@@ -1,0 +1,43 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#gradient)"/>
+  
+  <!-- Troll face/city icon -->
+  <g transform="translate(128, 128)">
+    <!-- Main building/troll shape -->
+    <rect x="64" y="96" width="128" height="160" rx="16" fill="#1a1a24" stroke="#7c3aed" stroke-width="4"/>
+    
+    <!-- Windows/Eyes -->
+    <rect x="80" y="120" width="32" height="32" rx="8" fill="#7c3aed"/>
+    <rect x="144" y="120" width="32" height="32" rx="8" fill="#7c3aed"/>
+    
+    <!-- Door/Mouth -->
+    <rect x="112" y="192" width="32" height="48" rx="16" fill="#7c3aed"/>
+    
+    <!-- Crown/Top -->
+    <path d="M64 96 L128 64 L192 96 Z" fill="#7c3aed" stroke="#1a1a24" stroke-width="2"/>
+    <circle cx="128" cy="64" r="12" fill="#ffd700"/>
+    
+    <!-- Side buildings -->
+    <rect x="16" y="144" width="48" height="112" rx="8" fill="#1a1a24" stroke="#7c3aed" stroke-width="3"/>
+    <rect x="192" y="128" width="48" height="128" rx="8" fill="#1a1a24" stroke="#7c3aed" stroke-width="3"/>
+    
+    <!-- Small windows -->
+    <rect x="24" y="160" width="16" height="16" rx="4" fill="#7c3aed"/>
+    <rect x="24" y="184" width="16" height="16" rx="4" fill="#7c3aed"/>
+    <rect x="200" y="144" width="16" height="16" rx="4" fill="#7c3aed"/>
+    <rect x="200" y="168" width="16" height="16" rx="4" fill="#7c3aed"/>
+  </g>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#a855f7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c084fc;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Text -->
+  <text x="256" y="440" text-anchor="middle" class="text-4xl font-bold" fill="white" font-family="Arial, sans-serif" font-size="48" font-weight="bold">TC</text>
+</svg>

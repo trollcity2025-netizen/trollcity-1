@@ -16,11 +16,12 @@ import CashoutRecordsPanel from "@/components/admin/CashoutRecordsPanel";
 import FeeManagementPanel from "@/components/admin/FeeManagementPanel";
 import { SafetyDashboard } from "@/components/admin/SafetyDashboard";
 import { toast } from "sonner";
-import { getCurrentUserProfile } from "@/api/supabaseHelpers";
+import { getCurrentUserProfile, ensureUserProfile } from "@/api/supabaseHelpers";
 import AccessDenied from "@/components/AccessDenied";
 import AppEditorInterface from "@/components/admin/AppEditorInterface";
 import AdminDebug from "@/components/AdminDebug";
 import TRAEAIChatPanel from "@/components/admin/TRAEAIChatPanel";
+import TrollLiveShowAdmin from "@/components/admin/TrollLiveShowAdmin";
 import { makeCurrentUserAdmin, updateCurrentUserAdminStatus } from "@/utils/adminUtils";
 
 export default function AdminDashboard() {
@@ -33,6 +34,21 @@ export default function AdminDashboard() {
     staleTime: 30000, // Cache for 30 seconds to reduce load
     retry: 1, // Only retry once to speed up failure
   });
+
+  // Ensure user profile exists
+  useEffect(() => {
+    if (!isLoading && !user) {
+      ensureUserProfile().then(profile => {
+        if (profile) {
+          console.log('Admin profile ensured:', profile.username);
+          // Refetch user data
+          queryClient.invalidateQueries(["currentUser"]);
+        }
+      }).catch(error => {
+        console.error('Error ensuring admin profile:', error);
+      });
+    }
+  }, [user, isLoading]);
 
   // Helper: resolve role from profile (supports `role` or `user_role`)
   const getRole = (u) => (u?.role ?? u?.user_role ?? null);
@@ -299,6 +315,10 @@ export default function AdminDashboard() {
             <TabsTrigger value="traeai" className="data-[state=active]:bg-[#2a2a3a]">
               <Bot className="w-4 h-4 mr-1" />
               TRAE.AI
+            </TabsTrigger>
+            <TabsTrigger value="troll-live-show" className="data-[state=active]:bg-[#2a2a3a]">
+              <Star className="w-4 h-4 mr-1" />
+              Troll Live Show
             </TabsTrigger>
           </TabsList>
 
@@ -664,6 +684,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="traeai">
             <TRAEAIChatPanel />
+          </TabsContent>
+
+          <TabsContent value="troll-live-show">
+            <TrollLiveShowAdmin />
           </TabsContent>
 
           <TabsContent value="content-editor">

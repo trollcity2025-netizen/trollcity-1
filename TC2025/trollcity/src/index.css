@@ -1,0 +1,220 @@
+/* Tailwind CSS entrypoint */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Holiday Theme CSS Variables */
+:root {
+  --holiday-primary: #8b5cf6;
+  --holiday-secondary: #3b82f6;
+  --holiday-accent: #10b981;
+}
+
+/* Holiday Theme Styles */
+.holiday-theme-new-year {
+  --holiday-primary: #FFD700;
+  --holiday-secondary: #FF6B6B;
+  --holiday-accent: #4ECDC4;
+}
+
+.holiday-theme-valentine {
+  --holiday-primary: #FF6B6B;
+  --holiday-secondary: #FF8E8E;
+  --holiday-accent: #FFB3B3;
+}
+
+.holiday-theme-st-patrick {
+  --holiday-primary: #4CAF50;
+  --holiday-secondary: #8BC34A;
+  --holiday-accent: #CDDC39;
+}
+
+.holiday-theme-april-fool {
+  --holiday-primary: #FF9800;
+  --holiday-secondary: #FFC107;
+  --holiday-accent: #FFEB3B;
+}
+
+.holiday-theme-independence {
+  --holiday-primary: #B22222;
+  --holiday-secondary: #FFFFFF;
+  --holiday-accent: #4169E1;
+}
+
+.holiday-theme-halloween {
+  --holiday-primary: #FF6B35;
+  --holiday-secondary: #1A1A1A;
+  --holiday-accent: #8B4513;
+}
+
+.holiday-theme-thanksgiving {
+  --holiday-primary: #8B4513;
+  --holiday-secondary: #D2691E;
+  --holiday-accent: #FF8C00;
+}
+
+.holiday-theme-christmas {
+  --holiday-primary: #DC143C;
+  --holiday-secondary: #228B22;
+  --holiday-accent: #FFD700;
+}
+
+.holiday-theme-new-year-eve {
+  --holiday-primary: #4B0082;
+  --holiday-secondary: #FFD700;
+  --holiday-accent: #FF1493;
+}
+
+.holiday-theme-may-day {
+  --holiday-primary: #FF69B4;
+  --holiday-secondary: #FFB6C1;
+  --holiday-accent: #FFC0CB;
+}
+
+.holiday-theme-juneteenth {
+  --holiday-primary: #000000;
+  --holiday-secondary: #FF0000;
+  --holiday-accent: #00FF00;
+}
+
+.holiday-theme-labor-day {
+  --holiday-primary: #8B4513;
+  --holiday-secondary: #A0522D;
+  --holiday-accent: #CD853F;
+}
+
+.holiday-theme-veterans {
+  --holiday-primary: #B22222;
+  --holiday-secondary: #FFFFFF;
+  --holiday-accent: #4169E1;
+}
+
+/* Apply holiday colors to common elements */
+.holiday-theme-container {
+  transition: all 0.3s ease-in-out;
+}
+
+.holiday-theme-container .bg-primary {
+  background-color: var(--holiday-primary) !important;
+}
+
+.holiday-theme-container .bg-secondary {
+  background-color: var(--holiday-secondary) !important;
+}
+
+.holiday-theme-container .bg-accent {
+  background-color: var(--holiday-accent) !important;
+}
+
+.holiday-theme-container .text-primary {
+  color: var(--holiday-primary) !important;
+}
+
+.holiday-theme-container .text-secondary {
+  color: var(--holiday-secondary) !important;
+}
+
+.holiday-theme-container .text-accent {
+  color: var(--holiday-accent) !important;
+}
+
+.holiday-theme-container .border-primary {
+  border-color: var(--holiday-primary) !important;
+}
+
+.holiday-theme-container .border-secondary {
+  border-color: var(--holiday-secondary) !important;
+}
+
+.holiday-theme-container .border-accent {
+  border-color: var(--holiday-accent) !important;
+}
+
+/* Holiday celebration effects */
+.holiday-celebration-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: holidayFadeIn 0.5s ease-in-out;
+}
+
+.holiday-celebration-content {
+  text-align: center;
+  background: linear-gradient(135deg, var(--holiday-primary), var(--holiday-secondary));
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 0 50px rgba(255, 255, 255, 0.3);
+  animation: holidayPulse 2s ease-in-out infinite;
+}
+
+.holiday-title {
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.holiday-message {
+  color: white;
+  font-size: 1.2rem;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.holiday-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.holiday-particle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: holidayFloatUp 5s ease-in-out infinite;
+  opacity: 0;
+}
+
+@keyframes holidayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes holidayPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes holidayFloatUp {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Optional: smooth scroll and touch improvements */
+html, body {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}

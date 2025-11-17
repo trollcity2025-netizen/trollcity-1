@@ -1,0 +1,8 @@
+-- Add payout method fields to profiles
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS payout_method TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS square_customer_id TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS square_card_id TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS cashapp_tag TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_payout_date DATE DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS payout_approval_level INTEGER DEFAULT 0;
