@@ -1,0 +1,105 @@
+import React from 'react'
+import { Link } from 'react-router-dom'
+import { Search, User, Radio } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../lib/store'
+import { supabase } from '../lib/supabase'
+import { toast } from 'sonner'
+
+const Header = () => {
+  const { user, profile } = useAuthStore()
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      toast.success('Logged out successfully')
+      useAuthStore.getState().logout()
+      try {
+        localStorage.removeItem('troll-city-auth')
+        localStorage.removeItem('troll-city-coins')
+        localStorage.removeItem('troll-city-ui')
+        localStorage.setItem('tc-logout', '1')
+      } catch {}
+      navigate('/auth?reset=1', { replace: true })
+    } catch (error) {
+      toast.error('Error logging out')
+    }
+  }
+
+  const getProfileLink = () => {
+    if (profile?.username) {
+      return `/profile/${profile.username}`
+    }
+    return '/profile/setup'
+  }
+
+  
+
+  return (
+    <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-8 backdrop-blur-lg relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5"></div>
+      <div className="relative z-10 flex items-center space-x-6 flex-1">
+        <div className="relative flex-1 max-w-lg">
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-troll-neon-blue/60" />
+          <input
+            type="text"
+            placeholder="Search streams, users..."
+            autoComplete="off"
+            className="w-full pl-12 pr-6 py-3 bg-troll-dark-card/50 border border-troll-neon-pink/30 rounded-xl text-white placeholder-troll-neon-blue/50 focus:outline-none focus:ring-2 focus:ring-troll-neon-pink focus:border-troll-neon-pink transition-all duration-300 shadow-lg focus:shadow-troll-neon-pink/30"
+          />
+        </div>
+      </div>
+
+      <div className="relative z-10 flex items-center space-x-6">
+        <Link 
+          to={profile?.username ? `/profile/${profile.username}` : '/profile/me'}
+          className={`p-3 text-troll-neon-blue/70 hover:text-troll-neon-green transition-all duration-300 group ${!profile?.username ? 'cursor-not-allowed opacity-50' : ''}`}
+          onClick={(e) => {
+            // allow navigation even if username not set (routes handle 'me')
+          }}
+        >
+          <User className="w-6 h-6" />
+        </Link>
+
+        <div className="flex items-center space-x-4">
+          <Link 
+            to={getProfileLink()}
+            className={`flex items-center space-x-4 hover:scale-105 transition-transform duration-300`}
+          >
+            <div className="text-right">
+              <p className="text-sm font-bold text-white">{profile?.username || 'Loading...'}</p>
+              <p className="text-xs text-troll-neon-blue/70 capitalize font-semibold">{profile?.username ? `${profile?.tier} Tier` : 'Set up profile'}</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-troll-neon-gold to-troll-neon-orange rounded-full flex items-center justify-center shadow-lg shadow-troll-neon-gold/50 border-2 border-troll-neon-gold/50 overflow-hidden">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initial if image fails to load
+                    const target = e.target as HTMLImageElement
+                    target.style.display = 'none'
+                    target.nextElementSibling?.classList.remove('hidden')
+                  }}
+                />
+              ) : null}
+              <span className={`text-troll-dark-bg font-bold text-lg ${profile?.avatar_url ? 'hidden' : ''}`}>
+                {profile?.username?.[0]?.toUpperCase() || 'U'}
+              </span>
+            </div>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm font-bold bg-gradient-to-r from-troll-neon-pink to-troll-neon-purple hover:from-troll-neon-pink/80 hover:to-troll-neon-purple/80 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-troll-neon-pink/50 hover:scale-105"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+export default Header

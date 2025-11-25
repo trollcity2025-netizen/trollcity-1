@@ -1,0 +1,702 @@
+
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  color-scheme: dark;
+
+  /* Original TrollCity Design Colors */
+  --troll-dark-bg: #0D0D0D;
+  --troll-dark-card: #121212;
+  --troll-gold: #FFC93C;
+  --troll-cyan: #00D4FF;
+  --troll-white: #E2E2E2;
+  --troll-purple-950: #0a041a;
+  --troll-purple-900: #1a0f3a;
+  --troll-purple-800: #2d1b5c;
+  --troll-purple-700: #3d247a;
+  --troll-purple-600: #4c2e96;
+  --troll-purple-300: #a78bfa;
+  --troll-green-neon: #00ff88;
+  --troll-green-glow: #00cc6a;
+  --troll-pink-neon: #ff0080;
+  --troll-pink-glow: #cc0066;
+  --troll-blue-neon: #0080ff;
+  --troll-cyan-neon: #00ffff;
+  --troll-orange-neon: #ff8000;
+  --troll-red-neon: #ff0040;
+  --troll-yellow-neon: #ffd700;
+  --troll-gold-neon: #FFC93C;
+  --troll-white-neon: #E2E2E2;
+
+  --troll-bg-gradient: linear-gradient(
+    135deg,
+    var(--troll-purple-950) 0%,
+    #000000 50%,
+    var(--troll-purple-900) 100%
+  );
+}
+
+body {
+  margin: 0;
+  background: var(--troll-bg-gradient);
+  background-attachment: fixed;
+  color: rgba(255, 255, 255, 0.9);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Neon streak background effects from image */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    linear-gradient(45deg, transparent 30%, rgba(0, 255, 136, 0.1) 50%, transparent 70%),
+    linear-gradient(-45deg, transparent 30%, rgba(255, 0, 128, 0.1) 50%, transparent 70%),
+    linear-gradient(90deg, transparent 40%, rgba(0, 255, 255, 0.05) 50%, transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+  animation: neon-streaks 20s ease-in-out infinite;
+}
+
+@keyframes neon-streaks {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+/* Glowing text effects matching image */
+.glow-green {
+  text-shadow: 0 0 10px var(--troll-green-neon), 0 0 20px var(--troll-green-neon), 0 0 30px var(--troll-green-neon);
+}
+
+.glow-pink {
+  text-shadow: 0 0 10px var(--troll-pink-neon), 0 0 20px var(--troll-pink-neon), 0 0 30px var(--troll-pink-neon);
+}
+
+.glow-blue {
+  text-shadow: 0 0 10px var(--troll-blue-neon), 0 0 20px var(--troll-blue-neon), 0 0 30px var(--troll-blue-neon);
+}
+
+.glow-gold {
+  text-shadow: 0 0 10px var(--troll-gold), 0 0 20px var(--troll-gold);
+}
+
+/* Neon borders and glows matching image */
+.neon-border-green {
+  border: 1px solid var(--troll-green-neon);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5), inset 0 0 10px rgba(0, 255, 136, 0.1);
+}
+
+.neon-border-pink {
+  border: 1px solid var(--troll-pink-neon);
+  box-shadow: 0 0 10px rgba(255, 0, 128, 0.5), inset 0 0 10px rgba(255, 0, 128, 0.1);
+}
+
+.shadow-troll-green {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.shadow-troll-pink {
+  box-shadow: 0 0 20px rgba(255, 0, 128, 0.3);
+}
+
+.shadow-troll-glow {
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.2), 0 0 60px rgba(255, 0, 128, 0.1);
+}
+
+/* Custom scrollbar matching image */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--troll-purple-900);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--troll-green-neon), var(--troll-pink-neon));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(var(--troll-pink-neon), var(--troll-green-neon));
+}
+
+/* Animations matching image */
+@keyframes pulse-neon {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-neon {
+  animation: pulse-neon 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Gift Animations */
+
+/* 🚗 Car Driving Across Screen */
+@keyframes driveCar {
+  from { transform: translateX(-200px); }
+  to { transform: translateX(110vw); }
+}
+.animate-driveCar {
+  animation: driveCar 3s linear forwards;
+}
+
+/* 💎 Diamond Rain */
+@keyframes diamondRain {
+  from { transform: translateY(-50px); opacity: 1; }
+  to { transform: translateY(100vh); opacity: 0; }
+}
+.animate-diamondRain {
+  animation: diamondRain 1.3s linear infinite;
+}
+
+/* 😼 Cat Scratch Swipe */
+@keyframes catScratch {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0.2; }
+  50% { transform: scale(1.2) rotate(2deg); opacity: 1; }
+  100% { transform: scale(0.8) rotate(-5deg); opacity: 0; }
+}
+.animate-catScratch {
+  animation: catScratch 1.6s ease-out forwards;
+}
+
+/* 👑 Crown Flash */
+@keyframes crownFlash {
+  0%,100% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+.animate-crownFlash {
+  animation: crownFlash 1.8s ease-in-out infinite;
+}
+
+/* 🧢 Hat Bounce */
+@keyframes hatBounce {
+  0% { transform: translateY(-40px); }
+  50% { transform: translateY(0px); }
+  100% { transform: translateY(-40px); }
+}
+.animate-hatBounce {
+  animation: hatBounce 2s ease-in-out infinite;
+}
+
+/* 🧰 Toolbox Spin */
+.animate-toolboxSpin {
+  animation: spin 1.5s linear infinite;
+}
+
+/* 🍷 Wine Glow */
+@keyframes wineGlow {
+  0%,100% { filter: drop-shadow(0 0 10px #fff); }
+  50% { filter: drop-shadow(0 0 30px #d100ff); }
+}
+.animate-wineGlow {
+  animation: wineGlow 2s ease-in-out infinite;
+}
+
+/* 🎉 Mega Announcement Pulse */
+@keyframes pulse-mega {
+  0%,100% { opacity: .9; transform: scale(.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+.animate-mega {
+  animation: pulse-mega 1.2s ease-in-out infinite;
+}
+
+/* 🎡 Wheel Modal Entrance */
+@keyframes spinIn {
+  from { transform: scale(0.2) rotate(-180deg); opacity: 0; }
+  to { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.animate-spinIn {
+  animation: spinIn 0.6s ease-out forwards;
+}
+
+/* Floating Animation (For Gift Emojis) */
+@keyframes floatGift {
+  0%,100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+.animate-floatGift {
+  animation: floatGift 2.5s ease-in-out infinite;
+}
+
+/* Gaming-style buttons */
+.gaming-button {
+  background: linear-gradient(45deg, var(--troll-green-neon), var(--troll-green-glow));
+  border: 2px solid var(--troll-green-glow);
+  box-shadow: 
+    0 4px 0 var(--troll-green-glow),
+    0 6px 10px rgba(0, 0, 0, 0.3),
+    0 0 10px rgba(0, 255, 136, 0.3);
+  transition: all 0.1s ease;
+  color: var(--troll-purple-950);
+  font-weight: 700;
+}
+
+.gaming-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 0 var(--troll-green-glow),
+    0 8px 15px rgba(0, 0, 0, 0.4),
+    0 0 15px rgba(0, 255, 136, 0.5);
+}
+
+.gaming-button:active {
+  transform: translateY(2px);
+  box-shadow: 
+    0 2px 0 var(--troll-green-glow),
+    0 4px 5px rgba(0, 0, 0, 0.3),
+    0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+/* Pink gaming button for primary actions */
+.gaming-button-pink {
+  background: linear-gradient(45deg, var(--troll-pink-neon), var(--troll-pink-glow));
+  border: 2px solid var(--troll-pink-glow);
+  box-shadow: 
+    0 4px 0 var(--troll-pink-glow),
+    0 6px 10px rgba(0, 0, 0, 0.3),
+    0 0 10px rgba(255, 0, 128, 0.3);
+  transition: all 0.1s ease;
+  color: white;
+  font-weight: 700;
+}
+
+.gaming-button-pink:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 0 var(--troll-pink-glow),
+    0 8px 15px rgba(0, 0, 0, 0.4),
+    0 0 15px rgba(255, 0, 128, 0.5);
+}
+
+.gaming-button-pink:active {
+  transform: translateY(2px);
+  box-shadow: 
+    0 2px 0 var(--troll-pink-glow),
+    0 4px 5px rgba(0, 0, 0, 0.3),
+    0 0 8px rgba(255, 0, 128, 0.3);
+}
+
+/* Troll City card styles matching image */
+.troll-card {
+  background: rgba(26, 15, 58, 0.8);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 20px rgba(0, 255, 136, 0.1);
+  border-radius: 12px;
+}
+
+/* Live indicator matching image */
+.live-indicator {
+  position: relative;
+  overflow: hidden;
+}
+
+.live-indicator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Neon pill badges matching image */
+.neon-pill {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid currentColor;
+}
+
+.neon-pill-green {
+  color: var(--troll-green-neon);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+.neon-pill-pink {
+  color: var(--troll-pink-neon);
+  box-shadow: 0 0 10px rgba(255, 0, 128, 0.3);
+}
+
+.neon-pill-blue {
+  color: var(--troll-blue-neon);
+  box-shadow: 0 0 10px rgba(0, 128, 255, 0.3);
+}
+
+.neon-pill-orange {
+  color: var(--troll-orange-neon);
+  box-shadow: 0 0 10px rgba(255, 128, 0, 0.3);
+}
+
+.neon-pill-red {
+  color: var(--troll-red-neon);
+  box-shadow: 0 0 10px rgba(255, 0, 64, 0.3);
+}
+
+/* 👑 GOLD crown pill for crowned families */
+.neon-pill-gold {
+  color: var(--troll-gold-neon);
+  border-color: var(--troll-gold-neon);
+  box-shadow: 0 0 12px rgba(255, 201, 60, 0.7);
+}
+
+/* Gradient text effects */
+.gradient-text-green-pink {
+  background: linear-gradient(45deg, var(--troll-green-neon), var(--troll-pink-neon));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Loading animation for the app */
+@keyframes loading-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+
+/* Additional animations for Home page */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(50px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+.animate-fade-in-left {
+  animation: fade-in-left 0.5s ease-out forwards;
+}
+
+.animate-fade-in-scale {
+  animation: fade-in-scale 0.5s ease-out forwards;
+}
+
+.tc-cosmic-bg {
+  background: linear-gradient(135deg, #0A0814 0%, #0D0D1A 50%, #14061A 100%);
+  color: #ffffff;
+}
+
+/* 🏠 Family building styles */
+
+.family-building {
+  background: rgba(20, 20, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+.royal-family {
+  border-color: gold;
+  box-shadow: 0 0 25px rgba(255, 215, 0, 0.9);
+  background: radial-gradient(circle, rgba(255,215,0,0.4), rgba(30,30,40,0.8));
+}
+
+.diamond-family {
+  border-color: #00ffff;
+  box-shadow: 0 0 20px rgba(0,255,255,0.6);
+}
+
+.platinum-family {
+  border-color: #a78bfa;
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.6);
+}
+
+.gold-family {
+  border-color: #ffb300;
+  box-shadow: 0 0 15px rgba(255,179,0,0.5);
+}
+
+.silver-family {
+  border-color: #a0a0a0;
+  box-shadow: 0 0 12px rgba(200,200,200,0.4);
+}
+
+.bronze-family {
+  border-color: #cd7f32;
+  box-shadow: 0 0 8px rgba(205,127,50,0.3);
+}
+
+/* Legend labels */
+.legend-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.legend-pill.bronze { color: #cd7f32; border: 1px solid #cd7f32; }
+.legend-pill.silver { color: #d0d0d0; border: 1px solid #d0d0d0; }
+.legend-pill.gold   { color: #ffb300; border: 1px solid #ffb300; }
+.legend-pill.platinum { color: #a78bfa; border: 1px solid #a78bfa; }
+.legend-pill.diamond { color: #00ffff; border: 1px solid #00ffff; }
+.legend-pill.royal  { color: gold; border: 1px solid gold; }
+
+/* 🔔 Announcement Banner (Wheel Win, Big Gift, VIP, Crown) */
+@keyframes scroll-banner {
+  0% { transform: translateX(120%); opacity: 1; }
+  100% { transform: translateX(-120%); opacity: 1; }
+}
+
+.announcement-banner {
+  position: fixed;
+  top: 18px;
+  left: 0;
+  width: 100vw;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--troll-gold);
+  text-align: center;
+  animation: scroll-banner 7s linear forwards;
+  z-index: 9999;
+  text-shadow: 0 0 8px var(--troll-gold);
+}
+
+/* 🟪 Streamer Video Box Glow */
+.stream-box {
+  border: 2px solid var(--troll-purple-300);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 25px rgba(124, 58, 237, 0.4);
+}
+
+/* 🔴 LIVE INDICATOR PULSE – separate pill style */
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,0,0,0.4); }
+  50% { box-shadow: 0 0 22px rgba(255,0,0,0.8); }
+}
+
+.live-indicator-pill {
+  background: #ff0000;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-weight: 700;
+  animation: livePulse 1.6s infinite;
+}
+
+/* 🧌 Multi-Box Layout for PK Head-to-Head / Battle Royale */
+.pk-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.pk-grid-4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.pk-grid-9 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.pk-grid-14 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+
+/* 🧠 Chat Neon Message Styles */
+.chat-bubble-entrance {
+  background: rgba(50,255,150,0.25);
+  border: 1px solid var(--troll-green-neon);
+  color: var(--troll-green-neon);
+}
+
+.chat-bubble-gift {
+  background: rgba(255,201,60,0.25);
+  border: 1px solid var(--troll-gold);
+}
+
+.chat-bubble-boo {
+  background: rgba(255,0,64,0.25);
+  border: 1px solid var(--troll-red-neon);
+  color: var(--troll-red-neon);
+}
+
+/* ⚠ Safety fix: prevent layout popping */
+img, video {
+  max-width: 100%;
+  border-radius: inherit;
+}
+/* 🌟 Unified Radiant Gold Border (matches Home + Sidebar outlines) */
+.gold-border {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: inherit;
+}
+
+.gold-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    90deg,
+    #ffd700,
+    #ffbf00,
+    #fff7c2,
+    #ffd700
+  );
+  background-size: 300% 300%;
+  animation: goldFlow 6s linear infinite;
+  z-index: -1;
+}
+
+@keyframes goldFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+
+
+/* 🚨 Gold Glow Box Shadow (for cards, buttons, modals, containers) */
+.shadow-gold {
+  box-shadow: 
+    0 0 10px rgba(255,215,0,0.4),
+    0 0 20px rgba(255,215,0,0.2),
+    0 0 40px rgba(255,215,0,0.08);
+}
+
+
+
+/* 💛 Floating Gold Accent (optional for hover or buttons) */
+.glow-gold-hover:hover {
+  box-shadow: 
+    0 0 15px rgba(255,215,0,0.6),
+    0 0 25px rgba(255,215,0,0.5),
+    0 0 45px rgba(255,215,0,0.3);
+  border-color: var(--troll-gold-neon) !important;
+}
+/* 🌟 Unified Radiant Gold Border (matches Home + Sidebar outlines) */
+.gold-border {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: inherit;
+}
+
+.gold-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    90deg,
+    #ffd700,
+    #ffbf00,
+    #fff7c2,
+    #ffd700
+  );
+  background-size: 300% 300%;
+  animation: goldFlow 6s linear infinite;
+  z-index: -1;
+}
+
+@keyframes goldFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+
+
+/* 🚨 Gold Glow Box Shadow (for cards, buttons, modals, containers) */
+.shadow-gold {
+  box-shadow: 
+    0 0 10px rgba(255,215,0,0.4),
+    0 0 20px rgba(255,215,0,0.2),
+    0 0 40px rgba(255,215,0,0.08);
+}
+
+
+
+/* 💛 Floating Gold Accent (optional for hover or buttons) */
+.glow-gold-hover:hover {
+  box-shadow: 
+    0 0 15px rgba(255,215,0,0.6),
+    0 0 25px rgba(255,215,0,0.5),
+    0 0 45px rgba(255,215,0,0.3);
+  border-color: var(--troll-gold-neon) !important;
+}
+/* 🧌 Falling Troll Animation */
+@keyframes fallTroll {
+  0% { transform: translateY(-150px) rotate(0deg) scale(1); opacity: 1; }
+  50% { transform: translateY(50vh) rotate(180deg) scale(1.1); opacity: 0.9; }
+  100% { transform: translateY(110vh) rotate(360deg) scale(1); opacity: 0.4; }
+}
+
+.falling-troll {
+  position: absolute;
+  top: -150px;
+  width: 90px;
+  height: 90px;
+  background-image: url('/images/trollface.png'); /* Replace with your troll image path */
+  background-size: contain;
+  background-repeat: no-repeat;
+  animation-name: fallTroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  pointer-events: none;
+  z-index: 1;
+}

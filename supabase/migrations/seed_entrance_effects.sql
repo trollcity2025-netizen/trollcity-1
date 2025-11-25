@@ -1,0 +1,8 @@
+-- Insert entrance effects data
+INSERT INTO entrance_effects (name, icon, description, coin_cost, rarity, animation_type, image_url, is_active) VALUES
+('Royal Entrance', '👑', 'Make a grand entrance with golden sparkles', 500, 'EPIC', 'sparkles', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sparkles%20royal%20entrance%20effect%20neon%20glow&image_size=square', true),
+('Fireworks', '🎆', 'Enter with explosive fireworks display', 1000, 'LEGENDARY', 'fireworks', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=explosive%20fireworks%20display%20neon%20colors%20dark%20background&image_size=square', true),
+('Rainbow Trail', '🌈', 'Leave a colorful rainbow trail as you enter', 300, 'RARE', 'rainbow', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=colorful%20rainbow%20trail%20neon%20glow%20streaming%20effect&image_size=square', true),
+('Neon Glow', '✨', 'Enter with a bright neon glow effect', 200, 'COMMON', 'glow', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=bright%20neon%20glow%20effect%20cyan%20magenta%20electric&image_size=square', true),
+('Confetti Blast', '🎊', 'Celebrate your entrance with confetti', 400, 'RARE', 'confetti', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=confetti%20blast%20celebration%20colorful%20neon%20particles&image_size=square', true),
+('Lightning Strike', '⚡', 'Make a shocking entrance with lightning', 750, 'EPIC', 'lightning', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=lightning%20strike%20electric%20shock%20neon%20blue%20purple%20flash&image_size=square', true);

@@ -1,0 +1,24 @@
+.dna-chaos { animation: screenShake 0.4s ease-in-out infinite alternate }
+.dna-mad { animation: glitchPulse 1.6s infinite }
+.dna-ghost { animation: fadeInOut 2.4s infinite }
+.dna-guardian { box-shadow: 0 0 12px rgba(124,58,237,0.4) }
+.dna-legacy { box-shadow: 0 0 12px rgba(255,201,60,0.4) }
+.dna-warrior { box-shadow: 0 0 12px rgba(34,197,94,0.4) }
+
+@keyframes screenShake {
+  0% { transform: translate(0,0) }
+  100% { transform: translate(1px,-1px) }
+}
+
+@keyframes glitchPulse {
+  0% { filter: hue-rotate(0deg) }
+  50% { filter: hue-rotate(20deg) }
+  100% { filter: hue-rotate(0deg) }
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 1 }
+  50% { opacity: 0.4 }
+  100% { opacity: 1 }
+}
+

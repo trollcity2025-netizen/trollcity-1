@@ -1,0 +1,347 @@
+import React, { useState, useEffect } from 'react'
+import { CreditCard, Coins, DollarSign, Shield, Check, X, Star } from 'lucide-react'
+import { useAuthStore } from '../lib/store'
+import { supabase } from '../lib/supabase'
+import { toast } from 'sonner'
+
+interface EntranceEffect {
+  id: string
+  name: string
+  icon: string
+  description: string
+  coin_cost: number
+  rarity: string
+  animation_type: string
+  image_url: string
+}
+
+const DEFAULT_EFFECTS: EntranceEffect[] = [
+  { id: 'e1', name: 'Troll Entrance (Classic)', icon: '🧌', description: 'Classic troll entrance', coin_cost: 0, rarity: 'EXCLUSIVE', animation_type: 'troll_classic', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=classic%20troll%20entrance%20neon%20aura&image_size=square' },
+  { id: 'e2', name: 'Royal Sparkle Crown', icon: '👑', description: 'Royal crown sparkles', coin_cost: 5000, rarity: 'EPIC', animation_type: 'sparkle_crown', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=royal%20sparkle%20crown%20neon%20gold&image_size=square' },
+  { id: 'e3', name: 'Neon Meteor Shower', icon: '☄️', description: 'Neon meteor shower', coin_cost: 10000, rarity: 'MYTHIC', animation_type: 'meteor_shower', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=neon%20meteor%20shower%20cosmic&image_size=square' },
+  { id: 'e4', name: 'Lightning Strike Arrival', icon: '⚡', description: 'Lightning strike arrival', coin_cost: 7500, rarity: 'EPIC', animation_type: 'lightning_arrival', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=lightning%20strike%20arrival%20neon&image_size=square' },
+  { id: 'e5', name: 'Chaos Portal Arrival', icon: '🌀', description: 'Chaos portal arrival', coin_cost: 15000, rarity: 'LEGENDARY', animation_type: 'chaos_portal', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=chaos%20portal%20arrival%20neon%20warp&image_size=square' },
+  { id: 'e6', name: 'Galactic Warp Beam', icon: '🛸', description: 'Galactic warp beam', coin_cost: 25000, rarity: 'ULTRA', animation_type: 'warp_beam', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=galactic%20warp%20beam%20neon&image_size=square' },
+  { id: 'e7', name: 'Troll City VIP Flames', icon: '🔥', description: 'VIP flames', coin_cost: 35000, rarity: 'LEGENDARY+', animation_type: 'vip_flames', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=vip%20flames%20neon%20crown&image_size=square' },
+  { id: 'e8', name: 'Flaming Gold Crown Drop', icon: '👑', description: 'Flaming gold crown drop', coin_cost: 50000, rarity: 'EXOTIC', animation_type: 'gold_crown_drop', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=flaming%20gold%20crown%20drop&image_size=square' },
+  { id: 'e9', name: 'Aurora Storm Entrance', icon: '🌌', description: 'Aurora storm entrance', coin_cost: 75000, rarity: 'MYTHIC', animation_type: 'aurora_storm', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=aurora%20storm%20entrance&image_size=square' },
+  { id: 'e10', name: 'Black Hole Vortex', icon: '🕳️', description: 'Black hole vortex', coin_cost: 100000, rarity: 'ULTRA', animation_type: 'black_hole', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=black%20hole%20vortex%20neon&image_size=square' },
+  { id: 'e11', name: 'Money Shower Madness', icon: '💸', description: 'Money shower madness', coin_cost: 125000, rarity: 'RARE+', animation_type: 'money_shower', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=money%20shower%20madness%20neon&image_size=square' },
+  { id: 'e12', name: 'Floating Royal Throne', icon: '👑', description: 'Floating royal throne', coin_cost: 150000, rarity: 'MYTHIC', animation_type: 'royal_throne', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=floating%20royal%20throne%20neon&image_size=square' },
+  { id: 'e13', name: 'Platinum Fire Tornado', icon: '🔥', description: 'Platinum fire tornado', coin_cost: 200000, rarity: 'LEGENDARY++', animation_type: 'fire_tornado', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=platinum%20fire%20tornado%20neon&image_size=square' },
+  { id: 'e14', name: 'Cosmic Crown Meteor Fall', icon: '☄️', description: 'Cosmic crown meteor fall', coin_cost: 250000, rarity: 'ULTRA', animation_type: 'crown_meteor', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=cosmic%20crown%20meteor%20fall&image_size=square' },
+  { id: 'e15', name: 'Royal Diamond Explosion', icon: '💎', description: 'Royal diamond explosion', coin_cost: 300000, rarity: 'EXOTIC', animation_type: 'diamond_explosion', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=royal%20diamond%20explosion%20neon&image_size=square' },
+  { id: 'e16', name: 'Neon Chaos Warp', icon: '🌀', description: 'Neon chaos warp', coin_cost: 400000, rarity: 'MYTHIC', animation_type: 'chaos_warp', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=neon%20chaos%20warp&image_size=square' },
+  { id: 'e17', name: 'Supreme Emerald Storm', icon: '💚', description: 'Supreme emerald storm', coin_cost: 500000, rarity: 'LEGENDARY++', animation_type: 'emerald_storm', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=supreme%20emerald%20storm%20neon&image_size=square' },
+  { id: 'e18', name: 'Millionaire Troller Arrival', icon: '🤑', description: 'Millionaire troller arrival', coin_cost: 1000000, rarity: 'EXOTIC GOLD', animation_type: 'millionaire_arrival', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=millionaire%20troller%20arrival%20neon&image_size=square' },
+  { id: 'e19', name: 'Troll God Ascension', icon: '🧌', description: 'Troll god ascension', coin_cost: 2500000, rarity: 'DIVINE', animation_type: 'god_ascension', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=troll%20god%20ascension%20neon&image_size=square' },
+  { id: 'e20', name: 'Troll City World Domination', icon: '🌍', description: 'World domination', coin_cost: 5000000, rarity: 'UNOBTAINABLE', animation_type: 'world_domination', image_url: 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=world%20domination%20neon&image_size=square' },
+]
+
+const EntranceEffects = () => {
+  const { profile } = useAuthStore()
+  const [effects, setEffects] = useState<EntranceEffect[]>([])
+  const [loading, setLoading] = useState(true)
+  const [purchasing, setPurchasing] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const cachedEffects = JSON.parse(localStorage.getItem('tc-effects') || '[]') as EntranceEffect[]
+      if (Array.isArray(cachedEffects) && cachedEffects.length) {
+        setEffects(cachedEffects)
+        setLoading(false)
+      }
+    } catch {}
+    if (effects.length === 0) {
+      setEffects(DEFAULT_EFFECTS)
+      setLoading(false)
+      try { localStorage.setItem('tc-effects', JSON.stringify(DEFAULT_EFFECTS)) } catch {}
+    }
+    loadEntranceEffects()
+  }, [])
+
+  const loadEntranceEffects = async () => {
+    try {
+      setLoading(true)
+      const final = [...DEFAULT_EFFECTS].sort((a, b) => a.coin_cost - b.coin_cost)
+      setEffects(final)
+      try { localStorage.setItem('tc-effects', JSON.stringify(final)) } catch {}
+    } catch (error: any) {
+      toast.error('Failed to load entrance effects')
+      console.error('Error loading entrance effects:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const purchaseEffect = async (effect: EntranceEffect) => {
+    if (!profile) {
+      toast.error('Please sign in to purchase effects')
+      return
+    }
+
+    if (profile.paid_coin_balance < effect.coin_cost) {
+      toast.error('Insufficient coins. Please purchase more coins.')
+      return
+    }
+
+    try {
+      setPurchasing(effect.id)
+      
+      // Deduct coins from user balance
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ 
+          paid_coin_balance: profile.paid_coin_balance - effect.coin_cost 
+        })
+        .eq('id', profile.id)
+
+      if (updateError) throw updateError
+
+      // Add effect to user's purchased effects
+      const { error: purchaseError } = await supabase
+        .from('user_entrance_effects')
+        .insert({
+          user_id: profile.id,
+          effect_id: effect.id,
+          purchased_at: new Date().toISOString()
+        })
+
+      if (purchaseError) throw purchaseError
+
+      // Record coin transaction
+      const { error: transactionError } = await supabase
+        .from('coin_transactions')
+        .insert({
+          user_id: profile.id,
+          type: 'purchase',
+          amount: -effect.coin_cost,
+          description: `Purchased ${effect.name} entrance effect`,
+          metadata: { effect_id: effect.id, effect_name: effect.name },
+          created_at: new Date().toISOString()
+        })
+
+      if (transactionError) throw transactionError
+
+      toast.success(`Successfully purchased ${effect.name}!`)
+      
+      // Update local profile
+      useAuthStore.getState().setProfile({
+        ...profile,
+        paid_coin_balance: profile.paid_coin_balance - effect.coin_cost
+      })
+
+    } catch (error: any) {
+      toast.error('Failed to purchase effect')
+      console.error('Purchase error:', error)
+    } finally {
+      setPurchasing(null)
+    }
+  }
+
+  const getRarityColor = (rarity: string) => {
+    const r = rarity.toLowerCase()
+    if (r.includes('unobtainable')) return 'bg-gradient-to-r from-black to-gray-700'
+    if (r.includes('divine')) return 'bg-gradient-to-r from-yellow-400 to-yellow-600'
+    if (r.includes('ultra')) return 'bg-gradient-to-r from-indigo-500 to-purple-600'
+    if (r.includes('mythic')) return 'bg-gradient-to-r from-pink-500 to-purple-500'
+    if (r.includes('legendary')) return 'bg-gradient-to-r from-[#FFC93C] to-[#FFD700]'
+    if (r.includes('exotic')) return 'bg-gradient-to-r from-teal-500 to-emerald-600'
+    if (r.includes('exclusive')) return 'bg-gradient-to-r from-blue-500 to-cyan-500'
+    if (r.includes('rare')) return 'bg-gradient-to-r from-[#E2E2E2] to-[#B8B8B8]'
+    return 'bg-gradient-to-r from-[#666666] to-[#888888]'
+  }
+
+  const getRarityGlow = (rarity: string) => {
+    const r = rarity.toLowerCase()
+    if (r.includes('unobtainable')) return 'shadow-lg shadow-black/40'
+    if (r.includes('divine')) return 'shadow-lg shadow-yellow-400/40'
+    if (r.includes('ultra')) return 'shadow-lg shadow-purple-500/30'
+    if (r.includes('mythic')) return 'shadow-lg shadow-pink-500/30'
+    if (r.includes('legendary')) return 'shadow-lg shadow-[#FFC93C]/30'
+    if (r.includes('exotic')) return 'shadow-lg shadow-emerald-500/30'
+    if (r.includes('exclusive')) return 'shadow-lg shadow-cyan-500/30'
+    if (r.includes('rare')) return 'shadow-lg shadow-[#E2E2E2]/20'
+    return 'shadow-lg shadow-[#666666]/20'
+  }
+
+  const getCardGradient = (rarity: string) => {
+    const r = rarity.toLowerCase()
+    if (r.includes('unobtainable')) return 'bg-gradient-to-br from-gray-900 via-black to-gray-800'
+    if (r.includes('divine')) return 'bg-gradient-to-br from-yellow-900/30 via-amber-900/20 to-yellow-900/30'
+    if (r.includes('ultra')) return 'bg-gradient-to-br from-indigo-900/30 via-purple-900/20 to-indigo-900/30'
+    if (r.includes('mythic')) return 'bg-gradient-to-br from-pink-900/30 via-purple-900/20 to-pink-900/30'
+    if (r.includes('legendary')) return 'bg-gradient-to-br from-orange-900/30 via-red-900/20 to-yellow-900/30'
+    if (r.includes('exotic')) return 'bg-gradient-to-br from-emerald-900/30 via-teal-900/20 to-emerald-900/30'
+    if (r.includes('exclusive')) return 'bg-gradient-to-br from-blue-900/30 via-cyan-900/20 to-blue-900/30'
+    if (r.includes('rare')) return 'bg-gradient-to-br from-blue-900/30 via-cyan-900/20 to-blue-900/30'
+    return 'bg-gradient-to-br from-gray-900/30 via-slate-900/20 to-gray-900/30'
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 min-h-screen bg-[#0D0D0D]">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-[#FFC93C]/20 rounded-full animate-pulse mx-auto mb-4"></div>
+          <div className="text-[#FFC93C] font-bold">Loading Entrance Effects...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-8 min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white relative overflow-hidden">
+      {/* Top Banner */}
+      <div className="mb-8 text-center">
+        <div className="inline-flex items-center space-x-2 bg-[#121212] border border-[#FFC93C]/30 rounded-full px-6 py-3">
+          <Coins className="w-5 h-5 text-[#FFC93C]" />
+          <span className="text-[#00D4FF] text-sm font-semibold">
+            Purchased Troll Coins have REAL VALUE and can be cashed out by streamers
+          </span>
+        </div>
+      </div>
+
+      {/* Section Header */}
+      <div className="mb-8">
+        <div className="flex items-center space-x-3 mb-2">
+          <Star className="w-6 h-6 text-[#FFC93C]" />
+          <h1 className="text-3xl font-bold text-white">Entrance Effects</h1>
+        </div>
+        <p className="text-[#E2E2E2]/70">Make a grand entrance to any stream</p>
+      </div>
+
+      {/* Effects Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {effects.map((effect) => (
+          <div
+            key={effect.id}
+            className={`${getCardGradient(effect.rarity)} border border-gray-700 rounded-lg p-6 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 bg-[#121212] ${effect.name === 'TROLLCITY' ? 'ring-2 ring-[#FFC93C] shadow-[#FFC93C]/40' : ''}`}
+          >
+            {/* Rarity Chip */}
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold text-white ${getRarityColor(effect.rarity)} mb-4`}>
+              {effect.rarity}
+            </div>
+            {effect.name === 'TROLLCITY' && (
+              <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold text-black bg-[#FFC93C] mb-4 ml-2">
+                BEST
+              </div>
+            )}
+
+            {/* Effect Image */}
+            <div className="w-full h-32 bg-troll-dark-card/30 rounded-lg mb-4 flex items-center justify-center border border-troll-neon-pink/10">
+              <img
+                src={effect.image_url}
+                alt={effect.name}
+                className="w-20 h-20 object-cover rounded-lg opacity-80"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.src = `https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(effect.description)}&image_size=square`
+                }}
+              />
+            </div>
+
+            {/* Effect Info */}
+            <h3 className="text-xl font-bold text-white mb-2">{effect.name}</h3>
+            <p className="text-troll-neon-blue/70 text-sm mb-4">{effect.description}</p>
+
+            {/* Price and Purchase */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Coins className="w-5 h-5 text-troll-neon-gold" />
+                <span className="text-troll-neon-gold font-bold text-lg">{effect.coin_cost}</span>
+              </div>
+              <button
+                onClick={() => purchaseEffect(effect)}
+                disabled={purchasing === effect.id || (profile && profile.paid_coin_balance < effect.coin_cost)}
+                className="px-6 py-2 bg-gradient-to-r from-troll-neon-pink to-troll-neon-purple text-white font-bold rounded-lg hover:from-troll-neon-pink/80 hover:to-troll-neon-purple/80 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {purchasing === effect.id ? 'Purchasing...' : 'Purchase'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Payment Info Bar */}
+      <div className="bg-gradient-to-r from-troll-neon-blue/20 to-troll-neon-green/20 border border-troll-neon-blue/30 rounded-xl p-6 mb-8">
+        <div className="flex items-center space-x-4">
+          <CreditCard className="w-8 h-8 text-troll-neon-blue" />
+          <div>
+            <h3 className="text-lg font-bold text-white">Secure Payment</h3>
+            <p className="text-troll-neon-blue/70">Pay using your saved payment methods or enter a new card</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Balances Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Total Balance */}
+        <div className="bg-troll-dark-card/50 border border-troll-neon-green/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-troll-neon-green">Total Balance</h3>
+            <DollarSign className="w-6 h-6 text-troll-neon-gold" />
+          </div>
+          <div className="text-3xl font-bold text-white mb-4">
+            {profile ? profile.paid_coin_balance + profile.free_coin_balance : 0}
+          </div>
+          <div className="border-t border-troll-neon-green/20 pt-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-troll-neon-blue/70">Total Value:</span>
+              <span className="text-troll-neon-green font-bold">
+                ${((profile ? profile.paid_coin_balance + profile.free_coin_balance : 0) * 0.01).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Troll Coins */}
+        <div className="bg-troll-dark-card/50 border border-troll-neon-green/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-troll-neon-green">Troll Coins</h3>
+            <div className="flex items-center space-x-2">
+              <Check className="w-5 h-5 text-troll-neon-green" />
+              <Coins className="w-6 h-6 text-troll-neon-gold" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-troll-neon-green mb-4">
+            {profile ? profile.paid_coin_balance : 0}
+          </div>
+          <div className="border-t border-troll-neon-green/20 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-troll-neon-blue/70">Value:</span>
+              <span className="text-troll-neon-purple font-bold">
+                ${(profile ? profile.paid_coin_balance : 0 * 0.01).toFixed(2)}
+              </span>
+            </div>
+            <p className="text-xs text-troll-neon-blue/50">Real value • Can spend</p>
+          </div>
+        </div>
+
+        {/* Free Coins */}
+        <div className="bg-troll-dark-card/50 border border-troll-neon-red/30 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-troll-neon-red">Free Coins</h3>
+            <div className="flex items-center space-x-2">
+              <X className="w-5 h-5 text-troll-neon-red" />
+              <Coins className="w-6 h-6 text-troll-neon-orange" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-troll-neon-red mb-4">
+            {profile ? profile.free_coin_balance : 0}
+          </div>
+          <div className="border-t border-troll-neon-red/20 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-troll-neon-blue/70">Value:</span>
+              <span className="text-troll-neon-blue/50 font-bold">
+                $0.00
+              </span>
+            </div>
+            <p className="text-xs text-troll-neon-blue/50">No cash value • Can spend</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default EntranceEffects

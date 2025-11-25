@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Environment Debug</title>
+</head>
+<body>
+    <h1>Environment Variables Debug</h1>
+    <div id="debug-info"></div>
+    
+    <script type="module">
+        // Test if environment variables are accessible
+        const debugInfo = document.getElementById('debug-info');
+        
+        try {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            
+            debugInfo.innerHTML = `
+                <h2>Vite Environment Variables:</h2>
+                <p><strong>VITE_SUPABASE_URL:</strong> ${supabaseUrl ? 'Found' : 'Missing'}</p>
+                <p><strong>VITE_SUPABASE_ANON_KEY:</strong> ${supabaseKey ? 'Found' : 'Missing'}</p>
+                
+                <h2>Available Vite Env Variables:</h2>
+                <pre>${JSON.stringify(import.meta.env, null, 2)}</pre>
+            `;
+        } catch (error) {
+            debugInfo.innerHTML = `<p style="color: red;">Error accessing environment: ${error.message}</p>`;
+        }
+    </script>
+</body>
+</html>
