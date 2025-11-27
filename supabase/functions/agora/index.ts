@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { RtcTokenBuilder, RtcRole } from "https://esm.sh/agora-token@2.0.4";
 
 Deno.serve(async (req) => {
   const corsHeaders = {
@@ -30,16 +31,38 @@ Deno.serve(async (req) => {
     }
 
     const appId = Deno.env.get('AGORA_APP_ID') || '7b95b64b0e154f7ab931e2abf000e694';
+    const appCertificate = Deno.env.get('AGORA_APP_CERTIFICATE');
 
-    // For now, return a mock token - TODO: Implement proper Agora token generation
-    const mockToken = `006${appId}00000000000000000000000000000000${Date.now().toString().slice(-10)}`;
+    if (!appCertificate) {
+      return new Response(JSON.stringify({ error: 'Agora app certificate not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Convert role string to RtcRole enum
+    const rtcRole = role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+
+    // Token valid for 24 hours
+    const expirationTimeInSeconds = Math.floor(Date.now() / 1000) + 86400;
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const privilegeExpiredTs = currentTimestamp + 86400;
+
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      appId,
+      appCertificate,
+      channelName,
+      parseInt(uid),
+      rtcRole,
+      privilegeExpiredTs
+    );
 
     return new Response(JSON.stringify({
-      token: mockToken,
+      token,
       appId,
       channelName,
       uid,
-      expiresAt: new Date(Date.now() + 86400000).toISOString() // 24 hours from now
+      expiresAt: new Date(expirationTimeInSeconds * 1000).toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
