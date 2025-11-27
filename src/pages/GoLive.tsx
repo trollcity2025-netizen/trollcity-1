@@ -25,6 +25,7 @@ const GoLive: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  console.log("AGORA APP ID:", import.meta.env.VITE_AGORA_APP_ID);
   const client = useRef(AgoraRTC.createClient({ mode: "live", codec: "vp8" }));
   const localVideoTrack = useRef<ICameraVideoTrack | null>(null);
   const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
