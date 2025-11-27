@@ -4,6 +4,7 @@ import { Shield, Clock, CheckCircle, AlertCircle, CreditCard, Zap, Crown } from 
 import { supabase, UserProfile } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
+import { deductCoins } from '../lib/coinTransactions'
 
 interface InsurancePackage {
   id: 'basic' | 'premium' | 'ultimate'
@@ -30,24 +31,54 @@ const INSURANCE_PACKAGES: InsurancePackage[] = [
   },
   {
     id: 'premium',
-    name: 'Premium Armor',
+    name: 'Bronze Armor',
+    duration: 3,
+    price: 120,
+    description: 'Good protection for regular trollers',
+    features: ['Protection from kicks', '3 hour duration', 'Basic priority', 'Chat boost'],
+    icon: <Shield className="w-6 h-6" />,
+    color: '#cd7f32'
+  },
+  {
+    id: 'premium',
+    name: 'Silver Shield',
     duration: 6,
     price: 200,
     description: 'Extended protection for serious trollers',
     features: ['Protection from kicks & bans', '6 hour duration', 'Medium priority', 'Faster chat'],
     icon: <Zap className="w-6 h-6" />,
-    color: '#3b82f6',
+    color: '#c0c0c0',
     popular: true
   },
   {
+    id: 'premium',
+    name: 'Gold Fortress',
+    duration: 12,
+    price: 350,
+    description: 'Strong protection for dedicated trollers',
+    features: ['Full protection', '12 hour duration', 'High priority', 'Special badge', 'Extra perks'],
+    icon: <Zap className="w-6 h-6" />,
+    color: '#ffd700'
+  },
+  {
     id: 'ultimate',
-    name: 'Ultimate Fortress',
+    name: 'Platinum Guard',
     duration: 24,
     price: 500,
     description: 'Maximum protection for legendary trollers',
-    features: ['Full protection', '24 hour duration', 'High priority', 'VIP badge', 'Exclusive perks'],
+    features: ['Full protection', '24 hour duration', 'Highest priority', 'VIP badge', 'All perks'],
     icon: <Crown className="w-6 h-6" />,
-    color: '#a855f7'
+    color: '#e5e4e2'
+  },
+  {
+    id: 'ultimate',
+    name: 'Diamond Elite',
+    duration: 48,
+    price: 850,
+    description: 'Ultimate protection for elite trollers',
+    features: ['Complete immunity', '48 hour duration', 'Elite priority', 'Diamond badge', 'Premium perks', 'Extra rewards'],
+    icon: <Crown className="w-6 h-6" />,
+    color: '#b9f2ff'
   }
 ]
 
@@ -86,7 +117,7 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
   const purchaseInsurance = async (package_: InsurancePackage) => {
     if (!profile) return
 
-    if (profile.paid_coin_balance < package_.price) {
+    if ((profile.paid_coin_balance || 0) < package_.price) {
       toast.error('Not enough coins! Visit the Coin Store.')
       return
     }
@@ -94,6 +125,7 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
     try {
       setPurchasing(package_.id)
 
+      // Calculate expiry time
       const newExpiry = new Date()
       newExpiry.setHours(newExpiry.getHours() + package_.duration)
 
@@ -105,11 +137,30 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
         }
       }
 
-      // Deduct and update insurance
+      // Deduct coins using centralized transaction logging
+      const result = await deductCoins({
+        userId: profile.id,
+        amount: package_.price,
+        type: 'insurance_purchase',
+        coinType: 'paid',
+        description: `Purchased ${package_.name} insurance`,
+        metadata: {
+          insurance_id: package_.id,
+          insurance_name: package_.name,
+          duration: package_.duration,
+          protection_type: package_.id === 'basic' ? 'kick' : package_.id === 'premium' ? 'kick' : 'full'
+        }
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to deduct coins')
+        return
+      }
+
+      // Update profile with insurance expiry (legacy fields)
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({
-          paid_coin_balance: profile.paid_coin_balance - package_.price,
           insurance_expires_at: finalExpiry.toISOString(),
           insurance_type: package_.id,
           updated_at: new Date().toISOString()
@@ -118,20 +169,27 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
 
       if (updateError) throw updateError
 
-      // Log purchase
-      await supabase.from('coin_transactions').insert([
-        {
+      // Save to user_insurances table
+      const { error: insuranceError } = await supabase
+        .from('user_insurances')
+        .insert({
           user_id: profile.id,
-          type: 'insurance_purchase',
-          amount: -package_.price,
-          description: `Purchased ${package_.name} insurance`,
+          insurance_id: `insurance_${package_.id}_${package_.duration}h`,
+          purchased_at: new Date().toISOString(),
+          expires_at: finalExpiry.toISOString(),
+          is_active: true,
+          protection_type: package_.id === 'basic' ? 'kick' : package_.id === 'premium' ? 'kick' : 'full',
           metadata: {
-            package_id: package_.id,
-            duration: package_.duration
-          },
-          created_at: new Date().toISOString()
-        }
-      ])
+            package_name: package_.name,
+            duration_hours: package_.duration,
+            price: package_.price
+          }
+        })
+
+      if (insuranceError) {
+        console.error('Failed to save insurance record:', insuranceError)
+        // Non-fatal, continue
+      }
 
       // Refresh profile
       const { data: updatedProfile } = await supabase
@@ -195,7 +253,7 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
       )}
 
       {/* Packages */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
         {INSURANCE_PACKAGES.map((pkg) => (
           <div
             key={pkg.id}

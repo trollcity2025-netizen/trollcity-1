@@ -17,6 +17,7 @@ import { supabase, Stream, UserProfile } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { recordAppEvent } from '../lib/progressionEngine'
+import ClickableUsername from '../components/ClickableUsername'
 
 interface Message {
   id: string
@@ -34,6 +35,7 @@ interface GiftItem {
   coin_cost: number
   image_url: string
   animation_type: string
+  type?: 'paid' | 'free'
 }
 
 interface EntranceEffectMeta {
@@ -242,6 +244,9 @@ const StreamRoom = () => {
 
   const [userOwnedEntranceEffects, setUserOwnedEntranceEffects] =
     useState<EntranceEffectMeta[]>([])
+  const [broadcasterActivePerks, setBroadcasterActivePerks] = useState<any[]>([])
+  const [broadcasterActiveInsurance, setBroadcasterActiveInsurance] = useState<any | null>(null)
+  const [broadcasterActiveEffect, setBroadcasterActiveEffect] = useState<any | null>(null)
   const [activeEntrance, setActiveEntrance] = useState<{
     username: string
     effectName: string
@@ -333,6 +338,8 @@ const StreamRoom = () => {
   }
   
   const remoteVideoRef = useRef<HTMLDivElement>(null)
+  const multiStreamRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
+  const remoteTracks = useRef<{ [key: string]: any }>({})
   const client = useRef<any>(null)
   const messageEndRef = useRef<HTMLDivElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -391,6 +398,51 @@ const StreamRoom = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
 
+  const loadBroadcasterActiveItems = async (broadcasterId: string) => {
+    if (!broadcasterId) return
+
+    const now = new Date().toISOString()
+
+    try {
+      // Load active perks
+      const { data: perks } = await supabase
+        .from('user_perks')
+        .select('*, perks(*)')
+        .eq('user_id', broadcasterId)
+        .eq('is_active', true)
+        .gte('expires_at', now)
+        .limit(5)
+
+      setBroadcasterActivePerks(perks || [])
+
+      // Load active insurance
+      const { data: insurance } = await supabase
+        .from('user_insurances')
+        .select('*, insurance_options(*)')
+        .eq('user_id', broadcasterId)
+        .eq('is_active', true)
+        .gte('expires_at', now)
+        .order('expires_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      setBroadcasterActiveInsurance(insurance)
+
+      // Load active entrance effect
+      const { data: effect } = await supabase
+        .from('user_entrance_effects')
+        .select('*, entrance_effects(*)')
+        .eq('user_id', broadcasterId)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+
+      setBroadcasterActiveEffect(effect)
+    } catch (err) {
+      console.error('Error loading broadcaster active items:', err)
+    }
+  }
+
   useEffect(() => {
     if (streamId) {
       loadStreamData()
@@ -402,6 +454,37 @@ const StreamRoom = () => {
   useEffect(() => {
     if (stream && user) {
       joinStream()
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      // Stop all remote tracks
+      Object.values(remoteTracks.current).forEach((track: any) => {
+        try {
+          track?.stop()
+        } catch (e) {
+          console.error('Error stopping track:', e)
+        }
+      })
+      remoteTracks.current = {}
+      
+      // Leave Agora channel
+      if (client.current) {
+        try {
+          client.current.leave()
+          client.current = null
+        } catch (e) {
+          console.error('Error leaving channel:', e)
+        }
+      }
+      
+      // Decrement viewer count
+      if (stream?.id) {
+        void supabase
+          .from('streams')
+          .update({ current_viewers: Math.max(0, (stream.current_viewers || 1) - 1) })
+          .eq('id', stream.id)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream, user])
@@ -461,6 +544,12 @@ const StreamRoom = () => {
 
   setStream(streamData)
   setBroadcaster(streamData.user_profiles)
+  
+  // Load broadcaster's active perks, insurance, and entrance effects
+  if (streamData.user_profiles?.id) {
+    loadBroadcasterActiveItems(streamData.user_profiles.id)
+  }
+  
   if (!streamStartLogged && profile?.id && streamData?.status === 'live') {
     // Identity event hook — First Stream
     try { await recordAppEvent(profile.id, 'STREAM_START', { stream_id: streamId }) } catch {}
@@ -727,22 +816,66 @@ const StreamRoom = () => {
 
       const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
       
-      client.current = AgoraRTC.createClient({ mode: 'live', codec: 'vp8' })
-      client.current.setClientRole('audience')
+      // Configure client with optimizations
+      client.current = AgoraRTC.createClient({ 
+        mode: 'live', 
+        codec: 'vp8',
+        role: 'audience'
+      })
+      
+      // Enable low-latency mode
+      client.current.setClientRole('audience', { level: 1 })
+      
+      // Set stream fallback to maintain quality
+      client.current.setStreamFallbackOption(2, 2)
       
       client.current.on('user-published', async (remoteUser: any, mediaType: any) => {
-        await client.current.subscribe(remoteUser, mediaType)
-        if (mediaType === 'video' && remoteVideoRef.current) {
-          const remoteVideoTrack = remoteUser.videoTrack
-          remoteVideoTrack.play(remoteVideoRef.current)
+        try {
+          await client.current.subscribe(remoteUser, mediaType)
+          const userId = String(remoteUser.uid)
+          
+          if (mediaType === 'video') {
+            const videoTrack = remoteUser.videoTrack
+            remoteTracks.current[userId] = videoTrack
+            
+            // For single-stream mode (non multi-beam)
+            if (remoteVideoRef.current && !stream?.multi_beam) {
+              videoTrack.play(remoteVideoRef.current, { fit: 'contain' })
+            }
+            
+            // For multi-beam mode
+            if (stream?.multi_beam && multiStreamRefs.current[userId]) {
+              videoTrack.play(multiStreamRefs.current[userId]!, { fit: 'cover' })
+            }
+          }
+          
+          if (mediaType === 'audio') {
+            const audioTrack = remoteUser.audioTrack
+            audioTrack?.play()
+          }
+        } catch (error) {
+          console.error('Error subscribing to remote user:', error)
         }
       })
 
-      client.current.on('user-unpublished', (_remoteUser: any, mediaType: any) => {
+      client.current.on('user-unpublished', (remoteUser: any, mediaType: any) => {
+        const userId = String(remoteUser.uid)
+        
         if (mediaType === 'video') {
-          if (remoteVideoRef.current) {
-            remoteVideoRef.current.innerHTML = ''
+          const track = remoteTracks.current[userId]
+          if (track) {
+            track.stop()
+            delete remoteTracks.current[userId]
           }
+        }
+      })
+      
+      client.current.on('user-left', (remoteUser: any) => {
+        const userId = String(remoteUser.uid)
+        const track = remoteTracks.current[userId]
+        if (track) {
+          track.stop()
+          delete remoteTracks.current[userId]
         }
       })
       
@@ -1010,28 +1143,39 @@ const StreamRoom = () => {
         .eq('id', streamId)
 
       // Record per-user coin transactions (sender + receiver)
+      // Record per-user coin transactions (sender + receiver) with expanded fields
       await supabase.from('coin_transactions').insert([
         {
           user_id: user.id,
-          type: 'gift',
+          type: 'gift_send',
           amount: -gift.coin_cost,
+          coin_type: gift.type === 'paid' ? 'paid' : 'free',
+          source: 'gift',
           description: `Sent ${gift.name} to ${broadcaster?.username}`,
           metadata: {
             gift_id: gift.id,
             gift_name: gift.name,
             stream_id: streamId
-          }
+          },
+          platform_profit: 0,
+          liability: gift.type === 'free' ? gift.coin_cost : 0,
+          created_at: new Date().toISOString()
         },
         {
           user_id: stream.broadcaster_id,
-          type: 'gift',
+          type: 'gift_receive',
           amount: gift.coin_cost,
+          coin_type: gift.type === 'paid' ? 'paid' : 'free',
+          source: 'gift',
           description: `Received ${gift.name} from ${profile?.username}`,
           metadata: {
             gift_id: gift.id,
             gift_name: gift.name,
             stream_id: streamId
-          }
+          },
+          platform_profit: 0,
+          liability: gift.type === 'free' ? gift.coin_cost : 0,
+          created_at: new Date().toISOString()
         }
       ])
 
@@ -1252,7 +1396,7 @@ const StreamRoom = () => {
             <div className="whitespace-nowrap animate-marquee font-bold flex items-center gap-2">
               <span>🎉</span>
               <span>
-                {liveBanner.username} just won {liveBanner.prize_name} (
+                <ClickableUsername username={liveBanner.username} className="text-white font-bold" /> just won {liveBanner.prize_name} (
                 {liveBanner.prize_value.toLocaleString()} coins) on Troll Wheel!
               </span>
               <span>🎉</span>
@@ -1282,7 +1426,7 @@ const StreamRoom = () => {
               <div className="flex items-center space-x-2">
                 <span className="text-2xl">{activeEntrance.icon}</span>
                 <span className="font-bold text-lg">
-                  {activeEntrance.username} entered with {activeEntrance.effectName}!
+                  <ClickableUsername username={activeEntrance.username} className="text-white font-bold" /> entered with {activeEntrance.effectName}!
                 </span>
               </div>
             </div>
@@ -1316,15 +1460,46 @@ const StreamRoom = () => {
             {/* Video Player Card */}
             <div className="bg-troll-purple-dark/70 rounded-2xl overflow-hidden border border-yellow-500 shadow-[0_0_35px_rgba(234,179,8,0.6)] backdrop-blur-md">
               <div className="aspect-video bg-troll-dark relative">
-                {/* Main video container */}
-                <div
-                  ref={remoteVideoRef}
-                  className="w-full h-full"
-                />
+                {/* Multi-Beam Grid Layout */}
+                {stream?.multi_beam ? (
+                  <div className="w-full h-full grid grid-cols-4 grid-rows-4 gap-1 p-1">
+                    {Array.from({ length: 14 }).map((_, idx) => {
+                      const userId = `box-${idx}`
+                      return (
+                        <div
+                          key={userId}
+                          ref={(el) => {
+                            if (el) multiStreamRefs.current[userId] = el
+                          }}
+                          className="relative bg-black/80 rounded overflow-hidden border border-purple-500/30 hover:border-yellow-400/50 transition-colors"
+                          style={{
+                            gridColumn: idx === 0 ? 'span 2' : 'span 1',
+                            gridRow: idx === 0 ? 'span 2' : 'span 1'
+                          }}
+                        >
+                          {/* Placeholder when no stream */}
+                          <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-xs">
+                            Box {idx + 1}
+                          </div>
+                          {/* Username overlay when active */}
+                          <div className="absolute top-1 left-1 bg-black/70 px-2 py-0.5 rounded text-[10px] text-white">
+                            <ClickableUsername username={broadcaster.username} className="text-white text-[10px]" />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  /* Single Stream Mode */
+                  <div
+                    ref={remoteVideoRef}
+                    className="w-full h-full"
+                  />
+                )}
 
                 {/* Overlay when not joined / loading */}
                 {!joining && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 pointer-events-none">
                     <Radio className="w-16 h-16 text-troll-purple animate-pulse mb-3" />
                     <p className="text-sm text-gray-300">
                       Connecting to Troll City live...
@@ -1347,7 +1522,7 @@ const StreamRoom = () => {
                       <div>
                         <div className="flex items-center space-x-2">
                           <h3 className="font-semibold text-lg flex items-center space-x-1">
-                            <span>{broadcaster.username}</span>
+                            <ClickableUsername username={broadcaster.username} className="text-white" />
                             {/* Example badges */}
                             {(broadcaster as any).has_crown_badge && (
                               <Crown className="w-4 h-4 text-troll-gold" />
@@ -1357,6 +1532,31 @@ const StreamRoom = () => {
                             )}
                           </h3>
                         </div>
+                        
+                        {/* Active Perks/Insurance/Effects */}
+                        {(broadcasterActivePerks.length > 0 || broadcasterActiveInsurance || broadcasterActiveEffect) && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {broadcasterActiveInsurance && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-troll-green/20 text-troll-green border border-troll-green/30 flex items-center gap-1">
+                                🛡️ Insurance
+                              </span>
+                            )}
+                            {broadcasterActiveEffect && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                                {broadcasterActiveEffect.entrance_effects?.icon || '✨'} Effect
+                              </span>
+                            )}
+                            {broadcasterActivePerks.slice(0, 3).map((perk: any) => (
+                              <span 
+                                key={perk.id}
+                                className="text-xs px-2 py-1 rounded-full bg-troll-gold/20 text-troll-gold border border-troll-gold/30 flex items-center gap-1"
+                              >
+                                {perk.perks?.icon || '⭐'} {perk.perks?.name || 'Perk'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
                         <p className="text-sm text-gray-300">
                           {stream.title}
                         </p>
@@ -1375,7 +1575,6 @@ const StreamRoom = () => {
                   </div>
                 </div>
 
-                {/* Optional PK / multi-box placeholder */}
               </div>
             </div>
 
@@ -1547,9 +1746,12 @@ const StreamRoom = () => {
                             isBoo ? 'text-troll-green' : ''
                           }`}
                         >
-                          <span className="font-medium text-troll-purple">
-                            {message.user_profiles?.username}:
-                          </span>
+                          <ClickableUsername
+                            username={message.user_profiles?.username || 'Unknown'}
+                            className="font-medium text-troll-purple"
+                            prefix=""
+                          />
+                          <span>:</span>
                           <span className="ml-1 break-words">
                             {message.content}
                           </span>

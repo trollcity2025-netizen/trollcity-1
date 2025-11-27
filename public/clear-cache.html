@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Clear Cache - Troll City</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0A0814;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .container {
+      max-width: 600px;
+      padding: 40px;
+      background: #1A1A2E;
+      border-radius: 12px;
+      text-align: center;
+    }
+    h1 { color: #00FFFF; margin-bottom: 20px; }
+    .status { margin: 20px 0; padding: 15px; background: #2A2A4E; border-radius: 8px; }
+    .success { color: #00FF88; }
+    .error { color: #FF4444; }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover { transform: scale(1.05); }
+    .log { margin-top: 20px; text-align: left; font-family: monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Cache & Service Worker Cleaner</h1>
+    <p>This will clear all cached data and reset the service worker.</p>
+    
+    <div id="status" class="status"></div>
+    
+    <button onclick="clearEverything()">Clear All Cache & Restart</button>
+    <button onclick="window.location.href='/'">Go to App</button>
+    
+    <div id="log" class="log"></div>
+  </div>
+
+  <script>
+    const log = (msg, isError = false) => {
+      const el = document.getElementById('log')
+      const color = isError ? '#FF4444' : '#00FF88'
+      el.innerHTML += `<div style="color: ${color}">• ${msg}</div>`
+    }
+
+    async function clearEverything() {
+      const statusEl = document.getElementById('status')
+      statusEl.innerHTML = '<p>Clearing cache...</p>'
+      document.getElementById('log').innerHTML = ''
+      
+      try {
+        // 1. Unregister all service workers
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations()
+          log(`Found ${registrations.length} service worker(s)`)
+          
+          for (const registration of registrations) {
+            await registration.unregister()
+            log('✓ Service worker unregistered')
+          }
+        }
+        
+        // 2. Clear all caches
+        if ('caches' in window) {
+          const cacheNames = await caches.keys()
+          log(`Found ${cacheNames.length} cache(s)`)
+          
+          for (const cacheName of cacheNames) {
+            await caches.delete(cacheName)
+            log(`✓ Deleted cache: ${cacheName}`)
+          }
+        }
+        
+        // 3. Clear localStorage
+        localStorage.clear()
+        log('✓ LocalStorage cleared')
+        
+        // 4. Clear sessionStorage
+        sessionStorage.clear()
+        log('✓ SessionStorage cleared')
+        
+        statusEl.innerHTML = '<p class="success">✅ All cache cleared successfully!</p><p>Reloading app in 2 seconds...</p>'
+        
+        // 5. Hard reload after 2 seconds
+        setTimeout(() => {
+          window.location.href = '/'
+          setTimeout(() => {
+            window.location.reload(true)
+          }, 100)
+        }, 2000)
+        
+      } catch (error) {
+        statusEl.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`
+        log(`Error: ${error.message}`, true)
+      }
+    }
+    
+    // Auto-run on page load
+    window.addEventListener('load', () => {
+      log('Cache cleaner ready')
+      log('Click button to clear all cached data')
+    })
+  </script>
+</body>
+</html>

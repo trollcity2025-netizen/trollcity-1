@@ -19,6 +19,14 @@ import platformFeesRoutes from './platform-fees.js'
 import adminRoutes from './routes/admin.js'
 import payoutsRoutes from './routes/payouts.js'
 import wheelRoutes from './routes/wheel.js'
+import adminEconomyRoutes from './routes/admin-economy.js'
+import cashoutsRoutes from './routes/cashouts.js'
+import giftRoutes from './routes/GiftTransactionHandler.js'
+import adminRiskRoutes from './routes/admin-risk.js'
+import adminProfitRoutes from './routes/admin-profit.js'
+import squareWebhookRoutes from './routes/square-webhook.js'
+import platformWalletRoutes from './routes/platform-wallet.js'
+import testingModeRoutes from './routes/testing-mode.js'
 
 // for esm mode
 const __filename = fileURLToPath(import.meta.url)
@@ -53,6 +61,13 @@ app.use('/api/platform-fees', platformFeesRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/payouts', payoutsRoutes)
 app.use('/api/wheel', wheelRoutes)
+app.use('/api/admin/economy', adminEconomyRoutes)
+app.use('/api/cashouts', cashoutsRoutes)
+app.use('/api/gifts', giftRoutes)
+app.use('/api/admin/risk', adminRiskRoutes)
+app.use('/api/admin', adminProfitRoutes)
+app.use('/api/square', squareWebhookRoutes)
+app.use('/api/admin', platformWalletRoutes)
 
 /**
  * health

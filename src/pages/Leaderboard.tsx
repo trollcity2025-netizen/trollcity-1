@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Trophy, Coins, Video, Users } from 'lucide-react'
+import ClickableUsername from '../components/ClickableUsername'
 
 export default function Leaderboard() {
   const [topUsers, setTopUsers] = useState<any[]>([])
@@ -48,7 +49,10 @@ export default function Leaderboard() {
               <div className="space-y-2">
                 {topUsers.map((u, i) => (
                   <div key={u.id} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2"><span className="text-gray-400">{i+1}.</span> @{u.username}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400">{i+1}.</span>
+                      <ClickableUsername username={u.username} className="text-white" />
+                    </div>
                     <div className="flex items-center gap-1 text-yellow-300"><Coins className="w-4 h-4" /> {u.total_earned_coins || 0}</div>
                   </div>
                 ))}

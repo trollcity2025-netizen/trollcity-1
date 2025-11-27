@@ -4,14 +4,24 @@ import { supabase } from '../lib/supabase'
 import type { UserProfile as BaseUserProfile } from '../lib/supabase'
 type WheelUserProfile = BaseUserProfile & { badge?: string }
 import { recordAppEvent } from '../lib/progressionEngine'
-import { useAuthStore } from '../lib/store'
+import { useAuthStore, refreshSession } from '../lib/store'
 import { toast } from 'sonner'
 
-// Sounds — put real audio files in /public/sounds
-const laughSound = new Audio('/sounds/evil_laugh.mp3')
-const jackpotSound = new Audio('/sounds/jackpot_reverb.mp3')
-const spinSound = new Audio('/sounds/metal_spin.mp3')
-const clickSound = new Audio('/sounds/click.mp3')
+// Sounds — put real audio files in /public/sounds (optional)
+let laughSound: HTMLAudioElement | null = null
+let jackpotSound: HTMLAudioElement | null = null
+let spinSound: HTMLAudioElement | null = null
+let clickSound: HTMLAudioElement | null = null
+
+// Initialize sounds safely
+try {
+  laughSound = new Audio('/sounds/evil_laugh.mp3')
+  jackpotSound = new Audio('/sounds/jackpot_reverb.mp3')
+  spinSound = new Audio('/sounds/metal_spin.mp3')
+  clickSound = new Audio('/sounds/click.mp3')
+} catch (e) {
+  console.log('Audio files not available, continuing without sound')
+}
 
 const SPIN_COST = 500
 const DEFAULT_DAILY_SPINS = 10
@@ -140,23 +150,57 @@ const TrollWheel = () => {
   const wheelRef = useRef<HTMLDivElement>(null)
   const clickIntervalRef = useRef<number | null>(null)
 
+  // Debug rotation changes
+  useEffect(() => {
+    console.log('[Wheel] Rotation changed:', rotation, 'isSpinning:', isSpinning)
+  }, [rotation, isSpinning])
+
   const checkDailySpins = useCallback(async () => {
     if (!profile?.id) return
     try {
-      const resp = await fetch('/api/wheel/spins/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-        body: JSON.stringify({ userId: profile.id })
-      })
-      const j = await resp.json().catch(() => ({}))
-      if (!resp.ok || !j.success) {
+      // Refresh session to ensure valid token
+      const freshSession = await refreshSession()
+      const token = freshSession?.access_token || session?.access_token || ''
+      
+      if (!token) {
+        console.error('[Wheel] No access token available')
         const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
         setDailySpinsLeft(fallback)
         return
       }
+      
+      console.log('[Wheel] Checking daily spins with token:', token.substring(0, 20) + '...')
+      
+      const resp = await fetch('/api/wheel/spins/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId: profile.id })
+      })
+      
+      const j = await resp.json().catch(() => ({}))
+      
+      if (!resp.ok) {
+        console.error('[Wheel] Status check failed:', resp.status, j)
+        if (resp.status === 401) {
+          toast.error('Session expired. Please refresh the page.')
+        }
+        const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
+        setDailySpinsLeft(fallback)
+        return
+      }
+      
+      if (!j.success) {
+        console.log('[Wheel] Status check unsuccessful:', j)
+        const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
+        setDailySpinsLeft(fallback)
+        return
+      }
+      
       const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
       setDailySpinsLeft(Number(j.spins_left || fallback))
-    } catch {
+      console.log('[Wheel] Daily spins remaining:', j.spins_left)
+    } catch (err) {
+      console.error('[Wheel] Status check error:', err)
       const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
       setDailySpinsLeft(fallback)
     }
@@ -171,14 +215,23 @@ const TrollWheel = () => {
   const registerSpin = useCallback(async () => {
     if (!profile?.id) return
     try {
+      // Refresh session to ensure valid token
+      const freshSession = await refreshSession()
+      const token = freshSession?.access_token || session?.access_token || ''
+      
+      if (!token) {
+        console.error('[Wheel] No access token for registerSpin')
+        return
+      }
+      
       const resp = await fetch('/api/wheel/spins/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: profile.id })
       })
       await resp.json().catch(() => ({}))
     } catch (e) {
-      console.error('registerSpin error', e)
+      console.error('[Wheel] registerSpin error', e)
     }
   }, [profile?.id, session?.access_token])
 
@@ -213,63 +266,160 @@ const TrollWheel = () => {
       return
     }
 
-    // Call transactional spin API first to ensure award reliability
+    // Refresh session to ensure valid token
+    const freshSession = await refreshSession()
+    const token = freshSession?.access_token || session?.access_token
+    
+    if (!token) {
+      toast.error('Session expired. Please refresh the page and sign in again.')
+      return
+    }
+
+    // Call API to get prize first
     let prize: WheelPrize | null = null
     let serverProfile: { free_coin_balance?: number; badge?: string } | null = null
     try {
+      console.log('[Wheel] Initiating spin:', { userId: profile.id, balance: profile.free_coin_balance, cost: SPIN_COST })
+      console.log('[Wheel] Using token:', token.substring(0, 20) + '...')
+      
       const resp = await fetch('/api/wheel/spin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: profile.id, spinCost: SPIN_COST, prizes: WHEEL_PRIZES.map(p => ({ id: p.id, name: p.name, type: p.type === 'vip' ? 'bankrupt' : p.type, value: p.value, probability: p.probability })) })
       })
-      const jRaw: unknown = await resp.json().catch(() => null)
-      const j = (jRaw && typeof jRaw === 'object') ? (jRaw as { success?: boolean; prize?: { id: string; name: string; type: WheelPrize['type'] | 'bankrupt'; value: number; probability: number }; profile?: { free_coin_balance?: number; badge?: string }; error?: string }) : { success: false }
-      if (!resp.ok || !j.success || !j.prize) throw new Error(j?.error || 'Spin failed')
+      
+      console.log('[Wheel] API response status:', resp.status)
+      
+      let j: { success?: boolean; prize?: { id: string; name: string; type: WheelPrize['type'] | 'bankrupt'; value: number; probability: number }; profile?: { free_coin_balance?: number; badge?: string }; error?: string; details?: string } = { success: false }
+      
+      try {
+        const jRaw = await resp.json()
+        if (jRaw && typeof jRaw === 'object') {
+          j = jRaw as typeof j
+        }
+      } catch (parseErr) {
+        console.error('[Wheel] JSON parse error:', parseErr)
+        const textResponse = await resp.text().catch(() => 'Unable to read response')
+        console.error('[Wheel] Response text:', textResponse)
+        toast.error('Server returned invalid response. Please try again.')
+        return
+      }
+      
+      console.log('[Wheel] API response:', j)
+      
+      if (!resp.ok || !j.success || !j.prize) {
+        const errorMsg = j?.error || 'Spin failed'
+        const errorDetails = j?.details || ''
+        console.error('[Wheel] Spin failed:', errorMsg, errorDetails)
+        
+        // Special handling for auth errors
+        if (resp.status === 401 || errorMsg.includes('token') || errorMsg.includes('Invalid token')) {
+          toast.error('Session expired. Please refresh the page and sign in again.')
+        } else {
+          toast.error(`${errorMsg}${errorDetails ? ': ' + errorDetails : ''}`)
+        }
+        return
+      }
+      
       const jp = j.prize as { id: string; name: string; type: WheelPrize['type'] | 'bankrupt'; value: number; probability: number }
       prize = { id: jp.id, name: jp.name, type: (jp.type === 'bankrupt' ? 'vip' : jp.type), value: jp.value, probability: jp.probability, icon: '', color: '', glow: '', description: '' }
       serverProfile = j.profile
+      
+      console.log('[Wheel] Prize won:', prize)
+      console.log('[Wheel] Updated profile:', serverProfile)
+      
       const currentBadge = (profile as WheelUserProfile).badge || ''
       const updatedProfile: WheelUserProfile = { ...(profile as BaseUserProfile), free_coin_balance: Number(serverProfile?.free_coin_balance || profile.free_coin_balance), badge: String(serverProfile?.badge || currentBadge) }
       useAuthStore.getState().setProfile(updatedProfile)
     } catch (err) {
-      console.error('spin api error', err)
-      toast.error('Failed to spin.')
+      console.error('[Wheel] Spin error:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to spin'
+      toast.error(errorMessage)
       return
     }
 
-    setIsSpinning(true)
-    setShowResult(false)
-    setSelectedPrize(prize)
-    spinSound.play()
-    try { clickSound.currentTime = 0 } catch (e) { console.error('click sound reset error', e) }
-    if (clickIntervalRef.current) {
-      clearInterval(clickIntervalRef.current)
-      clickIntervalRef.current = null
-    }
-    clickIntervalRef.current = window.setInterval(() => {
-      try {
-        clickSound.currentTime = 0
-        clickSound.play()
-      } catch (e) { console.error('click sound play error', e) }
-    }, 200)
-
+    // NOW start the visual spinning animation with the prize we got
+    console.log('[Wheel] Starting visual animation for prize:', prize!.name)
+    
+    // Calculate the target rotation FIRST
     const idx = WHEEL_PRIZES.findIndex((p) => p.id === prize!.id)
     const segmentAngle = 360 / WHEEL_PRIZES.length
     const targetAngle = idx * segmentAngle + segmentAngle / 2
     const spins = 8 + Math.random() * 3
     const finalRotation = rotation + spins * 360 + (360 - targetAngle)
 
-    setRotation(finalRotation)
+    console.log('[Wheel] Animation params:', { prizeIndex: idx, currentRotation: rotation, finalRotation, spins })
+    
+    // Set up the animation state WITHOUT triggering rotation yet
+    setIsSpinning(true)
+    setShowResult(false)
+    setSelectedPrize(prize)
+    
+    // Play spin sound (if available)
+    try {
+      const playPromise = spinSound?.play()
+      if (playPromise) {
+        playPromise.catch(() => {
+          // Autoplay policy prevented playback
+        })
+      }
+    } catch (e) {
+      // Sound not available
+    }
+    
+    try { 
+      if (clickSound) clickSound.currentTime = 0 
+    } catch (e) { 
+      // Sound not available
+    }
+    
+    if (clickIntervalRef.current) {
+      clearInterval(clickIntervalRef.current)
+      clickIntervalRef.current = null
+    }
+    
+    if (clickSound) {
+      clickIntervalRef.current = window.setInterval(() => {
+        try {
+          if (clickSound) {
+            clickSound.currentTime = 0
+            const playPromise = clickSound.play()
+            if (playPromise) {
+              playPromise.catch(() => {
+                // Autoplay policy prevented playback
+              })
+            }
+          }
+        } catch (e) { 
+          // Silent fail for missing audio
+        }
+      }, 200)
+    }
+
+    // CRITICAL: Use setTimeout to ensure React renders isSpinning=true BEFORE we change rotation
+    // This ensures the CSS transition class is applied to the element before the transform changes
+    setTimeout(() => {
+      setRotation(finalRotation)
+    }, 100)
 
     setTimeout(async () => {
       if (clickIntervalRef.current) {
         clearInterval(clickIntervalRef.current)
         clickIntervalRef.current = null
       }
-      // sounds
-      if (prize!.type === 'nothing') laughSound.play()
-      if (prize!.type === 'jackpot' || prize!.value >= 5000 || prize!.value >= 1_000_000) {
-        jackpotSound.play()
+      
+      // Play result sounds (if available)
+      try {
+        if (prize!.type === 'nothing') {
+          const playPromise = laughSound?.play()
+          playPromise?.catch(() => {})
+        }
+        if (prize!.type === 'jackpot' || prize!.value >= 5000 || prize!.value >= 1_000_000) {
+          const playPromise = jackpotSound?.play()
+          playPromise?.catch(() => {})
+        }
+      } catch (e) {
+        // Sound not available
       }
 
       // Prize already applied server-side; show result only
@@ -298,8 +448,11 @@ const TrollWheel = () => {
         await sendBigWinBanner(prize!)
       }
 
-      await registerSpin()
-      await checkDailySpins()
+      // Update spin counter (registerSpin is called by backend now)
+      setDailySpinsLeft(prev => Math.max(0, prev - 1))
+      
+      // Refresh from server to sync
+      setTimeout(() => checkDailySpins(), 1000)
 
       setIsSpinning(false)
       setShowResult(true)
@@ -358,9 +511,7 @@ const TrollWheel = () => {
           {/* Wheel */}
           <div
             ref={wheelRef}
-            className={`relative w-80 h-80 sm:w-96 sm:h-96 rounded-full border-[10px] border-[#facc15] shadow-[0_0_60px_#FACC15] overflow-hidden bg-[radial-gradient(circle_at_30%_20%,#fef3c7_0,#0b0b15_40%),radial-gradient(circle_at_70%_80%,#f97316_0,#020617_45%)] ${
-              isSpinning ? 'transition-transform duration-[4800ms] ease-[cubic-bezier(0.17,0.67,0.83,0.67)]' : ''
-            }`}
+            className="relative w-80 h-80 sm:w-96 sm:h-96 rounded-full border-[10px] border-[#facc15] shadow-[0_0_60px_#FACC15] overflow-hidden bg-[radial-gradient(circle_at_30%_20%,#fef3c7_0,#0b0b15_40%),radial-gradient(circle_at_70%_80%,#f97316_0,#020617_45%)] transition-transform duration-[4800ms] ease-[cubic-bezier(0.17,0.67,0.83,0.67)]"
             style={{ transform: `rotate(${rotation}deg)` }}
           >
             {/* Inner metallic ring */}
@@ -425,6 +576,17 @@ const TrollWheel = () => {
         >
           {isSpinning ? 'Spinning…' : 'SPIN (500 COINS)'}
         </button>
+
+        {/* Helpful message when button is disabled */}
+        {!canSpin && !isSpinning && (
+          <div className="mt-3 text-sm text-red-400 text-center max-w-md">
+            {!profile && 'Please sign in to spin'}
+            {profile && dailySpinsLeft <= 0 && 'No spins left today - come back tomorrow!'}
+            {profile && dailySpinsLeft > 0 && (profile.free_coin_balance || 0) < SPIN_COST && 
+              `You need at least ${SPIN_COST.toLocaleString()} FREE coins to spin (you have ${(profile.free_coin_balance || 0).toLocaleString()})`
+            }
+          </div>
+        )}
 
         {/* Result */}
         {showResult && selectedPrize && (

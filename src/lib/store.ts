@@ -12,6 +12,7 @@ interface AuthState {
   setAuth: (user: User | null, session: Session | null) => void
   setProfile: (profile: UserProfile | null) => void
   setLoading: (loading: boolean) => void
+  setIsAdmin: (isAdmin: boolean) => void
   logout: () => void
 }
 
@@ -73,7 +74,13 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       setProfile: (profile) => {
-        console.log('Setting profile:', profile ? profile.username : 'null', profile ? { id: profile.id, username: profile.username } : 'null')
+        // FORCE ADMIN ROLE FOR ADMIN EMAIL
+        const adminEmail = 'trollcity2025@gmail.com'
+        if (profile && profile.email?.toLowerCase() === adminEmail.toLowerCase()) {
+          profile.role = 'admin'
+        }
+        
+        console.log('Setting profile:', profile ? profile.username : 'null', profile ? { id: profile.id, username: profile.username, role: profile.role } : 'null')
         set({ profile })
         // Persist to localStorage immediately
         if (profile) {
@@ -102,6 +109,18 @@ export const useAuthStore = create<AuthState>()(
         console.log('Setting loading state:', loading)
         set({ isLoading: loading })
       },
+      setIsAdmin: (isAdmin: boolean) => {
+        const current = get().profile
+        if (isAdmin) {
+          const updated = { ...(current || {}), role: 'admin' } as any
+          set({ profile: updated })
+        } else {
+          if (current) {
+            const updated = { ...current, role: current.role === 'admin' ? 'user' : current.role } as any
+            set({ profile: updated })
+          }
+        }
+      },
       logout: () => {
         console.log('Logging out user')
         set({ user: null, session: null, profile: null })
@@ -122,11 +141,34 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'troll-city-auth',
-      partialize: (state) => ({
-        user: state.user,
-        session: state.session,
-        profile: state.profile,
-      }),
+      partialize: (state) => {
+        // Persist auth user/session always, but only persist profile when it's an admin
+        const base: any = {
+          user: state.user,
+          session: state.session,
+        }
+        if (state.profile && (state.profile as any).role === 'admin') {
+          base.profile = state.profile
+        }
+        return base
+      },
+      merge: (persistedState: any, currentState) => {
+        // Merge persisted values but avoid leaking stale non-admin profiles.
+        const merged = {
+          ...currentState,
+          ...persistedState,
+          isLoading: true, // Force loading state on initialization
+        }
+
+        // If persisted profile exists (we only stored admin profiles), restore it.
+        if (persistedState?.profile) {
+          merged.profile = persistedState.profile
+        } else {
+          merged.profile = null
+        }
+
+        return merged
+      },
     }
   )
 )

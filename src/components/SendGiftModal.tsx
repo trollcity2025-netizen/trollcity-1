@@ -8,7 +8,7 @@ interface GiftModalProps {
   isOpen: boolean
   onClose: () => void
   streamerId: string
-  streamId: string
+  streamId?: string
 }
 
 const GIFT_ITEMS = [
@@ -28,7 +28,7 @@ const GIFT_ITEMS = [
   { id: 'insurance', name: '🛡 Troller Insurance Pack', coinCost: 750, type: 'paid' },
 ]
 
-export default function SendGiftModal({ isOpen, onClose, streamerId, streamId }: GiftModalProps) {
+export default function SendGiftModal({ isOpen, onClose, streamerId, streamId = 'profile-gift' }: GiftModalProps) {
   const { profile } = useAuthStore()
   const { sendGift, isSending } = useGiftSystem(streamerId, streamId)
 

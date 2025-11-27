@@ -1,25 +1,56 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Camera, Edit, Star, CreditCard, Settings, ChevronDown, ChevronUp } from 'lucide-react'
+import { Camera, Edit, Star, CreditCard, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift } from 'lucide-react'
 import { toast } from 'sonner'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { getTierFromXP, getLevelFromXP } from '../lib/tierSystem'
+import XPProgressBar from '../components/XPProgressBar'
+import SendGiftModal from '../components/SendGiftModal'
 
 export default function Profile() {
   const { profile, user } = useAuthStore()
   const navigate = useNavigate()
-  const { username: routeUsername } = useParams()
+  const location = useLocation()
+  const { username: routeUsername, userId } = useParams()
   const [viewed, setViewed] = useState<any | null>(null)
-  const [expandedSections, setExpandedSections] = useState<string[]>(['profile_info'])
+  const [expandedSections, setExpandedSections] = useState<string[]>([
+    'profile_info',
+    'stats', 
+    'entrance_effects',
+    'payment_methods',
+    'account_settings'
+  ])
   const [editingProfile, setEditingProfile] = useState(false)
   const [bio, setBio] = useState('')
+  const [editUsername, setEditUsername] = useState('')
   const [streamsCreated, setStreamsCreated] = useState(0)
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [effects, setEffects] = useState<any[]>([])
   const [selectedEffectId, setSelectedEffectId] = useState<string>('')
   const [privateEnabled, setPrivateEnabled] = useState<boolean>(false)
+  const [viewPrice, setViewPrice] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [showGiftModal, setShowGiftModal] = useState(false)
+
+  // Initialize view price from profile
+  useEffect(() => {
+    if (profile) {
+      setViewPrice(Number((profile as any)?.profile_view_price ?? 0))
+    }
+  }, [profile?.id])
+
+  // Handle URL section parameter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const section = params.get('section')
+    if (section && !expandedSections.includes(section)) {
+      setExpandedSections(prev => [...prev, section])
+    }
+  }, [location.search])
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => 
@@ -33,15 +64,45 @@ export default function Profile() {
     if (!profile) return
     
     try {
+      const updates: any = { bio }
+      
+      // If username is being edited and changed
+      if (editUsername && editUsername !== profile.username) {
+        // Check username length limit (14 chars for regular users, unlimited for officers/admin)
+        const maxLength = (profile.role === 'troll_officer' || profile.role === 'admin') ? 999 : 14
+        if (editUsername.length > maxLength) {
+          toast.error(`Username must be ${maxLength} characters or less`)
+          return
+        }
+        
+        // Check if username is already taken
+        const { data: existing } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('username', editUsername)
+          .maybeSingle()
+        
+        if (existing) {
+          toast.error('Username already taken')
+          return
+        }
+        
+        updates.username = editUsername
+      }
+      
       const { error } = await supabase
         .from('user_profiles')
-        .update({ bio })
+        .update(updates)
         .eq('id', profile.id)
 
       if (error) throw error
 
+      // Update local profile
+      useAuthStore.getState().setProfile({ ...profile, ...updates })
+      
       toast.success('Profile updated successfully!')
       setEditingProfile(false)
+      setEditUsername('')
     } catch (error) {
       console.error('Update profile error:', error)
       toast.error('Failed to update profile')
@@ -53,15 +114,56 @@ export default function Profile() {
       try {
         if (!profile?.id) return
         let target = profile
-        if (routeUsername && profile?.username !== routeUsername) {
+        
+        // If viewing another user's profile by ID
+        if (userId && userId !== user?.id) {
           const { data } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle()
+          
+          if (data) {
+            target = data
+            setViewed(data)
+          } else {
+            // User not found, redirect to own profile
+            navigate('/profile/me')
+            return
+          }
+        }
+        // If viewing another user's profile by username
+        else if (routeUsername && profile?.username !== routeUsername) {
+          // First try to find by username
+          let { data } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('username', routeUsername)
             .maybeSingle()
-          target = data || profile
+          
+          // If not found by username, try email prefix match
+          if (!data) {
+            const { data: emailMatch } = await supabase
+              .from('user_profiles')
+              .select('*')
+              .ilike('email', `${routeUsername}@%`)
+              .maybeSingle()
+            data = emailMatch
+          }
+          
+          if (data) {
+            target = data
+            setViewed(data)
+          } else {
+            // User not found, redirect to own profile
+            navigate('/profile/me')
+            return
+          }
+        } else {
+          // Viewing own profile
+          setViewed(null)
         }
-        setViewed(target)
+        
         const { data: streams } = await supabase
           .from('streams')
           .select('id')
@@ -77,17 +179,45 @@ export default function Profile() {
           .select('id')
           .eq('follower_id', target.id)
         setFollowingCount((following || []).length)
+        
+        // Check if current user is following this profile
+        if (user?.id && target.id !== user.id) {
+          const { data: followCheck } = await supabase
+            .from('user_follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', target.id)
+            .maybeSingle()
+          setIsFollowing(!!followCheck)
+          
+          // Check if current user has blocked this profile
+          const { data: blockCheck } = await supabase
+            .from('blocked_users')
+            .select('id')
+            .eq('blocker_id', user.id)
+            .eq('blocked_id', target.id)
+            .maybeSingle()
+          setIsBlocked(!!blockCheck)
+        }
+        
+        // Try to load entrance effects (table might not exist yet)
         try {
-          const { data: userEffects } = await supabase
+          const { data: userEffects, error: effectsError } = await supabase
             .from('user_entrance_effects')
             .select('effect_id, entrance_effects:effect_id (*)')
             .eq('user_id', target.id)
-          const mapped = (userEffects || []).map((row: any) => row.entrance_effects).filter(Boolean)
-          if (mapped.length) {
-            setEffects(mapped)
-            try { localStorage.setItem('tc-effects', JSON.stringify(mapped)) } catch {}
+          
+          if (!effectsError && userEffects) {
+            const mapped = (userEffects || []).map((row: any) => row.entrance_effects).filter(Boolean)
+            if (mapped.length) {
+              setEffects(mapped)
+              try { localStorage.setItem('tc-effects', JSON.stringify(mapped)) } catch {}
+            }
           }
-        } catch {}
+        } catch (err) {
+          // Table doesn't exist yet, that's okay
+          console.log('Entrance effects table not available:', err)
+        }
       } catch {}
     }
     loadStats()
@@ -140,6 +270,61 @@ export default function Profile() {
     } catch {}
     try { localStorage.setItem(`tc-view-access-${user.id}-${viewed.id}`, String(Date.now())) } catch {}
     toast.success('Unlocked')
+  }
+
+  const handleFollow = async () => {
+    if (!user || !viewed || viewed.id === user.id) return
+    try {
+      if (isFollowing) {
+        await supabase
+          .from('user_follows')
+          .delete()
+          .eq('follower_id', user.id)
+          .eq('following_id', viewed.id)
+        setIsFollowing(false)
+        setFollowersCount(prev => Math.max(0, prev - 1))
+        toast.success('Unfollowed')
+      } else {
+        await supabase
+          .from('user_follows')
+          .insert({ follower_id: user.id, following_id: viewed.id })
+        setIsFollowing(true)
+        setFollowersCount(prev => prev + 1)
+        toast.success('Following!')
+      }
+    } catch (error) {
+      console.error('Follow error:', error)
+      toast.error('Failed to update follow status')
+    }
+  }
+
+  const handleBlock = async () => {
+    if (!user || !viewed || viewed.id === user.id) return
+    try {
+      if (isBlocked) {
+        await supabase
+          .from('blocked_users')
+          .delete()
+          .eq('blocker_id', user.id)
+          .eq('blocked_id', viewed.id)
+        setIsBlocked(false)
+        toast.success('Unblocked')
+      } else {
+        await supabase
+          .from('blocked_users')
+          .insert({ blocker_id: user.id, blocked_id: viewed.id })
+        setIsBlocked(true)
+        toast.success('Blocked')
+      }
+    } catch (error) {
+      console.error('Block error:', error)
+      toast.error('Failed to update block status')
+    }
+  }
+
+  const handleMessage = () => {
+    if (!viewed) return
+    navigate(`/messages?user=${viewed.username}`)
   }
 
   const handleSelectEffect = (id: string) => {
@@ -236,6 +421,9 @@ export default function Profile() {
     }
   }
 
+  // Define this before sections array since it's used inside
+  const isViewingOtherUser = viewed && user && viewed.id !== user.id
+
   const sections = [
     {
       id: 'profile_info',
@@ -243,15 +431,82 @@ export default function Profile() {
       icon: <Camera className="w-5 h-5" />,
       content: (
         <div className="space-y-4">
+          {user?.email && (!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (
+            <div className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C]">
+              <div className="text-xs text-gray-500 mb-1">Email</div>
+              <div className="text-sm text-gray-300">{user.email}</div>
+            </div>
+          )}
           <p className="text-gray-300">{bio}</p>
+          
+          {isViewingOtherUser && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                onClick={handleFollow}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  isFollowing
+                    ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                }`}
+              >
+                {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                {isFollowing ? 'Unfollow' : 'Follow'}
+              </button>
+              
+              <button
+                onClick={handleMessage}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Message
+              </button>
+              
+              <button
+                onClick={() => setShowGiftModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                <Gift className="w-4 h-4" />
+                Send Gift
+              </button>
+              
+              <button
+                onClick={handleBlock}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  isBlocked
+                    ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                    : 'bg-red-600 hover:bg-red-700 text-white'
+                }`}
+              >
+                <Ban className="w-4 h-4" />
+                {isBlocked ? 'Unblock' : 'Block'}
+              </button>
+            </div>
+          )}
+          
           {editingProfile ? (
             <div className="space-y-3">
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg text-white placeholder-gray-500 resize-none h-20"
-                placeholder="Tell us about yourself..."
-              />
+              <div>
+                <div className="text-xs text-gray-500 mb-1">
+                  Username {(profile?.role !== 'troll_officer' && profile?.role !== 'admin') && '(max 14 characters)'}
+                </div>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  maxLength={(profile?.role === 'troll_officer' || profile?.role === 'admin') ? undefined : 14}
+                  className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg text-white placeholder-gray-500"
+                  placeholder="Enter username..."
+                />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Bio</div>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg text-white placeholder-gray-500 resize-none h-20"
+                  placeholder="Tell us about yourself..."
+                />
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveProfile}
@@ -269,7 +524,10 @@ export default function Profile() {
             </div>
           ) : (
             <button
-              onClick={() => setEditingProfile(true)}
+              onClick={() => {
+                setEditingProfile(true)
+                setEditUsername(profile?.username || '')
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
             >
               <Edit className="w-4 h-4" />
@@ -347,6 +605,12 @@ export default function Profile() {
       icon: <Settings className="w-5 h-5" />,
       content: (
         <div className="space-y-3">
+          {user?.email && (!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (
+            <div className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C]">
+              <div className="text-xs text-gray-500 mb-1">Account Email</div>
+              <div className="text-sm text-gray-300">{user.email}</div>
+            </div>
+          )}
           <div className="p-3 bg-[#0D0D0D] rounded-lg">
             <div className="text-white mb-2">Profile View Price (max 2000 paid coins)</div>
             <div className="flex items-center gap-2">
@@ -354,17 +618,20 @@ export default function Profile() {
                 type="number"
                 min={0}
                 max={2000}
-                value={Number((profile as any)?.profile_view_price ?? localStorage.getItem(`tc-profile-view-price-${profile?.id}`) ?? 0)}
-                onChange={async (e) => {
+                value={viewPrice}
+                onChange={(e) => {
                   const val = Math.max(0, Math.min(2000, Number(e.target.value || 0)))
+                  setViewPrice(val)
+                }}
+                onBlur={async () => {
                   try {
                     await supabase
                       .from('user_profiles')
-                      .update({ profile_view_price: val, updated_at: new Date().toISOString() })
+                      .update({ profile_view_price: viewPrice, updated_at: new Date().toISOString() })
                       .eq('id', profile!.id)
-                    useAuthStore.getState().setProfile({ ...(profile as any), profile_view_price: val } as any)
+                    useAuthStore.getState().setProfile({ ...(profile as any), profile_view_price: viewPrice } as any)
                   } catch {
-                    try { localStorage.setItem(`tc-profile-view-price-${profile!.id}`, String(val)) } catch {}
+                    try { localStorage.setItem(`tc-profile-view-price-${profile!.id}`, String(viewPrice)) } catch {}
                   }
                 }}
                 className="w-24 bg-gray-900 text-white p-2 rounded border border-purple-600"
@@ -380,10 +647,20 @@ export default function Profile() {
     }
   ]
 
-  if (!profile) return null
+  console.log('Profile component - profile:', profile, 'user:', user, 'routeUsername:', routeUsername)
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
+        <div className="text-xl">Loading profile... (profile is null/undefined)</div>
+        <div className="text-sm mt-4">User: {user?.email || 'No user'}</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+    <>
+    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           {/* Profile Header */}
@@ -413,8 +690,38 @@ export default function Profile() {
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
               </div>
               <div className="flex-1">
-                <h1 className="text-2xl font-bold text-white mb-1">@{(viewed?.username || profile.username)}</h1>
-                <p className="text-gray-400 mb-3">{user?.email || ''}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <h1 className="text-2xl font-bold text-white">@{(viewed?.username || profile.username)}</h1>
+                  {/* Admin Badge */}
+                  {(viewed?.role || profile.role) === 'admin' && (
+                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
+                      <Shield className="w-3 h-3" />
+                      ADMIN
+                    </span>
+                  )}
+                  {/* OG Badge - for early users (created before 2026-01-01) or Level 100 */}
+                  {(viewed?.badge === 'og' || profile.badge === 'og' || getLevelFromXP((viewed?.xp || profile.xp) || 0) === 100) && (
+                    <span className="px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs font-bold rounded-full flex items-center gap-1">
+                      <Crown className="w-3 h-3" />
+                      OG
+                    </span>
+                  )}
+                </div>
+                {/* Tier and Level Display */}
+                <div className="mb-2">
+                  <div className="text-purple-400 font-semibold text-sm">
+                    Level {getLevelFromXP((viewed?.xp || profile.xp) || 0)} - {getTierFromXP((viewed?.xp || profile.xp) || 0).title}
+                  </div>
+                  {/* XP Progress Bar */}
+                  <XPProgressBar 
+                    key={(viewed?.xp || profile.xp) || 0}
+                    currentXP={(viewed?.xp || profile.xp) || 0} 
+                    className="mt-2" 
+                  />
+                </div>
+                {(!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (
+                  <p className="text-gray-400 mb-3">{user?.email || ''}</p>
+                )}
                 <div className="flex items-center gap-2">
                   <span className="text-yellow-400 text-xl font-bold">{(viewed?.paid_coin_balance ?? profile.paid_coin_balance)} Paid</span>
                   <span className="text-blue-400 text-xl font-bold">{(viewed?.free_coin_balance ?? profile.free_coin_balance)} Free</span>
@@ -461,30 +768,157 @@ export default function Profile() {
         </div>
       </div>
     </div>
+    
+    {viewed && (
+      <SendGiftModal
+        isOpen={showGiftModal}
+        onClose={() => setShowGiftModal(false)}
+        streamerId={viewed.id}
+        streamId="profile-gift"
+      />
+    )}
+    </>
   )
 }
 
 function DefaultPaymentMethod() {
-  const { profile } = useAuthStore()
+  const { profile, user } = useAuthStore()
   const [method, setMethod] = useState<any | null>(null)
+  const [allMethods, setAllMethods] = useState<any[]>([])
+  
+  const loadMethods = async () => {
+    if (!profile?.id) return
+    const { data } = await supabase
+      .from('user_payment_methods')
+      .select('*')
+      .eq('user_id', profile.id)
+      .eq('provider', 'card')
+      .order('is_default', { ascending: false })
+    setAllMethods(data || [])
+    setMethod(data?.find(m => m.is_default) || null)
+  }
+
   useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return
-      const { data } = await supabase
-        .from('user_payment_methods')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('provider', 'card')
-        .eq('is_default', true)
-        .maybeSingle()
-      setMethod(data || null)
+    loadMethods()
+    
+    // Set up real-time subscription for instant updates
+    if (profile?.id) {
+      const channel = supabase
+        .channel(`payment_methods_profile_${profile.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'user_payment_methods',
+          filter: `user_id=eq.${profile.id}`
+        }, () => {
+          loadMethods()
+        })
+        .subscribe()
+      
+      return () => {
+        void supabase.removeChannel(channel)
+      }
     }
-    load()
   }, [profile?.id])
+
+  const setAsDefault = async (methodId: string) => {
+    if (!profile?.id) return
+    try {
+      await supabase
+        .from('user_payment_methods')
+        .update({ is_default: false })
+        .eq('user_id', profile.id)
+      
+      await supabase
+        .from('user_payment_methods')
+        .update({ is_default: true })
+        .eq('id', methodId)
+      
+      toast.success('Default payment method updated')
+      loadMethods()
+    } catch (error) {
+      toast.error('Failed to update default payment method')
+    }
+  }
+
+  const removeMethod = async (methodId: string) => {
+    if (!profile?.id) return
+    // Optimistic UI: remove locally first
+    const backup = allMethods
+    setAllMethods(prev => prev.filter(m => m.id !== methodId))
+    if (method?.id === methodId) setMethod(null)
+
+    try {
+      const { error } = await supabase
+        .from('user_payment_methods')
+        .delete()
+        .eq('id', methodId)
+
+      if (error) {
+        setAllMethods(backup)
+        toast.error('Failed to remove payment method')
+        return
+      }
+
+      toast.success('Payment method removed')
+    } catch (error) {
+      setAllMethods(backup)
+      toast.error('Failed to remove payment method')
+    }
+  }
+
   if (!profile) return null
+  
   return (
-    <div className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C] text-sm text-gray-300">
-      Default payment method: {method ? 'Debit Card' : 'None'}
+    <div className="space-y-3">
+      {allMethods.length === 0 ? (
+        <div className="p-4 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C] text-center">
+          <div className="text-sm text-gray-400 mb-2">No payment methods saved</div>
+          <button
+            onClick={() => window.location.href = '/account/wallet'}
+            className="px-4 py-2 bg-troll-purple hover:bg-troll-purple/80 rounded-lg text-sm"
+          >
+            Add Payment Method
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {allMethods.map((m) => (
+            <div
+              key={m.id}
+              className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C] flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <CreditCard className="w-5 h-5 text-troll-neon-blue" />
+                <div>
+                  <div className="text-sm font-medium">
+                    {m.brand || m.card_brand || 'Card'} •••• {m.last4 || m.last_4 || '****'}
+                  </div>
+                  {m.is_default && (
+                    <div className="text-xs text-troll-neon-blue">Default</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {!m.is_default && (
+                  <button
+                    onClick={() => setAsDefault(m.id)}
+                    className="px-3 py-1 text-xs bg-troll-purple/20 hover:bg-troll-purple/40 rounded border border-troll-purple"
+                  >
+                    Set Default
+                  </button>
+                )}
+                <button
+                  onClick={() => removeMethod(m.id)}
+                  className="px-3 py-1 text-xs bg-red-500/20 hover:bg-red-500/40 rounded border border-red-500 text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

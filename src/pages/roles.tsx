@@ -3,6 +3,7 @@ import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { Shield, Users, RefreshCw, Award, Crown, UserCheck } from 'lucide-react'
 import { toast } from 'sonner'
+import ClickableUsername from '../components/ClickableUsername'
 
 export default function RolesManager() {
   const { profile } = useAuthStore()
@@ -114,7 +115,9 @@ export default function RolesManager() {
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id} className="border-b border-[#2C2C2C] hover:bg-[#2C2C2C] transition">
-                      <td className="px-3 py-3 text-white">@{u.username}</td>
+                      <td className="px-3 py-3 text-white">
+                        <ClickableUsername username={u.username} className="text-white" />
+                      </td>
                       <td className="px-3 py-3 text-gray-300">{u.email || 'N/A'}</td>
                       <td className="px-3 py-3">
                         <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-xs">

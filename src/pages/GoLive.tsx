@@ -7,6 +7,7 @@ import { useAuthStore } from "../lib/store";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import ClickableUsername from "../components/ClickableUsername";
 
 const APP_ID = import.meta.env.VITE_AGORA_APP_ID;
 
@@ -42,8 +43,25 @@ const GoLive: React.FC = () => {
 
   const startPreview = async () => {
     try {
-      localVideoTrack.current = await AgoraRTC.createCameraVideoTrack();
-      localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
+      // Create video track with optimizations
+      localVideoTrack.current = await AgoraRTC.createCameraVideoTrack({
+        encoderConfig: {
+          width: 1280,
+          height: 720,
+          frameRate: 30,
+          bitrateMin: 600,
+          bitrateMax: 1500
+        }
+      });
+      
+      // Create audio track with echo cancellation
+      localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack({
+        encoderConfig: 'high_quality_stereo',
+        AEC: true, // Acoustic Echo Cancellation
+        ANS: true, // Automatic Noise Suppression
+        AGC: true  // Automatic Gain Control
+      });
+      
       localVideoTrack.current?.play(videoRef.current!);
     } catch (err) {
       console.error(err);
@@ -126,12 +144,15 @@ const GoLive: React.FC = () => {
             <p className="text-gray-400 animate-pulse">Camera Preview</p>
           )}
           {multiBeam && (
-            <div className="absolute inset-0 p-2 grid grid-cols-2 gap-2 pointer-events-auto">
-              {beamBoxes.map((b) => (
+            <div className="absolute inset-0 p-2 grid grid-cols-4 grid-rows-4 gap-1 pointer-events-auto">
+              {beamBoxes.map((b, idx) => (
                 <div
                   key={b.id}
                   className="relative bg-black/50 border border-purple-600 rounded-lg overflow-hidden"
-                  style={{ width: `${b.w}%`, height: `${b.h}%` }}
+                  style={{
+                    gridColumn: idx === 0 ? 'span 2' : 'span 1',
+                    gridRow: idx === 0 ? 'span 2' : 'span 1'
+                  }}
                 >
                   <button
                     className="absolute top-1 left-1 text-[10px] bg-purple-900/70 px-2 py-1 rounded"
@@ -228,18 +249,21 @@ const GoLive: React.FC = () => {
           </select>
 
           <div className="flex items-center justify-between mb-3">
-            <label className="text-sm">Enable Multi Beams</label>
+            <label className="text-sm">Enable Multi Beams (14 boxes)</label>
             <button
               onClick={() => {
                 const next = !multiBeam
                 setMultiBeam(next)
                 if (next && beamBoxes.length === 0) {
-                  setBeamBoxes([
-                    { id: 'b1', w: 50, h: 50 },
-                    { id: 'b2', w: 50, h: 50 },
-                    { id: 'b3', w: 50, h: 50 },
-                    { id: 'b4', w: 50, h: 50 },
-                  ])
+                  // Create 14 beam boxes
+                  const boxes = Array.from({ length: 14 }, (_, i) => ({
+                    id: `b${i + 1}`,
+                    w: i === 0 ? 50 : 25, // First box bigger
+                    h: i === 0 ? 50 : 25,
+                    username: undefined,
+                    userId: undefined
+                  }))
+                  setBeamBoxes(boxes)
                 }
               }}
               className={`px-3 py-1 rounded ${multiBeam? 'bg-green-700':'bg-gray-700'} text-white text-xs`}
@@ -295,7 +319,9 @@ const GoLive: React.FC = () => {
               <div className="w-10 h-10 rounded-full overflow-hidden border border-purple-600">
                 <img src={previewUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${previewUser.username}`} className="w-full h-full object-cover" />
               </div>
-              <div className="font-semibold">@{previewUser.username}</div>
+              <div className="font-semibold">
+                <ClickableUsername username={previewUser.username} className="text-white" />
+              </div>
               <span className="ml-auto text-xs px-2 py-1 rounded bg-purple-800/60 border border-purple-500">{previewUser.role}</span>
             </div>
             <div className="text-xs text-gray-300 mb-3">{previewUser.bio || 'No bio'}</div>

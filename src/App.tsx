@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useLocation, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from './lib/store'
 import { supabase, isAdminEmail } from './lib/supabase'
+import { API_ENDPOINTS } from './lib/config'
 import { Toaster, toast } from 'sonner'
 import { coinOptimizer } from './lib/coinRotation'
 
@@ -45,9 +46,12 @@ import AccountPaymentsSuccess from './pages/AccountPaymentsSuccess'
 import AccountWallet from './pages/AccountWallet'
 import AccountPaymentLinkedSuccess from './pages/AccountPaymentLinkedSuccess'
 import Support from './pages/Support'
+import TermsAgreement from './pages/TermsAgreement'
+import Changelog from './pages/Changelog'
+import TransactionHistory from './pages/TransactionHistory'
 
 function App() {
-  const { user, profile, setAuth, setProfile, setLoading } = useAuthStore()
+  const { user, profile, setAuth, setProfile, setLoading, setIsAdmin } = useAuthStore()
   const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'trollcity2025@gmail.com'
   const isLoading = useAuthStore.getState().isLoading
   const [profileModalOpen, setProfileModalOpen] = useState(false)
@@ -60,7 +64,9 @@ function App() {
 
   // 🔐 Require Auth — No change
   const RequireAuth = () => {
-    const { user, isLoading } = useAuthStore()
+    const { user, profile, isLoading } = useAuthStore()
+    const location = useLocation()
+    
     if (isLoading) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#0A0814] text-white">
@@ -70,7 +76,18 @@ function App() {
         </div>
       )
     }
-    return user ? <Outlet /> : <Navigate to="/auth" replace />
+    
+    if (!user) return <Navigate to="/auth" replace />
+    
+    // Check if user has accepted terms (skip for admin)
+    // Only redirect if explicitly false (not null/undefined which means loading)
+    const needsTerms = profile && profile.terms_accepted === false && profile.role !== 'admin'
+    if (needsTerms && location.pathname !== '/terms') {
+      console.log('Redirecting to terms - user has not accepted:', profile.username)
+      return <Navigate to="/terms" replace />
+    }
+    
+    return <Outlet />
   }
 
   const FamilyAccessRoute = () => {
@@ -155,11 +172,68 @@ function App() {
         } catch {}
 
         if (session?.user) {
+          // Always check if this is an admin email FIRST and set profile immediately
+          const isAdmin = isAdminEmail(session.user.email)
+          
+          console.log('=== APP.TSX SESSION INIT ===')
+          console.log('Email:', session.user.email)
+          console.log('Is admin email:', isAdmin)
+          console.log('User ID:', session.user.id)
+          
+          // If admin email, load cached profile first to prevent flash, then fetch from backend
+          if (isAdmin) {
+            try {
+              // Load from localStorage immediately to prevent flash
+              const cachedProfile = localStorage.getItem('admin-profile-cache')
+              if (cachedProfile) {
+                try {
+                  const parsed = JSON.parse(cachedProfile)
+                  if (parsed.id === session.user.id) {
+                    console.log('Setting cached admin profile to prevent flash')
+                    setProfile(parsed)
+                    setIsAdmin(true)
+                  }
+                } catch {}
+              }
+
+              const { data: { session: currentSession } } = await supabase.auth.getSession()
+              const token = currentSession?.access_token
+              
+              if (token) {
+                const response = await fetch(API_ENDPOINTS.auth.fixAdminRole, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  }
+                })
+                const result = await response.json()
+                console.log('Fix admin role result:', result)
+                
+                if (result.success && result.profile) {
+                  console.log('Setting admin profile from backend:', result.profile)
+                  setProfile(result.profile)
+                  setIsAdmin(true)
+                  // Cache the profile for next time
+                  try {
+                    localStorage.setItem('admin-profile-cache', JSON.stringify(result.profile))
+                  } catch {}
+                  setLoading(false)
+                  return
+                }
+              }
+            } catch (err) {
+              console.error('Failed to fix admin role:', err)
+            }
+          }
+          
           const { data: profileData } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', session.user.id)
             .maybeSingle()
+            
+          console.log('Profile from DB:', profileData)
 
           if (!profileData) {
             let tries = 0
@@ -176,17 +250,40 @@ function App() {
                 tries++
               }
             }
-            setProfile(prof || null)
-          } else if (isAdminEmail(session.user.email) && profileData.role !== 'admin') {
-            const { data: updated } = await supabase
-              .from('user_profiles')
-              .update({ role: 'admin', updated_at: new Date().toISOString() })
-              .eq('id', session.user.id)
-              .select('*')
-              .single()
-            setProfile(updated || profileData)
+            
+            // Set admin role if applicable
+            if (prof && isAdmin && prof.role !== 'admin') {
+              console.log('Updating role to admin for retry path')
+              const { data: updated, error: updateError } = await supabase
+                .from('user_profiles')
+                .update({ role: 'admin', updated_at: new Date().toISOString() })
+                .eq('id', session.user.id)
+                .select('*')
+                .single()
+              console.log('Update result:', updated, 'Error:', updateError)
+              setProfile(updated || prof)
+              if (updated) setIsAdmin(true)
+            } else {
+              setProfile(prof || null)
+            }
           } else {
-            setProfile(profileData)
+            // Check if admin BEFORE setting profile to avoid flash
+            if (isAdmin && profileData.role !== 'admin') {
+              console.log('Updating role to admin (profile exists)')
+              const { data: updated, error: updateError } = await supabase
+                .from('user_profiles')
+                .update({ role: 'admin', updated_at: new Date().toISOString() })
+                .eq('id', session.user.id)
+                .select('*')
+                .single()
+              console.log('Update result:', updated, 'Error:', updateError)
+              setProfile(updated || profileData)
+              if (updated) setIsAdmin(true)
+            } else {
+              console.log('Setting profile with role:', profileData.role)
+              setProfile(profileData)
+              if (profileData.role === 'admin') setIsAdmin(true)
+            }
           }
         } else {
           setProfile(null)
@@ -268,9 +365,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
-      <div className="flex h-screen">
+      <div className="flex min-h-screen">
         {user && <Sidebar />}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-screen">
           {user && <Header />}
 
           <main className="flex-1 overflow-y-auto bg-[#121212]">
@@ -288,8 +385,9 @@ function App() {
 
                 <Route path="/store" element={<CoinStore />} />
 
-                <Route path="/profile/:username" element={<Profile />} />
                 <Route path="/profile/setup" element={<ProfileSetup />} />
+                <Route path="/profile/id/:userId" element={<Profile />} />
+                <Route path="/profile/:username" element={<Profile />} />
                 <Route path="/account/wallet" element={<AccountWallet />} />
                 <Route path="/account/payments/success" element={<AccountPaymentsSuccess />} />
                 <Route path="/account/payment-linked-success" element={<AccountPaymentLinkedSuccess />} />
@@ -315,6 +413,7 @@ function App() {
                 <Route path="/cashouts" element={<Cashouts />} />
                 <Route path="/earnings" element={<EarningsPayout />} />
                 <Route path="/support" element={<Support />} />
+                <Route path="/transactions" element={<TransactionHistory />} />
 
                 <Route
                   path="/officer/lounge"
@@ -334,10 +433,20 @@ function App() {
                   }
                 />
 
+                <Route
+                  path="/changelog"
+                  element={
+                    profile?.role === 'admin'
+                      ? <Changelog />
+                      : <Navigate to="/" replace />
+                  }
+                />
+
               </Route>
 
               <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/terms" element={<TermsAgreement />} />
 
               {/* 🛠 FIX: Always redirect unknown URLs to HOME, not back to /auth */}
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -389,7 +498,7 @@ function App() {
       </div>
 
       <ProfileSetupModal
-        isOpen={profileModalOpen || (!!profile && !profile.username)}
+        isOpen={profileModalOpen}
         onSubmit={handleProfileSetup}
         loading={profileModalLoading}
         onClose={() => setProfileModalOpen(false)}

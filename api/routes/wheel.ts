@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
+import { deductCoins, addCoins } from '../../src/lib/coinTransactions.js'
 
 dotenv.config()
 
@@ -35,68 +36,79 @@ const requireUserAuth = async (req: AuthedRequest, res: Response, next: NextFunc
 router.post('/deduct', requireUserAuth, async (req: AuthedRequest, res: Response) => {
   try {
     if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' })
+      return res.status(503).json({ success: false, error: 'Supabase not configured' })
     }
     const { userId: authedUserId } = req
     const { userId, amount } = (req.body || {}) as { userId?: string; amount?: number }
     const amt = Number(amount || 0)
-    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ error: 'Forbidden' })
-    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' })
+    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ success: false, error: 'Forbidden' })
+    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ success: false, error: 'Invalid amount' })
 
-    const { data: profile, error: selErr } = await supabase!
+    // Use centralized deductCoins function
+    const result = await deductCoins({
+      userId,
+      amount: amt,
+      type: 'wheel_spin',
+      coinType: 'free',
+      metadata: { action: 'wheel_spin_cost' },
+      supabaseClient: supabase
+    })
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error || 'Failed to deduct coins' })
+    }
+
+    // Fetch updated profile
+    const { data: profile } = await supabase!
       .from('user_profiles')
-      .select('id, free_coin_balance')
+      .select('id, free_coin_balance, paid_coin_balance')
       .eq('id', userId)
       .single()
-    if (selErr || !profile) return res.status(404).json({ error: 'User not found' })
 
-    const freeBal = Number(profile.free_coin_balance || 0)
-    if (freeBal < amt) return res.status(400).json({ error: 'Insufficient free coin balance' })
-
-    const { data: updated, error: updErr } = await supabase!
-      .from('user_profiles')
-      .update({ free_coin_balance: freeBal - amt, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-      .select('id, free_coin_balance')
-      .single()
-    if (updErr) throw updErr
-
-    return res.json({ success: true, profile: updated })
+    return res.json({ success: true, profile })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return res.status(500).json({ error: msg || 'Deduct failed' })
+    return res.status(500).json({ success: false, error: msg || 'Deduct failed' })
   }
 })
 
 router.post('/award', requireUserAuth, async (req: AuthedRequest, res: Response) => {
   try {
     if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' })
+      return res.status(503).json({ success: false, error: 'Supabase not configured' })
     }
     const { userId: authedUserId } = req
     const { userId, awardType, value } = (req.body || {}) as { userId?: string; awardType?: string; value?: number }
-    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ success: false, error: 'Forbidden' })
 
     const now = new Date().toISOString()
 
     if (awardType === 'coins') {
       const add = Number(value || 0)
-      if (!Number.isFinite(add) || add <= 0) return res.status(400).json({ error: 'Invalid coin value' })
-      const { data: profile, error: selErr } = await supabase!
+      if (!Number.isFinite(add) || add <= 0) return res.status(400).json({ success: false, error: 'Invalid coin value' })
+      
+      // Use centralized addCoins function
+      const result = await addCoins({
+        userId,
+        amount: add,
+        type: 'wheel_prize',
+        coinType: 'free',
+        metadata: { source: 'wheel_spin', prize_type: 'coins' },
+        supabaseClient: supabase
+      })
+
+      if (!result.success) {
+        return res.status(400).json({ success: false, error: result.error || 'Failed to award coins' })
+      }
+
+      // Fetch updated profile
+      const { data: profile } = await supabase!
         .from('user_profiles')
-        .select('id, free_coin_balance')
-        .eq('id', userId)
-        .single()
-      if (selErr || !profile) return res.status(404).json({ error: 'User not found' })
-      const freeBal = Number(profile.free_coin_balance || 0)
-      const { data: updated, error: updErr } = await supabase!
-        .from('user_profiles')
-        .update({ free_coin_balance: freeBal + add, updated_at: now })
-        .eq('id', userId)
         .select('*')
+        .eq('id', userId)
         .single()
-      if (updErr) throw updErr
-      return res.json({ success: true, profile: updated })
+
+      return res.json({ success: true, profile })
     }
 
     if (awardType === 'insurance') {
@@ -112,7 +124,7 @@ router.post('/award', requireUserAuth, async (req: AuthedRequest, res: Response)
 
     if (awardType === 'multiplier') {
       const mult = Number(value || 0)
-      if (!Number.isFinite(mult) || mult <= 0) return res.status(400).json({ error: 'Invalid multiplier value' })
+      if (!Number.isFinite(mult) || mult <= 0) return res.status(400).json({ success: false, error: 'Invalid multiplier value' })
       const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString()
       const { data: updated, error: updErr } = await supabase!
         .from('user_profiles')
@@ -125,6 +137,37 @@ router.post('/award', requireUserAuth, async (req: AuthedRequest, res: Response)
     }
 
     if (awardType === 'bankrupt') {
+      // Check if user has active bankrupt insurance
+      const { data: insurance, error: insError } = await supabase!
+        .from('user_insurances')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .gte('expires_at', now)
+        .or('protection_type.eq.bankrupt,protection_type.eq.full')
+        .limit(1)
+        .maybeSingle()
+
+      if (!insError && insurance) {
+        // User has insurance - protect them
+        console.log(`User ${userId} protected from bankrupt by insurance ${insurance.id}`)
+        
+        // Increment insurance trigger count
+        await supabase!
+          .from('user_insurances')
+          .update({ times_triggered: (insurance.times_triggered || 0) + 1 })
+          .eq('id', insurance.id)
+
+        // Return success without bankrupting
+        return res.json({ 
+          success: true, 
+          protected: true,
+          message: 'Insurance protected you from bankruptcy!',
+          insurance_type: insurance.protection_type
+        })
+      }
+
+      // No insurance - proceed with bankruptcy
       const { data: updated, error: updErr } = await supabase!
         .from('user_profiles')
         .update({ free_coin_balance: 0, updated_at: now })
@@ -132,7 +175,7 @@ router.post('/award', requireUserAuth, async (req: AuthedRequest, res: Response)
         .select('*')
         .single()
       if (updErr) throw updErr
-      return res.json({ success: true, profile: updated })
+      return res.json({ success: true, profile: updated, protected: false })
     }
 
     if (awardType === 'jackpot') {
@@ -146,55 +189,71 @@ router.post('/award', requireUserAuth, async (req: AuthedRequest, res: Response)
       return res.json({ success: true, profile: updated })
     }
 
-    return res.status(400).json({ error: 'Unknown awardType' })
+    return res.status(400).json({ success: false, error: 'Unknown awardType' })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return res.status(500).json({ error: msg || 'Award failed' })
+    return res.status(500).json({ success: false, error: msg || 'Award failed' })
   }
 })
 
 router.post('/spins/status', requireUserAuth, async (req: AuthedRequest, res: Response) => {
   try {
     if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' })
+      console.error('[Wheel Status] Supabase not configured')
+      return res.status(503).json({ success: false, error: 'Supabase not configured' })
     }
     const { userId: authedUserId } = req
     const { userId } = (req.body || {}) as { userId?: string }
-    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    
+    console.log('[Wheel Status] Request:', { userId, authedUserId })
+    
+    if (!userId || !authedUserId || authedUserId !== userId) {
+      console.error('[Wheel Status] Forbidden - userId mismatch')
+      return res.status(403).json({ success: false, error: 'Forbidden' })
+    }
 
     const today = new Date().toISOString().split('T')[0]
 
-    const { data: profile } = await supabase!
+    const { data: profile, error: profErr } = await supabase!
       .from('user_profiles')
       .select('id, role')
       .eq('id', userId)
       .single()
+    
+    if (profErr) {
+      console.error('[Wheel Status] Profile fetch error:', profErr)
+    }
+    
     const dailyLimit = (profile?.role === 'troll_officer') ? 15 : 10
 
-    const { data } = await supabase!
+    const { data, error: spinErr } = await supabase!
       .from('wheel_spins')
       .select('id, spin_count')
       .eq('user_id', userId)
       .eq('spin_date', today)
       .maybeSingle()
+    
+    if (spinErr) {
+      console.error('[Wheel Status] Spin fetch error:', spinErr)
+    }
 
     const count = Number(data?.spin_count || 0)
     const left = Math.max(0, dailyLimit - count)
     return res.json({ success: true, spin_count: count, daily_limit: dailyLimit, spins_left: left })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return res.status(500).json({ error: msg || 'Spin status failed' })
+    return res.status(500).json({ success: false, error: msg || 'Spin status failed' })
   }
 })
 
 router.post('/spins/register', requireUserAuth, async (req: AuthedRequest, res: Response) => {
   try {
     if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' })
+      return res.status(503).json({ success: false, error: 'Supabase not configured' })
     }
     const { userId: authedUserId } = req
     const { userId } = (req.body || {}) as { userId?: string }
-    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ success: false, error: 'Forbidden' })
 
     const today = new Date().toISOString().split('T')[0]
 
@@ -229,37 +288,50 @@ router.post('/spins/register', requireUserAuth, async (req: AuthedRequest, res: 
   }
 })
 
-export default router
-
 // Full spin endpoint: deduct cost, pick prize, apply award, register spin
 router.post('/spin', requireUserAuth, async (req: AuthedRequest, res: Response) => {
   try {
     if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' })
+      console.error('[Wheel Spin] Supabase not configured')
+      return res.status(503).json({ success: false, error: 'Supabase not configured' })
     }
     const { userId: authedUserId } = req
     const { userId, spinCost, prizes } = (req.body || {}) as { userId?: string; spinCost?: number; prizes?: { id: string; name: string; type: string; value: number; probability: number }[] }
-    if (!userId || !authedUserId || authedUserId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    
+    console.log('[Wheel Spin] Request:', { userId, authedUserId, spinCost })
+    
+    if (!userId || !authedUserId || authedUserId !== userId) {
+      console.error('[Wheel Spin] Forbidden - userId mismatch')
+      return res.status(403).json({ success: false, error: 'Forbidden' })
+    }
     const cost = Number(spinCost || 500)
-    if (!Number.isFinite(cost) || cost <= 0) return res.status(400).json({ error: 'Invalid spin cost' })
+    if (!Number.isFinite(cost) || cost <= 0) {
+      console.error('[Wheel Spin] Invalid spin cost:', cost)
+      return res.status(400).json({ success: false, error: 'Invalid spin cost' })
+    }
 
     const { data: profile, error: profErr } = await supabase!
       .from('user_profiles')
       .select('id, username, role, free_coin_balance, badge')
       .eq('id', userId)
       .single()
-    if (profErr || !profile) return res.status(404).json({ error: 'User not found' })
+    
+    if (profErr || !profile) {
+      console.error('[Wheel Spin] Profile fetch error:', profErr)
+      return res.status(404).json({ success: false, error: 'User not found', details: profErr?.message })
+    }
+    
+    console.log('[Wheel Spin] User profile:', { id: profile.id, balance: profile.free_coin_balance })
 
     const freeBal = Number(profile.free_coin_balance || 0)
-    if (freeBal < cost) return res.status(400).json({ error: 'Insufficient free coin balance' })
+    if (freeBal < cost) {
+      console.error('[Wheel Spin] Insufficient balance:', { balance: freeBal, cost })
+      return res.status(400).json({ success: false, error: 'Insufficient free coin balance' })
+    }
 
     const now = new Date().toISOString()
-
-    const { error: deductErr } = await supabase!
-      .from('user_profiles')
-      .update({ free_coin_balance: freeBal - cost, updated_at: now })
-      .eq('id', userId)
-    if (deductErr) throw deductErr
+    
+    console.log('[Wheel Spin] Sufficient balance. Proceeding with spin...')
 
     const items: { id: string; name: string; type: string; value: number; probability: number }[] = Array.isArray(prizes) && prizes.length > 0 ? prizes : [
       { id: '1', name: '750 Coins', type: 'coins', value: 750, probability: 28 },
@@ -330,10 +402,15 @@ router.post('/spin', requireUserAuth, async (req: AuthedRequest, res: Response) 
       return profile
     }
 
+    console.log('[Wheel Spin] Prize selected:', { id: prize.id, name: prize.name, type: prize.type, value: prize.value })
+    
     let finalProfile
     try {
       finalProfile = await applyAward()
+      console.log('[Wheel Spin] Award applied successfully')
     } catch (awardErr) {
+      console.error('[Wheel Spin] Award error:', awardErr)
+      console.log('[Wheel Spin] Rolling back coin deduction')
       await supabase!
         .from('user_profiles')
         .update({ free_coin_balance: freeBal, updated_at: now })
@@ -342,21 +419,32 @@ router.post('/spin', requireUserAuth, async (req: AuthedRequest, res: Response) 
     }
 
     const today = new Date().toISOString().split('T')[0]
-    const { data: spinRow } = await supabase!
+    const { data: spinRow, error: spinFetchErr } = await supabase!
       .from('wheel_spins')
       .select('id, spin_count')
       .eq('user_id', userId)
       .eq('spin_date', today)
       .maybeSingle()
+    
+    if (spinFetchErr) {
+      console.error('[Wheel Spin] Spin tracking fetch error:', spinFetchErr)
+    }
+    
     if (!spinRow) {
-      await supabase!.from('wheel_spins').insert({ user_id: userId, spin_date: today, spin_count: 1 })
+      const { error: insertErr } = await supabase!.from('wheel_spins').insert({ user_id: userId, spin_date: today, spin_count: 1 })
+      if (insertErr) console.error('[Wheel Spin] Spin tracking insert error:', insertErr)
     } else {
-      await supabase!.from('wheel_spins').update({ spin_count: Number(spinRow.spin_count || 0) + 1 }).eq('id', spinRow.id)
+      const { error: updateErr } = await supabase!.from('wheel_spins').update({ spin_count: Number(spinRow.spin_count || 0) + 1 }).eq('id', spinRow.id)
+      if (updateErr) console.error('[Wheel Spin] Spin tracking update error:', updateErr)
     }
 
+    console.log('[Wheel Spin] Success! Returning result')
     return res.json({ success: true, prize, profile: finalProfile })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    return res.status(500).json({ error: msg || 'Spin failed' })
+    console.error('[Wheel Spin] Fatal error:', msg)
+    return res.status(500).json({ success: false, error: msg || 'Spin failed', details: e instanceof Error ? e.stack : undefined })
   }
 })
+
+export default router

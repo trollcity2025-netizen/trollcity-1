@@ -12,8 +12,28 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
+// Service Worker registration - with proper cleanup on updates
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {})
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then((registration) => {
+        // Check for updates every hour
+        setInterval(() => {
+          registration.update()
+        }, 3600000)
+      })
+      .catch(() => {
+        console.warn('Service worker registration failed')
+      })
+      
+    // Clear old service workers and caches on app startup
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => {
+        if (registration.active && registration.active.scriptURL.includes('sw.js')) {
+          // Keep current, but ensure it's updated
+          registration.update()
+        }
+      })
+    })
   })
 }

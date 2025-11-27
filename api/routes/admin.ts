@@ -28,9 +28,7 @@ const requireAdmin = async (req: AuthedRequest, res: Response, next: NextFunctio
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined
     if (!token) return res.status(401).json({ error: 'Missing Authorization bearer token' })
 
-    // Support anon-key based client by setting the incoming JWT
-    try { await supabase.auth.setAuth(token!) } catch {}
-    const { data, error } = await supabase.auth.getUser()
+    const { data, error } = await supabase.auth.getUser(token)
     if (error || !data?.user) return res.status(401).json({ error: 'Invalid token' })
     const uid = data.user.id
     req.adminUser = { id: uid, email: data.user?.email || null }
@@ -154,6 +152,43 @@ router.patch('/users/:id/role', requireAdmin, async (req: AuthedRequest, res: Re
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     res.status(500).json({ success: false, error: 'Failed to update role', details: msg })
+  }
+})
+
+// Delete a user completely (admin only)
+router.delete('/users/:id', requireAdmin, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.params.id
+    if (!userId) return res.status(400).json({ error: 'Missing user ID' })
+
+    console.log('[Admin API] Deleting user:', userId)
+
+    // Delete from auth system first
+    try {
+      await supabase!.auth.admin.deleteUser(userId)
+      console.log('[Admin API] Deleted from auth.users:', userId)
+    } catch (authErr) {
+      console.warn('[Admin API] Auth delete failed:', authErr)
+      // Continue anyway - profile deletion is more important
+    }
+
+    // Delete from user_profiles (cascade will handle related data)
+    const { error: profileError } = await supabase!
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId)
+    
+    if (profileError) {
+      console.error('[Admin API] Profile delete error:', profileError)
+      throw profileError
+    }
+
+    console.log('[Admin API] User deleted successfully:', userId)
+    res.json({ success: true })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[Admin API] Delete user error:', msg)
+    res.status(500).json({ success: false, error: 'Failed to delete user', details: msg })
   }
 })
 

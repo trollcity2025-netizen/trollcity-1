@@ -3,6 +3,7 @@ import { Users, Mic, MicOff, Video, VideoOff, Gift, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
+import ClickableUsername from '../components/ClickableUsername'
 
 import GiftActionPanel from '../components/GiftActionPanel'
 import SendGiftModal from '../components/SendGiftModal'
@@ -129,7 +130,7 @@ export default function ViewerPage() {
                   👑 Royal Entrance
                 </div>
                 <div className="text-2xl font-extrabold text-yellow-300 animate-pulse-neon">
-                  {profile?.username} has entered — Troll Royalty Has Arrived!
+                  <ClickableUsername username={profile?.username || 'Unknown'} className="text-yellow-300 font-extrabold" /> has entered — Troll Royalty Has Arrived!
                 </div>
                 <p className="text-yellow-200 text-sm mt-1">Family Champions Winner</p>
 
@@ -149,7 +150,7 @@ export default function ViewerPage() {
               <div className="bg-black/70 px-8 py-4 rounded-2xl border border-[var(--troll-green-neon)] shadow-troll-glow animate-fade-in-up">
                 <div className="neon-pill neon-pill-green mb-2 w-max mx-auto">Entrance</div>
                 <div className="text-xl font-extrabold gradient-text-green-pink">
-                  {profile?.username} joined the stream!
+                  <ClickableUsername username={profile?.username || 'Unknown'} className="gradient-text-green-pink" /> joined the stream!
                 </div>
               </div>
             )}

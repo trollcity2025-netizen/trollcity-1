@@ -9,7 +9,8 @@ export default function FamilyApplication() {
   const [commitment, setCommitment] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const submit = async () => {
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!profile) return toast.error('Please sign in')
     if (!reason.trim() || !commitment.trim()) return toast.error('Complete all fields')
     const requiredCoins = 1000
@@ -20,13 +21,29 @@ export default function FamilyApplication() {
     }
     try {
       setLoading(true)
+      const now = new Date().toISOString()
+      
       const { error: coinErr } = await supabase
         .from('user_profiles')
-        .update({ paid_coin_balance: profile.paid_coin_balance - requiredCoins, updated_at: new Date().toISOString() })
+        .update({ paid_coin_balance: profile.paid_coin_balance - requiredCoins, updated_at: now })
         .eq('id', profile.id)
+      
       if (coinErr) throw coinErr
-      await supabase.from('applications').insert([{ user_id: profile.id, type: 'family', reason, commitment, created_at: new Date().toISOString() }])
-      toast.success('Application submitted')
+      
+      const { error } = await supabase.from('applications').insert([{ 
+        user_id: profile.id, 
+        type: 'family', 
+        reason, 
+        goals: commitment, 
+        status: 'pending'
+      }])
+      
+      if (error) {
+        console.error('[Family App] Submission error:', error)
+        toast.error(error.message || 'Failed to submit application')
+        throw error
+      }
+      toast.success('Application submitted! An admin will review it soon.')
       useAuthStore.getState().setProfile({ ...profile, paid_coin_balance: profile.paid_coin_balance - requiredCoins } as any)
       setReason('')
       setCommitment('')

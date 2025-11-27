@@ -44,32 +44,41 @@ const Auth = () => {
           setAuth(data.user, data.session)
           
           // Check if profile exists
-          const { data: profile } = await supabase
+          const { data: profileData } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', data.user.id)
-            .single()
+            .maybeSingle()
           
-          if (profile) {
-            if (isAdminEmail(data.user.email) && profile.role !== 'admin') {
+          if (profileData) {
+            // Check if admin BEFORE setting profile
+            if (isAdminEmail(data.user.email) && profileData.role !== 'admin') {
               try {
                 const now = new Date().toISOString()
-                await supabase.from('user_profiles').update({ role: 'admin', updated_at: now }).eq('id', data.user.id)
-                const { data: refreshed } = await supabase.from('user_profiles').select('*').eq('id', data.user.id).single()
-                if (refreshed) setProfile(refreshed)
-              } catch {}
+                const { data: updated } = await supabase
+                  .from('user_profiles')
+                  .update({ role: 'admin', updated_at: now })
+                  .eq('id', data.user.id)
+                  .select('*')
+                  .single()
+                setProfile(updated || profileData)
+              } catch (err) {
+                console.error('Failed to update admin role:', err)
+                setProfile(profileData)
+              }
             } else {
-              setProfile(profile)
+              setProfile(profileData)
             }
             
-            if (profile.username) {
+            if (profileData.username) {
               toast.success('Welcome back!')
               navigate('/')
             } else {
               toast.success('Login successful! Please complete your profile.')
-              navigate('/profile/setup')
+              navigate('/profile-setup')
             }
           } else {
+            // Profile doesn't exist, try polling for it
             let tries = 0
             let prof: any = null
             while (tries < 3 && !prof) {
@@ -87,10 +96,15 @@ const Auth = () => {
             if (prof) {
               setProfile(prof)
               if (prof.username) {
+                toast.success('Welcome back!')
                 navigate('/')
               } else {
-                navigate('/profile/setup')
+                toast.success('Login successful! Please complete your profile.')
+                navigate('/profile-setup')
               }
+            } else {
+              toast.success('Login successful! Please complete your profile.')
+              navigate('/profile-setup')
             }
           }
         } else {
@@ -102,37 +116,71 @@ const Auth = () => {
           setLoading(false)
           return
         }
-        const { data: signData, error: signUpErr } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { username: username.trim() }
-          }
+        
+        // Use our API endpoint to create user without sending confirmation email
+        console.log('Creating new user account...')
+        const signUpResponse = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, username: username.trim() })
         })
-        if (signUpErr) throw new Error(signUpErr.message || 'Signup failed')
+        const signUpData = await signUpResponse.json()
+        
+        if (!signUpResponse.ok || !signUpData.success) {
+          console.error('Signup failed:', signUpData)
+          throw new Error(signUpData.error || 'Signup failed')
+        }
+        
+        console.log('User created, signing in...')
+
+        // Now sign in the user
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
-        if (signInErr) throw new Error(signInErr.message || 'Login failed')
+        if (signInErr) {
+          console.error('Sign in error:', signInErr)
+          throw new Error(signInErr.message || 'Login failed')
+        }
+        
         const { data: { session } } = await supabase.auth.getSession()
         setAuth(session?.user ?? null, session ?? null)
+        
         if (session?.user) {
+          console.log('Session established, loading profile...')
           let tries = 0
           let prof: any = null
-          while (tries < 3 && !prof) {
-            const { data: p } = await supabase
+          while (tries < 5 && !prof) {
+            const { data: p, error: profErr } = await supabase
               .from('user_profiles')
               .select('*')
               .eq('id', session.user.id)
               .maybeSingle()
-            if (p) prof = p
-            else {
-              await new Promise(r => setTimeout(r, 500))
+            
+            if (profErr) {
+              console.error(`Profile load attempt ${tries + 1} error:`, profErr)
+            }
+            
+            if (p) {
+              prof = p
+              console.log('Profile loaded successfully')
+              break
+            } else {
+              console.log(`Profile not found yet, attempt ${tries + 1}/5, waiting...`)
+              await new Promise(r => setTimeout(r, 1000))
               tries++
             }
           }
-          if (prof) setProfile(prof)
+          
+          if (prof) {
+            setProfile(prof)
+            toast.success('Account created successfully!')
+            navigate('/')
+          } else {
+            console.warn('Profile not found after 5 attempts, but user was created')
+            toast.success('Account created! Please refresh the page.')
+            navigate('/')
+          }
+        } else {
+          throw new Error('Session not established')
         }
-        toast.success('Signed in')
-        navigate('/')
       }
     } catch (err: any) {
       console.error('Email auth error:', err)

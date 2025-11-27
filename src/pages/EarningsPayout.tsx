@@ -74,6 +74,31 @@ export default function CashoutRequest() {
     setRecentRequests(data || [])
   }
 
+  const cancelRequest = async (id: string) => {
+    if (!profile) return
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token || ''
+      const res = await fetch(`/api/payments/cashouts/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(j?.error || 'Cancel failed')
+        return
+      }
+      toast.success('Cashout request cancelled')
+      await loadRecent()
+    } catch (e: any) {
+      console.error('Cancel request error', e)
+      toast.error('Cancel failed')
+    }
+  }
+
   const placeholderForMethod = (m: PayoutMethod) => {
     if (m === 'CashApp') return '$Cashtag (e.g. $TrollKing)'
     if (m === 'Venmo') return '@VenmoHandle (e.g. @trollqueen)'
@@ -113,7 +138,7 @@ export default function CashoutRequest() {
       const email = user?.email || ''
       const username = profile.username
 
-      const { error } = await supabase.from('cashout_requests').insert([
+      const { data, error } = await supabase.from('cashout_requests').insert([
         {
           user_id: profile.id,
           username,
@@ -124,28 +149,23 @@ export default function CashoutRequest() {
           requested_coins: tier.coins,
           usd_value: tier.usd,
         },
-      ])
+      ]).select()
 
-      if (error) throw error
-
-      // Optionally: lock coins now (uncomment if you want immediate deduction)
-      /*
-      const { error: updateErr } = await supabase
-        .from('user_profiles')
-        .update({
-          paid_coin_balance: paidCoins - tier.coins,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id)
-      if (updateErr) throw updateErr
-      */
+      if (error) {
+        console.error('Cashout request error:', error)
+        toast.error(`Database error: ${error.message}. Please contact admin.`)
+        throw error
+      }
 
       toast.success('Cashout request submitted! Admin will review and pay manually.')
       setPayoutDetails('')
+      setFullName('')
       await loadRecent()
     } catch (err: any) {
-      console.error(err)
-      toast.error('Failed to submit request.')
+      console.error('Cashout submission error:', err)
+      if (!err.message?.includes('Database error:')) {
+        toast.error(err.message || 'Failed to submit request.')
+      }
     } finally {
       setLoading(false)
     }
@@ -316,6 +336,16 @@ export default function CashoutRequest() {
                   <div className="text-gray-500">
                     {new Date(r.created_at).toLocaleDateString()}
                   </div>
+                  {(r.status === 'pending' || r.status === 'processing') && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => cancelRequest(r.id)}
+                        className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-700"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

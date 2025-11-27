@@ -11,17 +11,30 @@ const ProfileSetup = () => {
 
   const suggestedUsername = React.useMemo(() => {
     if (profile?.username) return profile.username
-    if (user?.email) {
-      const emailUsername = user.email.split('@')[0]
-      return emailUsername.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 20)
+    if (user?.id) {
+      // Generate username from user ID instead of email
+      return `user${user.id.substring(0, 8)}`
     }
     return ''
-  }, [user?.email, profile?.username])
+  }, [user?.id, profile?.username])
 
   const [username, setUsername] = React.useState(profile?.username || suggestedUsername)
   const [bio, setBio] = React.useState(profile?.bio || '')
   const [loading, setLoading] = React.useState(false)
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false)
+  const [usernameError, setUsernameError] = React.useState('')
+
+  const handleUsernameChange = (value: string) => {
+    // Only allow letters and numbers
+    const alphanumeric = value.replace(/[^a-zA-Z0-9]/g, '')
+    setUsername(alphanumeric)
+    
+    if (value !== alphanumeric) {
+      setUsernameError('Username can only contain letters and numbers')
+    } else {
+      setUsernameError('')
+    }
+  }
 
   const [paymentsClient, setPaymentsClient] = React.useState<any>(null)
   const [card, setCard] = React.useState<any>(null)
@@ -51,11 +64,24 @@ const ProfileSetup = () => {
       if (!useAuthStore.getState().profile) return
       const appId = (import.meta as any).env.VITE_SQUARE_APPLICATION_ID
       const locationId = (import.meta as any).env.VITE_SQUARE_LOCATION_ID
-      if (!appId || !locationId) return
+      if (!appId || !locationId) {
+        console.error('Square credentials missing:', { appId, locationId })
+        toast.error('Payment configuration error')
+        return
+      }
+      
+      // Detect sandbox/test mode and warn
+      const isSandbox = appId.includes('sandbox') || locationId.includes('sandbox')
+      if (isSandbox && useAuthStore.getState().profile?.role === 'admin') {
+        console.warn('⚠️ SQUARE SANDBOX MODE DETECTED - Cards will show as TestCard')
+        toast.warning('Payment system in test mode. Production credentials needed.', { duration: 5000 })
+      }
+      
       const src = 'https://web.squarecdn.com/v1/square.js'
       const attach = async () => {
         try {
           const payments = await (window as any).Square.payments(appId, locationId)
+          console.log('Square payments initialized with appId:', appId)
           setPaymentsClient(payments)
           const k = '__tc_profile_card_attached'
           if ((window as any)[k]) return
@@ -80,13 +106,18 @@ const ProfileSetup = () => {
           await c.attach('#profile-card-container')
           ;(window as any)[k] = true
         } catch (e: any) {
-          toast.error(e?.message || 'Payments init failed')
+          console.error('Card attachment error:', e)
+          toast.error(e?.message || 'Payment form setup failed')
         }
       }
       if (!(window as any).Square) {
         const s = document.createElement('script')
         s.src = src
         s.async = true
+        s.onerror = () => {
+          console.error('Failed to load Square SDK from', src)
+          toast.error('Failed to load payment form')
+        }
         s.onload = attach
         document.body.appendChild(s)
       } else {
@@ -232,15 +263,18 @@ const ProfileSetup = () => {
           <div className="px-6 pb-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="username" className="block text-sm mb-2">Username</label>
+                <label htmlFor="username" className="block text-sm mb-2">Username (letters and numbers only)</label>
                 <input
                   id="username"
                   name="username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => handleUsernameChange(e.target.value)}
                   className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
                 />
+                {usernameError && (
+                  <p className="text-red-400 text-xs mt-1">{usernameError}</p>
+                )}
               </div>
 
               <div>
@@ -290,6 +324,16 @@ const ProfileSetup = () => {
                       const sJson = await sRes.json().catch(() => ({}))
                       if (!sRes.ok) { toast.error(sJson?.error || 'Save card failed'); return }
                       toast.success('Card saved')
+                      
+                      // Instant UI update if method is returned
+                      if (sJson?.method) {
+                        setMethods(prev => {
+                          const filtered = prev.filter(m => m.id !== sJson.method.id)
+                          const updated = filtered.map(m => ({ ...m, is_default: false }))
+                          return [{ ...sJson.method, is_default: true }, ...updated]
+                        })
+                      }
+                      
                       // Identity hooks
                       try { if (user?.id) await recordAppEvent(user.id, 'PAYMENT_METHOD_LINKED', { provider: 'card' }) } catch {}
                       try { if (user?.id) await recordAppEvent(user.id, 'HIGH_SPENDER_EVENT', { xp: 100 }) } catch {}

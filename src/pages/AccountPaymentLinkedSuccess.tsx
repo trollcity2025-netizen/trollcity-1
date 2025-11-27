@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -9,9 +9,9 @@ const AccountPaymentLinkedSuccess = () => {
   const { user, profile, setProfile } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
-  const [provider, setProvider] = React.useState('')
+  const [provider, setProvider] = useState('')
 
-  React.useEffect(() => {
+  useEffect(() => {
     const params = new URLSearchParams(location.search)
     const p = params.get('provider') || ''
     const token = params.get('token_id') || ''
@@ -28,32 +28,46 @@ const AccountPaymentLinkedSuccess = () => {
 
     const run = async () => {
       try {
+        // 🔹 Save regular card
         if (p === 'card') {
-          const saveRes = await fetch('/api/square/save-card', {
+          const res = await fetch('/api/square/save-card', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id, cardToken: token, saveAsDefault: true })
           })
-          const saved = await saveRes.json().catch(() => null)
-          if (!saveRes.ok) throw new Error(saved?.error || 'Failed to save card')
+          const saved = await res.json().catch(() => null)
+          if (!res.ok) throw new Error(saved?.error || 'Failed to save card')
+
+        // 🔹 Save wallet providers (CashApp, ApplePay, GooglePay, Venmo)
         } else {
-          const bindRes = await fetch('/api/square/wallet-bind', {
+          const res = await fetch('/api/square/wallet-bind', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id, provider: p, tokenId: token })
           })
-          const bound = await bindRes.json().catch(() => null)
-          if (!bindRes.ok) throw new Error(bound?.error || 'Failed to link wallet')
+          const bound = await res.json().catch(() => null)
+          if (!res.ok) throw new Error(bound?.error || 'Failed to link wallet')
         }
 
-        if (profile) setProfile(profile)
+        // 🔄 Fetch updated payment methods from Supabase
+        const { data: methods } = await supabase
+          .from('payment_methods')
+          .select('*')
+          .eq('user_id', user.id)
 
+        if (profile) {
+          setProfile({ ...profile, payment_methods: methods || [] })
+        }
+
+        // 🔐 Mark as valid in localStorage
         try {
           localStorage.setItem(`tc-valid-pay-${user.id}`, 'true')
         } catch {}
 
-        // Identity tracking
-        try { await recordAppEvent(user.id, 'PAYMENT_METHOD_LINKED', { provider: p }) } catch {}
+        // 🎯 Identity & analytics tracking
+        try {
+          await recordAppEvent(user.id, 'PAYMENT_METHOD_LINKED', { provider: p })
+        } catch {}
 
         toast.success('Payment method linked and activated!')
       } catch (err) {

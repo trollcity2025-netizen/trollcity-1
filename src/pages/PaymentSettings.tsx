@@ -39,7 +39,28 @@ export default function PaymentSettings() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [profile?.id])
+  useEffect(() => { 
+    load()
+    
+    // Set up real-time subscription for instant updates
+    if (profile?.id) {
+      const channel = supabase
+        .channel(`payment_methods_settings_${profile.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'user_payment_methods',
+          filter: `user_id=eq.${profile.id}`
+        }, () => {
+          load()
+        })
+        .subscribe()
+      
+      return () => {
+        void supabase.removeChannel(channel)
+      }
+    }
+  }, [profile?.id])
 
   // Attach ONLY ONE Square card input
   useEffect(() => {
@@ -49,38 +70,60 @@ export default function PaymentSettings() {
       const appId = import.meta.env.VITE_SQUARE_APPLICATION_ID
       const locationId = import.meta.env.VITE_SQUARE_LOCATION_ID
       if (!appId || !locationId) return
+      
+      // Detect sandbox/test mode and warn admin users
+      const isSandbox = appId.includes('sandbox') || locationId.includes('sandbox')
+      const currentProfile = useAuthStore.getState().profile
+      if (isSandbox && currentProfile?.role === 'admin') {
+        console.warn('⚠️ SQUARE SANDBOX MODE - Production Application ID required for real cards')
+        toast.warning('Payment system in sandbox mode - cards will appear as test cards', { duration: 5000 })
+      }
 
       const scriptUrl = 'https://web.squarecdn.com/v1/square.js'
 
       const attachCard = async () => {
         try {
-          const payments = await (window as any).Square.payments(appId, locationId)
-          const key = '__tc_global_card_attached'
-          if ((window as any)[key]) return
-
-          // Remove duplicate containers and stray Square iframes
-          document.querySelectorAll('#card-container').forEach((el, idx) => { if (idx > 0) el.remove() })
-          document.querySelectorAll('iframe').forEach((el: any) => {
-            const src = String(el?.src || '')
-            if (src.includes('squarecdn.com') || src.includes('square')) el.remove()
-          })
-
-          let container = document.getElementById('card-container')
-          if (container) {
-            const parent = container.parentElement
-            const fresh = document.createElement('div')
-            fresh.id = 'card-container'
-            fresh.className = container.className
-            if (parent) parent.replaceChild(fresh, container)
-            container = fresh
+          // First, destroy any existing card instances
+          if (cardRef.current) {
+            try {
+              await cardRef.current.destroy()
+            } catch {}
+            cardRef.current = null
           }
 
-          const card = await payments.card()
+          // Remove ALL Square iframes from the entire document
+          document.querySelectorAll('iframe').forEach((el: any) => {
+            const src = String(el?.src || '')
+            if (src.includes('squarecdn.com') || src.includes('square') || src.includes('web-sdk')) {
+              el.remove()
+            }
+          })
+
+          // Remove all card-container divs except the first one
+          const containers = document.querySelectorAll('#card-container')
+          containers.forEach((el, idx) => { 
+            if (idx > 0) el.remove() 
+          })
+
+          // Get or create the container
+          let container = document.getElementById('card-container')
+          if (!container) {
+            console.error('Card container not found')
+            return
+          }
+
+          // Clear the container
+          container.innerHTML = ''
+
+          const payments = await (window as any).Square.payments(appId, locationId)
+          const card = await payments.card({
+            postalCode: true  // Enable postal code field
+          })
           await card.attach('#card-container')
 
           cardRef.current = card
           attachedRef.current = true
-          ;(window as any)[key] = true
+          ;(window as any).__tc_square_attached = true
         } catch (err) {
           console.error('Square attach failed:', err)
         }
@@ -98,6 +141,18 @@ export default function PaymentSettings() {
     }
 
     initSquare()
+
+    // Cleanup on unmount
+    return () => {
+      if (cardRef.current) {
+        try {
+          cardRef.current.destroy()
+        } catch {}
+        cardRef.current = null
+      }
+      attachedRef.current = false
+      ;(window as any).__tc_square_attached = false
+    }
   }, [])
 
   const handleLinkCard = async () => {
@@ -123,9 +178,24 @@ export default function PaymentSettings() {
         })
       })
 
-      if (!res.ok) throw new Error('Failed to save card')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Failed to save card')
 
       toast.success('Card linked and set as default!')
+      
+      // Instant UI update if method is returned
+      if (data?.method) {
+        setMethods(prev => {
+          // Remove the new card from old position if it exists
+          const filtered = prev.filter(m => m.id !== data.method.id)
+          // Mark all as not default
+          const updated = filtered.map(m => ({ ...m, is_default: false }))
+          // Add new card as default at the top
+          return [{ ...data.method, is_default: true }, ...updated]
+        })
+      }
+      
+      // Still reload from server to ensure consistency
       await load()
     } catch (err: any) {
       toast.error(err?.message || 'Card link failed')
@@ -136,11 +206,25 @@ export default function PaymentSettings() {
 
   const remove = async (id: string) => {
     if (!profile) return
-    const res = await fetch(`/api/square/delete-method/${id}?userId=${profile.id}`, { method: 'DELETE' })
-    const j = await res.json().catch(() => ({}))
-    if (!res.ok) return toast.error(j?.error || 'Remove failed')
-    toast.success('Payment method removed')
-    await load()
+    // Optimistically remove from UI
+    const backup = methods
+    setMethods(old => old.filter(m => m.id !== id))
+
+    try {
+      const res = await fetch(`/api/square/delete-method/${id}?userId=${profile.id}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // Restore on failure
+        setMethods(backup)
+        return toast.error(j?.error || 'Remove failed')
+      }
+      toast.success('Payment method removed')
+      // refresh from server to be safe
+      await load()
+    } catch (e) {
+      setMethods(backup)
+      toast.error('Remove failed')
+    }
   }
 
   return (
@@ -150,6 +234,9 @@ export default function PaymentSettings() {
 
         <div className="p-6 bg-[#121212] rounded-lg border border-[#2C2C2C] mb-6">
           <h2 className="text-lg font-semibold mb-3">Link New Card</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Enter your card details including ZIP code. This card will be securely stored for future purchases.
+          </p>
 
           {/* SINGLE Square Input Container */}
           <div id="card-container" className="p-3 rounded border border-[#2C2C2C] bg-black" />
@@ -157,9 +244,9 @@ export default function PaymentSettings() {
           <button
             onClick={handleLinkCard}
             disabled={linking}
-            className="mt-4 w-full py-2 bg-purple-600 hover:bg-purple-700 rounded transition"
+            className="mt-4 w-full py-2 bg-purple-600 hover:bg-purple-700 rounded transition disabled:opacity-50"
           >
-            {linking ? 'Saving…' : 'Save Debit Card'}
+            {linking ? 'Saving…' : 'Save Card'}
           </button>
         </div>
 

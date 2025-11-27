@@ -42,6 +42,36 @@ function supabaseAdmin() {
 
 const router = Router()
 
+// CHECK SQUARE ENVIRONMENT
+router.get('/environment-check', async (req, res) => {
+  try {
+    const appId = process.env.VITE_SQUARE_APPLICATION_ID || process.env.SQUARE_APPLICATION_ID || ''
+    const locationId = getSquareLocationId()
+    const accessToken = process.env.SQUARE_ACCESS_TOKEN || ''
+    
+    // Detect sandbox mode
+    // Square sandbox app IDs contain 'sandbox'
+    // Square production app IDs start with sq0idp-
+    // Square production access tokens are long and complex (no simple prefix rule)
+    const isSandboxAppId = appId.includes('sandbox')
+    const isSandboxLocation = locationId.includes('sandbox')
+    const isProductionAppId = appId.startsWith('sq0idp-') || appId.startsWith('sq0atp-')
+    
+    // If we have production app ID, assume production mode
+    const mode = isProductionAppId ? 'production' : (isSandboxAppId || isSandboxLocation) ? 'sandbox' : 'production'
+    
+    res.json({
+      mode,
+      configured: !!accessToken && !!locationId,
+      appIdPrefix: appId.substring(0, 10) + '...',
+      locationIdPrefix: locationId.substring(0, 10) + '...',
+      warning: mode === 'sandbox' ? 'Cards will display as TestCard in sandbox mode. Use production credentials for real cards.' : null
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // CREATE CUSTOMER
 router.post('/create-customer', async (req, res) => {
   try {
@@ -84,8 +114,9 @@ router.post('/create-customer', async (req, res) => {
         {
           user_id: userId,
           provider: 'card',
+          token_id: `pending_${userId}`,
           square_customer_id: customerId,
-          is_default: true,
+          is_default: false,  // Don't mark as default until a real card is saved
         },
         { onConflict: 'id' }
       )
@@ -101,6 +132,22 @@ router.post('/save-card', async (req, res) => {
   try {
     const { userId, cardToken, saveAsDefault } = req.body || {}
     if (!userId || !cardToken) return res.status(400).json({ error: 'Missing data' })
+    
+    // Reject mock/test tokens in production
+    if (cardToken.includes('mock_') || cardToken.startsWith('test_')) {
+      return res.status(400).json({ 
+        error: 'Invalid card token',
+        details: 'Test cards are not allowed in production. Please use a valid debit or credit card.'
+      })
+    }
+    
+    // Reject mock/test tokens
+    if (cardToken.startsWith('mock_') || cardToken.startsWith('test_')) {
+      return res.status(400).json({ 
+        error: 'Invalid card token',
+        details: 'Payment form not properly initialized. Try refreshing the page and adding your card again.'
+      })
+    }
 
     const sb = supabaseAdmin()
     let { data: pm } = await sb
@@ -124,41 +171,130 @@ router.post('/save-card', async (req, res) => {
       pm = { square_customer_id: json.square_customer_id }
     }
 
-    const createBody = {
+    // Use Square Cards API to create a card on file for the customer
+    const createCardBody = {
       source_id: cardToken,
-      autocomplete: false,
-      location_id: getSquareLocationId(),
-      customer_id: pm.square_customer_id,
-      idempotency_key: `save-${userId}-${crypto.randomUUID()}`,
+      card: {
+        customer_id: pm.square_customer_id,
+      },
+      idempotency_key: `card-${userId}-${crypto.randomUUID()}`,
     }
 
-    const { ok, json } = await squareRequest('/v2/payments', 'POST', createBody)
+    const { ok, json } = await squareRequest('/v2/cards', 'POST', createCardBody)
     if (!ok) {
+      const errorDetail = json?.errors?.[0]?.detail || 'Unknown error'
+      const errorCode = json?.errors?.[0]?.code || ''
+      console.error('Square save-card error:', { errorCode, errorDetail, cardToken })
+      
+      // Log failed card save attempt
+      try {
+        await sb.from('declined_transactions').insert({
+          user_id: userId,
+          amount_usd: 0,
+          currency: 'USD',
+          error_code: errorCode,
+          error_message: errorDetail,
+          error_details: json?.errors || null,
+          payment_provider: 'square',
+          source_id: cardToken,
+          metadata: {
+            operation: 'save_card',
+          }
+        })
+      } catch (logErr) {
+        console.error('Failed to log declined card save:', logErr)
+      }
+      
+      // Provide helpful message
+      if (errorDetail?.includes('TEST_') || errorCode?.includes('TEST_') || errorDetail?.includes('declined')) {
+        return res.status(500).json({
+          error: 'Card declined or invalid',
+          details: 'This card cannot be used. If testing, make sure you are using valid test card numbers for your environment.'
+        })
+      }
+      
       return res.status(500).json({
-        error: 'Failed to vault card',
-        details: json?.errors?.[0]?.detail,
+        error: 'Failed to save card',
+        details: errorDetail,
       })
     }
 
-    const card = json?.payment?.card_details?.card || {}
-    const paymentId = json?.payment?.id
-    if (paymentId) {
-      await squareRequest(`/v2/payments/${paymentId}/cancel`, 'POST')
+    // Extract card details from the Cards API response
+    const card = json?.card || {}
+    const cardId = card.id
+    
+    if (!cardId) {
+      return res.status(500).json({ 
+        error: 'Card save failed', 
+        details: 'No card ID returned from Square' 
+      })
     }
-
-    await sb
+    
+    // If saving as default, clear other defaults first
+    if (saveAsDefault) {
+      await sb
+        .from('user_payment_methods')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+    }
+    
+    // Upsert into `user_payment_methods` with the proper card ID from Cards API
+    const { data: savedMethods } = await sb
       .from('user_payment_methods')
-      .update({
-        square_card_id: card.id,
+      .upsert({
+        user_id: userId,
+        provider: 'card',
+        token_id: cardId,  // Use the card ID, not the nonce
+        square_card_id: cardId,  // Store the reusable card ID
+        square_customer_id: pm?.square_customer_id || null,
         brand: card.card_brand,
         last4: card.last_4,
         exp_month: card.exp_month,
         exp_year: card.exp_year,
         is_default: !!saveAsDefault,
         updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,provider,token_id',
+        ignoreDuplicates: false
       })
-      .eq('user_id', userId)
-      .eq('provider', 'card')
+      .select()
+    
+    const updatedMethod = savedMethods?.[0] || null
+
+    // Also upsert into legacy `payment_methods` table so the store UI recognizes the new card
+    try {
+      if (saveAsDefault) {
+        await sb.from('payment_methods').update({ is_default: false }).eq('user_id', userId)
+      }
+
+      const { data: existing } = await sb
+        .from('payment_methods')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('provider', 'card')
+        .maybeSingle()
+
+      const pmRow = {
+        user_id: userId,
+        provider: 'card',
+        card_brand: card.card_brand || null,
+        last_4: card.last_4 || null,
+        token_id: cardId,  // Use the card ID from Cards API
+        is_default: !!saveAsDefault,
+        display_name: `${card.card_brand || 'Card'} •••• ${card.last_4}`,
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      }
+
+      if (existing && existing.id) {
+        await sb.from('payment_methods').update(pmRow).eq('id', existing.id)
+      } else {
+        await sb.from('payment_methods').insert(pmRow)
+      }
+    } catch (err) {
+      // Non-fatal: log and continue — store may still work from user_payment_methods
+      console.warn('Failed to upsert into payment_methods table:', err)
+    }
 
     res.json({
       success: true,
@@ -168,6 +304,7 @@ router.post('/save-card', async (req, res) => {
         exp_month: card.exp_month,
         exp_year: card.exp_year,
       },
+      method: updatedMethod || null,
     })
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'save-card error' })
@@ -188,11 +325,23 @@ router.post('/charge', async (req, res) => {
       .select('*')
       .eq('user_id', userId)
       .eq('is_default', true)
+      .not('square_card_id', 'like', 'mock_%')
+      .not('square_card_id', 'like', 'test_%')
+      .not('square_card_id', 'like', 'pending_%')
       .maybeSingle()
 
     if (!method?.square_card_id) {
       return res.status(400).json({
         error: 'No default payment method',
+        details: 'Please add a valid debit or credit card in your wallet settings.'
+      })
+    }
+
+    // Additional validation to reject mock/test/pending tokens
+    if (method.square_card_id.startsWith('mock_') || method.square_card_id.startsWith('test_') || method.square_card_id.startsWith('pending_')) {
+      return res.status(400).json({
+        error: 'Invalid payment method',
+        details: 'Test payment methods cannot be used. Please add a valid debit or credit card.'
       })
     }
 

@@ -20,7 +20,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 export type UserRole = 'user' | 'moderator' | 'admin' | 'troll_officer'
-export type UserTier = 'Bronze' | 'Silver' | 'Gold' | 'Platinum'
+export type UserTier = string // Now dynamic based on XP
 export type StreamStatus = 'live' | 'ended'
 export type TransactionType = 'purchase' | 'gift' | 'spin' | 'insurance' | 'cashout'
 
@@ -29,8 +29,11 @@ export interface UserProfile {
   username: string
   avatar_url: string
   bio: string
+  email?: string
   role: UserRole
   tier: UserTier
+  xp: number // Total XP points
+  level: number // Calculated from XP
   paid_coin_balance: number
   free_coin_balance: number
   total_earned_coins: number
@@ -39,11 +42,18 @@ export interface UserProfile {
   insurance_expires_at: string | null
   no_kick_until: string | null
   no_ban_until: string | null
+  terms_accepted?: boolean
+  badge?: string | null
+  has_insurance?: boolean
+  multiplier_active?: boolean
+  multiplier_value?: number
+  multiplier_expires?: string | null
   created_at: string
   updated_at: string
 
   sav_bonus_coins?: number
   vived_bonus_coins?: number
+  payment_methods?: Array<any>
 
 }
 
@@ -61,6 +71,7 @@ export interface Stream {
   total_unique_gifters: number
   agora_channel: string
   agora_token: string | null
+  multi_beam?: boolean
   created_at: string
   updated_at: string
 }

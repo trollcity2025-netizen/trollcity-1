@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tsconfigPaths from "vite-tsconfig-paths";
-import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
+// import tsconfigPaths from "vite-tsconfig-paths";
+// import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -10,31 +10,26 @@ const disableHmr = process.env.DISABLE_HMR === '1'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react({
-      babel: {
-        plugins: [
-          'react-dev-locator',
-        ],
-      },
-    }),
-    traeBadgePlugin({
-      variant: 'dark',
-      position: 'bottom-right',
-      prodOnly: true,
-      clickable: true,
-      clickUrl: 'https://www.trae.ai/solo?showJoin=1',
-      autoTheme: true,
-      autoThemeTarget: '#root'
-    }), 
-    tsconfigPaths(),
+    react(),
+    // traeBadgePlugin({
+    //   variant: 'dark',
+    //   position: 'bottom-right',
+    //   prodOnly: true,
+    //   clickable: true,
+    //   clickUrl: 'https://www.trae.ai/solo?showJoin=1',
+    //   autoTheme: true,
+    //   autoThemeTarget: '#root'
+    // }), 
+    // tsconfigPaths(),
   ],
   server: {
     host: 'localhost',
+    port: 5174,
     strictPort: true,
     hmr: disableHmr ? false : {
       host: 'localhost',
-      clientPort: 5173,
-      port: 5173,
+      clientPort: 5174,
+      port: 5174,
       protocol: 'ws'
     },
     proxy: {

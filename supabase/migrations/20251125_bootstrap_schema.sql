@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   role text NOT NULL DEFAULT 'user',
   tier text NOT NULL DEFAULT 'Bronze',
   paid_coin_balance integer NOT NULL DEFAULT 0,
-  free_coin_balance integer NOT NULL DEFAULT 0,
+  free_coin_balance integer NOT NULL DEFAULT 200,
   total_earned_coins integer NOT NULL DEFAULT 0,
   total_spent_coins integer NOT NULL DEFAULT 0,
   sav_bonus_coins integer DEFAULT 0,

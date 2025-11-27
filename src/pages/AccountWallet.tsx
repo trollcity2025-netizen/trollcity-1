@@ -1,167 +1,212 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../lib/store'
-import { supabase } from '../lib/supabase'
-import { toast } from 'sonner'
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../lib/store';
+import { toast } from 'sonner';
 
-const AccountWallet = () => {
-  const { user } = useAuthStore()
-  const navigate = useNavigate()
+export default function AccountWallet() {
+  const { user } = useAuthStore();
+  const [cardNumber, setCardNumber] = useState('');
+  const [exp, setExp] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [savedMethods, setSavedMethods] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const [paymentsClient, setPaymentsClient] = useState<any>(null)
-  const [cardInstance, setCardInstance] = useState<any>(null)
-  const [linking, setLinking] = useState<string>('')
-  const mountedRef = useRef(false)
-  const [methods, setMethods] = useState<any[]>([])
-
+  // Fetch saved cards on load
   useEffect(() => {
-    if (!user) navigate('/auth')
-  }, [user, navigate])
+    if (!user) return;
+    fetchSavedCards();
+  }, [user]);
 
-  // 🔹 Load saved cards from Supabase
-  const loadMethods = async () => {
-    if (!user) return
+  const fetchSavedCards = async () => {
     const { data, error } = await supabase
       .from('user_payment_methods')
-      .select('*')
+      .select('id, provider, display_name, brand, last4, is_default, created_at')
       .eq('user_id', user.id)
-      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
 
-    if (!error) setMethods(data || [])
+    if (error) {
+      console.error(error);
+      toast.error('Failed to load saved payment methods');
+    } else {
+      setSavedMethods(data || []);
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    if (!user) return
+    setLoading(true)
+    const backup = savedMethods
+    setSavedMethods(prev => prev.filter(m => m.id !== id))
+    try {
+      const { error } = await supabase
+        .from('user_payment_methods')
+        .delete()
+        .eq('id', id)
+
+      if (error) {
+        console.error('Delete failed', error)
+        setSavedMethods(backup)
+        toast.error(error?.message || 'Failed to remove payment method')
+      } else {
+        toast.success('Payment method removed')
+        fetchSavedCards()
+      }
+    } catch (e) {
+      console.error(e)
+      setSavedMethods(backup)
+      toast.error('Failed to remove payment method')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { loadMethods() }, [user?.id])
+  const handleSaveCard = async () => {
+    if (!cardNumber || !exp || !cvv || !zipCode) {
+      toast.error('Please complete all fields including ZIP code');
+      return;
+    }
 
-  // 🔹 Initialize Square UI Card Input
-  useEffect(() => {
-    const init = async () => {
-      if (!user) return
-      if (mountedRef.current) return
-      mountedRef.current = true
+    // Validate ZIP code (5 digits for US)
+    if (!/^\d{5}$/.test(zipCode)) {
+      toast.error('Please enter a valid 5-digit ZIP code');
+      return;
+    }
 
-      const appId = import.meta.env.VITE_SQUARE_APPLICATION_ID
-      const locationId = import.meta.env.VITE_SQUARE_LOCATION_ID
-      const src = 'https://web.squarecdn.com/v1/square.js'
-
-      if (!(window as any).Square) {
-        await new Promise<void>((resolve) => {
-          const script = document.createElement('script')
-          script.src = src
-          script.onload = () => resolve()
-          document.body.appendChild(script)
+    setLoading(true);
+    const last4 = cardNumber.slice(-4);
+    try {
+      // In development we create a mock token; in production, use Square Web Payments SDK
+      const cardToken = `mock_${last4}`
+      const res = await fetch('/api/payments/save-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId: user.id, 
+          cardToken, 
+          saveAsDefault: false,
+          postalCode: zipCode,
+          cardDetails: {
+            number: cardNumber,
+            exp,
+            cvv
+          }
         })
-      }
-
-      const payments = await (window as any).Square.payments(appId, locationId)
-      setPaymentsClient(payments)
-
-      let container = document.getElementById('wallet-card-container')
-      if (!container) return
-
-      const card = await payments.card()
-      setCardInstance(card)
-      await card.attach('#wallet-card-container')
-    }
-    init()
-    return () => { mountedRef.current = false }
-  }, [user])
-
-  // 🟣 FIXED — Directly Save Card to Supabase (No Backend /API Calls)
-  const linkCard = async () => {
-    if (!paymentsClient || !cardInstance) return
-    setLinking('card')
-    try {
-      const tokenResult = await cardInstance.tokenize()
-      if (!tokenResult || tokenResult.status !== 'OK') {
-        throw new Error('Tokenization failed')
-      }
-
-      const { token, card } = tokenResult
-      const brand = card?.brand || 'Card'
-      const last4 = card?.last4 || '0000'
-      const exp_month = card?.expMonth || null
-      const exp_year = card?.expYear || null
-
-      const { error } = await supabase.from('user_payment_methods').insert([
-        {
-          user_id: user?.id,
-          provider: 'card',
-          token_id: token,
-          brand,
-          last4,
-          exp_month,
-          exp_year,
-          display_name: `${brand} ••••${last4}`,
-          is_default: true,
-        }
-      ])
-
-      if (error) throw error
-
-      toast.success('Payment method securely saved')
-      await loadMethods()
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to link card')
-    }
-    setLinking('')
-  }
-
-  const deleteAccount = async () => {
-    try {
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token || ''
-      await fetch('/api/auth/delete-account', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
       })
-      toast.success('Account deleted')
-      navigate('/auth')
-    } catch (e: any) {
-      toast.error(e?.message || 'Delete failed')
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error('Save card failed', j)
+        toast.error(j?.error || 'Failed to save card')
+      } else {
+        toast.success('Card saved successfully!')
+        if (j?.method) {
+          setSavedMethods(prev => [j.method, ...prev])
+        }
+        setCardNumber('')
+        setExp('')
+        setCvv('')
+        setZipCode('')
+        await fetchSavedCards()
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Failed to save card')
+    } finally {
+      setLoading(false)
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
-      <div className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-3xl font-bold mb-6">Wallet & Payments</h1>
-
-        {/* 🔹 Card UI Container */}
-        <div
-          id="wallet-card-container"
-          className="mt-4 p-4 bg-[#0D0D0D] rounded border border-[#2C2C2C]"
+    <div className="p-6 max-w-xl mx-auto text-white">
+      <h2 className="text-xl font-bold mb-4">Wallet & Payments</h2>
+      <div className="mb-6">
+        <label className="block text-sm mb-1">Account Email</label>
+        <input
+          value={user?.email || ''}
+          disabled
+          className="w-full bg-[#121212] border border-gray-700 p-2 rounded"
         />
+      </div>
 
+      {/* Single Card Form */}
+      <div className="space-y-4 mb-4 bg-[#0d0d0d] p-4 rounded border border-gray-700">
+        <div className="text-sm text-gray-400 mb-2">
+          💳 Add your debit or credit card
+        </div>
+        <input
+          type="text"
+          placeholder="Card number"
+          value={cardNumber}
+          onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ''))}
+          maxLength={16}
+          className="w-full p-2 rounded bg-[#121212] border border-gray-600"
+        />
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="MM/YY"
+            value={exp}
+            onChange={(e) => setExp(e.target.value)}
+            maxLength={5}
+            className="w-1/3 p-2 rounded bg-[#121212] border border-gray-600"
+          />
+          <input
+            type="password"
+            placeholder="CVV"
+            value={cvv}
+            onChange={(e) => setCvv(e.target.value.replace(/\D/g, ''))}
+            maxLength={4}
+            className="w-1/3 p-2 rounded bg-[#121212] border border-gray-600"
+          />
+          <input
+            type="text"
+            placeholder="ZIP Code"
+            value={zipCode}
+            onChange={(e) => setZipCode(e.target.value.replace(/\D/g, ''))}
+            maxLength={5}
+            className="w-1/3 p-2 rounded bg-[#121212] border border-gray-600"
+          />
+        </div>
         <button
-          onClick={linkCard}
-          disabled={linking === 'card'}
-          className="mt-3 w-full py-3 rounded bg-[#7C3AED]"
+          onClick={handleSaveCard}
+          disabled={loading}
+          className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded font-semibold disabled:opacity-50"
         >
-          {linking === 'card' ? 'Saving card…' : 'Save Debit Card'}
-        </button>
-
-        <h2 className="text-xl mt-8 font-semibold">Linked Payment Methods</h2>
-        {methods.length === 0 && <p>No methods linked.</p>}
-
-        {methods.map(m => (
-          <div key={m.id} className="p-4 mt-2 rounded bg-[#0D0D0D] border border-[#2C2C2C] flex justify-between">
-            <div>
-              <div className="font-semibold">{m.display_name}</div>
-              <div className="text-xs text-gray-400">{m.brand} •••• {m.last4}</div>
-            </div>
-            {m.is_default && <span className="text-green-400 text-xs">Default</span>}
-          </div>
-        ))}
-
-        <button
-          onClick={deleteAccount}
-          className="mt-8 px-4 py-3 rounded bg-red-600 text-white"
-        >
-          Delete Account
+          {loading ? 'Saving...' : 'Save Debit Card'}
         </button>
       </div>
-    </div>
-  )
-}
 
-export default AccountWallet
+      <h3 className="text-lg font-semibold mt-6 mb-2">Linked Payment Methods</h3>
+      {savedMethods.length === 0 ? (
+        <p>No methods linked.</p>
+      ) : (
+        <div className="space-y-3">
+          {savedMethods.map((method) => (
+            <div
+              key={method.id}
+              className="bg-[#1a1a1a] p-3 rounded border border-gray-700 flex items-center justify-between"
+            >
+              <div>
+                <span>
+                  {method.provider === 'card' ? `💳 ${method.brand} ending in ${method.last4}` : method.display_name || method.provider}
+                  {method.is_default ? ' (default)' : ''}
+                </span>
+                <div className="text-sm text-gray-400">
+                  Added {new Date(method.created_at).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="ml-4 flex items-center gap-2">
+                <button
+                  onClick={() => handleRemove(method.id)}
+                  className="px-3 py-1 bg-gray-700 rounded text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

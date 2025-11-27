@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { Users, Crown, UploadCloud, Star } from 'lucide-react'
+import ClickableUsername from '../components/ClickableUsername'
 
 interface Family {
   id: string
@@ -268,9 +269,10 @@ export default function FamilyProfilePage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="font-semibold text-purple-200">
-                        {m.profiles?.username || 'Unknown'}
-                      </span>
+                      <ClickableUsername
+                        username={m.profiles?.username || 'Unknown'}
+                        className="font-semibold text-purple-200"
+                      />
                       {m.role === 'leader' && (
                         <span className="neon-pill neon-pill-red text-[9px]">Leader</span>
                       )}

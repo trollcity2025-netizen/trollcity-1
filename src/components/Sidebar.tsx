@@ -11,16 +11,17 @@ import {
   Settings,
   LayoutDashboard,
   Banknote,
-  Zap,
-  Aperture, // Troll Wheel icon
+  Aperture,
   FileText,
+  UserCheck,
+  ListChecks,
+  Receipt,
 } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { supabase, isAdminEmail } from '../lib/supabase'
 
 export default function Sidebar() {
   const { profile, user } = useAuthStore()
-  const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'trollcity2025@gmail.com'
   const location = useLocation()
   const isActive = (path: string) => location.pathname === path
 
@@ -33,31 +34,39 @@ export default function Sidebar() {
 
   const [canSeeOfficer, setCanSeeOfficer] = useState(false)
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
+  const isAdmin = profile?.role === 'admin'
 
   useEffect(() => {
     const checkAccess = async () => {
-      if (!profile) { setCanSeeOfficer(false); setCanSeeFamilyLounge(false); return }
+      if (!profile) { 
+        setCanSeeOfficer(false)
+        setCanSeeFamilyLounge(false)
+        return 
+      }
+      
       const isAdmin = profile.role === 'admin'
       const isOfficer = profile.role === 'troll_officer'
+      
+      // Troll Officer Lounge: Only admin and troll_officer role
       setCanSeeOfficer(isAdmin || isOfficer)
 
-      if (isAdmin) { setCanSeeFamilyLounge(true); return }
+      // Troll Family Lounge: Admin, troll_officer, OR approved family application
+      if (isAdmin || isOfficer) { 
+        setCanSeeFamilyLounge(true)
+        return 
+      }
+      
+      // Check if user has an approved family application
       try {
-        const { data: member } = await supabase
-          .from('troll_family_members')
-          .select('approved, has_crown_badge')
+        const { data: familyApp } = await supabase
+          .from('applications')
+          .select('status')
           .eq('user_id', profile.id)
+          .eq('type', 'family')
+          .eq('status', 'approved')
           .maybeSingle()
 
-        const { data: payment } = await supabase
-          .from('coin_transactions')
-          .select('id')
-          .eq('user_id', profile.id)
-          .eq('status', 'completed')
-          .ilike('description', '%Family Lounge%')
-          .maybeSingle()
-
-        setCanSeeFamilyLounge(!!member?.approved && !!member?.has_crown_badge && !!payment)
+        setCanSeeFamilyLounge(!!familyApp)
       } catch {
         setCanSeeFamilyLounge(false)
       }
@@ -66,10 +75,10 @@ export default function Sidebar() {
   }, [profile?.id, profile?.role])
 
   return (
-    <div className="w-64 min-h-screen bg-[#0A0A14] text-white flex flex-col border-r gold-border shadow-xl">
+    <div className="w-64 min-h-screen bg-[#0A0A14] text-white flex flex-col border-r border-[#2C2C2C] shadow-xl">
 
       {/* Profile Block */}
-      <div className="p-5 text-center gold-border">
+      <div className="p-5 text-center border-b border-[#2C2C2C]">
         <div className="w-20 h-20 mx-auto rounded-full overflow-hidden border-4 border-purple-500 shadow-lg">
           <img
             src={
@@ -82,12 +91,12 @@ export default function Sidebar() {
         </div>
 
         <p className="mt-3 font-bold text-lg flex items-center justify-center gap-2">
-          @{profile?.username || (user?.email ? user.email.split('@')[0] : 'Guest')}
+          @{profile?.username || 'Guest'}
           {badge && <span className="text-yellow-400">{badge}</span>}
         </p>
 
         <p className="text-xs text-gray-400">
-          {profile?.role === 'admin' ? 'Admin' : 'Member'}
+          {profile?.role === 'admin' ? 'Admin' : profile?.role === 'troll_officer' ? 'Troll Officer' : 'Member'}
         </p>
 
         <div className="flex justify-center gap-3 mt-4 text-xs">
@@ -104,38 +113,50 @@ export default function Sidebar() {
       <nav className="flex-1 p-4 space-y-1">
         <MenuLink to="/" icon={<Home />} label="Home" active={isActive('/')} />
         <MenuLink to="/messages" icon={<MessageSquare />} label="Messages" active={isActive('/messages')} />
+        <MenuLink to="/following" icon={<UserCheck />} label="Following" active={isActive('/following')} />
         <MenuLink to="/store" icon={<Coins />} label="Coin Store" active={isActive('/store')} />
-        
-        {/* Troll Wheel */}
+        <MenuLink to="/transactions" icon={<Receipt />} label="Transactions" active={isActive('/transactions')} />
+
         <MenuLink to="/wheel" icon={<Aperture />} label="Troll Wheel" active={isActive('/wheel')} />
 
         <MenuLink to="/leaderboard" icon={<span className="inline-block w-5 h-5">🏆</span>} label="Leaderboard" active={isActive('/leaderboard')} />
-        {canSeeFamilyLounge && (
-          <MenuLink to="/family" icon={<Users />} label="Troll Family Lounge" active={isActive('/family')} />
-        )}
+
         <MenuLink to="/go-live" icon={<Radio />} label="Go Live" active={isActive('/go-live')} />
         <MenuLink to="/trollifications" icon={<Gift />} label="Trollifications" active={isActive('/trollifications')} />
+        
+        {/* Applications - Show for everyone */}
+        <MenuLink to="/apply" icon={<FileText />} label="Applications" active={isActive('/apply')} />
+
+        {/* Troll Officer Lounge - Only for admin and troll_officer role */}
         {canSeeOfficer && (
           <MenuLink to="/officer/lounge" icon={<Shield />} label="Officer Moderation" active={isActive('/officer/lounge')} />
         )}
+
+        {/* Troll Family Lounge - Only for admin, troll_officer, OR approved family app */}
+        {canSeeFamilyLounge && (
+          <MenuLink to="/family" icon={<Users />} label="Troll Family Lounge" active={isActive('/family')} />
+        )}
+
         <MenuLink to="/earnings" icon={<Banknote />} label="Earnings" active={isActive('/earnings')} />
         <MenuLink to="/support" icon={<FileText />} label="Support" active={isActive('/support')} />
-        {(profile?.role === 'admin' || isAdminEmail(user?.email)) && (
+
+        {/* 🔐 RFC — Only Admin */}
+        {profile?.role === 'admin' && (
           <MenuLink to="/rfc" icon={<Shield />} label="RFC" active={isActive('/rfc')} />
         )}
       </nav>
 
-      {/* Admin Section */}
-      {(profile?.role === 'admin' || isAdminEmail(user?.email)) && (
-        <div className="p-4 gold-border">
+      {/* Admin Dashboard — Only Admin */}
+      {profile?.role === 'admin' && (
+        <div className="p-4 border-t border-[#2C2C2C]">
           <p className="text-gray-500 uppercase text-xs mb-2">Admin Controls</p>
-
           <MenuLink to="/admin" icon={<LayoutDashboard />} label="Admin Dashboard" active={isActive('/admin')} />
+          <MenuLink to="/changelog" icon={<ListChecks />} label="Updates & Changes" active={isActive('/changelog')} />
         </div>
       )}
 
-      {/* Settings */}
-      <div className="p-4 gold-border">
+      {/* Settings — Always visible */}
+      <div className="p-4 border-t border-[#2C2C2C]">
         <MenuLink to="/account/wallet" icon={<Settings />} label="Settings & Account" active={isActive('/account/wallet')} />
       </div>
     </div>
@@ -148,7 +169,7 @@ function MenuLink({ to, icon, label, active }: any) {
       to={to}
       className={`flex items-center gap-3 px-4 py-2 rounded-lg transition ${
         active
-          ? 'bg-purple-600 text-white gold-border'
+          ? 'bg-purple-600 text-white border border-purple-400'
           : 'hover:bg-[#1F1F2E] text-gray-300'
       }`}
     >

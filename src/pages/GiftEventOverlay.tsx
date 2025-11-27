@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import GiftSoundPlayer from './GiftSoundPlayer'
 import WheelModal from './WheelModal'
+import ClickableUsername from '../components/ClickableUsername'
 
 export default function GiftEventOverlay({ gift }: any) {
   const [visible, setVisible] = useState(false)
@@ -65,7 +66,7 @@ export default function GiftEventOverlay({ gift }: any) {
         {megaGift && (
           <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-purple-700/80 
                           px-6 py-3 rounded-xl text-lg animate-pulse text-white shadow-xl">
-            🎉 {gift.sender_username} sent {gift.name}! 🎉
+            🎉 <ClickableUsername username={gift.sender_username} className="text-white font-bold" /> sent {gift.name}! 🎉
           </div>
         )}
       </div>

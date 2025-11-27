@@ -39,6 +39,8 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [liveStreams, setLiveStreams] = useState<any[]>([]);
   const [loadingLive, setLoadingLive] = useState(false);
+  const [newUsers, setNewUsers] = useState<any[]>([]);
+  const [loadingNewUsers, setLoadingNewUsers] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,8 +51,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const loadLive = async () => {
-      setLoadingLive(true);
+    const loadLive = async (showLoading = true) => {
+      if (showLoading) setLoadingLive(true);
       try {
         const { data, error } = await supabase
           .from('streams')
@@ -61,20 +63,101 @@ export default function Home() {
         setLiveStreams(data || []);
       } catch (e) {
         console.error(e);
-        toast.error('Failed to load live streams');
+        if (showLoading) toast.error('Failed to load live streams');
       } finally {
-        setLoadingLive(false);
+        if (showLoading) setLoadingLive(false);
       }
     };
-    loadLive();
+    loadLive(true);
 
+    // Auto-refresh every 10 seconds (background, no loading state)
+    const interval = setInterval(() => {
+      loadLive(false);
+    }, 10000);
+
+    // Real-time subscription
     const channel = supabase
       .channel('home-live-streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, () => {
-        loadLive();
+        loadLive(false);
       })
       .subscribe();
+    
     return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadNewUsers = async (showLoading = true) => {
+      if (showLoading) setLoadingNewUsers(true);
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('id, username, avatar_url, tier, free_coin_balance, paid_coin_balance, created_at, email, role')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        if (error) {
+          console.error('Error loading new users:', error);
+          throw error;
+        }
+        
+        // Separate admin and regular users
+        const adminUser = (data || []).find(user => user.role === 'admin');
+        
+        // Show ALL users (no filtering by avatar or profile completion)
+        // Only exclude obvious test/demo accounts
+        const realUsers = (data || []).filter(user => {
+          if (user.role === 'admin') return false; // Admin handled separately
+          
+          const username = (user.username || '').toLowerCase();
+          
+          // Only exclude test/demo users
+          const isRealUser = !username.includes('test') &&
+                            !username.includes('demo') &&
+                            !username.includes('mock');
+          
+          return isRealUser;
+        });
+        
+        // Combine: admin first, then all real users (up to 7 more for total of 8)
+        const displayUsers = adminUser 
+          ? [adminUser, ...realUsers.slice(0, 7)]
+          : realUsers.slice(0, 8);
+        
+        console.log(`Loaded ${displayUsers.length} users (all profiles shown)`);
+        setNewUsers(displayUsers);
+      } catch (e: any) {
+        console.error('Failed to load new users:', e);
+        // Don't show error toast on initial load, just log it
+        // toast.error('Failed to load new users');
+        setNewUsers([]); // Set empty array instead of leaving it undefined
+      } finally {
+        if (showLoading) setLoadingNewUsers(false);
+      }
+    };
+    loadNewUsers(true);
+
+    // Auto-refresh every 15 seconds (background, no loading state)
+    const interval = setInterval(() => {
+      loadNewUsers(false);
+    }, 15000);
+
+    // Real-time subscription for new user inserts
+    const channel = supabase
+      .channel('home-new-users')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_profiles' }, () => {
+        loadNewUsers(false);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_profiles' }, () => {
+        loadNewUsers(false);
+      })
+      .subscribe();
+    
+    return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -201,9 +284,68 @@ export default function Home() {
               <div className="text-3xl">🆕</div>
               <h2 className="text-3xl font-bold text-white">New Trollerz</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg-grid-cols-4 gap-4">
+            {loadingNewUsers ? (
+              <div className="p-6 text-center text-gray-400">Loading...</div>
+            ) : newUsers.length === 0 ? (
               <div className="col-span-full p-6 text-center text-gray-400">No new users yet</div>
-            </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {newUsers.map((user) => {
+                  const displayName = user.username || 'User';
+                  const isAdmin = user.role === 'admin';
+                  // Use username if available, otherwise use user ID
+                  const profileRoute = user.username ? `/profile/${user.username}` : `/profile/id/${user.id}`;
+                  console.log('Rendering user:', { id: user.id, username: user.username, displayName, profileRoute, role: user.role });
+                  
+                  return (
+                    <div
+                      key={user.id}
+                      onClick={() => navigate(profileRoute)}
+                      className={`bg-gradient-to-br from-[#2A2A2A] to-[#1A1A1A] rounded-xl p-4 border transition-all duration-300 cursor-pointer hover:scale-105 ${
+                        isAdmin 
+                          ? 'border-yellow-400/50 hover:border-yellow-400 hover:shadow-[0_0_20px_rgba(255,215,0,0.5)]'
+                          : 'border-cyan-500/30 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(0,255,255,0.3)]'
+                      }`}
+                    >
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="relative">
+                          <img
+                            src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`}
+                            alt={displayName}
+                            className={`w-20 h-20 rounded-full border-2 ${
+                              isAdmin 
+                                ? 'border-yellow-400 shadow-[0_0_15px_rgba(255,215,0,0.5)]'
+                                : 'border-cyan-400 shadow-[0_0_15px_rgba(0,255,255,0.5)]'
+                            }`}
+                          />
+                          {isAdmin ? (
+                            <div className="absolute -top-1 -right-1 bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold shadow-lg flex items-center gap-1">
+                              <Crown size={12} />
+                              ADMIN
+                            </div>
+                          ) : (
+                            <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
+                              NEW
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <h3 className="font-bold text-white text-lg">
+                            {displayName}
+                          </h3>
+                        <p className="text-sm text-gray-400">{user.tier || 'Bronze'}</p>
+                        <div className="flex items-center justify-center gap-2 mt-2">
+                          <span className="text-yellow-400 text-sm">
+                            🪙 {(user.free_coin_balance || 0) + (user.paid_coin_balance || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
+import ClickableUsername from '../components/ClickableUsername'
 import {
   Eye,
   Ban,
@@ -15,7 +16,8 @@ import {
   MessageSquare,
   Star,
   Coins,
-  TrendingUp
+  TrendingUp,
+  RefreshCw
 } from 'lucide-react'
 
 type Stream = {
@@ -55,6 +57,8 @@ export default function TrollOfficerLounge() {
   const [officerChat, setOfficerChat] = useState<OfficerChatMessage[]>([])
   const [newOfficerMessage, setNewOfficerMessage] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'moderation' | 'families'>('moderation')
+  const [familiesList, setFamiliesList] = useState<any[]>([])
 
   const [officerStats, setOfficerStats] = useState<OfficerStats>({
     kicks: 0,
@@ -248,6 +252,28 @@ export default function TrollOfficerLounge() {
     }
   }
 
+  const loadFamilies = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('families')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setFamiliesList(data || [])
+    } catch (err) {
+      console.error('Failed to load families:', err)
+      setFamiliesList([])
+    }
+  }
+
+  // Load families when tab changes to families
+  useEffect(() => {
+    if (activeTab === 'families') {
+      loadFamilies()
+    }
+  }, [activeTab])
+
   const kickUser = async (username: string) => {
     // TODO: hook into moderation_logs + coin penalties
     toast.success(`${username} kicked - 500 paid coins deducted`)
@@ -308,7 +334,7 @@ export default function TrollOfficerLounge() {
           <div className="px-4 py-2 bg-gradient-to-r from-purple-900 to-indigo-900 rounded-lg shadow-lg text-sm">
             <div className="font-semibold text-purple-200">
               Officer:{' '}
-              <span className="text-white">@{profile?.username || 'unknown'}</span>
+              <ClickableUsername username={profile?.username || 'unknown'} className="text-white" />
             </div>
             <div className="text-xs text-gray-300">
               Rank:{' '}
@@ -320,7 +346,34 @@ export default function TrollOfficerLounge() {
           </div>
         </header>
 
-        {/* AI ALERTS */}
+        {/* TABS */}
+        <div className="flex gap-2 border-b border-gray-700 pb-2">
+          <button
+            onClick={() => setActiveTab('moderation')}
+            className={`px-4 py-2 rounded-t-lg transition ${
+              activeTab === 'moderation'
+                ? 'bg-purple-600 text-white'
+                : 'bg-[#1A1A1A] text-gray-400 hover:bg-[#252525]'
+            }`}
+          >
+            Moderation
+          </button>
+          <button
+            onClick={() => setActiveTab('families')}
+            className={`px-4 py-2 rounded-t-lg transition ${
+              activeTab === 'families'
+                ? 'bg-purple-600 text-white'
+                : 'bg-[#1A1A1A] text-gray-400 hover:bg-[#252525]'
+            }`}
+          >
+            <Users className="w-4 h-4 inline mr-2" />
+            Troll Families
+          </button>
+        </div>
+
+        {/* MODERATION TAB */}
+        {activeTab === 'moderation' && (
+          <>
         {reportAlerts.length > 0 && (
           <section className="bg-[#2A0000] border border-red-700 rounded-xl p-4 shadow-lg">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-red-300">
@@ -433,7 +486,7 @@ export default function TrollOfficerLounge() {
               {officerChat.map((msg) => (
                 <div key={msg.id} className="text-sm">
                   <span className="text-purple-300 font-semibold">
-                    @{msg.username || 'Officer'}:{' '}
+                    <ClickableUsername username={msg.username || 'Officer'} className="text-purple-300" />:{' '}
                   </span>
                   <span className="text-gray-200">{msg.message}</span>
                   <span className="text-[10px] text-gray-500 ml-1">
@@ -451,11 +504,17 @@ export default function TrollOfficerLounge() {
                 value={newOfficerMessage}
                 onChange={(e) => setNewOfficerMessage(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') sendOfficerMessage()
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    sendOfficerMessage()
+                  }
                 }}
               />
               <button
-                onClick={sendOfficerMessage}
+                onClick={(e) => {
+                  e.preventDefault()
+                  sendOfficerMessage()
+                }}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold"
               >
                 Send
@@ -608,6 +667,72 @@ export default function TrollOfficerLounge() {
             )}
           </div>
         </section>
+        </>
+        )}
+
+        {/* FAMILIES TAB */}
+        {activeTab === 'families' && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Users className="w-6 h-6 text-cyan-400" />
+                Troll Families
+              </h2>
+              <button
+                onClick={loadFamilies}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </button>
+            </div>
+
+            {familiesList.length === 0 ? (
+              <div className="bg-[#111320] border border-gray-700 rounded-xl p-8 text-center">
+                <Users className="w-12 h-12 mx-auto text-gray-500 mb-3" />
+                <p className="text-gray-400">No families found</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {familiesList.map((family) => (
+                  <div
+                    key={family.id}
+                    className="bg-[#111320] border border-gray-700 rounded-xl p-6 hover:border-purple-500/50 transition"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-white mb-2">
+                          {family.name || 'Unnamed Family'}
+                        </h3>
+                        <p className="text-gray-400 text-sm mb-3">
+                          {family.description || 'No description'}
+                        </p>
+                        <div className="flex gap-4 text-sm">
+                          <span className="text-gray-500">
+                            ID: <span className="text-purple-300">{family.id}</span>
+                          </span>
+                          <span className="text-gray-500">
+                            Created: <span className="text-gray-300">
+                              {new Date(family.created_at).toLocaleDateString()}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => navigate(`/family/${family.id}`)}
+                          className="px-3 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-sm transition"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )
