@@ -3,6 +3,24 @@ import { supabase } from './supabase'
 // Normalize base URL, remove trailing slash if needed
 const API_BASE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL?.replace(/\/$/, '') 
   || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
+// Centralized API endpoint definitions
+export const API_ENDPOINTS = {
+  auth: {
+    fixAdminRole: '/auth/fix-admin-role',
+  },
+  payments: {
+    status: '/payments/status',
+  },
+  agora: {
+    token: '/admin/agora-token',   // 👈 Correct path for STREAM token
+  },
+  stream: {
+    create: '/stream/create',      // 👈 You’ll use this soon
+  },
+  admin: {
+    trollDrop: '/admin/troll-drop',
+  },
+};
 
 interface ApiResponse<T = any> {
   data?: T;
