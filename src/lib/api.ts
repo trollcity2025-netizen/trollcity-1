@@ -107,6 +107,19 @@ export async function del<T = any>(endpoint: string, params?: any, options?: Req
   return request<T>(endpoint, { ...options, method: 'DELETE', params });
 }
 
-const api = { get, post, put, patch, delete: del, request };
+export async function createMuxStream() {
+  const response = await fetch(
+    `${API_BASE_URL}/mux-create-stream`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  )
+  return await response.json()
+}
+
+const api = { get, post, put, patch, delete: del, request, createMuxStream };
 
 export default api;
