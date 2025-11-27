@@ -168,9 +168,11 @@ export default function PaymentSettings() {
         throw new Error(msg)
       }
 
-      const res = await fetch('/api/square/save-card', {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const tokenHeader = sessionData?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/save-card`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(tokenHeader ? { Authorization: `Bearer ${tokenHeader}` } : {}) },
         body: JSON.stringify({
           userId: profile.id,
           cardToken: tokenResult.token,
@@ -211,7 +213,9 @@ export default function PaymentSettings() {
     setMethods(old => old.filter(m => m.id !== id))
 
     try {
-      const res = await fetch(`/api/square/delete-method/${id}?userId=${profile.id}`, { method: 'DELETE' })
+      const { data: sessionData2 } = await supabase.auth.getSession()
+      const tokenHeader2 = sessionData2?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/delete-method/${id}?userId=${profile.id}`, { method: 'DELETE', headers: { ...(tokenHeader2 ? { Authorization: `Bearer ${tokenHeader2}` } : {}) } })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) {
         // Restore on failure

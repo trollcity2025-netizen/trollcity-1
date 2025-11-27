@@ -273,9 +273,11 @@ export default function CoinStore() {
     })
 
     try {
-      const res = await fetch('/api/payments/create-payment', {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/payments/create-payment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           userId: user.id,
           packageId: pkg.id

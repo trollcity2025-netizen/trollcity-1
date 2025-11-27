@@ -50,7 +50,7 @@ const PlatformWallet = () => {
 
   const fetchWallet = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/platform-wallet`, {
+      const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/platform-wallet`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('supabase_token')}`
         }

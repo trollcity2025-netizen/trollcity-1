@@ -7,6 +7,8 @@
  * Works both on localhost and production (Vercel).
  */
 
+import { supabase } from './supabase'
+
 const API_BASE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
 
 interface ApiResponse<T = any> {
@@ -44,10 +46,14 @@ async function request<T = any>(
     }
 
     // Make the request with automatic JSON headers
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token || (typeof window !== 'undefined' ? localStorage.getItem('supabase_token') || '' : '')
+
     const response = await fetch(url, {
       ...fetchOptions,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
     })

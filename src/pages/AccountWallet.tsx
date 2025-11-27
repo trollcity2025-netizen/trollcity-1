@@ -78,9 +78,11 @@ export default function AccountWallet() {
     try {
       // In development we create a mock token; in production, use Square Web Payments SDK
       const cardToken = `mock_${last4}`
-      const res = await fetch('/api/payments/save-card', {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/save-card`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ 
           userId: user.id, 
           cardToken, 

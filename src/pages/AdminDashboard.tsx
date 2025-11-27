@@ -399,8 +399,11 @@ export default function AdminDashboard() {
   const loadEconomySummary = async () => {
     try {
       setEconomyLoading(true)
-      const res = await fetch('/api/admin/economy/summary', {
-        credentials: 'include'
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/economy/summary`, {
+        credentials: 'include',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' }
       })
       if (!res.ok) throw new Error('Failed to load economy summary')
       const json = await res.json()
@@ -471,7 +474,9 @@ export default function AdminDashboard() {
     const fetchRisk = async () => {
       if (profile?.role !== 'admin') return
       try {
-        const res = await fetch('/api/admin/risk/overview', { credentials: 'include' })
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token || ''
+        const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/risk/overview`, { credentials: 'include', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' } })
         if (!res.ok) throw new Error('Failed risk')
         const json = await res.json()
         setRisk(json)
@@ -609,7 +614,9 @@ export default function AdminDashboard() {
   const testAgoraStreaming = async () => {
     try {
       const body = { channelName: 'admin-test', userId: profile?.id || 'admin', role: 'publisher' }
-      const res = await fetch('/api/agora/agora-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/agora/agora-token`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) })
       const json = await res.json()
       if (res.ok && json?.token) {
         setAgoraStatus({ ok: true, appId: json.appId, expiresAt: json.expiresAt })
@@ -626,7 +633,9 @@ export default function AdminDashboard() {
 
   const testSquare = async () => {
     try {
-      const res = await fetch('/api/payments/status')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token || ''
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/payments/status`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' } })
       const json = await res.json()
       setSquareStatus(json)
       if (json.apiOk) {
@@ -935,24 +944,16 @@ export default function AdminDashboard() {
   const loadUsers = async () => {
     setTabLoading(true)
     try {
-      console.log('[Admin] Loading users...')
-      
-      // Direct Supabase query - simpler and more reliable
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, email, role, created_at, level, paid_coin_balance, free_coin_balance, xp, tier')
+        .select('id, username, role, created_at')
         .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.error('[Admin] Supabase query error:', error)
-        setUsersList([])
-      } else {
-        console.log('[Admin] Loaded users:', data?.length || 0)
-        console.log('[Admin] All users:', data?.map(u => ({ username: u.username, email: u.email, role: u.role })))
-        setUsersList(data || [])
-      }
-    } catch (err) {
-      console.error('[Admin] Load users error:', err)
+
+      if (error) throw error
+
+      setUsersList(data || [])
+    } catch (e) {
+      console.error('Error loading users:', e)
       setUsersList([])
     } finally {
       setTabLoading(false)

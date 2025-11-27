@@ -84,9 +84,11 @@ const GoLive: React.FC = () => {
       const base = (profile?.username || "stream").replace(/[^a-z0-9_-]/gi, "").toLowerCase();
       const channelName = `${base}-${Date.now()}`;
 
-      const resp = await fetch('/api/agora/agora-token', {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const tokenHeader = sessionData?.session?.access_token || ''
+      const resp = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/agora/agora-token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(tokenHeader ? { Authorization: `Bearer ${tokenHeader}` } : {}) },
         body: JSON.stringify({ channelName, userId: String(profile?.id), role: 'publisher' })
       })
       const j = await resp.json()

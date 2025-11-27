@@ -34,9 +34,11 @@ const AccountPaymentsSuccess = () => {
       try {
         setSaving(true)
 
-        const saveRes = await fetch('/api/square/save-card', {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token || ''
+        const saveRes = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/save-card`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: JSON.stringify({ userId: user.id, cardToken: tokenId, saveAsDefault: true })
         })
         const saved = await saveRes.json().catch(() => null)

@@ -17,7 +17,7 @@ export default function RolesManager() {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, email, role, created_at')
+        .select('id, username, role, created_at')
         .order('created_at', { ascending: false })
 
       if (error) throw error

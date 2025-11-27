@@ -881,14 +881,16 @@ const StreamRoom = () => {
       
       // Try join without token first (dev mode)
       try {
-        await client.current.join(APP_ID, stream.agora_channel, null, user?.id)
+        await client.current.join(APP_ID, stream.agora_channel, null as any, user?.id)
         console.log('Joined channel without token (development mode)')
       } catch (tokenError: any) {
         console.log('Token required, falling back to token authentication:', tokenError.message)
         
-        const response = await fetch('/api/agora/agora-token', {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const tokenHeader = sessionData?.session?.access_token || ''
+        const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/agora/agora-token`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(tokenHeader ? { Authorization: `Bearer ${tokenHeader}` } : {}) },
           body: JSON.stringify({
             channelName: stream.agora_channel,
             userId: user?.id,

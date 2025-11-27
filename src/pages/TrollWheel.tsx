@@ -171,7 +171,7 @@ const TrollWheel = () => {
       
       console.log('[Wheel] Checking daily spins with token:', token.substring(0, 20) + '...')
       
-      const resp = await fetch('/api/wheel/spins/status', {
+      const resp = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/wheel/spins/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: profile.id })
@@ -224,7 +224,7 @@ const TrollWheel = () => {
         return
       }
       
-      const resp = await fetch('/api/wheel/spins/register', {
+      const resp = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/wheel/spins/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: profile.id })
@@ -282,7 +282,7 @@ const TrollWheel = () => {
       console.log('[Wheel] Initiating spin:', { userId: profile.id, balance: profile.free_coin_balance, cost: SPIN_COST })
       console.log('[Wheel] Using token:', token.substring(0, 20) + '...')
       
-      const resp = await fetch('/api/wheel/spin', {
+      const resp = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/wheel/spin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: profile.id, spinCost: SPIN_COST, prizes: WHEEL_PRIZES.map(p => ({ id: p.id, name: p.name, type: p.type === 'vip' ? 'bankrupt' : p.type, value: p.value, probability: p.probability })) })

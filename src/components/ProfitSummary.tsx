@@ -28,7 +28,7 @@ const ProfitSummary = () => {
 
   const fetchProfitSummary = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/profit-summary`, {
+      const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/profit-summary`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('supabase_token')}`
         }

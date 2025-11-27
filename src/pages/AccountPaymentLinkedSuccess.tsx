@@ -29,10 +29,12 @@ const AccountPaymentLinkedSuccess = () => {
     const run = async () => {
       try {
         // 🔹 Save regular card
+        const { data: sessionData } = await supabase.auth.getSession()
+        const authToken = sessionData?.session?.access_token || ''
         if (p === 'card') {
-          const res = await fetch('/api/square/save-card', {
+          const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/save-card`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
             body: JSON.stringify({ userId: user.id, cardToken: token, saveAsDefault: true })
           })
           const saved = await res.json().catch(() => null)
@@ -40,9 +42,9 @@ const AccountPaymentLinkedSuccess = () => {
 
         // 🔹 Save wallet providers (CashApp, ApplePay, GooglePay, Venmo)
         } else {
-          const res = await fetch('/api/square/wallet-bind', {
+          const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/wallet-bind`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
             body: JSON.stringify({ userId: user.id, provider: p, tokenId: token })
           })
           const bound = await res.json().catch(() => null)

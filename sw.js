@@ -7,6 +7,7 @@ const SKIP_CACHE_URLS = [
   '/realtime/v1/',
   'supabase.co',
   '/api/',
+  '/functions/v1/',
   'localhost:3001'
 ]
 

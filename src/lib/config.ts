@@ -1,17 +1,16 @@
-// API Configuration
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+export const EDGE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL
 
 export const API_ENDPOINTS = {
   auth: {
-    fixAdminRole: `${API_URL}/api/auth/fix-admin-role`,
+    fixAdminRole: `${EDGE_URL}/auth/fix-admin-role`,
   },
   payments: {
-    status: `${API_URL}/api/payments/status`,
+    status: `${EDGE_URL}/payments/status`,
   },
   agora: {
-    token: `${API_URL}/api/agora-token`,
+    token: `${EDGE_URL}/admin/agora-token`,
   },
   admin: {
-    trollDrop: `${API_URL}/api/admin/troll-drop`,
+    trollDrop: `${EDGE_URL}/admin/troll-drop`,
   },
 }

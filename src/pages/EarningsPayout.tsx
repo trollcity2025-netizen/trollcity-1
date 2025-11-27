@@ -79,7 +79,7 @@ export default function CashoutRequest() {
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token || ''
-      const res = await fetch(`/api/payments/cashouts/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/payouts/cashouts/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

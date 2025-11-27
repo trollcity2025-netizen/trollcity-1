@@ -313,14 +313,16 @@ const ProfileSetup = () => {
                   onClick={async () => {
                     if (!user) { toast.error('Sign in required'); return }
                     try {
-                      const cRes = await fetch('/api/square/create-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) })
+                      const { data: sessionData } = await supabase.auth.getSession()
+                      const authToken = sessionData?.session?.access_token || ''
+                      const cRes = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/create-customer`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) }, body: JSON.stringify({ userId: user.id }) })
                       const cJson = await cRes.json().catch(() => ({}))
                       if (!cRes.ok) { toast.error(cJson?.error || 'Customer create failed'); return }
                       if (!card) { toast.error('Card form not ready'); return }
                       setLinking('card')
-                      const token = await card.tokenize()
-                      if (!token || token.status !== 'OK' || !token.token) throw new Error('Card tokenize failed')
-                      const sRes = await fetch('/api/square/save-card', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, cardToken: token.token, saveAsDefault: true }) })
+                      const cardToken = await card.tokenize()
+                      if (!cardToken || cardToken.status !== 'OK' || !cardToken.token) throw new Error('Card tokenize failed')
+                      const sRes = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/save-card`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) }, body: JSON.stringify({ userId: user.id, cardToken: cardToken.token, saveAsDefault: true }) })
                       const sJson = await sRes.json().catch(() => ({}))
                       if (!sRes.ok) { toast.error(sJson?.error || 'Save card failed'); return }
                       toast.success('Card saved')
@@ -382,7 +384,9 @@ const ProfileSetup = () => {
                         type="button"
                         onClick={async () => {
                           if (!user) return
-                          const res = await fetch(`/api/square/delete-method/${m.id}?userId=${user.id}`, { method: 'DELETE' })
+                          const { data: s2 } = await supabase.auth.getSession()
+                          const authToken2 = s2?.session?.access_token || ''
+                          const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/delete-method/${m.id}?userId=${user.id}`, { method: 'DELETE', headers: { ...(authToken2 ? { Authorization: `Bearer ${authToken2}` } : {}) } })
                           const j = await res.json().catch(() => ({}))
                           if (!res.ok) { toast.error(j?.error || 'Remove failed'); return }
                           await loadMethods()

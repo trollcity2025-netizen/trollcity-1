@@ -34,7 +34,7 @@ export function TestingModeControl() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) return
 
-      const response = await fetch('/api/testing-mode/status', {
+      const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/testing-mode/status`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -68,7 +68,7 @@ export function TestingModeControl() {
         return
       }
 
-      const response = await fetch('/api/testing-mode/toggle', {
+      const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/testing-mode/toggle`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ export function TestingModeControl() {
         return
       }
 
-      const response = await fetch('/api/testing-mode/reset-counter', {
+      const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/admin/testing-mode/reset-counter`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`
