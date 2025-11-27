@@ -134,10 +134,21 @@ function App() {
                   />
 
                   {/* ADMIN */}
-                  <Route path="/admin" element={profile?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" replace />} />
-                  <Route path="/rfc" element={profile?.role === 'admin' ? <AdminRFC /> : <Navigate to="/" replace />} />
-                  <Route path="/changelog" element={<Changelog />} />
-                </Route>
+                 <Route element={<RequireAuth />}>
+  <Route
+    path="/admin"
+    element={
+      profile?.role === 'admin'
+        ? (
+            <Suspense fallback={<LoadingScreen />}>
+              <AdminDashboard />
+            </Suspense>
+          )
+        : <Navigate to="/" replace />
+    }
+  />
+</Route>
+
 
                 {/* AUTH & TERMS */}
                 <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
