@@ -35,6 +35,8 @@ export default function Profile() {
   const [isFollowing, setIsFollowing] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [showGiftModal, setShowGiftModal] = useState(false)
+  const [wheelWinnings, setWheelWinnings] = useState<any[]>([])
+  const [wheelSettings, setWheelSettings] = useState({ winningsEnabled: true, insuranceEnabled: true })
 
   // Initialize view price from profile
   useEffect(() => {
@@ -233,6 +235,28 @@ export default function Profile() {
         setPrivateEnabled(priv === 'true')
       }
     } catch {}
+
+    // Load wheel data
+    const loadWheelData = async () => {
+      if (!profile?.id) return
+      try {
+        const { data: winnings } = await supabase
+          .from('wheel_spins')
+          .select('*')
+          .eq('user_id', profile.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        setWheelWinnings(winnings || [])
+
+        // Load settings from profile or localStorage
+        const winningsEnabled = localStorage.getItem(`tc-wheel-winnings-${profile.id}`) !== 'false'
+        const insuranceEnabled = localStorage.getItem(`tc-wheel-insurance-${profile.id}`) !== 'false'
+        setWheelSettings({ winningsEnabled, insuranceEnabled })
+      } catch (err) {
+        console.error('Failed to load wheel data:', err)
+      }
+    }
+    loadWheelData()
   }, [profile?.id, user?.id, routeUsername])
 
   const viewedPrice = () => {
@@ -596,6 +620,74 @@ export default function Profile() {
             Manage Payment Methods
           </button>
           <DefaultPaymentMethod />
+        </div>
+      )
+    },
+    {
+      id: 'wheel_winnings',
+      title: 'Wheel Winnings',
+      icon: <div className="w-5 h-5 flex items-center justify-center">🎡</div>,
+      content: (
+        <div className="space-y-4">
+          {/* Settings */}
+          <div className="bg-[#0D0D0D] rounded-lg p-4 border border-[#2C2C2C]">
+            <h3 className="text-white font-medium mb-3">Wheel Settings</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-300">Enable Winnings</span>
+                <button
+                  onClick={() => {
+                    const newValue = !wheelSettings.winningsEnabled
+                    setWheelSettings(prev => ({ ...prev, winningsEnabled: newValue }))
+                    try { localStorage.setItem(`tc-wheel-winnings-${profile!.id}`, String(newValue)) } catch {}
+                  }}
+                  className={`px-3 py-1 rounded text-sm ${wheelSettings.winningsEnabled ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                >
+                  {wheelSettings.winningsEnabled ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-300">Enable Insurance</span>
+                <button
+                  onClick={() => {
+                    const newValue = !wheelSettings.insuranceEnabled
+                    setWheelSettings(prev => ({ ...prev, insuranceEnabled: newValue }))
+                    try { localStorage.setItem(`tc-wheel-insurance-${profile!.id}`, String(newValue)) } catch {}
+                  }}
+                  className={`px-3 py-1 rounded text-sm ${wheelSettings.insuranceEnabled ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                >
+                  {wheelSettings.insuranceEnabled ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Winnings History */}
+          <div className="bg-[#0D0D0D] rounded-lg p-4 border border-[#2C2C2C]">
+            <h3 className="text-white font-medium mb-3">Recent Winnings</h3>
+            {wheelWinnings.length === 0 ? (
+              <div className="text-gray-400 text-sm">No wheel spins yet</div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {wheelWinnings.map((win: any) => (
+                  <div key={win.id} className="flex justify-between items-center py-2 border-b border-[#2C2C2C] last:border-b-0">
+                    <div>
+                      <div className="text-white text-sm capitalize">{win.prize_type}</div>
+                      <div className="text-gray-400 text-xs">{new Date(win.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white text-sm">
+                        {win.prize_type === 'coins' ? `${win.prize_value} coins` :
+                         win.prize_type === 'multiplier' ? `${win.prize_value}x multiplier` :
+                         win.prize_type === 'insurance' ? 'Insurance' :
+                         win.prize_type === 'bankrupt' ? 'Bankrupt' : win.prize_value}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )
     },

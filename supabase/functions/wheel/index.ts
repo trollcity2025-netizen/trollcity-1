@@ -299,6 +299,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // /status endpoint
+    if (path === 'status' && req.method === 'GET') {
+      const { data: config } = await supabase
+        .from('wheel_config')
+        .select('*')
+        .limit(1)
+        .single();
+
+      const isActive = config?.is_active || false;
+      const cost = config?.spin_cost || 1;
+      const maxSpins = config?.max_spins_per_day || 3;
+
+      return new Response(JSON.stringify({
+        success: true,
+        isActive,
+        cost,
+        maxSpins
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // /spin endpoint
     if (path === 'spin' && req.method === 'POST') {
       const body = await req.json();
@@ -311,14 +333,55 @@ Deno.serve(async (req) => {
         });
       }
 
-      const { data: config } = await supabase
+      let { data: config } = await supabase
         .from('wheel_config')
         .select('*')
         .limit(1)
         .single();
 
-      if (!config || !config.is_active) {
+      if (!config) {
+        // Insert default config
+        const { data: newConfig, error: insertError } = await supabase
+          .from('wheel_config')
+          .insert({
+            is_active: true,
+            spin_cost: 1,
+            max_spins_per_day: 3
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Failed to create wheel config:', insertError);
+          return new Response(JSON.stringify({ success: false, error: 'Wheel configuration error' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        config = newConfig;
+      }
+
+      if (!config.is_active) {
         return new Response(JSON.stringify({ success: false, error: 'Wheel is not active' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const spinCost = config.spin_cost || 1;
+
+      // Deduct spin cost
+      const deductResult = await deductCoins({
+        userId,
+        amount: spinCost,
+        type: 'wheel_spin',
+        coinType: 'free',
+        metadata: { action: 'wheel_spin_cost' },
+        supabaseClient: supabase
+      });
+
+      if (!deductResult.success) {
+        return new Response(JSON.stringify({ success: false, error: deductResult.error || 'Failed to deduct coins' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -362,6 +425,7 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Record the spin
       await supabase.from('wheel_spins').insert({
         user_id: userId,
         prize_type: selectedPrize.type,
@@ -369,9 +433,98 @@ Deno.serve(async (req) => {
         created_at: new Date().toISOString()
       });
 
-      return new Response(JSON.stringify({ 
-        success: true, 
-        prize: selectedPrize 
+      // Award the prize
+      let awardResult;
+      if (selectedPrize.type === 'coins') {
+        awardResult = await addCoins({
+          userId,
+          amount: selectedPrize.value,
+          type: 'wheel_prize',
+          coinType: 'free',
+          metadata: { source: 'wheel_spin', prize_type: 'coins', is_jackpot: selectedPrize.value >= 100 },
+          supabaseClient: supabase
+        });
+      } else if (selectedPrize.type === 'insurance') {
+        const now = new Date().toISOString();
+        const { data: updated, error: updErr } = await supabase
+          .from('user_profiles')
+          .update({ has_insurance: true, updated_at: now })
+          .eq('id', userId)
+          .select('*')
+          .single();
+
+        awardResult = updErr ? { success: false, error: updErr.message } : { success: true, profile: updated };
+      } else if (selectedPrize.type === 'multiplier') {
+        const mult = selectedPrize.value;
+        const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        const now = new Date().toISOString();
+        const { data: updated, error: updErr } = await supabase
+          .from('user_profiles')
+          .update({
+            multiplier_active: true,
+            multiplier_value: mult,
+            multiplier_expires: expires,
+            updated_at: now
+          })
+          .eq('id', userId)
+          .select('*')
+          .single();
+
+        awardResult = updErr ? { success: false, error: updErr.message } : { success: true, profile: updated };
+      } else if (selectedPrize.type === 'bankrupt') {
+        const now = new Date().toISOString();
+        const { data: insurance } = await supabase
+          .from('user_insurances')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .gte('expires_at', now)
+          .or('protection_type.eq.bankrupt,protection_type.eq.full')
+          .limit(1)
+          .maybeSingle();
+
+        if (insurance) {
+          await supabase
+            .from('user_insurances')
+            .update({ is_active: false })
+            .eq('id', insurance.id);
+
+          const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+          awardResult = { success: true, protected: true, message: 'Insurance protected you from bankruptcy!', profile };
+        } else {
+          const { data: updated, error: updErr } = await supabase
+            .from('user_profiles')
+            .update({ free_coin_balance: 0, paid_coin_balance: 0, updated_at: now })
+            .eq('id', userId)
+            .select('*')
+            .single();
+
+          awardResult = updErr ? { success: false, error: updErr.message } : { success: true, protected: false, profile: updated };
+        }
+      }
+
+      if (!awardResult.success) {
+        return new Response(JSON.stringify({ success: false, error: awardResult.error || 'Failed to award prize' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      return new Response(JSON.stringify({
+        success: true,
+        prize: selectedPrize,
+        profile
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
