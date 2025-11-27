@@ -1,45 +1,21 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { AccessToken } from "https://deno.land/x/livekit_server_sdk@1.0.3/mod.ts";
 
-// Simple LiveKit token generation for Deno
+// Generate LiveKit token
 async function generateLiveKitToken(apiKey: string, apiSecret: string, roomName: string, identity: string) {
-  // Simple JWT generation for LiveKit
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
-
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: apiKey,
-    exp: now + 3600, // 1 hour
-    nbf: now,
-    sub: identity,
+  const at = new AccessToken(apiKey, apiSecret, {
+    identity,
     name: identity,
-    video: {
-      roomJoin: true,
-      room: roomName,
-      canPublish: true,
-      canSubscribe: true
-    }
-  };
+  });
 
-  const encoder = new TextEncoder();
-  const headerB64 = btoa(JSON.stringify(header));
-  const payloadB64 = btoa(JSON.stringify(payload));
-  const message = `${headerB64}.${payloadB64}`;
+  at.addGrant({
+    roomJoin: true,
+    room: roomName,
+    canPublish: true,
+    canSubscribe: true,
+  });
 
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
-  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-
-  return `${headerB64}.${payloadB64}.${signatureB64}`;
+  return at.toJwt();
 }
 
 Deno.serve(async (req) => {

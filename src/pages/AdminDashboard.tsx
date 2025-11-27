@@ -605,7 +605,7 @@ export default function AdminDashboard() {
   const testLiveKitStreaming = async () => {
     try {
       const body = { channelName: 'admin-test', uid: profile?.id || 'admin' }
-      const json = await (await import('../lib/api')).default.post((await import('../lib/api')).API_ENDPOINTS.agora.token, body)
+      const json = await (await import('../lib/api')).default.post((await import('../lib/api')).API_ENDPOINTS.livekit.token, body)
       if (json?.success && json?.token) {
         setAgoraStatus({ ok: true })
         toast.success('LiveKit token generated')

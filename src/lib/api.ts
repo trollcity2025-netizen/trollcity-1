@@ -11,8 +11,8 @@ export const API_ENDPOINTS = {
   payments: {
     status: '/payments/status',
   },
-  agora: {
-    token: '/agora',   // 👈 Correct path for STREAM token
+  livekit: {
+    token: '/livekit',   // 👈 Correct path for STREAM token
   },
   stream: {
     create: '/stream/create',      // 👈 You’ll use this soon

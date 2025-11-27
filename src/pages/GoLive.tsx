@@ -69,7 +69,7 @@ const GoLive: React.FC = () => {
       const roomName = `${profile.username}-${Date.now()}`.toLowerCase();
 
       // CALL EDGE FUNCTION USING API SYSTEM
-      const result = await api.post(API_ENDPOINTS.agora.token, {
+      const result = await api.post(API_ENDPOINTS.livekit.token, {
         channelName: roomName,
         uid: String(profile.id),
       });
