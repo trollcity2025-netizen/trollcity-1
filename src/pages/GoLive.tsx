@@ -70,7 +70,7 @@ const GoLive: React.FC = () => {
 
       // CALL EDGE FUNCTION DIRECTLY
       const response = await fetch(
-        `${EDGE_FUNCTION_URL}/functions/v1/agora`,
+        `${EDGE_FUNCTION_URL}/agora`,
         {
           method: "POST",
           headers: {
