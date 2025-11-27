@@ -13,7 +13,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.6",
     "@supabase/supabase-js": "^2.45.4",
-    "agora-rtc-sdk-ng": "^4.22.0",
+    "agora-rtc-sdk-ng": "^4.24.1",
     "agora-token": "^2.0.4",
     "clsx": "^2.1.1",
     "lucide-react": "^0.511.0",
