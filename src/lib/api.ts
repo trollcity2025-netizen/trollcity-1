@@ -12,7 +12,7 @@ export const API_ENDPOINTS = {
     status: '/payments/status',
   },
   agora: {
-    token: '/admin/agora-token',   // 👈 Correct path for STREAM token
+    token: '/agora',   // 👈 Correct path for STREAM token
   },
   stream: {
     create: '/stream/create',      // 👈 You’ll use this soon

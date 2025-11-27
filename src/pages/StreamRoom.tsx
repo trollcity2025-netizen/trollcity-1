@@ -14,7 +14,7 @@ import {
   ShieldOff
 } from 'lucide-react'
 import { supabase, Stream, UserProfile } from '../lib/supabase'
-import api from '../lib/api'
+import api, { API_ENDPOINTS } from '../lib/api'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { recordAppEvent } from '../lib/progressionEngine'
@@ -887,7 +887,7 @@ const StreamRoom = () => {
       } catch (tokenError: any) {
         console.log('Token required, falling back to token authentication:', tokenError.message)
 
-        const j = await api.post('/agora', {
+        const j = await api.post(API_ENDPOINTS.agora.token, {
           channelName: stream.agora_channel,
           uid: user?.id,
           role: 'subscriber'
