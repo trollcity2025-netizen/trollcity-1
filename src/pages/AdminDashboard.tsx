@@ -434,7 +434,7 @@ export default function AdminDashboard() {
       // Get top buyers (users who spent most on insurance, effects, perks)
       const { data: topBuyers, error: buyersError } = await supabase
         .from('coin_transactions')
-        .select('user_id, amount, user_profiles(username)')
+        .select('user_id, amount, user_profiles!inner(username)')
         .in('type', ['insurance_purchase', 'entrance_effect', 'perk_purchase'])
         .order('amount', { ascending: true })
         .limit(10)
