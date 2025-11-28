@@ -60,24 +60,30 @@ const GoLive: React.FC = () => {
 
     setLoading(true);
     try {
-      // Get Supabase JWT for auth
-      const { data: sessionData } = await supabase.auth.getSession();
-      const jwt = sessionData?.session?.access_token;
-      if (!jwt) throw new Error("User session not found.");
-
       // Build unique room name
       const roomName = `${profile.username}-${Date.now()}`.toLowerCase();
 
       // CALL LIVEKIT TOKEN API
       console.log("Calling LiveKit Token API:", `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`);
 
+      const session = await supabase.auth.getSession();
+
       const response = await fetch(
-        `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`
+        `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${
+              session?.data.session?.access_token ??
+              import.meta.env.VITE_SUPABASE_ANON_KEY
+            }`,
+            "Content-Type": "application/json",
+          },
+        }
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Function error: ${errorText}`);
+        throw new Error(`API Error: ${response.status} - ${await response.text()}`);
       }
 
       const { token, url } = await response.json();
