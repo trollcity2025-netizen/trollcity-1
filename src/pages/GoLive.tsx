@@ -17,6 +17,7 @@ const GoLive: React.FC = () => {
   const { user, profile } = useAuthStore();
   const [isLive, setIsLive] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
+  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Just Chatting");
   const [multiBeam, setMultiBeam] = useState(false);
@@ -40,6 +41,30 @@ const GoLive: React.FC = () => {
     };
   }, [user, room]);
 
+  useEffect(() => {
+    const cleanup = async () => {
+      if (room) {
+        room.disconnect();
+      }
+      if (currentStreamId) {
+        await supabase
+          .from("streams")
+          .update({
+            is_live: false,
+            ended_at: new Date().toISOString(),
+          })
+          .eq("id", currentStreamId);
+      }
+    };
+
+    window.addEventListener("beforeunload", cleanup);
+
+    return () => {
+      window.removeEventListener("beforeunload", cleanup);
+      cleanup();
+    };
+  }, [currentStreamId, room]);
+
   const startPreview = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -58,10 +83,16 @@ const handleEndStream = async () => {
     setRoom(null);
   }
   setIsLive(false);
-  // Update database to set is_live to false
-  // Assuming we have streamRow.id from when we started
-  // But since we navigate away, perhaps not needed, or update by broadcaster_id
-  // For now, just disconnect and reset UI
+  if (currentStreamId) {
+    await supabase
+      .from("streams")
+      .update({
+        is_live: false,
+        ended_at: new Date().toISOString(),
+      })
+      .eq("id", currentStreamId);
+  }
+  setCurrentStreamId(null);
 };
 
 const handleGoLive = async () => {
@@ -149,6 +180,7 @@ const handleGoLive = async () => {
 
       if (insertError) throw insertError;
 
+      setCurrentStreamId(streamRow.id);
       setRoom(room);
       setIsLive(true);
       toast.success("🎉 You are LIVE!");
