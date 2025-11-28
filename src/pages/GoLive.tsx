@@ -66,20 +66,8 @@ const GoLive: React.FC = () => {
       // CALL LIVEKIT TOKEN API
       console.log("Calling LiveKit Token API:", `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`);
 
-      const session = await supabase.auth.getSession();
-
       const response = await fetch(
-        `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${
-              session?.data.session?.access_token ??
-              import.meta.env.VITE_SUPABASE_ANON_KEY
-            }`,
-            "Content-Type": "application/json",
-          },
-        }
+        `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`
       );
 
       if (!response.ok) {
