@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Room, createLocalVideoTrack, createLocalAudioTrack } from "livekit-client";
+import { Room, createLocalTracks } from "livekit-client";
 import { useAuthStore } from "../lib/store";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -16,7 +16,7 @@ console.log("🟢 LiveKit Token Endpoint:", LIVEKIT_TOKEN_ENDPOINT);
 const GoLive: React.FC = () => {
   const { user, profile } = useAuthStore();
   const [isLive, setIsLive] = useState(false);
-  const [liveKitRoom, setLiveKitRoom] = useState<Room | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Just Chatting");
   const [multiBeam, setMultiBeam] = useState(false);
@@ -27,8 +27,6 @@ const GoLive: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  console.log("LiveKit URL:", import.meta.env.VITE_LIVEKIT_URL);
-  const room = useRef<Room | null>(null);
 
   const navigate = useNavigate();
 
@@ -36,11 +34,11 @@ const GoLive: React.FC = () => {
     if (!user) return;
     startPreview();
     return () => {
-      if (liveKitRoom) {
-        liveKitRoom.disconnect();
+      if (room) {
+        room.disconnect();
       }
     };
-  }, [user, liveKitRoom]);
+  }, [user, room]);
 
   const startPreview = async () => {
     try {
@@ -103,12 +101,20 @@ const handleGoLive = async () => {
       await room.connect(url, token);
 
       // Get local tracks
-      const localVideoTrack = await createLocalVideoTrack();
-      const localAudioTrack = await createLocalAudioTrack();
+      const tracks = await createLocalTracks({ audio: true, video: true });
 
       // Publish tracks
-      await room.localParticipant.publishTrack(localVideoTrack);
-      await room.localParticipant.publishTrack(localAudioTrack);
+      tracks.forEach((track) => {
+        room.localParticipant.publishTrack(track);
+      });
+
+      // Attach video track to video element
+      if (videoRef.current) {
+        const videoTrack = tracks.find((t) => t.kind === 'video');
+        if (videoTrack) {
+          videoTrack.attach(videoRef.current);
+        }
+      }
 
       // Save stream session in Supabase
       const { data: streamRow, error: insertError } = await supabase
@@ -127,7 +133,7 @@ const handleGoLive = async () => {
 
       if (insertError) throw insertError;
 
-      setLiveKitRoom(room);
+      setRoom(room);
       setIsLive(true);
       toast.success("🎉 You are LIVE!");
       navigate(`/stream/${streamRow.id}`, { state: { stream: streamRow } });
