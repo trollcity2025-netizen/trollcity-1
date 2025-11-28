@@ -671,7 +671,7 @@ const StreamRoom = () => {
   const loadGifts = async () => {
     try {
       const { data, error } = await supabase
-        .from('gifts')
+        .from('troll_gift_items')
         .select('*')
         .eq('is_active', true)
         .order('coin_cost', { ascending: true })
