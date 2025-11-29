@@ -172,7 +172,7 @@ const TrollWheel = () => {
       
       console.log('[Wheel] Checking daily spins with token:', token.substring(0, 20) + '...')
       
-      const j = await api.get('/wheel/spins-left')
+      const j = await api.get('/wheel-spins-left')
       if (!j.success) {
         console.error('[Wheel] Status check failed:', j)
         // Fallback: compute spins used client-side
@@ -261,7 +261,7 @@ const TrollWheel = () => {
       console.log('[Wheel] Using token:', token.substring(0, 20) + '...')
       
       const j = await api.post<{ prize: { id: string; name: string; type: WheelPrize['type'] | 'bankrupt'; value: number; probability: number }; profile: { free_coin_balance?: number; badge?: string }; details?: string }>(
-        '/wheel/spin',
+        '/spin-wheel',
         { userId: profile.id, spinCost: SPIN_COST, prizes: WHEEL_PRIZES.map(p => ({ id: p.id, name: p.name, type: p.type === 'vip' ? 'bankrupt' : p.type, value: p.value, probability: p.probability })) }
       )
       
