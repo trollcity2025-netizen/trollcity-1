@@ -16,10 +16,22 @@ export default function VideoBox({ participant, size, label }: VideoBoxProps) {
     const container = videoRef.current
     container.innerHTML = ''
 
-    // Find video track
-    const videoTrack = Array.from(participant.videoTrackPublications?.values() || [])
-      .find((pub: any) => pub.track && pub.track.kind === 'video')
-      ?.track
+    // Find video track from participant
+    const videoTrack = (() => {
+      // Try videoTrackPublications first
+      if ((participant as any).videoTrackPublications) {
+        const pubs = Array.from((participant as any).videoTrackPublications.values()) as any[]
+        const pub = pubs.find((p: any) => p?.track && p.track.kind === 'video')
+        if (pub?.track) return pub.track
+      }
+      // Fallback to trackPublications
+      if ((participant as any).trackPublications) {
+        const pubs = Array.from((participant as any).trackPublications.values()) as any[]
+        const pub = pubs.find((p: any) => p?.track && p.track.kind === 'video')
+        if (pub?.track) return pub.track
+      }
+      return null
+    })() as any
 
     if (videoTrack) {
       const videoElement = videoTrack.attach()
