@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
+import api from '../lib/api'
 
 type Method = {
   id: string
@@ -168,20 +169,12 @@ export default function PaymentSettings() {
         throw new Error(msg)
       }
 
-      const { data: sessionData } = await supabase.auth.getSession()
-      const tokenHeader = sessionData?.session?.access_token || ''
-      const res = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/square/save-card`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tokenHeader ? { Authorization: `Bearer ${tokenHeader}` } : {}) },
-        body: JSON.stringify({
-          userId: profile.id,
-          cardToken: tokenResult.token,
-          saveAsDefault: true
-        })
+      const data = await api.post('/square/save-card', {
+        userId: profile.id,
+        cardToken: tokenResult.token,
+        saveAsDefault: true
       })
-
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || 'Failed to save card')
+      if (!data.success) throw new Error(data?.error || 'Failed to save card')
 
       toast.success('Card linked and set as default!')
       

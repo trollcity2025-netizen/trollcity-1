@@ -872,7 +872,7 @@ const StreamRoom = () => {
       const jwt = sessionData?.session?.access_token
       if (!jwt) throw new Error('No auth token')
 
-      const tokenResp = await api.post('/livekit-token', { room: stream.livekit_room, identity: user?.username })
+      const tokenResp = await api.post('/livekit-token', { room: stream.livekit_room, identity: profile?.username })
       if (!tokenResp.success) throw new Error(tokenResp.error || 'Token error')
       const { token, livekitUrl } = tokenResp
 

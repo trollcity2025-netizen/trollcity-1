@@ -113,16 +113,7 @@ export async function del<T = any>(endpoint: string, params?: any, options?: Req
 }
 
 export async function createMuxStream() {
-  const response = await fetch(
-    `${API_BASE_URL}/mux-create-stream`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  )
-  return await response.json()
+  return await post('/mux-create-stream')
 }
 
 export async function startRtmpRelay(roomName: string, streamKey: string) {

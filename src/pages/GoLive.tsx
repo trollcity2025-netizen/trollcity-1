@@ -1,248 +1,133 @@
-import React, { useEffect, useState, useRef } from "react";
-import { Room, createLocalTracks, RoomEvent } from "livekit-client";
-import { useAuthStore } from "../lib/store";
-import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import api, { API_ENDPOINTS } from "../lib/api";
-import ClickableUsername from "../components/ClickableUsername";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Room, RoomConnectOptions, createLocalTracks } from 'livekit-client';
+import api from '../lib/api';
+import { useAuthStore } from '../lib/store';
 
-const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
-const LIVEKIT_TOKEN_ENDPOINT = import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT;
+interface GoLiveProps {
+  className?: string;
+}
 
-console.log("🟢 LiveKit URL:", LIVEKIT_URL);
-console.log("🟢 LiveKit Token Endpoint:", LIVEKIT_TOKEN_ENDPOINT);
-
-const GoLive: React.FC = () => {
-  const { user, profile } = useAuthStore();
-  const [isLive, setIsLive] = useState(false);
-  const [room, setRoom] = useState<Room | null>(null);
-  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("Just Chatting");
-  const [multiBeam, setMultiBeam] = useState(false);
-  const [beamBoxes, setBeamBoxes] = useState<
-    { id: string; userId?: string; username?: string }[]
-  >([]);
-  const [loading, setLoading] = useState(false);
-
-  const previewRef = useRef<HTMLVideoElement>(null);
+const GoLive: React.FC<GoLiveProps> = ({ className = '' }) => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [streamTitle, setStreamTitle] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  // 🎥 Show preview BEFORE going live (without LiveKit)
-  useEffect(() => {
-    if (!user) return;
-    startPreview();
-    return () => stopPreview();
-  }, [user]);
+  const handleStartStream = async () => {
+    if (!user || !roomName.trim() || !streamTitle.trim()) {
+      setError('Please fill in all required fields');
+      return;
+    }
 
-  // 👋 Clean LiveKit + Supabase when closing tab or ending stream
-  useEffect(() => {
-    const cleanup = async () => {
-      if (room) {
-        room.disconnect();
-        setRoom(null);
-      }
-      if (currentStreamId) {
-        await supabase
-          .from("streams")
-          .update({
-            is_live: false,
-            ended_at: new Date().toISOString(),
-          })
-          .eq("id", currentStreamId);
-      }
-    };
+    setIsConnecting(true);
+    setError(null);
 
-    window.addEventListener("beforeunload", cleanup);
-    return () => {
-      window.removeEventListener("beforeunload", cleanup);
-      cleanup();
-    };
-  }, [currentStreamId, room]);
-
-  const startPreview = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
+      // Get LiveKit token via Supabase Edge Function
+      const { data: tokenData, error: tokenError } = await api.post('/livekit-token', {
+        roomName,
+        identity: user.id,
+        isHost: true
       });
-      if (previewRef.current) {
-        previewRef.current.srcObject = stream;
-      }
-    } catch {
-      toast.error("Camera/Mic blocked.");
-    }
-  };
 
-  const stopPreview = () => {
-    const mediaStream = previewRef.current?.srcObject as MediaStream;
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t) => t.stop());
-      previewRef.current!.srcObject = null;
-    }
-  };
-
-  const handleEndStream = async () => {
-    if (room) {
-      room.disconnect();
-      setRoom(null);
-    }
-    setIsLive(false);
-    stopPreview();
-    if (currentStreamId) {
-      await api.post('/live', { action: 'end', stream_id: currentStreamId });
-    }
-    setCurrentStreamId(null);
-  };
-
-  const handleGoLive = async () => {
-    // Use token endpoint to retrieve URL; LIVEKIT_URL is optional
-    if (!title.trim()) return toast.error("Enter a stream title.");
-    if (!profile?.id) return toast.error("Profile not loaded.");
-
-    setLoading(true);
-    stopPreview(); // 👈 stop preview before starting LiveKit
-
-    try {
-      const roomName = `${profile.username}-${Date.now()}`.toLowerCase();
-      const tokenPath = LIVEKIT_TOKEN_ENDPOINT || API_ENDPOINTS.livekit.token;
-      const resp = await api.post(tokenPath, { room: roomName, identity: profile.username, metadata: { user_id: profile.id, username: profile.username, avatar_url: profile.avatar_url, level: profile.level } });
-      if (!resp.success) throw new Error(resp?.error || 'Token fetch failed');
-      const { token, livekitUrl } = resp;
-
-      const newRoom = new Room({ adaptiveStream: true });
-      await newRoom.connect(livekitUrl, token);
-
-      // 🎥 Try to get video track, but allow audio-only if webcam fails
-      let hasVideo = false;
-      try {
-        await navigator.mediaDevices.getUserMedia({ video: true });
-        hasVideo = true;
-      } catch (err) {
-        console.warn("No webcam detected, or permission denied. Going live with audio only.");
-        toast.info("No webcam detected - going live with audio only!");
+      if (tokenError || !tokenData?.token) {
+        throw new Error(tokenError || 'Failed to get LiveKit token');
       }
 
-      // 🎤 Create tracks based on available hardware
+      // Create local tracks
       const tracks = await createLocalTracks({
         audio: true,
-        video: hasVideo
+        video: true
       });
 
-      tracks.forEach((track) => {
-        newRoom.localParticipant.publishTrack(track);
-      });
+      // Create room instance
+      const room = new Room();
+      
+      const connectOptions: RoomConnectOptions = {
+        autoSubscribe: true,
+      };
 
-      newRoom.on(RoomEvent.Disconnected, () => {
-        console.log("LiveKit disconnected");
-      });
+      // Connect to LiveKit room
+      await room.connect(tokenData.serverUrl, tokenData.token, connectOptions);
 
-      // 🧹 Clear previous video elements
-      const videoContainer = document.getElementById("live-video-container");
-      if (videoContainer) videoContainer.innerHTML = "";
+      // Publish local tracks
+      for (const track of tracks) {
+        await room.localParticipant.publishTrack(track);
+      }
 
-      // 🎯 Attach LiveKit video track
-      newRoom.localParticipant.trackPublications.forEach((publication) => {
-        if (publication.kind === "video") {
-          const element = publication.track?.attach();
-          if (element && videoContainer) {
-            element.style.width = "100%";
-            element.style.height = "100%";
-            element.style.objectFit = "cover";
-            videoContainer.appendChild(element);
-          }
-        }
-      });
-
-      const startRes = await api.post('/live', { action: 'start', stream_id: null, user_id: profile.id, title, category, room_name: roomName, livekit_url: livekitUrl });
-      if (!startRes.success) throw new Error(startRes.error || 'Failed to start stream');
-      const streamRow = startRes.stream;
-
-      setCurrentStreamId(streamRow.id);
-      setRoom(newRoom);
       setIsLive(true);
-      toast.success("🎉 You are LIVE!");
+      
+      // Navigate to stream room with room info
+      navigate('/stream-room', { 
+        state: { 
+          roomName, 
+          streamTitle,
+          tokenData,
+          room 
+        } 
+      });
 
-      navigate(`/stream/${streamRow.id}`, { state: { stream: streamRow } });
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to Go Live");
-      console.error(err);
-      startPreview(); // fallback to preview
+    } catch (err) {
+      console.error('Failed to start stream:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start stream');
     } finally {
-      setLoading(false);
+      setIsConnecting(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#0f0f1a] via-[#1a0f2a] to-[#082016] text-white px-6">
-      <div className="flex flex-col md:flex-row items-center gap-8 w-full max-w-6xl">
-
-        {/* 🎥 VIDEO PREVIEW / LIVE FEED */}
-        <div className="relative w-[620px] h-[420px] bg-black/70 rounded-xl border border-purple-500/40 shadow-[0_0_25px_rgba(128,0,128,0.5)] overflow-hidden">
-          {!isLive ? (
-            <video
-              ref={previewRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <div
-              id="live-video-container"
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "relative",
-              }}
-            />
-          )}
-        </div>
-
-        {/* ⚙️ SETTINGS PANEL */}
-        <div className="bg-black/60 p-6 rounded-xl border border-purple-500/50 shadow-[0_0_30px_rgba(0,255,170,0.4)] w-[350px]">
-          <h2 className="text-xl font-semibold text-purple-300 mb-4">
-            Go Live Settings
-          </h2>
-
-          {!isLive ? (
-            <>
+    <div className={`min-h-screen bg-gray-900 text-white ${className}`}>
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <h1 className="text-3xl font-bold mb-8 text-center">Go Live</h1>
+          
+          <div className="bg-gray-800 rounded-lg p-6 space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Stream Title *
+              </label>
               <input
-                className="w-full bg-gray-900 text-white p-2 rounded mb-3 border border-purple-600"
-                placeholder="Enter stream title..."
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                type="text"
+                value={streamTitle}
+                onChange={(e) => setStreamTitle(e.target.value)}
+                placeholder="Enter your stream title..."
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={isConnecting}
               />
+            </div>
 
-              <select
-                className="w-full bg-gray-900 text-white p-2 rounded mb-5 border border-purple-600"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                <option>Just Chatting</option>
-                <option>Gaming</option>
-                <option>Music</option>
-                <option>Flirting Only</option>
-                <option>Networking</option>
-              </select>
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Room Name *
+              </label>
+              <input
+                type="text"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                placeholder="Enter room name..."
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={isConnecting}
+              />
+            </div>
 
-              <button
-                onClick={handleGoLive}
-                disabled={loading}
-                className="w-full py-2 rounded-md font-semibold bg-gradient-to-r from-green-400 to-purple-500"
-              >
-                {loading ? "Starting..." : "Go Live"}
-              </button>
-            </>
-          ) : (
+            {error && (
+              <div className="bg-red-900 border border-red-600 text-red-200 px-4 py-3 rounded-md">
+                {error}
+              </div>
+            )}
+
             <button
-              onClick={handleEndStream}
-              className="w-full py-2 bg-red-600 rounded-md font-semibold"
+              onClick={handleStartStream}
+              disabled={isConnecting || !roomName.trim() || !streamTitle.trim()}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed py-3 px-4 rounded-md font-medium transition-colors"
             >
-              End Live
+              {isConnecting ? 'Starting Stream...' : 'Go Live'}
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>
