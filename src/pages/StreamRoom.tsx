@@ -10,6 +10,19 @@ import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import ClickableUsername from '../components/ClickableUsername'
 import TrollEvent from '../components/TrollEvent'
+import TrollRain from '../components/stream/TrollRain'
+import GiftPanel from '../components/stream/GiftPanel'
+import VideoFeed from '../components/stream/VideoFeed'
+import ControlBar from '../components/stream/ControlBar'
+import TopBar from '../components/stream/TopBar'
+import ChatInput from '../components/stream/ChatInput'
+import ChatOverlay from '../components/stream/ChatOverlay'
+import GiftBlast from '../components/stream/GiftBlast'
+import GiftParticles from '../components/stream/GiftParticles'
+import TrollSurprise from '../components/stream/TrollSurprise'
+import GuestGrid from '../components/stream/GuestGrid'
+import { LayoutSwitcher } from '../components/stream/ControlBar'
+import { useRoom } from '../hooks/useRoom'
 
 const StreamRoom = () => {
   const { streamId } = useParams<{ streamId: string }>()
@@ -32,6 +45,14 @@ const StreamRoom = () => {
   const [joining, setJoining] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isEndingStream, setIsEndingStream] = useState(false)
+  const [showGiftModal, setShowGiftModal] = useState(false)
+  const [giftTarget, setGiftTarget] = useState<string | null>(null)
+  const [livekitUrlForFeed, setLivekitUrlForFeed] = useState<string | null>(null)
+  const [livekitTokenForFeed, setLivekitTokenForFeed] = useState<string | null>(null)
+  const [isCameraEnabled, setIsCameraEnabled] = useState(true)
+  const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true)
+  const [giftTrigger, setGiftTrigger] = useState<{ timestamp: number; amount: number } | null>(null)
+  const [layoutMode, setLayoutMode] = useState<'spotlight' | 'grid' | 'talkshow' | 'stacked'>('grid')
 
   /** ────────────────────────────────────────────────
    🔄 Convert HTTP URL to WebSocket URL
@@ -307,6 +328,11 @@ const StreamRoom = () => {
 
       client.current.on(RoomEvent.Connected, () => {
         console.log('LiveKit connected successfully')
+        // Update camera/mic state
+        if (client.current?.localParticipant) {
+          setIsCameraEnabled(client.current.localParticipant.isCameraEnabled)
+          setIsMicrophoneEnabled(client.current.localParticipant.isMicrophoneEnabled)
+        }
       })
 
       // 3. Connect viewer or host
@@ -381,6 +407,11 @@ const StreamRoom = () => {
       }
 
       console.log('LiveKit connected', isHost ? 'as Host' : 'as Viewer')
+      
+      // Store credentials for VideoFeed component
+      setLivekitUrlForFeed(wsUrl)
+      setLivekitTokenForFeed(tokenString)
+      
       toast.success('Connected to stream')
     } catch (err: any) {
       console.error('LiveKit init failed:', err)
@@ -425,6 +456,18 @@ const StreamRoom = () => {
         .single()
 
       setBroadcaster(bc || null)
+
+      // Load messages with user profiles
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          user_profiles:user_id ( username, avatar_url )
+        `)
+        .eq('stream_id', streamId)
+        .order('created_at', { ascending: true })
+
+      setMessages(msgs || [])
       setLoading(false)
     } catch {
       toast.error('Failed to load stream')
@@ -452,6 +495,45 @@ const StreamRoom = () => {
       }
     }
   }, [stream, user, loading])
+
+  /** ────────────────────────────────────────────────
+   💬 Subscribe to chat messages
+  ───────────────────────────────────────────────────*/
+  useEffect(() => {
+    if (!streamId) return
+
+    const channel = supabase
+      .channel(`chat_${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        async (payload) => {
+          // Fetch the new message with user profile
+          const { data: newMsg } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              user_profiles:user_id ( username, avatar_url )
+            `)
+            .eq('id', payload.new.id)
+            .single()
+          
+          if (newMsg) {
+            setMessages((prev) => [...prev, newMsg])
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [streamId])
 
   const joinStream = async () => {
     try {
@@ -493,6 +575,38 @@ const StreamRoom = () => {
   }
 
   /** ────────────────────────────────────────────────
+   🎁 Send Gift to Participant or Viewer
+  ───────────────────────────────────────────────────*/
+  const sendGift = async (targetUserId: string, giftType: string) => {
+    try {
+      await api.post('/send-gift', {
+        streamId,
+        senderId: user?.id,
+        receiverId: targetUserId,
+        giftType,
+      })
+
+      // Broadcast event to all participants via LiveKit DataTracks
+      client.current?.localParticipant?.publishData(
+        JSON.stringify({
+          type: 'GIFT',
+          senderId: user?.id,
+          receiverId: targetUserId,
+          giftType,
+        }),
+        { reliable: true }
+      )
+
+      toast.success(`Gift sent to ${targetUserId}`)
+      setShowGiftModal(false)
+      setGiftTarget(null)
+    } catch (err) {
+      console.error('Failed to send gift:', err)
+      toast.error('Gift sending failed')
+    }
+  }
+
+  /** ────────────────────────────────────────────────
    📸 UI Rendering
   ───────────────────────────────────────────────────*/
   if (loading) {
@@ -518,8 +632,34 @@ const StreamRoom = () => {
         {/* Video Streaming Area */}
         <div className="bg-gray-900 rounded-xl overflow-hidden border border-purple-500 shadow-lg">
           <div className="relative aspect-video">
-            {/* Local video preview (for host) */}
+            {/* TopBar with Stream Stats */}
+            <TopBar room={client.current} streamerId={stream?.broadcaster_id || null} />
+
+            {/* Guest Grid - Shows Host + Guests */}
+            <GuestGrid room={client.current} layoutMode={layoutMode} />
+
+            {/* Layout Switcher - Only for Host */}
             {isHost && (
+              <div className="absolute top-4 right-4 z-30">
+                <LayoutSwitcher layoutMode={layoutMode} onLayoutChange={setLayoutMode} />
+              </div>
+            )}
+
+            {/* VideoFeed Component - Only show when using grid layout and no room yet */}
+            {livekitUrlForFeed && livekitTokenForFeed && layoutMode === 'grid' && !client.current && (
+              <VideoFeed
+                livekitUrl={livekitUrlForFeed}
+                token={livekitTokenForFeed}
+                isHost={isHost}
+                onRoomReady={(room) => {
+                  // Store room reference if needed
+                  client.current = room
+                }}
+              />
+            )}
+
+            {/* Fallback: Local video preview (for host) - Only when no room and grid mode */}
+            {isHost && !livekitUrlForFeed && layoutMode === 'grid' && !client.current && (
               <video
                 ref={videoRef}
                 autoPlay
@@ -529,11 +669,81 @@ const StreamRoom = () => {
               ></video>
             )}
             
-            {/* Remote video (for viewers or remote participants) */}
-            <div ref={remoteVideoRef} className={`w-full h-full bg-black ${isHost ? 'hidden' : ''}`}></div>
+            {/* Fallback: Remote video (for viewers) - Only when no room and grid mode */}
+            {!isHost && !livekitUrlForFeed && layoutMode === 'grid' && !client.current && (
+              <div className="relative w-full h-full">
+                <div ref={remoteVideoRef} className="w-full h-full bg-black"></div>
+                
+                {/* Gift button for co-hosts */}
+                {stream?.broadcaster_id && (
+                  <button
+                    className="absolute top-2 right-2 bg-black/50 p-2 rounded-full hover:bg-black/70 z-10"
+                    onClick={() => {
+                      setGiftTarget(stream.broadcaster_id)
+                      setShowGiftModal(true)
+                    }}
+                  >
+                    <Gift size={20} className="text-yellow-400" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Floating Emoji Reactions */}
+            <TrollRain />
+
+            {/* Gift Alert Panel */}
+            <GiftPanel streamId={streamId} />
+
+            {/* Gift Blast - Large Gift Notification */}
+            <GiftBlast
+              streamId={streamId}
+              onGiftTrigger={(amount) => setGiftTrigger({ timestamp: Date.now(), amount })}
+            />
+
+            {/* Gift Particles - Floating Emoji Animation */}
+            <GiftParticles trigger={giftTrigger} />
+
+            {/* Chat Overlay - Floating Messages */}
+            <ChatOverlay streamId={streamId} />
+
+            {/* Chat Input - Bottom Left */}
+            <ChatInput streamId={streamId} />
+
+            {/* Troll Surprise - Random Troll Walking Across Screen */}
+            <TrollSurprise streamId={streamId} />
+
+            {/* Control Bar for Host */}
+            {isHost && client.current && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
+                <ControlBar
+                  room={client.current}
+                  isCameraEnabled={isCameraEnabled}
+                  isMicrophoneEnabled={isMicrophoneEnabled}
+                  streamId={streamId}
+                  isHost={isHost}
+                  layoutMode={layoutMode}
+                  onLayoutChange={setLayoutMode}
+                  onToggleCamera={async () => {
+                    if (client.current?.localParticipant) {
+                      const enabled = !client.current.localParticipant.isCameraEnabled
+                      await client.current.localParticipant.setCameraEnabled(enabled)
+                      setIsCameraEnabled(enabled)
+                    }
+                  }}
+                  onToggleMicrophone={async () => {
+                    if (client.current?.localParticipant) {
+                      const enabled = !client.current.localParticipant.isMicrophoneEnabled
+                      await client.current.localParticipant.setMicrophoneEnabled(enabled)
+                      setIsMicrophoneEnabled(enabled)
+                    }
+                  }}
+                />
+              </div>
+            )}
 
             {joining && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-30">
                 <Radio className="w-12 h-12 text-purple-400 animate-pulse" />
                 <p className="mt-2 text-sm">Connecting to live stream...</p>
               </div>
@@ -555,6 +765,70 @@ const StreamRoom = () => {
             </button>
           )}
         </div>
+
+        {/* Chat Section */}
+        {messages.length > 0 && (
+          <div className="mt-4 bg-gray-900 rounded-xl p-4 border border-purple-500">
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Chat
+            </h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {messages.map((msg: any, i: number) => {
+                const username = msg.user_profiles?.username || 'Unknown'
+                return (
+                  <div key={msg.id || i} className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <ClickableUsername username={username} />
+                      
+                      {/* Gift button for broadcaster to gift chat users */}
+                      {isHost && msg.user_id && (
+                        <button
+                          className="text-green-400 hover:text-green-500 transition-colors"
+                          onClick={() => {
+                            setGiftTarget(msg.user_id)
+                            setShowGiftModal(true)
+                          }}
+                          title="Send gift"
+                        >
+                          <Gift size={16} />
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-gray-300">{msg.content || msg.message}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Gift Modal */}
+        {showGiftModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+            <div className="bg-gray-800 p-6 rounded-xl text-center max-w-md w-full mx-4">
+              <h3 className="text-lg mb-4 font-semibold">Send Gift</h3>
+              <p className="text-gray-400 mb-6">Choose a gift to send</p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+                  onClick={() => giftTarget && sendGift(giftTarget, 'coin')}
+                >
+                  🎁 Send 100 Coins
+                </button>
+                <button
+                  className="px-4 py-2 bg-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
+                  onClick={() => {
+                    setShowGiftModal(false)
+                    setGiftTarget(null)
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
