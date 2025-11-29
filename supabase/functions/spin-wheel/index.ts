@@ -4,28 +4,15 @@ import { createClient } from "@supabase/supabase-js";
 declare const Deno: { serve: (handler: (req: Request) => Response | Promise<Response>) => void; env: { get: (key: string) => string | undefined } };
 
 Deno.serve(async (req: Request) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  };
-
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  }
-
   const { userId, spinCost, prizes } = await req.json();
 
   if (!userId) {
-    return new Response(JSON.stringify({ success: false, error: 'Missing userId' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: 'Missing userId' }), { status: 400 });
   }
 
   // Random prize selection (weighted)
@@ -41,11 +28,11 @@ Deno.serve(async (req: Request) => {
     prize_type: prize!.type
   });
 
-  if (error) return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  if (error) return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
 
   return new Response(JSON.stringify({
     success: true,
     prize,
     profile: data
-  }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }), { status: 200 });
 });
