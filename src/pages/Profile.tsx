@@ -792,7 +792,7 @@ export default function Profile() {
                     </span>
                   )}
                   {/* OG Badge - for early users (created before 2026-01-01) or Level 100 */}
-                  {(viewed?.badge === 'og' || profile.badge === 'og' || getLevelFromXP((viewed?.xp || profile.xp) || 0) === 100) && (
+                  {(viewed?.badge === 'og' || profile.badge === 'og' || getLevelFromXP((viewed?.xp || profile.xp) || 0, (viewed?.role || profile.role) === 'admin') === 100) && (
                     <span className="px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs font-bold rounded-full flex items-center gap-1">
                       <Crown className="w-3 h-3" />
                       OG
@@ -802,13 +802,14 @@ export default function Profile() {
                 {/* Tier and Level Display */}
                 <div className="mb-2">
                   <div className="text-purple-400 font-semibold text-sm">
-                    Level {getLevelFromXP((viewed?.xp || profile.xp) || 0)} - {getTierFromXP((viewed?.xp || profile.xp) || 0).title}
+                    Level {getLevelFromXP((viewed?.xp || profile.xp) || 0, (viewed?.role || profile.role) === 'admin')} - {getTierFromXP((viewed?.xp || profile.xp) || 0).title}
                   </div>
                   {/* XP Progress Bar */}
-                  <XPProgressBar 
+                  <XPProgressBar
                     key={(viewed?.xp || profile.xp) || 0}
-                    currentXP={(viewed?.xp || profile.xp) || 0} 
-                    className="mt-2" 
+                    currentXP={(viewed?.xp || profile.xp) || 0}
+                    isAdmin={(viewed?.role || profile.role) === 'admin'}
+                    className="mt-2"
                   />
                 </div>
                 {(!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (

@@ -41,6 +41,8 @@ export default function Home() {
   const [loadingLive, setLoadingLive] = useState(false);
   const [newUsers, setNewUsers] = useState<any[]>([]);
   const [loadingNewUsers, setLoadingNewUsers] = useState(false);
+  const [topTrollers, setTopTrollers] = useState<any[]>([]);
+  const [loadingTop, setLoadingTop] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -56,8 +58,23 @@ export default function Home() {
       try {
         const { data, error } = await supabase
           .from('streams')
-          .select('id, title, category, current_viewers, status')
-          .eq('status', 'live')
+          .select(`
+            id,
+            title,
+            category,
+            current_viewers,
+            is_live,
+            room_name,
+            livekit_url,
+            start_time,
+            broadcaster_id,
+            thumbnail_url,
+            user_profiles!broadcaster_id (
+              username,
+              avatar_url
+            )
+          `)
+          .eq('is_live', true)
           .order('start_time', { ascending: false });
         if (error) throw error;
         setLiveStreams(data || []);
@@ -95,7 +112,7 @@ export default function Home() {
       try {
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('id, username, avatar_url, tier, free_coin_balance, paid_coin_balance, created_at, email, role')
+          .select('id, username, avatar_url, tier, free_coin_balance, paid_coin_balance, created_at, role')
           .order('created_at', { ascending: false })
           .limit(100);
         
@@ -156,6 +173,79 @@ export default function Home() {
       })
       .subscribe();
     
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadTopTrollers = async (showLoading = true) => {
+      if (showLoading) setLoadingTop(true);
+      try {
+        const { data, error } = await supabase
+          .from('coin_transactions')
+          .select(`
+            user_id,
+            amount,
+            type,
+            user_profiles:user_id (
+              username,
+              avatar_url
+            )
+          `)
+          .eq('type', 'gift_received')
+          .order('created_at', { ascending: false })
+          .limit(1000);
+        if (error) throw error;
+
+        const totals: Record<string, { user_id: string; total: number; username?: string; avatar_url?: string }> = {};
+        for (const tx of (data || []) as any[]) {
+          const uid = tx.user_id;
+          const amt = Number(tx.amount || 0);
+          if (!totals[uid]) {
+            totals[uid] = {
+              user_id: uid,
+              total: 0,
+              username: tx.user_profiles?.username,
+              avatar_url: tx.user_profiles?.avatar_url,
+            };
+          }
+          if (amt > 0) totals[uid].total += amt;
+        }
+
+        const list = Object.values(totals)
+          .filter((u) => {
+            const name = (u.username || '').toLowerCase();
+            const real = !name.includes('test') && !name.includes('demo') && !name.includes('mock');
+            return real && u.total > 0;
+          })
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 10);
+
+        setTopTrollers(list);
+      } catch (e) {
+        console.error('Failed to load top trollers', e);
+        if (showLoading) toast.error('Failed to load leaderboard');
+        setTopTrollers([]);
+      } finally {
+        if (showLoading) setLoadingTop(false);
+      }
+    };
+
+    loadTopTrollers(true);
+
+    const interval = setInterval(() => {
+      loadTopTrollers(false);
+    }, 20000);
+
+    const channel = supabase
+      .channel('home-top-trollers')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions' }, () => {
+        loadTopTrollers(false);
+      })
+      .subscribe();
+
     return () => {
       clearInterval(interval);
       supabase.removeChannel(channel);
@@ -232,31 +322,53 @@ export default function Home() {
 
           {loadingLive ? (
             <div className="text-gray-400">Loading live streams…</div>
-          ) : liveStreams.length > 0 ? (
+          ) : liveStreams.length === 0 ? (
+            <div className="bg-[#111] p-10 rounded-xl border border-gray-700 text-center">
+              <p className="text-gray-400 text-lg">No one is live right now…</p>
+              <button
+                onClick={() => navigate('/go-live')}
+                className="mt-4 px-6 py-3 bg-purple-600 hover:bg-purple-800 rounded-lg text-white shadow-lg"
+              >
+                Start a Live
+              </button>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {liveStreams.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => navigate(`/stream/${s.id}`)}
-                  className="text-left bg-[#1A1A1A] rounded-2xl p-4 border border-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.6)] hover:shadow-[0_0_25px_rgba(255,215,0,0.9)] hover:border-[#fffa8b] transition"
+                  className="relative rounded-xl overflow-hidden shadow-lg bg-[#111]/70 border border-purple-500/30 hover:shadow-purple-500/50 transition-all duration-300"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                      <span className="text-sm text-white">Live</span>
+                  {s.thumbnail_url ? (
+                    <img
+                      src={s.thumbnail_url}
+                      className="w-full h-48 object-cover"
+                      alt="Stream preview"
+                    />
+                  ) : (
+                    <div className="w-full h-48 bg-gradient-to-br from-purple-900 to-black flex items-center justify-center text-gray-500">
+                      🎥 No preview
                     </div>
-                    <span className="text-xs text-gray-400">{s.current_viewers || 0} watching</span>
+                  )}
+
+                  <div className="absolute top-2 left-2 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-xs font-bold text-white">LIVE NOW</span>
                   </div>
-                  <div className="text-white font-semibold truncate">{s.title || 'Untitled Stream'}</div>
-                  <div className="text-xs text-gray-400">{s.category || 'General'}</div>
+
+                  <div className="absolute bottom-0 left-0 w-full p-3 bg-black/70 flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-semibold">{s.title || 'Untitled Stream'}</p>
+                      <p className="text-xs text-gray-300 flex items-center gap-1">
+                        <img src={s.user_profiles?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.user_profiles?.username || 'troll'}`} className="w-5 h-5 rounded-full" />
+                        {s.user_profiles?.username || 'Unknown'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-red-400">{s.current_viewers || 0} viewing</span>
+                  </div>
                 </button>
               ))}
-            </div>
-          ) : (
-            <div className="bg-gradient-to-br from-[#1A1A1A] to-[#2A2A2A] rounded-2xl p-12 text-center border border-[#FFD700] shadow-[0_0_18px_rgba(255,215,0,0.6)]">
-              <div className="text-6xl mb-4">🌙</div>
-              <h3 className="text-xl font-semibold text-white mb-2">No one's live right now</h3>
-              <p className="text-gray-400">Be the first to go live!</p>
             </div>
           )}
         </div>
@@ -269,11 +381,38 @@ export default function Home() {
                 <Crown className="text-yellow-400" size={32} style={{ filter: 'drop-shadow(0 0 10px #FFC93C)' }} />
                 <h2 className="text-3xl font-bold text-white">Top Trollers</h2>
               </div>
-              <button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg font-medium hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:scale-105">
-                View All
-              </button>
+              <span className="text-xs text-gray-300">Auto-updating</span>
             </div>
-            <div className="p-6 text-center text-gray-400">No leaderboard data yet</div>
+
+            {loadingTop ? (
+              <div className="p-6 text-center text-gray-400">Loading leaderboard…</div>
+            ) : topTrollers.length === 0 ? (
+              <div className="p-6 text-center text-gray-400">No earners yet</div>
+            ) : (
+              <div className="space-y-3">
+                {topTrollers.map((u, idx) => (
+                  <button
+                    key={u.user_id}
+                    onClick={() => {
+                      const route = u.username ? `/profile/${u.username}` : `/profile/id/${u.user_id}`;
+                      navigate(route);
+                    }}
+                    className="w-full flex items-center gap-3 bg-[#121212] border border-[#2C2C2C] rounded-xl p-3 hover:border-yellow-400/50 hover:shadow-[0_0_18px_rgba(255,215,0,0.25)] transition"
+                  >
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-yellow-400/50">
+                      <img src={u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username || 'troller'}`} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-400/40 text-yellow-300">#{idx + 1}</span>
+                        <span className="font-semibold">{u.username || 'Unknown'}</span>
+                      </div>
+                    </div>
+                    <div className="text-sm text-yellow-300 font-bold">{u.total.toLocaleString()} coins</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

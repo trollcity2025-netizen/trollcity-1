@@ -25,7 +25,7 @@ try {
 }
 
 const SPIN_COST = 500
-const DEFAULT_DAILY_SPINS = 10
+const DEFAULT_DAILY_SPINS = 20
 
 interface WheelPrize {
   id: string
@@ -172,17 +172,32 @@ const TrollWheel = () => {
       
       console.log('[Wheel] Checking daily spins with token:', token.substring(0, 20) + '...')
       
-      const j = await api.post('/wheel/spins/status', { userId: profile.id })
+      const j = await api.get('/wheel-spins-left')
       if (!j.success) {
         console.error('[Wheel] Status check failed:', j)
-        const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
-        setDailySpinsLeft(fallback)
+        // Fallback: compute spins used client-side
+        const today = new Date().toISOString().split('T')[0]
+        try {
+          const { data: spins } = await supabase
+            .from('wheel_spins')
+            .select('id')
+            .eq('user_id', profile.id)
+            .gte('created_at', `${today}T00:00:00`)
+            .lt('created_at', `${today}T23:59:59`)
+          const used = Array.isArray(spins) ? spins.length : 0
+          const fallbackMax = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
+          setDailySpinsLeft(Math.max(0, fallbackMax - used))
+        } catch {
+          const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
+          setDailySpinsLeft(fallback)
+        }
         return
       }
-      
+
       const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
-      setDailySpinsLeft(Number(j.spins_left || fallback))
-      console.log('[Wheel] Daily spins remaining:', j.spins_left)
+      const spinsLeft = Number(j.spins_left ?? j.maxSpins ?? fallback)
+      setDailySpinsLeft(spinsLeft)
+      console.log('[Wheel] Status:', { isActive: j.isActive, spinsLeft })
     } catch (err) {
       console.error('[Wheel] Status check error:', err)
       const fallback = profile?.role === 'troll_officer' ? 15 : DEFAULT_DAILY_SPINS
@@ -196,23 +211,7 @@ const TrollWheel = () => {
     }
   }, [profile?.id, checkDailySpins])
 
-  const registerSpin = useCallback(async () => {
-    if (!profile?.id) return
-    try {
-      // Refresh session to ensure valid token
-      const freshSession = await refreshSession()
-      const token = freshSession?.access_token || session?.access_token || ''
-      
-      if (!token) {
-        console.error('[Wheel] No access token for registerSpin')
-        return
-      }
-      
-      await api.post('/wheel/spins/register', { userId: profile.id })
-    } catch (e) {
-      console.error('[Wheel] registerSpin error', e)
-    }
-  }, [profile?.id, session?.access_token])
+  // Removed registerSpin - now handled in the spin endpoint
 
   const sendBigWinBanner = async (prize: WheelPrize) => {
     if (!profile) return
@@ -262,7 +261,7 @@ const TrollWheel = () => {
       console.log('[Wheel] Using token:', token.substring(0, 20) + '...')
       
       const j = await api.post<{ prize: { id: string; name: string; type: WheelPrize['type'] | 'bankrupt'; value: number; probability: number }; profile: { free_coin_balance?: number; badge?: string }; details?: string }>(
-        '/wheel/spin',
+        '/wheel-spin',
         { userId: profile.id, spinCost: SPIN_COST, prizes: WHEEL_PRIZES.map(p => ({ id: p.id, name: p.name, type: p.type === 'vip' ? 'bankrupt' : p.type, value: p.value, probability: p.probability })) }
       )
       
@@ -305,11 +304,6 @@ const TrollWheel = () => {
 
     console.log('[Wheel] Animation params:', { prizeIndex: idx, currentRotation: rotation, finalRotation, spins })
     
-    // Set up the animation state WITHOUT triggering rotation yet
-    setIsSpinning(true)
-    setShowResult(false)
-    setSelectedPrize(prize)
-    
     // Play spin sound (if available)
     try {
       const playPromise = spinSound?.play()
@@ -351,11 +345,17 @@ const TrollWheel = () => {
       }, 200)
     }
 
-    // CRITICAL: Use setTimeout to ensure React renders isSpinning=true BEFORE we change rotation
-    // This ensures the CSS transition class is applied to the element before the transform changes
-    setTimeout(() => {
-      setRotation(finalRotation)
-    }, 100)
+    // Start spin (ensure CSS transition is applied first)
+    setIsSpinning(true);
+    setShowResult(false);
+    setSelectedPrize(prize);
+
+    // ❗Force layout update before setting rotation
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setRotation(finalRotation);
+      });
+    });
 
     setTimeout(async () => {
       if (clickIntervalRef.current) {
@@ -403,10 +403,8 @@ const TrollWheel = () => {
         await sendBigWinBanner(prize!)
       }
 
-      // Update spin counter (registerSpin is called by backend now)
+      // Update spin counter and refresh from server
       setDailySpinsLeft(prev => Math.max(0, prev - 1))
-      
-      // Refresh from server to sync
       setTimeout(() => checkDailySpins(), 1000)
 
       setIsSpinning(false)

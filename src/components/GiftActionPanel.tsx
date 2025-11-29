@@ -1,6 +1,5 @@
 import React from 'react'
 import { useGiftSystem } from '../lib/hooks/useGiftSystem'
-import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 
 interface GiftActionPanelProps {
@@ -27,7 +26,6 @@ const ALL_GIFTS = [
 
 export default function GiftActionPanel({ streamerId, streamId }: GiftActionPanelProps) {
   const { sendGift, isSending } = useGiftSystem(streamerId, streamId)
-  const { profile } = useAuthStore()
 
   const handleSend = async (gift: any) => {
     const success = await sendGift({

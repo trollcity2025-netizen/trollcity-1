@@ -188,24 +188,34 @@ export async function deductCoins(params: {
       ? (profile.paid_coin_balance || 0)
       : (profile.free_coin_balance || 0)
 
-    // Check sufficient balance
-    if (currentBalance < amount) {
+    // Check sufficient balance (skip for admins)
+    const { data: userProfile } = await sb
+      .from('user_profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    const isAdmin = userProfile?.role === 'admin'
+
+    if (!isAdmin && currentBalance < amount) {
       console.error('deductCoins: Insufficient balance', { currentBalance, amount })
       return { success: false, newBalance: currentBalance, transaction: null, error: 'Insufficient coins' }
     }
 
-    const newBalance = currentBalance - amount
+    const newBalance = isAdmin ? currentBalance : currentBalance - amount
 
-    // Update balance
-    const updateField = coinType === 'paid' ? 'paid_coin_balance' : 'free_coin_balance'
-    const { error: updateError } = await sb
-      .from('user_profiles')
-      .update({ [updateField]: newBalance })
-      .eq('id', userId)
+    // Update balance (only deduct for non-admins)
+    if (!isAdmin) {
+      const updateField = coinType === 'paid' ? 'paid_coin_balance' : 'free_coin_balance'
+      const { error: updateError } = await sb
+        .from('user_profiles')
+        .update({ [updateField]: newBalance })
+        .eq('id', userId)
 
-    if (updateError) {
-      console.error('deductCoins: Failed to update balance', updateError)
-      return { success: false, newBalance: currentBalance, transaction: null, error: 'Update failed' }
+      if (updateError) {
+        console.error('deductCoins: Failed to update balance', updateError)
+        return { success: false, newBalance: currentBalance, transaction: null, error: 'Update failed' }
+      }
     }
 
     // Record transaction with negative amount (deduction)

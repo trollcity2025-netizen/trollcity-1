@@ -24,14 +24,16 @@ serve(async (req) => {
       throw new Error("Missing 'room' or 'identity' in query params");
     }
 
-    const apiKey = Deno.env.get("LIVEKIT_API_KEY")!;
-    const apiSecret = Deno.env.get("LIVEKIT_API_SECRET")!;
-    const livekitUrl = Deno.env.get("LIVEKIT_CLOUD_URL")!;
+    const apiKey = Deno.env.get("LIVEKIT_API_KEY") || Deno.env.get("VITE_LIVEKIT_API_KEY") || "";
+    const apiSecret = Deno.env.get("LIVEKIT_API_SECRET") || Deno.env.get("VITE_LIVEKIT_API_SECRET") || "";
+    const livekitUrl = Deno.env.get("LIVEKIT_CLOUD_URL") || Deno.env.get("VITE_LIVEKIT_URL") || "";
 
-    console.log("🔑 LIVEKIT_API_KEY:", apiKey);
-    console.log("🔒 LIVEKIT_API_SECRET:", apiSecret?.slice(0,6) + "...");
-    console.log("🌐 URL:", livekitUrl);
-    console.log("➡️ Identity:", identity, " Room:", room);
+    if (!apiKey || !apiSecret || !livekitUrl) {
+      return new Response(JSON.stringify({ error: "LiveKit credentials missing" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const payload = {
       iss: apiKey,

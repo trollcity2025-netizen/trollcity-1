@@ -8,8 +8,8 @@ const StreamsPanel = () => {
   const loadStreams = async () => {
     const { data } = await supabase
       .from("troll_streams")
-      .select("id, title, broadcaster_id, status, current_viewers, created_at")
-      .eq("status", "live");
+      .select("id, title, broadcaster_id, is_live, current_viewers, created_at")
+      .eq("is_live", true);
     setStreams(data || []);
   };
 
@@ -40,7 +40,7 @@ const StreamsPanel = () => {
               await supabase
                 .from("troll_streams")
                 .update({
-                  status: "ended",
+                  is_live: false,
                   end_time: new Date().toISOString(),
                   is_force_ended: true,
                 })

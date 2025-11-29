@@ -84,7 +84,6 @@ export function useStreamEarnings(streamId?: string | null): StreamEarningsState
           const coins = g.coins_spent || 0
 
           setState((prev) => {
-            const totals: Record<string, number> = {}
             // We only track delta here; recompute top from prev + new
             const newTotalCoins = prev.totalCoins + coins
             const newGiftCount = prev.giftCount + 1

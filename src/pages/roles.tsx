@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Shield, Users, RefreshCw, Award, Crown, UserCheck } from 'lucide-react'
+import { Shield, Users, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import ClickableUsername from '../components/ClickableUsername'
 

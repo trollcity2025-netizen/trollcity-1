@@ -1,22 +1,17 @@
 import React from 'react'
 import { useAuthStore } from '../lib/store'
-import { useNavigate } from 'react-router-dom'
 import {
   Shield,
   Coins,
   Banknote,
   Gift,
-  Star,
-  Zap,
   Crown,
   Activity,
-  DollarSign,
-  Users
+  DollarSign
 } from 'lucide-react'
 
 export default function AdminRFC() {
   const { profile } = useAuthStore()
-  const navigate = useNavigate()
 
   if (!profile || profile.role !== 'admin') {
     return (

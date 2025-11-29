@@ -4,19 +4,20 @@ import { getXPForNextLevel, getLevelFromXP } from '../lib/tierSystem'
 
 interface XPProgressBarProps {
   currentXP: number
+  isAdmin?: boolean
   className?: string
 }
 
-function XPProgressBar({ currentXP, className = '' }: XPProgressBarProps) {
-  const { needed, percentage } = getXPForNextLevel(currentXP)
-  const currentLevel = getLevelFromXP(currentXP)
+function XPProgressBar({ currentXP, isAdmin = false, className = '' }: XPProgressBarProps) {
+  const { needed, percentage } = getXPForNextLevel(currentXP, isAdmin)
+  const currentLevel = getLevelFromXP(currentXP, isAdmin)
 
-  if (currentLevel >= 100) {
+  if (currentLevel >= (isAdmin ? 101 : 100)) {
     return (
       <div className={`${className}`}>
         <div className="flex items-center justify-between text-sm mb-1">
           <span className="text-gold-400 font-bold">MAX LEVEL</span>
-          <span className="text-gold-400">👑 Level 100</span>
+          <span className="text-gold-400">👑 Level {isAdmin ? 101 : 100}</span>
         </div>
         <div className="h-3 bg-[#1A1A1A] rounded-full overflow-hidden border border-gold-500">
           <div 

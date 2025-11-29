@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react'
 import { Users, Mic, MicOff, Video, VideoOff, Gift, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { toast } from 'sonner'
 import ClickableUsername from '../components/ClickableUsername'
 
 import GiftActionPanel from '../components/GiftActionPanel'
@@ -27,9 +26,9 @@ export default function ViewerPage() {
     const loadStream = async () => {
       const { data, error } = await supabase
         .from('streams')
-        .select('*')
-        .eq('status', 'live')
-        .order('start_time', { ascending: false })
+        .select('id, title, category, current_viewers, is_live, broadcaster_id, created_at')
+        .eq('is_live', true)
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
       if (error) return

@@ -106,7 +106,7 @@ export default function PaymentSettings() {
           })
 
           // Get or create the container
-          let container = document.getElementById('card-container')
+          const container = document.getElementById('card-container')
           if (!container) {
             console.error('Card container not found')
             return

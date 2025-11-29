@@ -103,7 +103,7 @@ const GoLive: React.FC = () => {
   };
 
   const handleGoLive = async () => {
-    if (!LIVEKIT_URL) return toast.error("Missing LiveKit URL.");
+    // Use token endpoint to retrieve URL; LIVEKIT_URL is optional
     if (!title.trim()) return toast.error("Enter a stream title.");
     if (!profile?.id) return toast.error("Profile not loaded.");
 
@@ -112,13 +112,10 @@ const GoLive: React.FC = () => {
 
     try {
       const roomName = `${profile.username}-${Date.now()}`.toLowerCase();
-      const endpoint = `${LIVEKIT_TOKEN_ENDPOINT}?room=${roomName}&identity=${profile.username}`;
-
-      const response = await fetch(endpoint);
-      const raw = await response.text();
-
-      if (!response.ok) throw new Error(raw);
-      const { token, url } = JSON.parse(raw);
+      const tokenPath = LIVEKIT_TOKEN_ENDPOINT || API_ENDPOINTS.livekit.token;
+      const resp = await api.get(tokenPath, { room: roomName, identity: profile.username });
+      if (!resp.success) throw new Error(resp?.error || 'Token fetch failed');
+      const { token, url } = resp;
 
       const newRoom = new Room({ adaptiveStream: true });
       await newRoom.connect(url, token);
@@ -149,15 +146,18 @@ const GoLive: React.FC = () => {
         }
       });
 
-      // 📦 Save Live stream in Supabase
+      // 📦 Save Live stream in Supabase (standard troll_streams schema)
       const { data: streamRow, error: insertError } = await supabase
         .from("streams")
         .insert({
           broadcaster_id: profile.id,
           title,
+          category,
+          current_viewers: 1,
+          is_live: true,
+          start_time: new Date().toISOString(),
           room_name: roomName,
           livekit_url: url,
-          is_live: true,
           created_at: new Date().toISOString(),
         })
         .select()

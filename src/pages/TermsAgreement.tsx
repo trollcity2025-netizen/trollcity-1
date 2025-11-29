@@ -9,11 +9,14 @@ export default function TermsAgreement() {
   const { profile } = useAuthStore()
   const navigate = useNavigate()
   const [agreed, setAgreed] = useState(false)
+  const [privacyAgreed, setPrivacyAgreed] = useState(false)
+  const [paymentAgreed, setPaymentAgreed] = useState(false)
+  const [creatorAgreed, setCreatorAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const handleAgree = async () => {
-    if (!agreed) {
-      toast.error('You must agree to the terms to continue')
+    if (!agreed || !privacyAgreed || !paymentAgreed || !creatorAgreed) {
+      toast.error('You must agree to all terms to continue')
       return
     }
 
@@ -151,8 +154,8 @@ export default function TermsAgreement() {
           </p>
         </div>
 
-        {/* Agreement Checkbox */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] p-6 mb-6">
+        {/* Agreement Checkboxes */}
+        <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] p-6 mb-6 space-y-4">
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -161,9 +164,46 @@ export default function TermsAgreement() {
               className="mt-1 w-5 h-5 accent-troll-purple"
             />
             <span className="text-gray-300">
-              I have read and agree to all the terms, rules, and consequences listed above. 
-              I understand that violating these terms may result in permanent ban with complete account reset. 
-              I am at least 13 years old and have permission from a parent/guardian if under 18.
+              I have read and agree to the <a href="/terms-of-service" target="_blank" className="text-troll-purple underline">Terms of Service</a>.
+              I understand that violating these terms may result in permanent ban with complete account reset.
+              I am at least 18 years old.
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={privacyAgreed}
+              onChange={(e) => setPrivacyAgreed(e.target.checked)}
+              className="mt-1 w-5 h-5 accent-troll-purple"
+            />
+            <span className="text-gray-300">
+              I have read and agree to the <a href="/privacy-policy" target="_blank" className="text-troll-purple underline">Privacy Policy</a>.
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={paymentAgreed}
+              onChange={(e) => setPaymentAgreed(e.target.checked)}
+              className="mt-1 w-5 h-5 accent-troll-purple"
+            />
+            <span className="text-gray-300">
+              I have read and agree to the <a href="/payment-terms" target="_blank" className="text-troll-purple underline">Payment Terms</a>.
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={creatorAgreed}
+              onChange={(e) => setCreatorAgreed(e.target.checked)}
+              className="mt-1 w-5 h-5 accent-troll-purple"
+            />
+            <span className="text-gray-300">
+              I have read and agree to the <a href="/creator-agreement" target="_blank" className="text-troll-purple underline">Creator Earning / Cashout Agreement</a>,
+              including 1099 tax reporting requirements.
             </span>
           </label>
         </div>
@@ -181,8 +221,8 @@ export default function TermsAgreement() {
           </button>
           <button
             onClick={handleAgree}
-            disabled={!agreed || submitting}
-            className="px-8 py-3 rounded-lg bg-gradient-to-r from-troll-purple to-troll-neon-blue 
+            disabled={!agreed || !privacyAgreed || !paymentAgreed || !creatorAgreed || submitting}
+            className="px-8 py-3 rounded-lg bg-gradient-to-r from-troll-purple to-troll-neon-blue
                      disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition font-bold"
           >
             {submitting ? 'Processing...' : 'Agree & Continue'}

@@ -184,6 +184,10 @@ export default function CoinStore() {
 
   const [defaultMethod, setDefaultMethod] = useState<PaymentMethod | null>(null)
 
+  // Calculate affordability stats
+  const affordableEffects = effects.filter(e => (profile?.paid_coin_balance || 0) >= e.coin_cost).length
+  const affordablePerks = PERKS.filter(p => (profile?.paid_coin_balance || 0) >= p.cost).length
+
   // Load default payment method
   useEffect(() => {
     const loadDefault = async () => {
@@ -592,15 +596,35 @@ export default function CoinStore() {
           </h1>
 
           {profile && (
-            <div className="mt-4 inline-flex items-center space-x-4 bg-[#121212] rounded-lg px-6 py-3 border border-[#2C2C2C]">
-              <span>
-                💰 Paid:{' '}
-                {profile.paid_coin_balance?.toLocaleString() ?? 0}
-              </span>
-              <span>
-                🧌 Free:{' '}
-                {profile.free_coin_balance?.toLocaleString() ?? 0}
-              </span>
+            <div className="mt-4 space-y-3">
+              <div className="inline-flex items-center space-x-4 bg-[#121212] rounded-lg px-6 py-3 border border-[#2C2C2C]">
+                <span>
+                  💰 Paid:{' '}
+                  {profile.paid_coin_balance?.toLocaleString() ?? 0}
+                </span>
+                <span>
+                  🧌 Free:{' '}
+                  {profile.free_coin_balance?.toLocaleString() ?? 0}
+                </span>
+              </div>
+
+              {/* Affordability Summary */}
+              <div className="bg-[#121212] rounded-lg px-6 py-3 border border-[#2C2C2C]">
+                <div className="text-sm text-gray-400 mb-2">What you can buy:</div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="text-green-400">
+                    ✓ {affordableEffects}/{effects.length} Effects
+                  </span>
+                  <span className="text-green-400">
+                    ✓ {affordablePerks}/{PERKS.length} Perks
+                  </span>
+                  {profile.role === 'admin' && (
+                    <span className="text-yellow-400 font-bold">
+                      👑 Admin: Unlimited purchases
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -718,73 +742,116 @@ export default function CoinStore() {
         {/* =================== ENTRANCE EFFECTS =================== */}
         {activeTab === 'effects' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-            {effects.map(e => (
-              <div
-                key={e.id}
-                className={[
-                  'p-6 rounded-xl bg-[#1A1A1A] border hover:scale-105 transition shadow-lg',
-                  e.rarity === 'Rare'
-                    ? 'border-blue-400 shadow-blue-500/30'
-                    : '',
-                  e.rarity === 'Epic'
-                    ? 'border-purple-400 shadow-purple-500/30'
-                    : '',
-                  e.rarity === 'Legendary'
-                    ? 'border-yellow-400 shadow-yellow-500/50'
-                    : '',
-                  e.rarity === 'Mythic'
-                    ? 'border-red-400 shadow-red-500/50 animate-pulse'
-                    : '',
-                  e.rarity === 'Exclusive'
-                    ? 'border-green-400 shadow-green-500/50 animate-bounce'
-                    : ''
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <div className="text-6xl mb-2">{e.icon}</div>
-                <h3 className="text-xl font-bold">{e.name}</h3>
-                <p className="text-gray-400 text-sm">{e.rarity}</p>
-                <p className="text-[#FFC93C] text-2xl mt-2">
-                  {e.coin_cost.toLocaleString()} Coins
-                </p>
-
-                <button
-                  className="mt-3 bg-[#FFC93C] text-black px-4 py-2 rounded-lg hover:bg-white"
-                  onClick={() => purchaseEntranceEffect(e)}
+            {effects.map(e => {
+              const canAfford = (profile?.paid_coin_balance || 0) >= e.coin_cost
+              return (
+                <div
+                  key={e.id}
+                  className={[
+                    'p-6 rounded-xl bg-[#1A1A1A] border hover:scale-105 transition shadow-lg relative',
+                    canAfford ? 'ring-2 ring-green-400/50' : 'ring-2 ring-red-400/50',
+                    e.rarity === 'Rare'
+                      ? 'border-blue-400 shadow-blue-500/30'
+                      : '',
+                    e.rarity === 'Epic'
+                      ? 'border-purple-400 shadow-purple-500/30'
+                      : '',
+                    e.rarity === 'Legendary'
+                      ? 'border-yellow-400 shadow-yellow-500/50'
+                      : '',
+                    e.rarity === 'Mythic'
+                      ? 'border-red-400 shadow-red-500/50 animate-pulse'
+                      : '',
+                    e.rarity === 'Exclusive'
+                      ? 'border-green-400 shadow-green-500/50 animate-bounce'
+                      : ''
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
-                  Buy Effect
-                </button>
-              </div>
-            ))}
+                  {/* Affordability Badge */}
+                  <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold ${
+                    canAfford
+                      ? 'bg-green-500 text-white'
+                      : 'bg-red-500 text-white'
+                  }`}>
+                    {canAfford ? '✓ Can Buy' : '✗ Need More'}
+                  </div>
+
+                  <div className="text-6xl mb-2">{e.icon}</div>
+                  <h3 className="text-xl font-bold">{e.name}</h3>
+                  <p className="text-gray-400 text-sm">{e.rarity}</p>
+                  <p className={`text-2xl mt-2 font-bold ${
+                    canAfford ? 'text-[#FFC93C]' : 'text-red-400'
+                  }`}>
+                    {e.coin_cost.toLocaleString()} Coins
+                  </p>
+
+                  <button
+                    className={`mt-3 px-4 py-2 rounded-lg font-semibold transition ${
+                      canAfford
+                        ? 'bg-[#FFC93C] text-black hover:bg-white'
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    }`}
+                    onClick={() => purchaseEntranceEffect(e)}
+                    disabled={!canAfford}
+                  >
+                    {canAfford ? 'Buy Effect' : `Need ${(e.coin_cost - (profile?.paid_coin_balance || 0)).toLocaleString()} More`}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 
         {/* =================== PERKS =================== */}
         {activeTab === 'perks' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-            {PERKS.map(perk => (
-              <div
-                key={perk.id}
-                className="p-6 rounded-2xl bg-[#121212] border border-yellow-500/60 shadow-lg"
-              >
-                <div className="font-bold text-white mb-1">
-                  {perk.name}
-                </div>
-                <div className="text-sm text-gray-400 mb-3">
-                  {perk.desc}
-                </div>
-                <div className="text-[#FFC93C] text-xl font-bold mb-3">
-                  {perk.cost.toLocaleString()} Coins
-                </div>
-                <button
-                  onClick={() => buyPerk(perk.id)}
-                  className="w-full py-2 rounded bg-yellow-500 text-black font-bold"
+            {PERKS.map(perk => {
+              const canAfford = (profile?.paid_coin_balance || 0) >= perk.cost
+              return (
+                <div
+                  key={perk.id}
+                  className={`p-6 rounded-2xl bg-[#121212] border shadow-lg relative ${
+                    canAfford
+                      ? 'border-green-500/60 ring-2 ring-green-400/50'
+                      : 'border-red-500/60 ring-2 ring-red-400/50'
+                  }`}
                 >
-                  Buy
-                </button>
-              </div>
-            ))}
+                  {/* Affordability Badge */}
+                  <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-bold ${
+                    canAfford
+                      ? 'bg-green-500 text-white'
+                      : 'bg-red-500 text-white'
+                  }`}>
+                    {canAfford ? '✓ Can Buy' : '✗ Need More'}
+                  </div>
+
+                  <div className="font-bold text-white mb-1">
+                    {perk.name}
+                  </div>
+                  <div className="text-sm text-gray-400 mb-3">
+                    {perk.desc}
+                  </div>
+                  <div className={`text-xl font-bold mb-3 ${
+                    canAfford ? 'text-[#FFC93C]' : 'text-red-400'
+                  }`}>
+                    {perk.cost.toLocaleString()} Coins
+                  </div>
+                  <button
+                    onClick={() => buyPerk(perk.id)}
+                    className={`w-full py-2 rounded font-bold transition ${
+                      canAfford
+                        ? 'bg-yellow-500 text-black hover:bg-yellow-400'
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    }`}
+                    disabled={!canAfford}
+                  >
+                    {canAfford ? 'Buy' : `Need ${(perk.cost - (profile?.paid_coin_balance || 0)).toLocaleString()} More`}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 

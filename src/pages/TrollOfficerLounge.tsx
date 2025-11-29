@@ -176,7 +176,7 @@ export default function TrollOfficerLounge() {
       const { data, error } = await supabase
         .from('streams')
         .select('id, title, category, broadcaster_id, current_viewers, status')
-        .eq('status', 'live')
+        .eq('is_live', true)
 
       if (error) throw error
       setLiveStreams((data as Stream[]) || [])

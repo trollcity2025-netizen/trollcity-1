@@ -20,7 +20,8 @@ export const TIER_LEVELS: TierInfo[] = [
   { level: 70, minXP: 70000, maxXP: 79999, title: "Royal Crowned Mischief", perks: ["Diamond profile frame", "premium gifts", "priority in stream lists"] },
   { level: 80, minXP: 80000, maxXP: 89999, title: "Neon God of Trollers", perks: ["Troll-themed blast effects", "leaderboard eligibility"] },
   { level: 90, minXP: 90000, maxXP: 99999, title: "Immortal Viral Phantom", perks: ["Neon animated avatar ring", "super gifts", "streamer enhancements"] },
-  { level: 100, minXP: 100000, maxXP: Infinity, title: "Eternal Original (OG) Troll Overlord 👑", perks: ["OG Crown", "OG Badge", "animated wings", "platform influencer", "staff eligibility"] },
+  { level: 100, minXP: 100000, maxXP: 100999, title: "Eternal Original (OG) Troll Overlord 👑", perks: ["OG Crown", "OG Badge", "animated wings", "platform influencer", "staff eligibility"] },
+  { level: 101, minXP: 101000, maxXP: Infinity, title: "Admin Overlord 👑", perks: ["All perks", "Admin powers", "Infinite coins", "Platform control"] },
 ]
 
 export function getTierFromXP(xp: number): TierInfo {
@@ -32,27 +33,32 @@ export function getTierFromXP(xp: number): TierInfo {
   return TIER_LEVELS[0]
 }
 
-export function getLevelFromXP(xp: number): number {
+export function getLevelFromXP(xp: number, isAdmin: boolean = false): number {
+  // Special case for admins - they can reach level 101
+  if (isAdmin && xp >= 101000) {
+    return 101
+  }
+
   const tier = getTierFromXP(xp)
-  
+
   // Calculate exact level within the tier range
   const tierIndex = TIER_LEVELS.indexOf(tier)
   if (tierIndex === -1) return 1
-  
+
   const nextTier = TIER_LEVELS[tierIndex + 1]
-  if (!nextTier) return 100 // Max level
-  
+  if (!nextTier) return isAdmin ? 101 : 100 // Max level
+
   const tierRange = nextTier.minXP - tier.minXP
   const xpInTier = xp - tier.minXP
   const levelsInTier = nextTier.level - tier.level
   const levelProgress = Math.floor((xpInTier / tierRange) * levelsInTier)
-  
+
   return tier.level + levelProgress
 }
 
-export function getXPForNextLevel(currentXp: number): { current: number; needed: number; percentage: number } {
-  const currentLevel = getLevelFromXP(currentXp)
-  if (currentLevel >= 100) {
+export function getXPForNextLevel(currentXp: number, isAdmin: boolean = false): { current: number; needed: number; percentage: number } {
+  const currentLevel = getLevelFromXP(currentXp, isAdmin)
+  if (currentLevel >= (isAdmin ? 101 : 100)) {
     return { current: currentXp, needed: 0, percentage: 100 }
   }
   

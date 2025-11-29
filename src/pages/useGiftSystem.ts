@@ -36,7 +36,7 @@ export function useGiftSystem(streamerId: string, streamId: string) {
       if (error) throw error
       toast.success(`Gift sent: ${gift.name} 🎁`)
       return true
-    } catch (err) {
+    } catch {
       toast.error('Failed to send gift.')
       return false
     } finally {

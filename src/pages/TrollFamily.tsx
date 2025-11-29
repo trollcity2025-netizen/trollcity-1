@@ -1,9 +1,8 @@
 // src/pages/TrollFamily.tsx
 import React, { useEffect, useState } from 'react'
-import { useAuthStore } from '../lib/store'
-import { supabase } from '../lib/supabase'
-import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../lib/store'
+import { toast } from 'sonner'
 import {
   Users,
   Shield,

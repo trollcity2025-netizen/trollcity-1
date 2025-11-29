@@ -321,6 +321,46 @@ Deno.serve(async (req) => {
       });
     }
 
+    // /spins-left endpoint
+    if (path === 'spins-left' && req.method === 'GET') {
+      let { data: config } = await supabase
+        .from('wheel_config')
+        .select('*')
+        .limit(1)
+        .single();
+
+      if (!config) {
+        const { data: newConfig } = await supabase
+          .from('wheel_config')
+          .insert({ is_active: true, spin_cost: 500, max_spins_per_day: 10 })
+          .select('*')
+          .single();
+        config = newConfig || { is_active: true, spin_cost: 500, max_spins_per_day: 10 };
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const { data: spins } = await supabase
+        .from('wheel_spins')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('created_at', `${today}T00:00:00`)
+        .lt('created_at', `${today}T23:59:59`);
+
+      const used = Array.isArray(spins) ? spins.length : 0;
+      const maxSpins = Number(config?.max_spins_per_day || 3);
+      const spinsLeft = Math.max(0, maxSpins - used);
+
+      return new Response(JSON.stringify({
+        success: true,
+        isActive: !!config?.is_active,
+        maxSpins,
+        spins_used: used,
+        spins_left: spinsLeft
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // /spin endpoint
     if (path === 'spin' && req.method === 'POST') {
       const body = await req.json();

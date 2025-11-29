@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Link } from 'react-router-dom'
-import { Search, User, Radio } from 'lucide-react'
+import { Search, User } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'

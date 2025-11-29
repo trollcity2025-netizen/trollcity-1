@@ -16,14 +16,44 @@ export default function Leaderboard() {
           .from('user_profiles')
           .select('id, username, total_earned_coins, paid_coin_balance')
           .order('total_earned_coins', { ascending: false })
-          .limit(20)
-        setTopUsers(users || [])
+          .limit(50) // Get more to filter
+
+        // Filter out fake/test accounts
+        const realUsers = (users || []).filter(user => {
+          const username = (user.username || '').toLowerCase();
+          // Exclude test/demo/mock accounts
+          const isRealUser = !username.includes('test') &&
+                            !username.includes('demo') &&
+                            !username.includes('mock') &&
+                            !username.includes('fake') &&
+                            !username.includes('sample') &&
+                            !username.includes('user') &&
+                            user.total_earned_coins > 0; // Must have earned something
+          return isRealUser;
+        });
+
+        setTopUsers(realUsers.slice(0, 20)) // Take top 20 real users
         const { data: streams } = await supabase
           .from('streams')
-          .select('id, title, total_gifts_coins, current_viewers')
+          .select('id, title, total_gifts_coins, current_viewers, broadcaster_id, user_profiles(username)')
           .order('total_gifts_coins', { ascending: false })
-          .limit(20)
-        setTopStreams(streams || [])
+          .limit(50) // Get more to filter
+
+        // Filter out streams from fake/test accounts
+        const realStreams = (streams || []).filter((stream: any) => {
+          const username = (stream.user_profiles?.username || '').toLowerCase();
+          // Exclude test/demo/mock accounts
+          const isRealUser = !username.includes('test') &&
+                            !username.includes('demo') &&
+                            !username.includes('mock') &&
+                            !username.includes('fake') &&
+                            !username.includes('sample') &&
+                            !username.includes('user') &&
+                            (stream.total_gifts_coins || 0) > 0; // Must have received gifts
+          return isRealUser;
+        });
+
+        setTopStreams(realStreams.slice(0, 20)) // Take top 20 real streams
       } catch {
         setTopUsers([]); setTopStreams([])
       } finally {

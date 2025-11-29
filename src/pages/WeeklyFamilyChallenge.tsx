@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../lib/store'
-import { Gift, Trophy, Users } from 'lucide-react'
+import { Trophy, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function WeeklyFamilyChallenge() {
-  const { user, profile } = useAuthStore()
-  const [tasksCompleted, setTasksCompleted] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const rewardPool = 10000

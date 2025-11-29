@@ -120,6 +120,7 @@ export default function Sidebar() {
         <MenuLink to="/wheel" icon={<Aperture />} label="Troll Wheel" active={isActive('/wheel')} />
 
         <MenuLink to="/leaderboard" icon={<span className="inline-block w-5 h-5">🏆</span>} label="Leaderboard" active={isActive('/leaderboard')} />
+        <MenuLink to="/wall" icon={<span className="inline-block w-5 h-5">🧌</span>} label="Troll City Wall" active={isActive('/wall')} />
 
         <MenuLink to="/go-live" icon={<Radio />} label="Go Live" active={isActive('/go-live')} />
         <MenuLink to="/trollifications" icon={<Gift />} label="Trollifications" active={isActive('/trollifications')} />
@@ -143,6 +144,11 @@ export default function Sidebar() {
         {/* 🔐 RFC — Only Admin */}
         {profile?.role === 'admin' && (
           <MenuLink to="/rfc" icon={<Shield />} label="RFC" active={isActive('/rfc')} />
+        )}
+
+        {/* Admin Earnings Dashboard — Only Admin */}
+        {profile?.role === 'admin' && (
+          <MenuLink to="/admin/earnings" icon={<Banknote />} label="Earnings Dashboard" active={isActive('/admin/earnings')} />
         )}
       </nav>
 

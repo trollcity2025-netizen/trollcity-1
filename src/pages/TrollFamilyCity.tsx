@@ -3,14 +3,11 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import {
-  Trophy,
   Users,
   Crown,
   Star,
   Gift,
   Radio,
-  Eye,
-  Home,
   Sparkles
 } from 'lucide-react'
 import { toast } from 'sonner'

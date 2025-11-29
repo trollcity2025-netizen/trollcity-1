@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react
 import { useAuthStore } from "./lib/store";
 import { supabase, isAdminEmail } from "./lib/supabase";
 import api from "./lib/api";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
 
 // Layout
 import Sidebar from "./components/Sidebar";
@@ -17,6 +17,19 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import TermsAgreement from "./pages/TermsAgreement";
+
+// Lazy-loaded pages
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
+const StreamEnded = lazy(() => import("./pages/StreamEnded"));
+const AdminRFC = lazy(() => import("./components/AdminRFC"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const PaymentTerms = lazy(() => import("./pages/PaymentTerms"));
+const CreatorAgreement = lazy(() => import("./pages/CreatorAgreement"));
+const TaxOnboarding = lazy(() => import("./pages/TaxOnboarding"));
+const AdminEarningsDashboard = lazy(() => import("./pages/admin/AdminEarningsDashboard"));
+const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 
 // Lazy-loaded pages
 const GoLive = lazy(() => import("./pages/GoLive"));
@@ -156,6 +169,14 @@ function App() {
                 <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/terms" element={<TermsAgreement />} />
+                <Route path="/terms-of-service" element={<TermsOfService />} />
+                <Route path="/refund-policy" element={<RefundPolicy />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/payment-terms" element={<PaymentTerms />} />
+                <Route path="/creator-agreement" element={<CreatorAgreement />} />
+                <Route path="/tax-onboarding" element={<TaxOnboarding />} />
+                <Route path="/earnings" element={<MyEarnings />} />
+                <Route path="/live" element={<LandingPage />} />
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
@@ -174,6 +195,7 @@ function App() {
                   <Route path="/go-live" element={<GoLive />} />
                   <Route path="/stream/:streamId" element={<StreamRoom />} />
                   <Route path="/stream/:id/summary" element={<StreamSummary />} />
+                  <Route path="/stream-ended" element={<StreamEnded />} />
 
                   {/* 💰 Earnings & Coins */}
                   <Route path="/store" element={<CoinStore />} />
@@ -222,6 +244,15 @@ function App() {
                       </RequireRole>
                     }
                   />
+                  <Route
+                    path="/admin/earnings"
+                    element={
+                      <RequireRole roles={['admin']}>
+                        <AdminEarningsDashboard />
+                      </RequireRole>
+                    }
+                  />
+                  <Route path="/rfc" element={<AdminRFC />} />
                 </Route>
 
                 {/* 🔙 Catch-all */}

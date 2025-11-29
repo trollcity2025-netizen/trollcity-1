@@ -50,7 +50,8 @@ add column if not exists is_app_sponsored boolean default false;
 -- Update streams table
 alter table public.streams
 add column if not exists is_force_ended boolean default false,
-add column if not exists ended_by uuid references public.user_profiles(id);
+add column if not exists ended_by uuid references public.user_profiles(id),
+add column if not exists is_live boolean default true;
 
 
 -- coin_transactions table

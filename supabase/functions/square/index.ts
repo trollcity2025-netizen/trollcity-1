@@ -5,18 +5,51 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-console.log("Hello from Functions!")
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+}
 
 Deno.serve(async (req) => {
-  const { name } = await req.json()
-  const data = {
-    message: `Hello ${name}!`,
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  return new Response(
-    JSON.stringify(data),
-    { headers: { "Content-Type": "application/json" } },
-  )
+  try {
+    const url = new URL(req.url)
+    const path = url.pathname.split('/').pop() || ''
+
+    if (path === 'status' && req.method === 'GET') {
+      const appId = Deno.env.get('SQUARE_APPLICATION_ID') || Deno.env.get('VITE_SQUARE_APPLICATION_ID')
+      const locationId = Deno.env.get('SQUARE_LOCATION_ID') || Deno.env.get('VITE_SQUARE_LOCATION_ID')
+      const sandbox = !!appId && (appId.includes('sandbox') || (locationId || '').includes('sandbox'))
+      return new Response(JSON.stringify({ success: true, appId: !!appId, locationId: !!locationId, sandbox }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    if (path === 'test' && req.method === 'POST') {
+      const appId = Deno.env.get('SQUARE_APPLICATION_ID') || Deno.env.get('VITE_SQUARE_APPLICATION_ID')
+      const locationId = Deno.env.get('SQUARE_LOCATION_ID') || Deno.env.get('VITE_SQUARE_LOCATION_ID')
+      if (!appId || !locationId) {
+        return new Response(JSON.stringify({ success: false, error: 'Missing Square credentials' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      return new Response(JSON.stringify({ success: true, message: 'Square test OK' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    return new Response(JSON.stringify({ success: false, error: 'Not found' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  } catch (e) {
+    return new Response(JSON.stringify({ success: false, error: e.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 })
 
 /* To invoke locally:

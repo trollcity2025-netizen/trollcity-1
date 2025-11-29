@@ -3,67 +3,80 @@ import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../lib/store";
 import { toast } from "sonner";
 import ClickableUsername from "../components/ClickableUsername";
-
-interface TrollPost {
-  id: string;
-  user_id: string;
-  content: string | null;
-  image_url: string | null;
-  coins_earned: number;
-  created_at: string;
-  user_profiles?: {
-    username: string;
-    avatar_url: string | null;
-  }[] | null;
-  reactions?: {
-    id: string;
-    reaction_type: string;
-  }[];
-}
+import { PlusCircle } from "lucide-react";
 
 const TrollCityWall: React.FC = () => {
   const { user, profile } = useAuthStore();
-  const [posts, setPosts] = useState<TrollPost[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [content, setContent] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-
-  const GIFT_COST = 50; // 50 coins per "Troll Heart" (adjust later)
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const loadPosts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("troll_posts")
-        .select(
-          `
-          id,
-          user_id,
-          content,
-          image_url,
-          coins_earned,
-          created_at,
-          user_profiles!user_id (
-            username,
-            avatar_url
-          ),
-          troll_post_reactions (
-            id,
-            reaction_type
-          )
-        `
-        )
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
+        .select(`
+          id, user_id, content, image_url, coins_earned, created_at,
+          user_profiles!user_id(username, avatar_url)
+        `)
+        .order("created_at", { ascending: false });
       setPosts(data || []);
-    } catch (err) {
-      console.error("Error loading posts:", err);
-      toast.error("Failed to load Troll City feed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createPost = async () => {
+    if (!content.trim() && !imageFile) {
+      toast.error("Please add some content or an image");
+      return;
+    }
+    if (!user || !profile) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      let imageUrl = null;
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('post-images')
+          .upload(fileName, imageFile);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from('post-images')
+          .getPublicUrl(fileName);
+        imageUrl = publicUrl;
+      }
+
+      const { error } = await supabase
+        .from("troll_posts")
+        .insert({
+          user_id: user.id,
+          content: content.trim(),
+          image_url: imageUrl,
+          coins_earned: 0
+        });
+
+      if (error) throw error;
+
+      toast.success("Post created!");
+      setContent("");
+      setImageFile(null);
+      setShowCreateModal(false);
+      loadPosts();
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      toast.error("Failed to create post");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -71,409 +84,120 @@ const TrollCityWall: React.FC = () => {
     loadPosts();
   }, []);
 
-  const createPost = async () => {
-    if (!user || !profile) {
-      toast.error("You must be logged in to post");
-      return;
-    }
-    if (!content.trim() && !imageUrl.trim()) {
-      toast.error("Write something or add an image");
-      return;
-    }
-
-    try {
-      setCreating(true);
-      const { data, error } = await supabase
-        .from("troll_posts")
-        .insert({
-          user_id: profile.id,
-          content: content.trim() || null,
-          image_url: imageUrl.trim() || null,
-        })
-        .select(
-          `
-          id,
-          user_id,
-          content,
-          image_url,
-          coins_earned,
-          created_at,
-          user_profiles!user_id (
-            username,
-            avatar_url
-          ),
-          troll_post_reactions (
-            id,
-            reaction_type
-          )
-        `
-        )
-        .single();
-
-      if (error) throw error;
-
-      setPosts((prev) => [data as TrollPost, ...prev]);
-      setContent("");
-      setImageUrl("");
-      toast.success("Posted to Troll City Wall");
-    } catch (err) {
-      console.error("Error creating post:", err);
-      toast.error("Failed to create post");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const sendPostGift = async (post: TrollPost) => {
-    if (!user || !profile) {
-      toast.error("Login required to send gifts");
-      return;
-    }
-
-    // don't gift yourself (optional)
-    if (post.user_id === profile.id) {
-      toast.error("You can't gift yourself… yet 😈");
-      return;
-    }
-
-    try {
-      const totalCoins =
-        Number(profile.paid_coin_balance || 0) +
-        Number(profile.free_coin_balance || 0);
-
-      if (totalCoins < GIFT_COST) {
-        toast.error("Not enough coins. Visit the store.");
-        return;
-      }
-
-      // prefer paid coins first
-      let paid = Number(profile.paid_coin_balance || 0);
-      let free = Number(profile.free_coin_balance || 0);
-      let remaining = GIFT_COST;
-
-      const usePaid = Math.min(remaining, paid);
-      paid -= usePaid;
-      remaining -= usePaid;
-
-      const useFree = Math.min(remaining, free);
-      free -= useFree;
-      remaining -= useFree;
-
-      // update sender balances
-      const { error: senderErr } = await supabase
-        .from("user_profiles")
-        .update({
-          paid_coin_balance: paid,
-          free_coin_balance: free,
-        })
-        .eq("id", profile.id);
-
-      if (senderErr) throw senderErr;
-
-      // fetch receiver
-      const { data: receiverRow, error: recvErr } = await supabase
-        .from("user_profiles")
-        .select("id, paid_coin_balance, total_earned_coins")
-        .eq("id", post.user_id)
-        .single();
-
-      if (recvErr) throw recvErr;
-
-      const receiverPaid =
-        Number(receiverRow.paid_coin_balance || 0) + GIFT_COST;
-      const receiverEarned =
-        Number(receiverRow.total_earned_coins || 0) + GIFT_COST;
-
-      const { error: recvUpdateErr } = await supabase
-        .from("user_profiles")
-        .update({
-          paid_coin_balance: receiverPaid,
-          total_earned_coins: receiverEarned,
-        })
-        .eq("id", post.user_id);
-
-      if (recvUpdateErr) throw recvUpdateErr;
-
-      // record gift on post
-      const { error: giftErr } = await supabase
-        .from("troll_post_gifts")
-        .insert({
-          post_id: post.id,
-          sender_id: profile.id,
-          receiver_id: post.user_id,
-          gift_name: "Troll Heart",
-          coin_cost: GIFT_COST,
-        });
-
-      if (giftErr) throw giftErr;
-
-      // update post coin total
-      const { error: postErr } = await supabase
-        .from("troll_posts")
-        .update({
-          coins_earned: (post.coins_earned || 0) + GIFT_COST,
-        })
-        .eq("id", post.id);
-
-      if (postErr) throw postErr;
-
-      // notify receiver
-      try {
-        await supabase.from("notifications").insert([
-          {
-            user_id: post.user_id,
-            type: "post_gift",
-            title: "🎁 New Post Gift",
-            message: `${profile.username} sent you a Troll Heart on your post (+${GIFT_COST} coins)`,
-            read: false,
-            created_at: new Date().toISOString(),
-            metadata: {
-              post_id: post.id,
-              coin_value: GIFT_COST,
-            },
-          },
-        ]);
-      } catch (e) {
-        console.warn("Notification failed:", e);
-      }
-
-      // update local profile so UI shows new balance
-      useAuthStore
-        .getState()
-        .setProfile({
-          ...(profile as any),
-          paid_coin_balance: paid,
-          free_coin_balance: free,
-        } as any);
-
-      // optimistic UI update for post coins
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === post.id
-            ? { ...p, coins_earned: (p.coins_earned || 0) + GIFT_COST }
-            : p
-        )
-      );
-
-      toast.success("Sent Troll Heart 💜");
-    } catch (err) {
-      console.error("Error sending post gift:", err);
-      toast.error("Failed to send gift");
-    }
-  };
-
-  const sendReaction = async (post: TrollPost, type: string, cost: number) => {
-    if (!user || !profile) return toast.error("Login required");
-
-    if (cost > 0) {
-      const totalCoins =
-        (profile?.paid_coin_balance || 0) +
-        (profile?.free_coin_balance || 0);
-
-      if (totalCoins < cost) {
-        toast.error("Not enough coins");
-        return;
-      }
-    }
-
-    try {
-      // record reaction
-      await supabase.from("troll_post_reactions").insert({
-        post_id: post.id,
-        user_id: profile.id,
-        reaction_type: type,
-        coin_cost: cost,
-      });
-
-      if (cost > 0) {
-        const newPaid = Math.max(0, (profile?.paid_coin_balance || 0) - cost);
-        const newFree = Math.max(0, (profile?.free_coin_balance || 0) - (cost - (profile?.paid_coin_balance || 0)));
-        await supabase.from("user_profiles").update({
-          paid_coin_balance: newPaid,
-          free_coin_balance: newFree,
-        }).eq("id", profile.id);
-        useAuthStore.getState().setProfile({ ...profile, paid_coin_balance: newPaid, free_coin_balance: newFree });
-      }
-
-      toast.success(`💥 Reaction sent: ${type}`);
-    } catch (err) {
-      toast.error("Failed to react");
-    }
-  };
-
   return (
-    <>
-      <style>{`
-        .reaction-overlay {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          font-size: 24px;
-          pointer-events: none;
-          z-index: 10;
-        }
-        .animate-crown { animation: bounce 1s infinite; }
-        .animate-fire { animation: flicker 1.2s infinite; }
-        .animate-troll { animation: wiggle 0.6s infinite; }
-        .animate-warp { animation: swirl 1.5s infinite; }
-        .animate-flex { animation: pulse 2s infinite; }
+    <div className="min-h-screen bg-[#06010F] text-white">
+      {/* Header */}
+      <div className="sticky top-0 bg-[#070113]/90 backdrop-blur-xl p-5 shadow-[0_0_25px_rgba(124,0,245,0.6)] z-20">
+        <h1 className="text-3xl font-bold text-transparent bg-gradient-to-r from-purple-400 to-green-400 bg-clip-text drop-shadow-lg">
+          🧌 Troll City Wall
+        </h1>
+        <p className="text-sm text-gray-400">Share. Troll. Gift. Earn.</p>
+      </div>
 
-        @keyframes bounce {
-          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-10px); }
-          60% { transform: translateY(-5px); }
-        }
-
-        @keyframes flicker {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-
-        @keyframes wiggle {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(-5deg); }
-          75% { transform: rotate(5deg); }
-        }
-
-        @keyframes swirl {
-          0% { transform: rotate(0deg) scale(1); }
-          50% { transform: rotate(180deg) scale(1.2); }
-          100% { transform: rotate(360deg) scale(1); }
-        }
-
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.1); opacity: 0.8; }
-        }
-      `}</style>
-      <div className="min-h-screen bg-gradient-to-b from-[#05010B] via-[#090018] to-[#000000] text-white">
-        <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        <h1 className="text-2xl font-bold mb-2">Troll City Wall</h1>
-
-        {/* Create Post */}
-        <div className="bg-black/60 border border-purple-700/60 rounded-xl p-4 space-y-3">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Share something with Troll City..."
-            className="w-full bg-[#05010B] border border-purple-700/60 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-troll-green"
-            rows={3}
-          />
-          <input
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="Image URL (optional)"
-            className="w-full bg-[#05010B] border border-purple-700/60 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-troll-green"
-          />
-          <button
-            disabled={creating}
-            onClick={createPost}
-            className="px-4 py-2 rounded-full bg-troll-green text-black font-semibold text-sm disabled:opacity-60"
-          >
-            {creating ? "Posting..." : "Post to Wall"}
-          </button>
-        </div>
-
-        {/* Feed */}
-        {loading && (
-          <div className="text-center text-gray-400 text-sm mt-6">
+      {/* Feed */}
+      <div className="max-w-3xl mx-auto p-5 space-y-6">
+        {loading ? (
+          <p className="text-center text-gray-500 animate-pulse">
             Loading Troll City…
-          </div>
-        )}
-
-        {!loading && posts.length === 0 && (
-          <div className="text-center text-gray-500 text-sm mt-6">
-            No posts yet. Be the first citizen to speak 👹
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {posts.map((post) => (
+          </p>
+        ) : posts.length === 0 ? (
+          <p className="text-center text-gray-500">No posts yet 👹</p>
+        ) : (
+          posts.map((post) => (
             <div
               key={post.id}
-              className="bg-black/60 border border-purple-800/50 rounded-xl p-4 space-y-2"
+              className="bg-black/60 border border-purple-800/40 rounded-xl p-5 shadow-[0_0_15px_rgba(150,50,220,0.3)] hover:shadow-[0_0_30px_rgba(150,50,220,0.6)] transition-all"
             >
-              <div className="flex items-center space-x-3 text-sm">
+              {/* User Header */}
+              <div className="flex items-center mb-3">
                 <img
                   src={
                     post.user_profiles?.[0]?.avatar_url ||
-                    `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_profiles?.[0]?.username || "troll"}`
+                    `https://api.dicebear.com/7.x/bottts/svg?seed=${post.user_profiles?.[0]?.username}`
                   }
-                  alt={post.user_profiles?.[0]?.username || "user"}
-                  className="w-8 h-8 rounded-full border border-troll-gold/50"
+                  className="w-10 h-10 rounded-full border border-green-400 shadow-[0_0_10px_rgba(0,255,150,0.4)]"
                 />
-                <div>
+                <div className="ml-3">
                   <ClickableUsername
                     username={post.user_profiles?.[0]?.username || "Unknown"}
-                    className="font-semibold text-sm"
+                    className="text-lg font-semibold text-green-300 drop-shadow"
                   />
-                  <div className="text-[11px] text-gray-400">
+                  <p className="text-xs text-gray-500">
                     {new Date(post.created_at).toLocaleString()}
-                  </div>
+                  </p>
                 </div>
               </div>
 
-              {post.reactions?.map((r) => (
-                <div key={r.id} className={`reaction-overlay animate-${r.reaction_type}`}>
-                  {r.reaction_type === 'crown' && "👑"}
-                  {r.reaction_type === 'fire' && "🔥🔥🔥"}
-                  {r.reaction_type === 'troll' && "🧌🧌🧌"}
-                  {r.reaction_type === 'warp' && "🌪️🌪️"}
-                  {r.reaction_type === 'flex' && "💎💎💎"}
-                </div>
-              ))}
-
+              {/* Post Content */}
               {post.content && (
-                <p className="text-sm mt-1 whitespace-pre-wrap">
+                <p className="text-sm text-gray-200 whitespace-pre-line mb-3">
                   {post.content}
                 </p>
               )}
 
+              {/* Post Image */}
               {post.image_url && (
-                <div className="mt-2 rounded-lg overflow-hidden border border-purple-700/60">
-                  <img
-                    src={post.image_url}
-                    alt="Post"
-                    className="w-full max-h-80 object-cover"
-                  />
-                </div>
+                <img
+                  src={post.image_url}
+                  className="rounded-xl mb-3 max-h-[450px] w-full object-cover shadow-[0_0_15px_rgba(0,255,255,0.3)]"
+                />
               )}
 
-              <div className="flex items-center justify-between mt-2 text-xs text-gray-300">
-                <span>{post.coins_earned || 0} coins earned</span>
-                <button
-                  onClick={() => sendPostGift(post)}
-                  className="px-3 py-1 rounded-full bg-troll-purple text-white text-xs flex items-center gap-1"
-                >
-                  <span>🎁</span>
-                  <span>Send Troll Heart ({GIFT_COST})</span>
+              {/* Metrics & Actions */}
+              <div className="flex justify-between items-center text-xs mt-3">
+                <span className="text-gray-400">
+                  💰 {post.coins_earned} Coins Earned
+                </span>
+                <button className="px-3 py-1 bg-gradient-to-r from-purple-600 to-green-500 rounded-full shadow-[0_0_10px_rgba(120,0,200,0.8)]">
+                  🎁 Send Troll Heart
                 </button>
               </div>
-
-              <div className="flex items-center gap-2 mt-3">
-                {[
-                  { icon: "💚", type: "hug", cost: 0 },
-                  { icon: "👑", type: "crown", cost: 100 },
-                  { icon: "🔥", type: "fire", cost: 200 },
-                  { icon: "🧌", type: "troll", cost: 500 },
-                  { icon: "🌪️", type: "warp", cost: 1000 },
-                  { icon: "💎", type: "flex", cost: 5000 },
-                ].map((r) => (
-                  <button
-                    key={r.type}
-                    onClick={() => sendReaction(post, r.type, r.cost)}
-                    className="px-2 py-1 bg-black/60 border border-purple-500 rounded-full text-xs hover:bg-purple-700 transition"
-                  >
-                    {r.icon} {r.cost > 0 ? r.cost : ""}
-                  </button>
-                ))}
-              </div>
             </div>
-          ))}
-        </div>
+          ))
+        )}
       </div>
+
+      {/* Floating Create Button */}
+      <button
+        onClick={() => setShowCreateModal(true)}
+        className="fixed bottom-6 right-6 bg-gradient-to-br from-green-400 to-purple-500 p-4 rounded-full shadow-[0_0_30px_rgba(140,0,240,0.9)] hover:scale-110 transition"
+      >
+        <PlusCircle className="text-black" size={32} />
+      </button>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center p-6">
+          <div className="bg-[#08010A] p-6 rounded-xl border border-purple-600 w-full max-w-md shadow-[0_0_40px_rgba(130,0,200,0.6)]">
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full bg-black/50 border border-purple-600 p-3 rounded-lg mb-3 text-sm"
+              placeholder="Speak to Troll City..."
+            />
+            <input
+              type="file"
+              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              className="w-full bg-black/50 border border-purple-600 p-2 rounded-lg mb-3 text-sm"
+            />
+            <div className="flex justify-between">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 bg-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={creating}
+                onClick={createPost}
+                className="px-4 py-2 bg-gradient-to-br from-green-400 to-purple-500 text-black rounded-lg font-semibold"
+              >
+                {creating ? "Posting..." : "Post"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-    </>
   );
 };
 

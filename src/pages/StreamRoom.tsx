@@ -19,6 +19,7 @@ import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { recordAppEvent } from '../lib/progressionEngine'
 import ClickableUsername from '../components/ClickableUsername'
+import TrollEvent from '../components/TrollEvent'
 
 interface Message {
   id: string
@@ -264,6 +265,10 @@ const StreamRoom = () => {
   const [falling, setFalling] = useState<number[]>(Array.from({ length: 10 }, (_, i) => i))
   const [boxOneUserId, setBoxOneUserId] = useState<string | null>(null)
   const [boxOneTimer, setBoxOneTimer] = useState<number | null>(null)
+  const [autoEndTimer, setAutoEndTimer] = useState<NodeJS.Timeout | null>(null)
+  const [isBroadcasterAway, setIsBroadcasterAway] = useState(false)
+  const [giftAnimation, setGiftAnimation] = useState<{ giftName: string; animationType: string; icon: string } | null>(null)
+
   const isGhostActiveNow = () => {
     try {
       const until = Number(localStorage.getItem(`tc-ghost-mode-${profile?.id}`) || '0')
@@ -280,6 +285,49 @@ const StreamRoom = () => {
       return false
     }
   }
+
+  // Auto-end stream when broadcaster is away for 5+ minutes
+  useEffect(() => {
+    if (!stream || !profile || profile.id !== stream.broadcaster_id) return
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsBroadcasterAway(true)
+        // Start 5-minute timer
+        const timer = setTimeout(async () => {
+          try {
+            await endStreamAsBroadcaster()
+            toast.info('Stream auto-ended due to inactivity')
+          } catch (error) {
+            console.error('Failed to auto-end stream:', error)
+          }
+        }, 5 * 60 * 1000) // 5 minutes
+        setAutoEndTimer(timer)
+      } else {
+        setIsBroadcasterAway(false)
+        if (autoEndTimer) {
+          clearTimeout(autoEndTimer)
+          setAutoEndTimer(null)
+        }
+      }
+    }
+
+    const handleBeforeUnload = () => {
+      // Immediately end stream when tab is closed
+      endStreamAsBroadcaster()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (autoEndTimer) {
+        clearTimeout(autoEndTimer)
+      }
+    }
+  }, [stream, profile, autoEndTimer])
 
   const KICK_FEE = 500
 
@@ -526,13 +574,10 @@ const StreamRoom = () => {
     try {
       setLoading(true)
       
-      // Load stream with broadcaster info
+      // Load stream (no FK join dependency)
       const { data: streamData, error: streamError } = await supabase
         .from('troll_streams')
-        .select(`
-          *,
-          user_profiles!broadcaster_id (*)
-        `)
+        .select('*')
         .eq('id', streamId)
         .single()
 
@@ -544,11 +589,19 @@ const StreamRoom = () => {
   }
 
   setStream(streamData)
-  setBroadcaster(streamData.user_profiles)
+  // Load broadcaster profile separately
+  if (streamData?.broadcaster_id) {
+    const { data: bc } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', streamData.broadcaster_id)
+      .single()
+    if (bc) setBroadcaster(bc as any)
+  }
   
   // Load broadcaster's active perks, insurance, and entrance effects
-  if (streamData.user_profiles?.id) {
-    loadBroadcasterActiveItems(streamData.user_profiles.id)
+  if (streamData?.broadcaster_id) {
+    loadBroadcasterActiveItems(streamData.broadcaster_id)
   }
   
   if (!streamStartLogged && profile?.id && streamData?.status === 'live') {
@@ -617,10 +670,10 @@ const StreamRoom = () => {
           },
           (payload: any) => {
             setStream(payload.new)
-            const ended = (payload.new as any)?.status === 'ended'
+            const ended = (payload.new as any)?.is_live === false
             if (ended) {
-              toast.error('200 coins deducted. Next time will be a 15 minute wait. You are now allowed to go back live / continue watching.')
-              navigate('/')
+              toast.error('Stream has ended.')
+              navigate('/stream-ended')
             }
             // Promote active speaker to box one briefly
             try {
@@ -900,7 +953,7 @@ const StreamRoom = () => {
       const { data } = await supabase
         .from('troll_streams')
         .select('id, title, broadcaster_id, current_viewers, total_gifts_coins')
-        .eq('status', 'live')
+        .eq('is_live', true)
         .neq('id', stream.id)
         .limit(20)
       const pool = (data || [])
@@ -1032,35 +1085,40 @@ const StreamRoom = () => {
   const sendGift = async (gift: GiftItem) => {
     if (!user || !streamId || !stream) return
 
+    const isAdmin = profile?.role === 'admin'
     const totalCoins =
       (profile?.paid_coin_balance || 0) + (profile?.free_coin_balance || 0)
-    if (totalCoins < gift.coin_cost) {
+    if (!isAdmin && totalCoins < gift.coin_cost) {
       toast.error('Insufficient coins')
       return
     }
 
     try {
-      // Deduct coins (prefer paid coins first)
-      const paidCoinsToUse = Math.min(
-        gift.coin_cost,
-        profile?.paid_coin_balance || 0
-      )
-      const freeCoinsToUse = gift.coin_cost - paidCoinsToUse
+      // Deduct coins (prefer paid coins first) - skip for admin
+      let paidCoinsToUse = 0
+      let freeCoinsToUse = 0
+      if (!isAdmin) {
+        paidCoinsToUse = Math.min(
+          gift.coin_cost,
+          profile?.paid_coin_balance || 0
+        )
+        freeCoinsToUse = gift.coin_cost - paidCoinsToUse
 
-      if (paidCoinsToUse > 0) {
-        await supabase
-          .from('user_profiles')
-          .update({ paid_coin_balance: profile!.paid_coin_balance - paidCoinsToUse })
-          .eq('id', user.id)
-      }
+        if (paidCoinsToUse > 0) {
+          await supabase
+            .from('user_profiles')
+            .update({ paid_coin_balance: profile!.paid_coin_balance - paidCoinsToUse })
+            .eq('id', user.id)
+        }
 
-      if (freeCoinsToUse > 0) {
-        await supabase
-          .from('user_profiles')
-          .update({
-            free_coin_balance: profile!.free_coin_balance - freeCoinsToUse
-          })
-          .eq('id', user.id)
+        if (freeCoinsToUse > 0) {
+          await supabase
+            .from('user_profiles')
+            .update({
+              free_coin_balance: profile!.free_coin_balance - freeCoinsToUse
+            })
+            .eq('id', user.id)
+        }
       }
 
       // Add coins to broadcaster wallet
@@ -1080,6 +1138,15 @@ const StreamRoom = () => {
       if (updatedBroadcasterRows && updatedBroadcasterRows[0]) {
         setBroadcaster(updatedBroadcasterRows[0] as UserProfile)
       }
+
+      // Trigger gift animation
+      setGiftAnimation({
+        giftName: gift.name,
+        animationType: gift.animation_type || 'bounce',
+        icon: '🎁'
+      })
+      // Hide animation after 3 seconds
+      setTimeout(() => setGiftAnimation(null), 3000)
 
       // Create gift chat message
       await supabase.from('messages').insert([
@@ -1248,6 +1315,33 @@ const StreamRoom = () => {
     }
   }
 
+  // Broadcaster: end their own stream
+  const endStreamAsBroadcaster = async () => {
+    if (!stream || !profile || profile.id !== stream.broadcaster_id) return
+
+    try {
+      setIsEndingStream(true)
+
+      // Mark stream as ended
+      await supabase
+        .from('troll_streams')
+        .update({
+          is_live: false,
+          status: 'ended',
+          end_time: new Date().toISOString()
+        })
+        .eq('id', stream.id)
+
+      toast.success('Stream ended')
+      navigate('/stream-ended')
+    } catch (error) {
+      console.error('Error ending stream:', error)
+      toast.error('Failed to end stream')
+    } finally {
+      setIsEndingStream(false)
+    }
+  }
+
   // Troll Officer: hard end stream, deduct 200 coins from broadcaster, redirect everyone
   const endStreamAsTrollOfficer = async () => {
     if (!stream || !broadcaster || !isTrollOfficer) return
@@ -1393,6 +1487,25 @@ const StreamRoom = () => {
         </div>
       )}
 
+      {/* Gift animation overlay */}
+      {giftAnimation && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-30">
+          <div className="bg-black/70 px-8 py-6 rounded-2xl border border-troll-gold shadow-[0_0_40px_rgba(234,179,8,0.9)] flex flex-col items-center space-y-4 animate-mega">
+            <div className="text-6xl animate-floatGift">
+              {giftAnimation.icon}
+            </div>
+            <div className="text-center">
+              <div className="text-sm text-troll-gold/80 mb-2">
+                GIFT RECEIVED!
+              </div>
+              <div className="text-2xl font-bold text-white">
+                {giftAnimation.giftName}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative container mx-auto px-4 py-4">
         {showSummary && (
           <div className="bg-black/70 rounded-2xl border border-yellow-500 shadow-[0_0_25px_rgba(234,179,8,0.6)] p-6 mb-4">
@@ -1421,8 +1534,8 @@ const StreamRoom = () => {
               <div className="aspect-video bg-troll-dark relative">
                 {/* Multi-Beam Grid Layout */}
                 {stream?.multi_beam ? (
-                  <div className="w-full h-full grid grid-cols-4 grid-rows-4 gap-1 p-1">
-                    {Array.from({ length: 14 }).map((_, idx) => {
+                  <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-1 p-1">
+                    {Array.from({ length: 4 }).map((_, idx) => {
                       const userId = `box-${idx}`
                       return (
                         <div
@@ -1575,6 +1688,19 @@ const StreamRoom = () => {
                     ? new Date(stream.start_time).toLocaleTimeString()
                     : '—'}
                 </span>
+
+                {profile?.id === stream.broadcaster_id && (
+                  <button
+                    onClick={endStreamAsBroadcaster}
+                    disabled={isEndingStream}
+                    className="flex items-center space-x-1 px-3 py-1 rounded-full border border-red-500/70 text-red-400 hover:bg-red-500/10 text-xs font-semibold disabled:opacity-50"
+                  >
+                    <ShieldOff className="w-4 h-4" />
+                    <span>
+                      {isEndingStream ? 'Ending...' : 'End Stream'}
+                    </span>
+                  </button>
+                )}
 
                 {isTrollOfficer && (
                   <button
@@ -1764,8 +1890,20 @@ const StreamRoom = () => {
                       className="p-3 bg-troll-dark rounded-xl border border-troll-purple hover:border-troll-gold transition-colors flex flex-col items-center justify-center text-center"
                     >
                       <div className="text-2xl mb-1">
-                        {/* You can map gift.animation_type to different emojis/icons later */}
-                        🎁
+                        {(() => {
+                          const type = gift.animation_type || 'bounce'
+                          switch (type) {
+                            case 'driveCar': return '🚗'
+                            case 'diamondRain': return '💎'
+                            case 'catScratch': return '🐱'
+                            case 'crownFlash': return '👑'
+                            case 'hatBounce': return '🎩'
+                            case 'toolboxSpin': return '🧰'
+                            case 'wineGlow': return '🍷'
+                            case 'mega': return '🎉'
+                            default: return '🎁'
+                          }
+                        })()}
                       </div>
                       <div className="text-xs font-medium truncate w-full">
                         {gift.name}
@@ -1787,6 +1925,9 @@ const StreamRoom = () => {
           </div>
         </div>
       </div>
+
+      {/* Global Troll Events */}
+      <TrollEvent streamId={streamId} />
     </div>
   )
 }

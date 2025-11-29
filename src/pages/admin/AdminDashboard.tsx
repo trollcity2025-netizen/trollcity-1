@@ -12,7 +12,6 @@ import {
   Shield,
   RefreshCw,
   CreditCard,
-  TrendingUp,
   Gift,
   Camera,
   Monitor,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import api from '../../lib/api'
 import ClickableUsername from '../../components/ClickableUsername'
 import ProfitSummary from '../../components/ProfitSummary'
 import { TestingModeControl } from '../../components/TestingModeControl'
@@ -139,12 +139,12 @@ export default function AdminDashboard() {
   const [purchases, setPurchases] = useState<any[]>([])
   const [declinedTransactions, setDeclinedTransactions] = useState<any[]>([])
   const [selectedDeclined, setSelectedDeclined] = useState<any | null>(null)
-  const [verifications, setVerifications] = useState<any[]>([])
+  const [_verifications, setVerifications] = useState<any[]>([])
   const [usersList, setUsersList] = useState<any[]>([])
   const [broadcastersList, setBroadcastersList] = useState<any[]>([])
   const [familiesList, setFamiliesList] = useState<any[]>([])
-  const [supportTickets, setSupportTickets] = useState<any[]>([])
-  const [agreements, setAgreements] = useState<any[]>([])
+  const [_supportTickets, setSupportTickets] = useState<any[]>([])
+  const [_agreements, setAgreements] = useState<any[]>([])
   const [squareStatus, setSquareStatus] = useState<any | null>(null)
   const [agoraStatus, setAgoraStatus] = useState<any | null>(null)
   const [supabaseStatus, setSupabaseStatus] = useState<any | null>(null)
@@ -434,6 +434,71 @@ export default function AdminDashboard() {
       setEconomySummary(json.data)
     } catch (err: any) {
       console.error('Failed to load economy summary:', err)
+      // Fallback: compute summary client-side
+      try {
+        const { data: paidCoinsTx } = await supabase
+          .from('coin_transactions')
+          .select('user_id, amount, type')
+          .in('type', ['purchase', 'cashout'])
+
+        const paidCoinsMap: Record<string, { purchased: number; spent: number }> = {};
+        ;(paidCoinsTx || []).forEach((tx: any) => {
+          const existing = paidCoinsMap[tx.user_id] || { purchased: 0, spent: 0 }
+          if (tx.type === 'purchase') existing.purchased += Math.abs(Number(tx.amount || 0))
+          if (tx.type === 'cashout') existing.spent += Math.abs(Number(tx.amount || 0))
+          paidCoinsMap[tx.user_id] = existing
+        })
+
+        let totalPurchased = 0
+        let totalSpent = 0
+        Object.values(paidCoinsMap).forEach(v => { totalPurchased += v.purchased; totalSpent += v.spent })
+        const outstandingLiability = totalPurchased - totalSpent
+
+        const { data: broadcasterEarnings } = await supabase
+          .from('earnings_payouts')
+          .select('amount, status')
+        let totalUsdOwed = 0
+        let paidOutUsd = 0;
+        ;(broadcasterEarnings || []).forEach((e: any) => {
+          const amt = Number(e.amount || 0)
+          if (e.status === 'paid') paidOutUsd += amt
+          totalUsdOwed += amt
+        })
+        const pendingCashoutsUsd = totalUsdOwed - paidOutUsd
+
+        const { data: officerPayments } = await supabase
+          .from('coin_transactions')
+          .select('amount')
+          .eq('type', 'officer_payment')
+        const totalUsdPaid = (officerPayments || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+
+        const { data: wheelSpins } = await supabase
+          .from('coin_transactions')
+          .select('amount, metadata')
+          .eq('type', 'wheel_spin')
+        let totalSpins = 0
+        let totalCoinsSpent = 0
+        let totalCoinsAwarded = 0
+        let jackpotCount = 0;
+        ;(wheelSpins || []).forEach((spin: any) => {
+          totalSpins++
+          const spent = Math.abs(Number(spin.amount || 0))
+          totalCoinsSpent += spent
+          const meta = spin.metadata || {}
+          const awarded = Number(meta.coins_awarded || 0)
+          totalCoinsAwarded += awarded
+          if (meta.is_jackpot) jackpotCount++
+        })
+
+        setEconomySummary({
+          paidCoins: { totalPurchased, totalSpent, outstandingLiability },
+          broadcasters: { totalUsdOwed, pendingCashoutsUsd, paidOutUsd },
+          officers: { totalUsdPaid },
+          wheel: { totalSpins, totalCoinsSpent, totalCoinsAwarded, jackpotCount }
+        })
+      } catch (e) {
+        console.error('Economy fallback failed:', e)
+      }
     } finally {
       setEconomyLoading(false)
     }
@@ -538,8 +603,8 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('troll_streams')
-        .select('id, title, category, broadcaster_id, current_viewers, status, created_at')
-        .eq('status', 'live')
+        .select('id, title, category, current_viewers, is_live, created_at')
+        .eq('is_live', true)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -603,7 +668,7 @@ export default function AdminDashboard() {
       await supabase
         .from('troll_streams')
         .update({
-          status: 'ended',
+          is_live: false,
           end_time: new Date().toISOString(),
           is_force_ended: true,
           ended_by: profile?.id,
@@ -891,7 +956,7 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('applications')
-        .select(`*, user_profiles!applications_user_id_fkey(username, email)`)
+        .select('id, user_id, status, created_at, user_profiles!applications_user_id_fkey(username)')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(50)
@@ -910,7 +975,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const approveVerification = async (id: string) => {
+  const _approveVerification = async (id: string) => {
     try {
       const { data: app } = await supabase
         .from('applications')
@@ -949,7 +1014,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const rejectApplication = async (id: string) => {
+  const _rejectApplication = async (id: string) => {
     try {
       const { error } = await supabase
         .from('applications')
@@ -966,7 +1031,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const deleteUser = async (userId: string, username: string) => {
+  const _deleteUser = async (userId: string, username: string) => {
     try {
       console.log('[Admin] Deleting user:', userId, username)
 
@@ -999,7 +1064,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const approveApplication = async (appId: string, userId: string, newRole: string) => {
+  const _approveApplication = async (appId: string, userId: string, newRole: string) => {
     // 1. Approve application
     await supabase
       .from("applications")
@@ -1028,7 +1093,7 @@ export default function AdminDashboard() {
     loadApplications();
   };
 
-  const deleteAllFakeAccounts = async () => {
+  const _deleteAllFakeAccounts = async () => {
     try {
       console.log('[Admin] Deleting all fake accounts')
       const fakePatterns = ['test', 'fake', 'demo', 'sample', 'user']
@@ -1104,8 +1169,9 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, role, email, created_at')
+        .select('id, username, avatar_url, created_at, role')
         .order('created_at', { ascending: false })
+        .limit(50)
 
       if (error) throw error
 
@@ -1178,7 +1244,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const respondToTicket = async (ticket: any) => {
+  const _respondToTicket = async (ticket: any) => {
     const response = window.prompt('Type your response:')
     if (!response) return
     try {
@@ -1869,7 +1935,7 @@ export default function AdminDashboard() {
       case 'agreements':
         return (
           <div className="overflow-x-auto text-xs">
-            {agreements.length === 0 ? (
+            {_agreements.length === 0 ? (
               <div className="text-gray-500">No users have accepted terms yet.</div>
             ) : (
               <table className="min-w-full text-left">
@@ -1880,7 +1946,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {agreements.map(a => (
+                  {_agreements.map(a => (
                     <tr key={a.id} className="border-b border-gray-800">
                       <td className="py-1 pr-4">
                         <ClickableUsername username={a.username} />
@@ -2207,18 +2273,97 @@ export default function AdminDashboard() {
             >
               Ban user
             </button>
-            <button
-              onClick={resetSelectedUserCoins}
-              className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-500"
-            >
-              Reset coins
-            </button>
-            <button
-              onClick={flagSelectedUserAI}
-              className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600"
-            >
-              AI Flag
-            </button>
+          <button
+            onClick={resetSelectedUserCoins}
+            className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-500"
+          >
+            Reset coins
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const res = await api.post('/admin/wheel/toggle', { enabled: true })
+                if (res?.success) {
+                  toast.success('Wheel enabled')
+                } else {
+                  toast.error(res?.error || 'Failed to enable wheel')
+                }
+              } catch (e: any) {
+                toast.error(e?.message || 'Failed to enable wheel')
+              }
+            }}
+            className="px-3 py-1 rounded bg-green-700 hover:bg-green-600"
+          >
+            Enable Wheel
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const res = await api.post('/admin/wheel/toggle', { enabled: false })
+                if (res?.success) {
+                  toast.success('Wheel disabled')
+                } else {
+                  toast.error(res?.error || 'Failed to disable wheel')
+                }
+              } catch (e: any) {
+                toast.error(e?.message || 'Failed to disable wheel')
+              }
+            }}
+            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600"
+          >
+            Disable Wheel
+          </button>
+          <button
+            onClick={flagSelectedUserAI}
+            className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600"
+          >
+            Flag AI Suspect
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const status = await api.get('/square/status')
+                const res = await api.post('/square/test')
+                if (status?.success && res?.success) {
+                  toast.success('Square test OK')
+                } else {
+                  toast.error(res?.error || 'Square test failed')
+                }
+              } catch (e: any) {
+                toast.error(e?.message || 'Square test failed')
+              }
+            }}
+            className="px-3 py-1 rounded bg-blue-700 hover:bg-blue-600"
+          >
+            Run Square Test
+          </button>
+          <button
+            onClick={async () => {
+              const trollType = window.prompt('Troll type (green/red):', 'green')
+              const rewardAmount = parseInt(window.prompt('Reward amount:', '10') || '10')
+              const durationMinutes = parseInt(window.prompt('Duration (minutes):', '2') ?? '2')
+
+              if (!trollType || !rewardAmount || !durationMinutes) return
+
+              try {
+                const res = await api.post('/admin/troll-events/spawn', {
+                  troll_type: trollType,
+                  reward_amount: rewardAmount,
+                  duration_minutes: durationMinutes
+                })
+                if (res.success) {
+                  toast.success(`Troll event spawned! ID: ${res.event_id}`)
+                } else {
+                  toast.error(res.error || 'Failed to spawn troll event')
+                }
+              } catch (e: any) {
+                toast.error(e?.message || 'Failed to spawn troll event')
+              }
+            }}
+            className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600"
+          >
+            Spawn Troll Event
+          </button>
           </div>
         </div>
 

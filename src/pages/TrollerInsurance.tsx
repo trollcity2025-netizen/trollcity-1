@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { Shield, Clock, CheckCircle, AlertCircle, CreditCard, Zap, Crown } from 'lucide-react'
+import { Shield, Clock, Zap, Crown } from 'lucide-react'
 import { supabase, UserProfile } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'

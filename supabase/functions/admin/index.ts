@@ -1,8 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 /// <reference types="https://deno.land/x/types/index.d.ts" />
-import { createClient } from "jsr:@supabase/supabase-js@2"
+import { createClient } from "@supabase/supabase-js"
+declare const Deno: { serve: (handler: (req: Request) => Response | Promise<Response>) => void; env: { get: (key: string) => string | undefined } };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -45,10 +46,10 @@ Deno.serve(async (req) => {
       }
 
       const payouts = payoutsRes.data || [];
-      const totalPayouts = payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      const totalPayouts = payouts.reduce((sum: number, p: { amount?: number }) => sum + Number(p.amount || 0), 0);
 
       const fees = feesRes.data || [];
-      const totalFees = fees.reduce((sum, f) => sum + Number(f.processing_fee || 0), 0);
+      const totalFees = fees.reduce((sum: number, f: { processing_fee?: number }) => sum + Number(f.processing_fee || 0), 0);
 
       const platformProfit = coinSalesRevenue - totalPayouts;
 
@@ -155,7 +156,7 @@ Deno.serve(async (req) => {
       const frozenCount = frozenUsers?.length || 0;
 
       // For simplicity, return empty topHighRisk for now
-      const topHighRisk = [];
+      const topHighRisk: Array<{ user_id: string; risk_score: number }> = [];
 
       return new Response(JSON.stringify({
         frozenCount,
@@ -173,8 +174,8 @@ Deno.serve(async (req) => {
         .select('user_id, amount, type')
         .in('type', ['purchase', 'cashout']);
 
-      const paidCoinsMap = new Map();
-      paidCoinsTx?.forEach(tx => {
+      const paidCoinsMap = new Map<string, { purchased: number; spent: number }>();
+      paidCoinsTx?.forEach((tx: { user_id: string; amount?: number; type: string }) => {
         const existing = paidCoinsMap.get(tx.user_id) || { purchased: 0, spent: 0 };
         if (tx.type === 'purchase') {
           existing.purchased += Math.abs(Number(tx.amount || 0));
@@ -199,7 +200,7 @@ Deno.serve(async (req) => {
 
       let totalUsdOwed = 0;
       let paidOutUsd = 0;
-      broadcasterEarnings?.forEach(e => {
+      broadcasterEarnings?.forEach((e: { amount?: number; status?: string }) => {
         const amt = Number(e.amount || 0);
         if (e.status === 'paid') {
           paidOutUsd += amt;
@@ -214,7 +215,7 @@ Deno.serve(async (req) => {
         .select('amount')
         .eq('type', 'officer_payment');
 
-      const totalUsdPaid = officerPayments?.reduce((sum, p) => sum + Number(p.amount || 0), 0) || 0;
+      const totalUsdPaid = officerPayments?.reduce((sum: number, p: { amount?: number }) => sum + Number(p.amount || 0), 0) || 0;
 
       // Wheel activity
       const { data: wheelSpins } = await supabase
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
       let totalCoinsSpent = 0;
       let totalCoinsAwarded = 0;
       let jackpotCount = 0;
-      wheelSpins?.forEach(spin => {
+      wheelSpins?.forEach((spin: { amount?: number; metadata?: any }) => {
         totalSpins++;
         const spent = Math.abs(Number(spin.amount || 0));
         totalCoinsSpent += spent;
@@ -260,6 +261,122 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // /wheel/status
+    if (pathname === 'wheel/status' && req.method === 'GET') {
+      let { data: cfg } = await supabase
+        .from('wheel_config')
+        .select('*')
+        .limit(1)
+        .single();
+
+      if (!cfg) {
+        const { data: newCfg } = await supabase
+          .from('wheel_config')
+          .insert({ is_active: true, spin_cost: 500, max_spins_per_day: 10 })
+          .select('*')
+          .single();
+        cfg = newCfg || { is_active: true, spin_cost: 500, max_spins_per_day: 10 };
+      }
+
+      return new Response(JSON.stringify({ success: true, config: cfg }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // /wheel/toggle
+    if (pathname === 'wheel/toggle' && req.method === 'POST') {
+      const body = await req.json();
+      const enabled = !!body?.enabled;
+
+      const { data: cfg } = await supabase
+        .from('wheel_config')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (!cfg) {
+        const { error: insErr } = await supabase
+          .from('wheel_config')
+          .insert({ is_active: enabled, spin_cost: 500, max_spins_per_day: 10 });
+        if (insErr) throw insErr;
+      } else {
+        const { error: updErr } = await supabase
+          .from('wheel_config')
+          .update({ is_active: enabled })
+          .eq('id', cfg.id);
+        if (updErr) throw updErr;
+      }
+
+      return new Response(JSON.stringify({ success: true, enabled }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // /troll-events/spawn
+    if (pathname === 'troll-events/spawn' && req.method === 'POST') {
+      const body = await req.json();
+      const { troll_type = 'green', reward_amount = 10, duration_minutes = 2 } = body;
+
+      const { data: eventId, error } = await supabase.rpc('spawn_troll_event', {
+        p_troll_type: troll_type,
+        p_reward_amount: reward_amount,
+        p_duration_minutes: duration_minutes
+      });
+
+      if (error) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true, event_id: eventId }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // /troll-events/claim
+    if (pathname === 'troll-events/claim' && req.method === 'POST') {
+      const body = await req.json();
+      const { event_id, user_id } = body;
+
+      // Get user from auth header
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const token = authHeader.substring(7);
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError || !user || user.id !== user_id) {
+        return new Response(JSON.stringify({ error: 'Invalid token or user mismatch' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: result, error } = await supabase.rpc('claim_troll_event', {
+        p_event_id: event_id,
+        p_user_id: user_id
+      });
+
+      if (error) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
 
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,
