@@ -66,8 +66,8 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
           console.log('Track subscribed:', track.kind, participant.identity)
         })
 
-        newRoom.on(RoomEvent.TrackUnsubscribed, (track, participant) => {
-          console.log('Track unsubscribed:', track.kind, participant.identity)
+        newRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
+          console.log('Track unsubscribed:', track.kind)
         })
 
         // Connect to room

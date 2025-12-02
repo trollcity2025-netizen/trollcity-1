@@ -36,96 +36,11 @@ const ProfileSetup = () => {
     }
   }
 
-  const [paymentsClient, setPaymentsClient] = React.useState<any>(null)
-  const [card, setCard] = React.useState<any>(null)
-  const [linking, setLinking] = React.useState('')
-  const [methods, setMethods] = React.useState<any[]>([])
-
   React.useEffect(() => {
     if (!username && suggestedUsername) {
       setUsername(suggestedUsername)
     }
   }, [suggestedUsername, username])
-
-  const loadMethods = React.useCallback(async () => {
-    if (!user) return
-    const { data } = await supabase
-      .from('user_payment_methods')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('is_default', { ascending: false })
-    setMethods(data || [])
-  }, [user?.id])
-
-  React.useEffect(() => { loadMethods() }, [loadMethods])
-
-  React.useEffect(() => {
-    const init = async () => {
-      if (!useAuthStore.getState().profile) return
-      const appId = (import.meta as any).env.VITE_SQUARE_APPLICATION_ID
-      const locationId = (import.meta as any).env.VITE_SQUARE_LOCATION_ID
-      if (!appId || !locationId) {
-        console.error('Square credentials missing:', { appId, locationId })
-        toast.error('Payment configuration error')
-        return
-      }
-      
-      // Detect sandbox/test mode and warn
-      const isSandbox = appId.includes('sandbox') || locationId.includes('sandbox')
-      if (isSandbox && useAuthStore.getState().profile?.role === 'admin') {
-        console.warn('⚠️ SQUARE SANDBOX MODE DETECTED - Cards will show as TestCard')
-        toast.warning('Payment system in test mode. Production credentials needed.', { duration: 5000 })
-      }
-      
-      const src = 'https://web.squarecdn.com/v1/square.js'
-      const attach = async () => {
-        try {
-          const payments = await (window as any).Square.payments(appId, locationId)
-          console.log('Square payments initialized with appId:', appId)
-          setPaymentsClient(payments)
-          const k = '__tc_profile_card_attached'
-          if ((window as any)[k]) return
-          document.querySelectorAll('#profile-card-container').forEach((el, idx) => { if (idx > 0) el.remove() })
-          document.querySelectorAll('iframe').forEach((el: any) => {
-            const src = String(el?.src || '')
-            if (src.includes('squarecdn.com') || src.includes('square')) el.remove()
-          })
-          let container = document.getElementById('profile-card-container')
-          if (container) {
-            const parent = container.parentElement
-            const fresh = document.createElement('div')
-            fresh.id = 'profile-card-container'
-            fresh.className = container.className
-            if (parent) parent.replaceChild(fresh, container)
-            container = fresh
-          }
-          const containerExists = !!document.getElementById('profile-card-container')
-          if (!containerExists) return
-          const c = await payments.card()
-          setCard(c)
-          await c.attach('#profile-card-container')
-          ;(window as any)[k] = true
-        } catch (e: any) {
-          console.error('Card attachment error:', e)
-          toast.error(e?.message || 'Payment form setup failed')
-        }
-      }
-      if (!(window as any).Square) {
-        const s = document.createElement('script')
-        s.src = src
-        s.async = true
-        s.onerror = () => {
-          console.error('Failed to load Square SDK from', src)
-          toast.error('Failed to load payment form')
-        }
-        s.onload = attach
-        document.body.appendChild(s)
-      } else {
-        attach()
-      }
-    }
-    init()
-  }, [useAuthStore.getState().profile?.id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -200,14 +115,41 @@ const ProfileSetup = () => {
       const ext = file.name.split('.').pop()
       const name = `${user.id}-${Date.now()}.${ext}`
       const path = `avatars/${name}`
-      const { error: uploadErr } = await supabase.storage
-        .from('troll-city-assets')
+      // Try multiple bucket names
+      let bucketName = 'troll-city-assets'
+      let uploadErr = null
+      let publicUrl = null
+      
+      // Try troll-city-assets first
+      const uploadResult = await supabase.storage
+        .from(bucketName)
         .upload(path, file, { cacheControl: '3600', upsert: false })
+      uploadErr = uploadResult.error
+      
+      // If that fails, try avatars bucket
+      if (uploadErr) {
+        bucketName = 'avatars'
+        const retryResult = await supabase.storage
+          .from(bucketName)
+          .upload(path, file, { cacheControl: '3600', upsert: false })
+        uploadErr = retryResult.error
+      }
+      
+      // If that fails, try public bucket
+      if (uploadErr) {
+        bucketName = 'public'
+        const retryResult = await supabase.storage
+          .from(bucketName)
+          .upload(path, file, { cacheControl: '3600', upsert: false })
+        uploadErr = retryResult.error
+      }
+      
       if (uploadErr) throw uploadErr
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('troll-city-assets')
+      
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
         .getPublicUrl(path)
+      publicUrl = urlData.publicUrl
 
       const { error: updateErr } = await supabase
         .from('user_profiles')
@@ -365,105 +307,6 @@ const ProfileSetup = () => {
           </div>
         </details>
 
-        {/* Payment Methods */}
-        <details className="bg-[#1A1A1A] rounded-lg border border-[#2C2C2C] mt-4">
-          <summary className="cursor-pointer px-6 py-4 font-semibold">Payment Methods</summary>
-          <div className="px-6 pb-6 space-y-4">
-            <div className="space-y-2">
-              <div className="text-sm text-gray-300">Add a debit card as your default payment method. Payments are processed via Square and coins are credited instantly after success.</div>
-              <div id="profile-card-container" className="mt-2" />
-              <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!user) { toast.error('Sign in required'); return }
-                    try {
-                      const { data: sessionData } = await supabase.auth.getSession()
-                      const authToken = sessionData?.session?.access_token || ''
-                      const cJson = await (await import('../lib/api')).default.post('/square/create-customer', { userId: user.id })
-                      if (!cJson.success) { toast.error(cJson?.error || 'Customer create failed'); return }
-                      if (!card) { toast.error('Card form not ready'); return }
-                      setLinking('card')
-                      const cardToken = await card.tokenize()
-                      if (!cardToken || cardToken.status !== 'OK' || !cardToken.token) throw new Error('Card tokenize failed')
-                      const sJson = await (await import('../lib/api')).default.post('/square/save-card', { userId: user.id, cardToken: cardToken.token, saveAsDefault: true })
-                      if (!sJson.success) { toast.error(sJson?.error || 'Save card failed'); return }
-                      toast.success('Card saved')
-                      
-                      // Instant UI update if method is returned
-                      if (sJson?.method) {
-                        setMethods(prev => {
-                          const filtered = prev.filter(m => m.id !== sJson.method.id)
-                          const updated = filtered.map(m => ({ ...m, is_default: false }))
-                          return [{ ...sJson.method, is_default: true }, ...updated]
-                        })
-                      }
-                      
-                      // Identity hooks
-                      try { if (user?.id) await recordAppEvent(user.id, 'PAYMENT_METHOD_LINKED', { provider: 'card' }) } catch {}
-                      try { if (user?.id) await recordAppEvent(user.id, 'HIGH_SPENDER_EVENT', { xp: 100 }) } catch {}
-                      await loadMethods()
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Card link failed')
-                    } finally {
-                      setLinking('')
-                    }
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-[#7C3AED] to-[#A78BFA] text-white rounded"
-                >
-                  {linking === 'card' ? 'Saving…' : 'Save Card'}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <div className="text-sm font-semibold mb-2">Saved Methods</div>
-              <div className="space-y-2">
-                {methods.length === 0 && (
-                  <div className="text-sm text-gray-400">No payment methods saved.</div>
-                )}
-                {methods.map(m => (
-                  <div key={m.id} className="flex items-center justify-between bg-[#121212] border border-[#2C2C2C] rounded px-4 py-2">
-                    <div className="text-sm">
-                      <div className="font-semibold">{m.display_name || (m.provider === 'card' ? 'Card' : m.provider)}</div>
-                      {m.provider === 'card' && (
-                        <div className="text-xs text-gray-400">{m.brand || ''} ·•••• {m.last4 || ''} {m.exp_month && m.exp_year ? `· exp ${String(m.exp_month).padStart(2,'0')}/${m.exp_year}` : ''}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!user) return
-                          await supabase.from('user_payment_methods').update({ is_default: false }).eq('user_id', user.id).eq('is_default', true)
-                          await supabase.from('user_payment_methods').update({ is_default: true }).eq('id', m.id)
-                          await loadMethods()
-                        }}
-                        className={`px-3 py-1 rounded text-xs ${m.is_default ? 'bg-green-600 text-white' : 'bg-gray-700 text-white'}`}
-                      >
-                        {m.is_default ? 'Default' : 'Set Default'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!user) return
-                          const { data: s2 } = await supabase.auth.getSession()
-                          const authToken2 = s2?.session?.access_token || ''
-                          const j = await (await import('../lib/api')).default.delete(`/square/delete-method/${m.id}?userId=${user.id}`)
-                          if (!j.success) { toast.error(j?.error || 'Remove failed'); return }
-                          await loadMethods()
-                        }}
-                        className="px-3 py-1 rounded bg-red-600 text-white text-xs"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </details>
         
       </div>
     </div>

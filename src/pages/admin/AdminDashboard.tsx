@@ -17,6 +17,7 @@ import {
   Monitor,
   Play,
   MessageSquare,
+  ChevronDown,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -25,13 +26,28 @@ import ClickableUsername from '../../components/ClickableUsername'
 import ProfitSummary from '../../components/ProfitSummary'
 import { TestingModeControl } from '../../components/TestingModeControl'
 import UsersPanel from './components/UsersPanel'
+import UserManagementPanel from './components/UserManagementPanel'
 import MetricsPanel from './components/MetricsPanel'
-import SquarePanel from './components/SquarePanel'
+import PayPalTestPanel from './components/PayPalTestPanel'
 import StreamsPanel from './components/StreamsPanel'
 import ReportsPanel from './components/ReportsPanel'
 import StreamMonitor from './components/StreamMonitor'
 import AdminSupportTickets from './components/AdminSupportTickets'
 import AdminApplications from './components/AdminApplications'
+import BroadcasterApplications from './components/BroadcasterApplications'
+import EarningsTaxOverview from './components/EarningsTaxOverview'
+import PayoutQueue from './components/PayoutQueue'
+import ReferralBonusPanel from './ReferralBonusPanel'
+import EmpireApplications from './EmpireApplications'
+import AdminResetPanel from './AdminResetPanel'
+import { StatCard } from '../../components/admin/StatCard'
+import { SectionCard } from '../../components/admin/SectionCard'
+import { ActionGroup } from '../../components/admin/ActionGroup'
+import OfficerShiftsPanel from './components/OfficerShiftsPanel'
+import CreateSchedulePanel from './components/CreateSchedulePanel'
+import { AdminGrantCoins } from './components/AdminGrantCoins'
+import AdminControlPanel from './components/AdminControlPanel'
+import TestDiagnostics from './components/TestDiagnostics'
 
 type StatState = {
   totalUsers: number
@@ -84,7 +100,7 @@ type TabId =
   | 'connections'
   | 'metrics'
   | 'streams'
-  | 'square'
+  | 'paypal'
   | 'reports'
   | 'monitor'
   | 'payouts'
@@ -92,16 +108,79 @@ type TabId =
   | 'verification'
   | 'users'
   | 'broadcasters'
+  | 'referrals'
   | 'families'
   | 'cashouts'
   | 'support'
   | 'declined'
   | 'agreements'
+  | 'broadcaster_applications'
+  | 'earnings_tax'
+  | 'reset'
+  | 'officer_shifts'
+  | 'create_schedule'
+  | 'grant_coins'
+  | 'control_panel'
+  | 'test_diagnostics'
+  | 'empire_applications'
+  | 'economy'
+  | 'tax_reviews'
+  | 'payout_queue'
 
 export default function AdminDashboard() {
   const { profile, user, setProfile } = useAuthStore()
   const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'trollcity2025@gmail.com'
   const navigate = useNavigate()
+  const [adminCheckLoading, setAdminCheckLoading] = useState(true)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+
+  // Admin Guard: Check admin status on mount
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      if (!user) {
+        setAdminCheckLoading(false)
+        setIsAuthorized(false)
+        return
+      }
+
+      try {
+        const { data: session } = await supabase.auth.getUser()
+        if (!session.user) {
+          setAdminCheckLoading(false)
+          setIsAuthorized(false)
+          return
+        }
+
+        const { data: profileData, error } = await supabase
+          .from('user_profiles')
+          .select('role, is_admin')
+          .eq('id', session.user.id)
+          .single()
+
+        if (error) {
+          console.error('Error checking admin access:', error)
+          setAdminCheckLoading(false)
+          setIsAuthorized(false)
+          return
+        }
+
+        // Check if user is admin
+        const isAdmin = 
+          profileData?.role === 'admin' || 
+          profileData?.is_admin === true ||
+          session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+
+        setIsAuthorized(isAdmin)
+      } catch (error) {
+        console.error('Error in admin check:', error)
+        setIsAuthorized(false)
+      } finally {
+        setAdminCheckLoading(false)
+      }
+    }
+
+    checkAdminAccess()
+  }, [user, ADMIN_EMAIL])
 
   const [stats, setStats] = useState<StatState>({
     totalUsers: 0,
@@ -145,14 +224,17 @@ export default function AdminDashboard() {
   const [familiesList, setFamiliesList] = useState<any[]>([])
   const [_supportTickets, setSupportTickets] = useState<any[]>([])
   const [_agreements, setAgreements] = useState<any[]>([])
-  const [squareStatus, setSquareStatus] = useState<any | null>(null)
   const [agoraStatus, setAgoraStatus] = useState<any | null>(null)
   const [supabaseStatus, setSupabaseStatus] = useState<any | null>(null)
+  const [paypalStatus, setPaypalStatus] = useState<any | null>(null)
+  const [paypalTesting, setPaypalTesting] = useState(false)
   const [trollDropAmount, setTrollDropAmount] = useState<number>(100)
   const [trollDropDuration, setTrollDropDuration] = useState<number>(60)
+  const [scheduledAnnouncements, setScheduledAnnouncements] = useState<any[]>([])
 
   // Economy summary
   const [economySummary, setEconomySummary] = useState<EconomySummary | null>(null)
+  const [economySummaryData, setEconomySummaryData] = useState<any>(null)
   const [economyLoading, setEconomyLoading] = useState(false)
 
   // Risk overview
@@ -173,13 +255,63 @@ export default function AdminDashboard() {
   const [selectedUserId, setSelectedUserId] = useState('')
   const [actionUntil, setActionUntil] = useState('')
 
+  // Admin Guard: Check admin status on mount
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      if (!user) {
+        setAdminCheckLoading(false)
+        setIsAuthorized(false)
+        return
+      }
+
+      try {
+        const { data: session } = await supabase.auth.getUser()
+        if (!session.user) {
+          setAdminCheckLoading(false)
+          setIsAuthorized(false)
+          return
+        }
+
+        const { data: profileData, error } = await supabase
+          .from('user_profiles')
+          .select('role, is_admin')
+          .eq('id', session.user.id)
+          .single()
+
+        if (error) {
+          console.error('Error checking admin access:', error)
+          setAdminCheckLoading(false)
+          setIsAuthorized(false)
+          return
+        }
+
+        // Check if user is admin
+        const isAdmin = 
+          profileData?.role === 'admin' || 
+          profileData?.is_admin === true ||
+          session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+
+        setIsAuthorized(isAdmin)
+      } catch (error) {
+        console.error('Error in admin check:', error)
+        setIsAuthorized(false)
+      } finally {
+        setAdminCheckLoading(false)
+      }
+    }
+
+    checkAdminAccess()
+  }, [user, ADMIN_EMAIL])
+
   // === INITIAL LOAD ===
   useEffect(() => {
-    loadDashboardData()
-    loadLiveStreams()
-    loadEconomySummary()
-    loadShopRevenue()
-  }, [])
+    if (isAuthorized) {
+      loadDashboardData()
+      loadLiveStreams()
+      loadEconomySummary()
+      loadShopRevenue()
+    }
+  }, [isAuthorized])
 
   // Auto-refresh core stats every 15s
   useEffect(() => {
@@ -198,7 +330,7 @@ export default function AdminDashboard() {
   
       const streamsChannel = supabase
         .channel('admin-global-streams')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'troll_streams' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, () => {
           loadLiveStreams()
           loadDashboardData()
         })
@@ -284,6 +416,25 @@ export default function AdminDashboard() {
       supabase.removeChannel(messagesChannel)
     }
   }, [activeTab])
+
+  // Load scheduled announcements on mount and listen for updates
+  useEffect(() => {
+    if (profile?.id) {
+      loadScheduledAnnouncements()
+      
+      // Listen for scheduled announcements updates
+      const scheduledChannel = supabase
+        .channel('admin-scheduled-announcements')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_announcements' }, () => {
+          loadScheduledAnnouncements()
+        })
+        .subscribe()
+      
+      return () => {
+        supabase.removeChannel(scheduledChannel)
+      }
+    }
+  }, [profile?.id])
 
   // Real-time cashout updates
   useEffect(() => {
@@ -429,6 +580,20 @@ export default function AdminDashboard() {
   const loadEconomySummary = async () => {
     try {
       setEconomyLoading(true)
+      
+      // Load from economy_summary view
+      const { data: summary, error: summaryError } = await supabase
+        .from('economy_summary')
+        .select('*')
+        .single()
+      
+      if (!summaryError && summary) {
+        setEconomySummaryData(summary)
+      } else {
+        console.warn('Failed to load economy_summary view:', summaryError)
+      }
+      
+      // Also load detailed economy summary from API (existing logic)
       const json = await (await import('../../lib/api')).default.get('/admin/economy/summary')
       if (!json.success) throw new Error(json?.error || 'Failed to load economy summary')
       setEconomySummary(json.data)
@@ -602,9 +767,9 @@ export default function AdminDashboard() {
     setStreamsLoading(true)
     try {
       const { data, error } = await supabase
-        .from('troll_streams')
-        .select('id, title, category, current_viewers, is_live, created_at')
-        .eq('is_live', true)
+        .from('streams')
+        .select('id, title, category, status, created_at, broadcaster_id')
+        .eq('is_live', true) // Use is_live instead of status for consistency
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -652,37 +817,182 @@ export default function AdminDashboard() {
     }
   }
 
+  const addCoinsToAdmin = async () => {
+    if (!user?.id) {
+      toast.error('User ID not found')
+      return
+    }
+    
+    try {
+      // Get current balance before adding
+      const { data: beforeData } = await supabase
+        .from('user_profiles')
+        .select('paid_coin_balance')
+        .eq('id', user.id)
+        .single()
+      
+      const beforeBalance = beforeData?.paid_coin_balance || 0
+      
+      // Call RPC function
+      const { data, error } = await supabase.rpc('add_paid_coins', {
+        user_id_input: user.id,
+        coins_to_add: 7000
+      })
+      
+      if (error) {
+        console.error('RPC error:', error)
+        throw error
+      }
+      
+      // Verify the balance was actually updated
+      const { data: afterData, error: verifyError } = await supabase
+        .from('user_profiles')
+        .select('paid_coin_balance')
+        .eq('id', user.id)
+        .single()
+      
+      if (verifyError) {
+        console.error('Verification error:', verifyError)
+        throw new Error('Failed to verify coins were added')
+      }
+      
+      const afterBalance = afterData?.paid_coin_balance || 0
+      const actualAdded = afterBalance - beforeBalance
+      
+      if (actualAdded !== 7000) {
+        console.warn(`Expected to add 7000 coins, but only added ${actualAdded}`)
+        toast.warning(`Added ${actualAdded} coins (expected 7000). Balance may have been updated.`)
+      } else {
+        toast.success(`Added 7000 paid coins! New balance: ${afterBalance.toLocaleString()}`)
+      }
+      
+      // Reload full profile to update balance in store
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      
+      if (profileData) {
+        setProfile(profileData)
+      }
+    } catch (error: any) {
+      console.error('Error adding coins:', error)
+      toast.error(error?.message || 'Failed to add coins. Check console for details.')
+    }
+  }
+
   const endStreamById = async (id: string) => {
     try {
-      const { error } = await supabase.rpc('end_stream', { p_stream_id: id })
-      if (error) throw error
-      toast.success('Stream ended')
-      loadLiveStreams()
-    } catch {
-      toast.error('Failed to end stream')
+      // Get auth token
+      const { data: session } = await supabase.auth.getSession()
+      const token = session?.session?.access_token
+
+      if (!token) {
+        toast.error('Authentication required')
+        return
+      }
+
+      // Call the streams-maintenance edge function to properly end the stream
+      const functionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 
+        'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
+
+      const response = await fetch(`${functionsUrl}/streams-maintenance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'end_stream',
+          stream_id: id,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorMessage = 'Failed to end stream'
+        try {
+          const errorJson = JSON.parse(errorText)
+          errorMessage = errorJson.error || errorMessage
+        } catch {
+          errorMessage = errorText || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+
+      if (!result.success && result.error) {
+        throw new Error(result.error)
+      }
+
+      toast.success('Stream ended successfully')
+      // Reload live streams list
+      await loadLiveStreams()
+    } catch (error: any) {
+      console.error('Error ending stream:', error)
+      toast.error(error?.message || 'Failed to end stream')
     }
   }
 
   const deleteStreamById = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this stream? This action cannot be undone.')) {
+      return
+    }
+
     try {
-      await supabase
-        .from('troll_streams')
+      // First, end the stream properly
+      const { error: endError } = await supabase
+        .from('streams')
         .update({
           is_live: false,
-          end_time: new Date().toISOString(),
-          is_force_ended: true,
-          ended_by: profile?.id,
-        } as any)
+          ended_at: new Date().toISOString(),
+        })
         .eq('id', id)
 
-      await supabase.from('messages').delete().eq('stream_id', id)
-      await supabase.from('stream_reports').delete().eq('stream_id', id)
-      await supabase.from('troll_streams').delete().eq('id', id)
+      if (endError) {
+        console.error('Error ending stream:', endError)
+        throw endError
+      }
 
-      toast.success('Stream deleted everywhere')
-      loadLiveStreams()
-    } catch {
-      toast.error('Failed to delete stream')
+      // Delete related data (handle errors gracefully if tables don't exist or RLS blocks)
+      const deleteRelatedData = async (table: string, column: string = 'stream_id') => {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq(column, id)
+        
+        // Ignore 404 (table not found) and 403 (RLS blocked) errors
+        if (error && error.code !== 'PGRST205' && error.code !== '42P01' && error.code !== '42501') {
+          console.warn(`Could not delete from ${table}:`, error)
+        }
+      }
+
+      // Delete related data in parallel (non-blocking)
+      await Promise.allSettled([
+        deleteRelatedData('messages'),
+        deleteRelatedData('stream_reports'),
+        deleteRelatedData('streams_participants'),
+        deleteRelatedData('gifts'),
+        deleteRelatedData('chat_messages'),
+      ])
+
+      // Finally, delete the stream itself
+      const { error: deleteError } = await supabase
+        .from('streams')
+        .delete()
+        .eq('id', id)
+
+      if (deleteError) {
+        throw deleteError
+      }
+
+      toast.success('Stream deleted successfully')
+      await loadLiveStreams()
+    } catch (error: any) {
+      console.error('Error deleting stream:', error)
+      toast.error(error?.message || 'Failed to delete stream')
     }
   }
 
@@ -719,23 +1029,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const testSquare = async () => {
-    try {
-      const json = await (await import('../../lib/api')).default.get('/payments/status')
-      setSquareStatus(json)
-      if (json.apiOk) {
-        toast.success(`Square reachable (${json.env})`)
-      } else {
-        const errorMsg = json.details || 'Square status check failed'
-        toast.error(`Square failed: ${errorMsg}`)
-        console.warn('Square test result:', json)
-      }
-    } catch (e: any) {
-      console.error('Square status check error:', e)
-      setSquareStatus({ ok: false, error: e?.message })
-      toast.error('Square status check failed')
-    }
-  }
 
   const testSupabase = async () => {
     try {
@@ -753,6 +1046,65 @@ export default function AdminDashboard() {
     } catch (e: any) {
       setSupabaseStatus({ ok: false, error: e?.message || 'Failed' })
       toast.error('Supabase test failed')
+    }
+  }
+
+  const testPayPal = async () => {
+    setPaypalTesting(true)
+    setPaypalStatus(null)
+    
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      if (!supabaseUrl) {
+        throw new Error('VITE_SUPABASE_URL environment variable is not set')
+      }
+
+      const testUrl = `${supabaseUrl}/functions/v1/paypal-test-live`
+      const apikey = import.meta.env.VITE_SUPABASE_ANON_KEY
+      
+      if (!apikey) {
+        throw new Error('VITE_SUPABASE_ANON_KEY environment variable is not set')
+      }
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 seconds timeout
+
+      try {
+        const response = await fetch(testUrl, {
+          method: 'OPTIONS',
+          headers: {
+            'apikey': apikey
+          },
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (response.ok || response.status === 200 || response.status === 204) {
+          setPaypalStatus({ ok: true })
+          toast.success('PayPal function reachable')
+        } else {
+          const responseText = await response.text().catch(() => 'No response body')
+          throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 200)}`)
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId)
+        
+        if (fetchError.name === 'AbortError') {
+          throw new Error(`Request timeout after 15 seconds. Function may not be deployed or URL is incorrect: ${testUrl}`)
+        } else if (fetchError.message?.includes('Failed to fetch') || fetchError.name === 'TypeError') {
+          throw new Error(`Network error: ${fetchError.message}. Check if function is deployed at: ${testUrl}`)
+        } else {
+          throw fetchError
+        }
+      }
+    } catch (e: any) {
+      const errorMsg = e?.message || 'Unknown error occurred'
+      console.error('[PayPal Test] Error:', e)
+      setPaypalStatus({ ok: false, error: errorMsg })
+      toast.error(`PayPal test failed: ${errorMsg}`)
+    } finally {
+      setPaypalTesting(false)
     }
   }
 
@@ -829,6 +1181,69 @@ export default function AdminDashboard() {
     }
   };
 
+  const loadScheduledAnnouncements = async () => {
+    if (!profile?.id) return
+    try {
+      // First, try a simple query without ordering to check if table exists
+      const { data: testData, error: testError } = await supabase
+        .from('scheduled_announcements')
+        .select('id')
+        .limit(1)
+      
+      // If table doesn't exist (PGRST205 = table not found), skip silently
+      if (testError?.code === 'PGRST205' || testError?.code === '42P01') {
+        setScheduledAnnouncements([])
+        return
+      }
+      
+      // Table exists, now try with ordering
+      const { data, error } = await supabase
+        .from('scheduled_announcements')
+        .select('*')
+        .order('scheduled_time', { ascending: true })
+        .limit(10)
+      
+      if (error) {
+        // If error is about missing column, try without ordering
+        if (error.code === '42703' || error.message?.includes('does not exist') || error.message?.includes('scheduled_time')) {
+          const { data: dataNoOrder, error: errorNoOrder } = await supabase
+            .from('scheduled_announcements')
+            .select('*')
+            .limit(10)
+          
+          if (errorNoOrder) {
+            // Table might have RLS issues, just skip
+            setScheduledAnnouncements([])
+            return
+          }
+          
+          if (dataNoOrder) {
+            // Sort manually by created_at if scheduled_time doesn't exist
+            const sorted = [...(dataNoOrder || [])].sort((a, b) => {
+              const aTime = a.scheduled_time || a.created_at || ''
+              const bTime = b.scheduled_time || b.created_at || ''
+              return new Date(aTime).getTime() - new Date(bTime).getTime()
+            })
+            setScheduledAnnouncements(sorted)
+            return
+          }
+        }
+        // For other errors, just skip silently
+        setScheduledAnnouncements([])
+        return
+      }
+      
+      if (data) {
+        setScheduledAnnouncements(data)
+      } else {
+        setScheduledAnnouncements([])
+      }
+    } catch (err) {
+      // Silently fail - this is a non-critical feature
+      setScheduledAnnouncements([])
+    }
+  }
+
   const loadCashouts = async () => {
     setTabLoading(true)
     try {
@@ -851,41 +1266,76 @@ export default function AdminDashboard() {
     }
   }
 
-  const updatePayoutStatus = async (id: string, status: 'approved' | 'rejected' | 'paid') => {
+  const updatePayoutStatus = async (id: string, status: 'approved' | 'rejected' | 'paid', e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
     try {
-      await supabase
+      const { error } = await supabase
         .from('payout_requests')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id)
+
+      if (error) {
+        console.error('Update payout status error:', error)
+        toast.error(`Failed to update payout: ${error.message}`)
+        return
+      }
 
       await loadPayouts()
       await loadDashboardData()
 
       toast.success(`Payout ${status}`)
-    } catch {
-      toast.error('Failed to update payout')
+    } catch (err: any) {
+      console.error('Update payout status error:', err)
+      toast.error(err.message || 'Failed to update payout')
     }
   }
 
-  const approvePayout = async (req: any) => {
+  const approvePayout = async (req: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
     try {
-      await supabase.from('payout_requests')
+      const { error: updateError } = await supabase.from('payout_requests')
         .update({ status: 'paid', processed_at: new Date().toISOString() })
         .eq('id', req.id);
 
-      await supabase.rpc('deduct_user_coins', {
+      if (updateError) {
+        console.error('Update payout error:', updateError)
+        toast.error(`Failed to update payout: ${updateError.message}`)
+        return
+      }
+
+      const { error: deductError } = await supabase.rpc('deduct_user_coins', {
         p_user_id: req.user_id,
         p_coins: req.coins_redeemed
       });
 
-      await supabase.from('messages').insert([
+      if (deductError) {
+        console.error('Deduct coins error:', deductError)
+        toast.error(`Failed to deduct coins: ${deductError.message}`)
+        return
+      }
+
+      const { error: messageError } = await supabase.from('messages').insert([
         {
           user_id: req.user_id,
-          content: `🎉 Your payout of $${req.cash_value} has been sent! Check your email or wallet.`,
+          content: `🎉 Your payout of $${req.cash_amount || req.cash_value || 0} has been sent! Check your email or wallet.`,
           system: true
         }
       ]);
 
+      if (messageError) {
+        console.error('Insert message error:', messageError)
+        // Don't fail the whole operation for message errors
+      }
+
+      toast.success('Payout approved and processed successfully!')
       await loadPayouts()
       await loadDashboardData()
 
@@ -917,7 +1367,7 @@ export default function AdminDashboard() {
     try {
       const { data } = await supabase
         .from('declined_transactions')
-        .select(`*, user_profiles!inner(username, email)`)
+        .select(`*, user_profiles!inner(username)`)
         .order('created_at', { ascending: false })
         .limit(100)
       setDeclinedTransactions(data || [])
@@ -1123,7 +1573,7 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('applications')
-        .select(`*, user_profiles!applications_user_id_fkey(username, email)`)
+        .select(`*, user_profiles!applications_user_id_fkey(username)`)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(50)
@@ -1167,7 +1617,7 @@ export default function AdminDashboard() {
     try {
       const { data } = await supabase
         .from('user_profiles')
-        .select('id, username, email, role, created_at')
+        .select('id, username, role, created_at')
         .eq('role', 'broadcaster')
         .order('created_at', { ascending: false })
         .limit(50)
@@ -1243,15 +1693,23 @@ export default function AdminDashboard() {
 
   const loadAgreements = async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, terms_accepted, created_at')
+        .select('id, username, email, terms_accepted, created_at')
         .eq('terms_accepted', true)
         .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (error) {
+        console.error('Error loading agreements:', error)
+        toast.error('Failed to load user agreements')
+        setAgreements([])
+        return
+      }
 
       setAgreements(data || [])
     } catch (error) {
-      console.error('Error loading agreements:', error)
+      console.error('Exception loading agreements:', error)
       setAgreements([])
     }
   }
@@ -1281,6 +1739,9 @@ export default function AdminDashboard() {
         break
       case 'verification':
         loadApplications()
+        break
+      case 'broadcaster_applications':
+        // Broadcaster applications handled by component
         break
       case 'users':
         loadUsers()
@@ -1323,6 +1784,18 @@ export default function AdminDashboard() {
           tries++
         }
         if (p) {
+          // Preserve admin role if user is admin email, but keep all existing data
+          const isAdmin = isAdminEmail(user?.email)
+          if (isAdmin && p.role !== 'admin') {
+            // Update role to admin but preserve all payment and other data
+            const { error: updateError } = await supabase
+              .from('user_profiles')
+              .update({ role: 'admin', updated_at: new Date().toISOString() })
+              .eq('id', user.id)
+            if (!updateError) {
+              p = { ...p, role: 'admin' }
+            }
+          }
           setProfile(p as any)
           return
         }
@@ -1358,12 +1831,17 @@ export default function AdminDashboard() {
       } catch (err) {
         console.error('Failed to create profile:', err)
       }
+      // Last resort: create minimal profile object (only if profile truly doesn't exist)
+      // This should rarely happen, but if it does, we'll fetch the full profile on next load
       const isAdmin2 = isAdminEmail(user?.email)
-      setProfile({
+      const minimalProfile = {
         id: user!.id,
         username: (user?.email || '').split('@')[0] || '',
         role: isAdmin2 ? 'admin' : 'user',
-      } as any)
+        paid_coin_balance: 0,
+        free_coin_balance: 0,
+      } as any
+      setProfile(minimalProfile)
     }
     ensureProfile()
   }, [profile, user?.id, setProfile])
@@ -1405,20 +1883,34 @@ export default function AdminDashboard() {
     { id: 'connections', label: 'Connections' },
     { id: 'metrics', label: 'Metrics' },
     { id: 'streams', label: 'Live Streams' },
-    { id: 'square', label: 'Square Payments' },
+    { id: 'reset', label: 'Reset & Maintenance' },
+    { id: 'paypal', label: 'PayPal Payments' },
     { id: 'reports', label: 'Reports' },
     { id: 'monitor', label: 'Stream Monitor' },
+    { id: 'referrals', label: 'Referral Bonuses' },
+    { id: 'empire_applications', label: 'Empire Applications' },
+    { id: 'economy', label: 'Economy Dashboard' },
+    { id: 'tax_reviews', label: 'Tax Reviews' },
     { id: 'payouts', label: 'Payouts' },
+    { id: 'payout_queue', label: 'Payout Queue' },
     { id: 'cashouts', label: 'Manual Cashouts' },
     { id: 'purchases', label: 'Purchases' },
     { id: 'declined', label: 'Declined' },
-    { id: 'verification', label: 'Verification' },
+    { id: 'verification', label: 'Applications' },
     { id: 'users', label: 'Users' },
     { id: 'broadcasters', label: 'Broadcasters' },
     { id: 'families', label: 'Families' },
     { id: 'support', label: 'Support Tickets' },
     { id: 'agreements', label: 'User Agreements' },
+    { id: 'broadcaster_applications', label: 'Broadcaster Applications' },
+    { id: 'earnings_tax', label: 'Earnings & Tax' },
+    { id: 'officer_shifts', label: 'Officer Shifts' },
+    { id: 'create_schedule', label: 'Create Schedule' },
+    { id: 'grant_coins', label: 'Grant Coins' },
+    { id: 'control_panel', label: 'Control Panel' },
+    { id: 'test_diagnostics', label: 'Test Diagnostics' },
   ]
+
 
   if (!profile) {
     return (
@@ -1430,13 +1922,16 @@ export default function AdminDashboard() {
     )
   }
 
-  if (profile.role !== 'admin' && user?.email !== ADMIN_EMAIL) {
+  // Allow admins and officers to access monitoring features
+  const canAccess = profile?.is_admin || profile?.is_troll_officer || user?.email === ADMIN_EMAIL
+  
+  if (!canAccess) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
         <div className="px-6 py-3 rounded bg-red-950 border border-red-500 text-center">
-          <p className="font-bold mb-1">Admin Only</p>
+          <p className="font-bold mb-1">Access Restricted</p>
           <p className="text-sm text-red-200">
-            This dashboard is restricted. Your account is not marked as admin.
+            This dashboard is restricted to admins and troll officers.
           </p>
         </div>
       </div>
@@ -1455,14 +1950,27 @@ export default function AdminDashboard() {
       case 'streams':
         return <StreamsPanel />
 
-      case 'square':
-        return <SquarePanel />
+      case 'paypal':
+        return <PayPalTestPanel />
 
       case 'reports':
         return <ReportsPanel />
 
       case 'monitor':
         return <StreamMonitor />
+
+      case 'referrals':
+        return <ReferralBonusPanel />
+      case 'empire_applications':
+        return <EmpireApplications />
+      case 'economy':
+        // Navigate to economy dashboard route
+        navigate('/admin/economy')
+        return <div className="text-sm text-gray-400">Redirecting to Economy Dashboard...</div>
+      case 'tax_reviews':
+        // Navigate to tax reviews route
+        navigate('/admin/tax-reviews')
+        return <div className="text-sm text-gray-400">Redirecting to Tax Reviews...</div>
 
       case 'connections':
         return (
@@ -1471,22 +1979,30 @@ export default function AdminDashboard() {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <CreditCard className="w-4 h-4 text-green-400" />
-                  <span className="font-semibold">Square</span>
+                  <CreditCard className="w-4 h-4 text-blue-400" />
+                  <span className="font-semibold">PayPal</span>
                 </div>
                 <button
-                  onClick={testSquare}
-                  className="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-500"
+                  type="button"
+                  onClick={testPayPal}
+                  disabled={paypalTesting}
+                  className="px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Test Square
+                  {paypalTesting ? 'Testing...' : 'Test PayPal'}
                 </button>
                 <div className="mt-2 text-xs text-gray-400">
                   Status:{' '}
-                  {squareStatus
-                    ? squareStatus.apiOk
-                      ? 'OK'
-                      : squareStatus.error || 'Failed'
-                    : 'Not tested'}
+                  {paypalTesting ? (
+                    <span className="text-yellow-400">Testing...</span>
+                  ) : paypalStatus ? (
+                    paypalStatus.ok ? (
+                      <span className="text-green-400">OK</span>
+                    ) : (
+                      <span className="text-red-400">{paypalStatus.error || 'Failed'}</span>
+                    )
+                  ) : (
+                    'Not tested'
+                  )}
                 </div>
               </div>
 
@@ -1571,7 +2087,7 @@ export default function AdminDashboard() {
                           <td className="py-1 pr-4">{stream.category}</td>
                           <td className="py-1 pr-4 text-xs">{stream.broadcaster_id}</td>
                           <td className="py-1 pr-4 text-center">
-                            {stream.current_viewers || 0}
+                            {/* Viewer count removed - column doesn't exist */}
                           </td>
                           <td className="py-1 pr-4">
                             {new Date(stream.created_at).toLocaleString()}
@@ -1646,13 +2162,23 @@ export default function AdminDashboard() {
                       </td>
                       <td className="py-1 pr-4 text-right space-x-1">
                         <button
-                          onClick={() => approvePayout(p)}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            approvePayout(p, e)
+                          }}
                           className="px-2 py-0.5 rounded bg-green-600 hover:bg-green-500"
                         >
                           Approve & Pay
                         </button>
                         <button
-                          onClick={() => updatePayoutStatus(p.id, 'rejected')}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            updatePayoutStatus(p.id, 'rejected', e)
+                          }}
                           className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500"
                         >
                           Reject
@@ -1805,7 +2331,7 @@ export default function AdminDashboard() {
                           username={tx.user_profiles?.username}
                         />
                         <div className="text-[10px] text-gray-500">
-                          {tx.user_profiles?.email}
+                          {tx.user_profiles?.username || 'Unknown'}
                         </div>
                       </td>
                       <td className="py-1 pr-4 max-w-xs truncate">{tx.failure_message}</td>
@@ -1855,7 +2381,6 @@ export default function AdminDashboard() {
                 <thead>
                   <tr className="border-b border-gray-700 text-gray-400">
                     <th className="py-1 pr-4">User</th>
-                    <th className="py-1 pr-4">Email</th>
                     <th className="py-1 pr-4">Created</th>
                   </tr>
                 </thead>
@@ -1865,7 +2390,6 @@ export default function AdminDashboard() {
                       <td className="py-1 pr-4">
                         <ClickableUsername username={b.username} />
                       </td>
-                      <td className="py-1 pr-4 text-[11px]">{b.email}</td>
                       <td className="py-1 pr-4">
                         {new Date(b.created_at).toLocaleString()}
                       </td>
@@ -1940,6 +2464,29 @@ export default function AdminDashboard() {
           </div>
         )
 
+      case 'broadcaster_applications':
+        return <BroadcasterApplications />
+
+      case 'earnings_tax':
+        return <EarningsTaxOverview />
+
+      case 'officer_shifts':
+        return <OfficerShiftsPanel />
+
+      case 'create_schedule':
+        return <CreateSchedulePanel />
+
+      case 'grant_coins':
+        return <AdminGrantCoins />
+
+      case 'control_panel':
+        return <AdminControlPanel />
+      case 'test_diagnostics':
+        return <TestDiagnostics />
+
+      case 'reset':
+        return <AdminResetPanel />
+
       default:
         return null
     }
@@ -1965,8 +2512,11 @@ export default function AdminDashboard() {
                 try {
                   await supabase.auth.signOut()
                   useAuthStore.getState().logout()
+                  localStorage.clear()
+                  sessionStorage.clear()
                   toast.success('Logged out')
-                  navigate('/auth?reset=1', { replace: true })
+                  await supabase.auth.signOut()
+                  navigate('/auth', { replace: true })
                 } catch {
                   toast.error('Logout failed')
                 }
@@ -1982,7 +2532,7 @@ export default function AdminDashboard() {
                   sessionStorage.clear()
                   toast.success('App reset')
                 } catch {}
-                window.location.href = '/auth?reset=1'
+                navigate('/auth?reset=1', { replace: true })
               }}
               className="px-4 py-2 border border-yellow-500 text-yellow-400 rounded-lg hover:bg-yellow-500 hover:text-black transition text-sm"
             >
@@ -1991,127 +2541,148 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Troll Drop */}
-        <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-          <div className="flex items-center gap-2 mb-3">
-            <Gift className="w-5 h-5 text-yellow-300" />
-            <span className="font-semibold">Troll Drop</span>
-          </div>
-          <div className="flex flex-wrap items-end gap-3 text-sm">
-            <div>
-              <div className="text-xs text-gray-400 mb-1">Coins</div>
-              <input
-                type="number"
-                min={1}
-                value={trollDropAmount}
-                onChange={e => setTrollDropAmount(Number(e.target.value))}
-                className="w-24 bg-[#0D0D0D] border border-[#2C2C2C] rounded p-2 text-white text-sm"
-              />
-            </div>
-            <div>
-              <div className="text-xs text-gray-400 mb-1">Duration (sec)</div>
-              <input
-                type="number"
-                min={5}
-                value={trollDropDuration}
-                onChange={e => setTrollDropDuration(Number(e.target.value))}
-                className="w-24 bg-[#0D0D0D] border border-[#2C2C2C] rounded p-2 text-white text-sm"
-              />
-            </div>
-            <button
-              onClick={createTrollDrop}
-              className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold text-xs"
-            >
-              Create Drop
-            </button>
-          </div>
-        </div>
-
-        {/* TOP METRICS */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {metricCards.map((card, index) => (
-            <div
-              key={index}
-              className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C] flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between mb-2">
-                {card.icon}
-                <div
-                  className={`w-8 h-8 ${card.color} rounded-full flex items-center justify-center`}
-                >
-                  <span className="text-white text-sm font-bold">
-                    {loading ? '…' : card.value}
-                  </span>
+        {/* ============================================
+            SECTION 1: CITY OVERVIEW
+            ============================================ */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">🏙️ City Overview</h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* LEFT: Testing Mode + Troll Drop */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
+                <TestingModeControl />
+              </div>
+              
+              {/* Troll Drop */}
+              <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
+                <div className="flex items-center gap-2 mb-3">
+                  <Gift className="w-5 h-5 text-yellow-300" />
+                  <span className="font-semibold">Troll Drop</span>
+                </div>
+                <div className="flex flex-wrap items-end gap-3 text-sm">
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">Coins</div>
+                    <input
+                      type="number"
+                      min={1}
+                      value={trollDropAmount}
+                      onChange={e => setTrollDropAmount(Number(e.target.value))}
+                      className="w-24 bg-[#0D0D0D] border border-[#2C2C2C] rounded p-2 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">Duration (sec)</div>
+                    <input
+                      type="number"
+                      min={5}
+                      value={trollDropDuration}
+                      onChange={e => setTrollDropDuration(Number(e.target.value))}
+                      className="w-24 bg-[#0D0D0D] border border-[#2C2C2C] rounded p-2 text-white text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={createTrollDrop}
+                    className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold text-xs"
+                  >
+                    Create Drop
+                  </button>
                 </div>
               </div>
-              <h3 className="text-white text-sm font-semibold">{card.title}</h3>
             </div>
-          ))}
-        </div>
 
-        {/* Testing mode + profit summary */}
-        <div className="grid md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)] gap-4">
-          <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-            <TestingModeControl />
+            {/* RIGHT: Counters + Alerts */}
+            <div className="space-y-4">
+              {/* Top Metrics Counters */}
+              <div className="grid grid-cols-2 gap-2">
+                {metricCards.map((card, index) => (
+                  <div
+                    key={index}
+                    className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C] flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      {card.icon}
+                      <div
+                        className={`w-8 h-8 ${card.color} rounded-full flex items-center justify-center`}
+                      >
+                        <span className="text-white text-sm font-bold">
+                          {loading ? '…' : card.value}
+                        </span>
+                      </div>
+                    </div>
+                    <h3 className="text-white text-sm font-semibold">{card.title}</h3>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Alerts Box (only show if there's an error) */}
+              <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
+                <ProfitSummary />
+              </div>
+            </div>
           </div>
-          <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-            <ProfitSummary />
-          </div>
-        </div>
+        </section>
 
-        {/* Economy overview + Risk + Shop */}
-        <div className="grid lg:grid-cols-[1.3fr_0.9fr] gap-4">
-          <section className="bg-[#050716]/80 border border-purple-500/30 rounded-2xl p-4 shadow-lg">
-            <h2 className="text-lg font-bold text-purple-300 mb-3">Troll City Economy</h2>
-            {economyLoading && (
-              <div className="text-sm text-gray-400">Loading economy stats…</div>
-            )}
-            {economySummary && (
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Paid Coins Outstanding</div>
-                  <div className="text-2xl font-semibold text-emerald-300">
-                    {economySummary.paidCoins.outstandingLiability.toLocaleString()}
+        {/* ============================================
+            SECTION 2: ECONOMY & REVENUE CENTER
+            ============================================ */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">💰 Economy & Revenue Center</h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* LEFT COLUMN: Economy Summary Grid */}
+            {economySummaryData && (
+              <div className="bg-[#050716]/80 border border-purple-500/30 rounded-2xl p-4 shadow-lg">
+                <h3 className="text-lg font-bold text-purple-300 mb-4">Economy Summary</h3>
+                <div className="grid grid-cols-2 gap-4 text-white">
+                  <div className="p-4 bg-zinc-900 rounded-xl">
+                    <h4 className="text-sm text-gray-400 mb-2">Total Coins in Circulation</h4>
+                    <p className="text-2xl font-bold text-emerald-300">
+                      {Number(economySummaryData.total_coins_in_circulation || 0).toLocaleString()}
+                    </p>
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Purchased: {economySummary.paidCoins.totalPurchased.toLocaleString()} •
-                    Spent: {economySummary.paidCoins.totalSpent.toLocaleString()}
+
+                  <div className="p-4 bg-zinc-900 rounded-xl">
+                    <h4 className="text-sm text-gray-400 mb-2">Total Gift Coins Spent</h4>
+                    <p className="text-2xl font-bold text-yellow-300">
+                      {Number(economySummaryData.total_gift_coins_spent || 0).toLocaleString()}
+                    </p>
                   </div>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Broadcaster Cashouts</div>
-                  <div className="text-2xl font-semibold text-amber-300">
-                    ${economySummary.broadcasters.pendingCashoutsUsd.toFixed(2)}
+
+                  <div className="p-4 bg-zinc-900 rounded-xl">
+                    <h4 className="text-sm text-gray-400 mb-2">Total Paid-Out ($)</h4>
+                    <p className="text-2xl font-bold text-green-300">
+                      ${Number(economySummaryData.total_payouts_processed_usd || 0).toFixed(2)}
+                    </p>
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Total Earned: ${economySummary.broadcasters.totalUsdOwed.toFixed(2)} • Paid: $
-                    {economySummary.broadcasters.paidOutUsd.toFixed(2)}
+
+                  <div className="p-4 bg-zinc-900 rounded-xl">
+                    <h4 className="text-sm text-gray-400 mb-2">Pending Payout Requests ($)</h4>
+                    <p className="text-2xl font-bold text-amber-300">
+                      ${Number(economySummaryData.total_pending_payouts_usd || 0).toFixed(2)}
+                    </p>
                   </div>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Officer Earnings</div>
-                  <div className="text-2xl font-semibold text-cyan-300">
-                    ${economySummary.officers.totalUsdPaid.toFixed(2)}
+
+                  <div className="p-4 bg-zinc-900 rounded-xl">
+                    <h4 className="text-sm text-gray-400 mb-2">Total Creator Earned Coins</h4>
+                    <p className="text-2xl font-bold text-purple-300">
+                      {Number(economySummaryData.total_creator_earned_coins || 0).toLocaleString()}
+                    </p>
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    From kicks, bans & penalties
-                  </div>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Troll Wheel Activity</div>
-                  <div className="text-2xl font-semibold text-pink-300">
-                    {economySummary.wheel.totalSpins.toLocaleString()} spins
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Coins Spent: {economySummary.wheel.totalCoinsSpent.toLocaleString()} •
-                    Jackpots: {economySummary.wheel.jackpotCount}
+
+                  <div className="p-4 bg-zinc-900 rounded-xl">
+                    <h4 className="text-sm text-gray-400 mb-2">Top Earning Broadcaster</h4>
+                    <p className="text-2xl font-bold text-cyan-300">
+                      {economySummaryData.top_earning_broadcaster || 'N/A'}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
-          </section>
 
-          <section className="space-y-4">
+            {/* RIGHT COLUMN: Shop Revenue + Risk */}
+            <div className="space-y-4">
             <div className="bg-[#050716]/80 border border-red-500/30 rounded-2xl p-4 shadow-lg">
               <h2 className="text-lg font-bold text-red-300 mb-2">Risk & Compliance</h2>
               {!risk ? (
@@ -2141,8 +2712,9 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            <section className="bg-[#050716]/80 border border-yellow-500/30 rounded-2xl p-4 shadow-lg">
-              <h2 className="text-lg font-bold text-yellow-300 mb-2">Shop Revenue</h2>
+              {/* Shop Revenue */}
+              <div className="bg-[#050716]/80 border border-yellow-500/30 rounded-2xl p-4 shadow-lg">
+                <h3 className="text-lg font-bold text-yellow-300 mb-2">Shop Revenue</h3>
               {!shopRevenue ? (
                 <div className="text-sm text-gray-400">Loading shop data…</div>
               ) : (
@@ -2222,148 +2794,613 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               )}
-            </section>
-          </section>
-        </div>
+              </div>
 
-        {/* ADMIN ACTIONS */}
-        <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
+              {/* Risk & Compliance */}
+              <div className="bg-[#050716]/80 border border-red-500/30 rounded-2xl p-4 shadow-lg">
+                <h3 className="text-lg font-bold text-red-300 mb-2">Risk & Compliance</h3>
+                {!risk ? (
+                  <div className="text-sm text-gray-400">Loading risk radar…</div>
+                ) : (
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">Frozen Accounts</span>
+                      <span className="text-2xl font-semibold text-red-400">
+                        {risk.frozenCount}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Top High-Risk Users</div>
+                      <ul className="space-y-1 max-h-32 overflow-auto text-xs text-gray-300">
+                        {risk.topHighRisk.map((u: any) => (
+                          <li key={u.user_id} className="flex justify-between">
+                            <span>{u.user_id}</span>
+                            <span className="text-red-300 font-semibold">
+                              {u.risk_score}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Full Width: Detailed Economy */}
+          <div className="bg-[#050716]/80 border border-purple-500/30 rounded-2xl p-4 shadow-lg">
+            <h3 className="text-lg font-bold text-purple-300 mb-3">Troll City Economy (Detailed)</h3>
+            {economyLoading && (
+              <div className="text-sm text-gray-400">Loading economy stats…</div>
+            )}
+            {economySummary && (
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
+                  <div className="text-xs text-gray-400">Paid Coins Outstanding</div>
+                  <div className="text-2xl font-semibold text-emerald-300">
+                    {economySummary.paidCoins.outstandingLiability.toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    Purchased: {economySummary.paidCoins.totalPurchased.toLocaleString()} •
+                    Spent: {economySummary.paidCoins.totalSpent.toLocaleString()}
+                  </div>
+                </div>
+                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
+                  <div className="text-xs text-gray-400">Broadcaster Cashouts</div>
+                  <div className="text-2xl font-semibold text-amber-300">
+                    ${economySummary.broadcasters.pendingCashoutsUsd.toFixed(2)}
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    Total Earned: ${economySummary.broadcasters.totalUsdOwed.toFixed(2)} • Paid: $
+                    {economySummary.broadcasters.paidOutUsd.toFixed(2)}
+                  </div>
+                </div>
+                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
+                  <div className="text-xs text-gray-400">Officer Earnings</div>
+                  <div className="text-2xl font-semibold text-cyan-300">
+                    ${economySummary.officers.totalUsdPaid.toFixed(2)}
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    From kicks, bans & penalties
+                  </div>
+                </div>
+                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
+                  <div className="text-xs text-gray-400">Troll Wheel Activity</div>
+                  <div className="text-2xl font-semibold text-pink-300">
+                    {economySummary.wheel.totalSpins.toLocaleString()} spins
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    Coins Spent: {economySummary.wheel.totalCoinsSpent.toLocaleString()} •
+                    Jackpots: {economySummary.wheel.jackpotCount}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ============================================
+          3) OPERATIONS & CONTROL DECK
+          ============================================ */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-bold text-white mb-4">Operations & Control Deck</h2>
+          
+          {/* ADMIN ACTIONS */}
+          <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
           <div className="flex items-center gap-2 mb-3">
             <MessageSquare className="w-4 h-4 text-pink-400" />
             <h2 className="text-sm font-bold text-white">Admin Actions</h2>
           </div>
-          <div className="grid gap-3 md:grid-cols-4 text-xs">
-            <input
-              value={selectedUserId}
-              onChange={e => setSelectedUserId(e.target.value)}
-              placeholder="User ID"
-              className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
-            />
-            <input
-              value={actionUntil}
-              onChange={e => setActionUntil(e.target.value)}
-              placeholder="Ban until (YYYY-MM-DD)"
-              className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
-            />
-            <button
-              onClick={banSelectedUser}
-              className="px-3 py-1 rounded bg-red-700 hover:bg-red-600"
-            >
-              Ban user
-            </button>
-          <button
-            onClick={resetSelectedUserCoins}
-            className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-500"
-          >
-            Reset coins
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const res = await api.post('/admin/wheel/toggle', { enabled: true })
-                if (res?.success) {
-                  toast.success('Wheel enabled')
-                } else {
-                  toast.error(res?.error || 'Failed to enable wheel')
-                }
-              } catch (e: any) {
-                toast.error(e?.message || 'Failed to enable wheel')
-              }
-            }}
-            className="px-3 py-1 rounded bg-green-700 hover:bg-green-600"
-          >
-            Enable Wheel
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const res = await api.post('/admin/wheel/toggle', { enabled: false })
-                if (res?.success) {
-                  toast.success('Wheel disabled')
-                } else {
-                  toast.error(res?.error || 'Failed to disable wheel')
-                }
-              } catch (e: any) {
-                toast.error(e?.message || 'Failed to disable wheel')
-              }
-            }}
-            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600"
-          >
-            Disable Wheel
-          </button>
-          <button
-            onClick={flagSelectedUserAI}
-            className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600"
-          >
-            Flag AI Suspect
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const status = await api.get('/square/status')
-                const res = await api.post('/square/test')
-                if (status?.success && res?.success) {
-                  toast.success('Square test OK')
-                } else {
-                  toast.error(res?.error || 'Square test failed')
-                }
-              } catch (e: any) {
-                toast.error(e?.message || 'Square test failed')
-              }
-            }}
-            className="px-3 py-1 rounded bg-blue-700 hover:bg-blue-600"
-          >
-            Run Square Test
-          </button>
-          <button
-            onClick={async () => {
-              const trollType = window.prompt('Troll type (green/red):', 'green')
-              const rewardAmount = parseInt(window.prompt('Reward amount:', '10') || '10')
-              const durationMinutes = parseInt(window.prompt('Duration (minutes):', '2') ?? '2')
+          
+          {/* A. City-Wide Broadcast */}
+          <ActionGroup title="City-Wide Broadcast" icon={<MessageSquare className="w-4 h-4" />}>
+            {/* Admin Broadcast Section */}
+            <div className="mb-4 p-3 bg-[#0E0A1A] rounded-lg border border-orange-500/30">
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="admin-broadcast-input"
+                  placeholder="Type announcement message..."
+                  className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      const input = e.target as HTMLInputElement
+                      const message = input.value.trim()
+                      if (message) {
+                        supabase
+                          .from('admin_broadcasts')
+                          .insert([{ message, admin_id: profile?.id }])
+                          .then(({ error }) => {
+                            if (error) {
+                              toast.error('Failed to send broadcast')
+                            } else {
+                              toast.success('Broadcast sent to all live streams!')
+                              input.value = ''
+                            }
+                          })
+                      }
+                    }
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    const input = document.getElementById('admin-broadcast-input') as HTMLInputElement
+                    const message = input?.value.trim()
+                    if (!message) {
+                      toast.error('Enter a message')
+                      return
+                    }
+                    const { error } = await supabase
+                      .from('admin_broadcasts')
+                      .insert([{ message, admin_id: profile?.id }])
+                    if (error) {
+                      toast.error('Failed to send broadcast')
+                    } else {
+                      toast.success('Broadcast sent to all live streams!')
+                      input.value = ''
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-orange-600 hover:bg-orange-500 text-sm font-semibold whitespace-nowrap"
+                >
+                  Send Now
+                </button>
+                </div>
+              
+                {/* Schedule Section */}
+                <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-400">or</span>
+                <span className="text-gray-400">Schedule for:</span>
+                <input
+                  type="datetime-local"
+                  id="admin-broadcast-schedule"
+                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"
+                />
+                <button
+                  onClick={async () => {
+                    const input = document.getElementById('admin-broadcast-input') as HTMLInputElement
+                    const scheduleInput = document.getElementById('admin-broadcast-schedule') as HTMLInputElement
+                    const message = input?.value.trim()
+                    const scheduledTime = scheduleInput?.value
+                    
+                    if (!message) {
+                      toast.error('Enter a message')
+                      return
+                    }
+                    if (!scheduledTime) {
+                      toast.error('Select a scheduled time')
+                      return
+                    }
+                    
+                    // Convert local datetime to ISO string
+                    const scheduledISO = new Date(scheduledTime).toISOString()
+                    
+                    const { error } = await supabase
+                      .from('scheduled_announcements')
+                      .insert([{ 
+                        message, 
+                        scheduled_time: scheduledISO,
+                        created_by: profile?.id 
+                      }])
+                    if (error) {
+                      toast.error('Failed to schedule broadcast')
+                    } else {
+                      toast.success(`Broadcast scheduled for ${new Date(scheduledTime).toLocaleString()}!`)
+                      input.value = ''
+                      scheduleInput.value = ''
+                      loadScheduledAnnouncements() // Refresh list
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-xs font-semibold whitespace-nowrap"
+                >
+                  Schedule
+                </button>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  This will appear on all active live streams (translated to each viewer's language)
+                </p>
+              
+                {/* Scheduled Announcements List */}
+                <div className="mt-3 p-2 bg-[#0A0A0A] rounded border border-purple-500/20">
+                <h4 className="text-[10px] font-bold text-purple-400 mb-2">Scheduled Announcements</h4>
+                {scheduledAnnouncements.length === 0 ? (
+                  <p className="text-[10px] text-gray-500">No scheduled announcements</p>
+                ) : (
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {scheduledAnnouncements.map((ann) => (
+                      <div key={ann.id} className="text-[10px] flex items-center justify-between bg-gray-900/30 p-1 rounded">
+                        <div className="flex-1 truncate">
+                          <span className="text-gray-400">{ann.message.substring(0, 30)}...</span>
+                          <span className="text-gray-500 ml-2">
+                            {new Date(ann.scheduled_time).toLocaleString()}
+                          </span>
+                        </div>
+                        <span className={`text-[9px] ${ann.is_sent ? 'text-green-400' : 'text-yellow-400'}`}>
+                          {ann.is_sent ? 'Sent' : 'Pending'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                </div>
+              </div>
+            </div>
+          </ActionGroup>
 
-              if (!trollType || !rewardAmount || !durationMinutes) return
+            {/* B. Engagement Controls */}
+            <ActionGroup title="Engagement Controls" icon={<Gift className="w-4 h-4" />}>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const trollType = window.prompt('Troll type (green/red):', 'green')
+                    const rewardAmount = parseInt(window.prompt('Reward amount:', '10') || '10')
+                    const durationMinutes = parseInt(window.prompt('Duration (minutes):', '2') ?? '2')
 
-              try {
-                const res = await api.post('/admin/troll-events/spawn', {
-                  troll_type: trollType,
-                  reward_amount: rewardAmount,
-                  duration_minutes: durationMinutes
-                })
-                if (res.success) {
-                  toast.success(`Troll event spawned! ID: ${res.event_id}`)
-                } else {
-                  toast.error(res.error || 'Failed to spawn troll event')
-                }
-              } catch (e: any) {
-                toast.error(e?.message || 'Failed to spawn troll event')
-              }
-            }}
-            className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600"
-          >
-            Spawn Troll Event
-          </button>
+                    if (!trollType || !rewardAmount || !durationMinutes) return
+
+                    try {
+                      const res = await api.post('/admin/troll-events/spawn', {
+                        troll_type: trollType,
+                        reward_amount: rewardAmount,
+                        duration_minutes: durationMinutes
+                      })
+                      if (res.success) {
+                        toast.success(`Troll event spawned! ID: ${res.event_id}`)
+                      } else {
+                        toast.error(res.error || 'Failed to spawn troll event')
+                      }
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to spawn troll event')
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600 text-xs"
+                >
+                  Spawn Troll Event
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await api.get('/admin/wheel/status')
+                      if (res?.success && res?.config) {
+                        const cfg = res.config
+                        const statusText = `Wheel Status: ${cfg.is_active ? '✅ ACTIVE' : '❌ DISABLED'}\nSpin Cost: ${cfg.spin_cost || 500} coins\nMax Spins/Day: ${cfg.max_spins_per_day || 10}`
+                        toast.success(statusText, { duration: 5000 })
+                        console.log('🎡 Wheel Status:', cfg)
+                      } else {
+                        toast.error('Failed to get wheel status')
+                        console.error('Wheel status response:', res)
+                      }
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to check wheel status')
+                      console.error('Wheel status error:', e)
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-blue-700 hover:bg-blue-600 text-xs"
+                >
+                  Check Status
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await api.post('/admin/wheel/toggle', { enabled: true })
+                      if (res?.success) {
+                        toast.success('Wheel enabled')
+                      } else {
+                        toast.error(res?.error || 'Failed to enable wheel')
+                      }
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to enable wheel')
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-xs"
+                >
+                  Enable Wheel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await api.post('/admin/wheel/toggle', { enabled: false })
+                      if (res?.success) {
+                        toast.success('Wheel disabled')
+                      } else {
+                        toast.error(res?.error || 'Failed to disable wheel')
+                      }
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to disable wheel')
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs"
+                >
+                  Disable Wheel
+                </button>
+              </div>
+            </ActionGroup>
+
+            {/* C. User Enforcement */}
+            <ActionGroup title="User Enforcement" icon={<Shield className="w-4 h-4" />}>
+              <div className="grid gap-3 md:grid-cols-4 text-xs">
+                <input
+                  type="text"
+                  value={selectedUserId}
+                  onChange={e => setSelectedUserId(e.target.value)}
+                  placeholder="User ID"
+                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
+                />
+                <input
+                  type="text"
+                  value={actionUntil}
+                  onChange={e => setActionUntil(e.target.value)}
+                  placeholder="Ban until (YYYY-MM-DD)"
+                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
+                />
+                <button
+                  type="button"
+                  onClick={banSelectedUser}
+                  className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-xs"
+                >
+                  Ban user
+                </button>
+                <button
+                  type="button"
+                  onClick={resetSelectedUserCoins}
+                  className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-500 text-xs"
+                >
+                  Reset coins
+                </button>
+                <button
+                  type="button"
+                  onClick={flagSelectedUserAI}
+                  className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600 text-xs"
+                >
+                  Flag AI Suspect
+                </button>
+              </div>
+            </ActionGroup>
+
+            {/* D. System Tools */}
+            <ActionGroup title="System Tools" icon={<Monitor className="w-4 h-4" />}>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={addCoinsToAdmin}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  Add 7000 Coins to Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={testSupabase}
+                  className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-xs"
+                >
+                  Test Supabase
+                </button>
+                <button
+                  type="button"
+                  onClick={testLiveKitStreaming}
+                  className="px-3 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-xs"
+                >
+                  Test LiveKit
+                </button>
+                <button
+                  type="button"
+                  onClick={cleanupStreams}
+                  className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs"
+                >
+                  Cleanup Orphaned Streams
+                </button>
+              </div>
+            </ActionGroup>
+
           </div>
-        </div>
+        </section>
 
-        {/* TABS */}
-        <div className="bg-[#050509] border border-[#2C2C2C] rounded-2xl">
-          <div className="flex overflow-x-auto border-b border-[#2C2C2C] text-xs">
-            {tabs.map(tab => (
+        {/* ============================================
+            SECTION 4: APPLICATIONS & CONNECTIONS HUB
+            ============================================ */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">📋 Applications & Connections Hub</h2>
+          
+          {/* Row 1: User Applications */}
+          <div className="bg-[#050509] border border-[#2C2C2C] rounded-2xl">
+            <div className="p-4">
+              <h3 className="text-xl font-bold mb-4 text-white">User Applications</h3>
+              <AdminApplications />
+            </div>
+          </div>
+
+          {/* Row 2: Connections */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* PayPal Connection */}
+            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CreditCard className="w-4 h-4 text-blue-400" />
+                <span className="font-semibold">PayPal</span>
+              </div>
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3 md:px-4 py-2 whitespace-nowrap border-r border-[#2C2C2C] last:border-r-0 ${
-                  activeTab === tab.id
-                    ? 'bg-purple-700 text-white'
-                    : 'bg-transparent text-gray-300 hover:bg-[#15151f]'
-                }`}
+                type="button"
+                onClick={testPayPal}
+                disabled={paypalTesting}
+                className="px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {tab.label}
+                {paypalTesting ? 'Testing...' : 'Test PayPal'}
               </button>
-            ))}
+              <div className="mt-2 text-xs text-gray-400">
+                Status:{' '}
+                {paypalTesting ? (
+                  <span className="text-yellow-400">Testing...</span>
+                ) : paypalStatus ? (
+                  paypalStatus.ok ? (
+                    <span className="text-green-400">OK</span>
+                  ) : (
+                    <span className="text-red-400">{paypalStatus.error || 'Failed'}</span>
+                  )
+                ) : (
+                  'Not tested'
+                )}
+              </div>
+            </div>
+
+            {/* Supabase Connection */}
+            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Monitor className="w-4 h-4 text-purple-400" />
+                <span className="font-semibold">Supabase</span>
+              </div>
+              <button
+                type="button"
+                onClick={testSupabase}
+                className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 mb-2"
+              >
+                Test Supabase
+              </button>
+              <div className="mt-2 text-xs text-gray-400">
+                Status:{' '}
+                {supabaseStatus
+                  ? supabaseStatus.ok
+                    ? 'OK'
+                    : supabaseStatus.error || 'Failed'
+                  : 'Not tested'}
+              </div>
+            </div>
+
+            {/* LiveKit Connection */}
+            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Camera className="w-4 h-4 text-cyan-400" />
+                <span className="font-semibold">LiveKit</span>
+              </div>
+              <button
+                type="button"
+                onClick={testLiveKitStreaming}
+                className="px-3 py-1 text-xs rounded bg-cyan-600 hover:bg-cyan-500 mb-2"
+              >
+                Test LiveKit
+              </button>
+              <div className="mt-2 text-xs text-gray-400">
+                Status:{' '}
+                {agoraStatus
+                  ? agoraStatus.ok
+                    ? 'OK'
+                    : agoraStatus.error || 'Failed'
+                  : 'Not tested'}
+              </div>
+            </div>
           </div>
-          <div className="p-4">{renderTabContent()}</div>
-        </div>
+
+          {/* Row 3: Live Streams */}
+          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Play className="w-4 h-4 text-pink-400" />
+              <span className="font-semibold">Live Streams</span>
+              <button
+                type="button"
+                onClick={loadLiveStreams}
+                className="ml-auto text-xs flex items-center gap-1 text-gray-300 hover:text-white"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Refresh
+              </button>
+            </div>
+
+            {streamsLoading ? (
+              <div className="text-xs text-gray-400">Loading streams…</div>
+            ) : liveStreams.length === 0 ? (
+              <div className="text-xs text-gray-500">No streams currently live.</div>
+            ) : (
+              <div className="overflow-x-auto text-xs">
+                <table className="min-w-full text-left">
+                  <thead>
+                    <tr className="border-b border-gray-700 text-gray-400">
+                      <th className="py-1 pr-4">Title</th>
+                      <th className="py-1 pr-4">Category</th>
+                      <th className="py-1 pr-4">Broadcaster</th>
+                      <th className="py-1 pr-4">Created</th>
+                      <th className="py-1 pr-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveStreams.map(stream => (
+                      <tr key={stream.id} className="border-b border-gray-800">
+                        <td className="py-1 pr-4">{stream.title || 'Untitled'}</td>
+                        <td className="py-1 pr-4">{stream.category}</td>
+                        <td className="py-1 pr-4 text-xs">{stream.broadcaster_id}</td>
+                        <td className="py-1 pr-4">
+                          {new Date(stream.created_at).toLocaleString()}
+                        </td>
+                        <td className="py-1 pr-4 text-right space-x-1">
+                          <button
+                            type="button"
+                            onClick={() => viewStream(stream.id)}
+                            className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-[10px]"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => endStreamById(stream.id)}
+                            className="px-2 py-0.5 rounded bg-yellow-600 hover:bg-yellow-500 text-[10px]"
+                          >
+                            End
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteStreamById(stream.id)}
+                            className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500 text-[10px]"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* TABS NAVIGATION - Additional Sections */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">🔧 Additional Tools</h2>
+          <div className="bg-[#050509] border border-[#2C2C2C] rounded-2xl">
+            {/* Tabs Header */}
+            <div className="flex flex-wrap gap-2 p-2 border-b border-[#2C2C2C] overflow-x-auto">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    // Prevent scroll by maintaining scroll position
+                    const scrollY = window.scrollY
+                    const scrollX = window.scrollX
+                    setActiveTab(tab.id)
+                    // Use requestAnimationFrame to restore scroll position smoothly
+                    requestAnimationFrame(() => {
+                      window.scrollTo(scrollX, scrollY)
+                    })
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
+                      : 'bg-[#15151f] text-gray-300 hover:bg-[#1a1a2e] hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {/* Tab Content */}
+            <div className="p-4">{renderTabContent()}</div>
+          </div>
+        </section>
       </div>
     </div>
   )

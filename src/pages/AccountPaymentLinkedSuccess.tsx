@@ -33,7 +33,7 @@ const AccountPaymentLinkedSuccess = () => {
         const { data: sessionData } = await supabase.auth.getSession()
         const authToken = sessionData?.session?.access_token || ''
         if (p === 'card') {
-          const saved = await api.post('/square/save-card', { userId: user.id, cardToken: token, saveAsDefault: true })
+          const saved = await api.post('/payments', { userId: user.id, nonce: token })
           if (!saved.success) throw new Error(saved?.error || 'Failed to save card')
 
         // 🔹 Save wallet providers (CashApp, ApplePay, GooglePay, Venmo)
@@ -59,7 +59,11 @@ const AccountPaymentLinkedSuccess = () => {
 
         // 🎯 Identity & analytics tracking
         try {
-          await recordAppEvent(user.id, 'PAYMENT_METHOD_LINKED', { provider: p })
+          await supabase.rpc('record_dna_event', {
+            p_user_id: user.id,
+            p_event_type: 'PAYMENT_METHOD_LINKED',
+            p_event_data: { provider: p }
+          })
         } catch {}
 
         toast.success('Payment method linked and activated!')

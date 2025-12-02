@@ -35,7 +35,7 @@ const AccountPaymentsSuccess = () => {
       try {
         setSaving(true)
 
-        const saved = await api.post('/square/save-card', { userId: user.id, cardToken: tokenId, saveAsDefault: true })
+        const saved = await api.post('/payments', { userId: user.id, nonce: tokenId })
         if (!saved.success) throw new Error(saved?.error || 'Failed to save card')
 
         // 2) Mark user as fully payment-enabled
@@ -46,7 +46,13 @@ const AccountPaymentsSuccess = () => {
         try { localStorage.setItem(`tc-valid-pay-${user.id}`, 'true') } catch {}
 
         // 3) Analytics / tracking
-        try { await recordAppEvent(user.id, 'PAYMENT_METHOD_LINKED', { provider: p }) } catch {}
+        try {
+          await supabase.rpc('record_dna_event', {
+            p_user_id: user.id,
+            p_event_type: 'PAYMENT_METHOD_LINKED',
+            p_event_data: { provider: p }
+          })
+        } catch {}
 
         setStatus('saved')
         toast.success('Payment Method Connected and Ready for Purchases')

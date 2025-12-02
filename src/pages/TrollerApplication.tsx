@@ -47,10 +47,22 @@ export default function TrollerApplication() {
       
       const applicationData = {
         user_id: profile.id,
-        username: profile.username,
-        role_requested: 'troller',
-        experience: formData.streamingExperience,
+        type: 'troller',
         reason: formData.bio,
+        goals: formData.goals,
+        data: {
+          username: profile.username,
+          fullName: formData.fullName,
+          email: formData.email,
+          age: formData.age,
+          location: formData.location,
+          contentStyle: formData.contentStyle,
+          streamingExperience: formData.streamingExperience,
+          uniqueValue: formData.uniqueValue,
+          availability: formData.availability,
+          equipment: formData.equipment,
+          socialMedia: formData.socialMedia
+        },
         status: 'pending'
       }
       

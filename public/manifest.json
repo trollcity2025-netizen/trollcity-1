@@ -1,0 +1,37 @@
+{
+  "name": "TrollCity Admin Dashboard",
+  "short_name": "Admin",
+  "description": "Mobile-first admin dashboard for TrollCity",
+  "start_url": "/admin-mobile",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#9333EA",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Payouts",
+      "short_name": "Payouts",
+      "description": "View pending payouts",
+      "url": "/admin-mobile?tab=payouts",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Applications",
+      "short_name": "Apps",
+      "description": "Review broadcaster applications",
+      "url": "/admin-mobile?tab=applications",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}
+
+

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { supabase, isAdminEmail } from '../lib/supabase'
 import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react'
 
@@ -17,8 +17,12 @@ const Auth = () => {
   const [username, setUsername] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user, profile, setAuth, setProfile } = useAuthStore()
   const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'trollcity2025@gmail.com'
+  
+  // Get referral code from URL
+  const referralCode = searchParams.get('ref') || ''
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -119,7 +123,12 @@ const Auth = () => {
         
         // Use our API endpoint to create user without sending confirmation email
         console.log('Creating new user account...')
-        const signUpData = await (await import('../lib/api')).default.post('/auth/signup', { email, password, username: username.trim() })
+        const signUpData = await (await import('../lib/api')).default.post('/auth/signup', { 
+          email, 
+          password, 
+          username: username.trim(),
+          referral_code: referralCode || undefined
+        })
         if (!signUpData.success) {
           console.error('Signup failed:', signUpData)
           throw new Error(signUpData.error || 'Signup failed')

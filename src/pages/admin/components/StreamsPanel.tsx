@@ -7,9 +7,9 @@ const StreamsPanel = () => {
 
   const loadStreams = async () => {
     const { data } = await supabase
-      .from("troll_streams")
-      .select("id, title, broadcaster_id, is_live, current_viewers, created_at")
-      .eq("is_live", true);
+      .from("streams")
+      .select("id, title, broadcaster_id, status, current_viewers, created_at")
+      .eq("is_live", true); // Use is_live for consistency
     setStreams(data || []);
   };
 
@@ -18,7 +18,7 @@ const StreamsPanel = () => {
 
     const channel = supabase
       .channel("admin_live_streams")
-      .on("postgres_changes", { event: "*", schema: "public", table: "troll_streams" }, loadStreams)
+      .on("postgres_changes", { event: "*", schema: "public", table: "streams" }, loadStreams)
       .subscribe();
 
     return () => {
@@ -38,11 +38,11 @@ const StreamsPanel = () => {
             className="bg-red-600 px-3 py-1 mt-2 rounded"
             onClick={async () => {
               await supabase
-                .from("troll_streams")
+                .from("streams")
                 .update({
                   is_live: false,
+                  status: "ended",
                   end_time: new Date().toISOString(),
-                  is_force_ended: true,
                 })
                 .eq("id", stream.id);
               loadStreams();

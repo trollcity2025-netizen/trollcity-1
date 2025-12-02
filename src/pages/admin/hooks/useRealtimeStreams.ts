@@ -15,7 +15,7 @@ export const useRealtimeStreams = (): Stream[] => {
 
   const loadStreams = async () => {
     const { data } = await supabase
-      .from('troll_streams')
+      .from('streams')
       .select('id, title, broadcaster_id, status, current_viewers, created_at')
       .order('created_at', { ascending: false });
     setStreams(data || []);
@@ -26,7 +26,7 @@ export const useRealtimeStreams = (): Stream[] => {
 
     const channel = supabase
       .channel('realtime-streams')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'troll_streams' }, loadStreams)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, loadStreams)
       .subscribe();
 
     return () => {

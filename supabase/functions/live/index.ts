@@ -72,6 +72,20 @@ Deno.serve(async (req) => {
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+      
+      // Award birthday coins if eligible (when user goes live on their birthday)
+      try {
+        const { data: birthdayResult } = await supabase.rpc('award_birthday_coins_if_eligible', {
+          p_user_id: user_id
+        });
+        if (birthdayResult?.success) {
+          console.log(`[Live] Birthday coins awarded to user ${user_id}: ${birthdayResult.coins_awarded} coins`);
+        }
+      } catch (birthdayErr) {
+        // Non-critical error, log but don't fail stream creation
+        console.warn('[Live] Birthday coin check failed:', birthdayErr);
+      }
+      
       return new Response(JSON.stringify({ success: true, stream: streamRow }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

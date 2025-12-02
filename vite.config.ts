@@ -25,14 +25,14 @@ export default defineConfig({
   base: '/',
   server: {
     host: 'localhost',
-    port: 5174,
+    port: 5173,
     strictPort: true,
     hmr: disableHmr
       ? false
       : {
           host: 'localhost',
-          clientPort: 5174,
-          port: 5174,
+          clientPort: 5173,
+          port: 5173,
           protocol: 'ws',
         },
     proxy: {

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import {
   Shield,
@@ -7,7 +7,9 @@ import {
   Gift,
   Crown,
   Activity,
-  DollarSign
+  DollarSign,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 
 export default function AdminRFC() {
@@ -138,10 +140,97 @@ export default function AdminRFC() {
           />
         </Section>
 
+        {/* PLATFORM POLICIES */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold text-white mb-4">
+            📜 Platform Policies, Rules & Economy Regulations
+          </h2>
+
+          {[
+            {
+              title: "🤑 Coin & Fee Policy",
+              content: (
+                <>
+                  • 100 coins = $1 USD<br />
+                  • Minimum withdrawal: 10,000 coins ($100)<br />
+                  • Platform commission: 20% per gifted coin<br />
+                  • Finix / Square payout processing fee: 2.9% + $0.30<br />
+                  • 1099-K issued for earnings over $600 per year (US law)<br />
+                </>
+              )
+            },
+            {
+              title: "🎤 Broadcaster Rules",
+              content: (
+                <>
+                  • Must complete onboarding + ID verification before going live<br />
+                  • Must enable 18+ age restriction for payouts<br />
+                  • Streaming misleading content is a violation (fake earnings, scams)<br />
+                  • Repeated policy violations → stream suspension → account ban<br />
+                </>
+              )
+            },
+            {
+              title: "💼 Recruiter Program Rules",
+              content: (
+                <>
+                  • Earn 5% of streamer's earned coins once they reach 40,000/month<br />
+                  • Bonus paid in paid coins (not cash withdrawable)<br />
+                  • Referrals must be REAL and unique active users<br />
+                  • Abuse = Permanent Recruiter program ban<br />
+                </>
+              )
+            },
+            {
+              title: "🛡️ Troll Officer Compliance",
+              content: (
+                <>
+                  • Level 1: Mute & Chat freeze<br />
+                  • Level 2: Kick users + stream lockdown<br />
+                  • Level 3: Full ban / report to admin<br />
+                  • Every moderation action is logged in Supabase (audit log)<br />
+                  • Abuse = demotion/banning from program<br />
+                </>
+              )
+            },
+            {
+              title: "⚖️ Legal & Policy Requirements",
+              content: (
+                <>
+                  • You must be 18+ to receive payouts or host live streams<br />
+                  • Refund policy is governed by digital goods law and Square<br />
+                  • Chargeback fraud = permanent account termination<br />
+                  • COPPA compliance: Viewers under 13 are not permitted<br />
+                </>
+              )
+            }
+          ].map((section, index) => (
+            <PolicySection key={index} title={section.title} content={section.content} />
+          ))}
+        </div>
+
       </div>
     </div>
   )
 }
+
+/* POLICY SECTION COMPONENT */
+const PolicySection = ({ title, content }: { title: string; content: React.ReactNode }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mb-4 bg-zinc-900 text-white p-4 rounded-xl">
+      <button 
+        onClick={() => setOpen(!open)} 
+        className="flex justify-between w-full text-lg font-semibold items-center hover:opacity-80 transition-opacity"
+      >
+        {title}
+        {open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
+      {open && <div className="mt-3 text-sm leading-relaxed text-gray-300">{content}</div>}
+    </div>
+  );
+};
 
 /* SECTION WRAPPER */
 function Section({ title, icon, children }: any) {

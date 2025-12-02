@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 
 export default function FamilyApplication() {
   const { profile } = useAuthStore()
+  const navigate = useNavigate()
   const [reason, setReason] = useState('')
   const [commitment, setCommitment] = useState('')
   const [loading, setLoading] = useState(false)
@@ -16,7 +18,7 @@ export default function FamilyApplication() {
     const requiredCoins = 1000
     if ((profile.paid_coin_balance || 0) < requiredCoins) {
       toast.error('Requires 1,000 paid coins to apply. Redirecting to Store...')
-      window.location.href = '/store?tab=packages'
+      navigate('/store?tab=packages')
       return
     }
     try {
@@ -32,10 +34,12 @@ export default function FamilyApplication() {
       
       const { error } = await supabase.from('applications').insert([{
         user_id: profile.id,
-        username: profile.username,
-        role_requested: 'troll_family',
-        experience: commitment,
-        reason,
+        type: 'troll_family',
+        reason: reason,
+        goals: commitment,
+        data: {
+          username: profile.username
+        },
         status: 'pending'
       }])
       
@@ -63,7 +67,7 @@ export default function FamilyApplication() {
         <div className="bg-[#1A1A1A] rounded-xl p-6 border border-[#2C2C2C] space-y-4">
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why join Troll Family?" className="w-full px-4 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg" />
           <textarea value={commitment} onChange={(e) => setCommitment(e.target.value)} placeholder="Weekly commitment" rows={4} className="w-full px-4 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg" />
-          <button onClick={submit} disabled={loading} className="px-6 py-3 bg-gradient-to-r from-[#FFC93C] to-[#FFD700] text-black rounded-lg font-semibold hover:shadow-lg hover:shadow-[#FFC93C]/30">Submit</button>
+          <button type="button" onClick={submit} disabled={loading} className="px-6 py-3 bg-gradient-to-r from-[#FFC93C] to-[#FFD700] text-black rounded-lg font-semibold hover:shadow-lg hover:shadow-[#FFC93C]/30">Submit</button>
         </div>
       </div>
     </div>

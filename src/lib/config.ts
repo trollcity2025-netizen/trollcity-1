@@ -5,7 +5,7 @@ export const API_ENDPOINTS = {
     fixAdminRole: `${EDGE_URL}/auth/fix-admin-role`,
   },
   payments: {
-    status: `${EDGE_URL}/payments/status`,
+    status: `${EDGE_URL}/payments-status`,
   },
   agora: {
     token: `${EDGE_URL}/admin/agora-token`,

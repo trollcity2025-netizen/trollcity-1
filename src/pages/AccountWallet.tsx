@@ -79,27 +79,29 @@ export default function AccountWallet() {
     try {
       // In development we create a mock token; in production, use Square Web Payments SDK
       const cardToken = `mock_${last4}`
-      const j = await api.post('/square/save-card', { 
+      const j = await api.post('/payments', {
         userId: user.id,
-        cardToken,
-        saveAsDefault: false,
-        postalCode: zipCode,
-        cardDetails: { number: cardNumber, exp, cvv }
+        nonce: cardToken
       })
-      if (!j.success) {
+      
+      if (!j || !j.success) {
+        const errorMsg = j?.error || j?.message || 'Failed to save card'
         console.error('Save card failed', j)
-        toast.error(j?.error || 'Failed to save card')
-      } else {
-        toast.success('Card saved successfully!')
-        if (j?.method) {
-          setSavedMethods(prev => [j.method, ...prev])
-        }
-        setCardNumber('')
-        setExp('')
-        setCvv('')
-        setZipCode('')
-        await fetchSavedCards()
+        toast.error(errorMsg)
+        setLoading(false)
+        return
       }
+      
+      toast.success('Card saved successfully!')
+      if (j?.method) {
+        setSavedMethods(prev => [j.method, ...prev])
+      }
+      setCardNumber('')
+      setExp('')
+      setCvv('')
+      setZipCode('')
+      await fetchSavedCards()
+      setLoading(false)
     } catch (e) {
       console.error(e)
       toast.error('Failed to save card')
@@ -143,7 +145,9 @@ export default function AccountWallet() {
             className="w-1/3 p-2 rounded bg-[#121212] border border-gray-600"
           />
           <input
-            type="password"
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="CVV"
             value={cvv}
             onChange={(e) => setCvv(e.target.value.replace(/\D/g, ''))}

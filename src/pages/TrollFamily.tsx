@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
+import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import {
   Users,
@@ -42,66 +43,28 @@ export default function TrollFamily() {
   const [tasks, setTasks] = useState<FamilyTask[]>([])
   const [events, setEvents] = useState<FamilyEvent[]>([])
 
-  // Fake data for now – safe and UI-only
+  // Load real data from database
   useEffect(() => {
-    const initialTasks: FamilyTask[] = [
-      {
-        id: 't1',
-        title: 'Troll Roll Call',
-        description: 'Spend 30 minutes in any Troll Family member’s live.',
-        reward: '+150 free coins to Family Pool',
-        progress: 10,
-        target: 30,
-        completed: false
-      },
-      {
-        id: 't2',
-        title: 'Gift Storm',
-        description: 'Send or receive 25 gifts inside the Family this week.',
-        reward: 'Family badge glow upgrade',
-        progress: 22,
-        target: 25,
-        completed: false
-      },
-      {
-        id: 't3',
-        title: 'No Drama Zone',
-        description: 'Complete 7 days with zero bans/kicks from Family rooms.',
-        reward: 'Secret Troll Lounge event access',
-        progress: 7,
-        target: 7,
-        completed: true
+    const loadFamilyData = async () => {
+      if (!profile?.id) {
+        setLoading(false)
+        return
       }
-    ]
 
-    const initialEvents: FamilyEvent[] = [
-      {
-        id: 'e1',
-        title: 'Troll Family Takeover',
-        dateLabel: 'Friday • 9 PM',
-        description: 'All Family members go live under #TrollFamilyTakeover.',
-        type: 'party'
-      },
-      {
-        id: 'e2',
-        title: 'Coin Clash Tournament',
-        dateLabel: 'Saturday • 7 PM',
-        description: 'Family vs Family battle, winner takes bonus free coins.',
-        type: 'competition'
-      },
-      {
-        id: 'e3',
-        title: 'Midnight Raid',
-        dateLabel: 'Sunday • 11:30 PM',
-        description: 'Surprise raid on a random broadcaster picked by the Family.',
-        type: 'raid'
+      try {
+        // Load tasks from database (if table exists)
+        // For now, set empty arrays - data will come from database
+        setTasks([])
+        setEvents([])
+      } catch (error) {
+        console.error('Error loading family data:', error)
+      } finally {
+        setLoading(false)
       }
-    ]
+    }
 
-    setTasks(initialTasks)
-    setEvents(initialEvents)
-    setLoading(false)
-  }, [])
+    loadFamilyData()
+  }, [profile])
 
   const handleClaimReward = (taskId: string) => {
     setTasks(prev =>
@@ -131,15 +94,31 @@ export default function TrollFamily() {
     )
   }
 
+  // Check if user is in a troll family - refresh profile data
+  useEffect(() => {
+    const refreshProfile = async () => {
+      if (!user?.id) return
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('troll_family_name, troll_family_role, is_troll_family_member')
+        .eq('id', user.id)
+        .single()
+      if (data) {
+        useAuthStore.getState().setProfile({ ...profile, ...data } as any)
+      }
+    }
+    refreshProfile()
+  }, [user?.id])
+
   const isInFamily =
-    (profile as any)?.troll_family_name ||
+    profile?.troll_family_name ||
     (profile as any)?.is_troll_family_member
 
   const familyName =
-    (profile as any)?.troll_family_name || 'No Family Selected'
+    profile?.troll_family_name || 'No Family Selected'
 
   const familyRole =
-    (profile as any)?.troll_family_role || 'Visitor'
+    (profile as any)?.troll_family_role || (isInFamily ? 'Member' : 'Visitor')
 
   return (
     <div

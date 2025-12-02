@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import api from '../lib/api'
+import api, { API_ENDPOINTS } from '../lib/api'
 
 type Method = {
   id: string
@@ -169,16 +169,20 @@ export default function PaymentSettings() {
         throw new Error(msg)
       }
 
-      const data = await api.post('/square/save-card', {
+      const data = await api.post('/payments', {
         userId: profile.id,
-        cardToken: tokenResult.token,
-        saveAsDefault: true
+        nonce: tokenResult.token
       })
       if (!data.success) throw new Error(data?.error || 'Failed to save card')
 
       toast.success('Card linked and set as default!')
       
-      // Instant UI update if method is returned
+      // Always reload from server to get the latest saved card
+      // Wait a moment for the database to update
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await load()
+      
+      // Also try to update UI optimistically if method is returned
       if (data?.method) {
         setMethods(prev => {
           // Remove the new card from old position if it exists
@@ -189,9 +193,6 @@ export default function PaymentSettings() {
           return [{ ...data.method, is_default: true }, ...updated]
         })
       }
-      
-      // Still reload from server to ensure consistency
-      await load()
     } catch (err: any) {
       toast.error(err?.message || 'Card link failed')
     } finally {

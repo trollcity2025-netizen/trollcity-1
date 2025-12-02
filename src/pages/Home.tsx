@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Crown, Video } from 'lucide-react';
+import { Crown, Video, PartyPopper } from 'lucide-react';
+import { isBirthdayToday } from '../lib/birthdayUtils';
+import BanPage from '../components/BanPage';
+import KickPage from '../components/KickPage';
 
 interface Stream {
   id: string;
@@ -44,6 +47,11 @@ export default function Home() {
   const [topTrollers, setTopTrollers] = useState<any[]>([]);
   const [loadingTop, setLoadingTop] = useState(false);
   const navigate = useNavigate();
+  
+  // Dev mode test displays
+  const [showBanPage, setShowBanPage] = useState(false);
+  const [showKickPage, setShowKickPage] = useState(false);
+  const isDev = import.meta.env.DEV;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -71,13 +79,33 @@ export default function Home() {
             thumbnail_url,
             user_profiles!broadcaster_id (
               username,
-              avatar_url
+              avatar_url,
+              date_of_birth
             )
           `)
           .eq('is_live', true)
           .order('start_time', { ascending: false });
         if (error) throw error;
-        setLiveStreams(data || []);
+        
+        // Sort: birthday users first, then by start_time
+        const today = new Date()
+        const sortedStreams = (data || []).sort((a, b) => {
+          const aBirthday = a.user_profiles?.date_of_birth
+          const bBirthday = b.user_profiles?.date_of_birth
+          
+          const aIsBirthday = aBirthday ? 
+            new Date(aBirthday).getMonth() === today.getMonth() && 
+            new Date(aBirthday).getDate() === today.getDate() : false
+          const bIsBirthday = bBirthday ? 
+            new Date(bBirthday).getMonth() === today.getMonth() && 
+            new Date(bBirthday).getDate() === today.getDate() : false
+          
+          if (aIsBirthday && !bIsBirthday) return -1
+          if (!aIsBirthday && bIsBirthday) return 1
+          return 0 // Keep original order for non-birthday users
+        })
+        
+        setLiveStreams(sortedStreams);
       } catch (e) {
         console.error(e);
         if (showLoading) toast.error('Failed to load live streams');
@@ -92,10 +120,18 @@ export default function Home() {
       loadLive(false);
     }, 10000);
 
-    // Real-time subscription
+    // Real-time subscription - reload when streams are created, updated, or deleted
+    // This ensures streams disappear immediately when is_live becomes false
     const channel = supabase
       .channel('home-live-streams')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, () => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'streams',
+        filter: 'is_live=eq.true' // Only listen to changes on live streams
+      }, (payload) => {
+        // Reload live streams list when any change occurs
+        // If is_live becomes false, the filter will exclude it on next load
         loadLive(false);
       })
       .subscribe();
@@ -357,6 +393,12 @@ export default function Home() {
                   <div className="absolute top-2 left-2 flex items-center gap-2">
                     <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                     <span className="text-xs font-bold text-white">LIVE NOW</span>
+                    {s.user_profiles?.date_of_birth && isBirthdayToday(s.user_profiles.date_of_birth) && (
+                      <div className="ml-2 bg-gradient-to-r from-pink-500 via-purple-500 to-yellow-500 rounded-full px-3 py-1 flex items-center gap-1 animate-pulse">
+                        <PartyPopper className="w-3 h-3 text-white" />
+                        <span className="text-xs font-bold text-white">BIRTHDAY!</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="absolute bottom-0 left-0 w-full p-3 bg-black/70 flex justify-between items-center">

@@ -7,8 +7,8 @@ const StreamMonitor = () => {
 
   const loadStreams = async () => {
     const { data } = await supabase
-      .from("troll_streams")
-      .select("id, title, broadcaster_id, status, stream_key, created_at")
+      .from("streams")
+      .select("id, title, broadcaster_id, status, created_at")
       .eq("status", "live");
     setStreams(data || []);
   };
@@ -18,7 +18,7 @@ const StreamMonitor = () => {
 
     const channel = supabase
       .channel("admin-stream-monitor")
-      .on("postgres_changes", { event: "*", schema: "public", table: "troll_streams" }, loadStreams)
+      .on("postgres_changes", { event: "*", schema: "public", table: "streams" }, loadStreams)
       .subscribe();
 
     return () => {

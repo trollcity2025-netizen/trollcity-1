@@ -101,6 +101,15 @@ export async function recordOfficerActionWithFee(input: {
 
   if (actionError) throw actionError
 
+  // Update officer activity (for shift tracking)
+  try {
+    const { updateOfficerActivity } = await import('./officerActivity')
+    await updateOfficerActivity(input.officer_id)
+  } catch (err) {
+    console.warn('[Economy] Failed to update officer activity:', err)
+    // Don't throw - activity update failure shouldn't block the action
+  }
+
   // 3) pay officer commission
   const commissionCoins = Math.round(input.fee_coins * input.officer_commission_pct)
   const usd_value = coinsToUsd(commissionCoins)

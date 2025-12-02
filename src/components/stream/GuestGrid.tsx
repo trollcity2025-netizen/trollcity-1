@@ -7,21 +7,22 @@ type LayoutMode = 'spotlight' | 'grid' | 'talkshow' | 'stacked'
 interface GuestGridProps {
   room: Room | null
   layoutMode: LayoutMode
+  onGiftSend?: (targetId: string) => void
 }
 
 // Spotlight Layout (Host full screen, guests bottom thumbnails)
-function SpotlightLayout({ participants }: { participants: any[] }) {
+function SpotlightLayout({ participants, onGiftSend }: { participants: any[]; onGiftSend?: (targetId: string) => void }) {
   if (participants.length === 0) return null
 
   return (
     <>
       <div className="absolute inset-0">
-        <VideoBox participant={participants[0]} size="full" label="🎥 Host" />
+        <VideoBox participant={participants[0]} size="full" label="🎥 Host" isHost={true} onGiftSend={onGiftSend} />
       </div>
       {participants.length > 1 && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-3 z-20">
           {participants.slice(1).map((p, i) => (
-            <VideoBox key={p.identity || i} participant={p} size="small" label={`👤 Guest ${i + 1}`} />
+            <VideoBox key={p.identity || i} participant={p} size="small" label={`👤 Guest ${i + 1}`} onGiftSend={onGiftSend} />
           ))}
         </div>
       )}
@@ -30,7 +31,7 @@ function SpotlightLayout({ participants }: { participants: any[] }) {
 }
 
 // Grid Layout (2, 3, or 4 equal blocks — automatic)
-function GridLayout({ participants }: { participants: any[] }) {
+function GridLayout({ participants, onGiftSend }: { participants: any[]; onGiftSend?: (targetId: string) => void }) {
   if (participants.length === 0) return null
 
   const gridClass =
@@ -50,6 +51,8 @@ function GridLayout({ participants }: { participants: any[] }) {
           participant={p}
           size="full"
           label={i === 0 ? '🎥 Host' : `👤 Guest ${i}`}
+          isHost={i === 0}
+          onGiftSend={onGiftSend}
         />
       ))}
     </div>
@@ -57,18 +60,18 @@ function GridLayout({ participants }: { participants: any[] }) {
 }
 
 // Talkshow Layout (Host large left, guests stacked right)
-function TalkshowLayout({ participants }: { participants: any[] }) {
+function TalkshowLayout({ participants, onGiftSend }: { participants: any[]; onGiftSend?: (targetId: string) => void }) {
   if (participants.length === 0) return null
 
   return (
     <>
       <div className="absolute left-0 top-0 bottom-0 w-[65%]">
-        <VideoBox participant={participants[0]} size="full" label="🎥 Host" />
+        <VideoBox participant={participants[0]} size="full" label="🎥 Host" isHost={true} onGiftSend={onGiftSend} />
       </div>
       {participants.length > 1 && (
         <div className="absolute right-0 top-0 bottom-0 w-[35%] flex flex-col space-y-3 p-3">
           {participants.slice(1).map((p, i) => (
-            <VideoBox key={p.identity || i} participant={p} size="medium" label={`👤 Guest ${i + 1}`} />
+            <VideoBox key={p.identity || i} participant={p} size="medium" label={`👤 Guest ${i + 1}`} onGiftSend={onGiftSend} />
           ))}
         </div>
       )}
@@ -77,7 +80,7 @@ function TalkshowLayout({ participants }: { participants: any[] }) {
 }
 
 // Stacked Layout (Vertical interview or podcast style)
-function StackedLayout({ participants }: { participants: any[] }) {
+function StackedLayout({ participants, onGiftSend }: { participants: any[]; onGiftSend?: (targetId: string) => void }) {
   if (participants.length === 0) return null
 
   return (
@@ -88,6 +91,8 @@ function StackedLayout({ participants }: { participants: any[] }) {
           participant={p}
           size="medium"
           label={i === 0 ? '🎥 Host' : `👤 Guest ${i}`}
+          isHost={i === 0}
+          onGiftSend={onGiftSend}
         />
       ))}
     </div>
@@ -123,7 +128,7 @@ function InviteSlots({ count }: { count: number }) {
   )
 }
 
-export default function GuestGrid({ room, layoutMode }: GuestGridProps) {
+export default function GuestGrid({ room, layoutMode, onGiftSend }: GuestGridProps) {
   if (!room) return null
 
   const participants = [room.localParticipant, ...Array.from(room.remoteParticipants.values())].slice(0, 4) // max 4 guests
@@ -132,10 +137,10 @@ export default function GuestGrid({ room, layoutMode }: GuestGridProps) {
 
   return (
     <div className="absolute inset-0">
-      {layoutMode === 'spotlight' && <SpotlightLayout participants={participants} />}
-      {layoutMode === 'grid' && <GridLayout participants={participants} />}
-      {layoutMode === 'talkshow' && <TalkshowLayout participants={participants} />}
-      {layoutMode === 'stacked' && <StackedLayout participants={participants} />}
+      {layoutMode === 'spotlight' && <SpotlightLayout participants={participants} onGiftSend={onGiftSend} />}
+      {layoutMode === 'grid' && <GridLayout participants={participants} onGiftSend={onGiftSend} />}
+      {layoutMode === 'talkshow' && <TalkshowLayout participants={participants} onGiftSend={onGiftSend} />}
+      {layoutMode === 'stacked' && <StackedLayout participants={participants} onGiftSend={onGiftSend} />}
 
       {emptySlots > 0 && layoutMode === 'grid' && (
         <div className="absolute left-4 top-24 flex flex-col space-y-4 w-[280px]">

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Camera, Mic, MicOff, Video, VideoOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { endStream } from '../../lib/endStream'
+import { toast } from 'sonner'
 
 type LayoutMode = 'spotlight' | 'grid' | 'talkshow' | 'stacked'
 
@@ -34,9 +35,7 @@ export default function ControlBar({
   const handleEndLive = async () => {
     if (!streamId || !isHost) return
 
-    if (!confirm('Are you sure you want to end the stream?')) {
-      return
-    }
+    // No confirmation - proceed directly
 
     setIsEnding(true)
     try {
@@ -44,12 +43,12 @@ export default function ControlBar({
       if (success) {
         navigate('/stream-ended')
       } else {
-        alert('Failed to end stream. Please try again.')
+        toast.error('Failed to end stream. Please try again.')
         setIsEnding(false)
       }
     } catch (error) {
       console.error('Error ending stream:', error)
-      alert('Failed to end stream. Please try again.')
+      toast.error('Failed to end stream. Please try again.')
       setIsEnding(false)
     }
   }

@@ -7,13 +7,16 @@ export async function endStream(streamId: string, room: Room | null) {
     if (room) {
       try {
         // Stop all local tracks
-        const localTracks = Array.from(room.localParticipant.tracks.values())
-        localTracks.forEach((pub) => {
-          if (pub.track) {
-            pub.track.stop()
-            room.localParticipant.unpublishTrack(pub.track)
-          }
-        })
+        const trackPublications = room.localParticipant.trackPublications
+        if (trackPublications) {
+          const localTracks = Array.from(trackPublications.values())
+          localTracks.forEach((pub) => {
+            if (pub.track) {
+              pub.track.stop()
+              room.localParticipant.unpublishTrack(pub.track)
+            }
+          })
+        }
 
         // Disconnect from room
         await room.disconnect()

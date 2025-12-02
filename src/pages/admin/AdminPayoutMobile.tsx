@@ -121,13 +121,19 @@ const AdminPayoutMobile: React.FC = () => {
           {req.status === "pending" && (
             <div className="flex justify-between mt-3">
               <button
+                type="button"
                 onClick={() => setShowReceiptModal(req)}
                 className="bg-green-500 hover:bg-green-600 text-xs px-3 py-1 rounded"
               >
                 Approve & Upload Receipt
               </button>
               <button
-                onClick={() => handleReject(req)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleReject(req)
+                }}
                 className="bg-red-500 hover:bg-red-600 text-xs px-3 py-1 rounded"
               >
                 Reject

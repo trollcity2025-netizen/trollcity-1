@@ -104,7 +104,16 @@ export default function FamilyWarsPage() {
     }
 
     toast.success('Challenge sent!')
-    try { await recordAppEvent(user!.id, 'WAR_BEGIN', { challenger_family_id: myFamily.id, defender_family_id: challengingId }) } catch {}
+    try {
+      await supabase.rpc('record_dna_event', {
+        p_user_id: user!.id,
+        p_event_type: 'WAR_BEGIN',
+        p_event_data: {
+          challenger_family_id: myFamily.id,
+          defender_family_id: challengingId
+        }
+      })
+    } catch {}
     setChallengingId('')
     loadWars()
   }

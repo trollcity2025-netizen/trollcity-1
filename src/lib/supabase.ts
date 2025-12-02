@@ -42,6 +42,7 @@ export interface UserProfile {
   insurance_expires_at: string | null
   no_kick_until: string | null
   no_ban_until: string | null
+  ban_expires_at?: string | null
   terms_accepted?: boolean
   badge?: string | null
   has_insurance?: boolean
@@ -57,6 +58,67 @@ export interface UserProfile {
   payout_method?: string
   payout_details?: string
 
+  // Officer fields
+  is_troll_officer?: boolean
+  is_officer_active?: boolean
+  is_lead_officer?: boolean
+  officer_level?: number // 1=Junior, 2=Senior, 3=Commander, 4=Elite Commander, 5=HQ Master
+  officer_tier_badge?: string // 'blue', 'orange', 'red', 'purple', 'gold'
+  
+  // Officer Work Credit (OWC) fields
+  owc_balance?: number // Current OWC balance
+  total_owc_earned?: number // Lifetime OWC earned
+
+  // Admin field
+  is_admin?: boolean
+
+  // Troller fields
+  is_troller?: boolean
+  troller_level?: number // 1=Basic Troller, 2=Chaos Agent, 3=Supreme Troll
+
+  // OG User field
+  is_og_user?: boolean
+
+  // Language preference
+  preferred_language?: string // 'en', 'es', 'ar', 'fr', 'fil', etc.
+
+  // Kick/Ban fields
+  kick_count?: number
+  is_kicked?: boolean
+  kicked_until?: string | null
+  account_deleted_at?: string | null
+  account_deletion_cooldown_until?: string | null
+  account_reset_after_ban?: boolean
+
+  // Square Card on File
+  square_customer_id?: string | null
+  square_card_id?: string | null
+
+  // Empire Partner
+  is_empire_partner?: boolean // Deprecated - use empire_role instead
+  empire_role?: string | null // 'partner' when approved as Empire Partner
+
+  // Moderation fields
+  is_banned?: boolean
+  is_officer?: boolean
+
+  // Verification fields
+  is_verified?: boolean
+  verification_date?: string | null
+  verification_paid_amount?: number | null
+  verification_payment_method?: string | null
+
+  // Officer reputation
+  officer_reputation_score?: number
+
+  // Ghost mode
+  is_ghost_mode?: boolean
+
+  // PayPal payout
+  payout_paypal_email?: string | null
+
+  // Broadcaster field
+  is_broadcaster?: boolean
 }
 
 
@@ -74,6 +136,9 @@ export interface Stream {
   livekit_room: string
   livekit_token: string | null
   multi_beam?: boolean
+  thumbnail_url?: string | null
+  is_testing_mode?: boolean
+  is_live?: boolean
   created_at: string
   updated_at: string
 }

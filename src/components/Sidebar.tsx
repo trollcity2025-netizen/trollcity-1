@@ -8,14 +8,15 @@ import {
   Coins,
   Users,
   Shield,
-  Settings,
   LayoutDashboard,
   Banknote,
-  Aperture,
   FileText,
   UserCheck,
   ListChecks,
   Receipt,
+  Sword,
+  UserPlus,
+  Bug,
 } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { supabase, isAdminEmail } from '../lib/supabase'
@@ -117,20 +118,25 @@ export default function Sidebar() {
         <MenuLink to="/store" icon={<Coins />} label="Coin Store" active={isActive('/store')} />
         <MenuLink to="/transactions" icon={<Receipt />} label="Transactions" active={isActive('/transactions')} />
 
-        <MenuLink to="/wheel" icon={<Aperture />} label="Troll Wheel" active={isActive('/wheel')} />
 
         <MenuLink to="/leaderboard" icon={<span className="inline-block w-5 h-5">🏆</span>} label="Leaderboard" active={isActive('/leaderboard')} />
         <MenuLink to="/wall" icon={<span className="inline-block w-5 h-5">🧌</span>} label="Troll City Wall" active={isActive('/wall')} />
 
         <MenuLink to="/go-live" icon={<Radio />} label="Go Live" active={isActive('/go-live')} />
+        <MenuLink to="/battles" icon={<Sword />} label="Battle History" active={isActive('/battles')} />
+        <MenuLink to="/empire-partner" icon={<UserPlus />} label="Empire Partner" active={isActive('/empire-partner')} />
         <MenuLink to="/trollifications" icon={<Gift />} label="Trollifications" active={isActive('/trollifications')} />
+        {/* Note: Trollifications is the unified notifications page */}
         
         {/* Applications - Show for everyone */}
         <MenuLink to="/apply" icon={<FileText />} label="Applications" active={isActive('/apply')} />
 
         {/* Troll Officer Lounge - Only for admin and troll_officer role */}
         {canSeeOfficer && (
-          <MenuLink to="/officer/lounge" icon={<Shield />} label="Officer Moderation" active={isActive('/officer/lounge')} />
+          <>
+            <MenuLink to="/officer/lounge" icon={<Shield />} label="Officer Lounge" active={isActive('/officer/lounge')} />
+            <MenuLink to="/officer/moderation" icon={<Shield />} label="Officer Moderation" active={isActive('/officer/moderation')} />
+          </>
         )}
 
         {/* Troll Family Lounge - Only for admin, troll_officer, OR approved family app */}
@@ -138,8 +144,9 @@ export default function Sidebar() {
           <MenuLink to="/family" icon={<Users />} label="Troll Family Lounge" active={isActive('/family')} />
         )}
 
-        <MenuLink to="/earnings" icon={<Banknote />} label="Earnings" active={isActive('/earnings')} />
+        <MenuLink to="/earnings" icon={<Banknote />} label="Earnings" active={isActive('/earnings') || isActive('/my-earnings')} />
         <MenuLink to="/support" icon={<FileText />} label="Support" active={isActive('/support')} />
+        <MenuLink to="/safety" icon={<Shield />} label="Safety & Policies" active={isActive('/safety')} />
 
         {/* 🔐 RFC — Only Admin */}
         {profile?.role === 'admin' && (
@@ -152,19 +159,25 @@ export default function Sidebar() {
         )}
       </nav>
 
+      {/* Lead Officer Section — Only Lead Officers */}
+      {profile?.is_lead_officer && (
+        <div className="p-4 border-t border-[#2C2C2C]">
+          <p className="text-gray-500 uppercase text-xs mb-2">Lead Officer</p>
+          <MenuLink to="/lead-officer" icon={<Shield />} label="Lead Officer HQ" active={isActive('/lead-officer')} />
+        </div>
+      )}
+
       {/* Admin Dashboard — Only Admin */}
       {profile?.role === 'admin' && (
         <div className="p-4 border-t border-[#2C2C2C]">
           <p className="text-gray-500 uppercase text-xs mb-2">Admin Controls</p>
           <MenuLink to="/admin" icon={<LayoutDashboard />} label="Admin Dashboard" active={isActive('/admin')} />
+          <MenuLink to="/admin/officer-reports" icon={<FileText />} label="Officer Reports" active={isActive('/admin/officer-reports')} />
+          <MenuLink to="/store-debug" icon={<Bug />} label="Store Debug" active={isActive('/store-debug')} />
           <MenuLink to="/changelog" icon={<ListChecks />} label="Updates & Changes" active={isActive('/changelog')} />
         </div>
       )}
 
-      {/* Settings — Always visible */}
-      <div className="p-4 border-t border-[#2C2C2C]">
-        <MenuLink to="/account/wallet" icon={<Settings />} label="Settings & Account" active={isActive('/account/wallet')} />
-      </div>
     </div>
   )
 }

@@ -58,16 +58,31 @@ export function TestingModeControl() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) {
         toast.error('Not authenticated')
+        setLoading(false)
         return
       }
 
       const data = await api.post('/admin', { action: 'testing-mode', command: 'toggle', enabled, resetCounter })
-      if (data.success) {
+      
+      if (data.success && data.testingMode) {
         setTestingMode(data.testingMode)
         toast.success(`Testing mode ${enabled ? 'enabled' : 'disabled'}${resetCounter ? ' and counter reset' : ''}`)
+      } else if (data.success) {
+        // If success but no testingMode in response, refetch status
+        await fetchStatus()
+        toast.success(`Testing mode ${enabled ? 'enabled' : 'disabled'}${resetCounter ? ' and counter reset' : ''}`)
+      } else {
+        const errorMsg = data.error || 'Failed to toggle testing mode'
+        console.error('Toggle testing mode error:', errorMsg, data)
+        toast.error(errorMsg)
+        // Refetch status to ensure UI is in sync
+        await fetchStatus()
       }
     } catch (error: any) {
+      console.error('Toggle testing mode exception:', error)
       toast.error(error.message || 'Failed to toggle testing mode')
+      // Refetch status to ensure UI is in sync
+      await fetchStatus()
     } finally {
       setLoading(false)
     }

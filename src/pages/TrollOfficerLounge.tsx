@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, isAdminEmail } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import ClickableUsername from '../components/ClickableUsername'
+import { downloadPayrollPDF } from '../lib/officerPayrollPDF'
 import {
   Eye,
   Ban,
@@ -17,7 +18,10 @@ import {
   Star,
   Coins,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  Download,
+  FileText,
+  Clock
 } from 'lucide-react'
 
 type Stream = {
@@ -47,7 +51,7 @@ type OfficerStats = {
 }
 
 export default function TrollOfficerLounge() {
-  const { profile } = useAuthStore()
+  const { profile, user } = useAuthStore()
   const navigate = useNavigate()
 
   const [liveStreams, setLiveStreams] = useState<Stream[]>([])
@@ -59,6 +63,8 @@ export default function TrollOfficerLounge() {
   const [chatLoading, setChatLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'moderation' | 'families'>('moderation')
   const [familiesList, setFamiliesList] = useState<any[]>([])
+  const [payrollReports, setPayrollReports] = useState<any[]>([])
+  const [payrollLoading, setPayrollLoading] = useState(false)
 
   const [officerStats, setOfficerStats] = useState<OfficerStats>({
     kicks: 0,
@@ -103,13 +109,16 @@ export default function TrollOfficerLounge() {
 
   // --- Access Gate ---
   useEffect(() => {
-    if (!profile) return
+    if (!profile || !user) return
 
-    if (!['troll_officer', 'admin'].includes(profile.role)) {
+    const isAdmin = profile.is_admin || profile.role === 'admin' || isAdminEmail(user.email)
+    const isOfficer = profile.is_troll_officer || profile.role === 'troll_officer'
+
+    if (!isOfficer && !isAdmin) {
       toast.error('Access denied')
-      window.location.href = '/'
+      navigate('/', { replace: true })
     }
-  }, [profile])
+  }, [profile, user, navigate])
 
   // --- Live Streams + AI Flags subscriptions ---
   useEffect(() => {
@@ -274,22 +283,84 @@ export default function TrollOfficerLounge() {
     }
   }, [activeTab])
 
+  // Load payroll reports
+  const loadPayrollReports = async () => {
+    if (!profile?.id) return
+    setPayrollLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('officer_monthly_payroll')
+        .select('*')
+        .eq('username', profile.username) // Filter by current officer
+        .order('month', { ascending: false })
+        .limit(12) // Last 12 months
+
+      if (error) throw error
+      setPayrollReports(data || [])
+    } catch (err) {
+      console.error('Failed to load payroll reports:', err)
+      toast.error('Failed to load payroll reports')
+    } finally {
+      setPayrollLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!profile || !user) return
+    const isAdmin = profile.is_admin || profile.role === 'admin' || isAdminEmail(user.email)
+    const isOfficer = profile.is_troll_officer || profile.role === 'troll_officer'
+    
+    if (profile.id && (isOfficer || isAdmin)) {
+      loadPayrollReports()
+    }
+  }, [profile?.id, profile?.role, profile?.username, user?.email])
+
   const kickUser = async (username: string) => {
     // TODO: hook into moderation_logs + coin penalties
     toast.success(`${username} kicked - 500 paid coins deducted`)
     bumpStats('kick')
+    
+    // Update officer activity for shift tracking
+    if (profile?.id) {
+      try {
+        const { updateOfficerActivity } = await import('../lib/officerActivity')
+        await updateOfficerActivity(profile.id)
+      } catch (err) {
+        console.warn('Failed to update officer activity:', err)
+      }
+    }
   }
 
   const banUserFromApp = async (username: string) => {
     // TODO: write actual ban logic (profiles / auth block)
     toast.success(`${username} banned from the entire app`)
     bumpStats('ban')
+    
+    // Update officer activity for shift tracking
+    if (profile?.id) {
+      try {
+        const { updateOfficerActivity } = await import('../lib/officerActivity')
+        await updateOfficerActivity(profile.id)
+      } catch (err) {
+        console.warn('Failed to update officer activity:', err)
+      }
+    }
   }
 
   const muteUser = async (username: string) => {
     // TODO: mute in chat via stream_chat_messages or a mute table
     toast.success(`${username} muted in chat`)
     bumpStats('mute')
+    
+    // Update officer activity for shift tracking
+    if (profile?.id) {
+      try {
+        const { updateOfficerActivity } = await import('../lib/officerActivity')
+        await updateOfficerActivity(profile.id)
+      } catch (err) {
+        console.warn('Failed to update officer activity:', err)
+      }
+    }
   }
 
   const endStream = async (streamId: string, broadcaster: string) => {
@@ -368,6 +439,13 @@ export default function TrollOfficerLounge() {
           >
             <Users className="w-4 h-4 inline mr-2" />
             Troll Families
+          </button>
+          <button
+            onClick={() => navigate('/officer/scheduling')}
+            className="px-4 py-2 rounded-t-lg transition bg-[#1A1A1A] text-gray-400 hover:bg-[#252525]"
+          >
+            <Clock className="w-4 h-4 inline mr-2" />
+            Shift Scheduling
           </button>
         </div>
 
@@ -461,6 +539,73 @@ export default function TrollOfficerLounge() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Monthly Payroll Reports */}
+            <div className="bg-[#111320] border border-green-700/50 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2 text-green-200">
+                  <FileText className="w-5 h-5 text-green-300" />
+                  Monthly Payroll Reports
+                </h3>
+                <button
+                  onClick={loadPayrollReports}
+                  className="text-xs text-gray-400 hover:text-white transition"
+                  title="Refresh reports"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+              
+              {payrollLoading ? (
+                <div className="text-center text-gray-400 py-4">Loading reports...</div>
+              ) : payrollReports.length === 0 ? (
+                <div className="text-center text-gray-400 py-4 text-sm">
+                  No payroll reports available yet
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {payrollReports.map((report, idx) => {
+                    const monthDate = new Date(report.month)
+                    const monthFormatted = monthDate.toLocaleDateString('en-US', { 
+                      month: 'long', 
+                      year: 'numeric' 
+                    })
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between bg-black/30 rounded-lg p-3 border border-gray-700"
+                      >
+                        <div className="flex-1">
+                          <div className="font-semibold text-white">{monthFormatted}</div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {Number(report.total_hours || 0).toFixed(2)} hours • {Number(report.total_coins || 0).toLocaleString()} coins • {report.total_shifts || 0} shifts
+                          </div>
+                          {report.auto_clockouts > 0 && (
+                            <div className="text-xs text-yellow-400 mt-1">
+                              ⚠️ {report.auto_clockouts} auto clock-out(s)
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await downloadPayrollPDF(report)
+                            } catch (err) {
+                              console.error('Error downloading PDF:', err)
+                              toast.error('Failed to generate PDF')
+                            }
+                          }}
+                          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white text-sm flex items-center gap-2 transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download PDF
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

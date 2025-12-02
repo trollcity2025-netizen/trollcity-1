@@ -1,43 +1,185 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, User } from 'lucide-react'
+import { Search, User, Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { getTierFromXP } from '../lib/tierSystem'
+import ClickableUsername from './ClickableUsername'
 
 const Header = () => {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = React.useState('')
 
-  const handleSearch = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      const query = searchQuery.trim().replace('@', '')
-      
-      // Validate alphanumeric only
-      if (!/^[a-zA-Z0-9]+$/.test(query)) {
-        toast.error('Username can only contain letters and numbers')
+  const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [notifications, setNotifications] = useState<any[]>([])
+
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!searchQuery.trim()) {
+        // Show all users if query is empty
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('id, username, avatar_url')
+          .limit(50)
+          .order('created_at', { ascending: false })
+        setSearchResults(data || [])
+        setShowUserDropdown(true)
         return
       }
 
+      const query = searchQuery.trim().replace('@', '')
+      const searchQuery4 = query.substring(0, 4).toLowerCase()
+
       try {
-        // Search for user by username
+        // Search by first 4 characters
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('id, username, avatar_url')
+          .ilike('username', `${searchQuery4}%`)
+          .limit(20)
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
+        setSearchResults(data || [])
+        setShowUserDropdown(true)
+      } catch (err) {
+        console.error('Search error:', err)
+        setSearchResults([])
+      }
+    }
+
+    const timeoutId = setTimeout(searchUsers, 300)
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery])
+
+  // Load notifications
+  useEffect(() => {
+    if (!user?.id) return
+
+    const loadNotifications = async () => {
+      try {
+        // Try RPC function first, but fallback to direct query if it doesn't exist
+        try {
+          const { data: count, error: rpcError } = await supabase
+            .rpc('get_unread_notification_count', { p_user_id: user.id })
+          
+          if (!rpcError && count !== null && count !== undefined) {
+            setUnreadNotifications(Number(count) || 0)
+            return // Success, exit early
+          }
+        } catch (rpcErr: any) {
+          // RPC function might not exist, fallback to direct query
+          console.warn('RPC function not available, using direct query:', rpcErr)
+        }
+        
+        // Fallback to direct query
+        const { data, error: queryError } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_read', false)
+        
+        if (queryError) {
+          console.warn('Error loading notifications (non-critical):', queryError)
+          setUnreadNotifications(0)
+          return
+        }
+        
+        if (data) {
+          setUnreadNotifications(data.length)
+        }
+      } catch (err) {
+        console.warn('Error loading notification count (non-critical):', err)
+        setUnreadNotifications(0) // Set to 0 instead of failing
+      }
+    }
+
+    loadNotifications()
+
+    // Real-time notification listener
+    const channel = supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'notifications', 
+          filter: `user_id=eq.${user.id}` 
+        },
+        (payload) => {
+          const newNotif = payload.new as any
+          // Show toast notification
+          toast(newNotif.title || 'New notification', {
+            description: newNotif.message,
+            duration: 5000
+          })
+          setUnreadNotifications((prev) => prev + 1)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'notifications', 
+          filter: `user_id=eq.${user.id}` 
+        },
+        async (payload) => {
+          const updatedNotif = payload.new as any
+          // If notification was marked as read, reload count
+          if (updatedNotif.is_read === true) {
+            loadNotifications()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { 
+          event: 'DELETE', 
+          schema: 'public', 
+          table: 'notifications', 
+          filter: `user_id=eq.${user.id}` 
+        },
+        async () => {
+          // Reload notification count when one is deleted
+          loadNotifications()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id])
+
+  const handleSearch = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      const query = searchQuery.trim().replace('@', '')
+      const searchQuery4 = query.substring(0, 4).toLowerCase()
+
+      try {
+        // Search by first 4 characters
         const { data, error } = await supabase
           .from('user_profiles')
           .select('id, username')
-          .eq('username', query)
-          .single()
+          .ilike('username', `${searchQuery4}%`)
+          .limit(1)
 
-        if (error || !data) {
+        if (error || !data || data.length === 0) {
           toast.error('User not found')
           return
         }
 
-        // Navigate to user profile
-        navigate(`/profile/${data.username}`)
+        // Navigate to first match
+        navigate(`/profile/${data[0].username}`)
         setSearchQuery('')
+        setShowUserDropdown(false)
       } catch (err) {
         console.error('Search error:', err)
         toast.error('Search failed')
@@ -67,8 +209,9 @@ const Header = () => {
         console.error('Error clearing storage:', e)
       }
       
-      // Force reload to clear memory
-      window.location.href = '/auth'
+      // Force reload to clear memory and redirect to login
+      await supabase.auth.signOut()
+      navigate('/auth', { replace: true })
     } catch (error) {
       toast.error('Error logging out')
     }
@@ -90,20 +233,63 @@ const Header = () => {
       <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5"></div>
       <div className="relative z-10 flex items-center space-x-6 flex-1">
         <div className="relative flex-1 max-w-lg">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-troll-neon-blue/60" />
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-troll-neon-blue/60 z-10" />
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setShowUserDropdown(true)
+            }}
+            onFocus={() => setShowUserDropdown(true)}
+            onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
             onKeyDown={handleSearch}
-            placeholder="Search users (letters and numbers only)..."
+            placeholder="Search users (first 4 chars)..."
             autoComplete="off"
             className="w-full pl-12 pr-6 py-3 bg-troll-dark-card/50 border border-troll-neon-pink/30 rounded-xl text-white placeholder-troll-neon-blue/50 focus:outline-none focus:ring-2 focus:ring-troll-neon-pink focus:border-troll-neon-pink transition-all duration-300 shadow-lg focus:shadow-troll-neon-pink/30"
           />
+          {showUserDropdown && searchResults.length > 0 && (
+            <div className="absolute top-full mt-2 w-full bg-[#1A1A1A] border border-purple-600 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+              {searchResults.map((user) => (
+                <div
+                  key={user.id}
+                  onClick={() => {
+                    navigate(`/profile/${user.username}`)
+                    setSearchQuery('')
+                    setShowUserDropdown(false)
+                  }}
+                  className="p-3 hover:bg-purple-600/20 cursor-pointer flex items-center gap-3 border-b border-[#2C2C2C] last:border-b-0"
+                >
+                  <img
+                    src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
+                    alt={user.username}
+                    className="w-10 h-10 rounded-full border border-purple-500"
+                  />
+                  <ClickableUsername
+                    username={user.username}
+                    userId={user.id}
+                    className="text-white hover:text-purple-400"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="relative z-10 flex items-center space-x-6">
+        <Link 
+          to="/trollifications"
+          className="relative p-3 text-troll-neon-blue/70 hover:text-troll-neon-green transition-all duration-300 group"
+        >
+          <Bell className="w-6 h-6" />
+          {unreadNotifications > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-2 py-1 rounded-full min-w-[20px] text-center">
+              {unreadNotifications > 99 ? '99+' : unreadNotifications}
+            </span>
+          )}
+        </Link>
+        
         <Link 
           to={profile?.username ? `/profile/${profile.username}` : '/profile/me'}
           className={`p-3 text-troll-neon-blue/70 hover:text-troll-neon-green transition-all duration-300 group ${!profile?.username ? 'cursor-not-allowed opacity-50' : ''}`}

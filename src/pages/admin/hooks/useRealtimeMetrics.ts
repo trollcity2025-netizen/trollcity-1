@@ -29,8 +29,8 @@ export const useRealtimeMetrics = (): Metrics => {
         revenueRes,
       ] = await Promise.all([
         supabase.from('user_profiles').select('id'),
-        supabase.from('troll_streams').select('id'),
-        supabase.from('troll_streams').select('id').eq('status', 'live'),
+        supabase.from('streams').select('id'),
+        supabase.from('streams').select('id').eq('is_live', true), // Use is_live for consistency
         supabase.from('coin_transactions').select('amount'),
         supabase.from('coin_transactions').select('metadata').eq('type', 'purchase'),
       ]);
@@ -70,7 +70,7 @@ export const useRealtimeMetrics = (): Metrics => {
 
     const streamsChannel = supabase
       .channel('metrics-streams')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'troll_streams' }, loadMetrics)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, loadMetrics)
       .subscribe();
 
     const coinsChannel = supabase

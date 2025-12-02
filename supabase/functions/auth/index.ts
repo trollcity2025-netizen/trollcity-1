@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     // /signup
     if (path === 'signup' && req.method === 'POST') {
       const body = await req.json();
-      const { email, password, username } = body;
+      const { email, password, username, referral_code } = body;
       
       if (!email || !password || !username) {
         return new Response(JSON.stringify({ error: 'Missing email, password or username' }), {
@@ -225,11 +225,11 @@ Deno.serve(async (req) => {
       // Check testing mode
       const { data: testingModeSettings } = await supabase
         .from('app_settings')
-        .select('value')
+        .select('setting_value')
         .eq('key', 'testing_mode')
         .single();
       
-      const testingMode = testingModeSettings?.value || { enabled: false, signup_limit: 15, current_signups: 0 };
+      const testingMode = testingModeSettings?.setting_value || { enabled: false, signup_limit: 15, current_signups: 0 };
       const isTestingMode = testingMode.enabled;
       
       if (isTestingMode && testingMode.current_signups >= testingMode.signup_limit) {
@@ -242,11 +242,11 @@ Deno.serve(async (req) => {
       // Get test user benefits
       const { data: benefitsSettings } = await supabase
         .from('app_settings')
-        .select('value')
+        .select('setting_value')
         .eq('key', 'test_user_benefits')
         .single();
       
-      const benefits = benefitsSettings?.value || { free_coins: 5000, bypass_family_fee: true, bypass_admin_message_fee: true };
+      const benefits = benefitsSettings?.setting_value || { free_coins: 5000, bypass_family_fee: true, bypass_admin_message_fee: true };
 
       const trimmedUsername = username.trim();
       const { data: created, error: createErr } = await supabase.auth.admin.createUser({
@@ -296,8 +296,38 @@ Deno.serve(async (req) => {
       if (isTestingMode) {
         await supabase
           .from('app_settings')
-          .update({ value: { ...testingMode, current_signups: testingMode.current_signups + 1 } })
+          .update({ setting_value: { ...testingMode, current_signups: testingMode.current_signups + 1 } })
           .eq('key', 'testing_mode');
+      }
+
+      // Handle referral code if provided
+      if (referral_code) {
+        try {
+          // Verify referral code is a valid user ID
+          const { data: recruiterProfile } = await supabase
+            .from('user_profiles')
+            .select('id')
+            .eq('id', referral_code)
+            .single();
+
+          if (recruiterProfile && recruiterProfile.id !== uid) {
+            // Create referral relationship
+            const { error: referralError } = await supabase
+              .from('referrals')
+              .insert({
+                recruiter_id: referral_code,
+                referred_user_id: uid
+              });
+
+            if (referralError) {
+              console.error('Error creating referral:', referralError);
+              // Don't fail signup if referral creation fails
+            }
+          }
+        } catch (error) {
+          console.error('Error processing referral code:', error);
+          // Don't fail signup if referral processing fails
+        }
       }
 
       return new Response(JSON.stringify({ success: true, user: created.user }), {

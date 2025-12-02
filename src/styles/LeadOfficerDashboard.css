@@ -1,0 +1,185 @@
+/* GLOBAL NEON VIBES ----------------------------------- */
+
+.lead-officer-hq {
+  padding: 30px;
+  color: #e5e5ff;
+  font-family: "Inter", sans-serif;
+  background: radial-gradient(circle at center, #1a001f 0%, #0b0010 100%);
+  min-height: 100vh;
+}
+
+/* TITLES ---------------------------------------------- */
+
+.page-title {
+  font-size: 36px;
+  font-weight: 900;
+  text-align: center;
+  margin-bottom: 40px;
+
+  background: linear-gradient(90deg, #a400ff, #00ff9d);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  text-shadow: 0 0 20px rgba(164, 0, 255, 0.8),
+               0 0 10px rgba(0, 255, 157, 0.8);
+}
+
+/* SECTION HEADER -------------------------------------- */
+
+.section h2 {
+  font-size: 24px;
+  background: linear-gradient(90deg, #9c00ff, #00ff95);
+  padding: 8px 14px;
+  border-radius: 10px;
+
+  margin-bottom: 10px;
+  margin-top: 40px;
+
+  color: white;
+  text-shadow: 0 0 10px #a300ff;
+  box-shadow: 0 0 12px #a300ff inset;
+}
+
+/* CARDS ------------------------------------------------ */
+
+.card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(164, 0, 255, 0.4);
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  box-shadow: 0 0 10px rgba(164, 0, 255, 0.3),
+              0 0 20px rgba(0, 255, 150, 0.2);
+  transition: 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(164, 0, 255, 0.6),
+              0 0 30px rgba(0, 255, 150, 0.4);
+}
+
+/* BUTTONS ---------------------------------------------- */
+
+.approve-btn,
+.deny-btn,
+.fire-btn,
+.submit-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  color: #0d0010;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.2s ease;
+}
+
+/* Approve = neon green */
+.approve-btn {
+  background: #00ff99;
+  box-shadow: 0 0 10px #00ff99, 0 0 20px #00ff99;
+}
+.approve-btn:hover {
+  background: #00d67e;
+}
+
+/* Deny = magenta red */
+.deny-btn {
+  background: #ff007c;
+  box-shadow: 0 0 10px #ff007c, 0 0 20px #ff007c;
+}
+.deny-btn:hover {
+  background: #d60066;
+}
+
+/* Fire = dangerous red glow */
+.fire-btn {
+  background: #ff0047;
+  box-shadow: 0 0 10px #ff0047, 0 0 20px #ff0047;
+}
+.fire-btn:hover {
+  background: #cc0038;
+}
+
+/* Submit report */
+.submit-btn {
+  background: #9100ff;
+  color: white;
+  box-shadow: 0 0 12px #9100ff, 0 0 25px #00ffb7 inset;
+}
+.submit-btn:hover {
+  background: #7a00d1;
+}
+
+/* TEXTAREA --------------------------------------------- */
+
+.report-box {
+  width: 100%;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(164, 0, 255, 0.3);
+  border-radius: 8px;
+  color: white;
+  padding: 12px;
+  font-size: 15px;
+  resize: vertical;
+
+  box-shadow: 0 0 8px rgba(164, 0, 255, 0.4);
+}
+
+.report-box:focus {
+  outline: none;
+  box-shadow: 0 0 20px #a300ff;
+}
+
+/* ROW LAYOUT ------------------------------------------- */
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* NO ACCESS -------------------------------------------- */
+
+.no-access {
+  padding: 80px;
+  text-align: center;
+  font-size: 30px;
+  background: linear-gradient(90deg, #ff006a, #7a00ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* OFFICER MESSAGE CENTER -------------------------------- */
+
+.message-input {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message-input textarea {
+  width: 100%;
+  min-height: 120px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(164, 0, 255, 0.3);
+  border-radius: 12px;
+  color: white;
+  padding: 12px;
+}
+
+.send-btn {
+  align-self: flex-end;
+  background: #00ffbd;
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: none;
+  box-shadow: 0 0 10px #00ffbd;
+  cursor: pointer;
+  font-weight: 700;
+}
+.send-btn:hover {
+  background: #00d6a0;
+}
+

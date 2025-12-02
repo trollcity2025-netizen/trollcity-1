@@ -4,13 +4,14 @@ import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react
 import { useAuthStore } from "./lib/store";
 import { supabase, isAdminEmail } from "./lib/supabase";
 import api from "./lib/api";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 
 // Layout
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import ProfileSetupModal from "./components/ProfileSetupModal";
 import RequireRole from "./components/RequireRole";
+import { RequireLeadOrOwner } from "./components/auth/RequireLeadOrOwner";
 
 // Static pages (fast load)
 import Home from "./pages/Home";
@@ -41,6 +42,16 @@ const Trollifications = lazy(() => import("./pages/Trollifications"));
 const Following = lazy(() => import("./pages/Following"));
 const Application = lazy(() => import("./pages/Application"));
 const TrollOfficerLounge = lazy(() => import("./pages/TrollOfficerLounge"));
+const OfficerModeration = lazy(() => import("./pages/OfficerModeration"));
+const OfficerScheduling = lazy(() => import("./pages/OfficerScheduling"));
+const Orientation = lazy(() => import("./pages/officer/Orientation"));
+const OrientationQuiz = lazy(() => import("./pages/officer/OrientationQuiz"));
+const OfficerOnboarding = lazy(() => import("./pages/officer/OfficerOnboarding"));
+const OfficerTrainingSimulator = lazy(() => import("./pages/officer/OfficerTrainingSimulator"));
+const OfficerTrainingProgress = lazy(() => import("./pages/officer/OfficerTrainingProgress"));
+const OfficerDashboard = lazy(() => import("./pages/officer/OfficerDashboard"));
+const OfficerOWCDashboard = lazy(() => import("./pages/OfficerOWCDashboard"));
+const ReportDetailsPage = lazy(() => import("./pages/ReportDetailsPage"));
 const TrollFamily = lazy(() => import("./pages/TrollFamily"));
 const TrollFamilyCity = lazy(() => import("./pages/TrollFamilyCity"));
 const FamilyProfilePage = lazy(() => import("./pages/FamilyProfilePage"));
@@ -49,45 +60,215 @@ const FamilyChatPage = lazy(() => import("./pages/FamilyChatPage"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const EarningsPayout = lazy(() => import("./pages/EarningsPayout"));
 const TransactionHistory = lazy(() => import("./pages/TransactionHistory"));
-const TrollWheel = lazy(() => import("./pages/TrollWheel"));
 const TrollCityWall = lazy(() => import("./pages/TrollCityWall"));
 const ReelFeed = lazy(() => import("./pages/ReelFeed"));
 const CashoutPage = lazy(() => import("./pages/CashoutPage"));
 const FamilyApplication = lazy(() => import("./pages/FamilyApplication"));
 const OfficerApplication = lazy(() => import("./pages/OfficerApplication"));
 const TrollerApplication = lazy(() => import("./pages/TrollerApplication"));
-const CoinStore = lazy(() => import("./pages/CoinStore"));
+const LeadOfficerApplication = lazy(() => import("./pages/LeadOfficerApplication"));
+const CoinStore = lazy(() => import("./pages/CoinStorePayPal"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminPayoutMobile = lazy(() => import("./pages/admin/AdminPayoutMobile"));
+const MobileAdminDashboard = lazy(() => import("./pages/admin/MobileAdminDashboard"));
+const PaymentsDashboard = lazy(() => import("./pages/admin/PaymentsDashboard"));
+const EconomyDashboard = lazy(() => import("./pages/admin/EconomyDashboard"));
+const TaxUpload = lazy(() => import("./pages/TaxUpload"));
+const TaxReviewPanel = lazy(() => import("./pages/admin/TaxReviewPanel"));
+const PaymentCallback = lazy(() => import("./pages/PaymentCallback"));
+const CoinsComplete = lazy(() => import("./pages/CoinsComplete"));
+const PayoutSetupPage = lazy(() => import("./pages/PayoutSetupPage"));
+const Withdraw = lazy(() => import("./pages/Withdraw"));
 const Support = lazy(() => import("./pages/Support"));
 const Profile = lazy(() => import("./pages/Profile"));
+const BattleHistory = lazy(() => import("./pages/BattleHistory"));
+const Changelog = lazy(() => import("./pages/Changelog"));
+const AccountWallet = lazy(() => import("./pages/AccountWallet"));
+const PaymentSettings = lazy(() => import("./pages/PaymentSettings"));
+const AccountPaymentsSuccess = lazy(() => import("./pages/AccountPaymentsSuccess"));
+const AccountPaymentLinkedSuccess = lazy(() => import("./pages/AccountPaymentLinkedSuccess"));
+const EmpirePartnerDashboard = lazy(() => import("./pages/EmpirePartnerDashboard"));
+const ReferralBonusPanel = lazy(() => import("./pages/admin/ReferralBonusPanel"));
+const EmpireApplications = lazy(() => import("./pages/admin/EmpireApplications"));
+const EmpirePartnerApply = lazy(() => import("./pages/EmpirePartnerApply"));
+const AddCard = lazy(() => import("./pages/AddCard"));
+const EarningsDashboard = lazy(() => import("./pages/EarningsDashboard"));
+const CreatorOnboarding = lazy(() => import("./pages/CreatorOnboarding"));
+const PolicyCenter = lazy(() => import("./pages/PolicyCenter"));
+const TermsOfServiceLegal = lazy(() => import("./pages/legal/TermsOfService"));
+const RefundPolicyLegal = lazy(() => import("./pages/legal/RefundPolicy"));
+const PayoutPolicyLegal = lazy(() => import("./pages/legal/PayoutPolicy"));
+const SafetyGuidelinesLegal = lazy(() => import("./pages/legal/SafetyGuidelines"));
+const CreatorEarnings = lazy(() => import("./pages/legal/CreatorEarnings"));
+const GamblingDisclosure = lazy(() => import("./pages/legal/GamblingDisclosure"));
+const PartnerProgram = lazy(() => import("./pages/legal/PartnerProgram"));
+const Safety = lazy(() => import("./pages/Safety"));
+const Wallet = lazy(() => import("./pages/Wallet"));
+const PayoutRequest = lazy(() => import("./pages/PayoutRequest"));
+const AdminPayoutDashboard = lazy(() => import("./pages/admin/components/AdminPayoutDashboard"));
+const AdminLiveOfficersTracker = lazy(() => import("./pages/admin/AdminLiveOfficersTracker"));
+const VerificationPage = lazy(() => import("./pages/VerificationPage"));
+const VerificationComplete = lazy(() => import("./pages/VerificationComplete"));
+const AdminVerifiedUsers = lazy(() => import("./pages/admin/AdminVerifiedUsers"));
+const AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
+const AdminVerificationReview = lazy(() => import("./pages/admin/AdminVerificationReview"));
+const AdminPoliciesDocs = lazy(() => import("./pages/admin/AdminPoliciesDocs"));
+const LeadOfficerReview = lazy(() => import("./pages/lead-officer/Review"));
+const LeadOfficerDashboard = lazy(() => import("./pages/lead-officer/LeadOfficerDashboard").then(m => ({ default: m.LeadOfficerDashboard })));
+const ApplicationsPage = lazy(() => import("./pages/admin/Applications"));
+const AdminOfficerReports = lazy(() => import("./pages/admin/AdminOfficerReports"));
+const StoreDebug = lazy(() => import("./pages/admin/StoreDebug"));
 
 function App() {
+  console.log('🚀 App component rendering...');
   const {
     user,
     profile,
     setAuth,
     setProfile,
     setLoading,
-    setIsAdmin,
     isLoading,
   } = useAuthStore();
+  console.log('📊 App state:', { hasUser: !!user, hasProfile: !!profile, isLoading });
 
   const location = useLocation();
   const navigate = useNavigate();
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalLoading] = useState(false);
 
-  // 🔹 Auto-routing after approval
+  // 🔹 Auto-routing after approval (only on home page, not on every route change)
   useEffect(() => {
-    if (profile?.role === 'troll_officer') {
-      navigate('/officer/lounge');
-    } else if (profile?.role === 'troll_family') {
-      navigate('/family');
-    } else if (profile?.role === 'troller') {
-      navigate('/');
+    // Only auto-route from home page (/) - never redirect from other pages
+    if (location.pathname !== '/') {
+      return;
     }
-  }, [profile?.role, navigate]);
+
+    // Don't redirect if user is not logged in
+    if (!user || !profile) {
+      return;
+    }
+
+    // Only redirect officers who need orientation (lead officers and admins skip quiz)
+    if (profile?.role === 'troll_officer' || profile?.is_troll_officer) {
+      // Admins don't need orientation/quiz - they're automatically active
+      if (profile?.role === 'admin' || profile?.is_admin) {
+        // Admin is already active, no redirect needed
+        return;
+      }
+      // Lead officers don't need orientation/quiz - they're activated immediately
+      if (profile?.is_lead_officer) {
+        // Lead officer is already active, no redirect needed
+        return;
+      }
+      // Regular officers need to complete orientation/quiz
+      if (!profile?.is_officer_active) {
+        navigate('/officer/orientation', { replace: true });
+      }
+    } else if (profile?.role === 'troll_family') {
+      navigate('/family', { replace: true });
+    }
+  }, [profile?.role, profile?.is_troll_officer, profile?.is_officer_active, location.pathname, navigate, user]);
+
+  // 🔹 Check if user is kicked or banned and show re-entry modal
+  useEffect(() => {
+    if (profile && (profile.is_kicked || profile.is_banned)) {
+      // Import and show kick re-entry modal
+      import('./components/KickReentryModal').then(({ default: KickReentryModal }) => {
+        // This will be handled by a global state or context
+        // For now, we'll check on route changes
+      })
+    }
+  }, [profile?.is_kicked, profile?.is_banned]);
+
+  // 🔹 Track user IP address and check for IP bans
+  useEffect(() => {
+    const trackIP = async () => {
+      if (!user?.id) return
+
+      try {
+        // Get user's IP address
+        const ipResponse = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipResponse.json()
+        const userIP = ipData.ip
+
+        // Check if IP is banned
+        const { data: isBanned, error: banError } = await supabase.rpc('is_ip_banned', {
+          p_ip_address: userIP
+        })
+
+        if (banError) {
+          console.error('Error checking IP ban:', banError)
+          return
+        }
+
+        if (isBanned) {
+          toast.error('Your IP address has been banned. Please contact support.')
+          // Sign out user
+          await supabase.auth.signOut()
+          useAuthStore.getState().logout()
+          navigate('/auth', { replace: true })
+          return
+        }
+
+        // Update user's last known IP
+        const { data: currentProfile } = await supabase
+          .from('user_profiles')
+          .select('ip_address_history')
+          .eq('id', user.id)
+          .single()
+
+        const ipHistory = currentProfile?.ip_address_history || []
+        const newIPEntry = {
+          ip: userIP,
+          timestamp: new Date().toISOString()
+        }
+
+        // Add to history if not already present
+        const updatedHistory = [...ipHistory, newIPEntry].slice(-10) // Keep last 10 IPs
+
+        await supabase
+          .from('user_profiles')
+          .update({ 
+            last_known_ip: userIP,
+            ip_address_history: updatedHistory
+          })
+          .eq('id', user.id)
+      } catch (error) {
+        console.error('Error tracking IP:', error)
+      }
+    }
+
+    if (user) {
+      trackIP()
+    }
+  }, [user?.id])
+
+
+  // 🔹 Real-time Profile Updates
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel('profile-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Profile updated via realtime:', payload.new)
+          setProfile(payload.new as any)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id, setProfile])
 
   // 🔹 Authentication Initialization
   useEffect(() => {
@@ -101,7 +282,6 @@ function App() {
         const isAdmin = isAdminEmail(session.user.email);
 
         if (isAdmin) {
-          setIsAdmin(true);
           const cached = localStorage.getItem("admin-profile-cache");
           if (cached) setProfile(JSON.parse(cached));
           try {
@@ -154,6 +334,7 @@ function App() {
     return <Outlet />;
   };
 
+  console.log('🎨 App returning JSX...');
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
       <div className="flex min-h-screen">
@@ -166,7 +347,8 @@ function App() {
               <Routes>
 
                 {/* 🚪 Public Routes */}
-                <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
+                <Route path="/" element={user ? <Navigate to="/live" replace /> : <LandingPage />} />
+                <Route path="/auth" element={user ? <Navigate to="/live" replace /> : <Auth />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/terms" element={<TermsAgreement />} />
                 <Route path="/terms-of-service" element={<TermsOfService />} />
@@ -176,11 +358,25 @@ function App() {
                 <Route path="/creator-agreement" element={<CreatorAgreement />} />
                 <Route path="/tax-onboarding" element={<TaxOnboarding />} />
                 <Route path="/earnings" element={<MyEarnings />} />
-                <Route path="/live" element={<LandingPage />} />
+                <Route path="/account/earnings" element={<EarningsDashboard />} />
+                
+                {/* Legal/Policy Pages */}
+                <Route path="/legal" element={<PolicyCenter />} />
+                <Route path="/legal/terms" element={<TermsOfServiceLegal />} />
+                <Route path="/legal/refunds" element={<RefundPolicyLegal />} />
+                <Route path="/legal/refund" element={<RefundPolicyLegal />} />
+                <Route path="/legal/payouts" element={<PayoutPolicyLegal />} />
+                <Route path="/legal/safety" element={<SafetyGuidelinesLegal />} />
+                <Route path="/legal/creator-earnings" element={<CreatorEarnings />} />
+                <Route path="/legal/gambling-disclosure" element={<GamblingDisclosure />} />
+                <Route path="/legal/partner-program" element={<PartnerProgram />} />
+                
+                {/* Safety Page (standalone) */}
+                <Route path="/safety" element={<Safety />} />
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/live" element={<Home />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
@@ -196,13 +392,33 @@ function App() {
                   <Route path="/stream/:streamId" element={<StreamRoom />} />
                   <Route path="/stream/:id/summary" element={<StreamSummary />} />
                   <Route path="/stream-ended" element={<StreamEnded />} />
+                  
+                  {/* ⚔️ Battles */}
+                  <Route path="/battles" element={<BattleHistory />} />
+                  
+                  {/* 👥 Empire Partner Program */}
+                  <Route path="/empire-partner" element={<EmpirePartnerDashboard />} />
+                  <Route path="/empire-partner/apply" element={<EmpirePartnerApply />} />
+                  
+                  {/* 💳 Payment Methods */}
+                  <Route path="/add-card" element={<AddCard />} />
+                  
+                  {/* 📝 Creator Onboarding */}
+                  <Route path="/onboarding/creator" element={<CreatorOnboarding />} />
 
                   {/* 💰 Earnings & Coins */}
                   <Route path="/store" element={<CoinStore />} />
-                  <Route path="/earnings" element={<EarningsPayout />} />
+                  <Route path="/coins" element={<CoinStore />} />
+                  <Route path="/coins/complete" element={<CoinsComplete />} />
+                  <Route path="/wallet" element={<Wallet />} />
+                  <Route path="/payouts/setup" element={<PayoutSetupPage />} />
+                  <Route path="/payouts/request" element={<PayoutRequest />} />
+                  <Route path="/payment/callback" element={<PaymentCallback />} />
+                  <Route path="/earnings" element={<MyEarnings />} />
+                  <Route path="/my-earnings" element={<MyEarnings />} />
                   <Route path="/cashout" element={<CashoutPage />} />
+                  <Route path="/withdraw" element={<Withdraw />} />
                   <Route path="/transactions" element={<TransactionHistory />} />
-                  <Route path="/wheel" element={<TrollWheel />} />
 
                   {/* 👨‍👩‍👧 Family */}
                   <Route path="/family" element={<TrollFamily />} />
@@ -216,13 +432,102 @@ function App() {
                   <Route path="/apply/family" element={<FamilyApplication />} />
                   <Route path="/apply/officer" element={<OfficerApplication />} />
                   <Route path="/apply/troller" element={<TrollerApplication />} />
+                  <Route path="/apply/lead-officer" element={<LeadOfficerApplication />} />
 
                   {/* 👮 Officer */}
                   <Route
+                    path="/officer/onboarding"
+                    element={<OfficerOnboarding />}
+                  />
+                  <Route
+                    path="/officer/orientation"
+                    element={<Orientation />}
+                  />
+                  <Route
+                    path="/officer/orientation/quiz"
+                    element={<OrientationQuiz />}
+                  />
+                  <Route
+                    path="/lead-officer/review"
+                    element={
+                      <RequireAuth>
+                        <RequireRole roles={["admin", "troll_officer"]}>
+                          <LeadOfficerReview />
+                        </RequireRole>
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/lead-officer"
+                    element={
+                      <RequireAuth>
+                        <RequireLeadOrOwner>
+                          <LeadOfficerDashboard />
+                        </RequireLeadOrOwner>
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
                     path="/officer/lounge"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']}>
+                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
                         <TrollOfficerLounge />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/moderation"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                        <OfficerModeration />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/report/:id"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                        <ReportDetailsPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/scheduling"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                        <OfficerScheduling />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/dashboard"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']}>
+                        <OfficerDashboard />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/owc"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                        <OfficerOWCDashboard />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/training"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']}>
+                        <OfficerTrainingSimulator />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/officer/training-progress"
+                    element={
+                      <RequireRole roles={['troll_officer', 'admin']}>
+                        <OfficerTrainingProgress />
                       </RequireRole>
                     }
                   />
@@ -237,10 +542,34 @@ function App() {
                     }
                   />
                   <Route
+                    path="/store-debug"
+                    element={
+                      <RequireRole roles={['admin']}>
+                        <StoreDebug />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
                     path="/admin/payouts-mobile"
                     element={
                       <RequireRole roles={['admin']}>
                         <AdminPayoutMobile />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/admin-mobile"
+                    element={
+                      <RequireRole roles={['admin']}>
+                        <MobileAdminDashboard />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/admin/officer-reports"
+                    element={
+                      <RequireRole roles={['admin']}>
+                        <AdminOfficerReports />
                       </RequireRole>
                     }
                   />
@@ -252,7 +581,102 @@ function App() {
                       </RequireRole>
                     }
                   />
+                    <Route
+                      path="/admin/payments"
+                      element={
+                        <RequireRole roles={['admin', 'troll_officer']}>
+                          <PaymentsDashboard />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/economy"
+                      element={
+                        <RequireRole roles={['admin', 'troll_officer']}>
+                          <EconomyDashboard />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/tax-reviews"
+                      element={
+                        <RequireRole roles={['admin', 'troll_officer']}>
+                          <TaxReviewPanel />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/tax/upload"
+                      element={<TaxUpload />}
+                    />
+                    <Route
+                      path="/admin/referrals"
+                      element={
+                        <RequireRole roles={['admin', 'troll_officer']}>
+                          <ReferralBonusPanel />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/payouts"
+                      element={
+                        <RequireRole roles={['admin']}>
+                          <AdminPayoutDashboard />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/officers-live"
+                      element={
+                        <RequireRole roles={['admin']}>
+                          <AdminLiveOfficersTracker />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/verified-users"
+                      element={
+                        <RequireRole roles={['admin']}>
+                          <AdminVerifiedUsers />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/verification"
+                      element={
+                        <RequireRole roles={['admin']}>
+                          <AdminVerificationReview />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/applications"
+                      element={
+                        <RequireAuth>
+                          <RequireRole roles={['admin']}>
+                            <ApplicationsPage />
+                          </RequireRole>
+                        </RequireAuth>
+                      }
+                    />
+                    <Route
+                      path="/admin/docs/policies"
+                      element={
+                        <RequireRole roles={['admin']}>
+                          <AdminPoliciesDocs />
+                        </RequireRole>
+                      }
+                    />
                   <Route path="/rfc" element={<AdminRFC />} />
+                  <Route
+                    path="/changelog"
+                    element={
+                      <RequireRole roles={['admin']}>
+                        <Changelog />
+                      </RequireRole>
+                    }
+                  />
+                  {/* Account routes removed - Settings/Account pages no longer in sidebar */}
                 </Route>
 
                 {/* 🔙 Catch-all */}

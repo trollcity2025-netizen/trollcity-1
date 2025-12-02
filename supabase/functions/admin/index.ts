@@ -31,71 +31,263 @@ Deno.serve(async (req: Request) => {
       const command = body?.command || '';
 
       if (action === 'testing-mode' && command === 'status') {
-        const { data: testingModeSettings } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'testing_mode')
-          .single();
+        try {
+          const { data: testingModeSettings, error: settingsError } = await supabase
+            .from('app_settings')
+            .select('setting_value')
+            .eq('setting_key', 'testing_mode')
+            .maybeSingle();
 
-        const testingMode = testingModeSettings?.value || { enabled: false, signup_limit: 15, current_signups: 0 };
+          // If no settings exist, create default
+          let testingMode = { enabled: false, signup_limit: 15, current_signups: 0 };
+          
+          if (settingsError && settingsError.code !== 'PGRST116') {
+            console.error('Error fetching testing mode settings:', settingsError);
+          } else if (testingModeSettings?.setting_value) {
+            testingMode = testingModeSettings.setting_value;
+          } else {
+            // Create default settings if they don't exist
+            // Use upsert with onConflict to handle race conditions
+            const { error: upsertError } = await supabase
+              .from('app_settings')
+              .upsert({ 
+                setting_key: 'testing_mode', 
+                setting_value: testingMode,
+                description: 'Testing mode configuration for controlled signups',
+                updated_at: new Date().toISOString()
+              }, {
+                onConflict: 'setting_key',
+                ignoreDuplicates: false
+              });
+            
+            // If upsert fails, try to fetch the existing value (might have been created by another request)
+            if (upsertError) {
+              console.warn('Upsert failed, attempting to fetch existing settings:', upsertError.message);
+              const { data: existingAfterUpsert, error: fetchAfterError } = await supabase
+                .from('app_settings')
+                .select('setting_value')
+                .eq('setting_key', 'testing_mode')
+                .maybeSingle();
+              
+              if (!fetchAfterError && existingAfterUpsert?.setting_value) {
+                testingMode = existingAfterUpsert.setting_value;
+              } else if (fetchAfterError && !fetchAfterError.message?.includes('duplicate key')) {
+                console.error('Error fetching testing mode after upsert failure:', fetchAfterError);
+              }
+            }
+          }
 
-        const { data: testUsers } = await supabase
-          .from('user_profiles')
-          .select('id')
-          .eq('is_test_user', true);
+          const { data: testUsers, error: testUsersError } = await supabase
+            .from('user_profiles')
+            .select('id')
+            .eq('is_test_user', true);
 
-        const actualTestUsers = testUsers?.length || 0;
+          if (testUsersError) {
+            console.error('Error fetching test users:', testUsersError);
+          }
 
-        return new Response(JSON.stringify({
-          success: true,
-          testingMode,
-          benefits: { free_coins: 5000, bypass_family_fee: true, bypass_admin_message_fee: true },
-          actualTestUsers
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          const actualTestUsers = testUsers?.length || 0;
+
+          return new Response(JSON.stringify({
+            success: true,
+            testingMode,
+            benefits: { free_coins: 5000, bypass_family_fee: true, bypass_admin_message_fee: true },
+            actualTestUsers
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        } catch (err: any) {
+          console.error('Testing mode status error:', err);
+          return new Response(JSON.stringify({
+            success: false,
+            error: err?.message || 'Failed to fetch testing mode status',
+            testingMode: { enabled: false, signup_limit: 15, current_signups: 0 },
+            benefits: { free_coins: 5000, bypass_family_fee: true, bypass_admin_message_fee: true },
+            actualTestUsers: 0
+          }), { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
       }
 
       if (action === 'testing-mode' && command === 'toggle') {
-        const enabled = !!body?.enabled;
-        const resetCounter = !!body?.resetCounter;
+        try {
+          const enabled = !!body?.enabled;
+          const resetCounter = !!body?.resetCounter;
 
-        let currentSettings = { enabled: false, signup_limit: 15, current_signups: 0 };
-        const { data: existing } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'testing_mode')
-          .single();
-        if (existing) currentSettings = existing.value;
+          let currentSettings = { enabled: false, signup_limit: 15, current_signups: 0 };
+          const { data: existing, error: fetchError } = await supabase
+            .from('app_settings')
+            .select('setting_value')
+            .eq('setting_key', 'testing_mode')
+            .maybeSingle();
+          
+          if (fetchError && fetchError.code !== 'PGRST116') {
+            console.error('Error fetching testing mode settings:', fetchError);
+          } else if (existing?.setting_value) {
+            currentSettings = existing.setting_value;
+          }
 
-        const newSettings = {
-          ...currentSettings,
-          enabled,
-          current_signups: resetCounter ? 0 : currentSettings.current_signups
-        };
+          const newSettings = {
+            ...currentSettings,
+            enabled,
+            current_signups: resetCounter ? 0 : currentSettings.current_signups
+          };
 
-        const { error } = await supabase
-          .from('app_settings')
-          .upsert({ key: 'testing_mode', value: newSettings });
-        if (error) throw error;
+          // Try update first (most common case)
+          const { data: updated, error: updateError } = await supabase
+            .from('app_settings')
+            .update({
+              setting_value: newSettings,
+              description: 'Testing mode configuration for controlled signups',
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'testing_mode')
+            .select('setting_value')
+            .maybeSingle();
 
-        return new Response(JSON.stringify({ success: true, testingMode: newSettings }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          let finalSettings = newSettings;
+
+          // If update didn't find a row, insert instead
+          if (updateError || !updated) {
+            const { error: insertError } = await supabase
+              .from('app_settings')
+              .insert({
+                setting_key: 'testing_mode',
+                setting_value: newSettings,
+                description: 'Testing mode configuration for controlled signups',
+                updated_at: new Date().toISOString()
+              })
+              .select('setting_value')
+              .maybeSingle();
+
+            // If insert fails due to unique constraint (race condition), try update again
+            if (insertError) {
+              if (insertError.message?.includes('unique constraint') || insertError.message?.includes('duplicate key')) {
+                // Another process inserted it, try update one more time
+                const { data: retryUpdated, error: retryError } = await supabase
+                  .from('app_settings')
+                  .update({
+                    setting_value: newSettings,
+                    description: 'Testing mode configuration for controlled signups',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('setting_key', 'testing_mode')
+                  .select('setting_value')
+                  .maybeSingle();
+
+                if (retryError) {
+                  console.error('Error updating testing mode after retry:', retryError);
+                  throw retryError;
+                }
+                finalSettings = retryUpdated?.setting_value || newSettings;
+              } else {
+                console.error('Error inserting testing mode:', insertError);
+                throw insertError;
+              }
+            } else {
+              finalSettings = newSettings;
+            }
+          } else {
+            finalSettings = updated?.setting_value || newSettings;
+          }
+
+          console.log('Testing mode toggle - enabled:', enabled, 'finalSettings:', finalSettings);
+
+          return new Response(JSON.stringify({ 
+            success: true, 
+            testingMode: finalSettings 
+          }), { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        } catch (err: any) {
+          console.error('Testing mode toggle error:', err);
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: err?.message || 'Failed to toggle testing mode' 
+          }), { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
       }
 
       if (action === 'testing-mode' && command === 'reset') {
-        const { data: existing } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'testing_mode')
-          .single();
+        try {
+          const { data: existing, error: fetchError } = await supabase
+            .from('app_settings')
+            .select('setting_value')
+            .eq('setting_key', 'testing_mode')
+            .maybeSingle();
 
-        const currentSettings = existing?.value || { enabled: false, signup_limit: 15, current_signups: 0 };
-        const newSettings = { ...currentSettings, current_signups: 0 };
+          if (fetchError && fetchError.code !== 'PGRST116') {
+            console.error('Error fetching testing mode settings:', fetchError);
+          }
 
-        const { error } = await supabase
-          .from('app_settings')
-          .upsert({ key: 'testing_mode', value: newSettings });
-        if (error) throw error;
+          const currentSettings = existing?.setting_value || { enabled: false, signup_limit: 15, current_signups: 0 };
+          const newSettings = { ...currentSettings, current_signups: 0 };
 
-        return new Response(JSON.stringify({ success: true, testingMode: newSettings }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          // Try update first
+          const { data: updated, error: updateError } = await supabase
+            .from('app_settings')
+            .update({
+              setting_value: newSettings,
+              description: 'Testing mode configuration for controlled signups',
+              updated_at: new Date().toISOString()
+            })
+            .eq('setting_key', 'testing_mode')
+            .select('setting_value')
+            .maybeSingle();
+
+          // If update didn't find a row, insert instead
+          if (updateError || !updated) {
+            const { error: insertError } = await supabase
+              .from('app_settings')
+              .insert({
+                setting_key: 'testing_mode',
+                setting_value: newSettings,
+                description: 'Testing mode configuration for controlled signups',
+                updated_at: new Date().toISOString()
+              })
+              .select('setting_value')
+              .maybeSingle();
+
+            // If insert fails due to unique constraint (race condition), try update again
+            if (insertError) {
+              if (insertError.message?.includes('unique constraint') || insertError.message?.includes('duplicate key')) {
+                // Another process inserted it, try update one more time
+                const { error: retryError } = await supabase
+                  .from('app_settings')
+                  .update({
+                    setting_value: newSettings,
+                    description: 'Testing mode configuration for controlled signups',
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('setting_key', 'testing_mode');
+
+                if (retryError) {
+                  console.error('Error resetting testing mode counter after retry:', retryError);
+                  throw retryError;
+                }
+              } else {
+                console.error('Error resetting testing mode counter:', insertError);
+                throw insertError;
+              }
+            }
+          }
+
+          return new Response(JSON.stringify({ success: true, testingMode: newSettings }), { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        } catch (err: any) {
+          console.error('Testing mode reset error:', err);
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: err?.message || 'Failed to reset testing mode counter' 
+          }), { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
       }
     }
 
@@ -280,8 +472,16 @@ Deno.serve(async (req: Request) => {
 
     // /wheel/toggle
     if (pathname === 'wheel/toggle' && req.method === 'POST') {
-      const body = await req.json();
-      const enabled = !!body?.enabled;
+      // Use the body already parsed at the top level if available, otherwise parse it
+      let wheelBody = body;
+      if (!wheelBody || Object.keys(wheelBody).length === 0) {
+        try {
+          wheelBody = await req.json();
+        } catch (_) {
+          wheelBody = {};
+        }
+      }
+      const enabled = !!wheelBody?.enabled;
 
       const { data: cfg } = await supabase
         .from('wheel_config')
@@ -309,8 +509,16 @@ Deno.serve(async (req: Request) => {
 
     // /troll-events/spawn
     if (pathname === 'troll-events/spawn' && req.method === 'POST') {
-      const body = await req.json();
-      const { troll_type = 'green', reward_amount = 10, duration_minutes = 2 } = body;
+      // Use the body already parsed at the top level if available
+      let spawnBody = body;
+      if (!spawnBody || Object.keys(spawnBody).length === 0) {
+        try {
+          spawnBody = await req.json();
+        } catch (_) {
+          spawnBody = {};
+        }
+      }
+      const { troll_type = 'green', reward_amount = 10, duration_minutes = 2 } = spawnBody;
 
       const { data: eventId, error } = await supabase.rpc('spawn_troll_event', {
         p_troll_type: troll_type,
@@ -332,8 +540,16 @@ Deno.serve(async (req: Request) => {
 
     // /troll-events/claim
     if (pathname === 'troll-events/claim' && req.method === 'POST') {
-      const body = await req.json();
-      const { event_id, user_id } = body;
+      // Use the body already parsed at the top level if available
+      let claimBody = body;
+      if (!claimBody || Object.keys(claimBody).length === 0) {
+        try {
+          claimBody = await req.json();
+        } catch (_) {
+          claimBody = {};
+        }
+      }
+      const { event_id, user_id } = claimBody;
 
       // Get user from auth header
       const authHeader = req.headers.get('authorization');

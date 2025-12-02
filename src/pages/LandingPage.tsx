@@ -1,9 +1,21 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Video, Gift, Users, Star, Zap } from 'lucide-react';
+import { useAuthStore } from '../lib/store';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  const handleEnterTrollCity = () => {
+    // If user is logged in, go directly to /live
+    // If not logged in, go to /auth to log in first
+    if (user) {
+      navigate('/live');
+    } else {
+      navigate('/auth');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
@@ -23,16 +35,18 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
-                onClick={() => navigate('/auth')}
+                type="button"
+                onClick={handleEnterTrollCity}
                 className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold rounded-xl hover:scale-105 transition transform"
               >
-                Join the Chaos
+                Enter Troll City
               </button>
               <button
-                onClick={() => navigate('/')}
+                type="button"
+                onClick={() => navigate('/onboarding/creator')}
                 className="px-8 py-4 border-2 border-cyan-400 text-cyan-400 font-bold rounded-xl hover:bg-cyan-400 hover:text-black transition"
               >
-                Explore Live Streams
+                Become a Creator
               </button>
             </div>
           </div>
@@ -250,7 +264,8 @@ export default function LandingPage() {
             Start streaming, earning, and building your legacy in Troll City today.
           </p>
           <button
-            onClick={() => navigate('/auth')}
+            type="button"
+            onClick={handleEnterTrollCity}
             className="px-12 py-4 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-xl rounded-xl hover:scale-105 transition transform"
           >
             Get Started Now

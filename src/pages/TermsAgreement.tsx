@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
@@ -164,7 +164,7 @@ export default function TermsAgreement() {
               className="mt-1 w-5 h-5 accent-troll-purple"
             />
             <span className="text-gray-300">
-              I have read and agree to the <a href="/terms-of-service" target="_blank" className="text-troll-purple underline">Terms of Service</a>.
+              I have read and agree to the <Link to="/terms-of-service" target="_blank" className="text-troll-purple underline">Terms of Service</Link>.
               I understand that violating these terms may result in permanent ban with complete account reset.
               I am at least 18 years old.
             </span>
@@ -178,7 +178,7 @@ export default function TermsAgreement() {
               className="mt-1 w-5 h-5 accent-troll-purple"
             />
             <span className="text-gray-300">
-              I have read and agree to the <a href="/privacy-policy" target="_blank" className="text-troll-purple underline">Privacy Policy</a>.
+              I have read and agree to the <Link to="/privacy-policy" target="_blank" className="text-troll-purple underline">Privacy Policy</Link>.
             </span>
           </label>
 
@@ -190,7 +190,7 @@ export default function TermsAgreement() {
               className="mt-1 w-5 h-5 accent-troll-purple"
             />
             <span className="text-gray-300">
-              I have read and agree to the <a href="/payment-terms" target="_blank" className="text-troll-purple underline">Payment Terms</a>.
+              I have read and agree to the <Link to="/payment-terms" target="_blank" className="text-troll-purple underline">Payment Terms</Link>.
             </span>
           </label>
 
@@ -202,7 +202,7 @@ export default function TermsAgreement() {
               className="mt-1 w-5 h-5 accent-troll-purple"
             />
             <span className="text-gray-300">
-              I have read and agree to the <a href="/creator-agreement" target="_blank" className="text-troll-purple underline">Creator Earning / Cashout Agreement</a>,
+              I have read and agree to the <Link to="/creator-agreement" target="_blank" className="text-troll-purple underline">Creator Earning / Cashout Agreement</Link>,
               including 1099 tax reporting requirements.
             </span>
           </label>

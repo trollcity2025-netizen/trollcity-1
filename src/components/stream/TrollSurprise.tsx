@@ -9,7 +9,7 @@ interface TrollSurpriseProps {
 export default function TrollSurprise({ streamId }: TrollSurpriseProps) {
   const [visible, setVisible] = useState(false)
   const [canClick, setCanClick] = useState(false)
-  const { user, profile } = useAuthStore()
+  const { user, profile, setProfile } = useAuthStore()
 
   // Track when user joined this stream
   useEffect(() => {
@@ -83,6 +83,26 @@ export default function TrollSurprise({ streamId }: TrollSurpriseProps) {
               free_coin_balance: (currentProfile.free_coin_balance || 0) + 10,
             })
             .eq('id', user.id)
+        }
+      }
+
+      // Refresh profile from database to get accurate balance
+      const { data: updatedProfile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (updatedProfile) {
+        useAuthStore.getState().setProfile(updatedProfile as any)
+      } else {
+        // Fallback: Instantly update local profile balance if refresh fails
+        if (profile) {
+          const newBalance = (profile.free_coin_balance || 0) + 10
+          setProfile({
+            ...profile,
+            free_coin_balance: newBalance,
+          })
         }
       }
 

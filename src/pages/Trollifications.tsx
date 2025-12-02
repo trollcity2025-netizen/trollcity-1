@@ -1,62 +1,28 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Bell, Check, Trash2, Gift, Trophy, AlertCircle, MessageSquare, Heart } from 'lucide-react'
-
-type Notification = {
-  id: string
-  user_id: string
-  type: string
-  content: string
-  read: boolean
-  created_at: string
-  metadata?: any
-}
+import { Bell, Check, Trash2, Gift, Trophy, AlertCircle, MessageSquare, Heart, Shield, DollarSign, Sword, Zap } from 'lucide-react'
+import { Notification, NotificationType } from '../types/notifications'
 
 export default function Trollifications() {
-  const { profile } = useAuthStore()
+  const { profile, user } = useAuthStore()
+  const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
 
-  useEffect(() => {
-    loadNotifications()
-    
-    // Realtime subscription for new notifications
-    if (!profile?.id) return
-    
-    const channel = supabase
-      .channel(`notifications_${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${profile.id}`
-        },
-        () => {
-          loadNotifications()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [profile?.id])
-
-  const loadNotifications = async () => {
-    if (!profile?.id) return
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) return
     
     setLoading(true)
     try {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', profile.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(100)
       
       if (error) throw error
       setNotifications(data || [])
@@ -65,66 +31,180 @@ export default function Trollifications() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id])
+
+  useEffect(() => {
+    loadNotifications()
+    
+    // Realtime subscription for notifications
+    if (!user?.id) return
+    
+    const channel = supabase
+      .channel(`notifications_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          const newNotif = payload.new as Notification
+          setNotifications((prev) => [newNotif, ...prev])
+          setLoading(false)
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          const updatedNotif = payload.new as Notification
+          setNotifications((prev) => 
+            prev.map(n => n.id === updatedNotif.id ? updatedNotif : n)
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          const deletedId = (payload.old as any).id
+          setNotifications((prev) => prev.filter(n => n.id !== deletedId))
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id, loadNotifications])
+
+  // Refresh notifications periodically to catch any missed updates
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const interval = setInterval(() => {
+      loadNotifications()
+    }, 30000) // Refresh every 30 seconds as backup
+    
+    return () => clearInterval(interval)
+  }, [user?.id, loadNotifications])
 
   const markAsRead = async (id: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ is_read: true })
         .eq('id', id)
       
+      if (error) throw error
+      
+      // Optimistically update UI immediately (realtime will confirm)
       setNotifications(prev => 
-        prev.map(n => n.id === id ? { ...n, read: true } : n)
+        prev.map(n => n.id === id ? { ...n, is_read: true } : n)
       )
     } catch (err) {
       console.error('Error marking notification as read:', err)
+      // Reload on error to sync state
+      loadNotifications()
     }
   }
 
   const markAllAsRead = async () => {
+    if (!user?.id) return
+    
     try {
-      await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('user_id', profile?.id)
-        .eq('read', false)
+      const { data, error } = await supabase
+        .rpc('mark_all_notifications_read', { p_user_id: user.id })
       
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      if (error) throw error
+      
+      // Optimistically update UI immediately (realtime will confirm)
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     } catch (err) {
       console.error('Error marking all as read:', err)
+      // Reload on error to sync state
+      loadNotifications()
     }
   }
 
   const deleteNotification = async (id: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .delete()
         .eq('id', id)
       
+      if (error) throw error
+      
+      // Optimistically update UI immediately (realtime will confirm)
       setNotifications(prev => prev.filter(n => n.id !== id))
     } catch (err) {
       console.error('Error deleting notification:', err)
+      // Reload on error to sync state
+      loadNotifications()
     }
   }
 
-  const getIcon = (type: string) => {
+  const getIcon = (type: NotificationType) => {
     switch (type) {
-      case 'gift': return <Gift className="w-5 h-5 text-pink-400" />
-      case 'achievement': return <Trophy className="w-5 h-5 text-yellow-400" />
-      case 'alert': return <AlertCircle className="w-5 h-5 text-red-400" />
-      case 'message': return <MessageSquare className="w-5 h-5 text-blue-400" />
-      case 'like': return <Heart className="w-5 h-5 text-pink-400" />
+      case 'gift_received': return <Gift className="w-5 h-5 text-pink-400" />
+      case 'badge_unlocked': return <Trophy className="w-5 h-5 text-yellow-400" />
+      case 'payout_status': return <DollarSign className="w-5 h-5 text-green-400" />
+      case 'moderation_action': return <AlertCircle className="w-5 h-5 text-red-400" />
+      case 'battle_result': return <Sword className="w-5 h-5 text-purple-400" />
+      case 'officer_update': return <Shield className="w-5 h-5 text-blue-400" />
+      case 'system_announcement': return <Zap className="w-5 h-5 text-cyan-400" />
       default: return <Bell className="w-5 h-5 text-purple-400" />
     }
   }
 
+  const handleNotificationClick = (notif: Notification) => {
+    // Mark as read when clicked
+    if (!notif.is_read) {
+      markAsRead(notif.id)
+    }
+
+    // Navigate based on notification type
+    if (notif.metadata) {
+      if (notif.metadata.stream_id) {
+        navigate(`/stream/${notif.metadata.stream_id}`)
+      } else if (notif.metadata.sender_id) {
+        // Get sender username
+        supabase
+          .from('user_profiles')
+          .select('username')
+          .eq('id', notif.metadata.sender_id)
+          .single()
+          .then(({ data }) => {
+            if (data?.username) {
+              navigate(`/profile/${data.username}`)
+            }
+          })
+      } else if (notif.metadata.payout_id) {
+        navigate('/my-earnings')
+      } else if (notif.metadata.battle_id) {
+        navigate('/battles')
+      }
+    }
+  }
+
   const filteredNotifications = filter === 'unread' 
-    ? notifications.filter(n => !n.read) 
+    ? notifications.filter(n => !n.is_read) 
     : notifications
 
-  const unreadCount = notifications.filter(n => !n.read).length
+  const unreadCount = notifications.filter(n => !n.is_read).length
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-8">
@@ -190,8 +270,9 @@ export default function Trollifications() {
               filteredNotifications.map((notif) => (
                 <div
                   key={notif.id}
-                  className={`p-4 hover:bg-[#0D0D0D] transition-colors ${
-                    !notif.read ? 'bg-purple-900/10 border-l-4 border-purple-500' : ''
+                  onClick={() => handleNotificationClick(notif)}
+                  className={`p-4 hover:bg-[#0D0D0D] transition-colors cursor-pointer ${
+                    !notif.is_read ? 'bg-purple-900/10 border-l-4 border-purple-500' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -199,16 +280,20 @@ export default function Trollifications() {
                       {getIcon(notif.type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${!notif.read ? 'font-semibold text-white' : 'text-gray-300'}`}>
-                        {notif.content}
+                      <p className={`text-sm font-semibold ${!notif.is_read ? 'text-white' : 'text-gray-300'}`}>
+                        {notif.title}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className={`text-sm mt-1 ${!notif.is_read ? 'text-gray-200' : 'text-gray-400'}`}>
+                        {notif.message}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-2">
                         {new Date(notif.created_at).toLocaleString()}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {!notif.read && (
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {!notif.is_read && (
                         <button
+                          type="button"
                           onClick={() => markAsRead(notif.id)}
                           className="p-2 hover:bg-purple-500/20 rounded-lg transition-colors"
                           title="Mark as read"
@@ -217,6 +302,7 @@ export default function Trollifications() {
                         </button>
                       )}
                       <button
+                        type="button"
                         onClick={() => deleteNotification(notif.id)}
                         className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
                         title="Delete"

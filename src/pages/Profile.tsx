@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Camera, Edit, Star, CreditCard, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift } from 'lucide-react'
+import { Camera, Edit, Star, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { getTierFromXP, getLevelFromXP } from '../lib/tierSystem'
 import XPProgressBar from '../components/XPProgressBar'
 import SendGiftModal from '../components/SendGiftModal'
+import GiftersModal from '../components/GiftersModal'
+import ReportModal from '../components/ReportModal'
+import { EmpireBadge } from '../components/EmpireBadge'
 
 export default function Profile() {
   const { profile, user } = useAuthStore()
@@ -18,7 +21,6 @@ export default function Profile() {
     'profile_info',
     'stats', 
     'entrance_effects',
-    'payment_methods',
     'account_settings'
   ])
   const [editingProfile, setEditingProfile] = useState(false)
@@ -35,8 +37,17 @@ export default function Profile() {
   const [isFollowing, setIsFollowing] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [showGiftModal, setShowGiftModal] = useState(false)
-  const [wheelWinnings, setWheelWinnings] = useState<any[]>([])
-  const [wheelSettings, setWheelSettings] = useState({ winningsEnabled: true, insuranceEnabled: true })
+  const [showGiftersModal, setShowGiftersModal] = useState(false)
+  const [giftersModalType, setGiftersModalType] = useState<'received' | 'sent'>('received')
+  const [coinsReceived, setCoinsReceived] = useState(0)
+  const [coinsSent, setCoinsSent] = useState(0)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [userPosts, setUserPosts] = useState<any[]>([])
+  const [showCreatePost, setShowCreatePost] = useState(false)
+  const [newPostContent, setNewPostContent] = useState('')
+  const [newPostImage, setNewPostImage] = useState<File | null>(null)
+  const [hasAccess, setHasAccess] = useState<boolean>(true)
+  const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
 
   // Initialize view price from profile
   useEffect(() => {
@@ -114,50 +125,88 @@ export default function Profile() {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        if (!profile?.id) return
+        if (!profile?.id) {
+          console.log('Profile not loaded yet, waiting...')
+          return
+        }
+        
         let target = profile
         
         // If viewing another user's profile by ID
         if (userId && userId !== user?.id) {
-          const { data } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
-            .maybeSingle()
-          
-          if (data) {
-            target = data
-            setViewed(data)
-          } else {
-            // User not found, redirect to own profile
+          try {
+            const { data, error } = await supabase
+              .from('user_profiles')
+              .select('*, avatar_url')
+              .eq('id', userId)
+              .maybeSingle()
+            
+            if (error) {
+              console.error('Error loading user by ID:', error)
+              toast.error('Failed to load user profile')
+              navigate('/profile/me')
+              return
+            }
+            
+            if (data) {
+              target = data
+              setViewed(data)
+            } else {
+              // User not found, redirect to own profile
+              toast.error('User not found')
+              navigate('/profile/me')
+              return
+            }
+          } catch (err) {
+            console.error('Error in userId lookup:', err)
+            toast.error('Failed to load profile')
             navigate('/profile/me')
             return
           }
         }
         // If viewing another user's profile by username
         else if (routeUsername && profile?.username !== routeUsername) {
-          // First try to find by username
-          let { data } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('username', routeUsername)
-            .maybeSingle()
-          
-          // If not found by username, try email prefix match
-          if (!data) {
-            const { data: emailMatch } = await supabase
+          try {
+            // Decode username in case it was URL encoded
+            const decodedUsername = decodeURIComponent(routeUsername)
+            
+            // First try to find by username
+            let { data, error } = await supabase
               .from('user_profiles')
-              .select('*')
-              .ilike('email', `${routeUsername}@%`)
+              .select('*, avatar_url')
+              .eq('username', decodedUsername)
               .maybeSingle()
-            data = emailMatch
-          }
-          
-          if (data) {
-            target = data
-            setViewed(data)
-          } else {
-            // User not found, redirect to own profile
+            
+            // If not found by username, try email prefix match
+            if (!data && !error) {
+              const { data: emailMatch, error: emailError } = await supabase
+                .from('user_profiles')
+                .select('*, avatar_url')
+                .ilike('email', `${decodedUsername}@%`)
+                .maybeSingle()
+              data = emailMatch
+              error = emailError
+            }
+            
+            if (error) {
+              console.error('Error loading user by username:', error)
+              toast.error('Failed to load user profile')
+              navigate('/profile/me')
+              return
+            }
+            
+            if (data) {
+              target = data
+              setViewed(data)
+            } else {
+              // User not found, redirect to own profile
+              toast.error('User not found')
+              navigate('/profile/me')
+              return
+            }
+          } catch (err) {
+            console.error('Error in username lookup:', err)
+            toast.error('Failed to load profile')
             navigate('/profile/me')
             return
           }
@@ -166,40 +215,136 @@ export default function Profile() {
           setViewed(null)
         }
         
-        const { data: streams } = await supabase
-          .from('streams')
-          .select('id')
-          .eq('broadcaster_id', target.id)
-        setStreamsCreated((streams || []).length)
-        const { data: followers } = await supabase
-          .from('user_follows')
-          .select('id')
-          .eq('following_id', target.id)
-        setFollowersCount((followers || []).length)
-        const { data: following } = await supabase
-          .from('user_follows')
-          .select('id')
-          .eq('follower_id', target.id)
-        setFollowingCount((following || []).length)
+        // Ensure target is valid before proceeding
+        if (!target || !target.id) {
+          console.error('Invalid target profile:', target)
+          return
+        }
+        
+        // Load stats for the target profile
+        try {
+          const { data: streams, error: streamsError } = await supabase
+            .from('streams')
+            .select('id')
+            .eq('broadcaster_id', target.id)
+          
+          if (streamsError) {
+            console.error('Error loading streams:', streamsError)
+          } else {
+            setStreamsCreated((streams || []).length)
+          }
+        } catch (err) {
+          console.error('Error fetching streams:', err)
+        }
+        
+        try {
+          const { data: followers, error: followersError } = await supabase
+            .from('user_follows')
+            .select('id')
+            .eq('following_id', target.id)
+          
+          if (followersError) {
+            console.error('Error loading followers:', followersError)
+          } else {
+            setFollowersCount((followers || []).length)
+          }
+        } catch (err) {
+          console.error('Error fetching followers:', err)
+        }
+        
+        try {
+          const { data: following, error: followingError } = await supabase
+            .from('user_follows')
+            .select('id')
+            .eq('follower_id', target.id)
+          
+          if (followingError) {
+            console.error('Error loading following:', followingError)
+          } else {
+            setFollowingCount((following || []).length)
+          }
+        } catch (err) {
+          console.error('Error fetching following:', err)
+        }
         
         // Check if current user is following this profile
         if (user?.id && target.id !== user.id) {
-          const { data: followCheck } = await supabase
-            .from('user_follows')
-            .select('id')
-            .eq('follower_id', user.id)
-            .eq('following_id', target.id)
-            .maybeSingle()
-          setIsFollowing(!!followCheck)
+          try {
+            const { data: followCheck, error: followError } = await supabase
+              .from('user_follows')
+              .select('id')
+              .eq('follower_id', user.id)
+              .eq('following_id', target.id)
+              .maybeSingle()
+            
+            if (!followError) {
+              setIsFollowing(!!followCheck)
+            }
+            
+            // Check if current user has blocked this profile
+            const { data: blockCheck, error: blockError } = await supabase
+              .from('blocked_users')
+              .select('id')
+              .eq('blocker_id', user.id)
+              .eq('blocked_id', target.id)
+              .maybeSingle()
+            
+            if (!blockError) {
+              setIsBlocked(!!blockCheck)
+            }
+            
+            // Check profile view access (don't auto-charge, just check)
+            const viewPrice = target.profile_view_price || 0
+            if (viewPrice > 0) {
+              const accessKey = `tc-view-access-${user.id}-${target.id}`
+              const lastAccess = localStorage.getItem(accessKey)
+              const accessExpiry = 24 * 60 * 60 * 1000 // 24 hours
+              
+              // Check if access is still valid
+              if (lastAccess && (Date.now() - parseInt(lastAccess)) < accessExpiry) {
+                setHasAccess(true)
+              } else {
+                // Access expired or never granted - user needs to unlock manually
+                setHasAccess(false)
+              }
+            } else {
+              setHasAccess(true) // Free profile
+            }
+          } catch (err) {
+            console.error('Error checking follow/block status:', err)
+            setHasAccess(true) // Default to true on error
+          }
+        } else {
+          setHasAccess(true) // Own profile always has access
+        }
+        
+        // Load coins received and sent from gifts table
+        try {
+          const { data: receivedGifts, error: receivedError } = await supabase
+            .from('gifts')
+            .select('coins_spent')
+            .eq('receiver_id', target.id)
           
-          // Check if current user has blocked this profile
-          const { data: blockCheck } = await supabase
-            .from('blocked_users')
-            .select('id')
-            .eq('blocker_id', user.id)
-            .eq('blocked_id', target.id)
-            .maybeSingle()
-          setIsBlocked(!!blockCheck)
+          if (!receivedError && receivedGifts) {
+            const totalReceived = receivedGifts.reduce((sum, gift) => sum + (gift.coins_spent || 0), 0)
+            setCoinsReceived(totalReceived)
+          }
+        } catch (err) {
+          console.error('Error loading coins received:', err)
+        }
+        
+        try {
+          const { data: sentGifts, error: sentError } = await supabase
+            .from('gifts')
+            .select('coins_spent')
+            .eq('sender_id', target.id)
+          
+          if (!sentError && sentGifts) {
+            const totalSent = sentGifts.reduce((sum, gift) => sum + (gift.coins_spent || 0), 0)
+            setCoinsSent(totalSent)
+          }
+        } catch (err) {
+          console.error('Error loading coins sent:', err)
         }
         
         // Try to load entrance effects (table might not exist yet)
@@ -220,7 +365,10 @@ export default function Profile() {
           // Table doesn't exist yet, that's okay
           console.log('Entrance effects table not available:', err)
         }
-      } catch {}
+      } catch (err) {
+        console.error('Error in loadStats:', err)
+        toast.error('Failed to load profile data')
+      }
     }
     loadStats()
     try {
@@ -236,39 +384,93 @@ export default function Profile() {
       }
     } catch {}
 
-    // Load wheel data
-    const loadWheelData = async () => {
-      if (!profile?.id) return
-      try {
-        const { data: winnings } = await supabase
-          .from('wheel_spins')
-          .select('*')
-          .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
-          .limit(50)
-        setWheelWinnings(winnings || [])
-
-        // Load settings from profile or localStorage
-        const winningsEnabled = localStorage.getItem(`tc-wheel-winnings-${profile.id}`) !== 'false'
-        const insuranceEnabled = localStorage.getItem(`tc-wheel-insurance-${profile.id}`) !== 'false'
-        setWheelSettings({ winningsEnabled, insuranceEnabled })
-      } catch (err) {
-        console.error('Failed to load wheel data:', err)
-      }
-    }
-    loadWheelData()
   }, [profile?.id, user?.id, routeUsername])
 
   const viewedPrice = () => {
     const p = Number(viewed?.profile_view_price || localStorage.getItem(`tc-profile-view-price-${viewed?.id}`) || 0)
     return isNaN(p) ? 0 : p
   }
-  const hasAccessToViewed = () => {
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!user || !viewed || profile?.id === viewed.id) {
+        setHasAccess(true)
+        setCheckingAccess(false)
+        return
+      }
+      
+      setCheckingAccess(true)
+      const price = (useAuthStore.getState().profile?.role === 'admin') ? 0 : viewedPrice()
+      if (price <= 0) {
+        setHasAccess(true)
+        setCheckingAccess(false)
+        return
+      }
+      
+      // Check localStorage first
+      try {
+        const access = localStorage.getItem(`tc-view-access-${user.id}-${viewed.id}`)
+        if (access) {
+          setHasAccess(true)
+          setCheckingAccess(false)
+          return
+        }
+      } catch {}
+      
+      // Check via RPC
+      try {
+        const { data, error } = await supabase.rpc('pay_for_profile_view', {
+          p_viewer_id: user.id,
+          p_profile_owner_id: viewed.id
+        })
+        
+        if (error && error.message.includes('Insufficient')) {
+          setHasAccess(false)
+        } else if (data?.has_access) {
+          setHasAccess(true)
+        } else {
+          setHasAccess(false)
+        }
+      } catch {
+        setHasAccess(false)
+      } finally {
+        setCheckingAccess(false)
+      }
+    }
+    
+    if (viewed && user && viewed.id !== user.id) {
+      checkAccess()
+    } else {
+      setHasAccess(true)
+      setCheckingAccess(false)
+    }
+  }, [viewed?.id, user?.id, profile?.id])
+
+  const hasAccessToViewed = async () => {
     if (!user || !viewed) return false
     if (profile?.id === viewed.id) return true
-        const price = (useAuthStore.getState().profile?.role === 'admin') ? 0 : viewedPrice()
+    const price = (useAuthStore.getState().profile?.role === 'admin') ? 0 : viewedPrice()
     if (price <= 0) return true
+    
+    // Check if user has paid for access
     try {
+      const { data, error } = await supabase.rpc('pay_for_profile_view', {
+        p_viewer_id: user.id,
+        p_profile_owner_id: viewed.id
+      })
+      
+      if (error) {
+        // If payment is required and user doesn't have access, return false
+        if (error.message.includes('Insufficient')) {
+          return false
+        }
+      }
+      
+      if (data?.has_access) {
+        return true
+      }
+      
+      // Fallback to localStorage check
       const access = localStorage.getItem(`tc-view-access-${user.id}-${viewed.id}`)
       return Boolean(access)
     } catch {
@@ -278,28 +480,53 @@ export default function Profile() {
   const unlockViewedProfile = async () => {
     if (!user || !viewed || !profile) return
     const price = viewedPrice()
-    if (price <= 0) return
-    if ((profile.paid_coin_balance || 0) < price) return toast.error('Not enough paid coins')
+    if (price <= 0) {
+      setHasAccess(true)
+      return
+    }
+    
     try {
-      const newBal = (profile.paid_coin_balance || 0) - price
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ paid_coin_balance: newBal })
-        .eq('id', profile.id)
-      if (error) throw error
-      await supabase
-        .from('coin_transactions')
-        .insert([{ user_id: profile.id, type: 'purchase', amount: -price, description: 'Profile view unlock', metadata: { target_id: viewed.id } }])
-      useAuthStore.getState().setProfile({ ...profile, paid_coin_balance: newBal } as any)
-    } catch {}
-    try { localStorage.setItem(`tc-view-access-${user.id}-${viewed.id}`, String(Date.now())) } catch {}
-    toast.success('Unlocked')
+      const { data, error } = await supabase.rpc('pay_for_profile_view', {
+        p_viewer_id: user.id,
+        p_profile_owner_id: viewed.id
+      })
+      
+      if (error) {
+        if (error.message.includes('Insufficient')) {
+          toast.error('Not enough paid coins')
+        } else {
+          toast.error('Failed to unlock profile')
+        }
+        return
+      }
+      
+      if (data?.success && data?.has_access) {
+        setHasAccess(true)
+        try { localStorage.setItem(`tc-view-access-${user.id}-${viewed.id}`, String(Date.now())) } catch {}
+        toast.success('Profile unlocked!')
+        
+        // Refresh profile balance
+        const { data: updatedProfile } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', profile.id)
+          .single()
+        if (updatedProfile) {
+          useAuthStore.getState().setProfile(updatedProfile as any)
+        }
+      }
+    } catch (error: any) {
+      console.error('Error unlocking profile:', error)
+      toast.error('Failed to unlock profile')
+    }
   }
 
   const handleFollow = async () => {
     if (!user || !viewed || viewed.id === user.id) return
-    try {
-      if (isFollowing) {
+    
+    // If unfollowing, no coin cost
+    if (isFollowing) {
+      try {
         await supabase
           .from('user_follows')
           .delete()
@@ -308,22 +535,82 @@ export default function Profile() {
         setIsFollowing(false)
         setFollowersCount(prev => Math.max(0, prev - 1))
         toast.success('Unfollowed')
-      } else {
-        await supabase
-          .from('user_follows')
-          .insert({ follower_id: user.id, following_id: viewed.id })
-        setIsFollowing(true)
-        setFollowersCount(prev => prev + 1)
-        toast.success('Following!')
+      } catch (error) {
+        console.error('Follow error:', error)
+        toast.error('Failed to unfollow')
       }
-    } catch (error) {
+      return
+    }
+    
+    // Following requires coins - use spend_coins RPC
+    const FOLLOW_COST = 100 // 100 paid coins to follow
+    try {
+      if ((profile?.paid_coin_balance || 0) < FOLLOW_COST) {
+        toast.error(`You need ${FOLLOW_COST} paid coins to follow`)
+        return
+      }
+      
+      // Deduct coins using spend_coins RPC
+      const { data: spendResult, error: spendError } = await supabase.rpc('spend_coins', {
+        p_sender_id: user.id,
+        p_receiver_id: viewed.id, // Coins go to the person being followed
+        p_coin_amount: FOLLOW_COST,
+        p_source: 'follow',
+        p_item: `Follow @${viewed.username}`
+      })
+      
+      if (spendError) {
+        throw spendError
+      }
+      
+      if (spendResult && typeof spendResult === 'object' && 'success' in spendResult && !spendResult.success) {
+        const errorMsg = (spendResult as any).error || 'Failed to follow'
+        toast.error(errorMsg)
+        return
+      }
+      
+      // Create follow relationship
+      const { error: followError } = await supabase
+        .from('user_follows')
+        .insert({ follower_id: user.id, following_id: viewed.id })
+      
+      if (followError) {
+        throw followError
+      }
+      
+      setIsFollowing(true)
+      setFollowersCount(prev => prev + 1)
+      toast.success(`Following @${viewed.username}!`)
+      
+      // Refresh profile balance
+      const { data: updatedProfile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      if (updatedProfile) {
+        useAuthStore.getState().setProfile(updatedProfile as any)
+      }
+    } catch (error: any) {
       console.error('Follow error:', error)
-      toast.error('Failed to update follow status')
+      toast.error(error?.message || 'Failed to follow')
     }
   }
 
   const handleBlock = async () => {
     if (!user || !viewed || viewed.id === user.id) return
+    
+    // Prevent blocking admins, officers, and trollers
+    const viewedUserRole = viewed?.role || (viewed?.is_admin ? 'admin' : null) || 
+                          (viewed?.is_troll_officer ? 'troll_officer' : null) ||
+                          (viewed?.is_troller ? 'troller' : null)
+    const cannotBeBlocked = viewedUserRole === 'admin' || viewedUserRole === 'troll_officer' || viewedUserRole === 'troller'
+    
+    if (cannotBeBlocked) {
+      toast.error(`Cannot block ${viewedUserRole === 'admin' ? 'admins' : viewedUserRole === 'troll_officer' ? 'troll officers' : 'trollers'}`)
+      return
+    }
+    
     try {
       if (isBlocked) {
         await supabase
@@ -346,8 +633,31 @@ export default function Profile() {
     }
   }
 
-  const handleMessage = () => {
-    if (!viewed) return
+  const handleMessage = async () => {
+    if (!viewed || !user || !profile) return
+
+    // Check if user needs to pay to message (unless sender is admin, troll officer, or troller)
+    const senderRole = profile.role
+    const senderIsOfficer = profile.is_troll_officer || profile.is_officer
+    const senderIsTroller = profile.is_troller
+    const senderIsAdmin = senderRole === 'admin' || profile.is_admin
+
+    const canMessageFree = senderIsAdmin || senderIsOfficer || senderIsTroller
+
+    if (!canMessageFree && viewed.profile_view_price && viewed.profile_view_price > 0) {
+      // User must pay profile view price to message
+      const { data: paymentResult, error: paymentError } = await supabase.rpc('pay_for_profile_view', {
+        p_viewer_id: user.id,
+        p_profile_owner_id: viewed.id
+      })
+
+      if (paymentError || !paymentResult?.success) {
+        const errorMsg = paymentResult?.error || paymentError?.message || 'Payment required to message this user'
+        toast.error(errorMsg)
+        return
+      }
+    }
+
     navigate(`/messages?user=${viewed.username}`)
   }
 
@@ -371,13 +681,41 @@ export default function Profile() {
       const ext = file.name.split('.').pop()
       const name = `${user.id}-${Date.now()}.${ext}`
       const path = `avatars/${name}`
-      const { error: uploadErr } = await supabase.storage
-        .from('troll-city-assets')
+      // Try multiple bucket names
+      let bucketName = 'troll-city-assets'
+      let uploadErr = null
+      let publicUrl = null
+      
+      // Try troll-city-assets first
+      const uploadResult = await supabase.storage
+        .from(bucketName)
         .upload(path, file, { cacheControl: '3600', upsert: false })
+      uploadErr = uploadResult.error
+      
+      // If that fails, try avatars bucket
+      if (uploadErr) {
+        bucketName = 'avatars'
+        const retryResult = await supabase.storage
+          .from(bucketName)
+          .upload(path, file, { cacheControl: '3600', upsert: false })
+        uploadErr = retryResult.error
+      }
+      
+      // If that fails, try public bucket
+      if (uploadErr) {
+        bucketName = 'public'
+        const retryResult = await supabase.storage
+          .from(bucketName)
+          .upload(path, file, { cacheControl: '3600', upsert: false })
+        uploadErr = retryResult.error
+      }
+      
       if (uploadErr) throw uploadErr
-      const { data: { publicUrl } } = supabase.storage
-        .from('troll-city-assets')
+      
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
         .getPublicUrl(path)
+      publicUrl = urlData.publicUrl
       const { error: updateErr } = await supabase
         .from('user_profiles')
         .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
@@ -447,8 +785,15 @@ export default function Profile() {
 
   // Define this before sections array since it's used inside
   const isViewingOtherUser = viewed && user && viewed.id !== user.id
+  
+  // Check if the viewed user is admin, officer, or troller (cannot be blocked)
+  const viewedUserRole = viewed?.role || viewed?.is_admin ? 'admin' : 
+                         viewed?.is_troll_officer || viewed?.role === 'troll_officer' ? 'troll_officer' :
+                         viewed?.is_troller || viewed?.role === 'troller' ? 'troller' : null
+  const cannotBeBlocked = viewedUserRole === 'admin' || viewedUserRole === 'troll_officer' || viewedUserRole === 'troller'
 
-  const sections = [
+  // Filter sections based on whether viewing own profile or another user's
+  const allSections = [
     {
       id: 'profile_info',
       title: 'Profile Info',
@@ -493,16 +838,26 @@ export default function Profile() {
                 Send Gift
               </button>
               
+              {!cannotBeBlocked && (
+                <button
+                  onClick={handleBlock}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    isBlocked
+                      ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                  }`}
+                >
+                  <Ban className="w-4 h-4" />
+                  {isBlocked ? 'Unblock' : 'Block'}
+                </button>
+              )}
+              
               <button
-                onClick={handleBlock}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  isBlocked
-                    ? 'bg-gray-600 hover:bg-gray-700 text-white'
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
+                onClick={() => setShowReportModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
               >
-                <Ban className="w-4 h-4" />
-                {isBlocked ? 'Unblock' : 'Block'}
+                <AlertTriangle className="w-4 h-4" />
+                Report User
               </button>
             </div>
           )}
@@ -547,16 +902,29 @@ export default function Profile() {
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => {
-                setEditingProfile(true)
-                setEditUsername(profile?.username || '')
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              <Edit className="w-4 h-4" />
-              Edit Profile
-            </button>
+            !isViewingOtherUser && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setEditingProfile(true)
+                    setEditUsername(profile?.username || '')
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <Edit className="w-4 h-4" />
+                  Edit Profile
+                </button>
+                {profile?.empire_role !== 'partner' && (
+                  <button
+                    onClick={() => navigate('/empire-partner/apply')}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors"
+                  >
+                    <Crown className="w-4 h-4" />
+                    Apply for Empire Partner
+                  </button>
+                )}
+              </div>
+            )
           )}
         </div>
       )
@@ -581,8 +949,36 @@ export default function Profile() {
             <div className="text-white text-2xl font-bold">{followingCount}</div>
           </div>
           <div className="bg-[#0D0D0D] rounded-lg p-4">
-            <div className="text-gray-400 text-sm">Total Earned Coins</div>
-            <div className="text-white text-2xl font-bold">{profile?.total_earned_coins || 0}</div>
+            <div className="text-gray-400 text-sm">Level</div>
+            <div className="text-white text-2xl font-bold">
+              {getLevelFromXP((viewed?.xp || profile?.xp) || 0, (viewed?.role || profile?.role) === 'admin')}
+            </div>
+          </div>
+          <div 
+            className="bg-[#0D0D0D] rounded-lg p-4 cursor-pointer hover:bg-[#1A1A1A] transition-colors"
+            onClick={() => {
+              setGiftersModalType('received')
+              setShowGiftersModal(true)
+            }}
+            title="Click to see gifters"
+          >
+            <div className="text-gray-400 text-sm">Coins Received</div>
+            <div className="text-white text-2xl font-bold">{coinsReceived.toLocaleString()}</div>
+          </div>
+          <div 
+            className="bg-[#0D0D0D] rounded-lg p-4 cursor-pointer hover:bg-[#1A1A1A] transition-colors"
+            onClick={() => {
+              setGiftersModalType('sent')
+              setShowGiftersModal(true)
+            }}
+            title="Click to see recipients"
+          >
+            <div className="text-gray-400 text-sm">Coins Sent</div>
+            <div className="text-white text-2xl font-bold">{coinsSent.toLocaleString()}</div>
+          </div>
+          <div className="bg-[#0D0D0D] rounded-lg p-4">
+            <div className="text-gray-400 text-sm">Total Earned</div>
+            <div className="text-white text-2xl font-bold">{(viewed?.total_earned_coins || profile?.total_earned_coins || 0).toLocaleString()}</div>
           </div>
         </div>
       )
@@ -611,87 +1007,6 @@ export default function Profile() {
       )
     },
     {
-      id: 'payment_methods',
-      title: 'Payment Methods',
-      icon: <CreditCard className="w-5 h-5" />,
-      content: (
-        <div className="space-y-3">
-          <button onClick={() => navigate('/account/wallet')} className="w-full py-2 border border-purple-500 text-purple-400 rounded-lg hover:bg-purple-500 hover:text-white transition-colors">
-            Manage Payment Methods
-          </button>
-          <DefaultPaymentMethod />
-        </div>
-      )
-    },
-    {
-      id: 'wheel_winnings',
-      title: 'Wheel Winnings',
-      icon: <div className="w-5 h-5 flex items-center justify-center">🎡</div>,
-      content: (
-        <div className="space-y-4">
-          {/* Settings */}
-          <div className="bg-[#0D0D0D] rounded-lg p-4 border border-[#2C2C2C]">
-            <h3 className="text-white font-medium mb-3">Wheel Settings</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300">Enable Winnings</span>
-                <button
-                  onClick={() => {
-                    const newValue = !wheelSettings.winningsEnabled
-                    setWheelSettings(prev => ({ ...prev, winningsEnabled: newValue }))
-                    try { localStorage.setItem(`tc-wheel-winnings-${profile!.id}`, String(newValue)) } catch {}
-                  }}
-                  className={`px-3 py-1 rounded text-sm ${wheelSettings.winningsEnabled ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'}`}
-                >
-                  {wheelSettings.winningsEnabled ? 'Enabled' : 'Disabled'}
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300">Enable Insurance</span>
-                <button
-                  onClick={() => {
-                    const newValue = !wheelSettings.insuranceEnabled
-                    setWheelSettings(prev => ({ ...prev, insuranceEnabled: newValue }))
-                    try { localStorage.setItem(`tc-wheel-insurance-${profile!.id}`, String(newValue)) } catch {}
-                  }}
-                  className={`px-3 py-1 rounded text-sm ${wheelSettings.insuranceEnabled ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'}`}
-                >
-                  {wheelSettings.insuranceEnabled ? 'Enabled' : 'Disabled'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Winnings History */}
-          <div className="bg-[#0D0D0D] rounded-lg p-4 border border-[#2C2C2C]">
-            <h3 className="text-white font-medium mb-3">Recent Winnings</h3>
-            {wheelWinnings.length === 0 ? (
-              <div className="text-gray-400 text-sm">No wheel spins yet</div>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {wheelWinnings.map((win: any) => (
-                  <div key={win.id} className="flex justify-between items-center py-2 border-b border-[#2C2C2C] last:border-b-0">
-                    <div>
-                      <div className="text-white text-sm capitalize">{win.prize_type}</div>
-                      <div className="text-gray-400 text-xs">{new Date(win.created_at).toLocaleDateString()}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-white text-sm">
-                        {win.prize_type === 'coins' ? `${win.prize_value} coins` :
-                         win.prize_type === 'multiplier' ? `${win.prize_value}x multiplier` :
-                         win.prize_type === 'insurance' ? 'Insurance' :
-                         win.prize_type === 'bankrupt' ? 'Bankrupt' : win.prize_value}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )
-    },
-    {
       id: 'account_settings',
       title: 'Account Settings',
       icon: <Settings className="w-5 h-5" />,
@@ -703,9 +1018,9 @@ export default function Profile() {
               <div className="text-sm text-gray-300">{user.email}</div>
             </div>
           )}
-          <div className="p-3 bg-[#0D0D0D] rounded-lg">
-            <div className="text-white mb-2">Profile View Price (max 2000 paid coins)</div>
-            <div className="flex items-center gap-2">
+          <div className="p-4 bg-[#0D0D0D] rounded-lg border border-purple-600/30">
+            <div className="text-white font-semibold mb-3">Profile View Price (coins)</div>
+            <div className="flex items-center gap-3">
               <input
                 type="number"
                 min={0}
@@ -715,23 +1030,97 @@ export default function Profile() {
                   const val = Math.max(0, Math.min(2000, Number(e.target.value || 0)))
                   setViewPrice(val)
                 }}
-                onBlur={async () => {
+                placeholder="Enter price in coins"
+                className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg border border-purple-600 focus:border-purple-400 focus:outline-none"
+              />
+              <button
+                onClick={async () => {
+                  if (!profile?.id) {
+                    toast.error('Profile not loaded')
+                    return
+                  }
+
+                  const priceValue = Number(viewPrice)
+                  if (isNaN(priceValue) || priceValue < 0) {
+                    toast.error('Please enter a valid price (0-2000 coins)')
+                    return
+                  }
+
                   try {
-                    await supabase
+                    const { error } = await supabase
                       .from('user_profiles')
-                      .update({ profile_view_price: viewPrice, updated_at: new Date().toISOString() })
-                      .eq('id', profile!.id)
-                    useAuthStore.getState().setProfile({ ...(profile as any), profile_view_price: viewPrice } as any)
-                  } catch {
-                    try { localStorage.setItem(`tc-profile-view-price-${profile!.id}`, String(viewPrice)) } catch {}
+                      .update({ 
+                        profile_view_price: Math.floor(priceValue), 
+                        updated_at: new Date().toISOString() 
+                      })
+                      .eq('id', profile.id)
+                    
+                    if (error) {
+                      console.error('Error updating profile view price:', error)
+                      toast.error(error.message || 'Failed to save profile view price')
+                      return
+                    }
+                    
+                    // Update local profile state
+                    useAuthStore.getState().setProfile({ 
+                      ...(profile as any), 
+                      profile_view_price: Math.floor(priceValue) 
+                    } as any)
+                    
+                    toast.success(`Profile view price saved: ${Math.floor(priceValue)} coins`)
+                  } catch (err: any) {
+                    console.error('Error saving profile view price:', err)
+                    toast.error(err?.message || 'Failed to save profile view price')
                   }
                 }}
-                className="w-24 bg-gray-900 text-white p-2 rounded border border-purple-600"
-              />
-              <span className="text-xs text-gray-400">Viewers must pay to view and follow</span>
+                disabled={isNaN(Number(viewPrice)) || Number(viewPrice) < 0}
+                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+              >
+                Save
+              </button>
             </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Viewers must pay this amount in paid coins to view your profile (max 2000 coins)
+            </p>
           </div>
-          <button className="w-full py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-colors">
+          <button
+            onClick={async () => {
+              // No confirmation - proceed directly
+              const hasEnoughCoins = profile?.paid_coin_balance >= 500;
+              const payEarly = hasEnoughCoins; // Auto-pay if user has enough coins
+              
+              try {
+                const { data, error } = await supabase.rpc('delete_user_account', {
+                  p_user_id: user?.id,
+                  p_pay_early_fee: payEarly || false
+                });
+                
+                if (error) throw error;
+                
+                if (data?.success) {
+                  if (payEarly) {
+                    toast.success('Account deleted. You can create a new account immediately.');
+                  } else {
+                    const cooldownDate = new Date(data.cooldown_until).toLocaleDateString();
+                    toast.success(`Account deletion scheduled. You must wait until ${cooldownDate} before creating a new account, or pay $5 to skip.`);
+                  }
+                  
+                  // Sign out and redirect to login
+                  await supabase.auth.signOut();
+                  useAuthStore.getState().logout();
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  navigate('/auth', { replace: true });
+                } else {
+                  toast.error(data?.error || 'Failed to delete account');
+                }
+              } catch (error: any) {
+                console.error('Error deleting account:', error);
+                toast.error(error?.message || 'Failed to delete account');
+              }
+            }}
+            className="w-full py-2 border border-red-500 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
+          >
             Delete Account
           </button>
         </div>
@@ -739,13 +1128,33 @@ export default function Profile() {
     }
   ]
 
+  // Filter sections: when viewing another user, only show stats and action buttons
+  const sections = isViewingOtherUser 
+    ? allSections.filter(s => s.id === 'stats' || s.id === 'profile_info')
+    : allSections
+
   console.log('Profile component - profile:', profile, 'user:', user, 'routeUsername:', routeUsername)
 
   if (!profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
-        <div className="text-xl">Loading profile... (profile is null/undefined)</div>
-        <div className="text-sm mt-4">User: {user?.email || 'No user'}</div>
+        <div className="text-center">
+          <div className="text-xl mb-2">Loading profile...</div>
+          <div className="text-sm text-gray-400">User: {user?.email || 'No user'}</div>
+          <div className="text-xs text-gray-500 mt-2">If this persists, try refreshing the page</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading state while checking access for viewed profile
+  if (viewed && profile.id !== viewed.id && checkingAccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl mb-2">Loading profile...</div>
+          <div className="text-sm text-gray-400">Checking access permissions...</div>
+        </div>
       </div>
     )
   }
@@ -756,7 +1165,7 @@ export default function Profile() {
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           {/* Profile Header */}
-          {viewed && profile.id !== viewed.id && !hasAccessToViewed() && (
+          {viewed && profile.id !== viewed.id && !hasAccess && !checkingAccess && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
               <div className="w-[360px] bg-[#121212] border border-purple-600 rounded-xl p-4">
                 <div className="font-semibold mb-2">Unlock @{viewed.username}'s profile</div>
@@ -768,22 +1177,56 @@ export default function Profile() {
               </div>
             </div>
           )}
+          
+          {viewed && profile.id !== viewed.id && checkingAccess && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+              <div className="text-white">Loading...</div>
+            </div>
+          )}
+          
           <div className="bg-[#1A1A1A] rounded-xl p-8 border border-[#2C2C2C] mb-6">
             <div className="flex items-center gap-6">
               <div className="relative">
                 <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full overflow-hidden">
-                  <img src={(viewed?.avatar_url || profile.avatar_url) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${(viewed?.username || profile.username)}`} alt="avatar" className="w-full h-full object-cover" />
+                  <img 
+                    src={
+                      (isViewingOtherUser && viewed?.avatar_url) 
+                        ? viewed.avatar_url 
+                        : (!isViewingOtherUser && profile?.avatar_url)
+                        ? profile.avatar_url
+                        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${(viewed?.username || profile?.username || 'user')}`
+                    } 
+                    alt={`${(viewed?.username || profile?.username || 'User')}'s avatar`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to dicebear if image fails to load
+                      const target = e.target as HTMLImageElement
+                      target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${(viewed?.username || profile?.username || 'user')}`
+                    }}
+                  />
                 </div>
                 {(!viewed || viewed.id === profile.id) && (
-                  <button onClick={triggerAvatarUpload} className="absolute -bottom-1 -right-1 w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center border-2 border-[#1A1A1A]">
+                  <button 
+                    onClick={triggerAvatarUpload} 
+                    className="absolute -bottom-1 -right-1 w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center border-2 border-[#1A1A1A]"
+                  >
                     <Camera className="w-4 h-4 text-white" />
                   </button>
                 )}
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                <input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleAvatarUpload} 
+                />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h1 className="text-2xl font-bold text-white">@{(viewed?.username || profile.username)}</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-white">@{(viewed?.username || profile.username)}</h1>
+                    <EmpireBadge empireRole={viewed?.empire_role || profile?.empire_role} />
+                  </div>
                   {/* Admin Badge */}
                   {(viewed?.role || profile.role) === 'admin' && (
                     <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
@@ -867,151 +1310,21 @@ export default function Profile() {
         isOpen={showGiftModal}
         onClose={() => setShowGiftModal(false)}
         streamerId={viewed.id}
-        streamId="profile-gift"
+        streamId={null as any}
+      />
+    )}
+    
+    {viewed && (
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetUserId={viewed.id}
+        streamId={null}
+        targetType="user"
+        onSuccess={() => setShowReportModal(false)}
       />
     )}
     </>
   )
 }
 
-function DefaultPaymentMethod() {
-  const { profile, user } = useAuthStore()
-  const [method, setMethod] = useState<any | null>(null)
-  const [allMethods, setAllMethods] = useState<any[]>([])
-  
-  const loadMethods = async () => {
-    if (!profile?.id) return
-    const { data } = await supabase
-      .from('user_payment_methods')
-      .select('*')
-      .eq('user_id', profile.id)
-      .eq('provider', 'card')
-      .order('is_default', { ascending: false })
-    setAllMethods(data || [])
-    setMethod(data?.find(m => m.is_default) || null)
-  }
-
-  useEffect(() => {
-    loadMethods()
-    
-    // Set up real-time subscription for instant updates
-    if (profile?.id) {
-      const channel = supabase
-        .channel(`payment_methods_profile_${profile.id}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'user_payment_methods',
-          filter: `user_id=eq.${profile.id}`
-        }, () => {
-          loadMethods()
-        })
-        .subscribe()
-      
-      return () => {
-        void supabase.removeChannel(channel)
-      }
-    }
-  }, [profile?.id])
-
-  const setAsDefault = async (methodId: string) => {
-    if (!profile?.id) return
-    try {
-      await supabase
-        .from('user_payment_methods')
-        .update({ is_default: false })
-        .eq('user_id', profile.id)
-      
-      await supabase
-        .from('user_payment_methods')
-        .update({ is_default: true })
-        .eq('id', methodId)
-      
-      toast.success('Default payment method updated')
-      loadMethods()
-    } catch (error) {
-      toast.error('Failed to update default payment method')
-    }
-  }
-
-  const removeMethod = async (methodId: string) => {
-    if (!profile?.id) return
-    // Optimistic UI: remove locally first
-    const backup = allMethods
-    setAllMethods(prev => prev.filter(m => m.id !== methodId))
-    if (method?.id === methodId) setMethod(null)
-
-    try {
-      const { error } = await supabase
-        .from('user_payment_methods')
-        .delete()
-        .eq('id', methodId)
-
-      if (error) {
-        setAllMethods(backup)
-        toast.error('Failed to remove payment method')
-        return
-      }
-
-      toast.success('Payment method removed')
-    } catch (error) {
-      setAllMethods(backup)
-      toast.error('Failed to remove payment method')
-    }
-  }
-
-  if (!profile) return null
-  
-  return (
-    <div className="space-y-3">
-      {allMethods.length === 0 ? (
-        <div className="p-4 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C] text-center">
-          <div className="text-sm text-gray-400 mb-2">No payment methods saved</div>
-          <button
-            onClick={() => window.location.href = '/account/wallet'}
-            className="px-4 py-2 bg-troll-purple hover:bg-troll-purple/80 rounded-lg text-sm"
-          >
-            Add Payment Method
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {allMethods.map((m) => (
-            <div
-              key={m.id}
-              className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C] flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <CreditCard className="w-5 h-5 text-troll-neon-blue" />
-                <div>
-                  <div className="text-sm font-medium">
-                    {m.brand || m.card_brand || 'Card'} •••• {m.last4 || m.last_4 || '****'}
-                  </div>
-                  {m.is_default && (
-                    <div className="text-xs text-troll-neon-blue">Default</div>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {!m.is_default && (
-                  <button
-                    onClick={() => setAsDefault(m.id)}
-                    className="px-3 py-1 text-xs bg-troll-purple/20 hover:bg-troll-purple/40 rounded border border-troll-purple"
-                  >
-                    Set Default
-                  </button>
-                )}
-                <button
-                  onClick={() => removeMethod(m.id)}
-                  className="px-3 py-1 text-xs bg-red-500/20 hover:bg-red-500/40 rounded border border-red-500 text-red-400"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}

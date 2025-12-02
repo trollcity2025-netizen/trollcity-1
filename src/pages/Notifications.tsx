@@ -35,6 +35,16 @@ export default function Notifications() {
       )
       .on(
         'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
+        (payload) => {
+          const updatedNotif = payload.new as any
+          setNotifications((prev) => 
+            prev.map(n => n.id === updatedNotif.id ? { ...n, read: updatedNotif.read } : n)
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
         (payload) => setNotifications((prev) => prev.filter((n) => n.id !== (payload.old as any).id))
       )
@@ -75,6 +85,21 @@ export default function Notifications() {
       toast.success('All notifications marked as read')
     } catch {
       toast.error('Error marking all as read')
+    }
+  }
+
+  const markAsRead = async (id: string) => {
+    try {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', id)
+      
+      setNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      )
+    } catch {
+      toast.error('Failed to mark notification as read')
     }
   }
 
@@ -188,20 +213,38 @@ export default function Notifications() {
                   <div className="mt-1">
                     {getNotificationIcon(notification.type)}
                   </div>
-src/pages/Profile.tsx                  <div className="flex-1">
+                  <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-white font-semibold">{notification.title}</h3>
+                      <h3 
+                        className={`text-white font-semibold ${!notification.read ? 'cursor-pointer hover:text-purple-400' : ''}`}
+                        onClick={() => !notification.read && markAsRead(notification.id)}
+                        title={!notification.read ? 'Click to mark as read' : ''}
+                      >
+                        {notification.title}
+                      </h3>
                       {!notification.read && <Dot className="w-4 h-4 text-purple-500 fill-current" />}
                     </div>
                     <p className="text-gray-300 text-sm mb-2">{notification.message}</p>
                     <p className="text-gray-500 text-xs">{formatDate(notification.created_at)}</p>
                   </div>
-                  <button
-                    onClick={() => dismissNotification(notification.id)}
-                    className="text-gray-500 hover:text-white transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {!notification.read && (
+                      <button
+                        onClick={() => markAsRead(notification.id)}
+                        className="text-purple-400 hover:text-purple-300 transition-colors text-xs"
+                        title="Mark as read"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                    <button
+                      onClick={() => dismissNotification(notification.id)}
+                      className="text-gray-500 hover:text-white transition-colors"
+                      title="Dismiss"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))

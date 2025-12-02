@@ -1,17 +1,68 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useAuthStore } from '../lib/store'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Calendar, CheckCircle, Code, Zap, Bug, Shield, Users, Star } from 'lucide-react'
 
 export default function Changelog() {
   const { profile } = useAuthStore()
+  const navigate = useNavigate()
 
   // Only admins can view this page
   if (profile?.role !== 'admin') {
     return <Navigate to="/" replace />
   }
 
+  // Prevent refresh redirect - only redirect if not admin
+  useEffect(() => {
+    if (profile?.role !== 'admin') {
+      navigate('/', { replace: true })
+    }
+  }, [profile?.role, navigate])
+
   const updates = [
+    {
+      date: 'December 5, 2025',
+      version: 'v1.6.0',
+      category: 'fix',
+      icon: <Bug className="w-5 h-5" />,
+      changes: [
+        {
+          type: 'fix',
+          title: 'Testing Mode Duplicate Key Error',
+          description: 'Fixed critical duplicate key constraint violation in testing mode toggle/reset operations. Replaced unreliable upsert operations with update-then-insert pattern that handles race conditions gracefully. Testing mode buttons now work reliably without database errors.',
+        },
+        {
+          type: 'fix',
+          title: 'App Settings Column Name Mismatch',
+          description: 'Fixed all references to app_settings table columns from "key" to "setting_key" throughout the admin edge function. This resolves schema cache errors and ensures all testing mode operations work correctly.',
+        },
+        {
+          type: 'improvement',
+          title: 'Square Connection Panel Enhancement',
+          description: 'Completely redesigned Square Payment Connection panel in admin dashboard with real-time connection status, test button, credential verification, and detailed error reporting. Shows environment, connection status, and credential availability at a glance.',
+        },
+        {
+          type: 'fix',
+          title: 'Wheel Enable/Disable Buttons',
+          description: 'Fixed wheel toggle functionality in admin dashboard. Updated endpoint calls to use correct /admin/wheel/toggle path. Wheel can now be properly enabled and disabled from the admin dashboard.',
+        },
+        {
+          type: 'feature',
+          title: 'Complete Route Coverage',
+          description: 'Added all missing routes: /admin/payments (Payments Dashboard), /changelog (Changelog page), /account/wallet (Account Wallet), /account/payment-settings (Payment Settings), /account/payments-success and /account/payment-linked (Payment callbacks). All pages are now accessible via proper routes.',
+        },
+        {
+          type: 'improvement',
+          title: 'Admin Dashboard UI Reorganization',
+          description: 'Reorganized admin dashboard with User Applications section moved to top (always visible) and replaced tab navigation with dropdown menu for better space management and usability.',
+        },
+        {
+          type: 'fix',
+          title: 'Edge Function Configuration',
+          description: 'Added deno.json configuration files for create-square-checkout and verify-square-payment edge functions. Updated redirect URLs to use environment variables instead of hardcoded domains for better deployment flexibility.',
+        },
+      ],
+    },
     {
       date: 'November 26, 2025',
       version: 'v1.5.0',
@@ -286,7 +337,7 @@ export default function Changelog() {
             <p className="text-gray-400 text-sm">
               This changelog is automatically updated with each deployment.
               <br />
-              Last updated: <span className="text-purple-400 font-semibold">November 26, 2025</span>
+              Last updated: <span className="text-purple-400 font-semibold">December 5, 2025</span>
             </p>
           </div>
         </div>

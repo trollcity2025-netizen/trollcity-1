@@ -2,13 +2,15 @@ import React, { useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { FileText, Send } from 'lucide-react'
+import { FileText, Send, AlertTriangle } from 'lucide-react'
+import api from '../lib/api'
 
 export default function Support() {
   const { user, profile } = useAuthStore()
   const [subject, setSubject] = useState('')
-  const [category, setCategory] = useState('general')
+  const [category, setCategory] = useState<'general' | 'appeal'>('general')
   const [message, setMessage] = useState('')
+  const [reportId, setReportId] = useState('')
   const [loading, setLoading] = useState(false)
 
   const submit = async () => {
@@ -16,27 +18,53 @@ export default function Support() {
     if (!subject.trim() || !message.trim()) { toast.error('Enter subject and message'); return }
     setLoading(true)
     try {
-      const payload = {
-        user_id: profile.id,
-        username: profile.username,
-        email: user.email,
-        subject: subject.trim(),
-        category,
-        message: message.trim(),
-        status: 'open',
-        created_at: new Date().toISOString()
+      // If appeal, submit as moderation report
+      if (category === 'appeal') {
+        const response = await api.post('/moderation', {
+          action: 'submit_report',
+          reporter_id: profile.id,
+          target_user_id: null,
+          stream_id: null,
+          reason: 'appeal',
+          description: `Subject: ${subject}\n\nReport ID: ${reportId || 'N/A'}\n\nMessage: ${message}`
+        })
+
+        if (response.success) {
+          toast.success('Appeal submitted. Our Troll Officers will review soon.')
+          setSubject('')
+          setMessage('')
+          setReportId('')
+          setCategory('general')
+        } else {
+          toast.error(response.error || 'Failed to submit appeal')
+        }
+      } else {
+        // Regular support ticket
+        const payload = {
+          user_id: profile.id,
+          username: profile.username,
+          email: user.email,
+          subject: subject.trim(),
+          category,
+          message: message.trim(),
+          status: 'open',
+          created_at: new Date().toISOString()
+        }
+        let ok = false
+        const { error } = await supabase.from('support_tickets').insert([payload])
+        if (!error) ok = true
+        if (!ok) {
+          await supabase.from('notifications').insert([
+            { type: 'support_ticket', content: `${profile.username}: ${subject}`, metadata: payload, created_at: new Date().toISOString() }
+          ])
+        }
+        toast.success('Support ticket submitted')
+        setSubject('')
+        setMessage('')
+        setCategory('general')
       }
-      let ok = false
-      const { error } = await supabase.from('support_tickets').insert([payload])
-      if (!error) ok = true
-      if (!ok) {
-        await supabase.from('notifications').insert([
-          { type: 'support_ticket', content: `${profile.username}: ${subject}`, metadata: payload, created_at: new Date().toISOString() }
-        ])
-      }
-      toast.success('Support ticket submitted')
-      setSubject(''); setMessage(''); setCategory('general')
-    } catch {
+    } catch (err: any) {
+      console.error('Support submission error:', err)
       toast.error('Failed to submit')
     } finally {
       setLoading(false)
@@ -59,13 +87,27 @@ export default function Support() {
           </div>
           <div>
             <label className="block text-sm mb-1">Category</label>
-            <select value={category} onChange={e=>setCategory(e.target.value)} className="w-full bg-[#171427] border border-purple-500/40 rounded px-3 py-2 text-sm">
-              <option value="general">General</option>
+            <select value={category} onChange={e=>setCategory(e.target.value as 'general' | 'appeal')} className="w-full bg-[#171427] border border-purple-500/40 rounded px-3 py-2 text-sm">
+              <option value="general">General Support</option>
+              <option value="appeal">Appeal Moderation Action</option>
               <option value="payouts">Payouts</option>
               <option value="payments">Payments</option>
               <option value="streams">Streams</option>
               <option value="account">Account</option>
             </select>
+            
+            {category === 'appeal' && (
+              <div>
+                <label className="block text-sm mb-1">Report ID (Optional)</label>
+                <input 
+                  type="text"
+                  value={reportId}
+                  onChange={e => setReportId(e.target.value)}
+                  placeholder="Enter the report ID if you have it..."
+                  className="w-full bg-[#171427] border border-purple-500/40 rounded px-3 py-2 text-sm"
+                />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm mb-1">Message</label>
