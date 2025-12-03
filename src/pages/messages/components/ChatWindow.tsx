@@ -241,13 +241,13 @@ export default function ChatWindow({
       setLoading(true)
 
       const { data: messagesData, error } = await supabase
-        .from("messages")
-        .select("*")
+        .from('messages')
+        .select('id, sender_id, receiver_id, content, created_at, seen, read_at, message_type')
         .or(
           `and(sender_id.eq.${profile.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${profile.id})`
         )
         .eq('message_type', 'dm')
-        .order("created_at", { ascending: true })
+        .order('created_at', { ascending: true })
 
       if (error) {
         console.error('Error loading messages:', error);
