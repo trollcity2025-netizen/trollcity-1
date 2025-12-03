@@ -99,9 +99,14 @@ export default function ChatWindow({
 
     loadMessages()
 
-    // Real-time subscription for new messages - use more specific filter
-    const channel = supabase
-      .channel(`messages:${profile.id}:${otherUserId}`)
+    // Real-time subscription for new messages - use broadcast for instant updates
+    const channelName = `messages:${profile.id}:${otherUserId}`;
+    const channel = supabase.channel(channelName, {
+      config: {
+        broadcast: { self: true },
+        presence: { key: profile.id }
+      }
+    })
       .on(
         'postgres_changes',
         {
@@ -111,6 +116,7 @@ export default function ChatWindow({
           filter: `message_type=eq.dm`
         },
         async (payload) => {
+          console.log('📨 New message received via real-time:', payload.new);
           const newMsg = payload.new as any;
           // Only add if it's a new message in this conversation
           if (
@@ -139,8 +145,10 @@ export default function ChatWindow({
             setMessages((prev) => {
               // Avoid duplicates
               if (prev.some((m) => m.id === newMsg.id)) {
+                console.log('⚠️ Duplicate message ignored:', newMsg.id);
                 return prev
               }
+              console.log('✅ Adding new message to UI:', newMsg.id);
               return [...prev, {
                 ...newMsg,
                 sender_username: senderUsername,
@@ -177,10 +185,20 @@ export default function ChatWindow({
         }
       )
       .subscribe((status) => {
+        console.log(`📡 Messages channel status: ${status}`);
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Subscribed to messages channel');
+          console.log('✅ Successfully subscribed to messages channel');
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Channel subscription error');
+          console.error('❌ Channel subscription error - will retry');
+          // Retry subscription after a delay
+          setTimeout(() => {
+            channel.subscribe();
+          }, 2000);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('⏱️ Channel subscription timed out - retrying');
+          setTimeout(() => {
+            channel.subscribe();
+          }, 2000);
         }
       })
 
