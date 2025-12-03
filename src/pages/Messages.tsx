@@ -6,6 +6,7 @@ import InboxSidebar from './messages/components/InboxSidebar'
 import ChatWindow from './messages/components/ChatWindow'
 import MessageInput from './messages/components/MessageInput'
 import NewMessageModal from './messages/components/NewMessageModal'
+import IncomingCallPopup from '../components/IncomingCallPopup'
 import { supabase } from '../lib/supabase'
 
 export default function Messages() {
@@ -24,6 +25,15 @@ export default function Messages() {
     username: string
     avatar_url: string | null
     is_online?: boolean
+  } | null>(null)
+  
+  // Incoming call state
+  const [incomingCall, setIncomingCall] = useState<{
+    callerId: string
+    callerUsername: string
+    callerAvatar: string | null
+    callType: 'audio' | 'video'
+    roomId: string
   } | null>(null)
 
   // Load conversation from URL
@@ -76,6 +86,61 @@ export default function Messages() {
       void supabase.removeChannel(channel)
     }
   }, [user?.id])
+
+  // Listen for incoming calls
+  useEffect(() => {
+    if (!user?.id) return
+
+    const callChannel = supabase
+      .channel(`calls:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          const notification = payload.new as any
+          if (notification.type === 'call' && notification.metadata) {
+            const metadata = notification.metadata
+            setIncomingCall({
+              callerId: metadata.caller_id,
+              callerUsername: metadata.caller_username || 'Unknown',
+              callerAvatar: metadata.caller_avatar || null,
+              callType: metadata.call_type || 'audio',
+              roomId: metadata.room_id
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(callChannel)
+    }
+  }, [user?.id])
+
+  const handleAcceptCall = () => {
+    if (!incomingCall) return
+    navigate(`/call/${incomingCall.roomId}/${incomingCall.callType}/${incomingCall.callerId}`)
+    setIncomingCall(null)
+  }
+
+  const handleDeclineCall = async () => {
+    if (!incomingCall || !user?.id) return
+    
+    // Delete the notification
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('type', 'call')
+      .contains('metadata', { room_id: incomingCall.roomId })
+    
+    setIncomingCall(null)
+  }
 
   // Load target user's info when conversation changes
   useEffect(() => {
@@ -170,6 +235,20 @@ export default function Messages() {
         onClose={() => setShowNewMessageModal(false)}
         onSelectUser={handleNewMessage}
       />
+
+      {/* Incoming Call Popup */}
+      {incomingCall && (
+        <IncomingCallPopup
+          isOpen={!!incomingCall}
+          callerId={incomingCall.callerId}
+          callerUsername={incomingCall.callerUsername}
+          callerAvatar={incomingCall.callerAvatar}
+          callType={incomingCall.callType}
+          roomId={incomingCall.roomId}
+          onAccept={handleAcceptCall}
+          onDecline={handleDeclineCall}
+        />
+      )}
     </div>
   )
 }

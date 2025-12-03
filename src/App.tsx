@@ -38,6 +38,7 @@ const StreamRoom = lazy(() => import("./pages/StreamRoom"));
 const Stream = lazy(() => import("./pages/Stream"));
 const StreamSummary = lazy(() => import("./pages/StreamSummary"));
 const Messages = lazy(() => import("./pages/Messages"));
+const Call = lazy(() => import("./pages/Call"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Trollifications = lazy(() => import("./pages/Trollifications"));
 const Following = lazy(() => import("./pages/Following"));
@@ -379,6 +380,7 @@ function App() {
                 <Route element={<RequireAuth />}>
                   <Route path="/live" element={<Home />} />
                   <Route path="/messages" element={<Messages />} />
+                  <Route path="/call/:roomId/:type/:userId" element={<Call />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
                   <Route path="/trollifications" element={<Trollifications />} />

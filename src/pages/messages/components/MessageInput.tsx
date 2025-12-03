@@ -90,10 +90,31 @@ export default function MessageInput({ otherUserId, onMessageSent }: MessageInpu
           content: `New message from ${profile.username}`,
           created_at: new Date().toISOString()
         }])
-      } catch {}
+      } catch (notifErr) {
+        console.warn('Notification error (non-critical):', notifErr);
+      }
 
+      // Clear input immediately
       setMessage('')
+      
+      // Trigger callback - parent component can handle refresh if needed
       onMessageSent()
+      
+      // Broadcast message via channel for instant delivery (fallback if postgres_changes is slow)
+      try {
+        const channel = supabase.channel(`messages:${profile.id}:${otherUserId}`);
+        await channel.send({
+          type: 'broadcast',
+          event: 'new_message',
+          payload: {
+            ...insertedMessage,
+            sender_username: profile.username,
+            sender_avatar_url: profile.avatar_url
+          }
+        });
+      } catch (broadcastErr) {
+        console.warn('Broadcast error (non-critical):', broadcastErr);
+      }
     } catch (error: any) {
       console.error('Error sending message:', error)
       toast.error(error.message || 'Failed to send message')

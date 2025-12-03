@@ -184,6 +184,29 @@ export default function ChatWindow({
           }
         }
       )
+      .on('broadcast', { event: 'new_message' }, (payload) => {
+        console.log('📨 New message received via broadcast:', payload.payload);
+        const newMsg = payload.payload as any;
+        // Only add if it's a new message in this conversation
+        if (
+          (newMsg.sender_id === otherUserId && newMsg.receiver_id === profile.id) ||
+          (newMsg.sender_id === profile.id && newMsg.receiver_id === otherUserId)
+        ) {
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some((m) => m.id === newMsg.id)) {
+              return prev
+            }
+            console.log('✅ Adding broadcast message to UI:', newMsg.id);
+            return [...prev, newMsg as Message]
+          })
+          
+          // Scroll to bottom
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }
+      })
       .subscribe((status) => {
         console.log(`📡 Messages channel status: ${status}`);
         if (status === 'SUBSCRIBED') {
