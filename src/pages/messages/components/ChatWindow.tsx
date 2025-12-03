@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { MoreVertical, Phone, Video } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import ClickableUsername from '../../../components/ClickableUsername'
+import { toast } from 'sonner'
 
 interface Message {
   id: string
@@ -31,11 +33,63 @@ export default function ChatWindow({
   isOnline,
   isTyping
 }: ChatWindowProps) {
-  const { profile } = useAuthStore()
+  const { profile, user } = useAuthStore()
+  const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [theirTyping, setTheirTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const handleStartCall = async (callType: 'audio' | 'video') => {
+    if (!otherUserId || !user?.id || !profile?.id) {
+      toast.error('Unable to start call');
+      return;
+    }
+
+    try {
+      // Check minute balance
+      const { data: balanceData, error: balanceError } = await supabase.rpc('get_call_balances', {
+        p_user_id: user.id
+      });
+
+      if (balanceError) throw balanceError;
+
+      const requiredMinutes = callType === 'audio' ? 1 : 2;
+      const hasMinutes = callType === 'audio' 
+        ? (balanceData?.audio_minutes || 0) >= requiredMinutes
+        : (balanceData?.video_minutes || 0) >= requiredMinutes;
+
+      if (!hasMinutes) {
+        toast.error(`You don't have enough ${callType} minutes. Please purchase a package.`);
+        navigate('/store');
+        return;
+      }
+
+      // Create room ID (sorted to ensure consistency)
+      const userIds = [user.id, otherUserId].sort();
+      const roomId = `call_${userIds[0]}_${userIds[1]}`;
+
+      // Send call notification to other user
+      await supabase.from('notifications').insert({
+        user_id: otherUserId,
+        type: 'call',
+        content: `${profile.username} is calling you`,
+        metadata: {
+          caller_id: user.id,
+          caller_username: profile.username,
+          caller_avatar: profile.avatar_url,
+          call_type: callType,
+          room_id: roomId
+        }
+      });
+
+      // Navigate to call page
+      navigate(`/call/${roomId}/${callType}/${otherUserId}`);
+    } catch (err: any) {
+      console.error('Error starting call:', err);
+      toast.error('Failed to start call');
+    }
+  }
 
   useEffect(() => {
     if (!otherUserId || !profile?.id) {
@@ -45,33 +99,90 @@ export default function ChatWindow({
 
     loadMessages()
 
-    // Real-time subscription
+    // Real-time subscription for new messages - use more specific filter
     const channel = supabase
       .channel(`messages:${profile.id}:${otherUserId}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
-          table: 'messages'
+          table: 'messages',
+          filter: `message_type=eq.dm`
         },
-        (payload) => {
+        async (payload) => {
+          const newMsg = payload.new as any;
           // Only add if it's a new message in this conversation
           if (
-            (payload.new.sender_id === otherUserId && payload.new.receiver_id === profile.id) ||
-            (payload.new.sender_id === profile.id && payload.new.receiver_id === otherUserId)
+            (newMsg.sender_id === otherUserId && newMsg.receiver_id === profile.id) ||
+            (newMsg.sender_id === profile.id && newMsg.receiver_id === otherUserId)
           ) {
+            // Fetch sender info immediately
+            let senderUsername = 'Unknown';
+            let senderAvatar = null;
+            
+            try {
+              const { data: senderData } = await supabase
+                .from('user_profiles')
+                .select('id, username, avatar_url')
+                .eq('id', newMsg.sender_id)
+                .single();
+              
+              if (senderData) {
+                senderUsername = senderData.username;
+                senderAvatar = senderData.avatar_url;
+              }
+            } catch (err) {
+              console.error('Error fetching sender info:', err);
+            }
+            
             setMessages((prev) => {
               // Avoid duplicates
-              if (prev.some((m) => m.id === payload.new.id)) {
+              if (prev.some((m) => m.id === newMsg.id)) {
                 return prev
               }
-              return [...prev, payload.new as Message]
+              return [...prev, {
+                ...newMsg,
+                sender_username: senderUsername,
+                sender_avatar_url: senderAvatar
+              } as Message]
             })
+            
+            // Scroll to bottom when new message arrives
+            setTimeout(() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
           }
         }
       )
-      .subscribe()
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `message_type=eq.dm`
+        },
+        (payload) => {
+          const updatedMsg = payload.new as any;
+          // Update read status if this message was marked as read
+          if (
+            (updatedMsg.sender_id === otherUserId && updatedMsg.receiver_id === profile.id) ||
+            (updatedMsg.sender_id === profile.id && updatedMsg.receiver_id === otherUserId)
+          ) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
+            )
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Subscribed to messages channel');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Channel subscription error');
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
@@ -94,9 +205,13 @@ export default function ChatWindow({
         .or(
           `and(sender_id.eq.${profile.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${profile.id})`
         )
+        .eq('message_type', 'dm')
         .order("created_at", { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error loading messages:', error);
+        throw error;
+      }
 
       // Mark messages as read when ChatWindow opens
       const unreadIds = messagesData
@@ -200,6 +315,7 @@ export default function ChatWindow({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => handleStartCall('audio')}
             className="p-2 hover:bg-[rgba(155,50,255,0.1)] rounded-lg transition"
             title="Voice call"
           >
@@ -207,6 +323,7 @@ export default function ChatWindow({
           </button>
           <button
             type="button"
+            onClick={() => handleStartCall('video')}
             className="p-2 hover:bg-[rgba(155,50,255,0.1)] rounded-lg transition"
             title="Video call"
           >

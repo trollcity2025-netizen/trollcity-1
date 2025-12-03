@@ -53,15 +53,34 @@ export default function MessageInput({ otherUserId, onMessageSent }: MessageInpu
       }
 
       // Send message
-      const { error } = await supabase.from('messages').insert({
-        sender_id: profile.id,
-        receiver_id: otherUserId,
-        content: message.trim(),
-        message_type: 'dm',
-        seen: false
-      })
+      const messageContent = message.trim();
+      const { data: insertedMessage, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: profile.id,
+          receiver_id: otherUserId,
+          content: messageContent,
+          message_type: 'dm',
+          seen: false,
+          read_at: null
+        })
+        .select()
+        .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Message insert error:', error);
+        toast.error('Failed to send message: ' + error.message);
+        throw error;
+      }
+
+      // Verify message was inserted
+      if (!insertedMessage) {
+        console.error('Message insert returned no data');
+        toast.error('Message was not sent');
+        throw new Error('Message was not inserted');
+      }
+
+      console.log('✅ Message sent successfully:', insertedMessage.id);
 
       // Send notification
       try {
