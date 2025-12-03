@@ -72,7 +72,8 @@ export default function StreamRoom() {
         if (!data.is_live) {
           setError('Stream is not live');
           setIsConnecting(false);
-          navigate('/live', { replace: true });
+          toast.error('Stream is not live. Please start the stream again.');
+          // Don't redirect immediately - let user see the error
           return;
         }
 
