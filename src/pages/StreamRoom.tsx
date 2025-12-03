@@ -119,13 +119,79 @@ export default function StreamRoom() {
         });
 
         // Set up event listeners
-        newRoom.on(RoomEvent.Connected, () => {
+        let isConnected = false;
+        let shouldPublishTracks = isHost || (isTestingMode && profile && !profile.is_broadcaster);
+
+        newRoom.on(RoomEvent.Connected, async () => {
           console.log('✅ Connected to LiveKit room');
+          isConnected = true;
           setIsConnecting(false);
+          setRoom(newRoom);
+
+          // Wait a bit for the connection to stabilize before publishing tracks
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // If host, publish tracks after connection is established
+          if (shouldPublishTracks && newRoom.state === 'connected') {
+            try {
+              // Check if room is still connected before publishing
+              if (newRoom.state !== 'connected') {
+                console.warn('Room not connected, skipping track publication');
+                return;
+              }
+
+              const [videoTrack, audioTrack] = await Promise.all([
+                createLocalVideoTrack({
+                  facingMode: 'user',
+                }).catch(err => {
+                  console.error('Error creating video track:', err);
+                  return null;
+                }),
+                createLocalAudioTrack().catch(err => {
+                  console.error('Error creating audio track:', err);
+                  return null;
+                }),
+              ]);
+
+              // Only publish if tracks were created and room is still connected
+              if (newRoom.state === 'connected' && newRoom.localParticipant) {
+                if (videoTrack) {
+                  try {
+                    await newRoom.localParticipant.publishTrack(videoTrack);
+                    console.log('✅ Published video track');
+                  } catch (err) {
+                    console.error('Error publishing video track:', err);
+                    videoTrack.stop();
+                  }
+                }
+
+                if (audioTrack) {
+                  try {
+                    await newRoom.localParticipant.publishTrack(audioTrack);
+                    console.log('✅ Published audio track');
+                  } catch (err) {
+                    console.error('Error publishing audio track:', err);
+                    audioTrack.stop();
+                  }
+                }
+              } else {
+                // Clean up tracks if room disconnected
+                if (videoTrack) videoTrack.stop();
+                if (audioTrack) audioTrack.stop();
+              }
+            } catch (trackError: any) {
+              console.error('Error publishing tracks:', trackError);
+              // Don't show error toast if it's just a connection issue
+              if (!trackError.message?.includes('closed') && !trackError.message?.includes('disconnected')) {
+                toast.error('Failed to start camera/microphone');
+              }
+            }
+          }
         });
 
         newRoom.on(RoomEvent.Disconnected, () => {
           console.log('❌ Disconnected from LiveKit room');
+          isConnected = false;
           navigate('/live', { replace: true });
         });
 
@@ -139,38 +205,20 @@ export default function StreamRoom() {
 
         // Connect to room
         await newRoom.connect(livekitUrl, token);
-        setRoom(newRoom);
-
-        // If host, publish tracks
-        if (isHost) {
-          try {
-            const canPublishTracks = isHost || (isTestingMode && profile && !profile.is_broadcaster);
-            
-            if (canPublishTracks) {
-              const [videoTrack, audioTrack] = await Promise.all([
-                createLocalVideoTrack({
-                  facingMode: 'user',
-                }),
-                createLocalAudioTrack(),
-              ]);
-
-              await newRoom.localParticipant.publishTrack(videoTrack);
-              await newRoom.localParticipant.publishTrack(audioTrack);
-              console.log('✅ Published video and audio tracks');
-            }
-          } catch (trackError) {
-            console.error('Error publishing tracks:', trackError);
-            toast.error('Failed to start camera/microphone');
-          }
-        }
+        
+        // Don't set room state here - wait for Connected event
+        // This prevents race conditions with track publishing
 
         // Update viewer count
         if (stream.id) {
           try {
-            await supabase.rpc('update_viewer_count', {
+            const viewerResult = supabase.rpc('update_viewer_count', {
               p_stream_id: stream.id,
               p_delta: 1,
             });
+            if (viewerResult && typeof viewerResult.catch === 'function') {
+              await viewerResult;
+            }
           } catch (viewerError: any) {
             if (viewerError.code !== 'PGRST202') {
               console.warn('Viewer count update error:', viewerError);
@@ -194,10 +242,17 @@ export default function StreamRoom() {
       }
       // Decrement viewer count
       if (stream?.id) {
-        supabase.rpc('update_viewer_count', {
-          p_stream_id: stream.id,
-          p_delta: -1,
-        }).catch(() => {});
+        try {
+          const viewerResult = supabase.rpc('update_viewer_count', {
+            p_stream_id: stream.id,
+            p_delta: -1,
+          });
+          if (viewerResult && typeof viewerResult.catch === 'function') {
+            viewerResult.catch(() => {});
+          }
+        } catch (err) {
+          // Silently ignore cleanup errors
+        }
       }
     };
   }, [livekitUrl, token, stream, isHost, isTestingMode, profile, navigate]);
