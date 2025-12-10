@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
-import { Wallet as WalletIcon, Coins, DollarSign } from "lucide-react";
+import { Wallet as WalletIcon, Coins, DollarSign, RefreshCw, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
+import { getTransactionHistory, refreshUserBalance, logCoinAction } from "../lib/coinUtils";
+import { toast } from "sonner";
 
 interface CoinTx {
   id: string;
@@ -12,51 +14,142 @@ interface CoinTx {
   external_id: string | null;
   payment_status: string | null;
   created_at: string;
+  type: string;
+  description?: string;
 }
 
 export default function Wallet() {
-  const { user, profile } = useAuthStore();
+  const { user, profile, refreshProfile } = useAuthStore();
   const navigate = useNavigate();
   const [txs, setTxs] = useState<CoinTx[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [balanceStats, setBalanceStats] = useState({
+    totalEarned: 0,
+    totalSpent: 0,
+    netChange: 0
+  });
 
-  useEffect(() => {
+  const loadWalletData = useCallback(async () => {
     if (!user) return;
 
-    const load = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("coin_transactions")
-        .select("id, coins, usd_amount, source, external_id, payment_status, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      
-      if (!error && data) {
-        setTxs(data as any);
-      }
-      setLoading(false);
-    };
+    setLoading(true);
+    setError(null);
 
-    load();
+    try {
+      // Load transactions with enhanced data
+      const { transactions, error: txError } = await getTransactionHistory(user.id, {
+        limit: 50
+      });
+
+      if (txError) {
+        throw new Error(txError);
+      }
+
+      setTxs(transactions);
+
+      // Calculate balance statistics
+      const totalEarned = transactions
+        .filter(tx => tx.coins > 0)
+        .reduce((sum, tx) => sum + tx.coins, 0);
+      
+      const totalSpent = transactions
+        .filter(tx => tx.coins < 0)
+        .reduce((sum, tx) => sum + Math.abs(tx.coins), 0);
+
+      setBalanceStats({
+        totalEarned,
+        totalSpent,
+        netChange: totalEarned - totalSpent
+      });
+
+      // Log wallet view for audit
+      await logCoinAction(user.id, 'wallet_viewed', {
+        timestamp: new Date().toISOString(),
+        transactionCount: transactions.length
+      });
+
+    } catch (err: any) {
+      console.error('Wallet loading error:', err);
+      setError(err.message || 'Failed to load wallet data');
+      toast.error('Failed to load wallet data');
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  const handleRefresh = async () => {
+    if (!user) return;
+
+    setRefreshing(true);
+    try {
+      // Refresh both profile and transactions
+      await Promise.all([
+        refreshProfile(),
+        loadWalletData()
+      ]);
+      toast.success('Wallet refreshed');
+    } catch (error: any) {
+      toast.error('Failed to refresh wallet');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWalletData();
+  }, [loadWalletData]);
 
   if (!user) {
     return (
       <div className="p-6 text-center text-white min-h-screen flex items-center justify-center">
-        <div>Please log in to view your wallet.</div>
+        <div className="text-gray-400">Please log in to view your wallet.</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto text-white min-h-screen">
+        <div className="flex items-center gap-3 mb-6">
+          <WalletIcon className="w-8 h-8 text-red-400" />
+          <h1 className="text-3xl font-bold">Wallet</h1>
+        </div>
+        <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Error Loading Wallet</h2>
+          <p className="text-gray-300 mb-4">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto text-white min-h-screen">
-      <div className="flex items-center gap-3 mb-6">
-        <WalletIcon className="w-8 h-8 text-purple-400" />
-        <h1 className="text-3xl font-bold">Wallet</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <WalletIcon className="w-8 h-8 text-purple-400" />
+          <h1 className="text-3xl font-bold">Wallet</h1>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-6">
+      {/* Enhanced Balance Overview */}
+      <div className="grid md:grid-cols-4 gap-4 mb-6">
         <div className="rounded-xl bg-black/60 border border-purple-600 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Coins className="w-5 h-5 text-purple-400" />
@@ -64,6 +157,9 @@ export default function Wallet() {
           </div>
           <div className="text-2xl font-bold text-purple-300">
             {profile?.paid_coin_balance?.toLocaleString() ?? 0}
+          </div>
+          <div className="text-xs text-gray-400 mt-1">
+            Withdrawable balance
           </div>
         </div>
 
@@ -75,6 +171,26 @@ export default function Wallet() {
           <div className="text-2xl font-bold text-green-300">
             {profile?.free_coin_balance?.toLocaleString() ?? 0}
           </div>
+          <div className="text-xs text-gray-400 mt-1">
+            Entertainment & bonuses
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-black/60 border border-yellow-600 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            {balanceStats.netChange >= 0 ? (
+              <TrendingUp className="w-5 h-5 text-green-400" />
+            ) : (
+              <TrendingDown className="w-5 h-5 text-red-400" />
+            )}
+            <div className="text-sm opacity-70">Net Change</div>
+          </div>
+          <div className={`text-2xl font-bold ${balanceStats.netChange >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+            {balanceStats.netChange >= 0 ? '+' : ''}{balanceStats.netChange.toLocaleString()}
+          </div>
+          <div className="text-xs text-gray-400 mt-1">
+            Lifetime earnings
+          </div>
         </div>
 
         <div className="rounded-xl bg-black/60 border border-blue-600 p-4">
@@ -82,10 +198,13 @@ export default function Wallet() {
             <DollarSign className="w-5 h-5 text-blue-400" />
             <div className="text-sm opacity-70">Payout Method</div>
           </div>
-          <div className="text-md mt-1">
+          <div className="text-sm mt-1">
             {profile?.payout_paypal_email ? (
               <>
-                PayPal: <span className="font-mono text-xs">{profile.payout_paypal_email}</span>
+                <div className="font-mono text-xs text-green-300">PayPal Connected</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {profile.payout_paypal_email.substring(0, 20)}...
+                </div>
               </>
             ) : (
               <span className="text-red-400 text-sm">Not set</span>
@@ -94,52 +213,170 @@ export default function Wallet() {
           {!profile?.payout_paypal_email && (
             <button
               onClick={() => navigate("/payouts/setup")}
-              className="mt-2 text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded"
+              className="mt-2 text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
             >
-              Set Up
+              Set Up Payouts
             </button>
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xl font-semibold">Recent Transactions</h2>
-        <button
-          onClick={() => navigate("/payouts/request")}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-semibold"
-        >
-          Request Payout
-        </button>
+      {/* Quick Stats */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div className="rounded-xl bg-black/40 border border-gray-600 p-4">
+          <h3 className="text-lg font-semibold mb-3">Earnings Overview</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Total Earned:</span>
+              <span className="text-green-400 font-semibold">
+                {balanceStats.totalEarned.toLocaleString()} coins
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Total Spent:</span>
+              <span className="text-red-400 font-semibold">
+                {balanceStats.totalSpent.toLocaleString()} coins
+              </span>
+            </div>
+            <div className="flex justify-between border-t border-gray-600 pt-2">
+              <span className="text-gray-400">Current Net:</span>
+              <span className={`font-bold ${balanceStats.netChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {balanceStats.netChange >= 0 ? '+' : ''}{balanceStats.netChange.toLocaleString()} coins
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-black/40 border border-gray-600 p-4">
+          <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
+          <div className="space-y-2">
+            <button
+              onClick={() => navigate("/store")}
+              className="w-full text-left px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 rounded-lg border border-purple-500/30 transition-colors"
+            >
+              <div className="font-semibold">Buy Coins</div>
+              <div className="text-xs text-gray-400">Purchase more coins</div>
+            </button>
+            <button
+              onClick={() => navigate("/payouts/request")}
+              className="w-full text-left px-3 py-2 bg-green-600/20 hover:bg-green-600/30 rounded-lg border border-green-500/30 transition-colors"
+            >
+              <div className="font-semibold">Request Payout</div>
+              <div className="text-xs text-gray-400">Cash out your earnings</div>
+            </button>
+            <button
+              onClick={() => navigate("/transactions")}
+              className="w-full text-left px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 rounded-lg border border-blue-500/30 transition-colors"
+            >
+              <div className="font-semibold">Transaction History</div>
+              <div className="text-xs text-gray-400">View detailed history</div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Enhanced Transaction History */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-semibold">Recent Transactions</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate("/transactions")}
+              className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 rounded transition-colors"
+            >
+              View All
+            </button>
+            <button
+              onClick={() => navigate("/payouts/request")}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-semibold transition-colors"
+            >
+              Request Payout
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-gray-400">Loading transactions...</div>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <div className="text-gray-400">Loading transactions...</div>
+        </div>
       ) : txs.length === 0 ? (
-        <div className="text-center py-8 text-gray-400">No transactions yet.</div>
+        <div className="text-center py-12 bg-black/30 rounded-xl border border-gray-600">
+          <Coins className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No Transactions Yet</h3>
+          <p className="text-gray-400 mb-4">Start earning coins by streaming, receiving gifts, or complete activities.</p>
+          <button
+            onClick={() => navigate("/store")}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+          >
+            Buy Your First Coins
+          </button>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {txs.map((tx) => (
             <div
               key={tx.id}
-              className="flex justify-between items-center rounded-lg bg-black/50 border border-purple-700/60 px-4 py-3"
+              className={`rounded-lg border px-4 py-3 transition-all hover:shadow-lg ${
+                tx.coins > 0
+                  ? 'bg-green-900/20 border-green-600/40 hover:border-green-500/60'
+                  : 'bg-red-900/20 border-red-600/40 hover:border-red-500/60'
+              }`}
             >
-              <div>
-                <div className="font-semibold text-purple-300">
-                  +{tx.coins.toLocaleString()} coins
-                </div>
-                <div className="text-xs opacity-70 mt-1">
-                  {new Date(tx.created_at).toLocaleString()} · {tx.source} ·{" "}
-                  {tx.payment_status || "completed"}
-                </div>
-                {tx.external_id && (
-                  <div className="text-xs opacity-60 mt-1">
-                    PayPal Tx: {tx.external_id.substring(0, 20)}...
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`font-semibold ${tx.coins > 0 ? 'text-green-300' : 'text-red-300'}`}>
+                      {tx.coins > 0 ? '+' : ''}{tx.coins.toLocaleString()} coins
+                    </div>
+                    <div className="text-xs px-2 py-1 rounded-full bg-black/40 border border-gray-600">
+                      {tx.type || 'transaction'}
+                    </div>
                   </div>
-                )}
-              </div>
-              <div className="text-right">
-                <div className="font-bold text-green-400">
-                  ${Number(tx.usd_amount || 0).toFixed(2)}
+                  
+                  {tx.description && (
+                    <div className="text-sm text-gray-300 mb-1">
+                      {tx.description}
+                    </div>
+                  )}
+                  
+                  <div className="text-xs text-gray-400 space-y-1">
+                    <div className="flex items-center gap-4">
+                      <span>{new Date(tx.created_at).toLocaleDateString()}</span>
+                      <span>{new Date(tx.created_at).toLocaleTimeString()}</span>
+                      <span>•</span>
+                      <span className="capitalize">{tx.source || 'app'}</span>
+                      {tx.payment_status && (
+                        <>
+                          <span>•</span>
+                          <span className={`capitalize ${
+                            tx.payment_status === 'completed' ? 'text-green-400' :
+                            tx.payment_status === 'pending' ? 'text-yellow-400' : 'text-red-400'
+                          }`}>
+                            {tx.payment_status}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    
+                    {tx.external_id && (
+                      <div className="text-gray-500 font-mono">
+                        ID: {tx.external_id.substring(0, 16)}...
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="text-right ml-4">
+                  {tx.usd_amount && Number(tx.usd_amount) > 0 && (
+                    <div className={`font-bold ${tx.coins > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ${Number(tx.usd_amount).toFixed(2)}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-400 mt-1">
+                    {tx.coins > 0 ? 'Earned' : 'Spent'}
+                  </div>
                 </div>
               </div>
             </div>

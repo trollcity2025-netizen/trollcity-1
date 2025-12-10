@@ -2,7 +2,7 @@
 import React, { useEffect, Suspense, lazy, useState } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./lib/store";
-import { supabase, isAdminEmail } from "./lib/supabase";
+import { supabase, isAdminEmail, UserRole } from "./lib/supabase";
 import api from "./lib/api";
 import { Toaster, toast } from "sonner";
 
@@ -31,6 +31,7 @@ const CreatorAgreement = lazy(() => import("./pages/CreatorAgreement"));
 const TaxOnboarding = lazy(() => import("./pages/TaxOnboarding"));
 const AdminEarningsDashboard = lazy(() => import("./pages/admin/AdminEarningsDashboard"));
 const MyEarnings = lazy(() => import("./pages/MyEarnings"));
+const EarningsPage = lazy(() => import("./pages/EarningsPage"));
 
 // Lazy-loaded pages
 const GoLive = lazy(() => import("./pages/GoLive"));
@@ -69,7 +70,7 @@ const FamilyApplication = lazy(() => import("./pages/FamilyApplication"));
 const OfficerApplication = lazy(() => import("./pages/OfficerApplication"));
 const TrollerApplication = lazy(() => import("./pages/TrollerApplication"));
 const LeadOfficerApplication = lazy(() => import("./pages/LeadOfficerApplication"));
-const CoinStore = lazy(() => import("./pages/CoinStorePayPal"));
+const CoinStore = lazy(() => import("./pages/CoinStore"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminPayoutMobile = lazy(() => import("./pages/admin/AdminPayoutMobile"));
 const MobileAdminDashboard = lazy(() => import("./pages/admin/MobileAdminDashboard"));
@@ -120,6 +121,14 @@ const LeadOfficerDashboard = lazy(() => import("./pages/lead-officer/LeadOfficer
 const ApplicationsPage = lazy(() => import("./pages/admin/Applications"));
 const AdminOfficerReports = lazy(() => import("./pages/admin/AdminOfficerReports"));
 const StoreDebug = lazy(() => import("./pages/admin/StoreDebug"));
+const ShopPartnerPage = lazy(() => import("./pages/ShopPartnerPage"));
+const ShopDashboard = lazy(() => import("./pages/ShopDashboard"));
+const CreatorContractPage = lazy(() => import("./pages/CreatorContractPage"));
+const CreatorDashboard = lazy(() => import("./pages/CreatorDashboard"));
+const TromodyShow = lazy(() => import("./pages/TromodyShow"));
+const CommandBattleGoLive = lazy(() => import("./pages/CommandBattleGoLive"));
+const OfficerLoungeStream = lazy(() => import("./pages/OfficerLoungeStream"));
+const TrollWheel = lazy(() => import("./pages/TrollWheel"));
 
 function App() {
   console.log('🚀 App component rendering...');
@@ -359,7 +368,6 @@ function App() {
                 <Route path="/payment-terms" element={<PaymentTerms />} />
                 <Route path="/creator-agreement" element={<CreatorAgreement />} />
                 <Route path="/tax-onboarding" element={<TaxOnboarding />} />
-                <Route path="/earnings" element={<MyEarnings />} />
                 <Route path="/account/earnings" element={<EarningsDashboard />} />
                 
                 {/* Legal/Policy Pages */}
@@ -384,6 +392,7 @@ function App() {
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
                   <Route path="/trollifications" element={<Trollifications />} />
+                  <Route path="/troll-wheel" element={<TrollWheel />} />
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/wall" element={<TrollCityWall />} />
@@ -397,12 +406,23 @@ function App() {
                   <Route path="/stream/:id/summary" element={<StreamSummary />} />
                   <Route path="/stream-ended" element={<StreamEnded />} />
                   
+                  {/* 🎮 Multi-Box Streaming */}
+                  <Route path="/command-battle-go-live" element={<CommandBattleGoLive />} />
+                  <Route path="/officer-stream" element={
+                    <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
+                      <OfficerLoungeStream />
+                    </RequireRole>
+                  } />
+                  
                   {/* ⚔️ Battles */}
                   <Route path="/battles" element={<BattleHistory />} />
                   
                   {/* 👥 Empire Partner Program */}
                   <Route path="/empire-partner" element={<EmpirePartnerDashboard />} />
                   <Route path="/empire-partner/apply" element={<EmpirePartnerApply />} />
+
+                  {/* 🎤 Tromody Show */}
+                  <Route path="/tromody" element={<TromodyShow />} />
                   
                   {/* 💳 Payment Methods */}
                   <Route path="/add-card" element={<AddCard />} />
@@ -418,11 +438,15 @@ function App() {
                   <Route path="/payouts/setup" element={<PayoutSetupPage />} />
                   <Route path="/payouts/request" element={<PayoutRequest />} />
                   <Route path="/payment/callback" element={<PaymentCallback />} />
-                  <Route path="/earnings" element={<MyEarnings />} />
+                  <Route path="/earnings" element={<EarningsPage />} />
                   <Route path="/my-earnings" element={<MyEarnings />} />
                   <Route path="/cashout" element={<CashoutPage />} />
                   <Route path="/withdraw" element={<Withdraw />} />
                   <Route path="/transactions" element={<TransactionHistory />} />
+                  <Route path="/shop-partner" element={<ShopPartnerPage />} />
+                  <Route path="/shop-dashboard" element={<ShopDashboard />} />
+                  <Route path="/creator-contract" element={<CreatorContractPage />} />
+                  <Route path="/creator-dashboard" element={<CreatorDashboard />} />
 
                   {/* 👨‍👩‍👧 Family */}
                   <Route path="/family" element={<TrollFamily />} />
@@ -454,7 +478,7 @@ function App() {
                   <Route
                     path="/lead-officer/review"
                     element={
-                      <RequireRole roles={["admin", "troll_officer"]}>
+                      <RequireRole roles={[UserRole.ADMIN, UserRole.TROLL_OFFICER]}>
                         <LeadOfficerReview />
                       </RequireRole>
                     }
@@ -462,17 +486,15 @@ function App() {
                   <Route
                     path="/lead-officer"
                     element={
-                      <RequireAuth>
-                        <RequireLeadOrOwner>
-                          <LeadOfficerDashboard />
-                        </RequireLeadOrOwner>
-                      </RequireAuth>
+                      <RequireLeadOrOwner>
+                        <LeadOfficerDashboard />
+                      </RequireLeadOrOwner>
                     }
                   />
                   <Route
                     path="/officer/lounge"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
                         <TrollOfficerLounge />
                       </RequireRole>
                     }
@@ -480,7 +502,7 @@ function App() {
                   <Route
                     path="/officer/moderation"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
                         <OfficerModeration />
                       </RequireRole>
                     }
@@ -488,7 +510,7 @@ function App() {
                   <Route
                     path="/officer/report/:id"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
                         <ReportDetailsPage />
                       </RequireRole>
                     }
@@ -496,7 +518,7 @@ function App() {
                   <Route
                     path="/officer/scheduling"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
                         <OfficerScheduling />
                       </RequireRole>
                     }
@@ -504,7 +526,7 @@ function App() {
                   <Route
                     path="/officer/dashboard"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]}>
                         <OfficerDashboard />
                       </RequireRole>
                     }
@@ -512,7 +534,7 @@ function App() {
                   <Route
                     path="/officer/owc"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']} requireActive={true}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
                         <OfficerOWCDashboard />
                       </RequireRole>
                     }
@@ -520,7 +542,7 @@ function App() {
                   <Route
                     path="/officer/training"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]}>
                         <OfficerTrainingSimulator />
                       </RequireRole>
                     }
@@ -528,7 +550,7 @@ function App() {
                   <Route
                     path="/officer/training-progress"
                     element={
-                      <RequireRole roles={['troll_officer', 'admin']}>
+                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]}>
                         <OfficerTrainingProgress />
                       </RequireRole>
                     }
@@ -538,7 +560,7 @@ function App() {
                   <Route
                     path="/admin"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <AdminDashboard />
                       </RequireRole>
                     }
@@ -546,7 +568,7 @@ function App() {
                   <Route
                     path="/store-debug"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <StoreDebug />
                       </RequireRole>
                     }
@@ -554,7 +576,7 @@ function App() {
                   <Route
                     path="/admin/payouts-mobile"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <AdminPayoutMobile />
                       </RequireRole>
                     }
@@ -562,7 +584,7 @@ function App() {
                   <Route
                     path="/admin-mobile"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <MobileAdminDashboard />
                       </RequireRole>
                     }
@@ -570,7 +592,7 @@ function App() {
                   <Route
                     path="/admin/officer-reports"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <AdminOfficerReports />
                       </RequireRole>
                     }
@@ -578,7 +600,7 @@ function App() {
                   <Route
                     path="/admin/earnings"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <AdminEarningsDashboard />
                       </RequireRole>
                     }
@@ -586,7 +608,7 @@ function App() {
                     <Route
                       path="/admin/payments"
                       element={
-                        <RequireRole roles={['admin', 'troll_officer']}>
+                        <RequireRole roles={[UserRole.ADMIN, UserRole.TROLL_OFFICER]}>
                           <PaymentsDashboard />
                         </RequireRole>
                       }
@@ -594,7 +616,7 @@ function App() {
                     <Route
                       path="/admin/economy"
                       element={
-                        <RequireRole roles={['admin', 'troll_officer']}>
+                        <RequireRole roles={[UserRole.ADMIN, UserRole.TROLL_OFFICER]}>
                           <EconomyDashboard />
                         </RequireRole>
                       }
@@ -602,7 +624,7 @@ function App() {
                     <Route
                       path="/admin/tax-reviews"
                       element={
-                        <RequireRole roles={['admin', 'troll_officer']}>
+                        <RequireRole roles={[UserRole.ADMIN, UserRole.TROLL_OFFICER]}>
                           <TaxReviewPanel />
                         </RequireRole>
                       }
@@ -614,7 +636,7 @@ function App() {
                     <Route
                       path="/admin/referrals"
                       element={
-                        <RequireRole roles={['admin', 'troll_officer']}>
+                        <RequireRole roles={[UserRole.ADMIN, UserRole.TROLL_OFFICER]}>
                           <ReferralBonusPanel />
                         </RequireRole>
                       }
@@ -622,7 +644,7 @@ function App() {
                     <Route
                       path="/admin/payouts"
                       element={
-                        <RequireRole roles={['admin']}>
+                        <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminPayoutDashboard />
                         </RequireRole>
                       }
@@ -630,7 +652,7 @@ function App() {
                     <Route
                       path="/admin/officers-live"
                       element={
-                        <RequireRole roles={['admin']}>
+                        <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminLiveOfficersTracker />
                         </RequireRole>
                       }
@@ -638,7 +660,7 @@ function App() {
                     <Route
                       path="/admin/verified-users"
                       element={
-                        <RequireRole roles={['admin']}>
+                        <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminVerifiedUsers />
                         </RequireRole>
                       }
@@ -646,7 +668,7 @@ function App() {
                     <Route
                       path="/admin/verification"
                       element={
-                        <RequireRole roles={['admin']}>
+                        <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminVerificationReview />
                         </RequireRole>
                       }
@@ -654,17 +676,15 @@ function App() {
                     <Route
                       path="/admin/applications"
                       element={
-                        <RequireAuth>
-                          <RequireRole roles={['admin']}>
-                            <ApplicationsPage />
-                          </RequireRole>
-                        </RequireAuth>
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <ApplicationsPage />
+                        </RequireRole>
                       }
                     />
                     <Route
                       path="/admin/docs/policies"
                       element={
-                        <RequireRole roles={['admin']}>
+                        <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminPoliciesDocs />
                         </RequireRole>
                       }
@@ -673,7 +693,7 @@ function App() {
                   <Route
                     path="/changelog"
                     element={
-                      <RequireRole roles={['admin']}>
+                      <RequireRole roles={[UserRole.ADMIN]}>
                         <Changelog />
                       </RequireRole>
                     }

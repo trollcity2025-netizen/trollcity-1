@@ -1,35 +1,39 @@
--- Add OG badge to user_profiles
-ALTER TABLE public.user_profiles 
-ADD COLUMN IF NOT EXISTS og_badge boolean DEFAULT false;
+-- OG Badge System Migration
+-- Adds OG badge column and auto-grant trigger for early users
 
--- Create function to automatically grant OG badge to users created before 2026-01-01
-CREATE OR REPLACE FUNCTION grant_og_badge_to_early_users()
+-- 1. Add og_badge column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_profiles' AND column_name = 'og_badge'
+  ) THEN
+    ALTER TABLE user_profiles ADD COLUMN og_badge BOOLEAN DEFAULT false;
+  END IF;
+END $$;
+
+-- 2. Create trigger to auto-grant OG badge to users created before 2026-01-01
+CREATE OR REPLACE FUNCTION grant_og_badge()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Auto-grant OG badge to any user created before January 1, 2026
-  IF NEW.created_at < '2026-01-01'::timestamp THEN
+  IF NEW.created_at < '2026-01-01' THEN
     NEW.og_badge = true;
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to run before insert on user_profiles
-DROP TRIGGER IF EXISTS set_og_badge_on_insert ON public.user_profiles;
-CREATE TRIGGER set_og_badge_on_insert
-  BEFORE INSERT ON public.user_profiles
-  FOR EACH ROW
-  EXECUTE FUNCTION grant_og_badge_to_early_users();
+-- 3. Create trigger
+CREATE TRIGGER tr_grant_og_badge
+BEFORE INSERT OR UPDATE ON user_profiles
+FOR EACH ROW
+EXECUTE FUNCTION grant_og_badge();
 
--- Grant OG badge to all existing users created before 2026-01-01
-UPDATE public.user_profiles
+-- 4. Update existing users who joined before 2026-01-01
+UPDATE user_profiles
 SET og_badge = true
-WHERE created_at < '2026-01-01'::timestamp;
+WHERE created_at < '2026-01-01'
+AND og_badge = false;
 
--- Verify
-SELECT 
-  COUNT(*) as total_users,
-  COUNT(*) FILTER (WHERE og_badge = true) as og_badge_holders,
-  MIN(created_at) as earliest_user,
-  MAX(created_at) as latest_user
-FROM public.user_profiles;
+-- 5. Add index for OG badge for faster queries
+CREATE INDEX IF NOT EXISTS idx_user_profiles_og_badge ON user_profiles(og_badge);

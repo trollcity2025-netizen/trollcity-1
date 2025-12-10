@@ -1,17 +1,40 @@
 import { ReactNode, useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { supabase, UserRole, validateProfile } from '../../lib/supabase'
+import { useAuthStore } from '../../lib/store'
 
 type Props = {
   children: ReactNode
+  fallbackPath?: string
 }
 
-export function RequireLeadOrOwner({ children }: Props) {
+export function RequireLeadOrOwner({ children, fallbackPath = "/" }: Props) {
   const [loading, setLoading] = useState(true)
   const [allowed, setAllowed] = useState(false)
+  const { profile } = useAuthStore()
 
   useEffect(() => {
     const load = async () => {
+      // Use cached profile if available for better performance
+      if (profile) {
+        const validation = validateProfile(profile)
+        if (!validation.isValid) {
+          console.error('Cached profile validation failed:', validation.errors)
+          setAllowed(false)
+          setLoading(false)
+          return
+        }
+
+        // Check if user is owner (admin) or lead officer
+        const isAdmin = profile.role === UserRole.ADMIN || profile.is_admin
+        const isLeadOfficer = Boolean(profile.is_lead_officer)
+
+        setAllowed(isAdmin || isLeadOfficer)
+        setLoading(false)
+        return
+      }
+
+      // Fallback to database query if no cached profile
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
@@ -30,19 +53,17 @@ export function RequireLeadOrOwner({ children }: Props) {
         console.error('Error checking officer role:', error)
         setAllowed(false)
       } else {
-        // Check if user is owner (admin) or lead officer
-        setAllowed(
-          data?.role === 'admin' ||
-          data?.is_admin === true ||
-          data?.is_lead_officer === true ||
-          data?.role === 'lead_officer'
-        )
+        // Production-ready lead officer check
+        const isAdmin = data?.role === UserRole.ADMIN || data?.is_admin === true
+        const isLeadOfficer = data?.is_lead_officer === true
+
+        setAllowed(isAdmin || isLeadOfficer)
       }
       setLoading(false)
     }
 
     load()
-  }, [])
+  }, [profile])
 
   if (loading) {
     return (
@@ -58,7 +79,12 @@ export function RequireLeadOrOwner({ children }: Props) {
   }
 
   if (!allowed) {
-    return <Navigate to="/" replace />
+    console.warn('Lead officer access denied:', {
+      profileRole: profile?.role,
+      isLeadOfficer: profile?.is_lead_officer,
+      isAdmin: profile?.is_admin
+    })
+    return <Navigate to={fallbackPath} replace />
   }
 
   return <>{children}</>

@@ -140,6 +140,63 @@ export default function AdminRFC() {
           />
         </Section>
 
+        {/* EMPIRE PROGRAM */}
+        <Section title="Empire Partner Program" icon={<Crown className="text-purple-400 w-6 h-6" />}>
+          <Table
+            headers={['Program Level', 'Application Fee', 'Recruiter Bonus', 'Eligibility Requirements']}
+            rows={[
+              ['Empire Partner', '$15 USD', '5% of recruit earnings', 'Approved creator + admin review'],
+              ['TrollTract Contract', '20,000 coins', 'Creator access required', 'Purchase contract first'],
+              ['Referral Tracking', 'Manual assignment', 'Permanent relationships', 'Admin-controlled only'],
+            ]}
+          />
+          
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">🏆 Empire Partner Benefits</h3>
+          <ul className="text-gray-300 space-y-2 pl-6 list-disc text-sm mb-4">
+            <li>5% commission on all recruited creator earnings</li>
+            <li>Exclusive Empire Partner badge and profile recognition</li>
+            <li>Access to Empire Partner dashboard and analytics</li>
+            <li>Priority support and direct admin contact</li>
+            <li>Exclusive promo codes for Empire Partners only</li>
+            <li>Manual recruit assignment by admins (prevents abuse)</li>
+          </ul>
+
+          <h3 className="text-lg font-semibold text-white mb-3">📋 Application Process</h3>
+          <Table
+            headers={['Step', 'Action', 'Cost', 'Processing Time']}
+            rows={[
+              ['1', 'Purchase TrollTract Contract', '20,000 coins', 'Instant'],
+              ['2', 'Submit Creator Application', 'Free', 'Admin review'],
+              ['3', 'Pay Empire Partner Fee', '$15 USD', 'Instant'],
+              ['4', 'Empire Partner Review', 'Free', 'Admin decision'],
+              ['5', 'Admin Assigns Recruits', 'Free', 'Manual process'],
+            ]}
+          />
+
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">⚠️ Empire Partner Rules</h3>
+          <ul className="text-gray-300 space-y-2 pl-6 list-disc text-sm">
+            <li>Must be approved creator before Empire Partner application</li>
+            <li>$15 application fee is non-refundable</li>
+            <li>Recruits are manually assigned by admins only</li>
+            <li>No self-assignment or referral link abuse allowed</li>
+            <li>5% commission only applies to earnings over 40,000 coins/month</li>
+            <li>Commission paid in paid coins (not cash withdrawable)</li>
+            <li>Abuse of system results in permanent ban from program</li>
+            <li>Recruit relationships are permanent and cannot be changed</li>
+          </ul>
+
+          <h3 className="text-lg font-semibold text-white mt-6 mb-3">🛡️ Admin Controls</h3>
+          <Table
+            headers={['Admin Action', 'Permission Level', 'Description', 'Audit Trail']}
+            rows={[
+              ['Review Applications', 'Admin/Officer', 'Approve/deny creator and Empire Partner apps', 'Logged with notes'],
+              ['Assign Recruits', 'Admin Only', 'Manual partner-recruit relationship assignment', 'Permanent records'],
+              ['Revoke Status', 'Admin Only', 'Remove Empire Partner privileges for violations', 'Full audit trail'],
+              ['View Analytics', 'Admin/Officer', 'Empire Partner earnings and performance tracking', 'Comprehensive logs'],
+            ]}
+          />
+        </Section>
+
         {/* PLATFORM POLICIES */}
         <div className="mt-8">
           <h2 className="text-2xl font-bold text-white mb-4">

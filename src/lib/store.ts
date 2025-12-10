@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User, Session } from '@supabase/supabase-js'
-import { UserProfile } from './supabase'
+import { UserProfile, UserRole } from './supabase'
 import { supabase } from './supabase'
 
 interface AuthState {
@@ -30,22 +30,46 @@ export const useAuthStore = create<AuthState>()(
         set({ user, session })
       },
 
-      // Sets profile AND applies admin overrides
+      // Sets profile AND applies admin overrides with production validation
       setProfile: (profile) => {
-        const adminEmail = "trollcity2025@gmail.com"
-
-        // Auto-admin if email matches
-        if (profile && profile.email?.toLowerCase() === adminEmail.toLowerCase()) {
-          profile = { ...profile, role: "admin" }
+        if (!profile) {
+          set({ profile: null })
+          return
         }
 
-        // Admins = auto officer
-        if (profile && profile.role === "admin") {
+        // Import admin email from environment
+        const adminEmail = (import.meta as any).env?.VITE_ADMIN_EMAIL || "trollcity2025@gmail.com"
+
+        // Auto-admin if email matches (with validation)
+        if (profile.email?.toLowerCase() === adminEmail.toLowerCase()) {
+          profile = {
+            ...profile,
+            role: UserRole.ADMIN,
+            is_admin: true
+          }
+        }
+
+        // Enhanced admin role handling
+        if (profile.role === UserRole.ADMIN || profile.is_admin) {
           profile = {
             ...profile,
             is_troll_officer: true,
             is_officer_active: true,
+            is_lead_officer: true,
+            // Ensure admin has highest officer level
+            officer_level: Math.max(profile.officer_level || 0, 5)
           }
+        }
+
+        // Production logging with validation
+        try {
+          const { validateProfile } = require('./supabase')
+          const validation = validateProfile(profile)
+          if (!validation.isValid) {
+            console.warn("Profile validation warnings:", validation.warnings)
+          }
+        } catch (error) {
+          // Silent fail if validation not available
         }
 
         console.log("Profile updated:", profile?.username, profile?.role)

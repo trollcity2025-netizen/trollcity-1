@@ -4,6 +4,7 @@ import { AccessToken } from 'livekit-server-sdk'
 
 export default async function handler(req: any, res: any) {
   const { room, identity } = req.query
+  const metadata = req.body?.metadata || {}
 
   const apiKey = process.env.LIVEKIT_API_KEY!
   const apiSecret = process.env.LIVEKIT_API_SECRET!
@@ -12,6 +13,7 @@ export default async function handler(req: any, res: any) {
   const token = new AccessToken(apiKey, apiSecret, {
     identity: identity as string,
     ttl: 3600,
+    metadata: JSON.stringify(metadata),
   })
 
   token.addGrant({
@@ -24,6 +26,8 @@ export default async function handler(req: any, res: any) {
 
   res.status(200).json({
     token: await token.toJwt(),
+    livekitUrl: livekitUrl,
+    serverUrl: livekitUrl,
     url: livekitUrl,
   })
 }

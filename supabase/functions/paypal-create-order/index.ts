@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js";
+
 export const config = {
   runtime: "edge",
 };
@@ -12,29 +14,6 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// PayPal token
-async function getToken() {
-  const creds = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`);
-
-  const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${creds}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error("PayPal OAuth error:", txt);
-    throw new Error("Failed to obtain PayPal access token");
-  }
-
-  const json = await res.json();
-  return json.access_token;
-}
 
 export default async function handler(req: Request) {
   // ⭐ OPTIONS MUST BE FIRST ⭐
@@ -55,26 +34,15 @@ export default async function handler(req: Request) {
   }
 
   try {
-    const body = await req.json();
-    const { amount } = body;
+    const { amount, user_id, coins } = await req.json();
 
-    if (!amount) {
-      return new Response(JSON.stringify({ error: "Missing amount field" }), {
-        status: 400,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      });
-    }
+    const auth = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`);
 
-    const token = await getToken();
-
-    const orderRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
+    const res = await fetch("https://api-m.paypal.com/v2/checkout/orders", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
+        Authorization: `Basic ${auth}`,
       },
       body: JSON.stringify({
         intent: "CAPTURE",
@@ -82,43 +50,24 @@ export default async function handler(req: Request) {
           {
             amount: {
               currency_code: "USD",
-              value: Number(amount).toFixed(2), // ⭐ FIXED ⭐
+              value: amount.toFixed(2),
             },
-            custom_id: JSON.stringify({
-              amount: Number(amount)
-            }),
+            custom_id: `${user_id}|${coins}`,
           },
         ],
       }),
     });
 
-    const json = await orderRes.json();
+    const data = await res.json();
 
-    if (!orderRes.ok) {
-      return new Response(JSON.stringify({ error: "PayPal create failed", details: json }), {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      });
-    }
-
-    return new Response(JSON.stringify({ id: json.id }), {
-      status: 200,
+    return new Response(JSON.stringify({ orderID: data.id }), {
       headers: {
         ...cors,
         "Content-Type": "application/json",
       },
     });
-
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message ?? "Unknown error" }), {
-      status: 500,
-      headers: {
-        ...cors,
-        "Content-Type": "application/json",
-      },
-    });
+  } catch (err) {
+    console.error(err);
+    return new Response(JSON.stringify({ error: "Order creation failed" }), { status: 500 });
   }
 }

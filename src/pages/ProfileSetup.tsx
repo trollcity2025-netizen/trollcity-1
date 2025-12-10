@@ -307,6 +307,122 @@ const ProfileSetup = () => {
           </div>
         </details>
 
+
+          {/* 🆔 ID Verification Section */}
+          <details className="bg-[#1A1A1A] rounded-lg border border-[#2C2C2C] mt-6">
+            <summary className="cursor-pointer px-6 py-4 flex items-center justify-between">
+              <span className="font-semibold">ID Verification (Required for Account Access)</span>
+              <span className="text-sm bg-red-600 text-white px-3 py-1 rounded">Required</span>
+            </summary>
+
+            <div className="px-6 pb-6 space-y-4">
+              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                <h3 className="font-semibold text-yellow-300 mb-2">📋 Important Notice</h3>
+                <p className="text-sm text-yellow-200 mb-3">
+                  To comply with our safety policies and prevent fraud, all users must upload a valid government-issued ID before gaining full access to Troll City features.
+                </p>
+                <p className="text-sm text-yellow-200">
+                  Your ID will be securely stored and only accessible to administrators for verification purposes.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm text-gray-300 mb-1">
+                  Upload Government ID (Driver's License, Passport, or State ID)
+                </label>
+                <div className="bg-[#23232b] border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-400 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file || !user) return
+
+                      try {
+                        setLoading(true)
+                        const fileName = `id-${user.id}-${Date.now()}${file.name.substring(file.name.lastIndexOf('.'))}`
+                        const filePath = `verification_docs/${fileName}`
+
+                        // Upload to Supabase storage
+                        const { error: uploadError } = await supabase.storage
+                          .from('verification_docs')
+                          .upload(filePath, file, { cacheControl: '3600', upsert: false })
+
+                        if (uploadError) throw uploadError
+
+                        // Get public URL
+                        const { data: urlData } = supabase.storage
+                          .from('verification_docs')
+                          .getPublicUrl(filePath)
+
+                        // Update user profile with ID verification info
+                        const { error: profileError } = await supabase
+                          .from('user_profiles')
+                          .update({
+                            id_document_url: urlData.publicUrl,
+                            id_verification_status: 'pending',
+                            id_uploaded_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                          })
+                          .eq('id', user.id)
+
+                        if (profileError) throw profileError
+
+                        // Update local profile
+                        const { data: updated } = await supabase
+                          .from('user_profiles')
+                          .select('*')
+                          .eq('id', user.id)
+                          .single()
+
+                        if (updated) {
+                          setProfile(updated as any)
+                          toast.success('ID uploaded successfully! Your account will be verified by an admin within 24 hours.')
+                        }
+                      } catch (err: any) {
+                        console.error('ID upload error:', err)
+                        toast.error(err?.message || 'Failed to upload ID. Please try again.')
+                      } finally {
+                        setLoading(false)
+                      }
+                    }}
+                    className="hidden"
+                    id="id-upload"
+                  />
+                  <label htmlFor="id-upload" className="cursor-pointer">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xl">📄</span>
+                      </div>
+                      <span className="text-purple-400 font-semibold">Click to Upload ID</span>
+                      <span className="text-xs text-gray-400">PDF, JPG, or PNG (max 10MB)</span>
+                    </div>
+                  </label>
+                </div>
+
+                {(profile as any)?.id_document_url ? (
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-green-400">✅</span>
+                      <span className="text-sm text-green-300">ID uploaded successfully!</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">
+                      Verification Status: <span className="font-semibold">{(profile as any).id_verification_status || 'pending'}</span>
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Your account will be reviewed by our team within 24 hours. You'll receive a notification when verified.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-gray-800/30 rounded-lg p-3">
+                    <p className="text-xs text-gray-400 text-center">
+                      No ID uploaded yet. Please upload your government-issued ID to gain full access to Troll City.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </details>
         
       </div>
     </div>

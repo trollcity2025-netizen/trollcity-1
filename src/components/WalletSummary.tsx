@@ -36,10 +36,13 @@ export default function WalletSummary() {
           </div>
           <div className="flex items-center gap-1">
             <Gift className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-400">Free:</span>
-            <span className="font-semibold text-cyan-300">
+            <span className="text-slate-400">TrollMonds:</span>
+            <button
+              className="font-semibold text-cyan-300 hover:text-cyan-200 underline cursor-pointer"
+              onClick={() => navigate('/trollmond-store')}
+            >
               {loading ? '...' : freeCoins.toLocaleString()}
-            </span>
+            </button>
           </div>
           <div className="flex items-center gap-1">
             <Crown className="w-4 h-4 text-purple-400" />

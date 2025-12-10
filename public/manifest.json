@@ -1,10 +1,10 @@
 {
-  "name": "TrollCity Admin Dashboard",
-  "short_name": "Admin",
-  "description": "Mobile-first admin dashboard for TrollCity",
-  "start_url": "/admin-mobile",
+  "name": "TrollCity",
+  "short_name": "TrollCity",
+  "description": "Live streaming and social platform for creators and viewers",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#0A0814",
   "theme_color": "#9333EA",
   "orientation": "portrait-primary",
   "icons": [
@@ -15,20 +15,27 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity"],
+  "categories": ["entertainment", "social", "productivity"],
   "shortcuts": [
     {
-      "name": "Payouts",
-      "short_name": "Payouts",
-      "description": "View pending payouts",
-      "url": "/admin-mobile?tab=payouts",
+      "name": "Go Live",
+      "short_name": "Live",
+      "description": "Start streaming",
+      "url": "/go-live",
       "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
-      "name": "Applications",
-      "short_name": "Apps",
-      "description": "Review broadcaster applications",
-      "url": "/admin-mobile?tab=applications",
+      "name": "Store",
+      "short_name": "Store",
+      "description": "Purchase coins",
+      "url": "/store",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Wallet",
+      "short_name": "Wallet",
+      "description": "View earnings",
+      "url": "/wallet",
       "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]

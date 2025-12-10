@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
   MessageSquare,
@@ -17,6 +17,9 @@ import {
   Sword,
   UserPlus,
   Bug,
+  Store,
+  Crown,
+  Mic,
 } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { supabase, isAdminEmail } from '../lib/supabase'
@@ -24,7 +27,14 @@ import { supabase, isAdminEmail } from '../lib/supabase'
 export default function Sidebar() {
   const { profile, user } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const isActive = (path: string) => location.pathname === path
+
+  // Real-time wallet state
+  const [walletData, setWalletData] = useState({
+    paid_coins: profile?.paid_coin_balance || 0,
+    trollmonds: 0, // Will be loaded from wallets table if exists
+  })
 
   const badge =
     profile?.role === 'admin'
@@ -36,6 +46,88 @@ export default function Sidebar() {
   const [canSeeOfficer, setCanSeeOfficer] = useState(false)
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
   const isAdmin = profile?.role === 'admin'
+
+  // Real-time wallet updates
+  useEffect(() => {
+    if (!user || !profile) return
+
+    const loadWalletData = async () => {
+      try {
+        // Load from wallets table if it exists
+        const { data: wallet } = await supabase
+          .from("wallets")
+          .select("*")
+          .eq("user_id", user.id)
+          .single()
+
+        if (wallet) {
+          setWalletData({
+            paid_coins: (wallet as any).paid_coins || profile.paid_coin_balance || 0,
+            trollmonds: (wallet as any).trollmonds || 0,
+          })
+        } else {
+          // Fallback to profile data
+          setWalletData({
+            paid_coins: profile.paid_coin_balance || 0,
+            trollmonds: 0,
+          })
+        }
+      } catch (error) {
+        // Wallets table might not exist, use profile data
+        setWalletData({
+          paid_coins: profile.paid_coin_balance || 0,
+          trollmonds: 0,
+        })
+      }
+    }
+
+    loadWalletData()
+
+    // Realtime Supabase listener for wallet updates
+    const channel = supabase
+      .channel("wallet_updates_sidebar")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "wallets",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            const wallet = payload.new as any
+            setWalletData({
+              paid_coins: wallet.paid_coins || profile.paid_coin_balance || 0,
+              trollmonds: wallet.trollmonds || 0,
+            })
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            const profileData = payload.new as any
+            setWalletData(prev => ({
+              ...prev,
+              paid_coins: profileData.paid_coin_balance || prev.paid_coins,
+            }))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user?.id, profile?.id, profile?.paid_coin_balance])
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -75,10 +167,12 @@ export default function Sidebar() {
     checkAccess()
   }, [profile?.id, profile?.role])
 
+  if (!user) return null
+
   return (
     <div className="w-64 min-h-screen bg-[#0A0A14] text-white flex flex-col border-r border-[#2C2C2C] shadow-xl">
 
-      {/* Profile Block */}
+      {/* Profile Block with Real-time Wallet */}
       <div className="p-5 text-center border-b border-[#2C2C2C]">
         <div className="w-20 h-20 mx-auto rounded-full overflow-hidden border-4 border-purple-500 shadow-lg">
           <img
@@ -100,12 +194,34 @@ export default function Sidebar() {
           {profile?.role === 'admin' ? 'Admin' : profile?.role === 'troll_officer' ? 'Troll Officer' : 'Member'}
         </p>
 
-        <div className="flex justify-center gap-3 mt-4 text-xs">
-          <div className="bg-[#1C1C24] px-3 py-2 rounded-lg border border-purple-500/40 text-purple-300">
-            Paid: {profile?.paid_coin_balance ?? 0}
+        {/* Real-time Wallet Section */}
+        <div className="mt-4 space-y-2">
+          {/* TROLL COINS */}
+          <div
+            onClick={() => navigate("/earnings")}
+            className="flex items-center justify-between bg-[#1C1C24] px-3 py-2 rounded-lg border border-green-500/40 text-green-300 cursor-pointer hover:bg-[#252530] transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💰</span>
+              <span className="text-sm font-semibold">Troll Coins</span>
+            </div>
+            <span className="font-bold">
+              {walletData.paid_coins?.toLocaleString() ?? 0}
+            </span>
           </div>
-          <div className="bg-[#1C1C24] px-3 py-2 rounded-lg border border-green-500/40 text-green-300">
-            Free: {profile?.free_coin_balance ?? 0}
+
+          {/* TROLLMONDS */}
+          <div
+            onClick={() => navigate("/trollmond-store")}
+            className="flex items-center justify-between bg-[#1C1C24] px-3 py-2 rounded-lg border border-green-500/40 text-green-300 cursor-pointer hover:bg-[#252530] transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💎</span>
+              <span className="text-sm font-semibold">Trollmonds</span>
+            </div>
+            <span className="font-bold">
+              {walletData.trollmonds?.toLocaleString() ?? 0}
+            </span>
           </div>
         </div>
       </div>
@@ -117,16 +233,20 @@ export default function Sidebar() {
         <MenuLink to="/following" icon={<UserCheck />} label="Following" active={isActive('/following')} />
         <MenuLink to="/store" icon={<Coins />} label="Coin Store" active={isActive('/store')} />
         <MenuLink to="/transactions" icon={<Receipt />} label="Transactions" active={isActive('/transactions')} />
-
+        <MenuLink to="/shop-partner" icon={<Store />} label="Sell on Troll City" active={isActive('/shop-partner')} />
+        <MenuLink to="/shop-dashboard" icon={<Store />} label="Shop Earnings" active={isActive('/shop-dashboard')} />
+        <MenuLink to="/creator-contract" icon={<Crown />} label="TrollTract" active={isActive('/creator-contract')} />
+        <MenuLink to="/creator-dashboard" icon={<LayoutDashboard />} label="Creator Dashboard" active={isActive('/creator-dashboard')} />
 
         <MenuLink to="/leaderboard" icon={<span className="inline-block w-5 h-5">🏆</span>} label="Leaderboard" active={isActive('/leaderboard')} />
         <MenuLink to="/wall" icon={<span className="inline-block w-5 h-5">🧌</span>} label="Troll City Wall" active={isActive('/wall')} />
 
         <MenuLink to="/go-live" icon={<Radio />} label="Go Live" active={isActive('/go-live')} />
+        <MenuLink to="/tromody" icon={<Mic />} label="Tromody Show" active={isActive('/tromody')} />
         <MenuLink to="/battles" icon={<Sword />} label="Battle History" active={isActive('/battles')} />
         <MenuLink to="/empire-partner" icon={<UserPlus />} label="Empire Partner" active={isActive('/empire-partner')} />
         <MenuLink to="/trollifications" icon={<Gift />} label="Trollifications" active={isActive('/trollifications')} />
-        {/* Note: Trollifications is the unified notifications page */}
+        <MenuLink to="/troll-wheel" icon={<span className="inline-block w-5 h-5">🎡</span>} label="Troll Wheel" active={isActive('/troll-wheel')} />
         
         {/* Applications - Show for everyone */}
         <MenuLink to="/apply" icon={<FileText />} label="Applications" active={isActive('/apply')} />

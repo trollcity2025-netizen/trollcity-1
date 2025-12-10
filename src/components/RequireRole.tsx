@@ -1,36 +1,83 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
-import { isAdminEmail } from '../lib/supabase';
+import { hasRole, UserRole, validateProfile, isAdminEmail } from '../lib/supabase';
 
 interface RequireRoleProps {
-  roles: string[];
+  roles: UserRole | UserRole[];
   children: React.ReactNode;
   requireActive?: boolean; // For officers, require is_officer_active = true
+  fallbackPath?: string; // Custom redirect path
+  showValidationErrors?: boolean; // For development
 }
 
-const RequireRole: React.FC<RequireRoleProps> = ({ roles, children, requireActive = false }) => {
+const RequireRole: React.FC<RequireRoleProps> = ({
+  roles,
+  children,
+  requireActive = false,
+  fallbackPath,
+  showValidationErrors = false
+}) => {
   const { profile, user } = useAuthStore();
 
+  // Basic authentication check
   if (!profile) {
     return <Navigate to="/" replace />;
   }
 
-  const isAdmin = profile.is_admin || profile.role === 'admin' || (user?.email && isAdminEmail(user.email))
-  
-  // Check if user has required role
-  const hasRole = roles.includes(profile.role || '') || 
-                  (roles.includes('troll_officer') && (profile.is_troll_officer || isAdmin)) ||
-                  (roles.includes('admin') && isAdmin);
-
-  if (!hasRole) {
-    return <Navigate to="/access-denied" replace />;
+  // Validate profile data
+  const validation = validateProfile(profile);
+  if (!validation.isValid) {
+    console.error('Profile validation failed:', validation.errors);
+    if (showValidationErrors) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#0A0814] text-white">
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 max-w-md">
+            <h2 className="text-xl font-bold mb-2">Profile Validation Error</h2>
+            <ul className="text-sm space-y-1">
+              {validation.errors.map((error, index) => (
+                <li key={index} className="text-red-300">• {error}</li>
+              ))}
+            </ul>
+            {validation.warnings.length > 0 && (
+              <>
+                <h3 className="text-lg font-semibold mt-4 mb-2">Warnings:</h3>
+                <ul className="text-sm space-y-1">
+                  {validation.warnings.map((warning, index) => (
+                    <li key={index} className="text-yellow-300">• {warning}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return <Navigate to="/" replace />;
   }
 
-  // If requireActive is true and user is an officer, check if they're active
-  if (requireActive && (profile.is_troll_officer || profile.role === 'troll_officer')) {
+  // Check role permissions with enhanced validation
+  const hasRequiredRole = hasRole(profile, roles, {
+    requireActive,
+    allowAdminOverride: true
+  });
+
+  if (!hasRequiredRole) {
+    console.warn('Access denied:', {
+      userRole: profile.role,
+      requiredRoles: roles,
+      requireActive,
+      isOfficerActive: profile.is_officer_active,
+      isAdmin: profile.is_admin || (user?.email && isAdminEmail(user.email))
+    });
+    
+    return <Navigate to={fallbackPath || "/access-denied"} replace />;
+  }
+
+  // Additional officer-specific checks
+  if (requireActive && (profile.role === UserRole.TROLL_OFFICER || profile.is_troll_officer)) {
     if (!profile.is_officer_active) {
-      // Redirect to orientation if not active
+      console.log('Officer not active, redirecting to orientation');
       return <Navigate to="/officer/orientation" replace />;
     }
   }

@@ -4,87 +4,137 @@ import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import { supabase, CoinPackage } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
+import { createPayPalOrder, capturePayPalOrder, getPayPalConfig, testPayPalConnection, logPayPalAction } from '../lib/paypalUtils'
 import TrollerInsurance from './TrollerInsurance'
 
-const DEFAULT_PACKAGES: CoinPackage[] = [
-  {
-    id: 'baby_troll',
-    name: 'Baby Troll',
-    coin_amount: 500,
-    price: 6.49,
-    currency: 'USD',
-    description: 'Starter pack',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'little_troller',
-    name: 'Little Troller',
-    coin_amount: 1440,
-    price: 12.99,
-    currency: 'USD',
-    description: 'Small bundle',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'troll_warrior',
-    name: 'Troll Warrior',
-    coin_amount: 3000,
-    price: 24.99,
-    currency: 'USD',
-    description: 'Medium bundle',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'troll_empire',
-    name: 'Troll Empire',
-    coin_amount: 7000,
-    price: 49.99,
-    currency: 'USD',
-    description: 'Large bundle',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'troll_royalty',
-    name: 'Troll Royalty VIP',
-    coin_amount: 15700,
-    price: 99.99,
-    currency: 'USD',
-    description: 'Mega bundle',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'big_troller',
-    name: 'Big Troller',
-    coin_amount: 60000,
-    price: 299.99,
-    currency: 'USD',
-    description: 'Ultra bundle',
-    is_active: true,
-    created_at: new Date().toISOString()
-  }
-]
-
 export default function CoinStore() {
-  // Hardcoded Supabase function URL for PayPal
-  const functionUrl = 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
-  
-  console.log("FUNCTION_URL:", functionUrl);
-
   const { user, profile, refreshProfile } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   
-  const [packages] = useState<CoinPackage[]>(DEFAULT_PACKAGES)
+  const [packages, setPackages] = useState<CoinPackage[]>([])
   const [promoCode, setPromoCode] = useState('')
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null)
   const [promoError, setPromoError] = useState('')
   const [processingPackage, setProcessingPackage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'coins' | 'calls'>('coins')
+  const [paypalConfig, setPaypalConfig] = useState<any>(null)
+  const [connectionTest, setConnectionTest] = useState<{ tested: boolean; success: boolean; error?: string }>({ tested: false, success: false })
+
+  // Load coin packages from database
+  useEffect(() => {
+    const loadPackages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('coin_packages')
+          .select('*')
+          .eq('is_active', true)
+          .order('price', { ascending: true })
+        
+        if (error) {
+          console.error('Error loading packages:', error)
+          // Fallback to default packages if database fails
+          setPackages([
+            {
+              id: 'baby_troll',
+              name: 'Baby Troll',
+              coin_amount: 500,
+              price: 6.49,
+              currency: 'USD',
+              description: 'Perfect for getting started',
+              is_active: true,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'little_troll',
+              name: 'Little Troll',
+              coin_amount: 1100,
+              price: 12.99,
+              currency: 'USD',
+              description: 'Great value for casual users',
+              is_active: true,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'mischief_troll',
+              name: 'Mischief Troll',
+              coin_amount: 2500,
+              price: 24.99,
+              currency: 'USD',
+              description: 'Popular choice for active users',
+              is_active: true,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'family_troll',
+              name: 'Family Troll',
+              coin_amount: 5500,
+              price: 49.99,
+              currency: 'USD',
+              description: 'Best value for regular streamers',
+              is_active: true,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'empire_troll',
+              name: 'Empire Troll',
+              coin_amount: 12000,
+              price: 99.99,
+              currency: 'USD',
+              description: 'For the ultimate Troll City experience',
+              is_active: true,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'king_troll',
+              name: 'King Troll',
+              coin_amount: 25000,
+              price: 199.99,
+              currency: 'USD',
+              description: 'The ultimate package for power users',
+              is_active: true,
+              created_at: new Date().toISOString()
+            }
+          ])
+        } else {
+          setPackages(data || [])
+        }
+      } catch (error) {
+        console.error('Error loading packages:', error)
+        toast.error('Failed to load coin packages')
+      }
+    }
+    
+    loadPackages()
+  }, [])
+
+  // Initialize PayPal configuration and test connection
+  useEffect(() => {
+    try {
+      const config = getPayPalConfig()
+      setPaypalConfig(config)
+      
+      // Test PayPal connection in background
+      testPayPalConnection().then(result => {
+        setConnectionTest({
+          tested: true,
+          success: result.success,
+          error: result.error
+        })
+        
+        if (!result.success) {
+          console.warn('PayPal connection test failed:', result.error)
+        }
+      })
+    } catch (error: any) {
+      console.error('PayPal configuration error:', error)
+      setConnectionTest({
+        tested: true,
+        success: false,
+        error: error.message
+      })
+    }
+  }, [])
 
   useEffect(() => {
     const state = location.state as { requiredCoins?: number; message?: string } | null
@@ -137,7 +187,6 @@ export default function CoinStore() {
     return Math.max(0, basePrice - discount)
   }, [appliedPromo])
 
-
   const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID
 
   const paypalOptions = useMemo(
@@ -153,7 +202,6 @@ export default function CoinStore() {
     [paypalClientId]
   )
 
-
   if (!paypalClientId) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-400">
@@ -162,11 +210,43 @@ export default function CoinStore() {
     )
   }
 
+  // Show connection test results
+  const showConnectionStatus = connectionTest.tested && (
+    <div className={`p-3 rounded-lg border text-sm mb-4 ${
+      connectionTest.success
+        ? 'bg-green-900/20 border-green-600/40 text-green-300'
+        : 'bg-red-900/20 border-red-600/40 text-red-300'
+    }`}>
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${
+          connectionTest.success ? 'bg-green-400' : 'bg-red-400'
+        }`}></div>
+        <span>
+          PayPal {connectionTest.success ? 'Connected' : 'Connection Failed'}
+          {paypalConfig && ` (${paypalConfig.environment})`}
+        </span>
+        {!connectionTest.success && connectionTest.error && (
+          <span className="text-xs opacity-70">- {connectionTest.error}</span>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <PayPalScriptProvider options={paypalOptions}>
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-4xl font-bold mb-2">Troll City Coin Store</h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-4xl font-bold">Troll City Coin Store</h1>
+            {connectionTest.tested && (
+              <div className="text-sm text-gray-400">
+                Environment: <span className="text-purple-400">{paypalConfig?.environment || 'unknown'}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Connection Status */}
+          {showConnectionStatus}
 
           <p className="text-gray-400 mb-6">
             Current Balance:{' '}
@@ -274,62 +354,50 @@ export default function CoinStore() {
                         createOrder={async () => {
                           setProcessingPackage(pkg.id);
                           try {
-                            const res = await fetch(
-                              `${functionUrl}/paypal-create-order`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json"
-                                },
-                                body: JSON.stringify({
-                                  amount: finalPrice
-                                })
-                              }
-                            );
-
+                            const functionUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
+                            const res = await fetch(`${functionUrl}/paypal-create-order`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                amount: finalPrice,
+                                coins: pkg.coin_amount,
+                                user_id: user.id,
+                              }),
+                            });
                             const data = await res.json();
-                            console.log("PayPal CreateOrder Response:", data);
-
-                            if (!data.id) throw new Error("No order ID returned");
-
-                            return data.id;
+                            console.log("Create Order Response", data);
+                            if (!data?.orderID) throw new Error("PayPal did not return an orderID");
+                            return data.orderID;
                           } catch (err) {
-                            console.error("CreateOrder Error:", err);
-                            toast.error("Unable to create PayPal order");
+                            console.error("createOrder error", err);
+                            toast.error("Unable to create PayPal order.");
                             setProcessingPackage(null);
                             throw err;
                           }
                         }}
-                        onApprove={async (data) => {
+                        onApprove={async (data, actions) => {
                           try {
-                            const res = await fetch(
-                              `${functionUrl}/paypal-complete-order`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json"
-                                },
-                                body: JSON.stringify({
-                                  paypal_order_id: data.orderID,
-                                  user_id: user.id,
-                                }),
-                              }
-                            );
-
+                            const functionUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
+                            const res = await fetch(`${functionUrl}/paypal-complete-order`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                orderID: data.orderID,
+                                user_id: user.id,
+                              }),
+                            });
                             const json = await res.json();
-                            console.log("PayPal Capture Response:", json);
-
+                            console.log("Capture Order Response", json);
                             if (!json.success) {
-                              toast.error("Payment was not completed");
+                              toast.error(json.message || "Payment capture failed");
                               return;
                             }
-
-                            toast.success(`Purchased ${json.coins_awarded} coins!`);
+                            toast.success(`Added ${json.coins_awarded} coins!`);
                             await refreshProfile();
-                            setProcessingPackage(null);
                           } catch (err) {
-                            console.error("onApprove Error:", err);
+                            console.error("onApprove error", err);
                             toast.error("Payment processing error");
+                          } finally {
                             setProcessingPackage(null);
                           }
                         }}
