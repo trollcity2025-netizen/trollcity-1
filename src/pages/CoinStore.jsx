@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
 import { coinPackages, formatCoins, formatUSD } from '../lib/coinMath';
 import RequireRole from '../components/RequireRole';
+import { PayPalButtons } from '@paypal/react-paypal-js';
 
 export default function CoinStore() {
   const { user, profile } = useAuthStore();
@@ -120,11 +121,10 @@ export default function CoinStore() {
       const token = session?.access_token;
       if (!token) throw new Error('No authentication token available');
 
-      // Build correct payload
       const payload = {
-        amount: pkg.price,   // REQUIRED BY BACKEND
-        coins: pkg.coins,    // REQUIRED BY BACKEND
-        user_id: user.id     // REQUIRED BY BACKEND
+        amount: pkg.price,
+        coins: pkg.coins,
+        user_id: user.id
       };
 
       console.log("📤 Sending payload →", payload);
@@ -135,30 +135,33 @@ export default function CoinStore() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,   // Supabase auth
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY // REQUIRED
+            Authorization: `Bearer ${token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY
           },
           body: JSON.stringify(payload),
         }
       );
 
-      console.log("📡 PayPal API response:", res.status);
+      console.log("📡 PayPal response status:", res.status);
 
-      if (!res.ok) throw new Error(`API Error: ${res.status}`);
-
-      const data = await res.json();
-      console.log("📦 PayPal API response data:", data);
-
-      if (!data.orderID) {
-        throw new Error("Missing orderID from backend");
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("❌ Backend error:", txt);
+        throw new Error(`Backend error: ${res.status}`);
       }
 
-      // For mock mode, just confirm
-      toast.success("Mock PayPal order created!");
+      const data = await res.json();
+      console.log("📦 Order created:", data);
+
+      if (!data.orderID) throw new Error("Backend did not return orderID");
+
+      // THIS IS THE REAL FLOW → RETURN THE ORDER ID TO PAYPAL BUTTONS
+      return data.orderID;
 
     } catch (err) {
       console.error("❌ Failed to start PayPal checkout:", err);
       toast.error("Unable to start checkout.");
+      throw err;
     } finally {
       setLoadingPackage(null);
     }
@@ -304,6 +307,51 @@ export default function CoinStore() {
                       <button onClick={() => handleBuy(pkg)} disabled={loadingPackage === pkg.id} className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                         {loadingPackage === pkg.id ? (<><Loader2 className="w-4 h-4 animate-spin" />Starting Checkout...</>) : (<><ShoppingCart className="w-4 h-4" />Buy with PayPal</>)}
                       </button>
+
+                      <PayPalButtons
+                        style={{ layout: "horizontal" }}
+                        fundingSource="paypal"
+                        createOrder={async () => {
+                          return await handleBuy(pkg); // MUST return orderID
+                        }}
+                        onApprove={async (data) => {
+                          console.log("✅ PayPal approved:", data);
+
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const token = session?.access_token;
+
+                          const captureRes = await fetch(
+                            `${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/paypal-capture-order`,
+                            {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+                              },
+                              body: JSON.stringify({
+                                orderID: data.orderID,
+                                user_id: user.id,
+                                coins: pkg.coins,
+                              }),
+                            }
+                          );
+
+                          const captureJson = await captureRes.json();
+                          console.log("💰 Capture result:", captureJson);
+
+                          if (captureRes.ok) {
+                            toast.success(`+${pkg.coins.toLocaleString()} Troll Coins added!`);
+                            loadWalletData();
+                          } else {
+                            toast.error("Payment completed, but coin update failed.");
+                          }
+                        }}
+                        onError={(err) => {
+                          console.error("❌ PayPal error:", err);
+                          toast.error("PayPal checkout error.");
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
