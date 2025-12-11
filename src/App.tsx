@@ -61,6 +61,10 @@ const TrollFamilyCity = lazy(() => import("./pages/TrollFamilyCity"));
 const FamilyProfilePage = lazy(() => import("./pages/FamilyProfilePage"));
 const FamilyWarsPage = lazy(() => import("./pages/FamilyWarsPage"));
 const FamilyChatPage = lazy(() => import("./pages/FamilyChatPage"));
+const FamilyLounge = lazy(() => import("./pages/FamilyLounge"));
+const FamilyWarsHub = lazy(() => import("./pages/FamilyWarsHub"));
+const FamilyLeaderboard = lazy(() => import("./pages/FamilyLeaderboard"));
+const FamilyShop = lazy(() => import("./pages/FamilyShop"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const EarningsPayout = lazy(() => import("./pages/EarningsPayout"));
 const TransactionHistory = lazy(() => import("./pages/TransactionHistory"));
@@ -535,6 +539,12 @@ function App() {
                   <Route path="/family/profile/:id" element={<FamilyProfilePage />} />
                   <Route path="/family/chat" element={<FamilyChatPage />} />
                   <Route path="/family/wars" element={<FamilyWarsPage />} />
+
+                  {/* 🏰 Troll Family Ecosystem */}
+                  <Route path="/family/lounge" element={<FamilyLounge />} />
+                  <Route path="/family/wars-hub" element={<FamilyWarsHub />} />
+                  <Route path="/family/leaderboard" element={<FamilyLeaderboard />} />
+                  <Route path="/family/shop" element={<FamilyShop />} />
 
                   {/* 📝 Applications */}
                   <Route path="/apply" element={<Application />} />

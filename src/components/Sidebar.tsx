@@ -277,7 +277,18 @@ export default function Sidebar() {
 
         {/* Troll Family Lounge - Only for admin, troll_officer, OR approved family app */}
         {canSeeFamilyLounge && (
-          <MenuLink to="/family" icon={<Users className="w-5 h-5 text-cyan-400" />} label="Troll Family Lounge" active={isActive('/family')} />
+          <>
+            <MenuLink to="/family" icon={<Users className="w-5 h-5 text-cyan-400" />} label="Troll Family Lounge" active={isActive('/family')} />
+
+            {/* Troll Families Section */}
+            <div className="mt-4">
+              <p className="text-gray-500 uppercase text-xs mb-2 px-4">Troll Families</p>
+              <MenuLink to="/family/lounge" icon={<Crown className="w-5 h-5 text-purple-400" />} label="Family Lounge" active={isActive('/family/lounge')} />
+              <MenuLink to="/family/wars-hub" icon={<Sword className="w-5 h-5 text-red-400" />} label="Family War Hub" active={isActive('/family/wars-hub')} />
+              <MenuLink to="/family/leaderboard" icon={<Trophy className="w-5 h-5 text-yellow-400" />} label="Family Leaderboard" active={isActive('/family/leaderboard')} />
+              <MenuLink to="/family/shop" icon={<Coins className="w-5 h-5 text-green-400" />} label="Family Shop" active={isActive('/family/shop')} />
+            </div>
+          </>
         )}
 
         <MenuLink to="/support" icon={<FileText className="w-5 h-5 text-gray-400" />} label="Support" active={isActive('/support')} />
