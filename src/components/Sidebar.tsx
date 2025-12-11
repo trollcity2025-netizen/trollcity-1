@@ -24,6 +24,8 @@ import {
   FerrisWheel,
   MessageCircle,
   Headphones,
+  Package,
+  Scale,
 } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { supabase, isAdminEmail } from '../lib/supabase'
@@ -237,12 +239,14 @@ export default function Sidebar() {
         <MenuLink to="/following" icon={<UserCheck className="w-5 h-5 text-indigo-400" />} label="Following" active={isActive('/following')} />
         <MenuLink to="/store" icon={<Coins className="w-5 h-5 text-yellow-500" />} label="Coin Store" active={isActive('/store')} />
         <MenuLink to="/marketplace" icon={<Store className="w-5 h-5 text-orange-500" />} label="Marketplace" active={isActive('/marketplace')} />
+        <MenuLink to="/inventory" icon={<Package className="w-5 h-5 text-cyan-500" />} label="My Inventory" active={isActive('/inventory')} />
         <MenuLink to="/sell" icon={<Store className="w-5 h-5 text-emerald-500" />} label="Sell on Troll City" active={isActive('/sell')} />
 
         <MenuLink to="/leaderboard" icon={<Trophy className="w-5 h-5 text-yellow-500" />} label="Leaderboard" active={isActive('/leaderboard')} />
         <MenuLink to="/wall" icon={<MessageCircle className="w-5 h-5 text-cyan-400" />} label="Troll City Wall" active={isActive('/wall')} />
 
         <MenuLink to="/tromody" icon={<Mic className="w-5 h-5 text-purple-400" />} label="Tromody Show" active={isActive('/tromody')} />
+        <MenuLink to="/troll-court" icon={<Scale className="w-5 h-5 text-red-400" />} label="Troll Court" active={isActive('/troll-court')} />
         <MenuLink to="/empire-partner" icon={<UserPlus className="w-5 h-5 text-green-400" />} label="Empire Partner" active={isActive('/empire-partner')} />
         <MenuLink to="/troll-wheel" icon={<FerrisWheel className="w-5 h-5 text-pink-500" />} label="Troll Wheel" active={isActive('/troll-wheel')} />
         
@@ -290,6 +294,7 @@ export default function Sidebar() {
           <p className="text-gray-500 uppercase text-xs mb-2">Admin Controls</p>
           <MenuLink to="/admin" icon={<LayoutDashboard className="w-5 h-5 text-violet-500" />} label="Admin Dashboard" active={isActive('/admin')} />
           <MenuLink to="/admin/applications" icon={<UserPlus className="w-5 h-5 text-blue-500" />} label="Applications" active={isActive('/admin/applications')} />
+          <MenuLink to="/admin/marketplace" icon={<Store className="w-5 h-5 text-orange-500" />} label="Marketplace Admin" active={isActive('/admin/marketplace')} />
           <MenuLink to="/admin/officer-reports" icon={<FileText className="w-5 h-5 text-teal-500" />} label="Officer Reports" active={isActive('/admin/officer-reports')} />
           <MenuLink to="/store-debug" icon={<Bug className="w-5 h-5 text-red-600" />} label="Store Debug" active={isActive('/store-debug')} />
           <MenuLink to="/changelog" icon={<ListChecks className="w-5 h-5 text-lime-500" />} label="Updates & Changes" active={isActive('/changelog')} />

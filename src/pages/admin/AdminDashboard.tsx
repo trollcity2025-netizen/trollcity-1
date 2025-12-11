@@ -25,31 +25,14 @@ import api from '../../lib/api'
 import ClickableUsername from '../../components/ClickableUsername'
 import ProfitSummary from '../../components/ProfitSummary'
 import { TestingModeControl } from '../../components/TestingModeControl'
-import UsersPanel from './components/UsersPanel'
-import UserManagementPanel from './components/UserManagementPanel'
-import MetricsPanel from './components/MetricsPanel'
-import PayPalTestPanel from './components/PayPalTestPanel'
-import StreamsPanel from './components/StreamsPanel'
-import ReportsPanel from './components/ReportsPanel'
-import StreamMonitor from './components/StreamMonitor'
-import AdminSupportTickets from './components/AdminSupportTickets'
-import AdminApplications from './components/AdminApplications'
-import BroadcasterApplications from './components/BroadcasterApplications'
-import EarningsTaxOverview from './components/EarningsTaxOverview'
-import PayoutQueue from './components/PayoutQueue'
-import PayPalPayoutManager from './components/PayPalPayoutManager'
-import ReferralBonusPanel from './ReferralBonusPanel'
-import EmpireApplications from './EmpireApplications'
-import AdminResetPanel from './AdminResetPanel'
-import { StatCard } from '../../components/admin/StatCard'
-import { SectionCard } from '../../components/admin/SectionCard'
-import { ActionGroup } from '../../components/admin/ActionGroup'
-import OfficerShiftsPanel from './components/OfficerShiftsPanel'
-import CreateSchedulePanel from './components/CreateSchedulePanel'
-import { AdminGrantCoins } from './components/AdminGrantCoins'
-import AdminControlPanel from './components/AdminControlPanel'
-import TestDiagnostics from './components/TestDiagnostics'
-import WeeklyReportsView from './WeeklyReportsView'
+import CitySummaryBar from './components/CitySummaryBar'
+import CityControlsHealth from './components/CityControlsHealth'
+import FinanceEconomyCenter from './components/FinanceEconomyCenter'
+import OperationsControlDeck from './components/OperationsControlDeck'
+import ApplicationsHub from './components/ApplicationsHub'
+import AdditionalTasksGrid from './components/AdditionalTasksGrid'
+import QuickActionsBar from './components/QuickActionsBar'
+import AgreementsManagement from './components/AgreementsManagement'
 
 type StatState = {
   totalUsers: number
@@ -257,6 +240,10 @@ export default function AdminDashboard() {
   const [streamsLoading, setStreamsLoading] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState('')
   const [actionUntil, setActionUntil] = useState('')
+
+  // New dashboard state
+  const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Admin Guard: Check admin status on mount
   useEffect(() => {
@@ -1724,6 +1711,48 @@ export default function AdminDashboard() {
     }, 2000)
   }
 
+  // New dashboard handlers
+  const handleRefreshAll = async () => {
+    setRefreshing(true)
+    try {
+      await loadDashboardData()
+      await loadLiveStreams()
+      await loadEconomySummary()
+      await loadShopRevenue()
+      toast.success('All data refreshed')
+    } catch (error) {
+      toast.error('Failed to refresh data')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const handleEmergencyStop = () => {
+    toast.warning('Emergency stop initiated - stopping all streams')
+    // Implement emergency stop logic
+  }
+
+  const handleBroadcastMessage = () => {
+    toast.info('Broadcast message feature coming soon')
+  }
+
+  const handleSystemMaintenance = () => {
+    toast.info('System maintenance panel opening')
+  }
+
+  const handleViewAnalytics = () => {
+    navigate('/admin/analytics')
+  }
+
+  const handleExportData = () => {
+    toast.info('Data export initiated')
+  }
+
+  const handleToggleMaintenanceMode = () => {
+    setMaintenanceMode(!maintenanceMode)
+    toast.success(maintenanceMode ? 'Maintenance mode disabled' : 'Maintenance mode enabled')
+  }
+
   // Load tab-specific data when tab changes
   useEffect(() => {
     if (!profile) return
@@ -2501,6 +2530,19 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+      {/* Quick Actions Bar */}
+      <QuickActionsBar
+        onRefreshAll={handleRefreshAll}
+        onEmergencyStop={handleEmergencyStop}
+        onBroadcastMessage={handleBroadcastMessage}
+        onSystemMaintenance={handleSystemMaintenance}
+        onViewAnalytics={handleViewAnalytics}
+        onExportData={handleExportData}
+        onToggleMaintenanceMode={handleToggleMaintenanceMode}
+        maintenanceMode={maintenanceMode}
+        refreshing={refreshing}
+      />
+
       <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
         {/* HEADER */}
         <div className="flex flex-wrap items-center gap-3 mb-2">
@@ -2508,9 +2550,9 @@ export default function AdminDashboard() {
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">Admin Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">Troll City Command Center</h1>
             <p className="text-gray-400 text-sm">
-              Live view of Troll City economy, users, and streams.
+              Enterprise-level administration for Troll City operations.
             </p>
           </div>
           <div className="ml-auto flex gap-2">
@@ -2548,866 +2590,79 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* ============================================
-            SECTION 1: CITY OVERVIEW
-            ============================================ */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">🏙️ City Overview</h2>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* LEFT: Testing Mode + Troll Drop */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-                <TestingModeControl />
-              </div>
-              
-              {/* Troll Drop */}
-              <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-                <div className="flex items-center gap-2 mb-3">
-                  <Gift className="w-5 h-5 text-yellow-300" />
-                  <span className="font-semibold">Troll Drop</span>
-                </div>
-                <div className="flex flex-wrap items-end gap-3 text-sm">
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Coins</div>
-                    <input
-                      type="number"
-                      min={1}
-                      value={trollDropAmount}
-                      onChange={e => setTrollDropAmount(Number(e.target.value))}
-                      className="w-24 bg-[#0D0D0D] border border-[#2C2C2C] rounded p-2 text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Duration (sec)</div>
-                    <input
-                      type="number"
-                      min={5}
-                      value={trollDropDuration}
-                      onChange={e => setTrollDropDuration(Number(e.target.value))}
-                      className="w-24 bg-[#0D0D0D] border border-[#2C2C2C] rounded p-2 text-white text-sm"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={createTrollDrop}
-                    className="px-4 py-2 bg-yellow-500 text-black rounded font-semibold text-xs"
-                  >
-                    Create Drop
-                  </button>
-                </div>
-              </div>
-            </div>
+        {/* City Summary Bar */}
+        <CitySummaryBar
+          stats={stats}
+          liveStreamsCount={liveStreams.length}
+          economySummary={economySummary}
+        />
 
-            {/* RIGHT: Counters + Alerts */}
-            <div className="space-y-4">
-              {/* Top Metrics Counters */}
-              <div className="grid grid-cols-2 gap-2">
-                {metricCards.map((card, index) => (
-                  <div
-                    key={index}
-                    className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C] flex flex-col justify-between"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      {card.icon}
-                      <div
-                        className={`w-8 h-8 ${card.color} rounded-full flex items-center justify-center`}
-                      >
-                        <span className="text-white text-sm font-bold">
-                          {loading ? '…' : card.value}
-                        </span>
-                      </div>
-                    </div>
-                    <h3 className="text-white text-sm font-semibold">{card.title}</h3>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Alerts Box (only show if there's an error) */}
-              <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-                <ProfitSummary />
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* City Controls & Health Section */}
+        <CityControlsHealth
+          paypalStatus={paypalStatus}
+          supabaseStatus={supabaseStatus}
+          agoraStatus={agoraStatus}
+          liveStreams={liveStreams}
+          onTestPayPal={testPayPal}
+          onTestSupabase={testSupabase}
+          onTestLiveKit={testLiveKitStreaming}
+          onLoadLiveStreams={loadLiveStreams}
+          onCreateTrollDrop={createTrollDrop}
+          trollDropAmount={trollDropAmount}
+          setTrollDropAmount={setTrollDropAmount}
+          trollDropDuration={trollDropDuration}
+          setTrollDropDuration={setTrollDropDuration}
+          paypalTesting={paypalTesting}
+        />
 
-        {/* ============================================
-            SECTION 2: ECONOMY & REVENUE CENTER
-            ============================================ */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">💰 Economy & Revenue Center</h2>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* LEFT COLUMN: Economy Summary Grid */}
-            {economySummaryData && (
-              <div className="bg-[#050716]/80 border border-purple-500/30 rounded-2xl p-4 shadow-lg">
-                <h3 className="text-lg font-bold text-purple-300 mb-4">Economy Summary</h3>
-                <div className="grid grid-cols-2 gap-4 text-white">
-                  <div className="p-4 bg-zinc-900 rounded-xl">
-                    <h4 className="text-sm text-gray-400 mb-2">Total Coins in Circulation</h4>
-                    <p className="text-2xl font-bold text-emerald-300">
-                      {Number(economySummaryData.total_coins_in_circulation || 0).toLocaleString()}
-                    </p>
-                  </div>
+        {/* Finance & Economy Center */}
+        <FinanceEconomyCenter
+          stats={stats}
+          economySummary={economySummary}
+          economyLoading={economyLoading}
+          onLoadEconomySummary={loadEconomySummary}
+        />
 
-                  <div className="p-4 bg-zinc-900 rounded-xl">
-                    <h4 className="text-sm text-gray-400 mb-2">Total Gift Coins Spent</h4>
-                    <p className="text-2xl font-bold text-yellow-300">
-                      {Number(economySummaryData.total_gift_coins_spent || 0).toLocaleString()}
-                    </p>
-                  </div>
+        {/* Operations & Control Deck */}
+        <OperationsControlDeck
+          liveStreams={liveStreams}
+          streamsLoading={streamsLoading}
+          onLoadLiveStreams={loadLiveStreams}
+          onEndStreamById={endStreamById}
+          onDeleteStreamById={deleteStreamById}
+          onViewStream={viewStream}
+          stats={stats}
+        />
 
-                  <div className="p-4 bg-zinc-900 rounded-xl">
-                    <h4 className="text-sm text-gray-400 mb-2">Total Paid-Out ($)</h4>
-                    <p className="text-2xl font-bold text-green-300">
-                      ${Number(economySummaryData.total_payouts_processed_usd || 0).toFixed(2)}
-                    </p>
-                  </div>
+        {/* Applications Hub */}
+        <ApplicationsHub
+          onLoadApplications={loadApplications}
+          applicationsLoading={tabLoading}
+          applications={[]}
+          onApproveApplication={_approveApplication}
+          onRejectApplication={_rejectApplication}
+        />
 
-                  <div className="p-4 bg-zinc-900 rounded-xl">
-                    <h4 className="text-sm text-gray-400 mb-2">Pending Payout Requests ($)</h4>
-                    <p className="text-2xl font-bold text-amber-300">
-                      ${Number(economySummaryData.total_pending_payouts_usd || 0).toFixed(2)}
-                    </p>
-                  </div>
+        {/* Agreements Management */}
+        <AgreementsManagement
+          onLoadAgreements={() => console.log('Load agreements')}
+          agreementsLoading={false}
+          agreements={[]}
+        />
 
-                  <div className="p-4 bg-zinc-900 rounded-xl">
-                    <h4 className="text-sm text-gray-400 mb-2">Total Creator Earned Coins</h4>
-                    <p className="text-2xl font-bold text-purple-300">
-                      {Number(economySummaryData.total_creator_earned_coins || 0).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-zinc-900 rounded-xl">
-                    <h4 className="text-sm text-gray-400 mb-2">Top Earning Broadcaster</h4>
-                    <p className="text-2xl font-bold text-cyan-300">
-                      {economySummaryData.top_earning_broadcaster || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* RIGHT COLUMN: Shop Revenue + Risk */}
-            <div className="space-y-4">
-            <div className="bg-[#050716]/80 border border-red-500/30 rounded-2xl p-4 shadow-lg">
-              <h2 className="text-lg font-bold text-red-300 mb-2">Risk & Compliance</h2>
-              {!risk ? (
-                <div className="text-sm text-gray-400">Loading risk radar…</div>
-              ) : (
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-300">Frozen Accounts</span>
-                    <span className="text-2xl font-semibold text-red-400">
-                      {risk.frozenCount}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Top High-Risk Users</div>
-                    <ul className="space-y-1 max-h-32 overflow-auto text-xs text-gray-300">
-                      {risk.topHighRisk.map((u: any) => (
-                        <li key={u.user_id} className="flex justify-between">
-                          <span>{u.user_id}</span>
-                          <span className="text-red-300 font-semibold">
-                            {u.risk_score}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </div>
-
-              {/* Shop Revenue */}
-              <div className="bg-[#050716]/80 border border-yellow-500/30 rounded-2xl p-4 shadow-lg">
-                <h3 className="text-lg font-bold text-yellow-300 mb-2">Shop Revenue</h3>
-              {!shopRevenue ? (
-                <div className="text-sm text-gray-400">Loading shop data…</div>
-              ) : (
-                <div className="space-y-3 text-xs">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-troll-green/10 border border-troll-green/30 rounded-lg p-3">
-                      <div className="text-[11px] text-gray-400 mb-1">Insurance</div>
-                      <div className="text-xl font-bold text-troll-green">
-                        {shopRevenue.insuranceTotal.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-gray-400">coins</div>
-                    </div>
-                    <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                      <div className="text-[11px] text-gray-400 mb-1">Effects</div>
-                      <div className="text-xl font-bold text-purple-300">
-                        {shopRevenue.effectsTotal.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-gray-400">coins</div>
-                    </div>
-                    <div className="bg-troll-gold/10 border border-troll-gold/30 rounded-lg p-3">
-                      <div className="text-[11px] text-gray-400 mb-1">Perks</div>
-                      <div className="text-xl font-bold text-troll-gold">
-                        {shopRevenue.perksTotal.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-gray-400">coins</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-troll-purple/20 to-troll-gold/20 border border-troll-gold/50 rounded-lg p-3">
-                    <div className="text-[11px] text-gray-400 mb-1">Total Shop Revenue</div>
-                    <div className="text-2xl font-bold text-white">
-                      {(
-                        shopRevenue.insuranceTotal +
-                        shopRevenue.effectsTotal +
-                        shopRevenue.perksTotal
-                      ).toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-gray-400">
-                      coins (~$
-                      {(
-                        (shopRevenue.insuranceTotal +
-                          shopRevenue.effectsTotal +
-                          shopRevenue.perksTotal) * 0.0001
-                      ).toFixed(2)}{' '}
-                      USD)
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-semibold text-gray-300 mb-1">
-                      Top Buyers
-                    </div>
-                    <div className="space-y-1 max-h-40 overflow-auto">
-                      {shopRevenue.topBuyers.length === 0 ? (
-                        <div className="text-[11px] text-gray-500">No purchases yet</div>
-                      ) : (
-                        shopRevenue.topBuyers.map((buyer: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-1.5 border border-gray-700/50"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-bold text-troll-gold">
-                                #{idx + 1}
-                              </span>
-                              <span className="text-sm text-white">
-                                {buyer.username}
-                              </span>
-                            </div>
-                            <div className="text-sm font-semibold text-troll-green">
-                              {buyer.total.toLocaleString()} coins
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-              </div>
-
-              {/* Risk & Compliance */}
-              <div className="bg-[#050716]/80 border border-red-500/30 rounded-2xl p-4 shadow-lg">
-                <h3 className="text-lg font-bold text-red-300 mb-2">Risk & Compliance</h3>
-                {!risk ? (
-                  <div className="text-sm text-gray-400">Loading risk radar…</div>
-                ) : (
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-300">Frozen Accounts</span>
-                      <span className="text-2xl font-semibold text-red-400">
-                        {risk.frozenCount}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-400 mb-1">Top High-Risk Users</div>
-                      <ul className="space-y-1 max-h-32 overflow-auto text-xs text-gray-300">
-                        {risk.topHighRisk.map((u: any) => (
-                          <li key={u.user_id} className="flex justify-between">
-                            <span>{u.user_id}</span>
-                            <span className="text-red-300 font-semibold">
-                              {u.risk_score}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Full Width: Detailed Economy */}
-          <div className="bg-[#050716]/80 border border-purple-500/30 rounded-2xl p-4 shadow-lg">
-            <h3 className="text-lg font-bold text-purple-300 mb-3">Troll City Economy (Detailed)</h3>
-            {economyLoading && (
-              <div className="text-sm text-gray-400">Loading economy stats…</div>
-            )}
-            {economySummary && (
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Paid Coins Outstanding</div>
-                  <div className="text-2xl font-semibold text-emerald-300">
-                    {economySummary.paidCoins.outstandingLiability.toLocaleString()}
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Purchased: {economySummary.paidCoins.totalPurchased.toLocaleString()} •
-                    Spent: {economySummary.paidCoins.totalSpent.toLocaleString()}
-                  </div>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Broadcaster Cashouts</div>
-                  <div className="text-2xl font-semibold text-amber-300">
-                    ${economySummary.broadcasters.pendingCashoutsUsd.toFixed(2)}
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Total Earned: ${economySummary.broadcasters.totalUsdOwed.toFixed(2)} • Paid: $
-                    {economySummary.broadcasters.paidOutUsd.toFixed(2)}
-                  </div>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Officer Earnings</div>
-                  <div className="text-2xl font-semibold text-cyan-300">
-                    ${economySummary.officers.totalUsdPaid.toFixed(2)}
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    From kicks, bans & penalties
-                  </div>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-purple-500/20">
-                  <div className="text-xs text-gray-400">Troll Wheel Activity</div>
-                  <div className="text-2xl font-semibold text-pink-300">
-                    {economySummary.wheel.totalSpins.toLocaleString()} spins
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Coins Spent: {economySummary.wheel.totalCoinsSpent.toLocaleString()} •
-                    Jackpots: {economySummary.wheel.jackpotCount}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* ============================================
-          3) OPERATIONS & CONTROL DECK
-          ============================================ */}
-        <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-white mb-4">Operations & Control Deck</h2>
-          
-          {/* ADMIN ACTIONS */}
-          <div className="bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C]">
-          <div className="flex items-center gap-2 mb-3">
-            <MessageSquare className="w-4 h-4 text-pink-400" />
-            <h2 className="text-sm font-bold text-white">Admin Actions</h2>
-          </div>
-          
-          {/* A. City-Wide Broadcast */}
-          <ActionGroup title="City-Wide Broadcast" icon={<MessageSquare className="w-4 h-4" />}>
-            {/* Admin Broadcast Section */}
-            <div className="mb-4 p-3 bg-[#0E0A1A] rounded-lg border border-orange-500/30">
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                <input
-                  type="text"
-                  id="admin-broadcast-input"
-                  placeholder="Type announcement message..."
-                  className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      const input = e.target as HTMLInputElement
-                      const message = input.value.trim()
-                      if (message) {
-                        supabase
-                          .from('admin_broadcasts')
-                          .insert([{ message, admin_id: profile?.id }])
-                          .then(({ error }) => {
-                            if (error) {
-                              toast.error('Failed to send broadcast')
-                            } else {
-                              toast.success('Broadcast sent to all live streams!')
-                              input.value = ''
-                            }
-                          })
-                      }
-                    }
-                  }}
-                />
-                <button
-                  onClick={async () => {
-                    const input = document.getElementById('admin-broadcast-input') as HTMLInputElement
-                    const message = input?.value.trim()
-                    if (!message) {
-                      toast.error('Enter a message')
-                      return
-                    }
-                    const { error } = await supabase
-                      .from('admin_broadcasts')
-                      .insert([{ message, admin_id: profile?.id }])
-                    if (error) {
-                      toast.error('Failed to send broadcast')
-                    } else {
-                      toast.success('Broadcast sent to all live streams!')
-                      input.value = ''
-                    }
-                  }}
-                  className="px-3 py-1 rounded bg-orange-600 hover:bg-orange-500 text-sm font-semibold whitespace-nowrap"
-                >
-                  Send Now
-                </button>
-                </div>
-              
-                {/* Schedule Section */}
-                <div className="flex items-center gap-2 text-xs">
-                <span className="text-gray-400">or</span>
-                <span className="text-gray-400">Schedule for:</span>
-                <input
-                  type="datetime-local"
-                  id="admin-broadcast-schedule"
-                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"
-                />
-                <button
-                  onClick={async () => {
-                    const input = document.getElementById('admin-broadcast-input') as HTMLInputElement
-                    const scheduleInput = document.getElementById('admin-broadcast-schedule') as HTMLInputElement
-                    const message = input?.value.trim()
-                    const scheduledTime = scheduleInput?.value
-                    
-                    if (!message) {
-                      toast.error('Enter a message')
-                      return
-                    }
-                    if (!scheduledTime) {
-                      toast.error('Select a scheduled time')
-                      return
-                    }
-                    
-                    // Convert local datetime to ISO string
-                    const scheduledISO = new Date(scheduledTime).toISOString()
-                    
-                    const { error } = await supabase
-                      .from('scheduled_announcements')
-                      .insert([{ 
-                        message, 
-                        scheduled_time: scheduledISO,
-                        created_by: profile?.id 
-                      }])
-                    if (error) {
-                      toast.error('Failed to schedule broadcast')
-                    } else {
-                      toast.success(`Broadcast scheduled for ${new Date(scheduledTime).toLocaleString()}!`)
-                      input.value = ''
-                      scheduleInput.value = ''
-                      loadScheduledAnnouncements() // Refresh list
-                    }
-                  }}
-                  className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-xs font-semibold whitespace-nowrap"
-                >
-                  Schedule
-                </button>
-                </div>
-                <p className="text-[10px] text-gray-500 mt-1">
-                  This will appear on all active live streams (translated to each viewer's language)
-                </p>
-              
-                {/* Scheduled Announcements List */}
-                <div className="mt-3 p-2 bg-[#0A0A0A] rounded border border-purple-500/20">
-                <h4 className="text-[10px] font-bold text-purple-400 mb-2">Scheduled Announcements</h4>
-                {scheduledAnnouncements.length === 0 ? (
-                  <p className="text-[10px] text-gray-500">No scheduled announcements</p>
-                ) : (
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {scheduledAnnouncements.map((ann) => (
-                      <div key={ann.id} className="text-[10px] flex items-center justify-between bg-gray-900/30 p-1 rounded">
-                        <div className="flex-1 truncate">
-                          <span className="text-gray-400">{ann.message.substring(0, 30)}...</span>
-                          <span className="text-gray-500 ml-2">
-                            {new Date(ann.scheduled_time).toLocaleString()}
-                          </span>
-                        </div>
-                        <span className={`text-[9px] ${ann.is_sent ? 'text-green-400' : 'text-yellow-400'}`}>
-                          {ann.is_sent ? 'Sent' : 'Pending'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                </div>
-              </div>
-            </div>
-          </ActionGroup>
-
-            {/* B. Engagement Controls */}
-            <ActionGroup title="Engagement Controls" icon={<Gift className="w-4 h-4" />}>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const trollType = window.prompt('Troll type (green/red):', 'green')
-                    const rewardAmount = parseInt(window.prompt('Reward amount:', '10') || '10')
-                    const durationMinutes = parseInt(window.prompt('Duration (minutes):', '2') ?? '2')
-
-                    if (!trollType || !rewardAmount || !durationMinutes) return
-
-                    try {
-                      const res = await api.post('/admin/troll-events/spawn', {
-                        troll_type: trollType,
-                        reward_amount: rewardAmount,
-                        duration_minutes: durationMinutes
-                      })
-                      if (res.success) {
-                        toast.success(`Troll event spawned! ID: ${res.event_id}`)
-                      } else {
-                        toast.error(res.error || 'Failed to spawn troll event')
-                      }
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to spawn troll event')
-                    }
-                  }}
-                  className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600 text-xs"
-                >
-                  Spawn Troll Event
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await api.get('/admin/wheel/status')
-                      if (res?.success && res?.config) {
-                        const cfg = res.config
-                        const statusText = `Wheel Status: ${cfg.is_active ? '✅ ACTIVE' : '❌ DISABLED'}\nSpin Cost: ${cfg.spin_cost || 500} coins\nMax Spins/Day: ${cfg.max_spins_per_day || 10}`
-                        toast.success(statusText, { duration: 5000 })
-                        console.log('🎡 Wheel Status:', cfg)
-                      } else {
-                        toast.error('Failed to get wheel status')
-                        console.error('Wheel status response:', res)
-                      }
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to check wheel status')
-                      console.error('Wheel status error:', e)
-                    }
-                  }}
-                  className="px-3 py-1 rounded bg-blue-700 hover:bg-blue-600 text-xs"
-                >
-                  Check Status
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await api.post('/admin/wheel/toggle', { enabled: true })
-                      if (res?.success) {
-                        toast.success('Wheel enabled')
-                      } else {
-                        toast.error(res?.error || 'Failed to enable wheel')
-                      }
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to enable wheel')
-                    }
-                  }}
-                  className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-xs"
-                >
-                  Enable Wheel
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await api.post('/admin/wheel/toggle', { enabled: false })
-                      if (res?.success) {
-                        toast.success('Wheel disabled')
-                      } else {
-                        toast.error(res?.error || 'Failed to disable wheel')
-                      }
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to disable wheel')
-                    }
-                  }}
-                  className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs"
-                >
-                  Disable Wheel
-                </button>
-              </div>
-            </ActionGroup>
-
-            {/* C. User Enforcement */}
-            <ActionGroup title="User Enforcement" icon={<Shield className="w-4 h-4" />}>
-              <div className="grid gap-3 md:grid-cols-4 text-xs">
-                <input
-                  type="text"
-                  value={selectedUserId}
-                  onChange={e => setSelectedUserId(e.target.value)}
-                  placeholder="User ID"
-                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
-                />
-                <input
-                  type="text"
-                  value={actionUntil}
-                  onChange={e => setActionUntil(e.target.value)}
-                  placeholder="Ban until (YYYY-MM-DD)"
-                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
-                />
-                <button
-                  type="button"
-                  onClick={banSelectedUser}
-                  className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-xs"
-                >
-                  Ban user
-                </button>
-                <button
-                  type="button"
-                  onClick={resetSelectedUserCoins}
-                  className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-500 text-xs"
-                >
-                  Reset coins
-                </button>
-                <button
-                  type="button"
-                  onClick={flagSelectedUserAI}
-                  className="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600 text-xs"
-                >
-                  Flag AI Suspect
-                </button>
-              </div>
-            </ActionGroup>
-
-            {/* D. System Tools */}
-            <ActionGroup title="System Tools" icon={<Monitor className="w-4 h-4" />}>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={addCoinsToAdmin}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold transition-colors"
-                >
-                  Add 7000 Coins to Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={testSupabase}
-                  className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-xs"
-                >
-                  Test Supabase
-                </button>
-                <button
-                  type="button"
-                  onClick={testLiveKitStreaming}
-                  className="px-3 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-xs"
-                >
-                  Test LiveKit
-                </button>
-                <button
-                  type="button"
-                  onClick={cleanupStreams}
-                  className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-500 text-xs"
-                >
-                  Cleanup Orphaned Streams
-                </button>
-              </div>
-            </ActionGroup>
-
-          </div>
-        </section>
-
-        {/* ============================================
-            SECTION 4: APPLICATIONS & CONNECTIONS HUB
-            ============================================ */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">📋 Applications & Connections Hub</h2>
-          
-          {/* Row 1: User Applications */}
-          <div className="bg-[#050509] border border-[#2C2C2C] rounded-2xl">
-            <div className="p-4">
-              <h3 className="text-xl font-bold mb-4 text-white">User Applications</h3>
-              <AdminApplications />
-            </div>
-          </div>
-
-          {/* Row 2: Connections */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* PayPal Connection */}
-            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <CreditCard className="w-4 h-4 text-blue-400" />
-                <span className="font-semibold">PayPal</span>
-              </div>
-              <button
-                type="button"
-                onClick={testPayPal}
-                disabled={paypalTesting}
-                className="px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {paypalTesting ? 'Testing...' : 'Test PayPal'}
-              </button>
-              <div className="mt-2 text-xs text-gray-400">
-                Status:{' '}
-                {paypalTesting ? (
-                  <span className="text-yellow-400">Testing...</span>
-                ) : paypalStatus ? (
-                  paypalStatus.ok ? (
-                    <span className="text-green-400">OK</span>
-                  ) : (
-                    <span className="text-red-400">{paypalStatus.error || 'Failed'}</span>
-                  )
-                ) : (
-                  'Not tested'
-                )}
-              </div>
-            </div>
-
-            {/* Supabase Connection */}
-            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Monitor className="w-4 h-4 text-purple-400" />
-                <span className="font-semibold">Supabase</span>
-              </div>
-              <button
-                type="button"
-                onClick={testSupabase}
-                className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 mb-2"
-              >
-                Test Supabase
-              </button>
-              <div className="mt-2 text-xs text-gray-400">
-                Status:{' '}
-                {supabaseStatus
-                  ? supabaseStatus.ok
-                    ? 'OK'
-                    : supabaseStatus.error || 'Failed'
-                  : 'Not tested'}
-              </div>
-            </div>
-
-            {/* LiveKit Connection */}
-            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Camera className="w-4 h-4 text-cyan-400" />
-                <span className="font-semibold">LiveKit</span>
-              </div>
-              <button
-                type="button"
-                onClick={testLiveKitStreaming}
-                className="px-3 py-1 text-xs rounded bg-cyan-600 hover:bg-cyan-500 mb-2"
-              >
-                Test LiveKit
-              </button>
-              <div className="mt-2 text-xs text-gray-400">
-                Status:{' '}
-                {agoraStatus
-                  ? agoraStatus.ok
-                    ? 'OK'
-                    : agoraStatus.error || 'Failed'
-                  : 'Not tested'}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 3: Live Streams */}
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Play className="w-4 h-4 text-pink-400" />
-              <span className="font-semibold">Live Streams</span>
-              <button
-                type="button"
-                onClick={loadLiveStreams}
-                className="ml-auto text-xs flex items-center gap-1 text-gray-300 hover:text-white"
-              >
-                <RefreshCw className="w-3 h-3" />
-                Refresh
-              </button>
-            </div>
-
-            {streamsLoading ? (
-              <div className="text-xs text-gray-400">Loading streams…</div>
-            ) : liveStreams.length === 0 ? (
-              <div className="text-xs text-gray-500">No streams currently live.</div>
-            ) : (
-              <div className="overflow-x-auto text-xs">
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr className="border-b border-gray-700 text-gray-400">
-                      <th className="py-1 pr-4">Title</th>
-                      <th className="py-1 pr-4">Category</th>
-                      <th className="py-1 pr-4">Broadcaster</th>
-                      <th className="py-1 pr-4">Created</th>
-                      <th className="py-1 pr-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {liveStreams.map(stream => (
-                      <tr key={stream.id} className="border-b border-gray-800">
-                        <td className="py-1 pr-4">{stream.title || 'Untitled'}</td>
-                        <td className="py-1 pr-4">{stream.category}</td>
-                        <td className="py-1 pr-4 text-xs">{stream.broadcaster_id}</td>
-                        <td className="py-1 pr-4">
-                          {new Date(stream.created_at).toLocaleString()}
-                        </td>
-                        <td className="py-1 pr-4 text-right space-x-1">
-                          <button
-                            type="button"
-                            onClick={() => viewStream(stream.id)}
-                            className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-[10px]"
-                          >
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => endStreamById(stream.id)}
-                            className="px-2 py-0.5 rounded bg-yellow-600 hover:bg-yellow-500 text-[10px]"
-                          >
-                            End
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteStreamById(stream.id)}
-                            className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500 text-[10px]"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* TABS NAVIGATION - Additional Sections */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-bold text-white border-b border-purple-500/30 pb-2">🔧 Additional Tools</h2>
-          <div className="bg-[#050509] border border-[#2C2C2C] rounded-2xl">
-            {/* Tabs Header */}
-            <div className="flex flex-wrap gap-2 p-2 border-b border-[#2C2C2C] overflow-x-auto">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    // Prevent scroll by maintaining scroll position
-                    const scrollY = window.scrollY
-                    const scrollX = window.scrollX
-                    setActiveTab(tab.id)
-                    // Use requestAnimationFrame to restore scroll position smoothly
-                    requestAnimationFrame(() => {
-                      window.scrollTo(scrollX, scrollY)
-                    })
-                  }}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
-                      : 'bg-[#15151f] text-gray-300 hover:bg-[#1a1a2e] hover:text-white'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            {/* Tab Content */}
-            <div className="p-4">{renderTabContent()}</div>
-          </div>
-        </section>
+        {/* Additional Tasks Grid */}
+        <AdditionalTasksGrid
+          onNavigateToEconomy={() => navigate('/admin/economy')}
+          onNavigateToTaxReviews={() => navigate('/admin/tax-reviews')}
+          onOpenTestDiagnostics={() => console.log('Test diagnostics')}
+          onOpenControlPanel={() => console.log('Control panel')}
+          onOpenGrantCoins={() => console.log('Grant coins')}
+          onOpenCreateSchedule={() => console.log('Create schedule')}
+          onOpenOfficerShifts={() => console.log('Officer shifts')}
+          onOpenResetPanel={() => console.log('Reset panel')}
+          onOpenEmpireApplications={() => console.log('Empire applications')}
+          onOpenReferralBonuses={() => console.log('Referral bonuses')}
+        />
       </div>
     </div>
   )

@@ -100,6 +100,8 @@ export interface UserProfile {
   // Empire Partner
   is_empire_partner?: boolean // Deprecated - use empire_role instead
   empire_role?: string | null // 'partner' when approved as Empire Partner
+  empire_partner?: boolean // New field for partner status
+  partner_status?: string | null // 'approved', 'pending', 'rejected'
 
   // Moderation fields
   is_banned?: boolean
@@ -229,7 +231,8 @@ export enum UserRole {
   ADMIN = 'admin',
   TROLL_OFFICER = 'troll_officer',
   TROLL_FAMILY = 'troll_family',
-  TROLLER = 'troller'
+  TROLLER = 'troller',
+  EMPIRE_PARTNER = 'empire_partner'
 }
 
 export enum Permission {
@@ -284,6 +287,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.TROLLER]: [
     Permission.BROADCAST,
     Permission.CREATE_CONTENT
+  ],
+  [UserRole.EMPIRE_PARTNER]: [
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
   ],
   [UserRole.ADMIN]: [
     // Admin has all permissions

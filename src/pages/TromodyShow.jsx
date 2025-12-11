@@ -9,10 +9,12 @@ import TromodyVideoBox from "../components/tromody/TromodyVideoBox";
 import { useMediaStream } from "../hooks/useMediaStream";
 import { useBattleQueue } from "../hooks/useBattleQueue";
 import { useBattleTimer } from "../hooks/useBattleTimer";
+import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
 import { supabase } from "../lib/supabase";
 import { createNotification } from "../lib/notifications";
 import api from "../lib/api";
 import { toast } from "sonner";
+import { createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
 
 export default function TromodyShow() {
   const navigate = useNavigate();
@@ -51,7 +53,13 @@ export default function TromodyShow() {
     rotateBattle();
   });
 
-  // Media streams for left and right
+  // Unified LiveKit room for Tromody Show
+  const { room, participants, isConnecting, connect, disconnect } = useLiveKitRoom(
+    'tromody-show',
+    currentUser ? { ...currentUser, role: role, level: 1 } : null
+  );
+
+  // Media streams for left and right (keeping for local preview)
   const leftStream = useMediaStream();
   const rightStream = useMediaStream();
 
@@ -180,20 +188,52 @@ export default function TromodyShow() {
   const joinBattle = async (side) => {
     if (!currentUser) return;
 
-    const userWithStreams = {
-      ...currentUser,
-      gifts: 0,
-      startStream: side === 'left' ? leftStream.startStream : rightStream.startStream,
-      stopStream: side === 'left' ? leftStream.stopStream : rightStream.stopStream,
-    };
+    // Connect to LiveKit room if not already connected
+    if (!room) {
+      connect();
+      // Wait for connection
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
-    const joined = joinQueue(userWithStreams, side);
-    if (joined) {
-      // Notify followers that user joined
-      await notifyFollowersUserJoined(currentUser, side);
-      toast.success(`${currentUser.username} joined the battle!`);
+    if (room && room.state === 'connected') {
+      try {
+        // Publish tracks to LiveKit
+        const [videoTrack, audioTrack] = await Promise.all([
+          createLocalVideoTrack({ facingMode: 'user' }),
+          createLocalAudioTrack()
+        ]);
+
+        await room.localParticipant.publishTrack(videoTrack);
+        await room.localParticipant.publishTrack(audioTrack);
+
+        // Set metadata for side
+        room.localParticipant.setMetadata(JSON.stringify({
+          side: side,
+          user_id: currentUser.id,
+          role: role
+        }));
+
+        const userWithStreams = {
+          ...currentUser,
+          gifts: 0,
+          startStream: side === 'left' ? leftStream.startStream : rightStream.startStream,
+          stopStream: side === 'left' ? leftStream.stopStream : rightStream.stopStream,
+        };
+
+        const joined = joinQueue(userWithStreams, side);
+        if (joined) {
+          // Notify followers that user joined
+          await notifyFollowersUserJoined(currentUser, side);
+          toast.success(`${currentUser.username} joined the battle!`);
+        } else {
+          toast.error('You are already in the battle or queue');
+        }
+      } catch (err) {
+        console.error('Error publishing to LiveKit:', err);
+        toast.error('Failed to join battle stream');
+      }
     } else {
-      toast.error('You are already in the battle or queue');
+      toast.error('Failed to connect to battle room');
     }
   };
 
@@ -214,6 +254,7 @@ export default function TromodyShow() {
     if (currentUser) {
       removeUser(currentUser.id);
     }
+    disconnect(); // Disconnect from LiveKit
     navigate('/live');
   };
 

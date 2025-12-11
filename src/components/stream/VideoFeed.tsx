@@ -2,34 +2,20 @@ import { Room, RoomEvent, createLocalVideoTrack, createLocalAudioTrack } from 'l
 import { useEffect, useRef } from 'react'
 
 interface VideoFeedProps {
-  livekitUrl: string
-  token: string
+  room: Room | null
   isHost?: boolean
-  onRoomReady?: (room: Room) => void
 }
 
-export default function VideoFeed({ livekitUrl, token, isHost = false, onRoomReady }: VideoFeedProps) {
+export default function VideoFeed({ room, isHost = false }: VideoFeedProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const roomRef = useRef<Room | null>(null)
 
   useEffect(() => {
-    if (!livekitUrl || !token) return
+    if (!room) return
 
-    let room: Room | null = null
-
-    const connectStream = async () => {
-      try {
-        room = new Room({
-          adaptiveStream: true,
-          dynacast: true,
-        })
-
-        // Connect to room
-        await room.connect(livekitUrl, token)
-        roomRef.current = room
-
-        // If host, publish local tracks
-        if (isHost) {
+    // If host, publish local tracks
+    if (isHost) {
+      const publishLocalTracks = async () => {
+        try {
           const [videoTrack, audioTrack] = await Promise.all([
             createLocalVideoTrack(),
             createLocalAudioTrack(),
@@ -44,54 +30,53 @@ export default function VideoFeed({ livekitUrl, token, isHost = false, onRoomRea
             videoRef.current.muted = true
             videoRef.current.play()
           }
+        } catch (error) {
+          console.error('Failed to publish local tracks:', error)
         }
+      }
 
-        // Handle remote tracks
-        room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-          if (track.kind === 'video') {
-            if (participant.isLocal && videoRef.current) {
-              // Local video already attached above
-            } else if (!participant.isLocal) {
-              // Remote video - attach to parent container
-              const element = track.attach()
-              if (videoRef.current?.parentElement) {
-                const container = videoRef.current.parentElement
-                // Clear existing remote videos
-                const existingRemote = container.querySelector('.remote-video-container')
-                if (existingRemote) {
-                  existingRemote.remove()
-                }
-                // Create container for remote video
-                const remoteContainer = document.createElement('div')
-                remoteContainer.className = 'remote-video-container absolute inset-0 w-full h-full'
-                remoteContainer.appendChild(element)
-                container.appendChild(remoteContainer)
-              }
+      publishLocalTracks()
+    }
+
+    // Handle remote tracks
+    const handleTrackSubscribed = (track, publication, participant) => {
+      if (track.kind === 'video') {
+        if (participant.isLocal && videoRef.current) {
+          // Local video already attached above
+        } else if (!participant.isLocal) {
+          // Remote video - attach to parent container
+          const element = track.attach()
+          if (videoRef.current?.parentElement) {
+            const container = videoRef.current.parentElement
+            // Clear existing remote videos
+            const existingRemote = container.querySelector('.remote-video-container')
+            if (existingRemote) {
+              existingRemote.remove()
             }
-          } else if (track.kind === 'audio') {
-            track.attach()
+            // Create container for remote video
+            const remoteContainer = document.createElement('div')
+            remoteContainer.className = 'remote-video-container absolute inset-0 w-full h-full'
+            remoteContainer.appendChild(element)
+            container.appendChild(remoteContainer)
           }
-        })
-
-        room.on(RoomEvent.TrackUnsubscribed, (track) => {
-          track.detach()
-        })
-
-        onRoomReady?.(room)
-      } catch (error) {
-        console.error('Failed to connect stream:', error)
+        }
+      } else if (track.kind === 'audio') {
+        track.attach()
       }
     }
 
-    connectStream()
+    const handleTrackUnsubscribed = (track) => {
+      track.detach()
+    }
+
+    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
+    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
 
     return () => {
-      if (roomRef.current) {
-        roomRef.current.disconnect()
-        roomRef.current = null
-      }
+      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed)
+      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
     }
-  }, [livekitUrl, token, isHost, onRoomReady])
+  }, [room, isHost])
 
   return (
     <div className="absolute inset-0 rounded-3xl overflow-hidden">

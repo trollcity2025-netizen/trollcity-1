@@ -118,6 +118,7 @@ const AdminVerifiedUsers = lazy(() => import("./pages/admin/AdminVerifiedUsers")
 const AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
 const AdminVerificationReview = lazy(() => import("./pages/admin/AdminVerificationReview"));
 const AdminPoliciesDocs = lazy(() => import("./pages/admin/AdminPoliciesDocs"));
+const AdminMarketplace = lazy(() => import("./pages/admin/AdminMarketplace"));
 const LeadOfficerReview = lazy(() => import("./pages/lead-officer/Review"));
 const LeadOfficerDashboard = lazy(() => import("./pages/lead-officer/LeadOfficerDashboard").then(m => ({ default: m.LeadOfficerDashboard })));
 const ApplicationsPage = lazy(() => import("./pages/admin/Applications"));
@@ -128,6 +129,9 @@ const TromodyShow = lazy(() => import("./pages/TromodyShow"));
 const CommandBattleGoLive = lazy(() => import("./pages/CommandBattleGoLive"));
 const OfficerLoungeStream = lazy(() => import("./pages/OfficerLoungeStream"));
 const TrollWheel = lazy(() => import("./pages/TrollWheel"));
+const TrollCourt = lazy(() => import("./pages/TrollCourt"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
+const UserInventory = lazy(() => import("./pages/UserInventory"));
 
 function App() {
   console.log('🚀 App component rendering...');
@@ -408,6 +412,8 @@ function App() {
                   <Route path="/following" element={<Following />} />
                   <Route path="/trollifications" element={<Trollifications />} />
                   <Route path="/troll-wheel" element={<TrollWheel />} />
+                  <Route path="/marketplace" element={<Marketplace />} />
+                  <Route path="/inventory" element={<UserInventory />} />
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/wall" element={<TrollCityWall />} />
@@ -435,7 +441,8 @@ function App() {
 
                   {/* 🎤 Tromody Show */}
                   <Route path="/tromody" element={<TromodyShow />} />
-                  
+                  <Route path="/troll-court" element={<TrollCourt />} />
+
                   {/* 💳 Payment Methods */}
                   <Route path="/add-card" element={<AddCard />} />
                   
@@ -698,6 +705,14 @@ function App() {
                       element={
                         <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminPoliciesDocs />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/marketplace"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <AdminMarketplace />
                         </RequireRole>
                       }
                     />

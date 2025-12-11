@@ -48,17 +48,17 @@ export default function EmpirePartnerDashboard() {
   useEffect(() => {
     if (user?.id && profile) {
       // Check if user is an approved Empire Partner
-      if (profile.empire_role !== 'partner') {
+      if (profile.empire_partner !== true && profile.partner_status !== 'approved' && profile.role !== 'empire_partner') {
         // Don't redirect, just show apply button
         return
       }
-      
+
       loadData()
       // Generate referral link
       const baseUrl = window.location.origin
       setReferralLink(`${baseUrl}/signup?ref=${user.id}`)
     }
-  }, [user?.id, profile?.empire_role])
+  }, [user?.id, profile])
   
   // Show apply button if not approved
   if (profile?.empire_role !== 'partner') {
@@ -171,7 +171,7 @@ export default function EmpirePartnerDashboard() {
           monthly_coins: monthlyCoins,
           is_eligible: isEligible,
           bonus_paid: existingBonus?.bonus_paid_coins || 0,
-          bonus_status: existingBonus ? 'paid' : (isEligible ? 'pending' : 'not_eligible')
+          bonus_status: existingBonus ? 'paid' as const : (isEligible ? 'pending' as const : 'not_eligible' as const)
         }
       })
 

@@ -10,30 +10,34 @@ import ChatOverlay from '../components/stream/ChatOverlay';
 import ControlBar from '../components/stream/ControlBar';
 import VideoFeed from '../components/stream/VideoFeed';
 import { endStream } from '../lib/endStream';
+import { useLiveKitRoom } from '../hooks/useLiveKitRoom';
 
 export default function StreamRoom() {
   const { id, streamId } = useParams<{ id?: string; streamId?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  
-  const [room, setRoom] = useState<Room | null>(null);
+
   const [stream, setStream] = useState<any>(null);
-  const [isConnecting, setIsConnecting] = useState(true);
+  const [isLoadingStream, setIsLoadingStream] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [livekitUrl, setLivekitUrl] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
   const [isTestingMode, setIsTestingMode] = useState(false);
 
   // Get stream ID from params or location state
   const actualStreamId = id || streamId || location.state?.streamId;
 
+  // Use unified LiveKit hook once we have stream data
+  const { room, participants, isConnecting, connect, disconnect } = useLiveKitRoom(
+    stream?.room_name || actualStreamId,
+    user ? { ...user, role: (profile as any)?.troll_role || 'viewer', level: 1 } : null
+  );
+
   // Load stream data
   useEffect(() => {
     if (!actualStreamId) {
       setError('Stream ID not found');
-      setIsConnecting(false);
+      setIsLoadingStream(false);
       return;
     }
 
@@ -63,7 +67,7 @@ export default function StreamRoom() {
         if (streamError || !data) {
           console.error('Stream load error after retries:', streamError);
           setError('Stream not found');
-          setIsConnecting(false);
+          setIsLoadingStream(false);
           // Don't redirect immediately - let user see the error
           toast.error('Stream not found. Please try starting the stream again.');
           return;
@@ -71,7 +75,7 @@ export default function StreamRoom() {
 
         if (!data.is_live) {
           setError('Stream is not live');
-          setIsConnecting(false);
+          setIsLoadingStream(false);
           toast.error('Stream is not live. Please start the stream again.');
           // Don't redirect immediately - let user see the error
           return;
@@ -84,28 +88,11 @@ export default function StreamRoom() {
         const isUserHost = !!(user && profile && data.broadcaster_id === profile.id);
         setIsHost(isUserHost);
 
-        // Get LiveKit token
-        const tokenResponse = await api.post('/livekit-token', {
-          room: data.room_name || actualStreamId,
-          identity: user?.email || user?.id || 'anonymous',
-          isHost: isUserHost,
-        });
-
-        if (tokenResponse.error || !tokenResponse.token) {
-          throw new Error(tokenResponse.error || 'Failed to get LiveKit token');
-        }
-
-        const serverUrl = tokenResponse.livekitUrl || tokenResponse.serverUrl;
-        if (!serverUrl) {
-          throw new Error('LiveKit server URL not found');
-        }
-
-        setLivekitUrl(serverUrl);
-        setToken(tokenResponse.token);
+        setIsLoadingStream(false);
       } catch (err: any) {
         console.error('Stream initialization error:', err);
         setError(err.message || 'Failed to load stream');
-        setIsConnecting(false);
+        setIsLoadingStream(false);
         toast.error(err.message || 'Failed to load stream');
       }
     };
@@ -113,154 +100,82 @@ export default function StreamRoom() {
     loadStream();
   }, [actualStreamId, user, profile, navigate]);
 
-  // Initialize LiveKit connection
+  // Handle track publishing for hosts when room connects
   useEffect(() => {
-    if (!livekitUrl || !token || !stream) return;
+    if (!room || !isHost || !stream) return;
 
-    let newRoom: Room | null = null;
-
-    const initializeLiveKit = async () => {
+    const publishTracks = async () => {
       try {
-        setIsConnecting(true);
-        
-        newRoom = new Room({
-          adaptiveStream: true,
-          dynacast: true,
-        });
+        const shouldPublishTracks = isHost || (isTestingMode && profile && !profile.is_broadcaster);
 
-        // Set up event listeners
-        let isConnected = false;
-        let shouldPublishTracks = isHost || (isTestingMode && profile && !profile.is_broadcaster);
+        if (shouldPublishTracks && room.state === 'connected') {
+          const [videoTrack, audioTrack] = await Promise.all([
+            createLocalVideoTrack({
+              facingMode: 'user',
+            }).catch(err => {
+              console.error('Error creating video track:', err);
+              return null;
+            }),
+            createLocalAudioTrack().catch(err => {
+              console.error('Error creating audio track:', err);
+              return null;
+            }),
+          ]);
 
-        newRoom.on(RoomEvent.Connected, async () => {
-          console.log('✅ Connected to LiveKit room');
-          isConnected = true;
-          setIsConnecting(false);
-          setRoom(newRoom);
-
-          // Wait a bit for the connection to stabilize before publishing tracks
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          // If host, publish tracks after connection is established
-          if (shouldPublishTracks && newRoom.state === 'connected') {
-            try {
-              // Check if room is still connected before publishing
-              if (newRoom.state !== 'connected') {
-                console.warn('Room not connected, skipping track publication');
-                return;
-              }
-
-              const [videoTrack, audioTrack] = await Promise.all([
-                createLocalVideoTrack({
-                  facingMode: 'user',
-                }).catch(err => {
-                  console.error('Error creating video track:', err);
-                  return null;
-                }),
-                createLocalAudioTrack().catch(err => {
-                  console.error('Error creating audio track:', err);
-                  return null;
-                }),
-              ]);
-
-              // Only publish if tracks were created and room is still connected
-              if (newRoom.state === 'connected' && newRoom.localParticipant) {
-                if (videoTrack) {
-                  try {
-                    await newRoom.localParticipant.publishTrack(videoTrack);
-                    console.log('✅ Published video track');
-                  } catch (err) {
-                    console.error('Error publishing video track:', err);
-                    videoTrack.stop();
-                  }
-                }
-
-                if (audioTrack) {
-                  try {
-                    await newRoom.localParticipant.publishTrack(audioTrack);
-                    console.log('✅ Published audio track');
-                  } catch (err) {
-                    console.error('Error publishing audio track:', err);
-                    audioTrack.stop();
-                  }
-                }
-              } else {
-                // Clean up tracks if room disconnected
-                if (videoTrack) videoTrack.stop();
-                if (audioTrack) audioTrack.stop();
-              }
-            } catch (trackError: any) {
-              console.error('Error publishing tracks:', trackError);
-              // Don't show error toast if it's just a connection issue
-              if (!trackError.message?.includes('closed') && !trackError.message?.includes('disconnected')) {
-                toast.error('Failed to start camera/microphone');
+          // Only publish if tracks were created and room is still connected
+          if (room.state === 'connected' && room.localParticipant) {
+            if (videoTrack) {
+              try {
+                await room.localParticipant.publishTrack(videoTrack);
+                console.log('✅ Published video track');
+              } catch (err) {
+                console.error('Error publishing video track:', err);
+                videoTrack.stop();
               }
             }
-          }
-        });
 
-        newRoom.on(RoomEvent.Disconnected, () => {
-          console.log('❌ Disconnected from LiveKit room');
-          isConnected = false;
-          navigate('/live', { replace: true });
-        });
-
-        newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-          console.log('Participant connected:', participant.identity);
-        });
-
-        newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-          console.log('Participant disconnected:', participant.identity);
-        });
-
-        // Connect to room
-        await newRoom.connect(livekitUrl, token);
-        
-        // Don't set room state here - wait for Connected event
-        // This prevents race conditions with track publishing
-
-        // Update viewer count
-        if (stream.id) {
-          try {
-            await supabase.rpc('update_viewer_count', {
-              p_stream_id: stream.id,
-              p_delta: 1,
-            });
-          } catch (viewerError: any) {
-            if (viewerError.code !== 'PGRST202') {
-              console.warn('Viewer count update error:', viewerError);
+            if (audioTrack) {
+              try {
+                await room.localParticipant.publishTrack(audioTrack);
+                console.log('✅ Published audio track');
+              } catch (err) {
+                console.error('Error publishing audio track:', err);
+                audioTrack.stop();
+              }
             }
+          } else {
+            // Clean up tracks if room disconnected
+            if (videoTrack) videoTrack.stop();
+            if (audioTrack) audioTrack.stop();
           }
         }
-      } catch (err: any) {
-        console.error('LiveKit connection error:', err);
-        setError(err.message || 'Failed to connect to stream');
-        setIsConnecting(false);
-        toast.error('Failed to connect to stream');
+      } catch (trackError: any) {
+        console.error('Error publishing tracks:', trackError);
+        // Don't show error toast if it's just a connection issue
+        if (!trackError.message?.includes('closed') && !trackError.message?.includes('disconnected')) {
+          toast.error('Failed to start camera/microphone');
+        }
       }
     };
 
-    initializeLiveKit();
+    publishTracks();
 
-    // Cleanup
-    return () => {
-      if (newRoom) {
-        try {
-          // Stop all local tracks before disconnecting
-          const trackPublications = newRoom.localParticipant?.trackPublications;
-          if (trackPublications) {
-            Array.from(trackPublications.values()).forEach((pub) => {
-              if (pub.track) {
-                pub.track.stop();
-                newRoom.localParticipant?.unpublishTrack(pub.track);
-              }
-            });
-          }
-          newRoom.disconnect();
-        } catch (cleanupError) {
-          console.error('Error during room cleanup:', cleanupError);
+    // Update viewer count
+    if (stream.id) {
+      try {
+        supabase.rpc('update_viewer_count', {
+          p_stream_id: stream.id,
+          p_delta: 1,
+        });
+      } catch (viewerError: any) {
+        if (viewerError.code !== 'PGRST202') {
+          console.warn('Viewer count update error:', viewerError);
         }
       }
+    }
+
+    // Cleanup function
+    return () => {
       // Decrement viewer count
       if (stream?.id) {
         void (async () => {
@@ -273,24 +188,25 @@ export default function StreamRoom() {
         })();
       }
     };
-  }, [livekitUrl, token, stream, isHost, isTestingMode, profile, navigate]);
+  }, [room, isHost, isTestingMode, profile, stream]);
 
   // Handle stream end
   const handleEndStream = async () => {
-    if (!stream?.id || !room) return;
-    
+    if (!stream?.id) return;
+
     const success = await endStream(stream.id, room);
     if (success) {
+      disconnect(); // Disconnect from LiveKit room
       navigate('/live', { replace: true });
     }
   };
 
-  if (isConnecting) {
+  if (isLoadingStream || (stream && !room && !error)) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-white">Connecting to stream...</p>
+          <p className="text-white">{isLoadingStream ? 'Loading stream...' : 'Connecting to stream...'}</p>
         </div>
       </div>
     );
@@ -312,7 +228,7 @@ export default function StreamRoom() {
     );
   }
 
-  if (!stream || !livekitUrl || !token) {
+  if (!stream || !room) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -335,10 +251,8 @@ export default function StreamRoom() {
       {/* Video Feed */}
       <div className="relative w-full h-screen">
         <VideoFeed
-          livekitUrl={livekitUrl}
-          token={token}
+          room={room}
           isHost={isHost}
-          onRoomReady={(readyRoom) => setRoom(readyRoom)}
         />
       </div>
 

@@ -4,18 +4,22 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
 import { Video, Users, Gift, Timer, Shield } from 'lucide-react';
+import { useLiveKitRoom } from '../hooks/useLiveKitRoom';
 
 const OfficerLoungeStream = () => {
   const { user, profile } = useAuthStore();
   const [boxCount, setBoxCount] = useState(2);
-  const [room, setRoom] = useState(null);
-  const [participants, setParticipants] = useState({});
-  const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
   const [battleTimer, setBattleTimer] = useState(0);
   const [accessDenied, setAccessDenied] = useState(false);
-  const [roomName] = useState('officer_stream_room');
-  
+  const roomName = 'officer-stream';
+
+  // Use unified LiveKit hook
+  const { room, participants, isConnecting, connect, disconnect } = useLiveKitRoom(
+    roomName,
+    user ? { ...user, role: profile?.troll_role, level: profile?.level } : null
+  );
+
   // Gift tracking for each box
   const [boxGifts, setBoxGifts] = useState({});
 
@@ -63,7 +67,7 @@ const OfficerLoungeStream = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'battle_gifts',
-          filter: 'room_name=eq.officer_stream_room'
+          filter: `room_name=eq.${roomName}`
         },
         (payload) => {
           const gift = payload.new;
@@ -111,124 +115,43 @@ const OfficerLoungeStream = () => {
       return;
     }
 
-    setIsConnecting(true);
-    setError(null);
+    if (!room) {
+      // Connect to room first
+      connect();
+      // Wait a bit for connection
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
-    try {
-      // Get LiveKit token with position metadata for officer room
-      const tokenResponse = await fetch(`/api/livekit/token?role=broadcaster&position=${boxNumber}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({
-          room: roomName,
-          identity: user.email || user.id,
-          metadata: { position: boxNumber.toString(), roomType: 'officer' }
-        })
-      });
-
-      if (!tokenResponse.ok) {
-        throw new Error('Failed to get LiveKit token');
-      }
-
-      const { token, livekitUrl } = await tokenResponse.json();
-
-      if (!token || !livekitUrl) {
-        throw new Error('Invalid token response');
-      }
-
-      // Create and connect room
-      const newRoom = new Room({
-        adaptiveStream: true,
-        dynacast: true,
-      });
-
-      // Set up event listeners
-      newRoom.on(RoomEvent.Connected, () => {
-        console.log(`Officer connected to box ${boxNumber}`);
-        setIsConnecting(false);
-        setRoom(newRoom);
+    if (room && room.state === 'connected') {
+      try {
+        // Update participant metadata with position
+        if (room.localParticipant) {
+          room.localParticipant.setMetadata(JSON.stringify({
+            position: boxNumber.toString(),
+            roomType: 'officer'
+          }));
+        }
 
         // Publish local tracks
-        const publishTracks = async () => {
-          try {
-            const [videoTrack, audioTrack] = await Promise.all([
-              createLocalVideoTrack({ facingMode: 'user' }),
-              createLocalAudioTrack()
-            ]);
+        const [videoTrack, audioTrack] = await Promise.all([
+          createLocalVideoTrack({ facingMode: 'user' }),
+          createLocalAudioTrack()
+        ]);
 
-            await newRoom.localParticipant.publishTrack(videoTrack);
-            await newRoom.localParticipant.publishTrack(audioTrack);
-            
-            toast.success(`Joined Officer Box ${boxNumber}!`);
-          } catch (err) {
-            console.error('Error publishing tracks:', err);
-            toast.error('Failed to start camera/microphone');
-          }
-        };
+        await room.localParticipant.publishTrack(videoTrack);
+        await room.localParticipant.publishTrack(audioTrack);
 
-        publishTracks();
-      });
-
-      newRoom.on(RoomEvent.Disconnected, () => {
-        console.log(`Disconnected from officer box ${boxNumber}`);
-        setRoom(null);
-        toast.info(`Left Officer Box ${boxNumber}`);
-      });
-
-      newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        console.log('Officer participant connected:', participant.identity);
-        // Parse metadata to get position
-        const metadata = participant.metadata ? JSON.parse(participant.metadata) : {};
-        const position = metadata.position || '1';
-        
-        setParticipants(prev => ({
-          ...prev,
-          [position]: participant
-        }));
-      });
-
-      newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        console.log('Officer participant disconnected:', participant.identity);
-        // Remove from participants map
-        setParticipants(prev => {
-          const updated = { ...prev };
-          Object.keys(updated).forEach(key => {
-            if (updated[key]?.identity === participant.identity) {
-              delete updated[key];
-            }
-          });
-          return updated;
-        });
-      });
-
-      newRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        console.log('Officer track subscribed:', track.kind, participant.identity);
-      });
-
-      newRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
-        console.log('Officer track unsubscribed:', track.kind);
-      });
-
-      // Connect to officer room
-      await newRoom.connect(livekitUrl, token);
-
-    } catch (err) {
-      console.error('Error joining officer box:', err);
-      setError(err.message);
-      setIsConnecting(false);
-      toast.error('Failed to join officer box');
+        toast.success(`Joined Officer Box ${boxNumber}!`);
+      } catch (err) {
+        console.error('Error publishing tracks:', err);
+        toast.error('Failed to start camera/microphone');
+      }
     }
   };
 
   // Leave current box
   const leaveBox = () => {
-    if (room) {
-      room.disconnect();
-      setRoom(null);
-    }
+    disconnect();
   };
 
   // Render individual box
@@ -261,7 +184,7 @@ const OfficerLoungeStream = () => {
             <div className="text-sm mb-4">Officer Box {boxNumber}</div>
             <button
               onClick={() => joinBox(boxNumber)}
-              disabled={isConnecting || room !== null}
+              disabled={isConnecting}
               className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
             >
               <Shield className="w-4 h-4" />
@@ -401,7 +324,7 @@ const OfficerLoungeStream = () => {
             <li>• Click "Join Officer Box" on any empty box to start broadcasting</li>
             <li>• Officers can send gifts that appear in real-time</li>
             <li>• Each box represents a different officer broadcaster position</li>
-            <li>• Uses separate LiveKit room: "officer_stream_room"</li>
+            <li>• Uses unified LiveKit room: "officer-stream"</li>
             <li>• Officer activity is tracked for shift management</li>
           </ul>
         </div>

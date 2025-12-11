@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { MessageSquarePlus } from 'lucide-react'
-import InboxSidebar from './messages/components/InboxSidebar'
-import ChatWindow from './messages/components/ChatWindow'
-import MessageInput from './messages/components/MessageInput'
+import MessagesSidebar from './messages/components/MessagesSidebar'
+import ConversationList from './messages/components/ConversationList'
+import ChatPanel from './messages/components/ChatPanel'
 import NewMessageModal from './messages/components/NewMessageModal'
 import IncomingCallPopup from '../components/IncomingCallPopup'
 import { supabase } from '../lib/supabase'
@@ -16,7 +16,7 @@ export default function Messages() {
 
   const [activeConversation, setActiveConversation] = useState<string | null>(null)
 
-  const [activeTab, setActiveTab] = useState('inbox')
+  const [activeTab, setActiveTab] = useState<'inbox' | 'requests'>('inbox')
   const [showNewMessageModal, setShowNewMessageModal] = useState(false)
 
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({})
@@ -183,52 +183,27 @@ export default function Messages() {
   }
 
   return (
-    <div className="h-screen flex bg-[#04000d] overflow-hidden">
+    <div className="h-screen flex bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] overflow-hidden">
+      {/* Column 1: Sidebar */}
+      <MessagesSidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
-      {/* Sidebar */}
-      <InboxSidebar
+      {/* Column 2: Conversation List */}
+      <ConversationList
         activeConversation={activeConversation}
         onSelectConversation={handleSelectConversation}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
         onlineUsers={onlineUsers}
       />
 
-      {/* Chat */}
-      <div className="flex-1 flex flex-col">
-
-        {activeConversation ? (
-          <>
-            <ChatWindow
-              otherUserId={activeConversation}
-              otherUserUsername={otherUserInfo?.username}
-              otherUserAvatar={otherUserInfo?.avatar_url}
-              isOnline={otherUserInfo?.is_online}
-            />
-
-            <MessageInput
-              otherUserId={activeConversation}
-              onMessageSent={() => {}}
-            />
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-gray-500">
-            Select a conversation to start messaging
-          </div>
-        )}
-
-      </div>
-
-      {/* New Message - Only show when no active conversation */}
-      {!activeConversation && (
-        <button
-          type="button"
-          onClick={() => setShowNewMessageModal(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-[#9b32ff] to-[#00ffcc] rounded-full text-black flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50"
-        >
-          <MessageSquarePlus className="w-6 h-6" />
-        </button>
-      )}
+      {/* Column 3: Chat Panel */}
+      <ChatPanel
+        activeConversation={activeConversation}
+        otherUserInfo={otherUserInfo}
+        onNewMessage={() => setShowNewMessageModal(true)}
+      />
 
       <NewMessageModal
         isOpen={showNewMessageModal}

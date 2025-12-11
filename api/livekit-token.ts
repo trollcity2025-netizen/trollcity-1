@@ -1,10 +1,19 @@
 // File: /api/livekit-token.ts  (Vercel serverless function)
+// Universal LiveKit token endpoint for all streaming features
 
 import { AccessToken } from 'livekit-server-sdk'
 
 export default async function handler(req: any, res: any) {
-  const { room, identity } = req.query
-  const metadata = req.body?.metadata || {}
+  // Support both GET (query params) and POST (body) for flexibility
+  const { room, identity, user_id, role, level } = req.method === 'POST' ? req.body : req.query
+
+  // Build metadata from request
+  const metadata = {
+    user_id: user_id || req.body?.user_id || req.query?.user_id,
+    role: role || req.body?.role || req.query?.role || 'viewer',
+    level: level || req.body?.level || req.query?.level || 1,
+    ...req.body?.metadata, // Allow additional metadata
+  }
 
   const apiKey = process.env.LIVEKIT_API_KEY!
   const apiSecret = process.env.LIVEKIT_API_SECRET!
@@ -12,7 +21,7 @@ export default async function handler(req: any, res: any) {
 
   const token = new AccessToken(apiKey, apiSecret, {
     identity: identity as string,
-    ttl: 3600,
+    ttl: 120, // 2 minutes expiration
     metadata: JSON.stringify(metadata),
   })
 

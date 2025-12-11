@@ -22,10 +22,10 @@ export default function EmpirePartnerApply() {
 
     // Check if user already has an application
     checkApplicationStatus()
-    
+
     // If already approved, redirect to dashboard
-    if (profile?.empire_role === 'partner') {
-      navigate('/empire-partner')
+    if (profile?.empire_partner === true || profile?.partner_status === 'approved' || profile?.role === 'empire_partner') {
+      navigate('/empire/dashboard')
       return
     }
   }, [user, profile?.empire_role, navigate])
@@ -174,9 +174,9 @@ export default function EmpirePartnerApply() {
             <p className="text-gray-300 mb-6">You are now an Empire Partner. Start recruiting and earning bonuses!</p>
             <button
               onClick={async () => {
-                // Refresh profile first to get updated empire_role
+                // Refresh profile first to get updated partner status
                 await refreshProfile()
-                navigate('/empire-partner')
+                navigate('/empire/dashboard')
               }}
               className="px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg flex items-center gap-2 mx-auto"
             >

@@ -354,8 +354,7 @@ export default function CoinStore() {
                         createOrder={async () => {
                           setProcessingPackage(pkg.id);
                           try {
-                            const functionUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
-                            const res = await fetch(`${functionUrl}/paypal-create-order`, {
+                            const res = await fetch('/api/paypal/create-order', {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
@@ -377,8 +376,7 @@ export default function CoinStore() {
                         }}
                         onApprove={async (data, actions) => {
                           try {
-                            const functionUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
-                            const res = await fetch(`${functionUrl}/paypal-complete-order`, {
+                            const res = await fetch('/api/paypal/complete-order', {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
