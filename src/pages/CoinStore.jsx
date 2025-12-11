@@ -311,10 +311,6 @@ export default function CoinStore() {
                         </div>
                         <p className="text-xl font-bold text-green-400">{formatUSD(pkg.price)}</p>
                       </div>
-                      <button onClick={() => handleBuy(pkg)} disabled={loadingPackage === pkg.id} className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                        {loadingPackage === pkg.id ? (<><Loader2 className="w-4 h-4 animate-spin" />Starting Checkout...</>) : (<><ShoppingCart className="w-4 h-4" />Buy with PayPal</>)}
-                      </button>
-
                       <PayPalButtons
                         style={{ layout: "horizontal" }}
                         fundingSource="paypal"
