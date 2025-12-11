@@ -71,6 +71,7 @@ export default function Profile() {
   // Referral code state
   const [referralCode, setReferralCode] = useState('')
   const [referralLink, setReferralLink] = useState('')
+  const [recruitedBy, setRecruitedBy] = useState<any>(null)
   
   // Battle history state
   const [battles, setBattles] = useState<any[]>([])
@@ -538,6 +539,28 @@ export default function Profile() {
           await loadBattleHistory(target.id)
         } catch (err) {
           console.error('Error loading battle history:', err)
+        }
+
+        // Check if user was recruited (only for viewed profiles, not own profile)
+        if (viewed && viewed.id !== profile?.id) {
+          try {
+            const { data: referralData, error: referralError } = await supabase
+              .from('referrals')
+              .select(`
+                referrer_id,
+                referrer:user_profiles!referrals_referrer_id_fkey (
+                  username
+                )
+              `)
+              .eq('referred_user_id', viewed.id)
+              .maybeSingle()
+
+            if (!referralError && referralData) {
+              setRecruitedBy(Array.isArray(referralData.referrer) ? referralData.referrer[0] : referralData.referrer)
+            }
+          } catch (err) {
+            console.error('Error loading referral data:', err)
+          }
         }
       } catch (err) {
         console.error('Error in loadStats:', err)
@@ -1785,6 +1808,16 @@ export default function Profile() {
                   <span className="text-yellow-400 text-xl font-bold">{(viewed?.paid_coin_balance ?? profile.paid_coin_balance)} Paid</span>
                   <span className="text-blue-400 text-xl font-bold">{(viewed?.free_coin_balance ?? profile.free_coin_balance)} Free</span>
                 </div>
+
+                {/* Recruited by display */}
+                {recruitedBy && (
+                  <div className="mt-2 text-sm text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Users className="w-4 h-4" />
+                      Recruited by: <ClickableUsername username={recruitedBy.username} />
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
