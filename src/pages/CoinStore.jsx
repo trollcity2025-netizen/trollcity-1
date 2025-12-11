@@ -114,11 +114,22 @@ export default function CoinStore() {
     console.log('🛒 Starting PayPal checkout for package:', pkg.id);
     setLoadingPackage(pkg.id);
     try {
+      // Get the current session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
       const res = await fetch(
         `${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/paypal-create-order`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
           body: JSON.stringify({
             packageId: pkg.id,
             user_id: user.id
