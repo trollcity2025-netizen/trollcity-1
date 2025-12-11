@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
 import { coinPackages, formatCoins, formatUSD } from '../lib/coinMath';
 import RequireRole from '../components/RequireRole';
-import { PayPalButtons } from '@paypal/react-paypal-js';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
 export default function CoinStore() {
   const { user, profile } = useAuthStore();
@@ -211,7 +211,14 @@ export default function CoinStore() {
 
   return (
     <RequireRole roles={['user', 'broadcaster', 'admin']} fallbackPath="/dashboard">
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <PayPalScriptProvider
+        options={{
+          "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID,
+          currency: "USD",
+          intent: "capture"
+        }}
+      >
+        <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -458,6 +465,7 @@ export default function CoinStore() {
           </div>
         </div>
       </div>
+      </PayPalScriptProvider>
     </RequireRole>
   );
 }
