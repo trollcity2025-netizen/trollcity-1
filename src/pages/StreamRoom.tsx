@@ -28,7 +28,14 @@ export default function StreamRoom() {
   const actualStreamId = id || streamId || location.state?.streamId;
 
   // Use unified LiveKit hook once we have stream data
-  const { room, participants, isConnecting, connect, disconnect } = useLiveKitRoom(
+  const {
+    room,
+    participants,
+    isConnecting,
+    error: liveKitError,
+    connect,
+    disconnect,
+  } = useLiveKitRoom(
     stream?.room_name || actualStreamId,
     user ? { ...user, role: (profile as any)?.troll_role || 'viewer', level: 1 } : null
   );
@@ -99,6 +106,26 @@ export default function StreamRoom() {
 
     loadStream();
   }, [actualStreamId, user, profile, navigate]);
+
+  // Handle LiveKit connection errors
+  useEffect(() => {
+    if (liveKitError && !error) {
+      setError(`Failed to connect to stream: ${liveKitError}`);
+      setIsLoadingStream(false);
+    }
+  }, [liveKitError, error]);
+
+  // Optional: Add timeout to prevent permanent loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoadingStream || (stream && !room && !error && !liveKitError)) {
+        setError("Stream is taking too long to load. Please try again.");
+        setIsLoadingStream(false);
+      }
+    }, 15000); // 15s timeout
+
+    return () => clearTimeout(timer);
+  }, [isLoadingStream, stream, room, error, liveKitError]);
 
   // Handle track publishing for hosts when room connects
   useEffect(() => {
@@ -201,7 +228,10 @@ export default function StreamRoom() {
     }
   };
 
-  if (isLoadingStream || (stream && !room && !error)) {
+  // Fix loading condition to prevent infinite loading
+  const stillLoading = isLoadingStream || (stream && !room && !error && !liveKitError);
+
+  if (stillLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">

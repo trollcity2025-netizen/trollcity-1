@@ -13,10 +13,13 @@ export function useLiveKitRoom(roomName, user, options = {}) {
   const roomOptions = { ...defaultLiveKitOptions, ...options };
 
   const connect = useCallback(async () => {
-    if (!user || !roomName) return;
+    if (!user || !roomName) {
+      setError("Missing room name or user");
+      return;
+    }
 
     setIsConnecting(true);
-    setError(null);
+    setError(null); // reset previous errors
 
     try {
       // Fetch token from universal endpoint
@@ -78,8 +81,9 @@ export function useLiveKitRoom(roomName, user, options = {}) {
 
     } catch (err) {
       console.error('Error connecting to LiveKit room:', err);
-      setError(err.message);
+      setError(err.message || 'Failed to connect to stream');
       setIsConnecting(false);
+      setRoom(null);
     }
   }, [roomName, user, roomOptions]);
 
@@ -129,7 +133,7 @@ export function useLiveKitRoom(roomName, user, options = {}) {
     room,
     participants,
     isConnecting,
-    error,
+    error,        // 🔥 expose error to parent
     connect,
     disconnect,
   };
