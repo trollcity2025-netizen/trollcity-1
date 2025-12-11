@@ -34,6 +34,27 @@ import AdditionalTasksGrid from './components/AdditionalTasksGrid'
 import QuickActionsBar from './components/QuickActionsBar'
 import AgreementsManagement from './components/AgreementsManagement'
 
+// Import missing components
+import MetricsPanel from './components/MetricsPanel'
+import StreamsPanel from './components/StreamsPanel'
+import PayPalTestPanel from './components/PayPalTestPanel'
+import ReportsPanel from './components/ReportsPanel'
+import WeeklyReportsView from './WeeklyReportsView'
+import StreamMonitor from './components/StreamMonitor'
+import ReferralBonusPanel from './ReferralBonusPanel'
+import EmpireApplications from './EmpireApplications'
+import AdminApplications from './components/AdminApplications'
+import UsersPanel from './components/UsersPanel'
+import AdminSupportTickets from './components/AdminSupportTickets'
+import BroadcasterApplications from './components/BroadcasterApplications'
+import EarningsTaxOverview from './components/EarningsTaxOverview'
+import OfficerShiftsPanel from './components/OfficerShiftsPanel'
+import CreateSchedulePanel from './components/CreateSchedulePanel'
+import AdminGrantCoins from './components/AdminGrantCoins'
+import AdminControlPanel from './components/AdminControlPanel'
+import TestDiagnostics from './components/TestDiagnostics'
+import AdminResetPanel from './AdminResetPanel'
+
 type StatState = {
   totalUsers: number
   adminsCount: number
