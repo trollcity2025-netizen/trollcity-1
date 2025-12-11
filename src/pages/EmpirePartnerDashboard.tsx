@@ -1,49 +1,46 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { Users, Coins, TrendingUp, CheckCircle2, XCircle, Copy, ExternalLink } from 'lucide-react'
+import { Users, Coins, TrendingUp, CheckCircle2, XCircle, Copy, ExternalLink, Clock, Target } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Referral {
   id: string
+  referrer_id: string
   referred_user_id: string
-  created_at: string
+  referred_at: string
+  reward_status: 'pending' | 'completed' | 'failed'
+  deadline: string
   referred_user: {
     username: string
     avatar_url: string
+    paid_coin_balance: number
   }
 }
 
-interface MonthlyBonus {
+interface ReferralReward {
   id: string
+  referrer_id: string
   referred_user_id: string
-  month: string
-  coins_earned: number
-  bonus_paid_coins: number
-  created_at: string
-  referred_user: {
-    username: string
-  }
+  coins_awarded: number
+  rewarded_at: string
 }
 
 interface ReferralStats {
-  referred_user_id: string
-  username: string
-  avatar_url: string
-  monthly_coins: number
-  is_eligible: boolean
-  bonus_paid: number
-  bonus_status: 'paid' | 'not_eligible' | 'pending'
+  totalReferrals: number
+  completedReferrals: number
+  pendingReferrals: number
+  failedReferrals: number
+  totalCoinsEarned: number
 }
 
 export default function EmpirePartnerDashboard() {
   const { profile, user } = useAuthStore()
   const [referrals, setReferrals] = useState<Referral[]>([])
-  const [bonuses, setBonuses] = useState<MonthlyBonus[]>([])
-  const [stats, setStats] = useState<ReferralStats[]>([])
+  const [rewards, setRewards] = useState<ReferralReward[]>([])
+  const [stats, setStats] = useState<ReferralStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [referralLink, setReferralLink] = useState('')
-  const [totalEarned, setTotalEarned] = useState(0)
 
   useEffect(() => {
     if (user?.id && profile) {
@@ -83,100 +80,66 @@ export default function EmpirePartnerDashboard() {
 
     setLoading(true)
     try {
-      // Load referrals
+      // Load referrals with user data
       const { data: referralsData, error: referralsError } = await supabase
         .from('referrals')
         .select(`
           id,
+          referrer_id,
           referred_user_id,
-          created_at,
+          referred_at,
+          reward_status,
+          deadline,
           referred_user:user_profiles!referrals_referred_user_id_fkey (
             username,
-            avatar_url
+            avatar_url,
+            paid_coin_balance
           )
         `)
-        .eq('recruiter_id', user.id)
-        .order('created_at', { ascending: false })
+        .eq('referrer_id', user.id)
+        .order('referred_at', { ascending: false })
 
       if (referralsError) throw referralsError
 
       // Transform referrals data
       const transformedReferrals = (referralsData || []).map((r: any) => ({
         id: r.id,
+        referrer_id: r.referrer_id,
         referred_user_id: r.referred_user_id,
-        created_at: r.created_at,
+        referred_at: r.referred_at,
+        reward_status: r.reward_status,
+        deadline: r.deadline,
         referred_user: Array.isArray(r.referred_user) ? r.referred_user[0] : r.referred_user
       }))
 
       setReferrals(transformedReferrals)
 
-      // Load monthly bonuses
-      const { data: bonusesData, error: bonusesError } = await supabase
-        .from('referral_monthly_bonus')
-        .select(`
-          id,
-          referred_user_id,
-          month,
-          coins_earned,
-          bonus_paid_coins,
-          created_at,
-          referred_user:user_profiles!referral_monthly_bonus_referred_user_id_fkey (
-            username
-          )
-        `)
-        .eq('recruiter_id', user.id)
-        .order('created_at', { ascending: false })
+      // Load rewards
+      const { data: rewardsData, error: rewardsError } = await supabase
+        .from('empire_partner_rewards')
+        .select('*')
+        .eq('referrer_id', user.id)
+        .order('rewarded_at', { ascending: false })
 
-      if (bonusesError) throw bonusesError
+      if (rewardsError) throw rewardsError
 
-      const transformedBonuses = (bonusesData || []).map((b: any) => ({
-        id: b.id,
-        referred_user_id: b.referred_user_id,
-        month: b.month,
-        coins_earned: b.coins_earned,
-        bonus_paid_coins: b.bonus_paid_coins,
-        created_at: b.created_at,
-        referred_user: Array.isArray(b.referred_user) ? b.referred_user[0] : b.referred_user
-      }))
+      setRewards(rewardsData || [])
 
-      setBonuses(transformedBonuses)
+      // Calculate stats
+      const totalReferrals = transformedReferrals.length
+      const completedReferrals = transformedReferrals.filter(r => r.reward_status === 'completed').length
+      const pendingReferrals = transformedReferrals.filter(r => r.reward_status === 'pending').length
+      const failedReferrals = transformedReferrals.filter(r => r.reward_status === 'failed').length
+      const totalCoinsEarned = (rewardsData || []).reduce((sum, reward) => sum + reward.coins_awarded, 0)
 
-      // Calculate total earned
-      const total = transformedBonuses.reduce((sum, b) => sum + (b.bonus_paid_coins || 0), 0)
-      setTotalEarned(total)
-
-      // Load current month stats for each referral
-      const now = new Date()
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-      const statsPromises = transformedReferrals.map(async (ref: Referral) => {
-        // Get monthly coins earned
-        const { data: coinsData } = await supabase.rpc('get_user_monthly_coins_earned', {
-          p_user_id: ref.referred_user_id,
-          p_month: currentMonth
-        })
-
-        const monthlyCoins = Number(coinsData) || 0
-        const isEligible = monthlyCoins >= 40000
-
-        // Check if bonus already paid this month
-        const existingBonus = transformedBonuses.find(
-          b => b.referred_user_id === ref.referred_user_id && b.month === currentMonth
-        )
-
-        return {
-          referred_user_id: ref.referred_user_id,
-          username: ref.referred_user?.username || 'Unknown',
-          avatar_url: ref.referred_user?.avatar_url || '',
-          monthly_coins: monthlyCoins,
-          is_eligible: isEligible,
-          bonus_paid: existingBonus?.bonus_paid_coins || 0,
-          bonus_status: existingBonus ? 'paid' as const : (isEligible ? 'pending' as const : 'not_eligible' as const)
-        }
+      setStats({
+        totalReferrals,
+        completedReferrals,
+        pendingReferrals,
+        failedReferrals,
+        totalCoinsEarned
       })
 
-      const statsData = await Promise.all(statsPromises)
-      setStats(statsData)
     } catch (error: any) {
       console.error('Error loading referral data:', error)
       toast.error('Failed to load referral data')
@@ -217,18 +180,36 @@ export default function EmpirePartnerDashboard() {
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
             Troll Empire Partner Program
           </h1>
-          <p className="text-gray-400">Earn 5% bonus when your referrals earn 40,000+ coins per month</p>
+          <p className="text-gray-400">Earn 10,000 coins when your referrals reach 40,000 paid coins within 21 days</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
             <div className="flex items-center gap-3 mb-2">
               <Users className="w-6 h-6 text-purple-400" />
               <h3 className="text-lg font-semibold">Total Referrals</h3>
             </div>
-            <p className="text-3xl font-bold">{referrals.length}</p>
+            <p className="text-3xl font-bold">{stats?.totalReferrals || 0}</p>
             <p className="text-sm text-gray-400 mt-2">Users you've recruited</p>
+          </div>
+
+          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <CheckCircle2 className="w-6 h-6 text-green-400" />
+              <h3 className="text-lg font-semibold">Completed</h3>
+            </div>
+            <p className="text-3xl font-bold">{stats?.completedReferrals || 0}</p>
+            <p className="text-sm text-gray-400 mt-2">Qualified referrals</p>
+          </div>
+
+          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Clock className="w-6 h-6 text-yellow-400" />
+              <h3 className="text-lg font-semibold">Pending</h3>
+            </div>
+            <p className="text-3xl font-bold">{stats?.pendingReferrals || 0}</p>
+            <p className="text-sm text-gray-400 mt-2">Within 3-week window</p>
           </div>
 
           <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
@@ -236,19 +217,8 @@ export default function EmpirePartnerDashboard() {
               <Coins className="w-6 h-6 text-yellow-400" />
               <h3 className="text-lg font-semibold">Total Earned</h3>
             </div>
-            <p className="text-3xl font-bold">{totalEarned.toLocaleString()}</p>
-            <p className="text-sm text-gray-400 mt-2">Paid coins from bonuses</p>
-          </div>
-
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <TrendingUp className="w-6 h-6 text-green-400" />
-              <h3 className="text-lg font-semibold">Active This Month</h3>
-            </div>
-            <p className="text-3xl font-bold">
-              {stats.filter(s => s.monthly_coins > 0).length}
-            </p>
-            <p className="text-sm text-gray-400 mt-2">Referrals earning coins</p>
+            <p className="text-3xl font-bold">{stats?.totalCoinsEarned?.toLocaleString() || 0}</p>
+            <p className="text-sm text-gray-400 mt-2">Coins from referrals</p>
           </div>
         </div>
 
@@ -271,117 +241,117 @@ export default function EmpirePartnerDashboard() {
             </button>
           </div>
           <p className="text-sm text-gray-400 mt-2">
-            Share this link to recruit new users. You'll earn 5% of their monthly earnings when they reach 40,000+ coins.
+            Share this link to recruit new users. You'll earn 10,000 coins when they reach 40,000 paid coins within 21 days.
           </p>
         </div>
 
         {/* Referrals Table */}
         <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Your Referrals</h2>
-          {stats.length === 0 ? (
+          {referrals.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>No referrals yet. Share your referral link to start earning!</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#2C2C2C]">
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">User</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Coins Earned (This Month)</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Bonus Eligible</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Bonus Paid</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.map((stat) => (
-                    <tr key={stat.referred_user_id} className="border-b border-[#2C2C2C] hover:bg-[#1A1A1A]">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={stat.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stat.username}`}
-                            alt={stat.username}
-                            className="w-10 h-10 rounded-full"
-                          />
-                          <span className="font-medium">{stat.username}</span>
+            <div className="space-y-4">
+              {referrals.map((referral) => {
+                const daysRemaining = Math.max(0, Math.ceil((new Date(referral.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                const progress = Math.min(100, (referral.referred_user?.paid_coin_balance || 0) / 40000 * 100)
+                const isExpired = new Date(referral.deadline) < new Date()
+
+                return (
+                  <div key={referral.id} className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={referral.referred_user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${referral.referred_user?.username}`}
+                          alt={referral.referred_user?.username}
+                          className="w-12 h-12 rounded-full"
+                        />
+                        <div>
+                          <div className="font-semibold text-white">{referral.referred_user?.username || 'Unknown'}</div>
+                          <div className="text-sm text-gray-400">
+                            Joined {new Date(referral.referred_at).toLocaleDateString()}
+                          </div>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-semibold">{stat.monthly_coins.toLocaleString()}</span>
-                        <span className="text-gray-400 text-sm ml-2">coins</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {stat.is_eligible ? (
-                          <span className="text-green-400 flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Yes
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">
-                            {stat.monthly_coins > 0 
-                              ? `${(40000 - stat.monthly_coins).toLocaleString()} more needed`
-                              : 'Not yet'
-                            }
+                      </div>
+                      <div className="text-right">
+                        {referral.reward_status === 'completed' && (
+                          <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
+                            Completed
                           </span>
                         )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {stat.bonus_paid > 0 ? (
-                          <span className="text-yellow-400 font-semibold">
-                            {stat.bonus_paid.toLocaleString()} coins
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {stat.bonus_status === 'paid' && (
-                          <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
-                            Paid
-                          </span>
-                        )}
-                        {stat.bonus_status === 'pending' && (
-                          <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                        {referral.reward_status === 'pending' && !isExpired && (
+                          <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-medium">
                             Pending
                           </span>
                         )}
-                        {stat.bonus_status === 'not_eligible' && (
-                          <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs">
-                            Not Eligible
+                        {referral.reward_status === 'failed' && (
+                          <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-medium">
+                            Failed
                           </span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Paid Coins Progress</span>
+                        <span className="text-white font-medium">
+                          {(referral.referred_user?.paid_coin_balance || 0).toLocaleString()} / 40,000
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>
+                          {referral.reward_status === 'pending' && !isExpired
+                            ? `${daysRemaining} days remaining`
+                            : referral.reward_status === 'completed'
+                            ? 'Qualified!'
+                            : 'Expired'
+                          }
+                        </span>
+                        <span>
+                          {progress >= 100 ? 'Target reached!' : `${Math.round(progress)}% complete`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
 
-        {/* Bonus History */}
-        {bonuses.length > 0 && (
+        {/* Rewards History */}
+        {rewards.length > 0 && (
           <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-4">Bonus History</h2>
+            <h2 className="text-xl font-semibold mb-4">Rewards History</h2>
             <div className="space-y-3">
-              {bonuses.map((bonus) => (
+              {rewards.map((reward) => (
                 <div
-                  key={bonus.id}
+                  key={reward.id}
                   className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4 flex items-center justify-between"
                 >
                   <div>
-                    <p className="font-medium">{bonus.referred_user?.username || 'Unknown User'}</p>
+                    <p className="font-medium">
+                      Referral reward for qualifying user
+                    </p>
                     <p className="text-sm text-gray-400">
-                      {formatMonth(bonus.month)} • {bonus.coins_earned.toLocaleString()} coins earned
+                      {new Date(reward.rewarded_at).toLocaleDateString()} • Automatic reward
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-yellow-400">
-                      +{bonus.bonus_paid_coins.toLocaleString()} coins
+                      +{reward.coins_awarded.toLocaleString()} coins
                     </p>
-                    <p className="text-xs text-gray-400">5% bonus</p>
+                    <p className="text-xs text-gray-400">Empire Partner reward</p>
                   </div>
                 </div>
               ))}
