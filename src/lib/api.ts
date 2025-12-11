@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from '../supabaseClient'
 import { AuthApiError } from '@supabase/supabase-js'
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY

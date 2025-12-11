@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Room, RoomEvent, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
 import api from '../lib/api';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
 import TopBar from '../components/stream/TopBar';
