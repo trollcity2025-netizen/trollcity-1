@@ -42,10 +42,15 @@ export default function EmpirePartnerDashboard() {
   const [loading, setLoading] = useState(true)
   const [referralLink, setReferralLink] = useState('')
 
+  // Real-time subscription channels
+  let referralsChannel: any = null
+  let rewardsChannel: any = null
+  let walletsChannel: any = null
+
   useEffect(() => {
     if (user?.id && profile) {
       // Check if user is an approved Empire Partner
-      if (profile.empire_partner !== true && profile.partner_status !== 'approved' && profile.role !== 'empire_partner') {
+      if (profile.empire_role !== 'partner') {
         // Don't redirect, just show apply button
         return
       }
@@ -53,7 +58,23 @@ export default function EmpirePartnerDashboard() {
       loadData()
       // Generate referral link
       const baseUrl = window.location.origin
-      setReferralLink(`${baseUrl}/signup?ref=${user.id}`)
+      setReferralLink(`${baseUrl}/auth?ref=${user.id}`)
+
+      // Set up real-time subscriptions for referral progress updates
+      setupRealtimeSubscriptions()
+    }
+
+    // Cleanup function
+    return () => {
+      if (referralsChannel) {
+        supabase.removeChannel(referralsChannel)
+      }
+      if (rewardsChannel) {
+        supabase.removeChannel(rewardsChannel)
+      }
+      if (walletsChannel) {
+        supabase.removeChannel(walletsChannel)
+      }
     }
   }, [user?.id, profile])
   
@@ -148,9 +169,146 @@ export default function EmpirePartnerDashboard() {
     }
   }
 
+  const setupRealtimeSubscriptions = () => {
+    if (!user?.id) return
+
+    // Subscribe to referrals table changes
+    referralsChannel = supabase
+      .channel('referrals_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'referrals',
+          filter: `referrer_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Referrals change detected:', payload)
+          loadData() // Reload all data when referrals change
+        }
+      )
+      .subscribe()
+
+    // Subscribe to rewards table changes
+    rewardsChannel = supabase
+      .channel('rewards_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'empire_partner_rewards',
+          filter: `referrer_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Rewards change detected:', payload)
+          loadData() // Reload all data when rewards change
+        }
+      )
+      .subscribe()
+
+    // Subscribe to wallets table changes for referred users
+    const referredUserIds = referrals.map(r => r.referred_user_id)
+    if (referredUserIds.length > 0) {
+      walletsChannel = supabase
+        .channel('wallets_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'wallets',
+            filter: `user_id=in.(${referredUserIds.join(',')})`
+          },
+          (payload) => {
+            console.log('Wallet change detected for referred user:', payload)
+            loadData() // Reload data when referred users' wallets change
+          }
+        )
+        .subscribe()
+    }
+  }
+
   const copyReferralLink = () => {
     navigator.clipboard.writeText(referralLink)
     toast.success('Referral link copied!')
+  }
+
+  const updateReferralStatus = async (referralId: string, newStatus: 'completed' | 'failed') => {
+    if (!user?.id) return
+
+    try {
+      const { error } = await supabase
+        .from('referrals')
+        .update({
+          reward_status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', referralId)
+        .eq('referrer_id', user.id) // Ensure user can only update their own referrals
+
+      if (error) throw error
+
+      // If completing a referral, also create the reward record
+      if (newStatus === 'completed') {
+        const referral = referrals.find(r => r.id === referralId)
+        if (referral) {
+          const { error: rewardError } = await supabase
+            .from('empire_partner_rewards')
+            .insert({
+              referrer_id: user.id,
+              referred_user_id: referral.referred_user_id,
+              coins_awarded: 10000
+            })
+
+          if (rewardError) {
+            console.error('Error creating reward record:', rewardError)
+            // Don't fail the whole operation if reward creation fails
+          } else {
+            // Add coins to referrer's wallet
+            const { data: currentWallet } = await supabase
+              .from('wallets')
+              .select('paid_coins')
+              .eq('user_id', user.id)
+              .single()
+
+            if (currentWallet) {
+              const { error: updateError } = await supabase
+                .from('wallets')
+                .update({
+                  paid_coins: currentWallet.paid_coins + 10000,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('user_id', user.id)
+
+              if (updateError) {
+                console.error('Error updating wallet:', updateError)
+              }
+            } else {
+              // Create wallet if it doesn't exist
+              const { error: insertError } = await supabase
+                .from('wallets')
+                .insert({
+                  user_id: user.id,
+                  paid_coins: 10000,
+                  updated_at: new Date().toISOString()
+                })
+
+              if (insertError) {
+                console.error('Error creating wallet:', insertError)
+              }
+            }
+          }
+        }
+      }
+
+      toast.success(`Referral ${newStatus === 'completed' ? 'completed' : 'marked as failed'}`)
+      loadData() // Refresh data
+    } catch (error: any) {
+      console.error('Error updating referral status:', error)
+      toast.error('Failed to update referral status')
+    }
   }
 
   const formatMonth = (month: string) => {
@@ -321,6 +479,24 @@ export default function EmpirePartnerDashboard() {
                           {progress >= 100 ? 'Target reached!' : `${Math.round(progress)}% complete`}
                         </span>
                       </div>
+
+                      {/* Admin override buttons for pending referrals */}
+                      {referral.reward_status === 'pending' && (
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => updateReferralStatus(referral.id, 'completed')}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
+                          >
+                            Complete
+                          </button>
+                          <button
+                            onClick={() => updateReferralStatus(referral.id, 'failed')}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
+                          >
+                            Fail
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
