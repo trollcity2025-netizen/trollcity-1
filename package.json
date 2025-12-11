@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.6",
+    "@livekit/components-react": "^2.9.17",
+    "@livekit/components-styles": "^1.2.0",
     "@paypal/paypal-server-sdk": "^2.1.0",
     "@paypal/react-paypal-js": "^8.9.2",
     "@supabase/supabase-js": "^2.45.4",
