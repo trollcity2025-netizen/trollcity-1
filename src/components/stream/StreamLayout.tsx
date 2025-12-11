@@ -2,13 +2,6 @@
 import React from 'react'
 import VideoBox, { StreamParticipant } from './VideoBox'
 
-export interface StreamParticipant {
-  participant: any | null // LiveKit Participant
-  userProfile: any | null // UserProfile from Supabase
-  userId: string
-  role?: 'host' | 'opponent' | 'guest'
-}
-
 interface StreamLayoutProps {
   mode: 'solo' | 'battle' | 'multi'
   participants: StreamParticipant[]

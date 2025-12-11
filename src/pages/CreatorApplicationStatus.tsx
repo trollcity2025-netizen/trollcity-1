@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Loader2, CheckCircle, XCircle, Clock, ArrowLeft, RefreshCw } from 'lucide-react';
-import { getUserApplicationStatus } from '../lib/trolltractApi';
+import { supabase } from '../lib/supabase';
 
 export function CreatorApplicationStatus() {
   const { user } = useAuthStore();
@@ -22,7 +22,18 @@ export function CreatorApplicationStatus() {
   const loadApplicationStatus = async () => {
     try {
       setLoading(true);
-      const data = await getUserApplicationStatus();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('creator_applications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
       setApplication(data);
     } catch (error) {
       console.error('Error loading application status:', error);

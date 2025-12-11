@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { submitCreatorApplication, getUserApplicationStatus, fetchMyTrolltractStatus } from '../lib/trolltractApi';
+import { supabase } from '../lib/supabase';
 
 interface FormErrors {
   experienceText?: string;
@@ -19,7 +19,6 @@ export function CreatorApplication() {
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [trolltractStatus, setTrolltractStatus] = useState(null);
   const [applicationStatus, setApplicationStatus] = useState(null);
   
   // Form state
@@ -40,13 +39,21 @@ export function CreatorApplication() {
   const loadUserStatus = async () => {
     try {
       setLoading(true);
-      const [status, application] = await Promise.all([
-        fetchMyTrolltractStatus(),
-        getUserApplicationStatus()
-      ]);
-      setTrolltractStatus(status);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: application, error } = await supabase
+        .from('creator_applications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
       setApplicationStatus(application);
-      
+
       // Pre-fill form if application exists
       if (application) {
         setFormData({
@@ -99,12 +106,29 @@ export function CreatorApplication() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     try {
       setSubmitting(true);
-      await submitCreatorApplication(formData);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('creator_applications')
+        .insert({
+          user_id: user.id,
+          experience_text: formData.experienceText,
+          social_links: formData.socialLinks,
+          goals_text: formData.goalsText,
+          empire_partner_request: formData.empirePartnerRequest,
+          empire_partner_reason: formData.empirePartnerReason,
+          category: formData.category,
+          status: 'pending',
+        });
+
+      if (error) throw error;
+
       navigate('/creator-application/status');
     } catch (error) {
       console.error('Error submitting application:', error);
@@ -126,28 +150,6 @@ export function CreatorApplication() {
     );
   }
 
-  // Check if user has TrollTract contract
-  if (!trolltractStatus?.is_contracted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-        <Card className="bg-slate-950/60 border-slate-800 max-w-md">
-          <CardContent className="p-6 text-center">
-            <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-slate-50 mb-2">TrollTract Contract Required</h2>
-            <p className="text-slate-300 mb-4">
-              You need an active TrollTract contract to submit a creator application.
-            </p>
-            <Button 
-              onClick={() => navigate('/trolltract')}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              Get TrollTract Contract
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Show existing application status
   if (applicationStatus && applicationStatus.status !== 'pending') {
