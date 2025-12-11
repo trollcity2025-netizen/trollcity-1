@@ -53,10 +53,13 @@ export default function CourtRoom() {
     );
   }
 
-  if (!token || !serverUrl) {
+  if (!token || !serverUrl || token === '' || serverUrl === '') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-10 text-center">
         <div className="text-red-400">Failed to join court session. Please try again.</div>
+        <div className="text-xs text-gray-500 mt-2">
+          Token: {token ? 'present' : 'missing'}, ServerUrl: {serverUrl ? 'present' : 'missing'}
+        </div>
       </div>
     );
   }
@@ -71,19 +74,15 @@ export default function CourtRoom() {
 
         <LiveKitRoom
           token={token}
-          serverUrl={serverUrl}
+          url={serverUrl}
           connect={true}
           audio={canPublish}
           video={canPublish}
           className="w-full h-[70vh] bg-black rounded-xl overflow-hidden"
         >
-          <GridLayout
-            className="w-full h-full"
-            style={{ "--lk-grid-gap": "10px" }}
-          >
-            <ParticipantTile />
-          </GridLayout>
-
+          <div className="w-full h-full flex items-center justify-center text-white">
+            Connected to Troll Court
+          </div>
         </LiveKitRoom>
 
         <div className="mt-6 bg-zinc-900 p-4 rounded-lg">
