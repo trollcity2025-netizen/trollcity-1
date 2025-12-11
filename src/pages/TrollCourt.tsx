@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { canDo } from '../lib/permissions.js'
 import { Scale, Gavel, Users, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 
 export default function TrollCourt() {
   const { user, profile } = useAuthStore()
+  const navigate = useNavigate()
   const [courtSession, setCourtSession] = useState<any>(null)
   const [isStartingSession, setIsStartingSession] = useState(false)
 
@@ -25,6 +27,9 @@ export default function TrollCourt() {
         status: 'active',
         participants: []
       })
+
+      // Navigate to the court room
+      navigate('/court-room')
     } catch (error) {
       console.error('Error starting court session:', error)
     } finally {

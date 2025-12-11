@@ -1,5 +1,6 @@
  import React, { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+ import { Link, useLocation, useNavigate } from 'react-router-dom'
+ import CourtEntryModal from './CourtEntryModal'
 import {
   Home,
   MessageSquare,
@@ -51,6 +52,7 @@ export default function Sidebar() {
 
   const [canSeeOfficer, setCanSeeOfficer] = useState(false)
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
+  const [showCourtModal, setShowCourtModal] = useState(false)
   const isAdmin = profile?.role === 'admin'
 
   // Real-time wallet updates
@@ -246,7 +248,19 @@ export default function Sidebar() {
         <MenuLink to="/wall" icon={<MessageCircle className="w-5 h-5 text-cyan-400" />} label="Troll City Wall" active={isActive('/wall')} />
 
         <MenuLink to="/tromody" icon={<Mic className="w-5 h-5 text-purple-400" />} label="Tromody Show" active={isActive('/tromody')} />
-        <MenuLink to="/troll-court" icon={<Scale className="w-5 h-5 text-red-400" />} label="Troll Court" active={isActive('/troll-court')} />
+        <button
+          onClick={() => setShowCourtModal(true)}
+          className={`flex items-center gap-3 px-4 py-2 rounded-lg transition w-full text-left ${
+            isActive('/troll-court') || isActive('/court-room')
+              ? 'bg-purple-600 text-white border border-purple-400'
+              : 'hover:bg-[#1F1F2E] text-gray-300'
+          }`}
+        >
+          <span className={`w-5 h-5 ${isActive('/troll-court') || isActive('/court-room') ? 'text-white' : ''}`}>
+            <Scale className="w-5 h-5 text-red-400" />
+          </span>
+          <span>Troll Court</span>
+        </button>
         <MenuLink to="/empire-partner" icon={<UserPlus className="w-5 h-5 text-green-400" />} label="Empire Partner" active={isActive('/empire-partner')} />
         <MenuLink to="/troll-wheel" icon={<FerrisWheel className="w-5 h-5 text-pink-500" />} label="Troll Wheel" active={isActive('/troll-wheel')} />
         
@@ -301,6 +315,11 @@ export default function Sidebar() {
         </div>
       )}
 
+      {/* Court Entry Modal */}
+      <CourtEntryModal
+        isOpen={showCourtModal}
+        onClose={() => setShowCourtModal(false)}
+      />
     </div>
   )
 }
