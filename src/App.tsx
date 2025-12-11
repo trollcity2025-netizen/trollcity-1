@@ -130,6 +130,7 @@ const CommandBattleGoLive = lazy(() => import("./pages/CommandBattleGoLive"));
 const OfficerLoungeStream = lazy(() => import("./pages/OfficerLoungeStream"));
 const TrollWheel = lazy(() => import("./pages/TrollWheel"));
 const TrollCourt = lazy(() => import("./pages/TrollCourt"));
+const CourtRoom = lazy(() => import("./pages/CourtRoom"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
 const ShopView = lazy(() => import("./pages/ShopView"));
 const UserInventory = lazy(() => import("./pages/UserInventory"));
@@ -501,6 +502,7 @@ function App() {
                   {/* 🎤 Tromody Show */}
                   <Route path="/tromody" element={<TromodyShow />} />
                   <Route path="/troll-court" element={<TrollCourt />} />
+                  <Route path="/court-room" element={<CourtRoom />} />
 
                   {/* 💳 Payment Methods */}
                   <Route path="/add-card" element={<AddCard />} />

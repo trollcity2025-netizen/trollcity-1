@@ -25,12 +25,23 @@ export default async function handler(req: any, res: any) {
     metadata: JSON.stringify(metadata),
   })
 
+  // Role-based permissions for court room
+  let canPublish = true
+  let canPublishData = true
+
+  if (room === 'troll-court') {
+    // Court room permissions - only specific roles can broadcast
+    const courtPublishRoles = ["admin", "lead_troll_officer", "troll_officer", "defendant", "accuser", "witness"]
+    canPublish = courtPublishRoles.includes(metadata.role)
+    canPublishData = canPublish // Same permission for data
+  }
+
   token.addGrant({
     room: room as string,
     roomJoin: true,
-    canPublish: true,
+    canPublish: canPublish,
     canSubscribe: true,
-    canPublishData: true,
+    canPublishData: canPublishData,
   })
 
   res.status(200).json({
