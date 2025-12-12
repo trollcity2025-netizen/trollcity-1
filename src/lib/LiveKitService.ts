@@ -462,6 +462,29 @@ export class LiveKitService {
     console.log(`🔴 LiveKit ${timestamp} ${roomInfo} ${message}`, ...args);
   }
 
+  // Update configuration and reconnect if needed
+  updateConfig(newConfig: Partial<LiveKitServiceConfig>): void {
+    const oldRoomName = this.config.roomName;
+    const oldUserId = this.config.user?.id;
+
+    // Update config
+    this.config = { ...this.config, ...newConfig };
+
+    const newRoomName = this.config.roomName;
+    const newUserId = this.config.user?.id;
+
+    // If room or user changed, disconnect and reconnect
+    if (newRoomName !== oldRoomName || newUserId !== oldUserId) {
+      this.log('Config changed, reconnecting...', { oldRoom: oldRoomName, newRoom: newRoomName, oldUser: oldUserId, newUser: newUserId });
+      this.disconnect();
+      this.connect().catch(error => {
+        this.log('Failed to reconnect after config update:', error.message);
+      });
+    } else {
+      this.log('Config updated but no reconnection needed');
+    }
+  }
+
   // Cleanup on destroy
   destroy(): void {
     this.disconnect();

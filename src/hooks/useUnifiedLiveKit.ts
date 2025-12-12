@@ -9,25 +9,17 @@ export interface UnifiedLiveKitConfig {
 }
 
 export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
-  const [service, setService] = useState<LiveKitService | null>(null);
+  const serviceRef = useRef<LiveKitService | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [participants, setParticipants] = useState<Map<string, LiveKitParticipant>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [localParticipant, setLocalParticipant] = useState<LiveKitParticipant | null>(null);
 
-  const configRef = useRef(config);
-  configRef.current = config;
-
-  // Initialize service
-  useEffect(() => {
-    if (!config.roomName || !config.user) {
-      return;
-    }
-
-    console.log('🎥 Initializing unified LiveKit service for room:', config.roomName);
-
-    const liveKitService = createLiveKitService({
+  // Create service once
+  if (!serviceRef.current) {
+    console.log('🎥 Creating unified LiveKit service');
+    serviceRef.current = createLiveKitService({
       roomName: config.roomName,
       user: config.user,
       autoPublish: config.autoPublish !== false, // Default to true
@@ -79,38 +71,56 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
         setIsConnecting(false);
       }
     });
+  }
 
-    setService(liveKitService);
+  // Connect once on mount
+  useEffect(() => {
+    if (serviceRef.current && config.roomName && config.user) {
+      console.log('🎥 Connecting LiveKit service');
+      serviceRef.current.connect().catch(err => {
+        console.error('Failed to connect:', err);
+      });
+    }
 
-    // Auto-connect
-    liveKitService.connect().catch(err => {
-      console.error('Failed to auto-connect:', err);
-    });
-
-    // Cleanup
+    // Cleanup on unmount
     return () => {
-      console.log('🧹 Cleaning up LiveKit service');
-      liveKitService.destroy();
+      if (serviceRef.current) {
+        console.log('🧹 Cleaning up LiveKit service');
+        serviceRef.current.destroy();
+        serviceRef.current = null;
+      }
     };
-  }, [config.roomName, config.user?.id]);
+  }, []); // Empty dependency array - connect only once
+
+  // Update config when it changes
+  useEffect(() => {
+    if (serviceRef.current) {
+      serviceRef.current.updateConfig({
+        roomName: config.roomName,
+        user: config.user,
+        autoPublish: config.autoPublish !== false,
+        maxReconnectAttempts: config.maxReconnectAttempts || 5,
+      });
+    }
+  }, [config.roomName, config.user?.id, config.autoPublish, config.maxReconnectAttempts]);
 
   // Update local participant state
   useEffect(() => {
-    if (service) {
-      const local = service.getLocalParticipant();
+    if (serviceRef.current) {
+      const local = serviceRef.current.getLocalParticipant();
       setLocalParticipant(local);
     }
-  }, [service, participants]);
+  }, [participants]); // Remove service from deps since it's stable
 
   // Control methods
   const connect = useCallback(async () => {
-    if (!service) return false;
+    if (!serviceRef.current) return false;
 
     setIsConnecting(true);
     setError(null);
 
     try {
-      const success = await service.connect();
+      const success = await serviceRef.current.connect();
       return success;
     } catch (err) {
       setError('Failed to connect');
@@ -118,28 +128,28 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
     } finally {
       setIsConnecting(false);
     }
-  }, [service]);
+  }, []);
 
   const disconnect = useCallback(() => {
-    if (service) {
-      service.disconnect();
+    if (serviceRef.current) {
+      serviceRef.current.disconnect();
     }
-  }, [service]);
+  }, []);
 
   const toggleCamera = useCallback(async () => {
-    if (!service) return false;
-    return await service.toggleCamera();
-  }, [service]);
+    if (!serviceRef.current) return false;
+    return await serviceRef.current.toggleCamera();
+  }, []);
 
   const toggleMicrophone = useCallback(async () => {
-    if (!service) return false;
-    return await service.toggleMicrophone();
-  }, [service]);
+    if (!serviceRef.current) return false;
+    return await serviceRef.current.toggleMicrophone();
+  }, []);
 
   // Get room for advanced operations
   const getRoom = useCallback(() => {
-    return service?.getRoom() || null;
-  }, [service]);
+    return serviceRef.current?.getRoom() || null;
+  }, []);
 
   return {
     // State
@@ -157,6 +167,6 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
     getRoom,
 
     // Service reference for advanced usage
-    service
+    service: serviceRef.current
   };
 }
