@@ -1792,9 +1792,6 @@ export default function AdminDashboard() {
       case 'verification':
         loadApplications()
         break
-      case 'broadcaster_applications':
-        // Broadcaster applications handled by component
-        break
       case 'users':
         loadUsers()
         break

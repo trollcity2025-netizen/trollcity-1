@@ -1,4 +1,4 @@
--- Fix court sessions RLS policy to allow lead officers
+-- Fix court sessions RLS policy to allow admins and lead officers
 DROP POLICY IF EXISTS "Only admins can manage court sessions" ON court_sessions;
 
 CREATE POLICY "Only admins and lead officers can manage court sessions" ON court_sessions
