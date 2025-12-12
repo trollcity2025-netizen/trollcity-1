@@ -5,6 +5,10 @@ import { useAuthStore } from "./lib/store";
 import { supabase, isAdminEmail, UserRole } from "./lib/supabase";
 import api from "./lib/api";
 import { Toaster, toast } from "sonner";
+import { GlobalAppProvider, useGlobalApp } from "./contexts/GlobalAppContext";
+import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
+import GlobalErrorBanner from "./components/GlobalErrorBanner";
+import { updateRoute } from "./utils/sessionStorage";
 
 // Layout
 import Sidebar from "./components/Sidebar";
@@ -34,7 +38,8 @@ const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 const EarningsPage = lazy(() => import("./pages/EarningsPage"));
 
 // Lazy-loaded pages
-const GoLive = lazy(() => import("./pages/GoLive"));
+const GoLiveSetup = lazy(() => import("./pages/GoLiveSetup"));
+const LiveBroadcast = lazy(() => import("./pages/LiveBroadcast"));
 const StreamRoom = lazy(() => import("./pages/StreamRoom"));
 const Stream = lazy(() => import("./pages/Stream"));
 const StreamSummary = lazy(() => import("./pages/StreamSummary"));
@@ -140,7 +145,7 @@ const Marketplace = lazy(() => import("./pages/Marketplace"));
 const ShopView = lazy(() => import("./pages/ShopView"));
 const UserInventory = lazy(() => import("./pages/UserInventory"));
 
-function App() {
+function AppContent() {
   console.log('🚀 App component rendering...');
   const {
     user,
@@ -156,6 +161,14 @@ function App() {
   const navigate = useNavigate();
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalLoading] = useState(false);
+
+  // Global app context for loading and error states
+  const { isLoading: globalLoading, loadingMessage, error, errorType, clearError, retryLastAction, isReconnecting, reconnectMessage } = useGlobalApp();
+
+  // Track route changes for session persistence
+  useEffect(() => {
+    updateRoute(location.pathname);
+  }, [location.pathname]);
 
   // 🔹 Auto-routing after approval (only on home page, not on every route change)
   useEffect(() => {
@@ -430,15 +443,43 @@ function App() {
 
   console.log('🎨 App returning JSX...');
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
-      <div className="flex min-h-screen">
-        {user && <Sidebar />}
-        <div className="flex flex-col flex-1 min-h-screen">
-          {user && <Header />}
+    <>
+      {/* Global Error Banner */}
+      <GlobalErrorBanner />
 
-          <main className="flex-1 overflow-y-auto bg-[#121212]">
-            <Suspense fallback={<LoadingScreen />}>
-              <Routes>
+      {/* Global Loading Overlay */}
+      <GlobalLoadingOverlay
+        isVisible={globalLoading}
+        message={loadingMessage}
+        type="loading"
+      />
+
+      {/* Global Reconnecting Overlay */}
+      <GlobalLoadingOverlay
+        isVisible={isReconnecting}
+        message={reconnectMessage}
+        type="reconnecting"
+      />
+
+      {/* Global Error Overlay (for critical errors) */}
+      <GlobalLoadingOverlay
+        isVisible={!!error && errorType !== 'offline' && !isReconnecting}
+        message={error || ''}
+        type={errorType as 'error' | 'offline'}
+        onRetry={retryLastAction}
+      />
+
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+        <div className="flex min-h-screen">
+          {/* Desktop Sidebar */}
+          {user && <div className="hidden md:block"><Sidebar /></div>}
+
+          <div className="flex flex-col flex-1 min-h-screen w-full md:w-auto">
+            {user && <Header />}
+
+            <main className="flex-1 overflow-y-auto bg-[#121212] safe-area-bottom">
+              <Suspense fallback={<LoadingScreen />}>
+                <Routes>
 
                 {/* 🚪 Public Routes */}
                 <Route path="/" element={user ? <Navigate to="/live" replace /> : <LandingPage />} />
@@ -486,7 +527,8 @@ function App() {
                   <Route path="/profile/:username" element={<Profile />} />
 
                   {/* 🎥 Streaming */}
-                  <Route path="/go-live" element={<GoLive />} />
+                  <Route path="/go-live" element={<GoLiveSetup />} />
+                  <Route path="/live/:streamId" element={<LiveBroadcast />} />
                   <Route path="/stream/:id" element={<Stream />} />
                   <Route path="/stream/:streamId" element={<StreamRoom />} />
                   <Route path="/stream/:id/summary" element={<StreamSummary />} />
@@ -837,6 +879,15 @@ function App() {
         }}
       />
     </div>
+  </>
+);
+}
+
+function App() {
+  return (
+    <GlobalAppProvider>
+      <AppContent />
+    </GlobalAppProvider>
   );
 }
 
