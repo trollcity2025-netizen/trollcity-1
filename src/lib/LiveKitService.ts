@@ -77,9 +77,13 @@ export class LiveKitService {
       this.log('Connecting to LiveKit room...');
       await this.room.connect(LIVEKIT_URL, tokenResponse.token);
 
-      // Step 5: IMMEDIATE media capture and publishing (if autoPublish enabled)
+      // Step 5: ASYNC media capture and publishing (if autoPublish enabled) - DO NOT BLOCK UI
       if (this.config.autoPublish) {
-        await this.immediateMediaCaptureAndPublish();
+        // Start media capture asynchronously - don't await to prevent blocking UI render
+        this.immediateMediaCaptureAndPublish().catch(error => {
+          this.log('❌ Media capture failed, but UI continues:', error.message);
+          // Media failure should not prevent UI from rendering
+        });
       }
 
       this.log('✅ Connection successful');

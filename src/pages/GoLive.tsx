@@ -16,24 +16,21 @@ const GoLive: React.FC = () => {
   const [streamId, setStreamId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
-  // IMMEDIATE CONNECTION: Connect to LiveKit room on page load
+  // IMMEDIATE UI RENDER: Set up room name immediately, connect asynchronously
   useEffect(() => {
     if (!user || !profile || streamId) return;
 
     const roomName = `stream-${crypto.randomUUID()}`;
     setStreamId(roomName);
 
-    console.log('🎥 GoLive: Auto-connecting to room:', roomName);
-  }, [user, profile]);
+    console.log('🎥 GoLive: Setting up room:', roomName);
 
-  // Auto-connect when streamId is set
-  useEffect(() => {
-    if (!streamId || !user || !profile) return;
-
-    console.log('🎥 GoLive: Connecting with broadcaster role');
-    // Connect with broadcaster role to ensure publishing permissions
-    connect(streamId, { ...user, role: 'broadcaster' }, { autoPublish: false }); // Don't auto-publish yet, wait for title
-  }, [streamId, user, profile, connect]);
+    // Connect asynchronously - DO NOT block UI render
+    connect(roomName, { ...user, role: 'broadcaster' }, { autoPublish: false }).catch(error => {
+      console.error('❌ GoLive: Connection failed, but UI continues:', error);
+      // Connection failure should not prevent UI from rendering
+    });
+  }, [user, profile, connect]);
 
   // Start stream when connected
   useEffect(() => {
@@ -100,28 +97,28 @@ const GoLive: React.FC = () => {
     }
   };
 
-  // If not connected yet, show loading
-  if (!streamId || isConnecting) {
+  // UI renders immediately - no blocking on media access
+  // Show title input form as soon as we have a streamId
+  if (!streamId) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-lg">Connecting to stream...</p>
-          <p className="text-sm text-gray-400 mt-2">Setting up camera and microphone</p>
+          <p className="text-lg">Setting up your stream...</p>
         </div>
       </div>
     );
   }
 
-  // If connected but no title yet, show title input
-  if (isConnected && !streamTitle.trim()) {
+  // Show title input form immediately once we have streamId
+  if (!streamTitle.trim()) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center p-6">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
             <Video className="w-16 h-16 text-purple-400 mx-auto mb-4" />
             <h1 className="text-3xl font-bold mb-2">Ready to Go Live</h1>
-            <p className="text-gray-400">Your camera and microphone are connected</p>
+            <p className="text-gray-400">Enter your stream title to start broadcasting</p>
           </div>
 
           <form onSubmit={handleTitleSubmit} className="space-y-6">
