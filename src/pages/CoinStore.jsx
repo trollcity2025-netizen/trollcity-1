@@ -11,6 +11,7 @@ import { useOwnedEntranceEffects, useActiveEntranceEffect, useEntranceEffectPurc
 import { useInsurancePlans, useActiveInsurance, useInsurancePurchase, useProtectionStatus } from '../hooks/useInsurance';
 import RequireRole from '../components/RequireRole';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+import LuckyStats from '../components/LuckyStats';
 
 export default function CoinStore() {
   const { user, profile } = useAuthStore();
@@ -52,7 +53,7 @@ export default function CoinStore() {
       // Load user profile data with coin balances
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('paid_coin_balance, free_coin_balance, total_earned_coins')
+        .select('paid_coins, trollmonds, total_earned_coins')
         .eq('id', user.id)
         .single();
 
@@ -60,9 +61,9 @@ export default function CoinStore() {
 
       console.log('✅ Profile data loaded:', profileData);
       setWalletData({
-        paidCoins: profileData.paid_coin_balance || 0,
-        freeCoins: profileData.free_coin_balance || 0,
-        totalCoins: (profileData.paid_coin_balance || 0) + (profileData.free_coin_balance || 0)
+        paidCoins: profileData.paid_coins || 0,
+        freeCoins: profileData.trollmonds || 0,
+        totalCoins: (profileData.paid_coins || 0) + (profileData.trollmonds || 0)
       });
       const [effRes] = await Promise.all([
         supabase.from('entrance_effects').select('*').order('created_at', { ascending: false })
@@ -245,6 +246,7 @@ export default function CoinStore() {
               <button className={`px-3 py-2 rounded ${tab==='effects'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('effects')}>Entrance Effects</button>
               <button className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('perks')}>Perks</button>
               <button className={`px-3 py-2 rounded ${tab==='insurance'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('insurance')}>Insurance</button>
+              <button className={`px-3 py-2 rounded ${tab==='lucky'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('lucky')}>Lucky Stats</button>
             </div>
           </div>
 
@@ -587,6 +589,16 @@ export default function CoinStore() {
                   })}
                   {entranceEffects.length === 0 && <div className="text-gray-400">No entrance effects available</div>}
                 </div>
+              </>
+            )}
+
+            {tab === 'lucky' && (
+              <>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                  Lucky Trollmonds Stats
+                </h2>
+                <LuckyStats />
               </>
             )}
           </div>
