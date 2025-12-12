@@ -40,6 +40,19 @@ BEGIN
         updated_at = now()
     WHERE id = p_streamer_id;
 
+  -- Check if recipient is an admin and process royal family gift tracking
+  IF EXISTS (SELECT 1 FROM user_profiles WHERE id = p_streamer_id AND role = 'admin') THEN
+    -- Process admin gift for royal family system (only count paid coins)
+    IF p_gift_type = 'paid' THEN
+      BEGIN
+        PERFORM process_admin_gift(p_sender_id, p_streamer_id, p_coins_spent);
+      EXCEPTION WHEN OTHERS THEN
+        -- Log error but don't fail the gift
+        RAISE WARNING 'Failed to process admin gift for royal family: %', SQLERRM;
+      END;
+    END IF;
+  END IF;
+
   -- Insert gift record
   INSERT INTO gifts(id, stream_id, sender_id, receiver_id, coins_spent, gift_type, message, created_at)
     VALUES (v_gift_id, p_stream_id, p_sender_id, p_streamer_id, p_coins_spent, p_gift_type, p_gift_name, now());

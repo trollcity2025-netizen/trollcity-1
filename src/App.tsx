@@ -8,6 +8,7 @@ import { Toaster, toast } from "sonner";
 import { GlobalAppProvider, useGlobalApp } from "./contexts/GlobalAppContext";
 import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
 import GlobalErrorBanner from "./components/GlobalErrorBanner";
+import GlobalEventsBanner from "./components/GlobalEventsBanner";
 import { updateRoute } from "./utils/sessionStorage";
 
 // Layout
@@ -24,6 +25,7 @@ import AuthCallback from "./pages/AuthCallback";
 import TermsAgreement from "./pages/TermsAgreement";
 
 // Lazy-loaded pages
+const ProfileSetupPage = lazy(() => import("./pages/ProfileSetupPage"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
 const StreamEnded = lazy(() => import("./pages/StreamEnded"));
@@ -61,7 +63,6 @@ const OfficerPayrollDashboard = lazy(() => import("./pages/officer/OfficerPayrol
 const OfficerDashboard = lazy(() => import("./pages/officer/OfficerDashboard"));
 const OfficerOWCDashboard = lazy(() => import("./pages/OfficerOWCDashboard"));
 const ReportDetailsPage = lazy(() => import("./pages/ReportDetailsPage"));
-const TrollFamily = lazy(() => import("./pages/TrollFamily"));
 const TrollFamilyCity = lazy(() => import("./pages/TrollFamilyCity"));
 const FamilyProfilePage = lazy(() => import("./pages/FamilyProfilePage"));
 const FamilyWarsPage = lazy(() => import("./pages/FamilyWarsPage"));
@@ -129,6 +130,13 @@ const AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
 const AdminVerificationReview = lazy(() => import("./pages/admin/AdminVerificationReview"));
 const AdminPoliciesDocs = lazy(() => import("./pages/admin/AdminPoliciesDocs"));
 const AdminMarketplace = lazy(() => import("./pages/admin/AdminMarketplace"));
+const AdminHQ = lazy(() => import("./pages/admin/AdminHQ"));
+const CityControlCenter = lazy(() => import("./pages/admin/CityControlCenter"));
+const ReputationDashboard = lazy(() => import("./pages/admin/ReputationDashboard"));
+const EscalationMatrix = lazy(() => import("./pages/admin/EscalationMatrix"));
+const OfficerOperations = lazy(() => import("./pages/admin/OfficerOperations"));
+const CityEventsManager = lazy(() => import("./pages/admin/CityEventsManager"));
+const TrollFamily = lazy(() => import("./pages/admin/TrollFamily"));
 const LeadOfficerReview = lazy(() => import("./pages/lead-officer/Review"));
 const LeadOfficerDashboard = lazy(() => import("./pages/lead-officer/LeadOfficerDashboard").then(m => ({ default: m.LeadOfficerDashboard })));
 const ApplicationsPage = lazy(() => import("./pages/admin/Applications"));
@@ -144,6 +152,8 @@ const CourtRoom = lazy(() => import("./pages/CourtRoom"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
 const ShopView = lazy(() => import("./pages/ShopView"));
 const UserInventory = lazy(() => import("./pages/UserInventory"));
+const DistrictTour = lazy(() => import("./pages/DistrictTour"));
+const DistrictNavigation = lazy(() => import("./components/DistrictNavigation"));
 
 function AppContent() {
   console.log('🚀 App component rendering...');
@@ -447,6 +457,9 @@ function AppContent() {
       {/* Global Error Banner */}
       <GlobalErrorBanner />
 
+      {/* Global Events Banner */}
+      <GlobalEventsBanner />
+
       {/* Global Loading Overlay */}
       <GlobalLoadingOverlay
         isVisible={globalLoading}
@@ -525,6 +538,7 @@ function AppContent() {
                   <Route path="/wall" element={<TrollCityWall />} />
                   <Route path="/reels" element={<ReelFeed />} />
                   <Route path="/profile/:username" element={<Profile />} />
+                  <Route path="/profile/setup" element={<ProfileSetupPage />} />
 
                   {/* 🎥 Streaming */}
                   <Route path="/go-live" element={<GoLiveSetup />} />
@@ -549,7 +563,8 @@ function AppContent() {
                   {/* 🎤 Tromody Show */}
                   <Route path="/tromody" element={<TromodyShow />} />
                   <Route path="/troll-court" element={<TrollCourt />} />
-                  <Route path="/court-room" element={<CourtRoom />} />
+                  <Route path="/troll-court/session/:sessionId" element={<CourtRoom />} />
+                  <Route path="/districts/:districtName/tour" element={<DistrictTour />} />
 
                   {/* 💳 Payment Methods */}
                   <Route path="/add-card" element={<AddCard />} />
@@ -835,6 +850,62 @@ function AppContent() {
                       element={
                         <RequireRole roles={[UserRole.ADMIN]}>
                           <AdminMarketplace />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/hq"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <AdminHQ />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/control-center"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <CityControlCenter />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/reputation"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <ReputationDashboard />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/escalation-matrix"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <EscalationMatrix />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/officer-operations"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <OfficerOperations />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/city-events"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <CityEventsManager />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/royal-family"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <TrollFamily />
                         </RequireRole>
                       }
                     />

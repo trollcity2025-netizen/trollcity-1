@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 
 interface ProfileSetupModalProps {
   isOpen: boolean;
-  onSubmit: (username: string, bio?: string) => void;
+  onSubmit: (username: string, bio?: string, gender?: string) => void;
   loading: boolean;
   onClose?: () => void;
 }
@@ -11,6 +11,7 @@ interface ProfileSetupModalProps {
 const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({ isOpen, onSubmit, loading, onClose }) => {
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [gender, setGender] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // focus the username input when modal opens and allow Escape to close
@@ -49,7 +50,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({ isOpen, onSubmit,
         <form
           onSubmit={e => {
             e.preventDefault();
-            onSubmit(username, bio);
+            onSubmit(username, bio, gender);
           }}
           className="space-y-4"
         >
@@ -76,6 +77,20 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({ isOpen, onSubmit,
               className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
               placeholder="Tell us about yourself"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-200 mb-1">Gender</label>
+            <select
+              value={gender}
+              onChange={e => setGender(e.target.value)}
+              required
+              className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none focus:border-purple-500"
+            >
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Used for royal family titles and in-app roles only</p>
           </div>
           <button
             type="submit"

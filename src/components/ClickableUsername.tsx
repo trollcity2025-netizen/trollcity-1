@@ -6,32 +6,37 @@ import { useNavigate } from 'react-router-dom'
 import { Shield, Crown, Skull, Star } from 'lucide-react'
 
 interface ClickableUsernameProps {
-  username: string
-  className?: string
-  prefix?: string // like '@'
-  onClick?: () => void
-  profile?: {
-    is_troll_officer?: boolean
-    is_admin?: boolean
-    is_troller?: boolean
-    is_og_user?: boolean
-    is_verified?: boolean
-    officer_level?: number
-    troller_level?: number
-    role?: string
-    empire_role?: string | null
-  }
-  userId?: string // Optional: if provided, will fetch profile
-}
+   username: string
+   className?: string
+   prefix?: string // like '@'
+   onClick?: () => void
+   profile?: {
+     is_troll_officer?: boolean
+     is_admin?: boolean
+     is_troller?: boolean
+     is_og_user?: boolean
+     is_verified?: boolean
+     officer_level?: number
+     troller_level?: number
+     role?: string
+     empire_role?: string | null
+   }
+   royalTitle?: {
+     title_type: string
+     is_active: boolean
+   } | null
+   userId?: string // Optional: if provided, will fetch profile
+ }
 
-const ClickableUsername: React.FC<ClickableUsernameProps> = ({ 
-  username, 
-  className = '', 
-  prefix = '@',
-  onClick,
-  profile,
-  userId
-}) => {
+const ClickableUsername: React.FC<ClickableUsernameProps> = ({
+   username,
+   className = '',
+   prefix = '@',
+   onClick,
+   profile,
+   royalTitle,
+   userId
+ }) => {
   const navigate = useNavigate()
   
   // Use profile prop directly (parent component should fetch and pass it)
@@ -123,7 +128,7 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
 
       {/* OG Badge (shows for all OG users, regardless of other badges) */}
       {userProfile?.is_og_user && (
-        <span className="badge-icon og-badge" title="OG User - Joined before 2026">
+        <span className="badge-icon og-badge" title="OG User - All users until Jan 1, 2026">
           <Star size={14} />
           <span className="badge-title">OG</span>
         </span>
@@ -131,6 +136,16 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
 
       {/* Empire Partner Badge (shows for all partners, regardless of other badges) */}
       <EmpireBadge empireRole={userProfile?.empire_role} />
+
+      {/* Royal Family Badge (highest priority, shows for active royal titles) */}
+      {royalTitle && royalTitle.is_active && (
+        <span className="badge-icon royal-badge" title="Status title earned through gifting. In-app role only.">
+          <Crown size={16} className="text-yellow-400" />
+          <span className="badge-title">
+            {royalTitle.title_type === 'wife' ? 'Wife' : royalTitle.title_type === 'husband' ? 'Husband' : royalTitle.title_type.replace('_', ' ')}
+          </span>
+        </span>
+      )}
 
       {/* Verified Badge (shows for all verified users) */}
       {userProfile?.is_verified && (

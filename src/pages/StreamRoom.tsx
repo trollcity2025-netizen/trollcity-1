@@ -9,6 +9,8 @@ import TopBar from '../components/stream/TopBar';
 import ChatOverlay from '../components/stream/ChatOverlay';
 import ControlBar from '../components/stream/ControlBar';
 import VideoFeed from '../components/stream/VideoFeed';
+import AuthorityPanel from '../components/AuthorityPanel';
+import RoyalCrownOverlay from '../components/RoyalCrownOverlay';
 import { endStream } from '../lib/endStream';
 import { useLiveKitRoom } from '../hooks/useLiveKitRoom';
 
@@ -269,48 +271,66 @@ export default function StreamRoom() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative">
-      {/* Top Bar */}
-      <TopBar
-        room={room}
-        streamerId={stream.broadcaster_id}
-        streamId={stream.id}
-        popularity={stream.popularity || 0}
-      />
-
-      {/* Video Feed */}
-      <div className="relative w-full h-screen">
-        <VideoFeed
+    <div className="min-h-screen bg-black relative flex pt-16 lg:pt-0">
+      <div className="flex-1 relative">
+        {/* Top Bar */}
+        <TopBar
           room={room}
-          isHost={isHost}
+          streamerId={stream.broadcaster_id}
+          streamId={stream.id}
+          popularity={stream.popularity || 0}
         />
-      </div>
 
-      {/* Chat Overlay */}
-      <ChatOverlay streamId={stream.id} />
-
-      {/* Control Bar */}
-      {isHost && room && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
-          <ControlBar
+        {/* Video Feed */}
+        <div className="relative w-full h-screen">
+          <VideoFeed
             room={room}
-            isCameraEnabled={room?.localParticipant?.isCameraEnabled ?? true}
-            isMicrophoneEnabled={room?.localParticipant?.isMicrophoneEnabled ?? true}
-            onToggleCamera={async () => {
-              if (room?.localParticipant) {
-                await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled);
-              }
-            }}
-            onToggleMicrophone={async () => {
-              if (room?.localParticipant) {
-                await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
-              }
-            }}
-            streamId={stream.id}
             isHost={isHost}
           />
+
+          {/* Royal Crown Overlay - Only for Admin streams */}
+          {stream?.user_profiles?.role === 'admin' && (
+            <RoyalCrownOverlay
+              streamId={stream.id}
+              isAdminStream={true}
+              participants={participants || []}
+            />
+          )}
         </div>
-      )}
+
+        {/* Chat Overlay */}
+        <ChatOverlay streamId={stream.id} />
+
+        {/* Control Bar */}
+        {isHost && room && (
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+            <ControlBar
+              room={room}
+              isCameraEnabled={room?.localParticipant?.isCameraEnabled ?? true}
+              isMicrophoneEnabled={room?.localParticipant?.isMicrophoneEnabled ?? true}
+              onToggleCamera={async () => {
+                if (room?.localParticipant) {
+                  await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled);
+                }
+              }}
+              onToggleMicrophone={async () => {
+                if (room?.localParticipant) {
+                  await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
+                }
+              }}
+              streamId={stream.id}
+              isHost={isHost}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Authority Panel - Right Side Rail */}
+      <div className="hidden lg:block">
+        <div className="sticky top-0 h-screen">
+          <AuthorityPanel />
+        </div>
+      </div>
     </div>
   );
 }

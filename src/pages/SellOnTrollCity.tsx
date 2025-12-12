@@ -19,6 +19,12 @@ export default function SellOnTrollCity() {
   const [existingApplication, setExistingApplication] = useState<any>(null)
   const [products, setProducts] = useState<any[]>([])
   const [newProduct, setNewProduct] = useState({ name: '', description: '', price: '', image_url: '' })
+
+  // Seller application form state
+  const [storeName, setStoreName] = useState('')
+  const [storeDescription, setStoreDescription] = useState('')
+  const [productTypes, setProductTypes] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
   
   // Product editing state
   const [isEditing, setIsEditing] = useState(false)
@@ -34,6 +40,9 @@ export default function SellOnTrollCity() {
     if (!user) return
     loadShop()
   }, [user?.id])
+
+  // Check if user is verified seller
+  const isVerifiedSeller = user && existingApplication?.status === 'approved'
 
   const loadShop = async () => {
     setLoading(true)
@@ -90,7 +99,14 @@ export default function SellOnTrollCity() {
     toast.success('Shop created')
   }
 
-  const submitApplication = async () => {
+  const submitApplication = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!storeName.trim() || !storeDescription.trim() || !contactEmail.trim()) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+
     setApplicationLoading(true)
     try {
       const { error } = await supabase
@@ -98,17 +114,22 @@ export default function SellOnTrollCity() {
         .insert([{
           user_id: user!.id,
           type: 'seller',
-          status: 'pending',
-          application_data: {
-            reason: 'Seller application submitted',
-            submitted_at: new Date().toISOString()
-          }
+          store_name: storeName.trim(),
+          store_description: storeDescription.trim(),
+          product_types: productTypes.trim(),
+          contact_email: contactEmail.trim(),
+          status: 'pending'
         }])
 
       if (error) throw error
 
       setApplicationSubmitted(true)
-      toast.success('Application submitted! Please wait for admin approval.')
+      toast.success('Seller application submitted successfully!')
+
+      // Redirect to home/dashboard with state
+      navigate('/live', {
+        state: { submitted: 'seller' }
+      })
     } catch (error: any) {
       console.error('Error submitting application:', error)
       toast.error('Failed to submit application')
@@ -221,7 +242,7 @@ export default function SellOnTrollCity() {
         {/* Tab Navigation */}
         <div className="flex justify-center">
           <div className="bg-[#1A1A1A] rounded-lg p-1 border border-[#2C2C2C]">
-            {existingApplication?.status === 'approved' || shop ? (
+            {isVerifiedSeller || shop ? (
               <>
                 <button
                   onClick={() => setActiveTab('overview')}
@@ -498,7 +519,7 @@ export default function SellOnTrollCity() {
               </div>
 
               <div className="mt-6 p-4 bg-gray-900/50 rounded-lg">
-                {existingApplication?.status === 'approved' ? (
+                {isVerifiedSeller ? (
                   <div className="text-center">
                     <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4 mb-4">
                       <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
@@ -526,17 +547,74 @@ export default function SellOnTrollCity() {
                 ) : (
                   <>
                     <h3 className="font-semibold mb-2">Ready to Apply?</h3>
-                    <p className="text-gray-400 text-sm mb-3">
-                      Submit your application below. It will be sent to the admin dashboard for review.
-                      Once approved, you'll be able to create and manage your shop.
+                    <p className="text-gray-400 text-sm mb-4">
+                      Fill out the application form below. Once submitted, it will be reviewed by admins.
+                      Approval unlocks seller features and shop creation.
                     </p>
-                    <button
-                      onClick={submitApplication}
-                      disabled={applicationLoading}
-                      className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-colors font-semibold"
-                    >
-                      {applicationLoading ? 'Submitting...' : 'Submit Seller Application'}
-                    </button>
+
+                    <form onSubmit={submitApplication} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Store Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={storeName}
+                          onChange={(e) => setStoreName(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none text-white"
+                          placeholder="e.g. Troll Collectibles Shop"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Store Description *
+                        </label>
+                        <textarea
+                          value={storeDescription}
+                          onChange={(e) => setStoreDescription(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none text-white resize-none h-24"
+                          placeholder="Describe what your store sells and your unique selling points..."
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Product Types
+                        </label>
+                        <input
+                          type="text"
+                          value={productTypes}
+                          onChange={(e) => setProductTypes(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none text-white"
+                          placeholder="e.g. Digital art, collectibles, merchandise"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Contact Email *
+                        </label>
+                        <input
+                          type="email"
+                          value={contactEmail}
+                          onChange={(e) => setContactEmail(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none text-white"
+                          placeholder="your@email.com"
+                          required
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={applicationLoading}
+                        className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-colors font-semibold"
+                      >
+                        {applicationLoading ? 'Submitting Application...' : 'Submit Seller Application'}
+                      </button>
+                    </form>
                   </>
                 )}
               </div>

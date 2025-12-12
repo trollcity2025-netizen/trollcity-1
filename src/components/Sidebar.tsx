@@ -328,6 +328,7 @@ export default function Sidebar() {
           <MenuLink to="/admin/officer-reports" icon={<FileText className="w-5 h-5 text-teal-500" />} label="Officer Reports" active={isActive('/admin/officer-reports')} />
           <MenuLink to="/store-debug" icon={<Bug className="w-5 h-5 text-red-600" />} label="Store Debug" active={isActive('/store-debug')} />
           <MenuLink to="/changelog" icon={<ListChecks className="w-5 h-5 text-lime-500" />} label="Updates & Changes" active={isActive('/changelog')} />
+          <MenuLink to="/admin/royal-family" icon={<Crown className="w-5 h-5 text-yellow-500" />} label="Royal Family" active={isActive('/admin/royal-family')} />
         </div>
       )}
 

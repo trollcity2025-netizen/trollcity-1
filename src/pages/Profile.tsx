@@ -67,6 +67,7 @@ export default function Profile() {
   const [newPostImage, setNewPostImage] = useState<File | null>(null)
   const [hasAccess, setHasAccess] = useState<boolean>(true)
   const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
+  const [royalTitle, setRoyalTitle] = useState<any>(null)
 
   // Referral code state
   const [referralCode, setReferralCode] = useState('')
@@ -130,44 +131,56 @@ export default function Profile() {
     setBattlesLoading(true)
     try {
       const { data, error } = await supabase
-        .from('battle_history')
+        .from('tromody_battles')
         .select(`
           *,
-          opponent:opponent_id (username, avatar_url),
-          battle:battle_id (
-            host_id,
-            challenger_id,
-            winner_id,
-            host_paid_coins,
-            challenger_paid_coins,
-            host_free_coins,
-            challenger_free_coins
-          )
+          left_user:left_user_id (username, avatar_url),
+          right_user:right_user_id (username, avatar_url),
+          winner:winner_user_id (username, avatar_url)
         `)
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false })
+        .or(`left_user_id.eq.${targetUserId},right_user_id.eq.${targetUserId}`)
+        .order('battle_ended_at', { ascending: false })
         .limit(50)
 
       if (error) throw error
 
-      const battleHistory = data || []
+      // Transform Tromody battle data to match the expected format
+      const battleHistory = (data || []).map((battle: any) => {
+        const isLeftUser = battle.left_user_id === targetUserId
+        const opponent = isLeftUser ? battle.right_user : battle.left_user
+        const userGifts = isLeftUser ? battle.left_gifts_received : battle.right_gifts_received
+        const opponentGifts = isLeftUser ? battle.right_gifts_received : battle.left_gifts_received
+        const won = battle.winner_user_id === targetUserId
+
+        return {
+          id: battle.id,
+          user_id: targetUserId,
+          opponent_id: isLeftUser ? battle.right_user_id : battle.left_user_id,
+          won,
+          paid_coins_sent: 0, // Tromody battles don't track sent coins this way
+          created_at: battle.battle_ended_at,
+          battle_duration_seconds: battle.battle_duration_seconds,
+          opponent,
+          user_gifts: userGifts,
+          opponent_gifts: opponentGifts,
+          battle: {
+            winner_id: battle.winner_user_id,
+            host_id: battle.left_user_id,
+            challenger_id: battle.right_user_id
+          }
+        }
+      })
+
       setBattles(battleHistory)
 
       // Calculate stats
       const wins = battleHistory.filter((b: any) => b.won).length
       const losses = battleHistory.filter((b: any) => !b.won && b.battle?.winner_id !== null).length
       const ties = battleHistory.filter((b: any) => b.battle?.winner_id === null).length
-      
-      // Get total coins (paid + free) from battle data
-      const totalCoinsReceived = battleHistory.reduce((sum: number, b: any) => {
-        if (!b.battle) return sum
-        const userTotal = b.battle.host_id === b.user_id
-          ? (b.battle.host_paid_coins || 0) + (b.battle.host_free_coins || 0)
-          : (b.battle.challenger_paid_coins || 0) + (b.battle.challenger_free_coins || 0)
-        return sum + userTotal
-      }, 0)
-      
-      const totalCoinsSent = battleHistory.reduce((sum: number, b: any) => sum + (b.paid_coins_sent || 0), 0)
+
+      // Get total gifts received from Tromody battles
+      const totalCoinsReceived = battleHistory.reduce((sum: number, b: any) => sum + (b.user_gifts || 0), 0)
+
       const winRate = battleHistory.length > 0 ? Math.round((wins / battleHistory.length) * 100) : 0
 
       setBattleStats({
@@ -177,10 +190,10 @@ export default function Profile() {
         ties,
         winRate,
         totalCoinsReceived,
-        totalCoinsSent,
+        totalCoinsSent: 0, // Not tracked for Tromody battles
       })
     } catch (err: any) {
-      console.error('Error loading battle history:', err)
+      console.error('Error loading Tromody battle history:', err)
     } finally {
       setBattlesLoading(false)
     }
@@ -560,6 +573,24 @@ export default function Profile() {
           } catch (err) {
             console.error('Error loading referral data:', err)
           }
+        }
+
+        // Load royal family title for the viewed user
+        try {
+          const { data: titleData, error: titleError } = await supabase
+            .from('current_royal_family')
+            .select('*')
+            .eq('user_id', target.id)
+            .maybeSingle()
+
+          if (!titleError && titleData) {
+            setRoyalTitle(titleData)
+          } else {
+            setRoyalTitle(null)
+          }
+        } catch (err) {
+          console.error('Error loading royal title:', err)
+          setRoyalTitle(null)
         }
       } catch (err) {
         console.error('Error in loadStats:', err)
@@ -1276,7 +1307,7 @@ export default function Profile() {
                   <div className="text-red-400 text-2xl font-bold">{battleStats.losses}</div>
                 </div>
                 <div className="bg-[#0D0D0D] rounded-lg p-4">
-                  <div className="text-gray-400 text-sm">Coins from Battles</div>
+                  <div className="text-gray-400 text-sm">Gifts from Battles</div>
                   <div className="text-yellow-400 text-2xl font-bold">{battleStats.totalCoinsReceived.toLocaleString()}</div>
                 </div>
                 <div className="bg-[#0D0D0D] rounded-lg p-4">
@@ -1307,17 +1338,6 @@ export default function Profile() {
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {battles.map((battle: any) => {
-                const totalCoins = battle.battle
-                  ? (battle.battle.host_id === battle.user_id
-                      ? (battle.battle.host_paid_coins || 0) + (battle.battle.host_free_coins || 0)
-                      : (battle.battle.challenger_paid_coins || 0) + (battle.battle.challenger_free_coins || 0))
-                  : 0
-                const opponentTotalCoins = battle.battle
-                  ? (battle.battle.host_id === battle.opponent_id
-                      ? (battle.battle.host_paid_coins || 0) + (battle.battle.host_free_coins || 0)
-                      : (battle.battle.challenger_paid_coins || 0) + (battle.battle.challenger_free_coins || 0))
-                  : 0
-
                 return (
                   <div
                     key={battle.id}
@@ -1353,12 +1373,12 @@ export default function Profile() {
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <div className="text-xs text-gray-400 mb-1">Your Coins</div>
-                        <div className="text-yellow-400 font-semibold">{totalCoins.toLocaleString()}</div>
+                        <div className="text-xs text-gray-400 mb-1">Your Gifts</div>
+                        <div className="text-yellow-400 font-semibold">{(battle.user_gifts || 0).toLocaleString()}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-400 mb-1">Opponent Coins</div>
-                        <div className="text-gray-400 font-semibold">{opponentTotalCoins.toLocaleString()}</div>
+                        <div className="text-xs text-gray-400 mb-1">Opponent Gifts</div>
+                        <div className="text-gray-400 font-semibold">{(battle.opponent_gifts || 0).toLocaleString()}</div>
                       </div>
                     </div>
                   </div>
@@ -1756,8 +1776,27 @@ export default function Profile() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-white">@{(viewed?.username || profile.username)}</h1>
+                    <h1 className="text-2xl font-bold text-white">
+                      {royalTitle && royalTitle.is_active ? (
+                        <span title="Status title earned through gifting. In-app role only.">
+                          Admin's {royalTitle.title_type === 'wife' ? 'Wife' : 'Husband'}
+                        </span>
+                      ) : (
+                        `@${(viewed?.username || profile.username)}`
+                      )}
+                    </h1>
+                    {royalTitle && royalTitle.is_active && (
+                      <div className="text-sm text-gray-400">
+                        @{viewed?.username || profile.username}
+                      </div>
+                    )}
                     <EmpireBadge empireRole={viewed?.empire_role || profile?.empire_role} />
+                    {royalTitle && royalTitle.is_active && (
+                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-full flex items-center gap-1 border border-yellow-500/30">
+                        <Crown className="w-3 h-3" />
+                        ROYAL
+                      </span>
+                    )}
                   </div>
                   {/* Admin Badge */}
                   {(viewed?.role || profile.role) === 'admin' && (
@@ -1766,8 +1805,8 @@ export default function Profile() {
                       ADMIN
                     </span>
                   )}
-                  {/* OG Badge - for early users (created before 2026-01-01) or Level 100 */}
-                  {(viewed?.badge === 'og' || profile.badge === 'og' || getLevelFromXP((viewed?.xp || profile.xp) || 0, (viewed?.role || profile.role) === 'admin') === 100) && (
+                  {/* OG Badge - for all users until 2026-01-01 */}
+                  {new Date() < new Date('2026-01-01') && (
                     <span className="px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs font-bold rounded-full flex items-center gap-1">
                       <Crown className="w-3 h-3" />
                       OG
@@ -1791,8 +1830,8 @@ export default function Profile() {
                   <p className="text-gray-400 mb-3">{user?.email || ''}</p>
                 )}
                 <div className="flex items-center gap-2">
-                  <span className="text-yellow-400 text-xl font-bold">{(viewed?.paid_coin_balance ?? profile.paid_coin_balance)} Paid</span>
-                  <span className="text-blue-400 text-xl font-bold">{(viewed?.free_coin_balance ?? profile.free_coin_balance)} Free</span>
+                  <span className="text-yellow-400 text-xl font-bold">{(viewed?.paid_coin_balance ?? profile.paid_coin_balance)} Paid Coins</span>
+                  <span className="text-blue-400 text-xl font-bold">{(viewed?.free_coin_balance ?? profile.free_coin_balance)} Trollmonds</span>
                 </div>
 
                 {/* Recruited by display */}

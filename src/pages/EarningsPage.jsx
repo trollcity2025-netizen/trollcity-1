@@ -24,7 +24,7 @@ export default function EarningsPage() {
     // Check if user has broadcaster or admin role
     const allowedRoles = ['broadcaster', 'admin'];
     if (!allowedRoles.includes(profile.role)) {
-      navigate('/dashboard', { replace: true });
+      navigate('/live', { replace: true });
       return;
     }
 

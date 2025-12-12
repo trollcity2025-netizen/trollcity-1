@@ -12,12 +12,18 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Create trigger to auto-grant OG badge to users created before 2026-01-01
+-- 2. Create trigger to auto-grant OG badge to ALL users until 2026-01-01
 CREATE OR REPLACE FUNCTION grant_og_badge()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.created_at < '2026-01-01' THEN
+  -- Grant OG badge to all users until 2026-01-01
+  IF CURRENT_DATE < '2026-01-01' THEN
     NEW.og_badge = true;
+  ELSE
+    -- After 2026-01-01, only grant to early users (created before 2026-01-01)
+    IF NEW.created_at < '2026-01-01' THEN
+      NEW.og_badge = true;
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -25,15 +31,14 @@ $$ LANGUAGE plpgsql;
 
 -- 3. Create trigger
 CREATE TRIGGER tr_grant_og_badge
-BEFORE INSERT OR UPDATE ON user_profiles
-FOR EACH ROW
-EXECUTE FUNCTION grant_og_badge();
+  BEFORE INSERT OR UPDATE ON user_profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION grant_og_badge();
 
--- 4. Update existing users who joined before 2026-01-01
+-- 4. Update ALL existing users to get OG badge until 2026-01-01
 UPDATE user_profiles
 SET og_badge = true
-WHERE created_at < '2026-01-01'
-AND og_badge = false;
+WHERE CURRENT_DATE < '2026-01-01';
 
 -- 5. Add index for OG badge for faster queries
 CREATE INDEX IF NOT EXISTS idx_user_profiles_og_badge ON user_profiles(og_badge);

@@ -3,7 +3,7 @@ import { Shield, Clock, Zap, Crown } from 'lucide-react'
 import { supabase, UserProfile } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { deductCoins } from '../lib/coinTransactions'
+import { deductCoins } from '../lib/coinTransactions.ts'
 
 interface InsurancePackage {
   id: 'basic' | 'premium' | 'ultimate'

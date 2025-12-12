@@ -3,8 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
-import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
+import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2, Clock, Sparkles, Shield } from 'lucide-react';
 import { coinPackages, formatCoins, formatUSD } from '../lib/coinMath';
+import { purchasePerk, getActivePerks, getAllPerks, formatPerkDuration, canAffordPerk } from '../lib/perkSystem';
+import { purchaseEntranceEffect, setActiveEntranceEffect, getAllEntranceEffects } from '../lib/entranceEffects';
+import { useOwnedEntranceEffects, useActiveEntranceEffect, useEntranceEffectPurchase, useSetActiveEntranceEffect } from '../hooks/useEntranceEffects';
+import { useInsurancePlans, useActiveInsurance, useInsurancePurchase, useProtectionStatus } from '../hooks/useInsurance';
 import RequireRole from '../components/RequireRole';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
@@ -17,7 +21,19 @@ export default function CoinStore() {
   const [tab, setTab] = useState('coins');
   const [effects, setEffects] = useState([]);
   const [perks, setPerks] = useState([]);
-  const [plans, setPlans] = useState([]);
+  const [activePerks, setActivePerks] = useState([]);
+  const [entranceEffects, setEntranceEffects] = useState([]);
+
+  // Insurance hooks
+  const { plans: insurancePlans, loading: loadingInsurancePlans } = useInsurancePlans();
+  const { activeInsurance, refreshInsurance } = useActiveInsurance();
+  const { purchase: purchaseInsurancePlan, purchasing: purchasingInsurance } = useInsurancePurchase();
+
+  // Entrance effects hooks
+  const { ownedEffects, refreshOwnedEffects } = useOwnedEntranceEffects();
+  const { activeEffect, refreshActiveEffect } = useActiveEntranceEffect();
+  const { purchase: purchaseEffect, purchasing: purchasingEffect } = useEntranceEffectPurchase();
+  const { setActive, setting: settingActive } = useSetActiveEntranceEffect();
 
   useEffect(() => {
     if (!user || !profile) {
@@ -48,15 +64,26 @@ export default function CoinStore() {
         freeCoins: profileData.free_coin_balance || 0,
         totalCoins: (profileData.paid_coin_balance || 0) + (profileData.free_coin_balance || 0)
       });
-      const [effRes, perkRes, planRes] = await Promise.all([
-        supabase.from('entrance_effects').select('*').order('created_at', { ascending: false }),
-        supabase.from('perks').select('*').order('created_at', { ascending: false }),
-        supabase.from('insurance_plans').select('*').order('created_at', { ascending: false })
+      const [effRes] = await Promise.all([
+        supabase.from('entrance_effects').select('*').order('created_at', { ascending: false })
       ])
-      console.log('✅ Effects, perks, plans loaded:', { effects: effRes.data?.length, perks: perkRes.data?.length, plans: planRes.data?.length });
+
+      // Load perks from the new system
+      const allPerks = getAllPerks();
+      const userActivePerks = await getActivePerks(user.id);
+      const allEntranceEffects = getAllEntranceEffects();
+
+      console.log('✅ Effects, perks, entrance effects loaded:', {
+        effects: effRes.data?.length,
+        perks: allPerks.length,
+        activePerks: userActivePerks.length,
+        entranceEffects: allEntranceEffects.length
+      });
+
       setEffects(effRes.data || [])
-      setPerks(perkRes.data || [])
-      setPlans(planRes.data || [])
+      setPerks(allPerks)
+      setActivePerks(userActivePerks)
+      setEntranceEffects(allEntranceEffects)
 
     } catch (err) {
       console.error('❌ Error loading wallet data:', err);
@@ -83,33 +110,20 @@ export default function CoinStore() {
 
   const buyPerk = async (perk) => {
     try {
-      const price = perk.price_paid_coins || 0
-      const { error: deductErr } = await supabase.rpc('deduct_coins', { p_user_id: user.id, p_amount: price, p_coin_type: 'paid' })
-      if (deductErr) throw deductErr
-      const { error } = await supabase.from('user_perks').insert([{ user_id: user.id, perk_id: perk.id }])
-      if (error) throw error
-      toast.success('Perk purchased')
-      await loadWalletData()
+      const result = await purchasePerk(user.id, perk.key);
+
+      if (result.success) {
+        toast.success(`${perk.name} activated!`);
+        await loadWalletData(); // Refresh wallet and active perks
+      } else {
+        toast.error(result.error || 'Purchase failed');
+      }
     } catch (err) {
-      toast.error('Purchase failed')
+      console.error('Perk purchase error:', err);
+      toast.error('Purchase failed');
     }
   }
 
-  const buyInsurance = async (plan) => {
-    try {
-      const price = plan.price_paid_coins || 0
-      const { error: deductErr } = await supabase.rpc('deduct_coins', { p_user_id: user.id, p_amount: price, p_coin_type: 'paid' })
-      if (deductErr) throw deductErr
-      const endDate = new Date()
-      endDate.setDate(endDate.getDate() + (plan.duration_days || 0))
-      const { error } = await supabase.from('user_insurance').insert([{ user_id: user.id, plan_id: plan.id, end_date: endDate.toISOString() }])
-      if (error) throw error
-      toast.success('Insurance purchased')
-      await loadWalletData()
-    } catch (err) {
-      toast.error('Purchase failed')
-    }
-  }
 
   const handleBuy = async (pkg) => {
     console.log('🛒 Starting PayPal checkout for package:', pkg.id);
@@ -384,16 +398,40 @@ export default function CoinStore() {
               <>
                 <h2 className="text-xl font-bold mb-4">Perks</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {perks.map((p) => (
-                    <div key={p.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
-                      <div className="font-semibold mb-2">{p.name}</div>
-                      <div className="text-sm text-gray-400 mb-3">{p.description}</div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-yellow-400 font-bold">{(p.price_paid_coins || 0).toLocaleString()} Troll Coins</div>
-                        <button onClick={() => buyPerk(p)} className="px-3 py-2 bg-purple-600 rounded">Purchase</button>
+                  {perks.map((perk) => {
+                    const isActive = activePerks.some(
+                      p => p.perk_id === perk.key && new Date(p.expires_at) > new Date()
+                    );
+                    const activePerk = activePerks.find(p => p.perk_id === perk.key);
+                    const timeLeft = activePerk ? new Date(activePerk.expires_at).getTime() - Date.now() : 0;
+
+                    return (
+                      <div key={perk.key} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
+                        <div className="font-semibold mb-2">{perk.name}</div>
+                        <div className="text-sm text-gray-400 mb-2">{perk.description}</div>
+                        <div className="text-xs text-gray-500 mb-3 flex items-center gap-2">
+                          <Clock className="w-3 h-3" />
+                          Duration: {formatPerkDuration(perk.duration_minutes)}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-yellow-400 font-bold">{perk.cost.toLocaleString()} Troll Coins</div>
+                          {isActive ? (
+                            <div className="text-green-400 text-sm font-semibold">
+                              Active ({Math.max(0, Math.ceil(timeLeft / (1000 * 60))).toLocaleString()}m left)
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => buyPerk(perk)}
+                              className="px-3 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={walletData?.paidCoins < perk.cost}
+                            >
+                              {walletData?.paidCoins < perk.cost ? 'Not enough coins' : 'Purchase'}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {perks.length === 0 && <div className="text-gray-400">No perks available</div>}
                 </div>
               </>
@@ -401,20 +439,153 @@ export default function CoinStore() {
 
             {tab === 'insurance' && (
               <>
-                <h2 className="text-xl font-bold mb-4">Insurance</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {plans.map((p) => (
-                    <div key={p.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
-                      <div className="font-semibold mb-2">{p.name}</div>
-                      <div className="text-sm text-gray-400 mb-2">{p.description}</div>
-                      <div className="text-xs text-gray-500 mb-3">{p.coverage_description}</div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-yellow-400 font-bold">{(p.price_paid_coins || 0).toLocaleString()} Troll Coins</div>
-                        <button onClick={() => buyInsurance(p)} className="px-3 py-2 bg-purple-600 rounded">Purchase</button>
-                      </div>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-purple-400" />
+                  Insurance Plans
+                </h2>
+
+                {/* Active Insurance Status */}
+                {activeInsurance.length > 0 && (
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-4 mb-6">
+                    <h3 className="text-lg font-semibold text-green-400 mb-3">Active Protection</h3>
+                    <div className="space-y-2">
+                      {activeInsurance.map((insurance) => (
+                        <div key={insurance.id} className="flex items-center justify-between bg-green-900/30 rounded-lg p-3">
+                          <div>
+                            <span className="font-medium text-green-300 capitalize">
+                              {insurance.protection_type} Protection
+                            </span>
+                            <span className="text-sm text-green-400 ml-2">
+                              ({Math.max(0, Math.ceil((new Date(insurance.expires_at) - Date.now()) / (1000 * 60))).toLocaleString()}m remaining)
+                            </span>
+                          </div>
+                          <Shield className="w-5 h-5 text-green-400" />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  {plans.length === 0 && <div className="text-gray-400">No plans available</div>}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {insurancePlans.map((plan) => {
+                    // Check if user already has this type of protection
+                    const hasProtection = activeInsurance.some(ins =>
+                      ins.protection_type === plan.protection_type ||
+                      ins.protection_type === 'full'
+                    );
+
+                    return (
+                      <div key={plan.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
+                        <div className="font-semibold mb-2">{plan.name}</div>
+                        <div className="text-sm text-gray-400 mb-2">{plan.description}</div>
+                        <div className="text-xs text-gray-500 mb-3">
+                          Duration: {plan.duration_hours}h | Protection: <span className="capitalize font-medium">{plan.protection_type}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-yellow-400 font-bold">{plan.cost.toLocaleString()} Troll Coins</div>
+                          {hasProtection ? (
+                            <div className="text-green-400 text-sm font-semibold">Active</div>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                const result = await purchaseInsurancePlan(plan.id);
+                                if (result.success) {
+                                  toast.success(`${plan.name} activated!`);
+                                  refreshInsurance();
+                                  loadWalletData();
+                                } else {
+                                  toast.error(result.error || 'Purchase failed');
+                                }
+                              }}
+                              disabled={purchasingInsurance || walletData?.paidCoins < plan.cost}
+                              className="px-3 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {purchasingInsurance ? 'Purchasing...' :
+                               walletData?.paidCoins < plan.cost ? 'Not enough coins' : 'Purchase'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {insurancePlans.length === 0 && !loadingInsurancePlans && (
+                    <div className="text-gray-400">No insurance plans available</div>
+                  )}
+                  {loadingInsurancePlans && (
+                    <div className="text-gray-400">Loading insurance plans...</div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {tab === 'effects' && (
+              <>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  Entrance Effects
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {entranceEffects.map((effect) => {
+                    const isOwned = ownedEffects.includes(effect.key);
+                    const isActive = activeEffect === effect.key;
+
+                    return (
+                      <div key={effect.key} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
+                        <div className="font-semibold mb-2">{effect.name}</div>
+                        <div className="text-sm text-gray-400 mb-2">{effect.description}</div>
+                        <div className="text-xs text-gray-500 mb-3">
+                          Rarity: <span className={`font-semibold ${
+                            effect.rarity === 'Exclusive' ? 'text-red-400' :
+                            effect.rarity === 'Mythic' ? 'text-purple-400' :
+                            effect.rarity === 'Legendary' ? 'text-yellow-400' :
+                            effect.rarity === 'Epic' ? 'text-blue-400' :
+                            'text-green-400'
+                          }`}>{effect.rarity}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-yellow-400 font-bold">{effect.cost.toLocaleString()} Troll Coins</div>
+                          {isActive ? (
+                            <div className="text-green-400 text-sm font-semibold">Active</div>
+                          ) : isOwned ? (
+                            <button
+                              onClick={async () => {
+                                const result = await setActive(effect.key);
+                                if (result.success) {
+                                  toast.success(`${effect.name} activated!`);
+                                  refreshActiveEffect();
+                                } else {
+                                  toast.error(result.error || 'Failed to activate effect');
+                                }
+                              }}
+                              disabled={settingActive}
+                              className="px-3 py-2 bg-green-600 rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                              {settingActive ? 'Setting...' : 'Activate'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                const result = await purchaseEffect(effect.key);
+                                if (result.success) {
+                                  toast.success(`${effect.name} purchased!`);
+                                  refreshOwnedEffects();
+                                  loadWalletData();
+                                } else {
+                                  toast.error(result.error || 'Purchase failed');
+                                }
+                              }}
+                              disabled={purchasingEffect || walletData?.paidCoins < effect.cost}
+                              className="px-3 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {purchasingEffect ? 'Buying...' :
+                               walletData?.paidCoins < effect.cost ? 'Not enough coins' : 'Purchase'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {entranceEffects.length === 0 && <div className="text-gray-400">No entrance effects available</div>}
                 </div>
               </>
             )}

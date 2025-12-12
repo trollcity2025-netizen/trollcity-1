@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Crown, Video, PartyPopper } from 'lucide-react';
@@ -47,6 +47,7 @@ export default function Home() {
   const [topTrollers, setTopTrollers] = useState<any[]>([]);
   const [loadingTop, setLoadingTop] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Dev mode test displays
   const [showBanPage, setShowBanPage] = useState(false);
@@ -59,6 +60,18 @@ export default function Home() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Check for seller application submission success
+  useEffect(() => {
+    if (location.state?.submitted === 'seller') {
+      toast.success('✅ Seller application submitted successfully! Please wait for admin approval.', {
+        duration: 6000,
+        description: 'You will receive a notification when your application is reviewed.'
+      });
+      // Clear the state to prevent re-showing on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const loadLive = async (showLoading = true) => {

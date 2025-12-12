@@ -3,6 +3,7 @@ import { Users, Mic, MicOff, Video, VideoOff, Gift, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import ClickableUsername from '../components/ClickableUsername'
+import AuthorityPanel from '../components/AuthorityPanel'
 
 import GiftActionPanel from '../components/GiftActionPanel'
 import SendGiftModal from '../components/SendGiftModal'
@@ -112,7 +113,8 @@ export default function ViewerPage() {
     coins.toLocaleString('en-US', { maximumFractionDigits: 0 })
 
   return (
-    <div className="flex flex-col h-screen bg-black text-white">
+    <div className="flex h-screen bg-black text-white pt-16 lg:pt-0">
+      <div className="flex-1 flex flex-col">
 
       {/* STREAM PLAYER */}
       <div className="relative flex-1 bg-gray-900">
@@ -252,6 +254,13 @@ export default function ViewerPage() {
               Send
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Authority Panel - Right Side Rail */}
+      <div className="hidden lg:block">
+        <div className="sticky top-0 h-screen">
+          <AuthorityPanel />
         </div>
       </div>
     </div>
