@@ -57,6 +57,13 @@ export default function Sidebar() {
   const [showStatsPanel, setShowStatsPanel] = useState(false)
   const isAdmin = profile?.role === 'admin'
 
+  // Role logic for Go Live access
+  const canGoLive =
+    user?.role === "admin" ||
+    user?.role === "broadcaster" ||
+    user?.role === "lead_officer" ||
+    user?.role === "troll_officer";
+
   // Real-time wallet updates
   useEffect(() => {
     if (!user || !profile) return
@@ -206,6 +213,23 @@ export default function Sidebar() {
         <p className="text-xs text-gray-400">
           {profile?.role === 'admin' ? 'Admin' : profile?.role === 'troll_officer' ? 'Troll Officer' : 'Member'}
         </p>
+
+        {/* Go Live Button - Under username */}
+        {canGoLive && (
+          <button
+            onClick={() => {
+              const confirmed = confirm("You are about to start a live stream. Continue?");
+              if (confirmed) {
+                navigate("/go-live");
+              }
+            }}
+            className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg
+                       bg-red-700 hover:bg-red-800 text-white font-bold
+                       shadow-lg border border-red-500"
+          >
+            🔴 Go Live
+          </button>
+        )}
 
         {/* Real-time Wallet Section */}
         <div className="mt-4 space-y-2">

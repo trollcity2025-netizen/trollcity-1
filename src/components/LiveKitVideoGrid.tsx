@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLiveKit } from '../contexts/LiveKitContext';
 
 interface VideoGridProps {
@@ -90,27 +90,28 @@ interface VideoTileProps {
 
 function VideoTile({ participant, isLocal }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    if (!participant || !videoRef.current) return;
+    if (!participant) return;
 
     // Attach video track to video element
-    if (participant.videoTrack) {
+    if (participant.videoTrack && videoRef.current) {
       participant.videoTrack.attach(videoRef.current);
     }
 
-    // Attach audio track
-    if (participant.audioTrack) {
-      participant.audioTrack.attach(videoRef.current);
+    // Attach audio track to audio element
+    if (participant.audioTrack && audioRef.current) {
+      participant.audioTrack.attach(audioRef.current);
     }
 
     return () => {
       // Detach tracks on cleanup
-      if (participant.videoTrack) {
+      if (participant.videoTrack && videoRef.current) {
         participant.videoTrack.detach(videoRef.current);
       }
-      if (participant.audioTrack) {
-        participant.audioTrack.detach(videoRef.current);
+      if (participant.audioTrack && audioRef.current) {
+        participant.audioTrack.detach(audioRef.current);
       }
     };
   }, [participant]);
@@ -124,6 +125,9 @@ function VideoTile({ participant, isLocal }: VideoTileProps) {
         muted={isLocal} // Mute local video to prevent feedback
         className="w-full h-full object-cover"
       />
+
+      {/* Hidden audio element for audio tracks */}
+      <audio ref={audioRef} autoPlay />
 
       {/* Participant info overlay */}
       <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-2 py-1">
@@ -178,10 +182,28 @@ export function LiveKitRoomWrapper({
   className = '',
   showLocalVideo = true,
   maxParticipants = 6,
-  autoPublish = true,
+  autoPublish = false, // Changed default to false
   role
 }: LiveKitRoomWrapperProps) {
-  const { connect, isConnected, isConnecting, error } = useLiveKit();
+  const { connect, isConnected, isConnecting, error, startPublishing, localParticipant } = useLiveKit();
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  // Determine if user can publish based on role
+  const canPublish = role && ['admin', 'broadcaster', 'officer', 'lead_troll_officer', 'troll_officer'].includes(role);
+
+  // Check if already publishing
+  const isAlreadyPublishing = localParticipant && (localParticipant.videoTrack || localParticipant.audioTrack);
+
+  const handleStartPublishing = async () => {
+    setIsPublishing(true);
+    try {
+      await startPublishing();
+    } catch (err) {
+      console.error('Failed to start publishing:', err);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   useEffect(() => {
     // Auto-connect on mount
@@ -218,6 +240,36 @@ export function LiveKitRoomWrapper({
         showLocalVideo={showLocalVideo}
         maxParticipants={maxParticipants}
       />
+
+      {/* Start Camera & Mic Button */}
+      {isConnected && canPublish && !isAlreadyPublishing && (
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={handleStartPublishing}
+            disabled={isPublishing}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+          >
+            {isPublishing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Starting...
+              </>
+            ) : (
+              <>
+                📹🎤 Start Camera & Mic
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Show message if cannot publish */}
+      {isConnected && !canPublish && (
+        <div className="mt-4 text-center text-gray-400">
+          You are viewing this stream as a spectator.
+        </div>
+      )}
+
       {children}
     </div>
   );

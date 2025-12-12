@@ -6,8 +6,8 @@ export interface LiveKitParticipant {
   identity: string;
   name?: string;
   isLocal: boolean;
-  videoTrack?: LocalVideoTrack;
-  audioTrack?: LocalAudioTrack;
+  videoTrack?: any; // LocalVideoTrack or RemoteTrack
+  audioTrack?: any; // LocalAudioTrack or RemoteTrack
   isCameraEnabled: boolean;
   isMicrophoneEnabled: boolean;
   isMuted: boolean;
@@ -40,7 +40,7 @@ export class LiveKitService {
   constructor(config: LiveKitServiceConfig) {
     this.config = {
       maxReconnectAttempts: 5,
-      autoPublish: true,
+      autoPublish: false,
       ...config
     };
 
@@ -77,14 +77,7 @@ export class LiveKitService {
       this.log('Connecting to LiveKit room...');
       await this.room.connect(LIVEKIT_URL, tokenResponse.token);
 
-      // Step 5: ASYNC media capture and publishing (if autoPublish enabled) - DO NOT BLOCK UI
-      if (this.config.autoPublish) {
-        // Start media capture asynchronously - don't await to prevent blocking UI render
-        this.immediateMediaCaptureAndPublish().catch(error => {
-          this.log('❌ Media capture failed, but UI continues:', error.message);
-          // Media failure should not prevent UI from rendering
-        });
-      }
+      // Media publishing will be triggered by user action, not auto-published
 
       this.log('✅ Connection successful');
       this.config.onConnected?.();
@@ -291,9 +284,9 @@ export class LiveKitService {
       const liveKitParticipant = this.participants.get(participant.identity);
       if (liveKitParticipant) {
         if (track.kind === 'video') {
-          // Store video track reference
+          liveKitParticipant.videoTrack = track;
         } else if (track.kind === 'audio') {
-          // Store audio track reference
+          liveKitParticipant.audioTrack = track;
         }
         this.config.onTrackSubscribed?.(track, liveKitParticipant);
       }
@@ -394,6 +387,57 @@ export class LiveKitService {
     } catch (error: any) {
       this.log('❌ Microphone toggle failed:', error.message);
       return false;
+    }
+  }
+
+  // Start publishing camera and microphone - user-triggered
+  async startPublishing(): Promise<void> {
+    if (!this.room || this.room.state !== 'connected') {
+      throw new Error('Room not connected');
+    }
+
+    this.log('🎥 Starting user-triggered media publishing...');
+
+    try {
+      // Capture camera and microphone simultaneously
+      const [videoTrack, audioTrack] = await Promise.all([
+        this.captureVideoTrack(),
+        this.captureAudioTrack()
+      ]);
+
+      // Store references
+      this.localVideoTrack = videoTrack;
+      this.localAudioTrack = audioTrack;
+
+      // Publish tracks
+      if (videoTrack) {
+        await this.publishVideoTrack(videoTrack);
+      }
+
+      if (audioTrack) {
+        await this.publishAudioTrack(audioTrack);
+      }
+
+      // Update local participant state
+      this.updateLocalParticipantState();
+
+      this.log('✅ User-triggered publishing complete');
+
+    } catch (error: any) {
+      this.log('❌ Publishing failed:', error.message);
+      this.config.onError?.(`Media publishing failed: ${error.message}`);
+
+      // Clean up tracks
+      if (this.localVideoTrack) {
+        this.localVideoTrack.stop();
+        this.localVideoTrack = null;
+      }
+      if (this.localAudioTrack) {
+        this.localAudioTrack.stop();
+        this.localAudioTrack = null;
+      }
+
+      throw error;
     }
   }
 

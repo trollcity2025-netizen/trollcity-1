@@ -20,6 +20,7 @@ interface LiveKitContextType {
   disconnect: () => void;
   toggleCamera: () => Promise<boolean>;
   toggleMicrophone: () => Promise<boolean>;
+  startPublishing: () => Promise<void>;
 
   // Service reference for advanced usage
   service: LiveKitService | null;
@@ -198,6 +199,11 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
     return await service.toggleMicrophone();
   }, [service]);
 
+  const startPublishing = useCallback(async () => {
+    if (!service) throw new Error('Service not available');
+    return await service.startPublishing();
+  }, [service]);
+
   const value: LiveKitContextType = {
     isConnected,
     isConnecting,
@@ -209,6 +215,7 @@ export function LiveKitProvider({ children }: LiveKitProviderProps) {
     disconnect,
     toggleCamera,
     toggleMicrophone,
+    startPublishing,
     service
   };
 

@@ -361,14 +361,6 @@ export default function Home() {
                 Auto-updating
               </span>
             </div>
-            <button
-              onClick={() => navigate('/go-live')}
-              className="bg-gradient-to-r from-pink-500 to-purple-500 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-300 flex items-center gap-2 transform hover:scale-105 active:scale-95"
-              aria-label="Go Live - open broadcaster setup"
-            >
-              <Video size={20} />
-              Go Live
-            </button>
           </div>
 
           {loadingLive ? (
@@ -376,12 +368,6 @@ export default function Home() {
           ) : liveStreams.length === 0 ? (
             <div className="bg-[#111] p-10 rounded-xl border border-gray-700 text-center">
               <p className="text-gray-400 text-lg">No one is live right now…</p>
-              <button
-                onClick={() => navigate('/go-live')}
-                className="mt-4 px-6 py-3 bg-purple-600 hover:bg-purple-800 rounded-lg text-white shadow-lg"
-              >
-                Start a Live
-              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

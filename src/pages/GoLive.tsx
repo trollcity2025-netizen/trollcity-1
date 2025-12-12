@@ -12,6 +12,22 @@ const GoLive: React.FC = () => {
   const { user, profile } = useAuthStore();
   const { isConnected, isConnecting, toggleCamera, toggleMicrophone, localParticipant, connect } = useLiveKit();
 
+  // Role logic for Go Live access
+  const canGoLive =
+    user?.role === "admin" ||
+    user?.role === "broadcaster" ||
+    user?.role === "lead_officer" ||
+    user?.role === "troll_officer";
+
+  // Frontend guard - if user doesn't have permission, show access denied
+  if (!canGoLive) {
+    return (
+      <div className="p-8 text-center text-red-500 font-bold">
+        Access denied.
+      </div>
+    );
+  }
+
   const [streamTitle, setStreamTitle] = useState('');
   const [streamId, setStreamId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);

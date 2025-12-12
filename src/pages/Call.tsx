@@ -30,8 +30,9 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
   const callType = (propCallType || paramType || 'audio') as 'audio' | 'video';
   const otherUserId = propOtherUserId || paramUserId || '';
 
-  const [room, setRoom] = useState<Room | null>(null);
+  const roomRef = useRef<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isCallStarted, setIsCallStarted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(callType === 'audio');
   const [minutes, setMinutes] = useState({ audio: 0, video: 0 });
@@ -40,6 +41,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
   const [livekitUrl, setLivekitUrl] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isEnding, setIsEnding] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -98,26 +100,9 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
           dynacast: true,
         });
 
-        newRoom.on(RoomEvent.Connected, async () => {
+        newRoom.on(RoomEvent.Connected, () => {
           console.log('✅ Connected to call room');
           setIsConnected(true);
-          callStartTimeRef.current = new Date();
-
-          // Publish audio track
-          if (callType === 'audio' || !isVideoOff) {
-            const audioTrack = await createLocalAudioTrack();
-            await newRoom!.localParticipant.publishTrack(audioTrack);
-          }
-
-          // Publish video track if video call
-          if (callType === 'video' && !isVideoOff) {
-            const videoTrack = await createLocalVideoTrack({ facingMode: 'user' });
-            await newRoom!.localParticipant.publishTrack(videoTrack);
-            if (videoRef.current) {
-              videoTrack.attach(videoRef.current);
-              videoRef.current.muted = true;
-            }
-          }
 
           // Handle remote tracks
           newRoom!.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -127,45 +112,6 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
               track.attach();
             }
           });
-
-          // Start duration timer
-          durationIntervalRef.current = setInterval(() => {
-            if (callStartTimeRef.current) {
-              const elapsed = Math.floor((new Date().getTime() - callStartTimeRef.current.getTime()) / 1000);
-              setCallDuration(elapsed);
-            }
-          }, 1000);
-
-          // Start minute deduction (every 60 seconds)
-          minuteDeductionIntervalRef.current = setInterval(async () => {
-            if (!user?.id) return;
-
-            const deductionAmount = callType === 'audio' ? 1 : 2;
-            const { data, error } = await supabase.rpc('deduct_call_minutes', {
-              p_user_id: user.id,
-              p_minutes: deductionAmount,
-              p_type: callType
-            });
-
-            if (error) {
-              console.error('Error deducting minutes:', error);
-            } else {
-              const newAudio = data?.audio_minutes || 0;
-              const newVideo = data?.video_minutes || 0;
-              setMinutes({ audio: newAudio, video: newVideo });
-
-              // Check if out of minutes
-              const hasMinutes = callType === 'audio' ? newAudio > 0 : newVideo > 0;
-              if (!hasMinutes) {
-                toast.error('You ran out of minutes. Call ending...');
-                endCall();
-              } else if (callType === 'audio' && newAudio < 5) {
-                setLowMinutesWarning(true);
-              } else if (callType === 'video' && newVideo < 10) {
-                setLowMinutesWarning(true);
-              }
-            }
-          }, 60000); // Every 60 seconds
         });
 
         newRoom.on(RoomEvent.Disconnected, () => {
@@ -174,7 +120,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
         });
 
         await newRoom.connect(livekitUrl, token);
-        setRoom(newRoom);
+        roomRef.current = newRoom;
       } catch (err: any) {
         console.error('Call connection error:', err);
         toast.error('Failed to connect to call');
@@ -230,6 +176,77 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
     getToken();
   }, [roomId, user, navigate]);
 
+  const startCall = async () => {
+    if (!roomRef.current || isStartingCall) return;
+    setIsStartingCall(true);
+
+    try {
+      callStartTimeRef.current = new Date();
+      setIsCallStarted(true);
+
+      // Publish audio track
+      if (callType === 'audio' || !isVideoOff) {
+        const audioTrack = await createLocalAudioTrack();
+        await roomRef.current.localParticipant.publishTrack(audioTrack);
+      }
+
+      // Publish video track if video call
+      if (callType === 'video' && !isVideoOff) {
+        const videoTrack = await createLocalVideoTrack({ facingMode: 'user' });
+        await roomRef.current.localParticipant.publishTrack(videoTrack);
+        if (videoRef.current) {
+          videoTrack.attach(videoRef.current);
+          videoRef.current.muted = true;
+        }
+      }
+
+      // Start duration timer
+      durationIntervalRef.current = setInterval(() => {
+        if (callStartTimeRef.current) {
+          const elapsed = Math.floor((new Date().getTime() - callStartTimeRef.current.getTime()) / 1000);
+          setCallDuration(elapsed);
+        }
+      }, 1000);
+
+      // Start minute deduction (every 60 seconds)
+      minuteDeductionIntervalRef.current = setInterval(async () => {
+        if (!user?.id) return;
+
+        const deductionAmount = callType === 'audio' ? 1 : 2;
+        const { data, error } = await supabase.rpc('deduct_call_minutes', {
+          p_user_id: user.id,
+          p_minutes: deductionAmount,
+          p_type: callType
+        });
+
+        if (error) {
+          console.error('Error deducting minutes:', error);
+        } else {
+          const newAudio = data?.audio_minutes || 0;
+          const newVideo = data?.video_minutes || 0;
+          setMinutes({ audio: newAudio, video: newVideo });
+
+          // Check if out of minutes
+          const hasMinutes = callType === 'audio' ? newAudio > 0 : newVideo > 0;
+          if (!hasMinutes) {
+            toast.error('You ran out of minutes. Call ending...');
+            endCall();
+          } else if (callType === 'audio' && newAudio < 5) {
+            setLowMinutesWarning(true);
+          } else if (callType === 'video' && newVideo < 10) {
+            setLowMinutesWarning(true);
+          }
+        }
+      }, 60000); // Every 60 seconds
+
+    } catch (err) {
+      console.error('Error starting call:', err);
+      toast.error('Failed to start call');
+    } finally {
+      setIsStartingCall(false);
+    }
+  };
+
   const endCall = async () => {
     if (isEnding) return;
     setIsEnding(true);
@@ -253,8 +270,8 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
       }
 
       // Disconnect room
-      if (room) {
-        room.disconnect();
+      if (roomRef.current) {
+        roomRef.current.disconnect();
       }
 
       // Clear intervals
@@ -272,16 +289,16 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
   };
 
   const toggleMute = async () => {
-    if (!room?.localParticipant) return;
+    if (!roomRef.current?.localParticipant) return;
     const enabled = !isMuted;
-    await room.localParticipant.setMicrophoneEnabled(!enabled);
+    await roomRef.current.localParticipant.setMicrophoneEnabled(!enabled);
     setIsMuted(enabled);
   };
 
   const toggleVideo = async () => {
-    if (!room?.localParticipant || callType === 'audio') return;
+    if (!roomRef.current?.localParticipant || callType === 'audio') return;
     const enabled = isVideoOff;
-    await room.localParticipant.setCameraEnabled(enabled);
+    await roomRef.current.localParticipant.setCameraEnabled(enabled);
     setIsVideoOff(!enabled);
   };
 
@@ -355,27 +372,49 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
       {/* Controls */}
       <div className="p-6 bg-black/80 backdrop-blur-sm border-t border-purple-500/30">
         <div className="flex items-center justify-center gap-4">
-          {callType === 'video' && (
+          {!isCallStarted ? (
             <button
-              onClick={toggleVideo}
-              className={`p-4 rounded-full ${isVideoOff ? 'bg-red-600' : 'bg-gray-700'} text-white hover:bg-opacity-80 transition`}
+              onClick={startCall}
+              disabled={isStartingCall}
+              className="px-8 py-4 rounded-full bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50 font-semibold flex items-center gap-2"
             >
-              {isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+              {isStartingCall ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Phone className="w-6 h-6" />
+                  Start Call
+                </>
+              )}
             </button>
+          ) : (
+            <>
+              {callType === 'video' && (
+                <button
+                  onClick={toggleVideo}
+                  className={`p-4 rounded-full ${isVideoOff ? 'bg-red-600' : 'bg-gray-700'} text-white hover:bg-opacity-80 transition`}
+                >
+                  {isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+                </button>
+              )}
+              <button
+                onClick={toggleMute}
+                className={`p-4 rounded-full ${isMuted ? 'bg-red-600' : 'bg-gray-700'} text-white hover:bg-opacity-80 transition`}
+              >
+                {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+              </button>
+              <button
+                onClick={endCall}
+                disabled={isEnding}
+                className="p-4 rounded-full bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50"
+              >
+                <PhoneOff className="w-6 h-6" />
+              </button>
+            </>
           )}
-          <button
-            onClick={toggleMute}
-            className={`p-4 rounded-full ${isMuted ? 'bg-red-600' : 'bg-gray-700'} text-white hover:bg-opacity-80 transition`}
-          >
-            {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-          </button>
-          <button
-            onClick={endCall}
-            disabled={isEnding}
-            className="p-4 rounded-full bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50"
-          >
-            <PhoneOff className="w-6 h-6" />
-          </button>
         </div>
       </div>
     </div>
