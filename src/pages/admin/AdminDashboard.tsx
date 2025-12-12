@@ -54,6 +54,7 @@ import { AdminGrantCoins } from './components/AdminGrantCoins'
 import AdminControlPanel from './components/AdminControlPanel'
 import TestDiagnostics from './components/TestDiagnostics'
 import AdminResetPanel from './AdminResetPanel'
+import PayoutAdmin from '../../components/PayoutAdmin'
 
 type StatState = {
   totalUsers: number

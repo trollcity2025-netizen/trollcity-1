@@ -139,8 +139,11 @@ BEGIN
         updated_at = now()
     WHERE id = p_sender_id;
 
-    -- Process gift (existing logic)
-    -- This would integrate with existing gift processing
+    -- Process gift and update recipient's earned coins for payout system
+    UPDATE user_profiles
+    SET total_earned_coins = total_earned_coins + p_paid_coins,
+        updated_at = now()
+    WHERE id = p_receiver_id;
 
     -- Roll for lucky multiplier
     SELECT calculate_lucky_multiplier(p_paid_coins) INTO v_lucky_multiplier;

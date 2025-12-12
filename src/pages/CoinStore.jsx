@@ -12,6 +12,7 @@ import { useInsurancePlans, useActiveInsurance, useInsurancePurchase, useProtect
 import RequireRole from '../components/RequireRole';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import LuckyStats from '../components/LuckyStats';
+import PayoutRequest from '../components/PayoutRequest';
 
 export default function CoinStore() {
   const { user, profile } = useAuthStore();
@@ -247,6 +248,7 @@ export default function CoinStore() {
               <button className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('perks')}>Perks</button>
               <button className={`px-3 py-2 rounded ${tab==='insurance'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('insurance')}>Insurance</button>
               <button className={`px-3 py-2 rounded ${tab==='lucky'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('lucky')}>Lucky Stats</button>
+              <button className={`px-3 py-2 rounded ${tab==='payouts'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('payouts')}>Payouts</button>
             </div>
           </div>
 
@@ -599,6 +601,16 @@ export default function CoinStore() {
                   Lucky Trollmonds Stats
                 </h2>
                 <LuckyStats />
+              </>
+            )}
+
+            {tab === 'payouts' && (
+              <>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-green-400" />
+                  Creator Payouts
+                </h2>
+                <PayoutRequest />
               </>
             )}
           </div>
