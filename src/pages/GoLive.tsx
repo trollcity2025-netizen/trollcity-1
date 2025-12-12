@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 const GoLive: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  const { isConnected, isConnecting, toggleCamera, toggleMicrophone, localParticipant } = useLiveKit();
+  const { isConnected, isConnecting, toggleCamera, toggleMicrophone, localParticipant, connect } = useLiveKit();
 
   const [streamTitle, setStreamTitle] = useState('');
   const [streamId, setStreamId] = useState<string | null>(null);
@@ -25,6 +25,15 @@ const GoLive: React.FC = () => {
 
     console.log('🎥 GoLive: Auto-connecting to room:', roomName);
   }, [user, profile]);
+
+  // Auto-connect when streamId is set
+  useEffect(() => {
+    if (!streamId || !user || !profile) return;
+
+    console.log('🎥 GoLive: Connecting with broadcaster role');
+    // Connect with broadcaster role to ensure publishing permissions
+    connect(streamId, { ...user, role: 'broadcaster' }, { autoPublish: false }); // Don't auto-publish yet, wait for title
+  }, [streamId, user, profile, connect]);
 
   // Start stream when connected
   useEffect(() => {

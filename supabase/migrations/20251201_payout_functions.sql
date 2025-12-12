@@ -27,10 +27,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'User not found');
   END IF;
 
-  -- Check if user is an approved broadcaster
-  IF NOT v_user_profile.is_broadcaster THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Only approved broadcasters can request payouts');
-  END IF;
+  -- Removed broadcaster approval requirement - anyone can request payouts now
 
   -- Tax compliance check
   IF v_user_profile.tax_status = 'required' THEN
