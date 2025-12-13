@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 const GoLive: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  const { toggleMicrophone, toggleCamera } = useLiveKit();
+  const { toggleMicrophone, toggleCamera, isConnected } = useLiveKit();
 
   // 🔒 HARD-LOCKED identifiers (created once)
   const streamUuidRef = useRef<string>(crypto.randomUUID());
@@ -145,7 +145,8 @@ const GoLive: React.FC = () => {
                 toggleCamera();
                 setCamEnabled(v => !v);
               }}
-              className={`p-2 rounded-lg ${camEnabled ? 'bg-green-600' : 'bg-red-600'}`}
+              disabled={!isConnected}
+              className={`p-2 rounded-lg ${camEnabled ? 'bg-green-600' : 'bg-red-600'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <Video />
             </button>
@@ -155,7 +156,8 @@ const GoLive: React.FC = () => {
                 toggleMicrophone();
                 setMicEnabled(v => !v);
               }}
-              className={`p-2 rounded-lg ${micEnabled ? 'bg-green-600' : 'bg-red-600'}`}
+              disabled={!isConnected}
+              className={`p-2 rounded-lg ${micEnabled ? 'bg-green-600' : 'bg-red-600'} ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {micEnabled ? <Mic /> : <MicOff />}
             </button>
