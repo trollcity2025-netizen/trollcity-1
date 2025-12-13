@@ -43,7 +43,7 @@ export default function CoinStore() {
       return;
     }
 
-    loadWalletData();
+    // Removed loadWalletData call since only PayPal is used
   }, [user, profile, navigate]);
 
   const loadWalletData = async () => {
