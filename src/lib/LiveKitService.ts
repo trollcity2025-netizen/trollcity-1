@@ -37,6 +37,8 @@ export interface LiveKitServiceConfig {
 }
 
 export class LiveKitService {
+  private static instance: LiveKitService | null = null
+
   private room: Room | null = null
   private config: LiveKitServiceConfig
   private participants: Map<string, LiveKitParticipant> = new Map()
@@ -44,18 +46,23 @@ export class LiveKitService {
   private localAudioTrack: LocalAudioTrack | null = null
   private isConnecting = false
 
-  constructor(config: LiveKitServiceConfig) {
-    this.config = {
-      autoPublish: false,
-      ...config,
-    }
-
-    this.log('LiveKitService initialized', {
+  private constructor(config: LiveKitServiceConfig) {
+    this.config = config
+    this.log('LiveKitService singleton initialized', {
       roomName: config.roomName,
       identity: config.identity,
       userId: config.user?.id,
     })
   }
+
+  static getInstance(config: LiveKitServiceConfig): LiveKitService {
+    if (!LiveKitService.instance) {
+      LiveKitService.instance = new LiveKitService(config)
+    }
+    return LiveKitService.instance
+  }
+
+  // Constructor replaced with singleton pattern
 
   /* =========================
      PUBLISH GUARDS
@@ -78,8 +85,9 @@ export class LiveKitService {
   ========================= */
 
   async connect(): Promise<boolean> {
-    if (this.isConnecting || this.room?.state === 'connected') {
-      this.log('Already connecting or connected')
+    // Hard guard: prevent multiple connections
+    if (this.room || this.isConnecting) {
+      this.log('Already connected or connecting')
       return true
     }
 
@@ -639,5 +647,5 @@ private hydrateExistingRemoteParticipants(): void {
 }
 
 export function createLiveKitService(config: LiveKitServiceConfig): LiveKitService {
-  return new LiveKitService(config)
+  return LiveKitService.getInstance(config)
 }
