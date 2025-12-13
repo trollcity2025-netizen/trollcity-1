@@ -15,7 +15,8 @@ export interface LiveKitParticipant {
 
 export interface LiveKitServiceConfig {
   roomName: string;
-  user: any;
+  identity: string;
+  user?: any;
   onConnected?: () => void;
   onDisconnected?: () => void;
   onParticipantJoined?: (participant: LiveKitParticipant) => void;
@@ -24,7 +25,6 @@ export interface LiveKitServiceConfig {
   onTrackUnsubscribed?: (track: any, participant: LiveKitParticipant) => void;
   onError?: (error: string) => void;
   autoPublish?: boolean; // Whether to immediately publish camera/mic
-  maxReconnectAttempts?: number;
 }
 
 export class LiveKitService {
@@ -33,13 +33,10 @@ export class LiveKitService {
   private participants: Map<string, LiveKitParticipant> = new Map();
   private localVideoTrack: LocalVideoTrack | null = null;
   private localAudioTrack: LocalAudioTrack | null = null;
-  private reconnectAttempts = 0;
   private isConnecting = false;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
 
   constructor(config: LiveKitServiceConfig) {
     this.config = {
-      maxReconnectAttempts: 5,
       autoPublish: false,
       ...config
     };
@@ -87,11 +84,6 @@ export class LiveKitService {
       this.log('❌ Connection failed:', error.message);
       this.config.onError?.(error.message || 'Failed to connect to stream');
       this.isConnecting = false;
-
-      // Attempt auto-reconnect
-      if (this.reconnectAttempts < (this.config.maxReconnectAttempts || 5)) {
-        this.scheduleReconnect();
-      }
 
       return false;
     }
@@ -241,18 +233,12 @@ export class LiveKitService {
     this.room.on(RoomEvent.Connected, () => {
       this.log('📡 Room connected');
       this.isConnecting = false;
-      this.reconnectAttempts = 0;
     });
 
     this.room.on(RoomEvent.Disconnected, () => {
       this.log('📡 Room disconnected');
       this.cleanup();
       this.config.onDisconnected?.();
-
-      // Attempt auto-reconnect
-      if (this.reconnectAttempts < (this.config.maxReconnectAttempts || 5)) {
-        this.scheduleReconnect();
-      }
     });
 
     this.room.on(RoomEvent.ParticipantConnected, (participant) => {
@@ -305,20 +291,6 @@ export class LiveKitService {
       this.log('📊 Connection quality changed:', quality, participant?.identity);
     });
 
-    // Reconnection handling
-    this.room.on(RoomEvent.Reconnecting, () => {
-      this.log('🔄 Reconnecting to room...');
-    });
-
-    this.room.on(RoomEvent.Reconnected, () => {
-      this.log('✅ Reconnected to room');
-      // Re-publish tracks if needed
-      if (this.config.autoPublish && (!this.localVideoTrack || !this.localAudioTrack)) {
-        this.immediateMediaCaptureAndPublish().catch(error => {
-          this.log('❌ Failed to re-publish tracks after reconnect:', error.message);
-        });
-      }
-    });
   }
 
   // Get LiveKit token from API
@@ -343,23 +315,6 @@ export class LiveKitService {
     }
   }
 
-  // Schedule auto-reconnect
-  private scheduleReconnect(): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-    }
-
-    this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff, max 30s
-
-    this.log(`⏰ Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
-
-    this.reconnectTimeout = setTimeout(() => {
-      this.connect().catch(error => {
-        this.log('❌ Reconnect failed:', error.message);
-      });
-    }, delay);
-  }
 
   // Public control methods
   async toggleCamera(): Promise<boolean> {
@@ -463,11 +418,6 @@ export class LiveKitService {
   disconnect(): void {
     this.log('🔌 Disconnecting from LiveKit room...');
 
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-
     if (this.room) {
       try {
         this.room.disconnect();
@@ -506,28 +456,6 @@ export class LiveKitService {
     console.log(`🔴 LiveKit ${timestamp} ${roomInfo} ${message}`, ...args);
   }
 
-  // Update configuration and reconnect if needed
-  updateConfig(newConfig: Partial<LiveKitServiceConfig>): void {
-    const oldRoomName = this.config.roomName;
-    const oldUserId = this.config.user?.id;
-
-    // Update config
-    this.config = { ...this.config, ...newConfig };
-
-    const newRoomName = this.config.roomName;
-    const newUserId = this.config.user?.id;
-
-    // If room or user changed, disconnect and reconnect
-    if (newRoomName !== oldRoomName || newUserId !== oldUserId) {
-      this.log('Config changed, reconnecting...', { oldRoom: oldRoomName, newRoom: newRoomName, oldUser: oldUserId, newUser: newUserId });
-      this.disconnect();
-      this.connect().catch(error => {
-        this.log('Failed to reconnect after config update:', error.message);
-      });
-    } else {
-      this.log('Config updated but no reconnection needed');
-    }
-  }
 
   // Cleanup on destroy
   destroy(): void {

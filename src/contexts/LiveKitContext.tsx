@@ -31,7 +31,7 @@ interface LiveKitContextValue {
   getRoom: () => any | null
 }
 
-// Context holds the singleton LiveKitService plus state helpers
+// Context holds the LiveKitService plus state helpers
 const LiveKitContext = createContext<LiveKitContextValue | null>(null)
 
 export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => {
@@ -44,15 +44,6 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
   const [localParticipant, setLocalParticipant] = useState<LiveKitParticipant | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (!serviceRef.current) {
-    // Initialize once with minimal config; callers will set room/user before connect
-    serviceRef.current = new LiveKitService({
-      roomName: '',
-      user: null,
-    })
-    console.log('LiveKitService initialized (singleton)')
-  }
-
   const syncLocalParticipant = useCallback(() => {
     if (!serviceRef.current) return
     setLocalParticipant(serviceRef.current.getLocalParticipant())
@@ -64,20 +55,17 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
       user: any,
       options: Partial<LiveKitServiceConfig> = {}
     ) => {
-      if (!serviceRef.current) return false
       if (!roomName || !user) {
         setError('Missing room or user for LiveKit connect')
         return false
       }
 
-      setError(null)
-      setIsConnecting(true)
-
-      serviceRef.current.updateConfig({
+      // Create new service instance for each connect to ensure immutability
+      serviceRef.current = new LiveKitService({
         roomName,
+        identity: user.id || user.identity,
         user,
         autoPublish: options.autoPublish !== false,
-        maxReconnectAttempts: options.maxReconnectAttempts ?? 5,
         onConnected: () => {
           setIsConnected(true)
           setIsConnecting(false)
@@ -140,12 +128,24 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
           options.onTrackUnsubscribed?.(track, participant)
         },
         onError: (errorMsg) => {
+          // Filter non-errors
+          if (
+            errorMsg.includes('Client initiated disconnect') ||
+            errorMsg.includes('Abort connection attempt') ||
+            errorMsg.includes('websocket closed')
+          ) {
+            console.log('LiveKit non-error:', errorMsg)
+            return
+          }
           console.error('LiveKit error:', errorMsg)
           setError(errorMsg)
           setIsConnecting(false)
           options.onError?.(errorMsg)
         },
       })
+
+      setError(null)
+      setIsConnecting(true)
 
       try {
         const ok = await serviceRef.current.connect()

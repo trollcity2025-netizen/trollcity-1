@@ -44,7 +44,6 @@ export function useLiveKitSession(options: SessionOptions) {
       try {
         const connected = await connect(options.roomName, options.user, {
           autoPublish: options.autoPublish !== false,
-          maxReconnectAttempts: 5,
         })
         if (!connected) throw new Error('LiveKit connection failed')
 
