@@ -365,8 +365,19 @@ export default function CoinStore() {
                             });
                             const data = await res.json();
                             console.log("Create Order Response", data);
-                            if (!data?.id) throw new Error("PayPal did not return an order ID");
-                            console.log("Order ID returned from create-order:", data.id);
+
+                            if (!data?.id) {
+                              console.error("FATAL: create-order did not return a valid PayPal order ID");
+                              throw new Error("PayPal did not return a valid order ID. Cannot proceed with payment.");
+                            }
+
+                            // Validate PayPal order ID format
+                            if (typeof data.id !== 'string' || data.id.length < 10 || data.id.length > 25) {
+                              console.error("FATAL: Invalid PayPal order ID format:", data.id);
+                              throw new Error("Invalid PayPal order ID received. Cannot proceed with payment.");
+                            }
+
+                            console.log("✅ Valid PayPal Order ID returned from create-order:", data.id);
                             return data.id;
                           } catch (err) {
                             console.error("createOrder error", err);
