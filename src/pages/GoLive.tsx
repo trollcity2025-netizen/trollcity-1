@@ -1,154 +1,96 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { Video, Mic, MicOff, Settings } from 'lucide-react';
 import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid';
-import { useLiveKitSession } from '../hooks/useLiveKitSession';
 import { toast } from 'sonner';
 
-// Generate room name ONCE at module load
-const STREAM_ROOM_ID = crypto.randomUUID();
-const STREAM_ROOM_NAME = `stream-${STREAM_ROOM_ID}`;
+const isTransientLiveKitMsg = (msg?: string) => {
+  const m = (msg || '').toLowerCase();
+  return (
+    m.includes('client initiated disconnect') ||
+    m.includes('websocket closed') ||
+    m.includes('abort connection') ||
+    m.includes('connection was interrupted') ||
+    m.includes('code: 1006')
+  );
+};
 
 const GoLive: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
 
-  // ---- IDs (DO NOT CHANGE DURING SESSION)
-  const streamUuid = STREAM_ROOM_ID;
-  const roomName = STREAM_ROOM_NAME;
+  // 🔒 Stable IDs for the entire component lifetime (StrictMode-safe)
+  const streamUuidRef = useRef<string>(crypto.randomUUID()); // DB UUID
+  const roomNameRef = useRef<string>(`stream-${streamUuidRef.current}`); // LiveKit room
 
-  // Freeze LiveKit config inputs to prevent re-renders
-  const livekitUser = useMemo(() => {
-    if (!user) return null;
-    return {
-      identity: user.id,
-      name: profile?.username || user.email,
-      role: 'broadcaster',
-    };
-  }, [user?.id, profile?.username]);
+  const streamUuid = streamUuidRef.current;
+  const roomName = roomNameRef.current;
 
-  // ---- LiveKit session (event-driven) - only when user is available
-  const liveKitSession = user ? useLiveKitSession({
-    roomName,
-    user: livekitUser,
-    autoPublish: true,
-    maxParticipants: 6,
-  }) : {
-    joinAndPublish: () => Promise.resolve(false),
-    resetJoinGuard: () => {},
-    isConnected: false,
-    isConnecting: false,
-    toggleCamera: () => {},
-    toggleMicrophone: () => {},
-    localParticipant: null,
-    error: null,
-  };
-
-  const {
-    joinAndPublish,
-    resetJoinGuard,
-    isConnected,
-    isConnecting,
-    toggleCamera,
-    toggleMicrophone,
-    localParticipant,
-    error: livekitError,
-  } = liveKitSession;
-
-  // ---- UI / Flow State
+  // UI state
   const [streamTitle, setStreamTitle] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
+  const [isLiveRequested, setIsLiveRequested] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  // basic UI toggles (visual only unless you wire to wrapper controls)
+  const [uiMicEnabled, setUiMicEnabled] = useState(true);
+  const [uiCamEnabled, setUiCamEnabled] = useState(true);
+
+  // connection UX
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [hasAttempted, setHasAttempted] = useState(false);
 
-  // ---- One-time guards
+  // Guards
   const hasCreatedStreamRef = useRef(false);
+  const navigateOnceRef = useRef(false);
 
-  // ---- Reset join guard ONCE on mount (StrictMode-safe)
+  // Default title
   useEffect(() => {
-    resetJoinGuard();
-  }, [resetJoinGuard]);
-
-  // ---- Surface REAL LiveKit errors only
-  useEffect(() => {
-    if (livekitError) {
-      const msg = livekitError;
-      // Filter transient LiveKit events BEFORE setting state
-      if (
-        msg.includes('Client initiated disconnect') ||
-        msg.includes('websocket closed') ||
-        msg.includes('Abort connection')
-      ) {
-        // transient LiveKit event — NOT an error
-        return;
-      }
-      setConnectionError(msg);
-    }
-  }, [livekitError]);
-
-  // ---- Default title (safe + idempotent)
-  useEffect(() => {
-    setStreamTitle(prev =>
-      prev.trim()
-        ? prev
-        : `Live with ${profile?.username || 'broadcaster'}`
+    setStreamTitle((prev) =>
+      prev.trim() ? prev : `Live with ${profile?.username || 'broadcaster'}`
     );
   }, [profile?.username]);
 
-  // ---- Start stream (NO throwing on async states)
-  const handleStartStream = async () => {
+  const handleStartStream = () => {
     if (!user?.id || !profile?.id) {
       toast.error('Not ready to stream');
       return;
     }
-
     if (!streamTitle.trim()) {
       toast.error('Enter a stream title');
       return;
     }
 
     setHasAttempted(true);
-    setIsPublishing(true);
     setConnectionError(null);
-
-    try {
-      await joinAndPublish(); // event-driven, do NOT interpret return value
-    } catch (err: any) {
-      console.error('GoLive: joinAndPublish error:', err);
-      const msg = err?.message || '';
-      // Filter transient LiveKit events BEFORE setting state
-      if (
-        msg.includes('Client initiated disconnect') ||
-        msg.includes('websocket closed') ||
-        msg.includes('Abort connection')
-      ) {
-        // transient LiveKit event — NOT an error
-        return;
-      }
-      setConnectionError(msg || '🔄 Reconnecting to stream…');
-      resetJoinGuard();
-    } finally {
-      setIsPublishing(false);
-    }
+    setIsLiveRequested(true);
   };
 
-  const handleReconnect = () => {
-    if (!user || !profile) return;
+  const handleBackToTitle = () => {
+    setConnectionError(null);
+    setIsLiveRequested(false);
+    setHasAttempted(false);
+    // Allow DB retry if they come back in
+    hasCreatedStreamRef.current = false;
+    navigateOnceRef.current = false;
+  };
+
+  const handleRetry = () => {
     setConnectionError(null);
     setHasAttempted(true);
-    resetJoinGuard();
-    handleStartStream();
+    setIsLiveRequested(true);
   };
 
-  // ---- Create DB stream record ONCE after connection succeeds
+  // Create DB stream once after going live is requested.
+  // We do NOT wait on LiveKit events here (Wrapper owns that) — we just create the stream record.
   useEffect(() => {
-    if (!isConnected || !profile?.id) return;
+    if (!isLiveRequested) return;
+    if (!profile?.id) return;
     if (hasCreatedStreamRef.current) return;
 
     hasCreatedStreamRef.current = true;
+    setIsCreating(true);
 
     (async () => {
       const { error } = await supabase.from('streams').insert({
@@ -168,129 +110,159 @@ const GoLive: React.FC = () => {
       if (error) {
         console.error('GoLive: stream insert failed', error);
         hasCreatedStreamRef.current = false;
+        setConnectionError('Failed to create stream record');
         toast.error('Failed to create stream');
         return;
       }
 
-      setIsStreaming(true);
+      // Navigate once to the stream page (viewer/broadcaster room)
+      if (!navigateOnceRef.current) {
+        navigateOnceRef.current = true;
+        setTimeout(() => {
+          navigate(`/stream/${streamUuid}`, { replace: true });
+        }, 300);
+      }
+    })().finally(() => setIsCreating(false));
+  }, [isLiveRequested, profile?.id, streamTitle, roomName, streamUuid, navigate]);
 
-      setTimeout(() => {
-        navigate(`/stream/${streamUuid}`, { replace: true });
-      }, 300);
-    })();
-  }, [isConnected, profile?.id, streamTitle, roomName, streamUuid, navigate]);
+  // Decide what to render
+  const showTitleScreen = !isLiveRequested;
 
-  // ---- Render state resolution
-  const isFatalConnectionError =
-    connectionError &&
-    hasAttempted &&
-    !isConnecting &&
-    !isConnected;
+  // "Fatal" error screen should only show if it's not transient AND user tried
+  const showErrorScreen =
+    !!connectionError && hasAttempted && !isTransientLiveKitMsg(connectionError);
 
-  const showConnecting =
-    isConnecting && !isConnected;
-
-  const showTitleScreen =
-    !isConnected && !showConnecting && !isFatalConnectionError && !isStreaming;
-
-  const showLive =
-    isConnected || isStreaming;
+  // -------------------- UI --------------------
 
   let content: React.ReactNode;
 
-  if (showConnecting) {
+  if (showTitleScreen) {
     content = (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4" />
-          <p className="text-lg">Connecting you to LiveKit…</p>
-        </div>
-      </div>
-    );
-  } else if (isFatalConnectionError) {
-    content = (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Video className="w-14 h-14 text-red-400 mx-auto" />
-          <p className="text-red-400">{connectionError}</p>
-          <button
-            onClick={handleReconnect}
-            className="px-4 py-2 bg-purple-600 rounded-lg"
-          >
-            Retry Go Live
-          </button>
-        </div>
-      </div>
-    );
-  } else if (showTitleScreen) {
-    content = (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center p-6">
         <div className="max-w-md w-full space-y-6">
-          <h1 className="text-3xl font-bold text-center">Ready to Go Live</h1>
+          <div className="text-center">
+            <Video className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+            <h1 className="text-3xl font-bold">Ready to Go Live</h1>
+            <p className="text-gray-400 mt-2">Enter a title, then start streaming</p>
+          </div>
+
           <input
             value={streamTitle}
-            onChange={e => setStreamTitle(e.target.value)}
+            onChange={(e) => setStreamTitle(e.target.value)}
             className="w-full bg-[#1C1C24] border border-purple-500/40 rounded px-4 py-3"
+            placeholder="Stream title"
+            autoFocus
           />
+
           <button
             onClick={handleStartStream}
-            disabled={isPublishing}
-            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded"
+            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded text-white font-semibold"
           >
-            {isPublishing ? 'Publishing…' : 'Start Streaming'}
+            Start Streaming
           </button>
+        </div>
+      </div>
+    );
+  } else if (showErrorScreen) {
+    content = (
+      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <Video className="w-14 h-14 text-red-400 mx-auto" />
+          <h2 className="text-2xl font-bold">Connection issue</h2>
+          <p className="text-gray-300 text-sm">{connectionError}</p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={handleRetry}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
+            >
+              Retry
+            </button>
+            <button
+              onClick={handleBackToTitle}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold"
+            >
+              Back
+            </button>
+          </div>
         </div>
       </div>
     );
   } else {
+    // Live view
     content = (
-      <div className="min-h-screen bg-[#0A0814] text-white p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">LIVE: {streamTitle}</h1>
-            <div className="flex gap-3">
-              <button onClick={toggleCamera}>
-                <Video />
+      <div className="min-h-screen bg-[#0A0814] text-white">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+              <h1 className="text-2xl font-bold">LIVE: {streamTitle}</h1>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* These are UI toggles.
+                  If your LiveKitRoomWrapper exposes real toggles, wire them here. */}
+              <button
+                onClick={() => setUiCamEnabled((v) => !v)}
+                className={`p-2 rounded-lg ${
+                  uiCamEnabled ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                } transition-colors`}
+                title={uiCamEnabled ? 'Turn off camera' : 'Turn on camera'}
+              >
+                <Video className="w-5 h-5" />
               </button>
-              <button onClick={toggleMicrophone}>
-                {localParticipant?.isMicrophoneEnabled ? <Mic /> : <MicOff />}
+
+              <button
+                onClick={() => setUiMicEnabled((v) => !v)}
+                className={`p-2 rounded-lg ${
+                  uiMicEnabled ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                } transition-colors`}
+                title={uiMicEnabled ? 'Turn off mic' : 'Turn on mic'}
+              >
+                {uiMicEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </button>
-              <Settings />
+
+              <button
+                className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
             </div>
           </div>
-          <div className="w-full h-[70vh] bg-black rounded-lg" />
+
+          <div className="w-full h-[70vh] bg-black rounded-lg overflow-hidden">
+            {/* ✅ SINGLE CONNECTION OWNER (no useLiveKitSession here) */}
+            <LiveKitRoomWrapper
+              roomName={roomName}
+              user={user}
+              role="broadcaster"
+              showLocalVideo
+              maxParticipants={6}
+              autoConnect={true}
+              autoPublish={true}
+              className="w-full h-full"
+              // If your wrapper supports these props, uncomment:
+              // initialMicEnabled={uiMicEnabled}
+              // initialCamEnabled={uiCamEnabled}
+            />
+          </div>
+
+          <div className="mt-4 text-sm text-gray-400 flex items-center justify-between">
+            <span>Room: {roomName}</span>
+            <span>Stream ID: {streamUuid}</span>
+          </div>
+
+          {isCreating && (
+            <div className="mt-4 text-sm text-gray-400">
+              Finalizing stream…
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="relative min-h-screen bg-[#0A0814]">
-      {content}
-
-      {/* STABLE LIVEKIT CONTAINER — NEVER UNMOUNT */}
-      <div
-        className={`absolute inset-0 ${
-          showLive ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } transition-opacity`}
-      >
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="w-full h-[70vh] bg-black rounded-lg overflow-hidden">
-            <LiveKitRoomWrapper
-              roomName={roomName}
-              user={user}
-              className="w-full h-full"
-              showLocalVideo
-              maxParticipants={6}
-              autoPublish={false}
-              autoConnect={false}
-              role="broadcaster"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="min-h-screen bg-[#0A0814]">{content}</div>;
 };
 
 export default GoLive;
