@@ -165,6 +165,13 @@ export default function StreamRoom() {
     };
   }, [isConnected, stream?.id]);
 
+  // Navigate viewers to home when stream ends
+  useEffect(() => {
+    if (!isConnected && !isHost && stream) {
+      navigate('/', { replace: true });
+    }
+  }, [isConnected, isHost, stream, navigate]);
+
   // Handle stream end
   const handleEndStream = async () => {
     if (!stream?.id) return;
@@ -172,7 +179,7 @@ export default function StreamRoom() {
     const success = await endStream(stream.id, room);
     if (success) {
       disconnect(); // Disconnect from LiveKit room
-      navigate('/live', { replace: true });
+      navigate(`/stream-summary/${stream.id}`, { replace: true });
     }
   };
 
