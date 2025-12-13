@@ -50,6 +50,14 @@ const GoLive: React.FC = () => {
   // ---- Surface REAL LiveKit errors only
   useEffect(() => {
     if (livekitError) {
+      // Ignore transient disconnect errors
+      if (
+        livekitError.includes('Client initiated disconnect') ||
+        livekitError.includes('websocket closed')
+      ) {
+        // transient — ignore
+        return;
+      }
       setConnectionError(livekitError);
     }
   }, [livekitError]);
@@ -83,7 +91,15 @@ const GoLive: React.FC = () => {
       await joinAndPublish(); // event-driven, do NOT interpret return value
     } catch (err: any) {
       console.error('GoLive: joinAndPublish error:', err);
-      setConnectionError(err?.message || 'Failed to connect');
+      // Ignore transient disconnect errors
+      if (
+        err?.message?.includes('Client initiated disconnect') ||
+        err?.message?.includes('websocket closed')
+      ) {
+        // transient — ignore
+        return;
+      }
+      setConnectionError(err?.message || '🔄 Reconnecting to stream…');
       resetJoinGuard();
     } finally {
       setIsPublishing(false);
@@ -136,14 +152,17 @@ const GoLive: React.FC = () => {
   }, [isConnected, profile?.id, streamTitle, roomName, streamUuid, navigate]);
 
   // ---- Render state resolution
-  const showError =
-    !!connectionError && hasAttempted && !isConnected && !isConnecting;
+  const isFatalConnectionError =
+    connectionError &&
+    hasAttempted &&
+    !isConnecting &&
+    !isConnected;
 
   const showConnecting =
     isConnecting && !isConnected;
 
   const showTitleScreen =
-    !isConnected && !showConnecting && !showError && !isStreaming;
+    !isConnected && !showConnecting && !isFatalConnectionError && !isStreaming;
 
   const showLive =
     isConnected || isStreaming;
@@ -159,7 +178,7 @@ const GoLive: React.FC = () => {
         </div>
       </div>
     );
-  } else if (showError) {
+  } else if (isFatalConnectionError) {
     content = (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
         <div className="text-center space-y-4">
