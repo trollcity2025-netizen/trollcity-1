@@ -6,10 +6,10 @@ import { serve } from "https://deno.land/std@0.214.0/http/server.ts"
 import { AccessToken, TrackSource } from "https://esm.sh/livekit-server-sdk@2.0.1"
 
 const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "https://www.maitrollcity.com",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
 type JsonRecord = Record<string, unknown>
