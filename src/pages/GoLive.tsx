@@ -29,7 +29,23 @@ const GoLive: React.FC = () => {
     };
   }, [user?.id, profile?.username]);
 
-  // ---- LiveKit session (event-driven)
+  // ---- LiveKit session (event-driven) - only when user is available
+  const liveKitSession = user ? useLiveKitSession({
+    roomName,
+    user: livekitUser,
+    autoPublish: true,
+    maxParticipants: 6,
+  }) : {
+    joinAndPublish: () => Promise.resolve(false),
+    resetJoinGuard: () => {},
+    isConnected: false,
+    isConnecting: false,
+    toggleCamera: () => {},
+    toggleMicrophone: () => {},
+    localParticipant: null,
+    error: null,
+  };
+
   const {
     joinAndPublish,
     resetJoinGuard,
@@ -39,12 +55,7 @@ const GoLive: React.FC = () => {
     toggleMicrophone,
     localParticipant,
     error: livekitError,
-  } = useLiveKitSession({
-    roomName,
-    user: livekitUser,
-    autoPublish: true,
-    maxParticipants: 6,
-  });
+  } = liveKitSession;
 
   // ---- UI / Flow State
   const [streamTitle, setStreamTitle] = useState('');
