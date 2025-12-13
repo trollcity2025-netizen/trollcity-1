@@ -110,21 +110,23 @@ async function request<T = any>(
 
     // Don't require auth for signup endpoint (user doesn't exist yet)
     const isSignupEndpoint = endpoint.includes('/auth/signup');
-    
+    const isLiveKitToken = endpoint.includes('/livekit-token');
+
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     // Always include anon key for Supabase Edge Functions
     if (supabaseAnonKey) {
       requestHeaders['apikey'] = supabaseAnonKey;
     }
-    
+
     // For signup endpoint, use anon key as auth token since user doesn't exist yet
+    // For LiveKit token, don't send auth (public endpoint)
     // For other endpoints, add user auth token if available
     if (isSignupEndpoint) {
       requestHeaders['Authorization'] = `Bearer ${supabaseAnonKey}`;
-    } else if (token) {
+    } else if (!isLiveKitToken && token) {
       requestHeaders['Authorization'] = `Bearer ${token}`;
     }
     
