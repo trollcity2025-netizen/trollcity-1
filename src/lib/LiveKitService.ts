@@ -37,8 +37,6 @@ export interface LiveKitServiceConfig {
 }
 
 export class LiveKitService {
-  private static instance: LiveKitService | null = null
-
   private room: Room | null = null
   private config: LiveKitServiceConfig
   private participants: Map<string, LiveKitParticipant> = new Map()
@@ -46,20 +44,13 @@ export class LiveKitService {
   private localAudioTrack: LocalAudioTrack | null = null
   private isConnecting = false
 
-  private constructor(config: LiveKitServiceConfig) {
+  constructor(config: LiveKitServiceConfig) {
     this.config = config
-    this.log('LiveKitService singleton initialized', {
+    this.log('LiveKitService initialized', {
       roomName: config.roomName,
       identity: config.identity,
       userId: config.user?.id,
     })
-  }
-
-  static getInstance(config: LiveKitServiceConfig): LiveKitService {
-    if (!LiveKitService.instance) {
-      LiveKitService.instance = new LiveKitService(config)
-    }
-    return LiveKitService.instance
   }
 
   // Constructor replaced with singleton pattern
@@ -647,5 +638,5 @@ private hydrateExistingRemoteParticipants(): void {
 }
 
 export function createLiveKitService(config: LiveKitServiceConfig): LiveKitService {
-  return LiveKitService.getInstance(config)
+  return new LiveKitService(config)
 }

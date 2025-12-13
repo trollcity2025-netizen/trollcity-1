@@ -62,9 +62,8 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
 
       // Hard guard: block ONLY if user id is missing
       if (!user?.id) {
-        console.warn('LiveKit connect blocked: user id not ready')
-        setError('User not authenticated for LiveKit')
-        return false
+        console.log('⏳ LiveKit waiting for user id')
+        return false // do NOT set error
       }
 
       // Create new service instance for each connect to ensure immutability
