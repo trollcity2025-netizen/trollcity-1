@@ -6,14 +6,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Determine environment - SAME as frontend paypalUtils.ts
+    // Use ONLY PAYPAL_ENV to select environment - no auto-detection
     const clientId = process.env.PAYPAL_CLIENT_ID;
-    const paypalEnv = process.env.PAYPAL_ENV || 'live'; // Default to live
-    const isLive = paypalEnv === 'live' ||
-      (!clientId.includes('sandbox') && !clientId.includes('test'));
-    const isSandbox = !isLive;
+    const isSandbox = process.env.PAYPAL_ENV === 'sandbox';
 
-    console.log('PayPal Environment:', isSandbox ? 'SANDBOX' : 'LIVE', `(clientId: ${clientId?.substring(0, 8)}...)`);
+    console.log('PayPal Environment:', isSandbox ? 'SANDBOX' : 'LIVE', `(PAYPAL_ENV: ${process.env.PAYPAL_ENV})`);
 
     const client = new paypal.core.PayPalHttpClient(
       isSandbox
