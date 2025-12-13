@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
@@ -7,13 +7,27 @@ import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid';
 import { useLiveKitSession } from '../hooks/useLiveKitSession';
 import { toast } from 'sonner';
 
+// Generate room name ONCE at module load
+const STREAM_ROOM_ID = crypto.randomUUID();
+const STREAM_ROOM_NAME = `stream-${STREAM_ROOM_ID}`;
+
 const GoLive: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
 
   // ---- IDs (DO NOT CHANGE DURING SESSION)
-  const streamUuid = useRef<string>(crypto.randomUUID()).current; // DB UUID
-  const roomName = useRef<string>(`stream-${streamUuid}`).current; // LiveKit room
+  const streamUuid = STREAM_ROOM_ID;
+  const roomName = STREAM_ROOM_NAME;
+
+  // Freeze LiveKit config inputs to prevent re-renders
+  const livekitUser = useMemo(() => {
+    if (!user) return null;
+    return {
+      identity: user.id,
+      name: profile?.username || user.email,
+      role: 'broadcaster',
+    };
+  }, [user?.id, profile?.username]);
 
   // ---- LiveKit session (event-driven)
   const {
@@ -27,7 +41,7 @@ const GoLive: React.FC = () => {
     error: livekitError,
   } = useLiveKitSession({
     roomName,
-    user: user ? { id: user.id, email: user.email } : null,
+    user: livekitUser,
     autoPublish: true,
     maxParticipants: 6,
   });
