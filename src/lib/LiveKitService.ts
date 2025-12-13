@@ -400,10 +400,14 @@ private hydrateExistingRemoteParticipants(): void {
   ========================= */
 
   private async getToken(): Promise<any> {
+    if (!this.config.identity) {
+      throw new Error('Identity is required for LiveKit token')
+    }
+
     try {
       const response = await api.post('/livekit-token', {
         room: this.config.roomName,
-        identity: this.config.identity, // ✅ FIXED
+        identity: this.config.identity,
         user_id: this.config.user?.id,
         role:
           this.config.role ||
