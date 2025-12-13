@@ -116,10 +116,6 @@ export const updateSetting = async (key: string, value: any): Promise<void> => {
           throw err
         }
       }
-    } else if (updateError) {
-      const err = new Error(`Failed to update setting "${key}": ${updateError.message}`)
-      useAppSettingsStore.getState().setError(err)
-      throw err
     }
 
     // Note: The store will be updated automatically via realtime subscription
