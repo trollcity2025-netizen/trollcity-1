@@ -14,7 +14,6 @@ export interface LiveKitParticipant {
   name?: string
   isLocal: boolean
   // IMPORTANT: your UI expects participant.videoTrack.track
-  // so we store tracks as { track } consistently for local + remote.
   videoTrack?: { track: any } // LocalVideoTrack | RemoteVideoTrack
   audioTrack?: { track: any } // LocalAudioTrack | RemoteAudioTrack
   isCameraEnabled: boolean
@@ -58,7 +57,26 @@ export class LiveKitService {
     })
   }
 
-  // Main connection method
+  /* =========================
+     PUBLISH GUARDS
+  ========================= */
+
+  private isPublishing(): boolean {
+    if (!this.room?.localParticipant) return false
+    return (
+      this.room.localParticipant.videoTrackPublications.size > 0 ||
+      this.room.localParticipant.audioTrackPublications.size > 0
+    )
+  }
+
+  private hasLocalTracks(): boolean {
+    return !!this.localVideoTrack || !!this.localAudioTrack
+  }
+
+  /* =========================
+     Main connection method
+  ========================= */
+
   async connect(): Promise<boolean> {
     if (this.isConnecting || this.room?.state === 'connected') {
       this.log('Already connecting or connected')
@@ -77,7 +95,6 @@ export class LiveKitService {
 
       // Step 2: Create room with configuration
       // NOTE: Do NOT spread this.config into Room() because it contains non-Room keys (callbacks/user/etc).
-      // Keep your original intent but avoid invalid options.
       this.room = new Room({
         ...defaultLiveKitOptions,
       })
@@ -91,6 +108,9 @@ export class LiveKitService {
 
       // Ensure local participant exists in map as soon as we connect
       this.updateLocalParticipantState()
+
+      // ✅ Hydrate participants already in the room (important when you join late)
+      this.hydrateExistingRemoteParticipants()
 
       // If autoPublish requested, publish immediately
       if (this.config.autoPublish) {
@@ -114,27 +134,55 @@ export class LiveKitService {
     }
   }
 
-  // IMMEDIATE media capture and publishing - no previews, no delays
-  // (kept exactly as your original design; not required if using startPublishing only)
+private hydrateExistingRemoteParticipants(): void {
+  if (!this.room) return
+
+  // remoteParticipants is a Map<string, RemoteParticipant> in the livekit-client types
+  this.room.remoteParticipants.forEach((participant: any) => {
+    if (this.participants.has(participant.identity)) return
+
+    const liveKitParticipant: LiveKitParticipant = {
+      identity: participant.identity,
+      name: participant.name || participant.identity,
+      isLocal: false,
+      isCameraEnabled: participant.isCameraEnabled,
+      isMicrophoneEnabled: participant.isMicrophoneEnabled,
+      isMuted: !participant.isMicrophoneEnabled,
+    }
+
+    this.participants.set(participant.identity, liveKitParticipant)
+    this.config.onParticipantJoined?.(liveKitParticipant)
+  })
+}
+
+  /* =========================
+     IMMEDIATE media capture and publishing
+     (kept as your original design)
+  ========================= */
+
   private async immediateMediaCaptureAndPublish(): Promise<void> {
     if (!this.room || this.room.state !== 'connected') {
       throw new Error('Room not connected')
     }
 
+    // ✅ Hard guard: never publish twice
+    if (this.isPublishing()) {
+      this.log('⛔ Already publishing - immediate capture skipped')
+      return
+    }
+
     this.log('🎥 Starting immediate media capture and publishing...')
 
     try {
-      // Capture camera and microphone simultaneously
       const [videoTrack, audioTrack] = await Promise.all([
         this.captureVideoTrack(),
         this.captureAudioTrack(),
       ])
 
-      // Store references to prevent garbage collection
+      // Store references to prevent GC
       this.localVideoTrack = videoTrack
       this.localAudioTrack = audioTrack
 
-      // Publish tracks immediately
       if (videoTrack) {
         await this.publishVideoTrack(videoTrack)
       }
@@ -143,7 +191,6 @@ export class LiveKitService {
         await this.publishAudioTrack(audioTrack)
       }
 
-      // Update local participant state
       this.updateLocalParticipantState()
 
       this.log('✅ Media capture and publishing complete')
@@ -151,7 +198,6 @@ export class LiveKitService {
       this.log('❌ Media capture/publishing failed:', error.message)
       this.config.onError?.(`Media access failed: ${error.message}`)
 
-      // Clean up any tracks that were created
       if (this.localVideoTrack) {
         this.localVideoTrack.stop()
         this.localVideoTrack = null
@@ -165,7 +211,10 @@ export class LiveKitService {
     }
   }
 
-  // Capture video track with immediate constraints
+  /* =========================
+     Capture tracks
+  ========================= */
+
   private async captureVideoTrack(): Promise<LocalVideoTrack | null> {
     try {
       this.log('📹 Capturing video track...')
@@ -182,7 +231,6 @@ export class LiveKitService {
     }
   }
 
-  // Capture audio track with immediate constraints
   private async captureAudioTrack(): Promise<LocalAudioTrack | null> {
     try {
       this.log('🎤 Capturing audio track...')
@@ -199,7 +247,10 @@ export class LiveKitService {
     }
   }
 
-  // Publish video track
+  /* =========================
+     Publish helpers
+  ========================= */
+
   private async publishVideoTrack(track: LocalVideoTrack): Promise<void> {
     if (!this.room?.localParticipant) {
       throw new Error('No local participant available')
@@ -216,7 +267,6 @@ export class LiveKitService {
     }
   }
 
-  // Publish audio track
   private async publishAudioTrack(track: LocalAudioTrack): Promise<void> {
     if (!this.room?.localParticipant) {
       throw new Error('No local participant available')
@@ -233,7 +283,10 @@ export class LiveKitService {
     }
   }
 
-  // ✅ FIXED: Store tracks consistently as { track } for UI compatibility
+  /* =========================
+     Local participant state sync
+  ========================= */
+
   private updateLocalParticipantState(): void {
     if (!this.room?.localParticipant) return
 
@@ -253,15 +306,18 @@ export class LiveKitService {
     this.participants.set(localParticipant.identity, localParticipant)
   }
 
-  // Set up all event listeners
+  /* =========================
+     Event listeners
+  ========================= */
+
   private setupEventListeners(): void {
     if (!this.room) return
 
     this.room.on(RoomEvent.Connected, () => {
       this.log('📡 Room connected')
       this.isConnecting = false
-      // ensure local participant is registered
       this.updateLocalParticipantState()
+      this.hydrateExistingRemoteParticipants()
     })
 
     this.room.on(RoomEvent.Disconnected, () => {
@@ -295,7 +351,7 @@ export class LiveKitService {
       }
     })
 
-    // ✅ FIXED: store remote tracks as { track } to match UI expectations
+    // ✅ store remote tracks as { track } to match UI expectations
     this.room.on(RoomEvent.TrackSubscribed, (track: any, publication: any, participant: any) => {
       this.log('📥 Track subscribed:', track.kind, participant.identity)
       const liveKitParticipant = this.participants.get(participant.identity)
@@ -313,7 +369,6 @@ export class LiveKitService {
       this.log('📤 Track unsubscribed:', track.kind, participant.identity)
       const liveKitParticipant = this.participants.get(participant.identity)
       if (liveKitParticipant) {
-        // Clear the corresponding reference if it matches
         if (track.kind === 'video' && liveKitParticipant.videoTrack?.track === track) {
           liveKitParticipant.videoTrack = undefined
         }
@@ -324,54 +379,84 @@ export class LiveKitService {
       }
     })
 
-    // Connection quality monitoring
+    // ✅ keep mute state accurate for UI
+    this.room.on(RoomEvent.TrackMuted, (_pub: any, participant: any) => {
+      const p = this.participants.get(participant.identity)
+      if (p) p.isMuted = true
+    })
+
+    this.room.on(RoomEvent.TrackUnmuted, (_pub: any, participant: any) => {
+      const p = this.participants.get(participant.identity)
+      if (p) p.isMuted = false
+    })
+
     this.room.on(RoomEvent.ConnectionQualityChanged, (quality: any, participant: any) => {
       this.log('📊 Connection quality changed:', quality, participant?.identity)
     })
   }
 
-  // ✅ FIXED: Identity must match config.identity (the identity used by the client)
+  /* =========================
+     Token (identity fixed)
+  ========================= */
+
   private async getToken(): Promise<any> {
     try {
       const response = await api.post('/livekit-token', {
         room: this.config.roomName,
         identity: this.config.identity, // ✅ FIXED
         user_id: this.config.user?.id,
-        role: this.config.role || this.config.user?.role || this.config.user?.troll_role || 'viewer',
+        role:
+          this.config.role ||
+          this.config.user?.role ||
+          this.config.user?.troll_role ||
+          'viewer',
         level: this.config.user?.level || 1,
       })
 
-      if (!response.token) {
+      console.log('LiveKit token raw response:', response)
+
+      const data = response?.data ?? response
+
+      if (!data?.token) {
+        console.error('LiveKit token API response data:', data)
         throw new Error('No token received from server')
       }
 
-      return response
+      return data
     } catch (error: any) {
       this.log('❌ Token fetch failed:', error.message)
       throw new Error(`Authentication failed: ${error.message}`)
     }
   }
 
-  // Public control methods
+  /* =========================
+     Public control methods
+  ========================= */
+
   async toggleCamera(): Promise<boolean> {
     if (!this.room?.localParticipant) return false
 
     try {
       const enabled = !this.room.localParticipant.isCameraEnabled
-      await this.room.localParticipant.setCameraEnabled(enabled)
 
-      // If disabling, clear the track reference since it's stopped
-      if (!enabled) {
-        this.localVideoTrack = null
+      // ✅ If not publishing yet and user turns on camera, publish once
+      if (enabled && !this.isPublishing()) {
+        // publish both camera+mic if you're going live; camera alone if that's your UI behavior
+        const video = await this.captureVideoTrack()
+        if (video) {
+          this.localVideoTrack = video
+          await this.publishVideoTrack(video)
+        }
       }
 
-      // If we toggled ON and we have no stored local track yet, try capture+publish
-      if (enabled && !this.localVideoTrack) {
-        const track = await this.captureVideoTrack()
-        if (track) {
-          this.localVideoTrack = track
-          await this.publishVideoTrack(track)
-        }
+      await this.room.localParticipant.setCameraEnabled(enabled)
+
+      // If disabling, stop our stored track reference (LiveKit also manages internally)
+      if (!enabled && this.localVideoTrack) {
+        try {
+          this.localVideoTrack.stop()
+        } catch {}
+        this.localVideoTrack = null
       }
 
       this.updateLocalParticipantState()
@@ -388,20 +473,23 @@ export class LiveKitService {
 
     try {
       const enabled = !this.room.localParticipant.isMicrophoneEnabled
-      await this.room.localParticipant.setMicrophoneEnabled(enabled)
 
-      // If disabling, clear the track reference since it's stopped
-      if (!enabled) {
-        this.localAudioTrack = null
+      // ✅ If not publishing yet and user turns on mic, publish once
+      if (enabled && !this.isPublishing()) {
+        const audio = await this.captureAudioTrack()
+        if (audio) {
+          this.localAudioTrack = audio
+          await this.publishAudioTrack(audio)
+        }
       }
 
-      // If we toggled ON and we have no stored local track yet, try capture+publish
-      if (enabled && !this.localAudioTrack) {
-        const track = await this.captureAudioTrack()
-        if (track) {
-          this.localAudioTrack = track
-          await this.publishAudioTrack(track)
-        }
+      await this.room.localParticipant.setMicrophoneEnabled(enabled)
+
+      if (!enabled && this.localAudioTrack) {
+        try {
+          this.localAudioTrack.stop()
+        } catch {}
+        this.localAudioTrack = null
       }
 
       this.updateLocalParticipantState()
@@ -419,41 +507,35 @@ export class LiveKitService {
       throw new Error('Room not connected')
     }
 
+    // ✅ HARD GUARD: never publish twice
+    if (this.isPublishing()) {
+      this.log('⛔ Already publishing - startPublishing skipped')
+      return
+    }
+
     this.log('🎥 Starting user-triggered media publishing...')
 
     try {
-      // Capture camera and microphone simultaneously
       const [videoTrack, audioTrack] = await Promise.all([
         this.captureVideoTrack(),
         this.captureAudioTrack(),
       ])
 
-      // Store references
       this.localVideoTrack = videoTrack
       this.localAudioTrack = audioTrack
 
-      // Publish tracks
-      if (videoTrack) {
-        await this.publishVideoTrack(videoTrack)
-      }
+      if (videoTrack) await this.publishVideoTrack(videoTrack)
+      if (audioTrack) await this.publishAudioTrack(audioTrack)
 
-      if (audioTrack) {
-        await this.publishAudioTrack(audioTrack)
-      }
-
-      // Enable tracks after publishing
       await this.room.localParticipant.setCameraEnabled(true)
       await this.room.localParticipant.setMicrophoneEnabled(true)
 
-      // Update local participant state (✅ ensures UI gets {track: ...})
       this.updateLocalParticipantState()
-
       this.log('✅ User-triggered publishing complete')
     } catch (error: any) {
       this.log('❌ Publishing failed:', error.message)
       this.config.onError?.(`Media publishing failed: ${error.message}`)
 
-      // Clean up tracks
       if (this.localVideoTrack) {
         this.localVideoTrack.stop()
         this.localVideoTrack = null
@@ -463,14 +545,15 @@ export class LiveKitService {
         this.localAudioTrack = null
       }
 
-      // Update local participant state to remove tracks
       this.updateLocalParticipantState()
-
       throw error
     }
   }
 
-  // Get current state
+  /* =========================
+     Get current state
+  ========================= */
+
   getRoom(): Room | null {
     return this.room
   }
@@ -488,7 +571,10 @@ export class LiveKitService {
     return this.participants.get(this.room.localParticipant.identity) || null
   }
 
-  // Cleanup and disconnect
+  /* =========================
+     Cleanup and disconnect
+  ========================= */
+
   disconnect(): void {
     this.log('🔌 Disconnecting from LiveKit room...')
 
@@ -504,39 +590,36 @@ export class LiveKitService {
   }
 
   private cleanup(): void {
-    // Clean up tracks
     if (this.localVideoTrack) {
-      this.localVideoTrack.stop()
+      try {
+        this.localVideoTrack.stop()
+      } catch {}
       this.localVideoTrack = null
     }
 
     if (this.localAudioTrack) {
-      this.localAudioTrack.stop()
+      try {
+        this.localAudioTrack.stop()
+      } catch {}
       this.localAudioTrack = null
     }
 
-    // Clear participants
     this.participants.clear()
-
-    // Reset state
     this.room = null
     this.isConnecting = false
   }
 
-  // Logging utility
   private log(message: string, ...args: any[]): void {
     const timestamp = new Date().toISOString()
     const roomInfo = this.config.roomName ? `[${this.config.roomName}]` : ''
     console.log(`🔴 LiveKit ${timestamp} ${roomInfo} ${message}`, ...args)
   }
 
-  // Cleanup on destroy
   destroy(): void {
     this.disconnect()
   }
 }
 
-// Factory function for easy service creation
 export function createLiveKitService(config: LiveKitServiceConfig): LiveKitService {
   return new LiveKitService(config)
 }
