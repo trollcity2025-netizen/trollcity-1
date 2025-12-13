@@ -11,17 +11,26 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Determine environment based on client ID
+    const clientId = process.env.PAYPAL_CLIENT_ID;
+    const isSandbox = clientId && clientId.includes('sandbox');
+    console.log('PayPal Environment:', isSandbox ? 'SANDBOX' : 'LIVE');
+
     const client = new paypal.core.PayPalHttpClient(
-      new paypal.core.LiveEnvironment(
-        process.env.PAYPAL_CLIENT_ID,
-        process.env.PAYPAL_CLIENT_SECRET
-      )
+      isSandbox
+        ? new paypal.core.SandboxEnvironment(clientId, process.env.PAYPAL_CLIENT_SECRET)
+        : new paypal.core.LiveEnvironment(clientId, process.env.PAYPAL_CLIENT_SECRET)
     );
 
     const { orderID, user_id } = req.body;
+    console.log('Capture Order Request - OrderID:', orderID, 'UserID:', user_id);
 
     if (!orderID || !user_id) {
       return res.status(400).json({ error: "Missing orderID or user_id" });
+    }
+
+    if (!orderID.trim()) {
+      return res.status(400).json({ error: "Invalid orderID" });
     }
 
     // Capture the payment

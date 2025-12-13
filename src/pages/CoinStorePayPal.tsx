@@ -365,8 +365,9 @@ export default function CoinStore() {
                             });
                             const data = await res.json();
                             console.log("Create Order Response", data);
-                            if (!data?.orderID) throw new Error("PayPal did not return an orderID");
-                            return data.orderID;
+                            if (!data?.id) throw new Error("PayPal did not return an order ID");
+                            console.log("Order ID returned from create-order:", data.id);
+                            return data.id;
                           } catch (err) {
                             console.error("createOrder error", err);
                             toast.error("Unable to create PayPal order.");
@@ -376,6 +377,7 @@ export default function CoinStore() {
                         }}
                         onApprove={async (data, actions) => {
                           try {
+                            console.log("Order ID sent to capture-order:", data.orderID);
                             const res = await fetch('/api/paypal/complete-order', {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
