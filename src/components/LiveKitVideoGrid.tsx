@@ -157,6 +157,7 @@ export function LiveKitRoomWrapper({
       'officer',
       'lead_troll_officer',
       'troll_officer',
+      'moderator',
     ].includes(role)
 
   // ✅ MUST check actual MediaTrack, not publication

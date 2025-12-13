@@ -4,10 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import {
   Heart,
-  Share2,
   Users,
   Coins,
-  Zap,
   Crown,
   Shield,
   Ban,
@@ -18,7 +16,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid'
+import { UserRole } from '../lib/supabase'
 
+/* =========================
+   TYPES
+========================= */
 interface StreamData {
   id: string
   title: string
@@ -43,7 +45,7 @@ interface UserProfile {
   id: string
   username: string
   level: number
-  role: string
+  role: UserRole
   troll_family_id?: string
   paid_coin_balance?: number
   free_coin_balance?: number
@@ -52,6 +54,9 @@ interface UserProfile {
   is_lead_officer?: boolean
 }
 
+/* =========================
+   COMPONENT
+========================= */
 const LiveBroadcast: React.FC = () => {
   const { streamId } = useParams<{ streamId: string }>()
   const { user, profile } = useAuthStore()
@@ -78,7 +83,6 @@ const LiveBroadcast: React.FC = () => {
         .single()
 
       if (!streamData) return
-
       setStream(streamData)
 
       const { data: broadcasterData } = await supabase
@@ -87,7 +91,7 @@ const LiveBroadcast: React.FC = () => {
         .eq('id', streamData.broadcaster_id)
         .single()
 
-      setBroadcaster(broadcasterData)
+      setBroadcaster(broadcasterData as UserProfile)
     }
 
     loadStream()
@@ -152,7 +156,7 @@ const LiveBroadcast: React.FC = () => {
     checkEntry()
   }, [stream, user, profile])
 
-  if (!stream || !hasPaidEntry) {
+  if (!stream || !hasPaidEntry || !profile) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
         <div className="text-center">
@@ -163,11 +167,21 @@ const LiveBroadcast: React.FC = () => {
     )
   }
 
+  /* =========================
+     ROLE RESOLUTION (TYPE SAFE)
+  ========================= */
+  const isBroadcaster =
+    profile.role === UserRole.ADMIN ||
+    profile.role === UserRole.MODERATOR ||
+    profile.role === UserRole.TROLL_OFFICER
+
+  const liveKitRole: string = isBroadcaster ? profile.role : 'viewer'
+
   const isAdmin =
-    profile?.role === 'admin' ||
-    profile?.role === 'troll_officer' ||
-    profile?.is_admin ||
-    profile?.is_lead_officer
+    profile.role === UserRole.ADMIN ||
+    profile.role === UserRole.TROLL_OFFICER ||
+    profile.is_admin ||
+    profile.is_lead_officer
 
   /* =========================
      RENDER
@@ -211,9 +225,9 @@ const LiveBroadcast: React.FC = () => {
             <LiveKitRoomWrapper
               roomName={roomName}
               identity={user?.id || `viewer-${crypto.randomUUID()}`}
-              role="viewer"
+              role={liveKitRole}
               autoConnect
-              autoPublish={false}
+              autoPublish={isBroadcaster}
               maxParticipants={6}
               className="w-full h-full"
             />
@@ -226,9 +240,7 @@ const LiveBroadcast: React.FC = () => {
             <MessageSquare className="w-5 h-5 text-purple-400" />
             Chat
           </div>
-
           <div className="flex-1 text-gray-400 text-sm">Chat messages…</div>
-
           <input
             placeholder="Type a message…"
             className="mt-4 bg-zinc-800 border border-purple-500/30 rounded px-3 py-2"
