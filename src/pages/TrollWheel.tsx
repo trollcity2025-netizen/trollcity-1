@@ -13,29 +13,12 @@ export default function TrollWheelPage() {
   const [loadingBalance, setLoadingBalance] = useState(true)
 
   useEffect(() => {
-    const loadWallet = async () => {
-      if (!user) return
-      try {
-        setLoadingBalance(true)
-        const { data } = await supabase
-          .from('wallets')
-          .select('trollmonds')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        const fallback = (profile as any)?.trollmond_balance ?? profile?.free_coin_balance ?? 0
-        setTrollmonds(data?.trollmonds ?? fallback ?? 0)
-      } catch (err) {
-        console.error('Error loading trollmonds balance:', err)
-        const fallback = (profile as any)?.trollmond_balance ?? profile?.free_coin_balance ?? 0
-        setTrollmonds(fallback ?? 0)
-      } finally {
-        setLoadingBalance(false)
-      }
-    }
-
-    loadWallet()
-  }, [user?.id, profile?.id])
+    if (!profile) return
+    setLoadingBalance(true)
+    const trollmonds = profile?.free_coin_balance ?? 0
+    setTrollmonds(trollmonds)
+    setLoadingBalance(false)
+  }, [profile?.id, profile?.free_coin_balance])
 
   if (!user || !profile) {
     return (

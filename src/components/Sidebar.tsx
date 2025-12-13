@@ -41,7 +41,7 @@ export default function Sidebar() {
   // Real-time wallet state
   const [walletData, setWalletData] = useState({
     paid_coins: profile?.paid_coin_balance || 0,
-    trollmonds: 0, // Will be loaded from wallets table if exists
+    trollmonds: profile?.free_coin_balance || 0,
   })
 
   const badge =
@@ -69,41 +69,14 @@ export default function Sidebar() {
 
   // Real-time wallet updates
   useEffect(() => {
-    if (!user || !profile) return
+    if (!profile) return
 
-    const loadWalletData = async () => {
-      try {
-        // Load from wallets table if it exists
-        const { data: wallet } = await supabase
-          .from("wallets")
-          .select("*")
-          .eq("user_id", user.id)
-          .single()
+    setWalletData({
+      paid_coins: profile.paid_coin_balance || 0,
+      trollmonds: profile.free_coin_balance || 0,
+    })
 
-        if (wallet) {
-          setWalletData({
-            paid_coins: (wallet as any).paid_coins || profile.paid_coin_balance || 0,
-            trollmonds: (wallet as any).trollmonds || 0,
-          })
-        } else {
-          // Fallback to profile data
-          setWalletData({
-            paid_coins: profile.paid_coin_balance || 0,
-            trollmonds: 0,
-          })
-        }
-      } catch (error) {
-        // Wallets table might not exist, use profile data
-        setWalletData({
-          paid_coins: profile.paid_coin_balance || 0,
-          trollmonds: 0,
-        })
-      }
-    }
-
-    loadWalletData()
-
-    // Realtime Supabase listener for wallet updates
+    // Realtime Supabase listener for profile updates
     const channel = supabase
       .channel("wallet_updates_sidebar")
       .on(
@@ -111,34 +84,16 @@ export default function Sidebar() {
         {
           event: "*",
           schema: "public",
-          table: "wallets",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            const wallet = payload.new as any
-            setWalletData({
-              paid_coins: wallet.paid_coins || profile.paid_coin_balance || 0,
-              trollmonds: wallet.trollmonds || 0,
-            })
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
           table: "user_profiles",
-          filter: `id=eq.${user.id}`,
+          filter: `id=eq.${profile.id}`,
         },
         (payload) => {
           if (payload.new) {
             const profileData = payload.new as any
-            setWalletData(prev => ({
-              ...prev,
-              paid_coins: profileData.paid_coin_balance || prev.paid_coins,
-            }))
+            setWalletData({
+              paid_coins: profileData.paid_coin_balance || 0,
+              trollmonds: profileData.free_coin_balance || 0,
+            })
           }
         }
       )
@@ -147,7 +102,7 @@ export default function Sidebar() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user?.id, profile?.id, profile?.paid_coin_balance])
+  }, [profile?.id, profile?.paid_coin_balance, profile?.free_coin_balance])
 
   useEffect(() => {
     const checkAccess = async () => {

@@ -81,25 +81,11 @@ export default function WheelModal({ onClose, trollmonds = 0, setTrollmonds }: W
   }, [])
 
   useEffect(() => {
-    const loadBalance = async () => {
-      if (!user) return
-      try {
-        const { data } = await supabase
-          .from('wallets')
-          .select('trollmonds')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        const walletBalance = data?.trollmonds ?? (profile as any)?.trollmond_balance ?? profile?.free_coin_balance ?? 0
-        setBalance(walletBalance)
-        if (setTrollmonds) setTrollmonds(walletBalance)
-      } catch (err) {
-        console.error('Error loading trollmond balance in wheel modal:', err)
-      }
-    }
-
-    loadBalance()
-  }, [user?.id, profile?.id, setTrollmonds])
+    if (!profile) return
+    const walletBalance = profile?.free_coin_balance ?? 0
+    setBalance(walletBalance)
+    if (setTrollmonds) setTrollmonds(walletBalance)
+  }, [profile?.id, profile?.free_coin_balance, setTrollmonds])
 
   const spinWheel = async () => {
     if (!profile || !user || !wheelConfig?.is_active) return
@@ -120,15 +106,15 @@ export default function WheelModal({ onClose, trollmonds = 0, setTrollmonds }: W
     setIsSpinning(true)
 
     try {
-      // Deduct trollmonds from wallets
+      // Deduct trollmonds from user profile
       const newBalance = (balance || 0) - spinCost
       const { error: deductError } = await supabase
-        .from('wallets')
-        .upsert({
-          user_id: user.id,
-          trollmonds: newBalance,
+        .from('user_profiles')
+        .update({
+          free_coin_balance: newBalance,
           updated_at: new Date().toISOString()
         })
+        .eq('id', user.id)
 
       if (deductError) throw deductError
 
@@ -155,12 +141,12 @@ export default function WheelModal({ onClose, trollmonds = 0, setTrollmonds }: W
       // Award trollmonds to user (prizes go to trollmond balance)
       const payoutBalance = newBalance + selectedSegment.coins
       const { error: awardError } = await supabase
-        .from('wallets')
-        .upsert({
-          user_id: user.id,
-          trollmonds: payoutBalance,
+        .from('user_profiles')
+        .update({
+          free_coin_balance: payoutBalance,
           updated_at: new Date().toISOString()
         })
+        .eq('id', user.id)
 
       if (awardError) {
         console.error('Error awarding trollmonds:', awardError)
