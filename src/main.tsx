@@ -7,19 +7,6 @@ import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
 // GlobalAppProvider intentionally removed per required root layout
 
-// 🚨 HARD RESET FOR EDGE/CHROME CACHE ISSUES
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  });
-}
-
-if (window.caches) {
-  caches.keys().then(keys => {
-    keys.forEach(key => caches.delete(key));
-  });
-}
-
 // App version for cache busting
 const APP_VERSION = '1.0.0-' + Date.now().toString()
 

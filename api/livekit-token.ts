@@ -30,7 +30,7 @@ export default async function handler(req: any, res: any) {
     'admin',
     'lead_troll_officer',
     'troll_officer',
-    'broadcaster', // Go Live
+    'creator', // Go Live
     'tromody_show', // Tromody Show
     'officer_stream', // Officer Stream
     'troll_court', // Troll Court
