@@ -598,7 +598,7 @@ function AppContent() {
                   <Route path="/seller/earnings" element={<ShopEarnings />} />
 
                   {/* 👨‍👩‍👧 Family */}
-                  <Route path="/family" element={<TrollFamily />} />
+                  <Route path="/family" element={<FamilyLounge />} />
                   <Route path="/family/city" element={<TrollFamilyCity />} />
                   <Route path="/family/profile/:id" element={<FamilyProfilePage />} />
                   <Route path="/family/chat" element={<FamilyChatPage />} />

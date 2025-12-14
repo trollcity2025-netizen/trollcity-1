@@ -5,7 +5,6 @@ export interface UnifiedLiveKitConfig {
   roomName: string
   user: any
   autoPublish?: boolean
-  maxReconnectAttempts?: number
 }
 
 // Thin wrapper around the global LiveKit service that connects/disconnects at page level
@@ -26,11 +25,10 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
 
   // Connect on mount with provided config; disconnect when page unmounts
   useEffect(() => {
-    if (!config.roomName || !config.user) return
+    if (!config.roomName || !config.user || !config.user.id) return
 
     connect(config.roomName, config.user, {
       autoPublish: config.autoPublish !== false,
-      maxReconnectAttempts: config.maxReconnectAttempts ?? 5,
     })
 
     return () => {
@@ -42,7 +40,6 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
     config.roomName,
     config.user?.id,
     config.autoPublish,
-    config.maxReconnectAttempts,
   ])
 
   // Stable connect helper that reuses the current config by default
@@ -50,9 +47,8 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
     () => () =>
       connect(config.roomName, config.user, {
         autoPublish: config.autoPublish !== false,
-        maxReconnectAttempts: config.maxReconnectAttempts ?? 5,
       }),
-    [connect, config.roomName, config.user, config.autoPublish, config.maxReconnectAttempts]
+    [connect, config.roomName, config.user, config.autoPublish]
   )
 
   return {
