@@ -39,6 +39,16 @@ export default function StreamRoom() {
   // Consistent room name from the start
   const roomName = actualStreamId ? getRoomName(actualStreamId) : null;
 
+  // Determine mode once we have stream data
+  const mode = stream ? (isHost ? 'publisher' : 'viewer') : 'viewer';
+
+  // MODE RESOLVED logging
+  useEffect(() => {
+    if (stream && user) {
+      console.log('[MODE RESOLVED ONCE]', { mode, roomName, identity: user.id })
+    }
+  }, [stream, user, mode, roomName])
+
   // Use unified LiveKit hook once we have stream data
   const {
     isConnected,
@@ -53,8 +63,12 @@ export default function StreamRoom() {
     getRoom,
   } = useUnifiedLiveKit({
     roomName: roomName || '',
-    user: user ? { ...user, role: (profile as any)?.troll_role || 'viewer', level: 1 } : null,
-    autoPublish: isHost // Only auto-publish for hosts
+    user: user && stream ? {
+      ...user,
+      role: isHost ? 'broadcaster' : ((profile as any)?.troll_role || 'viewer'),
+      level: 1
+    } : null,
+    autoPublish: mode === 'publisher'
   });
 
   const room = getRoom();

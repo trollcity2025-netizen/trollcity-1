@@ -70,8 +70,11 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
 
       console.log('[LiveKit identity check]', user.id)
 
-      // Hard guard against re-init for same room/identity
-      const initKey = `${roomName}:${user.id}`
+      // Determine mode from options
+      const mode = options.autoPublish ? 'publisher' : 'viewer'
+
+      // Hard guard against re-init for same room/identity/mode
+      const initKey = `${roomName}:${user.id}:${mode}`
       if (lastInitRef.current === initKey) {
         console.log('[CONNECT SKIPPED - already initialized]', initKey)
         return true
@@ -81,7 +84,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
       console.log('[CONNECT INTENT]', {
         roomName,
         identity: user.id,
-        mode: options.autoPublish ? 'publisher' : 'viewer'
+        mode
       })
 
       // Disconnect existing service before creating new one
