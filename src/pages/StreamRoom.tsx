@@ -18,18 +18,11 @@ export default function StreamRoom() {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
 
-  // Block rendering until user identity is ready
-  const identity = user?.id;
-  if (!identity) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-white">Loading user…</p>
-        </div>
-      </div>
-    );
-  }
+  // Debug mount/unmount
+  useEffect(() => {
+    console.log('[StreamRoom mount]')
+    return () => console.log('[StreamRoom unmount]')
+  }, [])
 
   const [stream, setStream] = useState<any>(null);
   const [isLoadingStream, setIsLoadingStream] = useState(true);
@@ -197,14 +190,19 @@ export default function StreamRoom() {
   };
 
   // Fix loading condition to prevent infinite loading
-  const stillLoading = isLoadingStream || (stream && !isConnected && !error && !liveKitError);
+  const identity = user?.id;
+  const stillLoading = !identity || isLoadingStream || (stream && !isConnected && !error && !liveKitError);
 
   if (stillLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-white">{isLoadingStream ? 'Loading stream...' : 'Connecting to stream...'}</p>
+          <p className="text-white">
+            {!identity ? 'Loading user…' :
+             isLoadingStream ? 'Loading stream...' :
+             'Connecting to stream...'}
+          </p>
         </div>
       </div>
     );
