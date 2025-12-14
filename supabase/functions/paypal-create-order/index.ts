@@ -11,6 +11,8 @@ const PAYPAL_CLIENT_ID = Deno.env.get("PAYPAL_CLIENT_ID");
 const PAYPAL_CLIENT_SECRET = Deno.env.get("PAYPAL_CLIENT_SECRET");
 const PAYPAL_MODE = Deno.env.get("PAYPAL_MODE") ?? "live";
 
+console.log(`PayPal env: mode=${PAYPAL_MODE}, clientId=${PAYPAL_CLIENT_ID?.substring(0, 8)}...`);
+
 // Check for required environment variables
 if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
   serve(async (req: Request) => {
@@ -28,24 +30,28 @@ if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
   });
 }
 
-// Enforce LIVE mode only
-if (PAYPAL_MODE !== "live") {
-  serve(async (req: Request) => {
-    return new Response(
-      JSON.stringify({
-        status: "error",
-        environment: PAYPAL_MODE,
-        message: "PayPal is restricted to LIVE mode only. PAYPAL_MODE must be 'live'."
-      }),
-      {
-        status: 400,
-        headers: { ...cors, "Content-Type": "application/json" }
-      }
-    );
-  });
-}
+const PAYPAL_BASE =
+  PAYPAL_MODE === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
 
-const PAYPAL_BASE = "https://api-m.paypal.com";
+async function getAccessToken() {
+  const creds = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`);
+  const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${creds}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+  if (!res.ok) {
+    console.error("PayPal token error", await res.text());
+    throw new Error("Failed to get PayPal token");
+  }
+  const data = await res.json();
+  return data.access_token as string;
+}
 
 serve(async (req: Request) => {
   // Handle CORS preflight
@@ -79,15 +85,53 @@ serve(async (req: Request) => {
       });
     }
 
-    // For now, return a mock order ID to test the flow
-    // TODO: Implement actual PayPal API call
-    const mockOrderId = `mock_order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Get PayPal access token
+    const accessToken = await getAccessToken();
+
+    // Create PayPal order
+    const orderPayload = {
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          amount: {
+            currency_code: "USD",
+            value: amount.toString()
+          },
+          custom_id: JSON.stringify({
+            userId: user_id,
+            coins: coins
+          })
+        }
+      ]
+    };
+
+    const orderRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(orderPayload)
+    });
+
+    if (!orderRes.ok) {
+      const errorText = await orderRes.text();
+      console.error("PayPal create order error:", errorText);
+      return new Response(JSON.stringify({
+        error: "Failed to create PayPal order",
+        details: errorText
+      }), {
+        status: 500,
+        headers: { ...cors, "Content-Type": "application/json" }
+      });
+    }
+
+    const orderData = await orderRes.json();
+    console.log("PayPal order created:", orderData.id);
 
     return new Response(
       JSON.stringify({
-        orderID: mockOrderId,
-        status: "mock_success",
-        message: "Mock PayPal order created for testing"
+        orderID: orderData.id
       }),
       {
         status: 200,

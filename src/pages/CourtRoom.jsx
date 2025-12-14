@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid';
-import { useLiveKit } from '../contexts/LiveKitContext';
+import { useLiveKitSession } from '../hooks/useLiveKitSession';
 import { toast } from "sonner";
 import { Scale, Gavel, Users, Mic, MicOff, UserX, FileText, MessageSquare, Crown, AlertTriangle, CheckCircle, XCircle, Shield, Eye } from 'lucide-react';
 import AuthorityPanel from '../components/AuthorityPanel';
@@ -136,26 +136,44 @@ export default function CourtRoom() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  const { isConnected, toggleMicrophone, localParticipant } = useLiveKit();
+  const userRole = (() => {
+    if (profile?.role === 'admin' || profile?.is_lead_officer) return 'judge';
+    if (profile?.role === 'troll_officer') return 'bailiff';
+    return 'audience';
+  })();
+
+  const isJudge = userRole === 'judge';
+  const isBailiff = userRole === 'bailiff';
+  const isOfficial = isJudge || isBailiff;
+
+  const {
+    joinAndPublish,
+    isConnected,
+    isConnecting,
+    toggleMicrophone,
+    localParticipant,
+    error,
+    participants,
+  } = useLiveKitSession({
+    roomName: sessionId || 'troll-court',
+    user: user ? { ...user, role: userRole } : null,
+    autoPublish: isOfficial,
+    maxParticipants: 6,
+  });
 
   const [loading, setLoading] = useState(true);
   const [courtSession, setCourtSession] = useState(null);
   const [userDocket, setUserDocket] = useState(null);
   const [roomName, setRoomName] = useState(null);
-
-  // Determine user role in court
-  const getUserRole = () => {
-    if (profile?.role === 'admin' || profile?.is_lead_officer) return 'judge';
-    if (profile?.role === 'troll_officer') return 'bailiff';
-    return 'audience';
-  };
-
-  const userRole = getUserRole();
-  const isJudge = userRole === 'judge';
-  const isBailiff = userRole === 'bailiff';
   const isAudience = userRole === 'audience';
-  const isOfficial = isJudge || isBailiff;
-  const canParticipate = isJudge || isBailiff; // Only judges and bailiffs can have video/audio
+  const canParticipate = isOfficial;
+
+  // Join LiveKit once room is known
+  useEffect(() => {
+    if (roomName && user?.id) {
+      joinAndPublish();
+    }
+  }, [roomName, user?.id, joinAndPublish]);
 
   useEffect(() => {
     if (!user || !sessionId) return;
@@ -295,14 +313,6 @@ export default function CourtRoom() {
     );
   }
 
-  if (!token || !serverUrl) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-10 text-center">
-        <div className="text-red-400">Failed to join courtroom. Please try again.</div>
-      </div>
-    );
-  }
-
   return (
     <RequireRole roles={["user", "troll_officer", "lead_troll_officer", "admin"]}>
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
@@ -358,8 +368,9 @@ export default function CourtRoom() {
                 className="w-full h-full bg-black rounded-xl overflow-hidden"
                 showLocalVideo={canParticipate}
                 maxParticipants={6}
-                autoPublish={canParticipate}
+                autoPublish={false}
                 role={userRole}
+                autoConnect={false}
               />
             )}
 
@@ -467,7 +478,7 @@ export default function CourtRoom() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span>Total Participants:</span>
-                  <span>{participants.size + (hasJoined ? 1 : 0)}</span>
+                  <span>{participants.size + (localParticipant ? 1 : 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Status:</span>

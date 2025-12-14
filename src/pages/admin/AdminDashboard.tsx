@@ -2171,7 +2171,28 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <div className="mt-3 text-right">
+              <div className="mt-3 text-right space-x-2">
+                <button
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to DELETE ALL live streams? This action cannot be undone.')) return
+                    try {
+                      const { error } = await supabase
+                        .from('streams')
+                        .delete()
+                        .eq('is_live', true)
+                      if (error) throw error
+                      toast.success('All live streams deleted')
+                      loadLiveStreams()
+                      loadDashboardData()
+                    } catch (error: any) {
+                      console.error('Error deleting all streams:', error)
+                      toast.error(error?.message || 'Failed to delete streams')
+                    }
+                  }}
+                  className="text-xs px-3 py-1 border border-red-600 text-red-400 rounded hover:bg-red-900 hover:text-red-200"
+                >
+                  Delete All Broadcasts
+                </button>
                 <button
                   onClick={cleanupStreams}
                   className="text-xs px-3 py-1 border border-gray-600 rounded hover:bg-gray-800"

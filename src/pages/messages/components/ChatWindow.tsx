@@ -272,7 +272,7 @@ export default function ChatWindow({
 
       // Fetch sender usernames
       const senderIds = [...new Set(messagesData?.map(m => m.sender_id).filter(Boolean) || [])]
-      let senderMap: Record<string, { username: string; avatar_url: string | null }> = {}
+      const senderMap: Record<string, { username: string; avatar_url: string | null }> = {}
 
       if (senderIds.length > 0) {
         const { data: usersData } = await supabase

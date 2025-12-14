@@ -1,227 +1,273 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Room, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
-import { createLiveKitService, LiveKitService, LiveKitParticipant } from '../lib/LiveKitService';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+import {
+  LiveKitParticipant,
+  LiveKitService,
+  LiveKitServiceConfig,
+} from '../lib/LiveKitService'
 
-interface LiveKitContextType {
-  // Connection state
-  isConnected: boolean;
-  isConnecting: boolean;
-  error: string | null;
-
-  // Participants
-  participants: Map<string, LiveKitParticipant>;
-  localParticipant: LiveKitParticipant | null;
-
-  // Room reference
-  room: Room | null;
-
-  // Control methods
-  connect: (roomName: string, user: any, options?: { autoPublish?: boolean; role?: string }) => Promise<boolean>;
-  disconnect: () => void;
-  toggleCamera: () => Promise<boolean>;
-  toggleMicrophone: () => Promise<boolean>;
-  startPublishing: () => Promise<void>;
-
-  // Service reference for advanced usage
-  service: LiveKitService | null;
-}
-
-const LiveKitContext = createContext<LiveKitContextType | null>(null);
-
-export function useLiveKit() {
-  const context = useContext(LiveKitContext);
-  if (!context) {
-    throw new Error('useLiveKit must be used within a LiveKitProvider');
-  }
-  return context;
-}
-
-interface LiveKitProviderProps {
-  children: React.ReactNode;
-}
-
-export function LiveKitProvider({ children }: LiveKitProviderProps) {
-  const [service, setService] = useState<LiveKitService | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [participants, setParticipants] = useState<Map<string, LiveKitParticipant>>(new Map());
-  const [localParticipant, setLocalParticipant] = useState<LiveKitParticipant | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [room, setRoom] = useState<Room | null>(null);
-
-  // Initialize service on mount
-  useEffect(() => {
-    console.log('🎥 Initializing global LiveKit service...');
-
-    const liveKitService = createLiveKitService({
-      roomName: '', // Will be set when connecting
-      user: null, // Will be set when connecting
-      autoPublish: true,
-      maxReconnectAttempts: 5,
-      onConnected: () => {
-        console.log('✅ Global LiveKit connected');
-        setIsConnected(true);
-        setIsConnecting(false);
-        setError(null);
-        setRoom(liveKitService.getRoom());
-      },
-      onDisconnected: () => {
-        console.log('❌ Global LiveKit disconnected');
-        setIsConnected(false);
-        setIsConnecting(false);
-        setRoom(null);
-      },
-      onParticipantJoined: (participant) => {
-        console.log('👤 Global participant joined:', participant.identity);
-        setParticipants(prev => new Map(prev.set(participant.identity, participant)));
-      },
-      onParticipantLeft: (participant) => {
-        console.log('👤 Global participant left:', participant.identity);
-        setParticipants(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(participant.identity);
-          return newMap;
-        });
-      },
-      onTrackSubscribed: (track, participant) => {
-        console.log('📥 Global track subscribed:', track.kind, participant.identity);
-      },
-      onTrackUnsubscribed: (track, participant) => {
-        console.log('📤 Global track unsubscribed:', track.kind, participant.identity);
-      },
-      onError: (errorMsg) => {
-        console.error('🔴 Global LiveKit error:', errorMsg);
-        setError(errorMsg);
-        setIsConnecting(false);
-      }
-    });
-
-    setService(liveKitService);
-
-    // Cleanup on unmount
-    return () => {
-      console.log('🧹 Cleaning up global LiveKit service');
-      liveKitService.destroy();
-    };
-  }, []);
-
-  // Update local participant state
-  useEffect(() => {
-    if (service) {
-      const local = service.getLocalParticipant();
-      setLocalParticipant(local);
-    }
-  }, [service, participants]);
-
-  const connect = useCallback(async (
+interface LiveKitContextValue {
+  service: LiveKitService
+  isConnected: boolean
+  isConnecting: boolean
+  participants: Map<string, LiveKitParticipant>
+  localParticipant: LiveKitParticipant | null
+  error: string | null
+  connect: (
     roomName: string,
     user: any,
-    options: { autoPublish?: boolean; role?: string } = {}
-  ): Promise<boolean> => {
-    if (!service) {
-      setError('LiveKit service not initialized');
-      return false;
-    }
+    options?: Partial<LiveKitServiceConfig>
+  ) => Promise<boolean>
+  disconnect: () => void
+  toggleCamera: () => Promise<boolean>
+  toggleMicrophone: () => Promise<boolean>
+  startPublishing: () => Promise<void>
+  getRoom: () => any | null
+}
 
-    setIsConnecting(true);
-    setError(null);
+// Context holds the LiveKitService plus state helpers
+const LiveKitContext = createContext<LiveKitContextValue | null>(null)
 
-    try {
-      // Create new service instance for this connection
-      const connectionService = createLiveKitService({
+export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => {
+  const serviceRef = useRef<LiveKitService | null>(null)
+  const lastInitRef = useRef<string | null>(null)
+  const disconnectingRef = useRef(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [participants, setParticipants] = useState<Map<string, LiveKitParticipant>>(
+    new Map()
+  )
+  const [localParticipant, setLocalParticipant] = useState<LiveKitParticipant | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const syncLocalParticipant = useCallback(() => {
+    if (!serviceRef.current) return
+    setLocalParticipant(serviceRef.current.getLocalParticipant())
+  }, [])
+
+  const connect = useCallback(
+    async (
+      roomName: string,
+      user: any,
+      options: Partial<LiveKitServiceConfig> = {}
+    ) => {
+      if (!roomName || !user) {
+        setError('Missing room or user for LiveKit connect')
+        return false
+      }
+
+      // Hard guard: block ONLY if user id is missing
+      if (!user?.id) {
+        return false // do NOT set error
+      }
+
+      console.log('[LiveKit identity check]', user.id)
+
+      // Determine mode from options
+      const mode = options.autoPublish ? 'publisher' : 'viewer'
+
+      // Hard guard against re-init for same room/identity/mode
+      const initKey = `${roomName}:${user.id}:${mode}`
+      if (lastInitRef.current === initKey) {
+        console.log('[CONNECT SKIPPED - already initialized]', initKey)
+        return true
+      }
+
+      // CONNECT INTENT logging
+      console.log('[CONNECT INTENT]', {
         roomName,
-        user: { ...user, role: options.role || user.role },
+        identity: user.id,
+        mode
+      })
+
+      // Disconnect existing service before creating new one
+      if (serviceRef.current) {
+        serviceRef.current.disconnect()
+      }
+
+      // Create new service instance for each connect to ensure immutability
+      serviceRef.current = new LiveKitService({
+        roomName,
+        identity: user.id || user.identity,
+        user,
         autoPublish: options.autoPublish !== false,
-        maxReconnectAttempts: 5,
         onConnected: () => {
-          console.log('✅ Room connected');
-          setIsConnected(true);
-          setIsConnecting(false);
-          setError(null);
-          setRoom(connectionService.getRoom());
+          setIsConnected(true)
+          setIsConnecting(false)
+          setError(null)
+          setParticipants(new Map(serviceRef.current?.getParticipants()))
+          syncLocalParticipant()
+          options.onConnected?.()
         },
         onDisconnected: () => {
-          console.log('❌ Room disconnected');
-          setIsConnected(false);
-          setIsConnecting(false);
-          setRoom(null);
+          setIsConnected(false)
+          setIsConnecting(false)
+          setParticipants(new Map())
+          setLocalParticipant(null)
+          options.onDisconnected?.()
         },
         onParticipantJoined: (participant) => {
-          console.log('👤 Participant joined:', participant.identity);
-          setParticipants(prev => new Map(prev.set(participant.identity, participant)));
+          setParticipants((prev) => {
+            const next = new Map(prev)
+            next.set(participant.identity, participant)
+            return next
+          })
+          options.onParticipantJoined?.(participant)
         },
         onParticipantLeft: (participant) => {
-          console.log('👤 Participant left:', participant.identity);
-          setParticipants(prev => {
-            const newMap = new Map(prev);
-            newMap.delete(participant.identity);
-            return newMap;
-          });
+          setParticipants((prev) => {
+            const next = new Map(prev)
+            next.delete(participant.identity)
+            return next
+          })
+          options.onParticipantLeft?.(participant)
         },
         onTrackSubscribed: (track, participant) => {
-          console.log('📥 Track subscribed:', track.kind, participant.identity);
+          setParticipants((prev) => {
+            const next = new Map(prev)
+            const existing = next.get(participant.identity) || participant
+            const updated = { ...existing }
+            if (track.kind === 'video') updated.videoTrack = track
+            if (track.kind === 'audio') updated.audioTrack = track
+            next.set(participant.identity, updated)
+            return next
+          })
+          options.onTrackSubscribed?.(track, participant)
         },
         onTrackUnsubscribed: (track, participant) => {
-          console.log('📤 Track unsubscribed:', track.kind, participant.identity);
+          setParticipants((prev) => {
+            const next = new Map(prev)
+            const existing = next.get(participant.identity)
+            if (existing) {
+              const updated: LiveKitParticipant = { ...existing }
+              if (track.kind === 'video') {
+                delete (updated as any).videoTrack
+              }
+              if (track.kind === 'audio') {
+                delete (updated as any).audioTrack
+              }
+              next.set(participant.identity, updated)
+            }
+            return next
+          })
+          options.onTrackUnsubscribed?.(track, participant)
         },
         onError: (errorMsg) => {
-          console.error('🔴 Connection error:', errorMsg);
-          setError(errorMsg);
-          setIsConnecting(false);
-        }
-      });
+          // Filter non-errors
+          if (
+            errorMsg.includes('Client initiated disconnect') ||
+            errorMsg.includes('Abort connection attempt') ||
+            errorMsg.includes('websocket closed')
+          ) {
+            console.log('LiveKit non-error:', errorMsg)
+            return
+          }
+          console.error('LiveKit error:', errorMsg)
+          setError(errorMsg)
+          setIsConnecting(false)
+          options.onError?.(errorMsg)
+        },
+      })
 
-      setService(connectionService);
+      setError(null)
+      setIsConnecting(true)
 
-      const success = await connectionService.connect();
-      return success;
-    } catch (err) {
-      setError('Failed to connect');
-      return false;
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [service]);
+      // Mark as initialized
+      lastInitRef.current = initKey
+
+      try {
+        const ok = await serviceRef.current.connect()
+        syncLocalParticipant()
+        return ok
+      } catch (err: any) {
+        setIsConnecting(false)
+        setError(err?.message || 'Failed to connect to LiveKit')
+        // Reset init key on failure
+        lastInitRef.current = null
+        return false
+      }
+    },
+    [syncLocalParticipant]
+  )
 
   const disconnect = useCallback(() => {
-    if (service) {
-      service.disconnect();
+    if (disconnectingRef.current) return
+    disconnectingRef.current = true
+
+    if (serviceRef.current) {
+      serviceRef.current.disconnect()
     }
-  }, [service]);
+    setIsConnected(false)
+    setIsConnecting(false)
+    setParticipants(new Map())
+    setLocalParticipant(null)
+    lastInitRef.current = null
+    disconnectingRef.current = false
+  }, [])
 
   const toggleCamera = useCallback(async () => {
-    if (!service) return false;
-    return await service.toggleCamera();
-  }, [service]);
+    if (!serviceRef.current) return false
+    const enabled = await serviceRef.current.toggleCamera()
+    syncLocalParticipant()
+    return enabled
+  }, [syncLocalParticipant])
 
   const toggleMicrophone = useCallback(async () => {
-    if (!service) return false;
-    return await service.toggleMicrophone();
-  }, [service]);
+    if (!serviceRef.current) return false
+    const enabled = await serviceRef.current.toggleMicrophone()
+    syncLocalParticipant()
+    return enabled
+  }, [syncLocalParticipant])
 
   const startPublishing = useCallback(async () => {
-    if (!service) throw new Error('Service not available');
-    return await service.startPublishing();
-  }, [service]);
+    if (!serviceRef.current) return
+    await serviceRef.current.startPublishing()
+    syncLocalParticipant()
+  }, [syncLocalParticipant])
 
-  const value: LiveKitContextType = {
+  const getRoom = useCallback(() => {
+    return serviceRef.current?.getRoom() || null
+  }, [])
+
+  // Do not disconnect here; StrictMode/dev unmounts would break active sessions.
+  useEffect(() => {
+    return () => {
+      console.log('LiveKitProvider unmounted (dev / StrictMode) - no disconnect')
+    }
+  }, [])
+
+  const value: LiveKitContextValue = {
+    service: serviceRef.current!,
     isConnected,
     isConnecting,
-    error,
     participants,
     localParticipant,
-    room,
+    error,
     connect,
     disconnect,
     toggleCamera,
     toggleMicrophone,
     startPublishing,
-    service
-  };
+    getRoom,
+  }
 
   return (
     <LiveKitContext.Provider value={value}>
       {children}
     </LiveKitContext.Provider>
-  );
+  )
+}
+
+export function useLiveKit() {
+  const ctx = useContext(LiveKitContext)
+  if (!ctx) {
+    throw new Error('useLiveKit must be used within LiveKitProvider')
+  }
+  return ctx
 }

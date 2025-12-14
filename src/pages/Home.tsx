@@ -39,13 +39,14 @@ const NeonParticle: React.FC<{ delay: number; color: string }> = ({ delay, color
 };
 
 export default function Home() {
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [liveStreams, setLiveStreams] = useState<any[]>([]);
   const [loadingLive, setLoadingLive] = useState(false);
   const [newUsers, setNewUsers] = useState<any[]>([]);
   const [loadingNewUsers, setLoadingNewUsers] = useState(false);
   const [topTrollers, setTopTrollers] = useState<any[]>([]);
   const [loadingTop, setLoadingTop] = useState(false);
+  const [homeFeature, setHomeFeature] = useState<any>(null);
+  const [cycleTimeLeft, setCycleTimeLeft] = useState<number>(0);
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -53,13 +54,6 @@ export default function Home() {
   const [showBanPage, setShowBanPage] = useState(false);
   const [showKickPage, setShowKickPage] = useState(false);
   const isDev = import.meta.env.DEV;
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Check for seller application submission success
   useEffect(() => {
@@ -303,6 +297,67 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const loadHomeFeature = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('home_feature_cycles')
+          .select(`
+            id,
+            end_time,
+            total_spent_coins,
+            winner_user_id,
+            user_profiles!winner_user_id (
+              username,
+              avatar_url
+            )
+          `)
+          .order('start_time', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        if (data) {
+          setHomeFeature(data);
+        }
+      } catch (e) {
+        console.error('Failed to load home feature', e);
+      }
+    };
+
+    loadHomeFeature();
+
+    // Real-time subscription for home feature updates
+    const channel = supabase
+      .channel('home-feature-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'home_feature_cycles' }, () => {
+        loadHomeFeature();
+      })
+      .subscribe();
+
+    // Update countdown every second
+    const interval = setInterval(() => {
+      if (homeFeature?.end_time) {
+        const now = new Date().getTime();
+        const end = new Date(homeFeature.end_time).getTime();
+        const left = Math.max(0, end - now);
+        setCycleTimeLeft(Math.floor(left / 1000));
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [homeFeature?.end_time]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white relative overflow-hidden">
       
@@ -345,6 +400,43 @@ export default function Home() {
               <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
                 A new line of reinventions. Join the live experience, send gifts, and be a part of the chaos.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Home Feature King */}
+        <div className="mb-12 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+          <div className="bg-gradient-to-r from-yellow-600/80 via-orange-600/80 to-red-600/80 rounded-3xl p-8 border border-yellow-400 shadow-[0_0_18px_rgba(255,215,0,0.7)]">
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <Crown className="text-yellow-400 animate-bounce" size={48} style={{ filter: 'drop-shadow(0 0 20px #FFC93C)' }} />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">30-Minute King of the Home Page</h2>
+              {homeFeature?.user_profiles ? (
+                <div className="flex items-center justify-center gap-4 mb-4">
+                  <img
+                    src={homeFeature.user_profiles.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${homeFeature.user_profiles.username}`}
+                    className="w-12 h-12 rounded-full border-2 border-yellow-400"
+                  />
+                  <div>
+                    <p className="text-lg font-bold">{homeFeature.user_profiles.username}</p>
+                    <p className="text-sm text-yellow-300">Current King!</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-lg mb-4 text-yellow-300">Crown Available - Spend to Win!</p>
+              )}
+              <div className="flex justify-center items-center gap-4 mb-4">
+                <div className="text-center">
+                  <p className="text-sm text-gray-300">Time Left</p>
+                  <p className="text-xl font-bold text-white">{formatTime(cycleTimeLeft)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-300">Total Spent</p>
+                  <p className="text-xl font-bold text-green-400">{(homeFeature?.total_spent_coins || 0).toLocaleString()}</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-300">Spend coins to become the featured King!</p>
             </div>
           </div>
         </div>

@@ -116,10 +116,6 @@ export const updateSetting = async (key: string, value: any): Promise<void> => {
           throw err
         }
       }
-    } else if (updateError) {
-      const err = new Error(`Failed to update setting "${key}": ${updateError.message}`)
-      useAppSettingsStore.getState().setError(err)
-      throw err
     }
 
     // Note: The store will be updated automatically via realtime subscription
@@ -205,7 +201,13 @@ export const subscribeToRealtime = (): (() => void) => {
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         isSubscribed = true
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+      } else if (status === 'CHANNEL_ERROR') {
+        isSubscribed = false
+        realtimeChannel = null
+      } else if (status === 'TIMED_OUT') {
+        isSubscribed = false
+        realtimeChannel = null
+      } else if (status === 'CLOSED') {
         isSubscribed = false
         realtimeChannel = null
       }

@@ -36,6 +36,10 @@ export default function SellOnTrollCity() {
     image_url: ''
   })
 
+  // Shop deletion state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingShop, setDeletingShop] = useState(false)
+
   useEffect(() => {
     if (!user) return
     loadShop()
@@ -217,6 +221,31 @@ export default function SellOnTrollCity() {
     }
   }
 
+  const deleteShop = async () => {
+    if (!shop) return
+
+    setDeletingShop(true)
+    try {
+      const { error } = await supabase
+        .from('trollcity_shops')
+        .update({ is_active: false })
+        .eq('id', shop.id)
+        .eq('owner_id', user!.id)
+
+      if (error) throw error
+
+      setShop(null)
+      setProducts([])
+      setShowDeleteModal(false)
+      toast.success('Shop deleted successfully!')
+    } catch (error: any) {
+      console.error('Error deleting shop:', error)
+      toast.error('Failed to delete shop')
+    } finally {
+      setDeletingShop(false)
+    }
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
@@ -297,7 +326,15 @@ export default function SellOnTrollCity() {
               ) : shop ? (
                 <div className="space-y-4">
                   <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
-                    <p className="text-green-400 font-semibold">✓ Shop Active: {shop.name}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-green-400 font-semibold">✓ Shop Active: {shop.name}</p>
+                      <button
+                        onClick={() => setShowDeleteModal(true)}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                      >
+                        Delete Shop
+                      </button>
+                    </div>
                   </div>
                   <button onClick={() => setActiveTab('dashboard')} className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
                     Seller Dashboard
@@ -673,6 +710,50 @@ export default function SellOnTrollCity() {
                   <p className="text-gray-400">Start selling products to see your earnings here</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Delete Shop Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1A1A1A] rounded-xl p-6 max-w-md w-full border border-red-500/30">
+              <h3 className="text-xl font-bold mb-4 text-center text-red-400">Delete Shop</h3>
+              <div className="text-center mb-6">
+                <p className="text-gray-300 mb-2">
+                  Are you sure you want to delete <span className="text-red-400 font-bold">"{shop?.name}"</span>?
+                </p>
+                <p className="text-sm text-gray-400">
+                  This action cannot be undone. Your shop will be removed from the marketplace and all products will be deleted.
+                </p>
+              </div>
+              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mb-6">
+                <p className="text-sm text-red-300">
+                  ⚠️ Deleting your shop will permanently remove it from the marketplace. Any pending orders may be affected.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={deleteShop}
+                  disabled={deletingShop}
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  {deletingShop ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Shop'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

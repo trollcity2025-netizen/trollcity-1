@@ -76,44 +76,17 @@ const GoLiveSetup: React.FC = () => {
 
   // Check broadcaster status
   useEffect(() => {
-    const checkStatus = async () => {
-      if (!user || !profile) return;
-
-      // If already marked broadcaster
-      if (profile.is_broadcaster) {
-        setBroadcasterStatus({
-          isApproved: true,
-          hasApplication: true,
-        });
-        return;
-      }
-
-      // Check broadcaster_applications table
-      const { data } = await supabase
-        .from('broadcaster_applications')
-        .select('application_status')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      setBroadcasterStatus({
-        isApproved: data?.application_status === 'approved',
-        hasApplication: !!data,
-      });
-    };
-
-    checkStatus();
-  }, [user, profile]);
+    // Everyone is allowed to go live instantly
+    if (!user || !profile) return;
+    setBroadcasterStatus({
+      isApproved: true,
+      hasApplication: true,
+    });
+  }, [user?.id, profile?.id]);
 
   const handleSubmit = async () => {
     if (!user || !profile) {
       toast.error('You must be logged in');
-      return;
-    }
-
-    if (!broadcasterStatus?.isApproved) {
-      toast.error('You must be an approved broadcaster to go live');
       return;
     }
 
@@ -204,27 +177,6 @@ const GoLiveSetup: React.FC = () => {
         <div className="text-center">
           <Video className="w-12 h-12 text-purple-400 mx-auto mb-4 animate-pulse" />
           <p>Loading broadcaster status...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!broadcasterStatus.isApproved) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
-        <div className="max-w-2xl mx-auto text-center">
-          <Video className="w-16 h-16 text-red-400 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold mb-4">Broadcaster Access Required</h1>
-          <p className="text-gray-300 mb-6">
-            You must be an approved broadcaster to set up live streams.
-            {!broadcasterStatus.hasApplication && ' Apply for broadcaster status first.'}
-          </p>
-          <button
-            onClick={() => navigate('/apply')}
-            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors"
-          >
-            Apply to be a Broadcaster
-          </button>
         </div>
       </div>
     );

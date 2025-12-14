@@ -1,4 +1,12 @@
-import { Room, RoomEvent, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client'
+import {
+  Room,
+  RoomEvent,
+  createLocalVideoTrack,
+  createLocalAudioTrack,
+  Track,
+  TrackPublication,
+  Participant,
+} from 'livekit-client'
 import { useEffect, useRef } from 'react'
 
 interface VideoFeedProps {
@@ -7,65 +15,90 @@ interface VideoFeedProps {
 }
 
 export default function VideoFeed({ room, isHost = false }: VideoFeedProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const localVideoRef = useRef<HTMLVideoElement>(null)
+  const remoteContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!room) return
 
-    // If host, publish local tracks
-    if (isHost) {
-      const publishLocalTracks = async () => {
-        try {
-          const [videoTrack, audioTrack] = await Promise.all([
-            createLocalVideoTrack(),
-            createLocalAudioTrack(),
-          ])
+    let published = false
 
-          await room.localParticipant.publishTrack(videoTrack)
-          await room.localParticipant.publishTrack(audioTrack)
+    /* ===============================
+       HOST: PUBLISH LOCAL TRACKS
+    =============================== */
+    const publishLocalTracks = async () => {
+      if (!isHost || published) return
 
-          // Attach video to preview
-          if (videoRef.current) {
-            videoTrack.attach(videoRef.current)
-            videoRef.current.muted = true
-            videoRef.current.play()
-          }
-        } catch (error) {
-          console.error('Failed to publish local tracks:', error)
+      try {
+        const permissions =
+          (room.localParticipant as any)?.permissions ||
+          (room.localParticipant as any)?.participantInfo?.permissions
+
+        if (permissions?.canPublish === false) {
+          console.warn('[LiveKit] Token blocks publishing')
+          return
         }
-      }
 
-      publishLocalTracks()
+        const alreadyPublishing =
+          room.localParticipant.videoTrackPublications.size > 0 ||
+          room.localParticipant.audioTrackPublications.size > 0
+
+        if (alreadyPublishing) {
+          published = true
+          return
+        }
+
+        const [videoTrack, audioTrack] = await Promise.all([
+          createLocalVideoTrack({
+            resolution: { width: 1280, height: 720 },
+          }),
+          createLocalAudioTrack(),
+        ])
+
+        await room.localParticipant.publishTrack(videoTrack)
+        await room.localParticipant.publishTrack(audioTrack)
+
+        published = true
+
+        if (localVideoRef.current) {
+          videoTrack.attach(localVideoRef.current)
+          localVideoRef.current.muted = true
+          localVideoRef.current.playsInline = true
+          await localVideoRef.current.play().catch(() => {})
+        }
+      } catch (err) {
+        console.error('[LiveKit] Publish failed:', err)
+      }
     }
 
-    // Handle remote tracks
-    const handleTrackSubscribed = (track, publication, participant) => {
-      if (track.kind === 'video') {
-        if (participant.isLocal && videoRef.current) {
-          // Local video already attached above
-        } else if (!participant.isLocal) {
-          // Remote video - attach to parent container
-          const element = track.attach()
-          if (videoRef.current?.parentElement) {
-            const container = videoRef.current.parentElement
-            // Clear existing remote videos
-            const existingRemote = container.querySelector('.remote-video-container')
-            if (existingRemote) {
-              existingRemote.remove()
-            }
-            // Create container for remote video
-            const remoteContainer = document.createElement('div')
-            remoteContainer.className = 'remote-video-container absolute inset-0 w-full h-full'
-            remoteContainer.appendChild(element)
-            container.appendChild(remoteContainer)
-          }
-        }
-      } else if (track.kind === 'audio') {
+    if (isHost) {
+      if (room.state === 'connected') publishLocalTracks()
+      else room.once(RoomEvent.Connected, publishLocalTracks)
+    }
+
+    /* ===============================
+       REMOTE TRACK HANDLING
+    =============================== */
+    const handleTrackSubscribed = (
+      track: Track,
+      _publication: TrackPublication,
+      participant: Participant
+    ) => {
+      if (!remoteContainerRef.current) return
+      if (participant.isLocal) return
+
+      if (track.kind === Track.Kind.Video) {
+        const el = track.attach()
+        el.className = 'w-full h-full object-cover rounded-3xl'
+        remoteContainerRef.current.appendChild(el)
+      }
+
+      if (track.kind === Track.Kind.Audio) {
         track.attach()
       }
     }
 
-    const handleTrackUnsubscribed = (track) => {
+    const handleTrackUnsubscribed = (track: Track) => {
       track.detach()
     }
 
@@ -79,22 +112,21 @@ export default function VideoFeed({ room, isHost = false }: VideoFeedProps) {
   }, [room, isHost])
 
   return (
-    <div className="absolute inset-0 rounded-3xl overflow-hidden">
+    <div className="absolute inset-0 rounded-3xl overflow-hidden bg-black">
       {isHost && (
         <video
-          ref={videoRef}
+          ref={localVideoRef}
           autoPlay
-          playsInline
           muted
-          className="w-full h-full object-cover"
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover z-10"
         />
       )}
-      {!isHost && (
-        <div className="w-full h-full bg-black">
-          {/* Remote videos will be attached here via TrackSubscribed event */}
-        </div>
-      )}
+
+      <div
+        ref={remoteContainerRef}
+        className="absolute inset-0 w-full h-full z-0"
+      />
     </div>
   )
 }
-

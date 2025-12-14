@@ -18,6 +18,15 @@ export default function StreamRoom() {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
 
+  // Debug mount/unmount
+  useEffect(() => {
+    console.log('[StreamRoom mount]')
+    return () => console.log('[StreamRoom unmount]')
+  }, [])
+
+  // Single source of truth for room name
+  const getRoomName = (roomId: string) => `stream-${roomId}`
+
   const [stream, setStream] = useState<any>(null);
   const [isLoadingStream, setIsLoadingStream] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +35,19 @@ export default function StreamRoom() {
 
   // Get stream ID from params or location state
   const actualStreamId = id || streamId || location.state?.streamId;
+
+  // Consistent room name from the start
+  const roomName = actualStreamId ? getRoomName(actualStreamId) : null;
+
+  // Determine mode once we have stream data
+  const mode = stream ? (isHost ? 'publisher' : 'viewer') : 'viewer';
+
+  // MODE RESOLVED logging
+  useEffect(() => {
+    if (stream && user) {
+      console.log('[MODE RESOLVED ONCE]', { mode, roomName, identity: user.id })
+    }
+  }, [stream, user, mode, roomName])
 
   // Use unified LiveKit hook once we have stream data
   const {
@@ -40,9 +62,13 @@ export default function StreamRoom() {
     toggleMicrophone,
     getRoom,
   } = useUnifiedLiveKit({
-    roomName: stream?.room_name || actualStreamId,
-    user: user ? { ...user, role: (profile as any)?.troll_role || 'viewer', level: 1 } : null,
-    autoPublish: isHost // Only auto-publish for hosts
+    roomName: roomName || '',
+    user: user && stream ? {
+      ...user,
+      role: isHost ? 'broadcaster' : ((profile as any)?.troll_role || 'viewer'),
+      level: 1
+    } : null,
+    autoPublish: mode === 'publisher'
   });
 
   const room = getRoom();
@@ -165,6 +191,13 @@ export default function StreamRoom() {
     };
   }, [isConnected, stream?.id]);
 
+  // Navigate viewers to home when stream ends
+  useEffect(() => {
+    if (!isConnected && !isHost && stream) {
+      navigate('/', { replace: true });
+    }
+  }, [isConnected, isHost, stream, navigate]);
+
   // Handle stream end
   const handleEndStream = async () => {
     if (!stream?.id) return;
@@ -172,19 +205,24 @@ export default function StreamRoom() {
     const success = await endStream(stream.id, room);
     if (success) {
       disconnect(); // Disconnect from LiveKit room
-      navigate('/live', { replace: true });
+      navigate(`/stream-summary/${stream.id}`, { replace: true });
     }
   };
 
   // Fix loading condition to prevent infinite loading
-  const stillLoading = isLoadingStream || (stream && !isConnected && !error && !liveKitError);
+  const identity = user?.id;
+  const stillLoading = !identity || isLoadingStream || (stream && !isConnected && !error && !liveKitError);
 
   if (stillLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-white">{isLoadingStream ? 'Loading stream...' : 'Connecting to stream...'}</p>
+          <p className="text-white">
+            {!identity ? 'Loading user…' :
+             isLoadingStream ? 'Loading stream...' :
+             'Connecting to stream...'}
+          </p>
         </div>
       </div>
     );

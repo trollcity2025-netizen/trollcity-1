@@ -70,10 +70,11 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
           console.log('Track unsubscribed:', track.kind)
         })
 
-        // Connect to room
-        await newRoom.connect(url, token)
-        roomRef.current = newRoom
-        setRoom(newRoom)
+        // DISABLED: All connections must route through LiveKitService
+        // await newRoom.connect(url, token)
+        // roomRef.current = newRoom
+        // setRoom(newRoom)
+        console.warn('useRoom direct connect disabled - use LiveKitService')
       } catch (error) {
         console.error('Failed to connect to room:', error)
       }

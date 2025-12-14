@@ -1,12 +1,11 @@
 // src/App.tsx
-import React, { useEffect, Suspense, lazy, useState } from "react";
+import React, { useEffect, Suspense, lazy, useState, useRef } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./lib/store";
 import { supabase, isAdminEmail, UserRole } from "./lib/supabase";
 import api from "./lib/api";
 import { Toaster, toast } from "sonner";
-import { GlobalAppProvider, useGlobalApp } from "./contexts/GlobalAppContext";
-import { LiveKitProvider } from "./contexts/LiveKitContext";
+import { useGlobalApp } from "./contexts/GlobalAppContext";
 import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
 import GlobalErrorBanner from "./components/GlobalErrorBanner";
 import GlobalEventsBanner from "./components/GlobalEventsBanner";
@@ -41,7 +40,7 @@ const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 const EarningsPage = lazy(() => import("./pages/EarningsPage"));
 
 // Lazy-loaded pages
-const GoLiveSetup = lazy(() => import("./pages/GoLiveSetup"));
+const GoLive = lazy(() => import("./pages/GoLive"));
 const LiveBroadcast = lazy(() => import("./pages/LiveBroadcast"));
 const StreamRoom = lazy(() => import("./pages/StreamRoom"));
 const Stream = lazy(() => import("./pages/Stream"));
@@ -73,7 +72,7 @@ const FamilyWarsHub = lazy(() => import("./pages/FamilyWarsHub.jsx"));
 const FamilyLeaderboard = lazy(() => import("./pages/FamilyLeaderboard.jsx"));
 const FamilyShop = lazy(() => import("./pages/FamilyShop.jsx"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
-const EarningsPayout = lazy(() => import("./pages/EarningsPayout"));
+const _EarningsPayout = lazy(() => import("./pages/EarningsPayout"));
 const TransactionHistory = lazy(() => import("./pages/TransactionHistory"));
 const TrollCityWall = lazy(() => import("./pages/TrollCityWall"));
 const ReelFeed = lazy(() => import("./pages/ReelFeed"));
@@ -100,13 +99,13 @@ const Withdraw = lazy(() => import("./pages/Withdraw"));
 const Support = lazy(() => import("./pages/Support"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Changelog = lazy(() => import("./pages/Changelog"));
-const AccountWallet = lazy(() => import("./pages/AccountWallet"));
-const PaymentSettings = lazy(() => import("./pages/PaymentSettings"));
-const AccountPaymentsSuccess = lazy(() => import("./pages/AccountPaymentsSuccess"));
-const AccountPaymentLinkedSuccess = lazy(() => import("./pages/AccountPaymentLinkedSuccess"));
+const _AccountWallet = lazy(() => import("./pages/AccountWallet"));
+const _PaymentSettings = lazy(() => import("./pages/PaymentSettings"));
+const _AccountPaymentsSuccess = lazy(() => import("./pages/AccountPaymentsSuccess"));
+const _AccountPaymentLinkedSuccess = lazy(() => import("./pages/AccountPaymentLinkedSuccess"));
 const EmpirePartnerDashboard = lazy(() => import("./pages/EmpirePartnerDashboard"));
 const ReferralBonusPanel = lazy(() => import("./pages/admin/ReferralBonusPanel"));
-const EmpireApplications = lazy(() => import("./pages/admin/EmpireApplications"));
+const _EmpireApplications = lazy(() => import("./pages/admin/EmpireApplications"));
 const EmpirePartnerApply = lazy(() => import("./pages/EmpirePartnerApply"));
 const AddCard = lazy(() => import("./pages/AddCard"));
 const EarningsDashboard = lazy(() => import("./pages/EarningsDashboard"));
@@ -124,10 +123,10 @@ const Wallet = lazy(() => import("./pages/Wallet"));
 const PayoutRequest = lazy(() => import("./pages/PayoutRequest"));
 const AdminPayoutDashboard = lazy(() => import("./pages/admin/components/AdminPayoutDashboard"));
 const AdminLiveOfficersTracker = lazy(() => import("./pages/admin/AdminLiveOfficersTracker"));
-const VerificationPage = lazy(() => import("./pages/VerificationPage"));
-const VerificationComplete = lazy(() => import("./pages/VerificationComplete"));
+const _VerificationPage = lazy(() => import("./pages/VerificationPage"));
+const _VerificationComplete = lazy(() => import("./pages/VerificationComplete"));
 const AdminVerifiedUsers = lazy(() => import("./pages/admin/AdminVerifiedUsers"));
-const AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
+const _AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
 const AdminVerificationReview = lazy(() => import("./pages/admin/AdminVerificationReview"));
 const AdminPoliciesDocs = lazy(() => import("./pages/admin/AdminPoliciesDocs"));
 const AdminMarketplace = lazy(() => import("./pages/admin/AdminMarketplace"));
@@ -154,7 +153,7 @@ const Marketplace = lazy(() => import("./pages/Marketplace"));
 const ShopView = lazy(() => import("./pages/ShopView"));
 const UserInventory = lazy(() => import("./pages/UserInventory"));
 const DistrictTour = lazy(() => import("./pages/DistrictTour"));
-const DistrictNavigation = lazy(() => import("./components/DistrictNavigation"));
+const _DistrictNavigation = lazy(() => import("./components/DistrictNavigation"));
 
 function AppContent() {
   console.log('🚀 App component rendering...');
@@ -168,13 +167,21 @@ function AppContent() {
   } = useAuthStore();
   console.log('📊 App state:', { hasUser: !!user, hasProfile: !!profile, isLoading });
 
+  // APP INIT ONCE debug log
+  useEffect(() => {
+    console.log('[APP INIT ONCE]')
+  }, [])
+
   const location = useLocation();
   const navigate = useNavigate();
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalLoading] = useState(false);
 
+  // Guard startup navigation
+  const didNavigateRef = useRef(false);
+
   // Global app context for loading and error states
-  const { isLoading: globalLoading, loadingMessage, error, errorType, clearError, retryLastAction, isReconnecting, reconnectMessage } = useGlobalApp();
+  const { isLoading: globalLoading, loadingMessage, error, errorType, clearError: _clearError, retryLastAction, isReconnecting, reconnectMessage } = useGlobalApp();
 
   // Track route changes for session persistence
   useEffect(() => {
@@ -193,6 +200,11 @@ function AppContent() {
       return;
     }
 
+    // Guard against multiple navigates
+    if (didNavigateRef.current) {
+      return;
+    }
+
     // Only redirect officers who need orientation (lead officers and admins skip quiz)
     if (profile?.role === 'troll_officer' || profile?.is_troll_officer) {
       // Admins don't need orientation/quiz - they're automatically active
@@ -207,9 +219,11 @@ function AppContent() {
       }
       // Regular officers need to complete orientation/quiz
       if (!profile?.is_officer_active) {
+        didNavigateRef.current = true;
         navigate('/officer/orientation', { replace: true });
       }
     } else if (profile?.role === 'troll_family') {
+      didNavigateRef.current = true;
       navigate('/family', { replace: true });
     }
   }, [profile?.role, profile?.is_troll_officer, profile?.is_officer_active, location.pathname, navigate, user]);
@@ -218,7 +232,7 @@ function AppContent() {
   useEffect(() => {
     if (profile && (profile.is_kicked || profile.is_banned)) {
       // Import and show kick re-entry modal
-      import('./components/KickReentryModal').then(({ default: KickReentryModal }) => {
+      import('./components/KickReentryModal').then(({ default: _KickReentryModal }) => {
         // This will be handled by a global state or context
         // For now, we'll check on route changes
       })
@@ -370,6 +384,13 @@ function AppContent() {
     };
     initSession();
   }, []);
+
+  // Failsafe so refreshes never get stuck on the loading screen
+  useEffect(() => {
+    const timeout = setTimeout(() => setLoading(false), 8000);
+    return () => clearTimeout(timeout);
+  }, [setLoading]);
+
 
   // 🔹 Auth State Change Listener (handles token refresh failures)
   useEffect(() => {
@@ -542,7 +563,7 @@ function AppContent() {
                   <Route path="/profile/setup" element={<ProfileSetupPage />} />
 
                   {/* 🎥 Streaming */}
-                  <Route path="/go-live" element={<GoLiveSetup />} />
+                  <Route path="/go-live" element={<GoLive />} />
                   <Route path="/live/:streamId" element={<LiveBroadcast />} />
                   <Route path="/stream/:id" element={<Stream />} />
                   <Route path="/stream/:streamId" element={<StreamRoom />} />
@@ -592,7 +613,7 @@ function AppContent() {
                   <Route path="/seller/earnings" element={<ShopEarnings />} />
 
                   {/* 👨‍👩‍👧 Family */}
-                  <Route path="/family" element={<TrollFamily />} />
+                  <Route path="/family" element={<FamilyLounge />} />
                   <Route path="/family/city" element={<TrollFamilyCity />} />
                   <Route path="/family/profile/:id" element={<FamilyProfilePage />} />
                   <Route path="/family/chat" element={<FamilyChatPage />} />
@@ -955,14 +976,6 @@ function AppContent() {
 );
 }
 
-function App() {
-  return (
-    <GlobalAppProvider>
-      <LiveKitProvider>
-        <AppContent />
-      </LiveKitProvider>
-    </GlobalAppProvider>
-  );
+export default function App() {
+  return <AppContent />;
 }
-
-export default App;

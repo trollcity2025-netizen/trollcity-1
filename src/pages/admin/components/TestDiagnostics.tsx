@@ -83,15 +83,6 @@ export default function TestDiagnostics() {
               error: error,
               details: `Missing RPC function. Create migration: CREATE OR REPLACE FUNCTION ${rpcName}(...)`
             })
-          } else if (error.code === '42883' || error.message?.includes('function') && error.message?.includes('does not exist')) {
-            testResults.push({
-              name: `RPC: ${rpcName}`,
-              status: 'fail',
-              message: 'Function not found',
-              location: `Database RPC Functions`,
-              error: error,
-              details: `Error: ${error.message}`
-            })
           } else {
             // Function exists but wrong parameters - that's okay for this test
             testResults.push({

@@ -1,13 +1,24 @@
- import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useNavigate } from 'react-router-dom'
 import { Coins, Gift, Crown, Zap, ArrowLeft } from 'lucide-react'
 import WheelModal from './WheelModal'
+import { supabase } from '../lib/supabase'
 
 export default function TrollWheelPage() {
   const { profile, user } = useAuthStore()
   const navigate = useNavigate()
   const [showWheel, setShowWheel] = useState(false)
+  const [trollmonds, setTrollmonds] = useState<number>(0)
+  const [loadingBalance, setLoadingBalance] = useState(true)
+
+  useEffect(() => {
+    if (!profile) return
+    setLoadingBalance(true)
+    const trollmonds = profile?.free_coin_balance ?? 0
+    setTrollmonds(trollmonds)
+    setLoadingBalance(false)
+  }, [profile?.id, profile?.free_coin_balance])
 
   if (!user || !profile) {
     return (
@@ -37,9 +48,9 @@ export default function TrollWheelPage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-3xl font-bold flex items-center gap-3">
-            <span className="text-purple-400">🎡</span>
+            <span className="text-purple-400">dYZн</span>
             TROLL WHEEL
-            <span className="text-purple-400">🎡</span>
+            <span className="text-purple-400">dYZн</span>
           </h1>
         </div>
 
@@ -55,19 +66,19 @@ export default function TrollWheelPage() {
                 </h2>
                 <ul className="space-y-3 text-gray-300">
                   <li className="flex items-start gap-2">
-                    <span className="text-purple-400 mt-1">•</span>
+                    <span className="text-purple-400 mt-1">Г?Ы</span>
                     <span>Spin the wheel for a chance to win Trollmonds!</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-purple-400 mt-1">•</span>
+                    <span className="text-purple-400 mt-1">Г?Ы</span>
                     <span>Cost: <span className="text-yellow-400 font-bold">500 Trollmonds</span> per spin</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-purple-400 mt-1">•</span>
+                    <span className="text-purple-400 mt-1">Г?Ы</span>
                     <span>Win prizes credited to your <span className="text-green-400 font-bold">Trollmond balance</span></span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="text-purple-400 mt-1">•</span>
+                    <span className="text-purple-400 mt-1">Г?Ы</span>
                     <span>Chance to win up to <span className="text-yellow-400 font-bold">5,000 Trollmonds</span>!</span>
                   </li>
                 </ul>
@@ -119,7 +130,7 @@ export default function TrollWheelPage() {
                       <span className="w-8 h-8 bg-yellow-600 rounded-full flex items-center justify-center text-sm font-bold">5000</span>
                       <span className="text-gray-300 font-semibold">JACKPOT!</span>
                     </div>
-                    <span className="text-yellow-400 font-semibold">🌟 Legendary</span>
+                    <span className="text-yellow-400 font-semibold">dYOY Legendary</span>
                   </div>
                 </div>
               </div>
@@ -136,30 +147,30 @@ export default function TrollWheelPage() {
                   <div className="bg-black/20 p-4 rounded-lg">
                     <p className="text-sm text-gray-400 mb-1">Trollmonds Available</p>
                     <p className="text-2xl font-bold text-yellow-400">
-                      {profile?.free_coin_balance?.toLocaleString() || 0}
+                      {loadingBalance ? '—' : (trollmonds ?? 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setShowWheel(true)}
-                  disabled={(profile?.free_coin_balance || 0) < 500}
+                  disabled={loadingBalance || (trollmonds || 0) < 500}
                   className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
                 >
-                  {((profile?.free_coin_balance || 0) >= 500) ? (
+                  {((trollmonds || 0) >= 500) ? (
                     <>
-                      <span className="mr-2">🎡</span>
+                      <span className="mr-2">dYZн</span>
                       SPIN THE WHEEL - 500 TROLLMONDS
                     </>
                   ) : (
                     <>
-                      <span className="mr-2">⚠️</span>
+                      <span className="mr-2">LOCKED</span>
                       NEED 500 TROLLMONDS
                     </>
                   )}
                 </button>
 
-                {((profile?.free_coin_balance || 0) < 500) && (
+                {((trollmonds || 0) < 500) && (
                   <p className="text-sm text-gray-400 mt-3">
                     Get more Trollmonds from <button
                       onClick={() => navigate('/go-live')}
@@ -189,28 +200,28 @@ export default function TrollWheelPage() {
         {/* Rules and Info */}
         <div className="mt-8 bg-zinc-900 rounded-xl p-6 border border-purple-500/20">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <span className="text-purple-400">ℹ️</span>
+            <span className="text-purple-400">Г,1Л,?</span>
             Rules & Information
           </h2>
           <ul className="space-y-3 text-gray-300 text-sm">
             <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-1">•</span>
+              <span className="text-purple-400 mt-1">Г?Ы</span>
               <span>Only <span className="text-yellow-400 font-semibold">Trollmonds</span> can be used to spin the wheel</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-1">•</span>
+              <span className="text-purple-400 mt-1">Г?Ы</span>
               <span>All prizes are awarded as <span className="text-green-400 font-semibold">Trollmonds</span></span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-1">•</span>
+              <span className="text-purple-400 mt-1">Г?Ы</span>
               <span>Jackpot triggers special confetti and sound effects!</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-1">•</span>
+              <span className="text-purple-400 mt-1">Г?Ы</span>
               <span>Wheel activity is logged and can be viewed in your transaction history</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-1">•</span>
+              <span className="text-purple-400 mt-1">Г?Ы</span>
               <span>Maximum 10 spins per day to keep it fair for everyone</span>
             </li>
           </ul>
@@ -218,7 +229,13 @@ export default function TrollWheelPage() {
       </div>
 
       {/* Wheel Modal */}
-      {showWheel && <WheelModal onClose={() => setShowWheel(false)} />}
+      {showWheel && (
+        <WheelModal
+          onClose={() => setShowWheel(false)}
+          trollmonds={trollmonds}
+          setTrollmonds={setTrollmonds}
+        />
+      )}
     </div>
   )
 }

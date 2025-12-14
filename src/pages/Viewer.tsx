@@ -256,13 +256,14 @@ export default function ViewerPage() {
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Authority Panel - Right Side Rail */}
-      <div className="hidden lg:block">
-        <div className="sticky top-0 h-screen">
-          <AuthorityPanel />
-        </div>
+    {/* Authority Panel - Right Side Rail */}
+    <div className="hidden lg:block">
+      <div className="sticky top-0 h-screen">
+        <AuthorityPanel />
       </div>
     </div>
-  )
+  </div>
+)
 }

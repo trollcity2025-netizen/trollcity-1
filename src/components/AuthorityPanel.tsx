@@ -59,7 +59,7 @@ const AuthorityPanel: React.FC = () => {
         event: '*',
         schema: 'public',
         table: 'court_sessions'
-      }, (payload) => {
+      }, (_payload) => {
         loadCourtSession();
       })
       .subscribe();

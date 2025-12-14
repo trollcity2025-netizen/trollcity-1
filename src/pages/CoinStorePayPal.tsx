@@ -7,6 +7,9 @@ import { toast } from 'sonner'
 import { createPayPalOrder, capturePayPalOrder, getPayPalConfig, testPayPalConnection, logPayPalAction } from '../lib/paypalUtils'
 import TrollerInsurance from './TrollerInsurance'
 
+// App version for cache busting
+const APP_VERSION = '1.0.0-' + Date.now().toString();
+
 export default function CoinStore() {
   const { user, profile, refreshProfile } = useAuthStore()
   const navigate = useNavigate()
@@ -233,7 +236,7 @@ export default function CoinStore() {
   )
 
   return (
-    <PayPalScriptProvider options={paypalOptions}>
+    <PayPalScriptProvider key={APP_VERSION} options={paypalOptions}>
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-4">
@@ -365,8 +368,20 @@ export default function CoinStore() {
                             });
                             const data = await res.json();
                             console.log("Create Order Response", data);
-                            if (!data?.orderID) throw new Error("PayPal did not return an orderID");
-                            return data.orderID;
+
+                            if (!data?.id) {
+                              console.error("FATAL: create-order did not return a valid PayPal order ID");
+                              throw new Error("PayPal did not return a valid order ID. Cannot proceed with payment.");
+                            }
+
+                            // Validate PayPal order ID format
+                            if (typeof data.id !== 'string' || data.id.length < 10 || data.id.length > 25) {
+                              console.error("FATAL: Invalid PayPal order ID format:", data.id);
+                              throw new Error("Invalid PayPal order ID received. Cannot proceed with payment.");
+                            }
+
+                            console.log("✅ Valid PayPal Order ID returned from create-order:", data.id);
+                            return data.id;
                           } catch (err) {
                             console.error("createOrder error", err);
                             toast.error("Unable to create PayPal order.");
@@ -376,6 +391,7 @@ export default function CoinStore() {
                         }}
                         onApprove={async (data, actions) => {
                           try {
+                            console.log("Order ID sent to capture-order:", data.orderID);
                             const res = await fetch('/api/paypal/complete-order', {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },

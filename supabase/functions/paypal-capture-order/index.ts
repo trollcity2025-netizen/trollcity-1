@@ -63,10 +63,12 @@ serve(async (req: Request) => {
     const currentUserId = userData.user.id;
 
     const body = await req.json();
-    const orderId = body.orderId as string;
+    const orderId = body.orderID as string;
     if (!orderId) {
-      return new Response("Missing orderId", { status: 400, headers: cors });
+      return new Response("Missing orderID", { status: 400, headers: cors });
     }
+
+    console.log(`PayPal capture: orderID=${orderId}, env=${PAYPAL_MODE}, clientId=${PAYPAL_CLIENT_ID?.substring(0, 8)}...`);
 
     const accessToken = await getAccessToken();
 
@@ -98,8 +100,17 @@ serve(async (req: Request) => {
       );
 
       if (!captureRes.ok) {
-        console.error("PayPal capture error", await captureRes.text());
-        return new Response("Failed to capture payment", { status: 500, headers: cors });
+        const errorText = await captureRes.text();
+        console.error("PayPal capture error:", errorText);
+        const debugId = captureRes.headers.get('paypal-debug-id') || 'unknown';
+        return new Response(JSON.stringify({
+          error: "Failed to capture payment",
+          paypalDebugId: debugId,
+          details: errorText
+        }), {
+          status: 500,
+          headers: { ...cors, "Content-Type": "application/json" }
+        });
       }
 
       orderData = await captureRes.json();

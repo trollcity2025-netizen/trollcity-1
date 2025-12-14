@@ -156,7 +156,7 @@ const FamilyLounge = () => {
             Join or create a Troll Family to access the family lounge and participate in epic family battles!
           </p>
           <button
-            onClick={() => navigate('/family')}
+            onClick={() => navigate('/apply/family')}
             className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors"
           >
             Browse Families

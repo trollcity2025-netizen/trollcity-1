@@ -1,240 +1,189 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../lib/store';
-import { Video, Mic, MicOff, Settings } from 'lucide-react';
-import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid';
-import { useLiveKit } from '../contexts/LiveKitContext';
-import { toast } from 'sonner';
+import React, { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from '../lib/store'
+import { Video, Mic, MicOff, Settings } from 'lucide-react'
+import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid'
+import { useLiveKit } from '../contexts/LiveKitContext'
+import { toast } from 'sonner'
 
 const GoLive: React.FC = () => {
-  const navigate = useNavigate();
-  const { user, profile } = useAuthStore();
-  const { isConnected, isConnecting, toggleCamera, toggleMicrophone, localParticipant, connect } = useLiveKit();
+  const navigate = useNavigate()
+  const { user, profile } = useAuthStore()
+  const { toggleMicrophone, toggleCamera, isConnected } = useLiveKit()
 
-  // Role logic for Go Live access
-  const canGoLive =
-    user?.role === "admin" ||
-    user?.role === "broadcaster" ||
-    user?.role === "lead_officer" ||
-    user?.role === "troll_officer";
+  // 🔒 HARD-LOCKED identifiers
+  const streamUuidRef = useRef<string>(crypto.randomUUID())
+  const roomNameRef = useRef<string>(`stream-${streamUuidRef.current}`)
+  const identityRef = useRef<string | null>(null)
 
-  // Frontend guard - if user doesn't have permission, show access denied
-  if (!canGoLive) {
-    return (
-      <div className="p-8 text-center text-red-500 font-bold">
-        Access denied.
-      </div>
-    );
+  if (!identityRef.current && user?.id) {
+    identityRef.current = user.id
   }
 
-  const [streamTitle, setStreamTitle] = useState('');
-  const [streamId, setStreamId] = useState<string | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const streamUuid = streamUuidRef.current
+  const roomName = roomNameRef.current
+  const identity = identityRef.current
 
-  // IMMEDIATE UI RENDER: Set up room name immediately, connect asynchronously
+  const [streamTitle, setStreamTitle] = useState('')
+  const [started, setStarted] = useState(false)
+  const [creating, setCreating] = useState(false)
+
+  const [micEnabled, setMicEnabled] = useState(true)
+  const [camEnabled, setCamEnabled] = useState(true)
+
+  const createdRef = useRef(false)
+  const navigatedRef = useRef(false)
+
+  // Default title
   useEffect(() => {
-    if (!user || !profile || streamId) return;
-
-    const roomName = `stream-${crypto.randomUUID()}`;
-    setStreamId(roomName);
-
-    console.log('🎥 GoLive: Setting up room:', roomName);
-
-    // Connect asynchronously - DO NOT block UI render
-    connect(roomName, { ...user, role: 'broadcaster' }, { autoPublish: false }).catch(error => {
-      console.error('❌ GoLive: Connection failed, but UI continues:', error);
-      // Connection failure should not prevent UI from rendering
-    });
-  }, [user, profile, connect]);
-
-  // Start stream when connected
-  useEffect(() => {
-    if (isConnected && streamId && !isStreaming && streamTitle.trim()) {
-      handleStartStream();
+    if (!streamTitle.trim()) {
+      setStreamTitle(`Live with ${profile?.username || 'broadcaster'}`)
     }
-  }, [isConnected, streamId, isStreaming, streamTitle]);
+  }, [profile?.username])
 
-  const handleStartStream = async () => {
-    if (!user || !profile || !streamId) {
-      toast.error('Not ready to stream');
-      return;
+  const startStream = async () => {
+    if (!identity || !profile?.id) {
+      toast.error('Not ready to stream')
+      return
     }
 
     if (!streamTitle.trim()) {
-      toast.error('Enter a stream title');
-      return;
+      toast.error('Enter a stream title')
+      return
     }
 
+    // Browser media permission (required)
     try {
-      console.log('🎥 GoLive: Starting stream...');
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    } catch {
+      toast.error('Camera/microphone access required')
+      return
+    }
 
-      // Insert into streams table
-      const { error: insertError } = await supabase.from('streams').insert({
-        id: streamId,
-        broadcaster_id: profile.id,
-        title: streamTitle,
-        room_name: streamId,
-        is_live: true,
-        status: 'live',
-        start_time: new Date().toISOString(),
-        thumbnail_url: null,
-        is_testing_mode: false,
-        viewer_count: 0,
-        current_viewers: 0,
-        total_gifts_coins: 0,
-        popularity: 0,
-      });
+    setStarted(true)
 
-      if (insertError) {
-        console.error('❌ GoLive: Failed to create stream record:', insertError);
-        toast.error('Failed to start stream');
-        return;
-      }
+    if (createdRef.current) return
+    createdRef.current = true
+    setCreating(true)
 
-      console.log('✅ GoLive: Stream record created');
-      setIsStreaming(true);
+    const { error } = await supabase.from('streams').insert({
+      id: streamUuid,
+      broadcaster_id: profile.id,
+      title: streamTitle,
+      room_name: roomName,
+      is_live: true,
+      status: 'live',
+      start_time: new Date().toISOString(),
+      viewer_count: 0,
+      current_viewers: 0,
+      total_gifts_coins: 0,
+      popularity: 0,
+    })
 
-      // Navigate to stream room after a brief delay
+    setCreating(false)
+
+    if (error) {
+      console.error(error)
+      toast.error('Failed to create stream')
+      createdRef.current = false
+      setStarted(false)
+      return
+    }
+
+    if (!navigatedRef.current) {
+      navigatedRef.current = true
       setTimeout(() => {
-        navigate(`/stream/${streamId}`, { replace: true });
-      }, 1000);
-
-    } catch (error) {
-      console.error('❌ GoLive: Error starting stream:', error);
-      toast.error('Error starting stream');
+        navigate(`/stream/${streamUuid}`, { replace: true })
+      }, 300)
     }
-  };
-
-  const handleTitleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (streamTitle.trim()) {
-      handleStartStream();
-    }
-  };
-
-  // UI renders immediately - no blocking on media access
-  // Show title input form as soon as we have a streamId
-  if (!streamId) {
-    return (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-lg">Setting up your stream...</p>
-        </div>
-      </div>
-    );
   }
 
-  // Show title input form immediately once we have streamId
-  if (!streamTitle.trim()) {
+  // ================= UI =================
+
+  if (!started) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center p-6">
-        <div className="max-w-md w-full">
-          <div className="text-center mb-8">
-            <Video className="w-16 h-16 text-purple-400 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold mb-2">Ready to Go Live</h1>
-            <p className="text-gray-400">Enter your stream title to start broadcasting</p>
-          </div>
+        <div className="max-w-md w-full space-y-6">
+          <Video className="w-16 h-16 text-purple-400 mx-auto" />
+          <h1 className="text-3xl font-bold text-center">Ready to Go Live</h1>
 
-          <form onSubmit={handleTitleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Stream Title *
-              </label>
-              <input
-                type="text"
-                value={streamTitle}
-                onChange={(e) => setStreamTitle(e.target.value)}
-                placeholder="What's your stream about?"
-                className="w-full bg-[#1C1C24] border border-purple-500/40 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                autoFocus
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!streamTitle.trim()}
-              className="w-full py-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Start Streaming
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // If streaming, show the live interface
-  if (isStreaming) {
-    return (
-      <div className="min-h-screen bg-[#0A0814] text-white">
-        <div className="max-w-6xl mx-auto p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              <h1 className="text-2xl font-bold">LIVE: {streamTitle}</h1>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Camera Toggle */}
-              <button
-                onClick={toggleCamera}
-                className={`p-2 rounded-lg ${localParticipant?.isCameraEnabled ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} transition-colors`}
-                title={localParticipant?.isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
-              >
-                <Video className="w-5 h-5" />
-              </button>
-
-              {/* Mic Toggle */}
-              <button
-                onClick={toggleMicrophone}
-                className={`p-2 rounded-lg ${localParticipant?.isMicrophoneEnabled ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} transition-colors`}
-                title={localParticipant?.isMicrophoneEnabled ? 'Turn off microphone' : 'Turn on microphone'}
-              >
-                {localParticipant?.isMicrophoneEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-              </button>
-
-              {/* Settings */}
-              <button className="p-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors">
-                <Settings className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Video Grid */}
-          <LiveKitRoomWrapper
-            roomName={streamId}
-            user={user}
-            className="w-full h-[70vh] bg-black rounded-xl overflow-hidden"
-            showLocalVideo={true}
-            maxParticipants={6}
-            autoPublish={true}
-            role="broadcaster"
+          <input
+            value={streamTitle}
+            onChange={(e) => setStreamTitle(e.target.value)}
+            className="w-full bg-[#1C1C24] border border-purple-500/40 rounded px-4 py-3"
           />
 
-          {/* Stream Info */}
-          <div className="mt-6 bg-[#1C1C24] rounded-lg p-4">
-            <div className="flex items-center justify-between text-sm text-gray-400">
-              <span>Stream ID: {streamId}</span>
-              <span>Status: LIVE</span>
-            </div>
-          </div>
+          <button
+            onClick={startStream}
+            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded"
+          >
+            Start Streaming
+          </button>
         </div>
       </div>
-    );
+    )
   }
 
-  // Fallback
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
-      <div className="text-center">
-        <Video className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-lg">Preparing your stream...</p>
+    <div className="min-h-screen bg-[#0A0814] text-white">
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+            <h1 className="text-2xl font-bold">LIVE: {streamTitle}</h1>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                toggleCamera()
+                setCamEnabled((v) => !v)
+              }}
+              disabled={!isConnected}
+              className={`p-2 rounded-lg ${
+                camEnabled ? 'bg-green-600' : 'bg-red-600'
+              } ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Video />
+            </button>
+
+            <button
+              onClick={() => {
+                toggleMicrophone()
+                setMicEnabled((v) => !v)
+              }}
+              disabled={!isConnected}
+              className={`p-2 rounded-lg ${
+                micEnabled ? 'bg-green-600' : 'bg-red-600'
+              } ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {micEnabled ? <Mic /> : <MicOff />}
+            </button>
+
+            <Settings />
+          </div>
+        </div>
+
+        <div className="w-full h-[70vh] bg-black rounded-lg overflow-hidden">
+          <LiveKitRoomWrapper
+            roomName={roomName}
+            identity={identity!}
+            role="broadcaster"
+            autoConnect
+            autoPublish
+            maxParticipants={6}
+            className="w-full h-full"
+          />
+        </div>
+
+        <div className="mt-4 text-sm text-gray-400 flex justify-between">
+          <span>Room: {roomName}</span>
+          <span>{creating ? 'Starting…' : 'Live'}</span>
+        </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default GoLive;
+export default GoLive

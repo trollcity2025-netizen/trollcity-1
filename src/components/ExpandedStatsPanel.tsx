@@ -44,12 +44,7 @@ export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPan
         const levelData = await getLevelProfile(user.id)
         const dnaData = await getDnaProfile(user.id)
 
-        // Load wallet data
-        const { data: wallet } = await supabase
-          .from('wallets')
-          .select('paid_coins, trollmonds')
-          .eq('user_id', user.id)
-          .single()
+        // Use profile balances
 
         // Load family data
         let familyData = null
@@ -94,8 +89,8 @@ export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPan
           xp: levelData.xp,
           totalXp: levelData.total_xp,
           nextLevelXp: levelData.next_level_xp,
-          paidCoins: wallet?.paid_coins || profile?.paid_coin_balance || 0,
-          trollmonds: wallet?.trollmonds || 0,
+          paidCoins: profile?.paid_coin_balance || 0,
+          trollmonds: profile?.free_coin_balance || 0,
           ...familyData,
           ...warStats,
           badges

@@ -391,12 +391,12 @@ export function LeadOfficerDashboard() {
       let error: any = null
 
       switch (actionType) {
-        case 'hire_officer':
+        case 'hire_officer': {
           // Approve officer application using RPC
           const { data: hireData, error: hireError } = await supabase.rpc('approve_officer_application', {
             p_user_id: userId
           })
-          
+
           if (hireError) {
             error = hireError
           } else if (!hireData?.success) {
@@ -413,8 +413,9 @@ export function LeadOfficerDashboard() {
             error = activateError
           }
           break
+        }
 
-        case 'fire_officer':
+        case 'fire_officer': {
           // Deactivate officer
           const { error: fireError } = await supabase
             .from('user_profiles')
@@ -426,8 +427,9 @@ export function LeadOfficerDashboard() {
             .eq('id', userId)
           error = fireError
           break
+        }
 
-        case 'promote_to_lead':
+        case 'promote_to_lead': {
           // Promote to lead officer
           const { error: promoteError } = await supabase
             .from('user_profiles')
@@ -438,8 +440,9 @@ export function LeadOfficerDashboard() {
             .eq('id', userId)
           error = promoteError
           break
+        }
 
-        case 'revoke_lead':
+        case 'revoke_lead': {
           // Revoke lead officer status
           const { error: revokeError } = await supabase
             .from('user_profiles')
@@ -450,6 +453,7 @@ export function LeadOfficerDashboard() {
             .eq('id', userId)
           error = revokeError
           break
+        }
       }
 
       if (error) {

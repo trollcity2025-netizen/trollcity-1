@@ -38,7 +38,7 @@ export default function ModerationPanel({ room, targetUserId, roomId }: Moderati
 
   const handleMute = () => {
     room?.localParticipant.setParticipantPermissions(targetUserId, {
-      canPublishAudio: false
+      canPublishAudio: true
     });
   };
 

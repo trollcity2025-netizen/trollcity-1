@@ -1,65 +1,117 @@
-// File: /api/livekit-token.ts  (Vercel serverless function)
-// Universal LiveKit token endpoint for all streaming features
+// File: /api/livekit-token.ts
+// Universal LiveKit token endpoint for ALL Troll City live features
 
-import { AccessToken } from 'livekit-server-sdk'
+import { AccessToken, TrackSource } from 'livekit-server-sdk'
 
 export default async function handler(req: any, res: any) {
-  // Support both GET (query params) and POST (body) for flexibility
-  const { room, identity, user_id, role, level } = req.method === 'POST' ? req.body : req.query
-
-  // Backend guard for Go Live access - only allow specific roles to create broadcaster tokens
-  const allowedGoLiveRoles = ["admin", "broadcaster", "lead_officer", "troll_officer"];
-  
-  // If this is a broadcaster request and the role is not allowed, deny access
-  if (role === 'broadcaster' && !allowedGoLiveRoles.includes(role)) {
-    return res.status(403).json({ error: "Not allowed to go live" });
+  /* ============================
+     METHOD GUARD
+  ============================ */
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' })
   }
 
-  // Build metadata from request
+  /* ============================
+     PARAMS
+  ============================ */
+  const params = req.method === 'POST' ? req.body : req.query
+
+  const room = params.room
+  const identity = params.identity
+  const user_id = params.user_id
+  const role = params.role
+  const level = params.level
+
+  /* ============================
+     HARD GUARDS
+  ============================ */
+  if (!room || !identity) {
+    return res.status(400).json({
+      error: 'Missing required parameters: room or identity',
+    })
+  }
+
+  /* ============================
+     ROLE RESOLUTION
+     POST → broadcaster
+     GET  → viewer
+  ============================ */
+  const resolvedRole =
+    req.method === 'POST' ? role || 'creator' : 'viewer'
+
+  /* ============================
+     METADATA
+  ============================ */
   const metadata = {
-    user_id: user_id || req.body?.user_id || req.query?.user_id,
-    role: role || req.body?.role || req.query?.role || 'viewer',
-    level: level || req.body?.level || req.query?.level || 1,
-    ...req.body?.metadata, // Allow additional metadata
+    user_id: user_id ?? null,
+    role: resolvedRole,
+    level: Number(level ?? 1),
   }
 
-  const apiKey = process.env.LIVEKIT_API_KEY!
-  const apiSecret = process.env.LIVEKIT_API_SECRET!
-  const livekitUrl = process.env.LIVEKIT_CLOUD_URL!
+  /* ============================
+     ENV VALIDATION
+  ============================ */
+  const apiKey = process.env.LIVEKIT_API_KEY
+  const apiSecret = process.env.LIVEKIT_API_SECRET
+  const livekitUrl = process.env.LIVEKIT_CLOUD_URL
 
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return res.status(500).json({ error: 'LiveKit not configured' })
+  }
+
+  /* ============================
+     TOKEN
+  ============================ */
   const token = new AccessToken(apiKey, apiSecret, {
-    identity: identity as string,
-    ttl: 120, // 2 minutes expiration
+    identity: String(identity),
+    ttl: 60 * 60 * 6,
     metadata: JSON.stringify(metadata),
   })
 
-  // Role-based permissions
-  let canPublish = true
-  let canPublishData = true
+  /* ============================
+     POST-BASED AUTHORITY
+  ============================ */
+  const isBroadcaster = req.method === 'POST'
 
-  if (room === 'troll-court') {
-    // Court room permissions - only specific roles can broadcast
-    const courtPublishRoles = ["admin", "lead_troll_officer", "troll_officer", "defendant", "accuser", "witness"]
-    canPublish = courtPublishRoles.includes(metadata.role)
-    canPublishData = canPublish // Same permission for data
-  } else if (room === 'officer-stream') {
-    // Officer stream permissions - only officers can broadcast
-    const officerRoles = ["admin", "lead_troll_officer", "troll_officer"]
-    canPublish = officerRoles.includes(metadata.role)
-    canPublishData = canPublish // Same permission for data
-  }
+  const canPublish = isBroadcaster
+  const canPublishData = isBroadcaster
 
-  token.addGrant({
-    room: room as string,
-    roomJoin: true,
-    canPublish: canPublish,
-    canSubscribe: true,
-    canPublishData: canPublishData,
+  /* ============================
+     DEBUG LOG
+  ============================ */
+  console.log('[LiveKit Token Issued]', {
+    method: req.method,
+    room,
+    identity,
+    role: resolvedRole,
+    isBroadcaster,
+    canPublish,
+    sources: canPublish
+      ? [TrackSource.CAMERA, TrackSource.MICROPHONE]
+      : [],
   })
 
-  res.status(200).json({
+  /* ============================
+     GRANTS (THIS WAS THE BUG)
+  ============================ */
+  token.addGrant({
+    room: String(room),
+    roomJoin: true,
+    canSubscribe: true,
+    canPublish,
+    canPublishData,
+    canUpdateOwnMetadata: true,
+    canPublishSources: canPublish
+      ? [TrackSource.CAMERA, TrackSource.MICROPHONE]
+      : [],
+  })
+
+  /* ============================
+     RESPONSE
+  ============================ */
+  return res.status(200).json({
     token: await token.toJwt(),
-    livekitUrl: livekitUrl,
+    livekitUrl,
     serverUrl: livekitUrl,
     url: livekitUrl,
   })

@@ -6,33 +6,77 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 export default async function handler(req, res) {
+  // Disable caching
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
+    // Use ONLY PAYPAL_ENV to select environment - no auto-detection
+    const clientId = process.env.PAYPAL_CLIENT_ID;
+    const isSandbox = process.env.PAYPAL_ENV === 'sandbox';
+
+    console.log('PayPal Environment:', isSandbox ? 'SANDBOX' : 'LIVE', `(PAYPAL_ENV: ${process.env.PAYPAL_ENV})`);
+
     const client = new paypal.core.PayPalHttpClient(
-      new paypal.core.LiveEnvironment(
-        process.env.PAYPAL_CLIENT_ID,
-        process.env.PAYPAL_CLIENT_SECRET
-      )
+      isSandbox
+        ? new paypal.core.SandboxEnvironment(clientId, process.env.PAYPAL_CLIENT_SECRET)
+        : new paypal.core.LiveEnvironment(clientId, process.env.PAYPAL_CLIENT_SECRET)
     );
 
     const { orderID, user_id } = req.body;
+    console.log('📥 Capture Order Request received - OrderID:', orderID, 'UserID:', user_id);
 
     if (!orderID || !user_id) {
       return res.status(400).json({ error: "Missing orderID or user_id" });
     }
 
-    // Capture the payment
+    if (!orderID.trim()) {
+      return res.status(400).json({ error: "Invalid orderID - empty or whitespace" });
+    }
+
+    // Validate orderID format (PayPal order IDs are typically 17-19 characters)
+    if (orderID.length < 10 || orderID.length > 25) {
+      return res.status(400).json({ error: "Invalid orderID format" });
+    }
+
+    // Capture the payment - EXACT orderID from frontend
+    console.log('Attempting to capture PayPal order:', orderID);
     const request = new paypal.orders.OrdersCaptureRequest(orderID);
     request.requestBody({});
 
-    const capture = await client.execute(request);
+    let capture;
+    try {
+      capture = await client.execute(request);
+    } catch (error) {
+      console.error('PayPal capture error:', error);
+
+      // Fail hard on 404 or INVALID_RESOURCE_ID
+      if (error.statusCode === 404 || error.message?.includes('INVALID_RESOURCE_ID')) {
+        console.error('FATAL: PayPal order not found or invalid:', orderID);
+        return res.status(400).json({
+          success: false,
+          message: "PayPal order not found or invalid. Payment cannot be processed."
+        });
+      }
+
+      // Re-throw other errors
+      throw error;
+    }
 
     if (capture.result.status !== "COMPLETED") {
-      return res.status(400).json({ success: false, message: "Payment not completed" });
+      console.error('PayPal capture incomplete:', capture.result.status);
+      return res.status(400).json({
+        success: false,
+        message: `Payment status: ${capture.result.status}. Payment not completed.`
+      });
     }
+
+    console.log('PayPal capture successful for order:', orderID);
 
     // Extract purchase details
     const purchaseUnit = capture.result.purchase_units[0];

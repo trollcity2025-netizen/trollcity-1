@@ -15,15 +15,18 @@ interface WheelSegment {
 
 interface WheelModalProps {
   onClose?: () => void
+  trollmonds?: number
+  setTrollmonds?: (value: number) => void
 }
 
-export default function WheelModal({ onClose }: WheelModalProps) {
+export default function WheelModal({ onClose, trollmonds = 0, setTrollmonds }: WheelModalProps) {
   const { profile, user } = useAuthStore()
   const [isOpen, setIsOpen] = useState(true)
   const [isSpinning, setIsSpinning] = useState(false)
   const [result, setResult] = useState<WheelSegment | null>(null)
   const [wheelConfig, setWheelConfig] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [balance, setBalance] = useState<number>(trollmonds || 0)
 
   // Wheel segments configuration
   const segments: WheelSegment[] = [
@@ -34,6 +37,10 @@ export default function WheelModal({ onClose }: WheelModalProps) {
     { id: '250', label: '250', icon: <DollarSign className="w-6 h-6" />, color: '#32CD32', coins: 250, probability: 0.2 },
     { id: '750', label: '750', icon: <Gift className="w-6 h-6" />, color: '#FF69B4', coins: 750, probability: 0.1 },
   ]
+
+  useEffect(() => {
+    setBalance(trollmonds || 0)
+  }, [trollmonds])
 
   useEffect(() => {
     const loadWheelConfig = async () => {
@@ -73,6 +80,13 @@ export default function WheelModal({ onClose }: WheelModalProps) {
     loadWheelConfig()
   }, [])
 
+  useEffect(() => {
+    if (!profile) return
+    const walletBalance = profile?.free_coin_balance ?? 0
+    setBalance(walletBalance)
+    if (setTrollmonds) setTrollmonds(walletBalance)
+  }, [profile?.id, profile?.free_coin_balance, setTrollmonds])
+
   const spinWheel = async () => {
     if (!profile || !user || !wheelConfig?.is_active) return
 
@@ -82,25 +96,27 @@ export default function WheelModal({ onClose }: WheelModalProps) {
       return
     }
 
-    // Check if user has enough free coins
-    if ((profile.free_coin_balance || 0) < (wheelConfig.spin_cost || 500)) {
-      toast.error(`You need ${wheelConfig.spin_cost || 500} free coins to spin the wheel`)
+    // Check if user has enough trollmonds
+    const spinCost = wheelConfig.spin_cost || 500
+    if ((balance || 0) < spinCost) {
+      toast.error(`You need ${spinCost} Trollmonds to spin the wheel`)
       return
     }
 
     setIsSpinning(true)
 
     try {
-      // Deduct free coins first
-      const { error: deductError } = await supabase.rpc('spend_free_coins', {
-        p_user_id: user.id,
-        p_amount: wheelConfig.spin_cost || 500,
-        p_reason: 'troll_wheel_spin'
-      })
+      // Deduct trollmonds from user profile
+      const newBalance = (balance || 0) - spinCost
+      const { error: deductError } = await supabase
+        .from('user_profiles')
+        .update({
+          free_coin_balance: newBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
 
-      if (deductError) {
-        throw deductError
-      }
+      if (deductError) throw deductError
 
       // Calculate result based on probabilities
       const random = Math.random()
@@ -123,40 +139,21 @@ export default function WheelModal({ onClose }: WheelModalProps) {
       setResult(selectedSegment)
 
       // Award trollmonds to user (prizes go to trollmond balance)
-      // Since we don't have a specific RPC for trollmonds, we'll use a direct database approach
-      // First, try to update the wallets table if it exists
-      let awardError = null
-      try {
-        // Try to update wallets table first
-        const { error: walletError } = await supabase
-          .from('wallets')
-          .upsert({
-            user_id: user.id,
-            trollmonds: (profile as any)?.trollmond_balance || 0 + selectedSegment.coins,
-            updated_at: new Date().toISOString()
-          })
-
-        if (walletError) {
-          console.warn('Wallets table update failed, trying alternative approach:', walletError)
-          // If wallets table doesn't exist, we'll need to add trollmond_balance to user_profiles
-          // This would require a migration, so for now we'll log the win but not award
-          awardError = walletError
-        }
-      } catch (err) {
-        console.error('Error awarding trollmonds:', err)
-        awardError = err as any
-      }
+      const payoutBalance = newBalance + selectedSegment.coins
+      const { error: awardError } = await supabase
+        .from('user_profiles')
+        .update({
+          free_coin_balance: payoutBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
 
       if (awardError) {
         console.error('Error awarding trollmonds:', awardError)
         toast.error('Spin completed but failed to award trollmonds')
       } else {
-        // Update local profile with trollmond balance
-        const updatedProfile = {
-          ...profile,
-          trollmond_balance: ((profile as any)?.trollmond_balance || 0) + selectedSegment.coins
-        }
-        useAuthStore.getState().setProfile(updatedProfile as any)
+        setBalance(payoutBalance)
+        if (setTrollmonds) setTrollmonds(payoutBalance)
       }
 
       // Log the spin in database
@@ -203,7 +200,7 @@ export default function WheelModal({ onClose }: WheelModalProps) {
         </h2>
 
         <p className="text-gray-300 text-center mb-4 text-sm">
-          Spin the wheel for a chance to win free coins!
+          Spin the wheel for a chance to win Trollmonds!
         </p>
 
         {loading ? (
@@ -278,16 +275,16 @@ export default function WheelModal({ onClose }: WheelModalProps) {
 
                 <div className="text-center mb-6">
                   <p className="text-sm text-gray-300 mb-2">
-                    Cost: <span className="text-yellow-400 font-bold">{wheelConfig?.spin_cost || 500} free coins</span>
+                    Cost: <span className="text-yellow-400 font-bold">{wheelConfig?.spin_cost || 500} Trollmonds</span>
                   </p>
                   <p className="text-sm text-gray-300">
-                    Your balance: <span className="text-green-400 font-bold">{profile?.free_coin_balance || 0} free coins</span>
+                    Your balance: <span className="text-green-400 font-bold">{balance || 0} Trollmonds</span>
                   </p>
                 </div>
 
                 <button
                   onClick={spinWheel}
-                  disabled={isSpinning || (profile?.free_coin_balance || 0) < (wheelConfig?.spin_cost || 500)}
+                  disabled={isSpinning || (balance || 0) < (wheelConfig?.spin_cost || 500)}
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSpinning ? (
@@ -313,7 +310,7 @@ export default function WheelModal({ onClose }: WheelModalProps) {
                     {result.coins.toLocaleString()} COINS!
                   </h3>
                   <p className="text-gray-300 mb-4">
-                    You won <span className="text-yellow-400 font-bold">{result.coins.toLocaleString()}</span> free coins!
+                    You won <span className="text-yellow-400 font-bold">{result.coins.toLocaleString()}</span> Trollmonds!
                   </p>
                 </div>
 

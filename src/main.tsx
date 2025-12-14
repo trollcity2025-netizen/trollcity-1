@@ -1,44 +1,48 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter as Router } from 'react-router-dom'
+import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
+import { LiveKitProvider } from './contexts/LiveKitContext'
+import { AuthProvider } from './contexts/AuthProvider'
+import { GlobalAppProvider } from './contexts/GlobalAppContext'
+// GlobalAppProvider intentionally removed per required root layout
 
-// Debug: Check if root element exists
-console.log('🔍 main.tsx executing...')
-const rootElement = document.getElementById('root')
-console.log('🔍 Root element:', rootElement ? 'Found ✅' : 'NOT FOUND ❌')
+// App version for cache busting
+const APP_VERSION = '1.0.0-' + Date.now().toString()
 
-if (!rootElement) {
-  console.error('❌ Root element not found!')
-  document.body.innerHTML = '<div style="padding: 20px; color: red; font-family: monospace; background: white;">Error: Root element (#root) not found in HTML</div>'
-} else {
-  console.log('✅ Root element found, rendering app...')
-  try {
-    createRoot(rootElement).render(
-      <StrictMode>
-        <Router>
-          <App />
-        </Router>
-      </StrictMode>,
-    )
-    console.log('✅ React app rendered successfully!')
-  } catch (error) {
-    console.error('❌ Error rendering React app:', error)
-    rootElement.innerHTML = `<div style="padding: 20px; color: red; font-family: monospace; background: white;">Error rendering app: ${error instanceof Error ? error.message : String(error)}</div>`
-  }
+// App version guard - clear storage on deploy
+const storedVersion = localStorage.getItem('app_version')
+if (storedVersion !== APP_VERSION) {
+  console.log('App version changed, clearing storage')
+  localStorage.clear()
+  sessionStorage.clear()
+  localStorage.setItem('app_version', APP_VERSION)
 }
 
-if ('serviceWorker' in navigator && !import.meta.env.DEV) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then((registration) => {
-        setInterval(() => {
-          registration.update()
-        }, 3600000)
-      })
-      .catch(() => {
-        console.warn('Service worker registration failed')
-      })
+// Unregister all service workers
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => {
+      console.log('Unregistering service worker:', registration.scope)
+      registration.unregister()
+    })
   })
 }
+
+const rootElement = document.getElementById('root')
+
+if (!rootElement) {
+  throw new Error('Root element (#root) not found')
+}
+
+createRoot(rootElement).render(
+  <LiveKitProvider>
+    <AuthProvider>
+      <GlobalAppProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </GlobalAppProvider>
+    </AuthProvider>
+  </LiveKitProvider>
+)

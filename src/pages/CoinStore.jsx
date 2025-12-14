@@ -336,38 +336,46 @@ export default function CoinStore() {
                           return await handleBuy(pkg); // MUST return orderID
                         }}
                         onApprove={async (data) => {
-                          console.log("✅ PayPal approved:", data);
+                           console.log("✅ PayPal approved:", data);
 
-                          const { data: { session } } = await supabase.auth.getSession();
-                          const token = session?.access_token;
+                           if (!data.orderID) {
+                             toast.error("Missing PayPal order ID");
+                             return;
+                           }
 
-                          const captureRes = await fetch(
-                            `${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/paypal-capture-order`,
-                            {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`,
-                                apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-                              },
-                              body: JSON.stringify({
-                                orderID: data.orderID,
-                                user_id: user.id,
-                                coins: pkg.coins,
-                              }),
-                            }
-                          );
+                           const { data: { session } } = await supabase.auth.getSession();
+                           const token = session?.access_token;
 
-                          const captureJson = await captureRes.json();
-                          console.log("💰 Capture result:", captureJson);
+                           const captureRes = await fetch(
+                             `${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/paypal-capture-order`,
+                             {
+                               method: "POST",
+                               headers: {
+                                 "Content-Type": "application/json",
+                                 Authorization: `Bearer ${token}`,
+                                 apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+                               },
+                               body: JSON.stringify({
+                                 orderID: data.orderID,
+                                 user_id: user.id,
+                                 coins: pkg.coins,
+                               }),
+                             }
+                           );
 
-                          if (captureRes.ok) {
-                            toast.success(`+${pkg.coins.toLocaleString()} Troll Coins added!`);
-                            loadWalletData();
-                          } else {
-                            toast.error("Payment completed, but coin update failed.");
-                          }
-                        }}
+                           const captureJson = await captureRes.json();
+                           console.log("💰 Capture result:", captureJson);
+
+                           if (captureRes.ok) {
+                             toast.success(`+${pkg.coins.toLocaleString()} Troll Coins added!`);
+                             loadWalletData();
+                           } else {
+                             const errorMsg = captureJson.paypalDebugId
+                               ? `Payment failed (Debug ID: ${captureJson.paypalDebugId})`
+                               : "Payment completed, but coin update failed.";
+                             toast.error(errorMsg);
+                           }
+                         }}
                         onError={(err) => {
                           console.error("❌ PayPal error:", err);
                           toast.error("PayPal checkout error.");

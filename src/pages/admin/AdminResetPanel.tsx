@@ -49,6 +49,46 @@ export default function AdminResetPanel() {
       return
     }
 
+    // Handle delete all livestreams
+    if (action === 'delete_all_livestreams') {
+      try {
+        toast.info('Deleting all livestreams... This may take a moment.')
+
+        // First, get count of streams to be deleted
+        const { count: streamCount } = await supabase
+          .from('streams')
+          .select('*', { count: 'exact', head: true })
+
+        if (streamCount === 0) {
+          toast.info('No livestreams found to delete')
+          setLoading(null)
+          setConfirmText('')
+          return
+        }
+
+        // Delete all streams
+        const { error } = await supabase
+          .from('streams')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all (this condition is always true)
+
+        if (error) {
+          console.error('Delete streams error:', error)
+          toast.error(`Failed to delete streams: ${error.message}`)
+          return
+        }
+
+        toast.success(`Successfully deleted ${streamCount} livestream${streamCount === 1 ? '' : 's'}!`)
+      } catch (err: any) {
+        console.error('Error deleting livestreams:', err)
+        toast.error(err.message || 'Failed to delete livestreams')
+      } finally {
+        setLoading(null)
+        setConfirmText('')
+      }
+      return
+    }
+
     // Handle comprehensive app reset
     if (action === 'reset_all_for_launch') {
       try {
@@ -170,6 +210,29 @@ export default function AdminResetPanel() {
             <>
               <PowerOff className="w-5 h-5" />
               End All Live Streams
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            handleReset('delete_all_livestreams', 'Delete All Livestreams')
+          }}
+          disabled={loading !== null || confirmText !== 'RESET'}
+          className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+        >
+          {loading === 'delete_all_livestreams' ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Deleting streams...
+            </>
+          ) : (
+            <>
+              <Trash2 className="w-5 h-5" />
+              Delete All Livestreams
             </>
           )}
         </button>

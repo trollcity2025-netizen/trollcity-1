@@ -288,14 +288,26 @@ const Auth = () => {
           </span>
           <span className="block text-troll-gold text-lg font-semibold mt-1 tracking-widest">Welcome</span>
         </div>
-        
-        <div className="mb-6 flex justify-center">
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-troll-purple-300 hover:text-white transition-colors"
-          >
-            {isLogin ? 'Need an account? Sign Up' : 'Already have an account? Sign In'}
-          </button>
+
+        <div className="flex justify-center mb-6">
+          <div className="flex bg-[#23232b] rounded-lg p-1">
+            <button
+              onClick={() => setIsLogin(true)}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                isLogin ? 'bg-[#FFC93C] text-black' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setIsLogin(false)}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                !isLogin ? 'bg-[#FFC93C] text-black' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">

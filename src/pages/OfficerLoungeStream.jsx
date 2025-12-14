@@ -1,31 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { useAuthStore } from '../lib/store';
-import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid';
-import { useLiveKit } from '../contexts/LiveKitContext';
-import { toast } from 'sonner';
-import { Shield } from 'lucide-react';
+import React, { useState, useEffect } from 'react'
+import { useAuthStore } from '../lib/store'
+import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid'
+import { useLiveKitSession } from '../hooks/useLiveKitSession'
+import { toast } from 'sonner'
+import { Shield } from 'lucide-react'
 
 const OfficerLoungeStream = () => {
-  const { user, profile } = useAuthStore();
-  const { isConnected, isConnecting, toggleCamera, toggleMicrophone, localParticipant } = useLiveKit();
-  const [accessDenied, setAccessDenied] = useState(false);
+  const { user, profile } = useAuthStore()
+  const {
+    joinAndPublish,
+    isConnected,
+    isConnecting,
+    toggleCamera,
+    toggleMicrophone,
+    localParticipant,
+    error,
+  } = useLiveKitSession({
+    roomName: 'officer-stream',
+    user: user ? { ...user, role: 'officer' } : null,
+    autoPublish: true,
+    maxParticipants: 6,
+  })
+  const [accessDenied, setAccessDenied] = useState(false)
 
-  // Officer access validation
+  // Officer access validation and single join
   useEffect(() => {
-    if (!profile || !user) return;
+    if (!profile || !user) return
 
-    const allowedRoles = ['admin', 'lead_troll_officer', 'troll_officer'];
-    const userRole = profile.role || profile.troll_role;
+    const allowedRoles = ['admin', 'lead_troll_officer', 'troll_officer']
+    const userRole = profile.role || profile.troll_role
 
     if (!allowedRoles.includes(userRole)) {
-      setAccessDenied(true);
-      toast.error('Access Denied — Officers Only');
-      return;
+      setAccessDenied(true)
+      toast.error('Access Denied – Officers Only')
+      return
     }
-  }, [profile, user]);
 
-
-
+    joinAndPublish()
+  }, [profile, user, joinAndPublish])
 
   // Access denied screen
   if (accessDenied) {
@@ -40,7 +52,7 @@ const OfficerLoungeStream = () => {
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -68,8 +80,9 @@ const OfficerLoungeStream = () => {
           className="w-full h-[70vh] bg-black rounded-xl overflow-hidden"
           showLocalVideo={true}
           maxParticipants={6}
-          autoPublish={true}
+          autoPublish={false}
           role="officer"
+          autoConnect={false}
         />
 
         {/* Controls */}
@@ -84,7 +97,7 @@ const OfficerLoungeStream = () => {
                     : 'bg-red-600 hover:bg-red-700'
                 }`}
               >
-                📹 {localParticipant?.isCameraEnabled ? 'Camera On' : 'Camera Off'}
+                dY"1 {localParticipant?.isCameraEnabled ? 'Camera On' : 'Camera Off'}
               </button>
 
               <button
@@ -95,14 +108,15 @@ const OfficerLoungeStream = () => {
                     : 'bg-red-600 hover:bg-red-700'
                 }`}
               >
-                🎤 {localParticipant?.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}
+                dYZ {localParticipant?.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}
               </button>
             </div>
 
             <div className="text-center mt-4">
               <p className="text-green-400 font-semibold">
-                ✅ Connected to Officer LiveKit room. You are live!
+                ƒo. Connected to Officer LiveKit room. You are live!
               </p>
+              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             </div>
           </div>
         )}
@@ -114,18 +128,17 @@ const OfficerLoungeStream = () => {
             Officer Stream Guidelines:
           </h3>
           <ul className="space-y-2 text-gray-300">
-            <li>• This area is exclusively for authorized officers (Admin, Lead Troll Officers, Troll Officers)</li>
-            <li>• Camera and microphone connect automatically when you enter</li>
-            <li>• Use the controls above to toggle camera and microphone</li>
-            <li>• Your video appears in the grid alongside other officers</li>
-            <li>• Uses unified LiveKit room: "officer-stream"</li>
-            <li>• All officers can see and hear each other in real-time</li>
+            <li>ƒ?› This area is exclusively for authorized officers (Admin, Lead Troll Officers, Troll Officers)</li>
+            <li>ƒ?› Camera and microphone connect automatically when you enter</li>
+            <li>ƒ?› Use the controls above to toggle camera and microphone</li>
+            <li>ƒ?› Your video appears in the grid alongside other officers</li>
+            <li>ƒ?› Uses unified LiveKit room: "officer-stream"</li>
+            <li>ƒ?› All officers can see and hear each other in real-time</li>
           </ul>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-
-export default OfficerLoungeStream;
+export default OfficerLoungeStream

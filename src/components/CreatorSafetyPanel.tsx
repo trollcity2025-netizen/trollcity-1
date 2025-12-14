@@ -197,7 +197,7 @@ const CreatorSafetyPanel: React.FC<CreatorSafetyPanelProps> = ({ streamId, isHos
         <div className="text-xs text-gray-400 text-center">
           <div className="flex items-center justify-center gap-1 mb-1">
             <Shield className="w-3 h-3" />
-            <span>Emergency Response: <5 seconds</span>
+            <span>Emergency Response: less than 5 seconds</span>
           </div>
           <div>Officers will be notified immediately</div>
         </div>

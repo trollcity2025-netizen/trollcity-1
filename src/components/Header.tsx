@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, User, Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -190,15 +190,12 @@ const Header = () => {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut()
-      toast.success('Logged out successfully')
       useAuthStore.getState().logout()
-      
-      // FORCE CLEAR ALL APP DATA
+
+      // Clear client storage
       try {
         localStorage.clear()
         sessionStorage.clear()
-        
-        // Clear all indexed DB
         if (window.indexedDB) {
           const dbs = await window.indexedDB.databases()
           dbs.forEach((db: any) => {
@@ -208,23 +205,22 @@ const Header = () => {
       } catch (e) {
         console.error('Error clearing storage:', e)
       }
-      
-      // Force reload to clear memory and redirect to login
-      await supabase.auth.signOut()
+
+      toast.success('Logged out successfully')
+    } catch (error: any) {
+      console.error('Logout error:', error)
+      toast.error(error?.message || 'Error logging out')
+    } finally {
       navigate('/auth', { replace: true })
-    } catch (error) {
-      toast.error('Error logging out')
     }
   }
 
-  const getProfileLink = () => {
-    const username = profile?.username
-    console.log('getProfileLink - profile.username:', profile?.username, 'final username:', username)
-    if (username) {
-      return `/profile/${username}`
+  const profileLink = useMemo(() => {
+    if (profile?.username) {
+      return `/profile/${profile.username}`
     }
     return '/profile/setup'
-  }
+  }, [profile?.username])
 
   
 
@@ -278,13 +274,13 @@ const Header = () => {
       </div>
 
       <div className="relative z-10 flex items-center space-x-6">
-        <Link 
+        <Link
           to="/trollifications"
           className="relative p-3 text-purple-400 hover:text-purple-300 transition-all duration-300 group"
         >
           <Bell className="w-6 h-6" />
           {unreadNotifications > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-2 py-1 rounded-full min-w-[20px] text-center">
+            <span className="absolute -top-1 -right-1 text-xs px-2 py-1 rounded-full min-w-[20px] text-center bg-red-500 text-white">
               {unreadNotifications > 99 ? '99+' : unreadNotifications}
             </span>
           )}
@@ -302,7 +298,7 @@ const Header = () => {
 
         <div className="flex items-center space-x-4">
           <Link 
-            to={getProfileLink()}
+            to={profileLink}
             className={`flex items-center space-x-4 hover:scale-105 transition-transform duration-300`}
           >
             <div className="text-right">
@@ -344,4 +340,4 @@ const Header = () => {
   )
 }
 
-export default Header
+export default React.memo(Header)

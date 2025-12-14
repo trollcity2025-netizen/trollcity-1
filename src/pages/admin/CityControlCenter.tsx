@@ -115,14 +115,15 @@ export default function CityControlCenter() {
             let error: string | undefined;
 
             switch (service) {
-              case 'supabase':
+              case 'supabase': {
                 const { error: dbError } = await supabase.from('user_profiles').select('count').limit(1);
                 if (dbError) {
                   status = 'down';
                   error = dbError.message;
                 }
                 break;
-              case 'paypal':
+              }
+              case 'paypal': {
                 // Test PayPal connectivity
                 const paypalResponse = await fetch('/api/paypal/test', { method: 'GET' });
                 if (!paypalResponse.ok) {
@@ -130,7 +131,8 @@ export default function CityControlCenter() {
                   error = 'PayPal service check failed';
                 }
                 break;
-              case 'livekit':
+              }
+              case 'livekit': {
                 // Test LiveKit connectivity
                 const livekitResponse = await fetch('/api/livekit/test', { method: 'GET' });
                 if (!livekitResponse.ok) {
@@ -138,7 +140,8 @@ export default function CityControlCenter() {
                   error = 'LiveKit service check failed';
                 }
                 break;
-              case 'api':
+              }
+              case 'api': {
                 // Test general API health
                 const apiResponse = await fetch('/api/health', { method: 'GET' });
                 if (!apiResponse.ok) {
@@ -146,6 +149,7 @@ export default function CityControlCenter() {
                   error = 'API health check failed';
                 }
                 break;
+              }
             }
 
             const responseTime = Date.now() - startTime;

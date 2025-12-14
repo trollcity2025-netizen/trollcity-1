@@ -98,7 +98,7 @@ export default function TrollCatch({ streamId, userId, onCatch }: TrollCatchProp
     }
 
     let currentLeft = -150 // offscreen start
-    let currentTop = randomInt(10, window.innerHeight - 160) // random height
+    const currentTop = randomInt(10, window.innerHeight - 160) // random height
     const speed = 3 // lower = slower | higher = faster (2.5–4 is sweet spot)
     setPosition({ top: currentTop, left: currentLeft })
 

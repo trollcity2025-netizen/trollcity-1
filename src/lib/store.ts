@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User, Session } from '@supabase/supabase-js'
-import { UserProfile, UserRole } from './supabase'
+import { UserProfile, UserRole, validateProfile } from './supabase'
 import { supabase } from './supabase'
 
 interface AuthState {
@@ -37,11 +37,19 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
+        // Ensure profile has email (fallback to auth/session)
+        const authEmail = get().user?.email || get().session?.user?.email
+        if (!profile.email && authEmail) {
+          profile = { ...profile, email: authEmail }
+        }
+
         // Import admin email from environment
         const adminEmail = (import.meta as any).env?.VITE_ADMIN_EMAIL || "trollcity2025@gmail.com"
+        const adminEmailLower = adminEmail.toLowerCase()
+        const profileEmailLower = profile.email?.toLowerCase()
 
         // Auto-admin if email matches (with validation)
-        if (profile.email?.toLowerCase() === adminEmail.toLowerCase()) {
+        if (profileEmailLower && profileEmailLower === adminEmailLower) {
           profile = {
             ...profile,
             role: UserRole.ADMIN,
@@ -63,7 +71,6 @@ export const useAuthStore = create<AuthState>()(
 
         // Production logging with validation
         try {
-          const { validateProfile } = require('./supabase')
           const validation = validateProfile(profile)
           if (!validation.isValid) {
             console.warn("Profile validation warnings:", validation.warnings)

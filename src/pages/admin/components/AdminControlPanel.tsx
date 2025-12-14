@@ -129,7 +129,7 @@ export default function AdminControlPanel() {
           }
           break
 
-        case 'zero_coins':
+        case 'zero_coins': {
           if (!selectedUser) {
             toast.error('Please select a user')
             setLoading(false)
@@ -144,7 +144,7 @@ export default function AdminControlPanel() {
 
           if (currentProfile) {
             const totalCoins = (currentProfile.paid_coin_balance || 0) + (currentProfile.free_coin_balance || 0)
-            
+
             // Set both balances to 0
             const { error: updateError } = await supabase
               .from('user_profiles')
@@ -181,8 +181,9 @@ export default function AdminControlPanel() {
             toast.success(result.message)
           }
           break
+        }
 
-        case 'set_user_level':
+        case 'set_user_level': {
           if (!selectedUser) {
             toast.error('Please select a user')
             setLoading(false)
@@ -193,7 +194,7 @@ export default function AdminControlPanel() {
             setLoading(false)
             return
           }
-          
+
           const { error: levelError } = await supabase
             .from('user_profiles')
             .update({
@@ -208,8 +209,9 @@ export default function AdminControlPanel() {
           setMessage(result.message)
           toast.success(result.message)
           break
+        }
 
-        case 'approve_application':
+        case 'approve_application': {
           if (!selectedUser) {
             toast.error('Please select a user')
             setLoading(false)
@@ -257,17 +259,18 @@ export default function AdminControlPanel() {
 
             result = { success: true, message: `Approved ${application.type} application for ${selectedUser.username}` }
           }
-          
+
           setMessage(result.message)
           toast.success(result.message)
-          
+
           // Refresh profile if granting to self
           if (selectedUser.id === user.id && refreshProfile) {
             await refreshProfile()
           }
           break
+        }
 
-        case 'reject_application':
+        case 'reject_application': {
           if (!selectedUser) {
             toast.error('Please select a user')
             setLoading(false)
@@ -299,8 +302,9 @@ export default function AdminControlPanel() {
           setMessage(result.message)
           toast.success(result.message)
           break
+        }
 
-        case 'gift_all':
+        case 'gift_all': {
           if (amount <= 0) {
             toast.error('Please enter an amount')
             setLoading(false)
@@ -361,6 +365,7 @@ export default function AdminControlPanel() {
           toast.success(result.message)
           setAmount(0)
           break
+        }
 
         default:
           result = { success: false, error: 'Unknown action' }
