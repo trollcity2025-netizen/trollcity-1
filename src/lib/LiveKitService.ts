@@ -46,6 +46,7 @@ export class LiveKitService {
 
   constructor(config: LiveKitServiceConfig) {
     this.config = config
+    console.log('[LiveKitService created]', Date.now())
     this.log('LiveKitService initialized', {
       roomName: config.roomName,
       identity: config.identity,

@@ -68,6 +68,11 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
 
       console.log('[LiveKit identity check]', user.id)
 
+      // Disconnect existing service before creating new one
+      if (serviceRef.current) {
+        serviceRef.current.disconnect()
+      }
+
       // Create new service instance for each connect to ensure immutability
       serviceRef.current = new LiveKitService({
         roomName,
