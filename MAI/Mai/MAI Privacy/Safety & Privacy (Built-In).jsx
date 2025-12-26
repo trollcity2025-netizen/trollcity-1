@@ -1,2 +1,0 @@
-Safety & Privacy (Built-In)
-FeatureGuaranteeNo Cloud StorageAll data stays on your deviceSession-Based AccessPermissions reset when USB is removedAudit LogSee every action MAI took (mai_log.txt)Emergency StopSay “MAI, stop!” → Instant haltOpen-Source CoreReview code at github.com/mechtronic/mai-core
