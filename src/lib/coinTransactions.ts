@@ -29,7 +29,7 @@ export type CoinTransactionType =
   | 'refund'            // Refunding a purchase
   | 'reward'            // System reward (daily login, achievement, etc.)
 
-export type CoinType = 'free' | 'paid'
+export type CoinType = 'trollmonds' | 'troll_coins'
 
 export interface CoinTransactionMetadata {
   [key: string]: any
@@ -103,13 +103,13 @@ export async function recordCoinTransaction(params: RecordCoinTransactionParams)
     if (finalBalanceAfter === undefined) {
       const { data: profile } = await sb
         .from('user_profiles')
-        .select('paid_coin_balance, free_coin_balance')
+        .select('troll_coins_balance, free_coin_balance')
         .eq('id', userId)
         .single()
 
       if (profile) {
-        const currentBalance = coinType === 'paid' 
-          ? (profile.paid_coin_balance || 0)
+        const currentBalance = coinType === 'troll_coins'
+          ? (profile.troll_coins_balance || 0)
           : (profile.free_coin_balance || 0)
         finalBalanceAfter = currentBalance + amount
       } else {
@@ -118,24 +118,48 @@ export async function recordCoinTransaction(params: RecordCoinTransactionParams)
     }
 
     // Insert transaction record
+    const insertPayload = {
+      user_id: userId,
+      amount,
+      coin_delta: amount,
+      type,
+      coin_type: coinType,
+      source_type: sourceType || type,
+      source_id: sourceId || null,
+      description: description || null,
+      balance_after: finalBalanceAfter,
+      metadata: metadata || null,
+      created_at: new Date().toISOString()
+    }
+
     const { data, error } = await sb
       .from('coin_transactions')
-      .insert({
-        user_id: userId,
-        amount,
-        type,
-        coin_type: coinType,
-        source_type: sourceType || type,
-        source_id: sourceId || null,
-        description: description || null,
-        balance_after: finalBalanceAfter,
-        metadata: metadata || null,
-        created_at: new Date().toISOString()
-      })
+      .insert(insertPayload)
       .select()
       .single()
 
     if (error) {
+      const message = error.message || ''
+      const isCoinTypeCheck =
+        error.code === '23514' &&
+        message.toLowerCase().includes('coin_transactions_coin_type_check')
+
+      if (isCoinTypeCheck) {
+        const legacyCoinType = coinType === 'troll_coins' ? 'paid' : 'free'
+        const { data: retryData, error: retryError } = await sb
+          .from('coin_transactions')
+          .insert({ ...insertPayload, coin_type: legacyCoinType })
+          .select()
+          .single()
+
+        if (retryError) {
+          console.error('recordCoinTransaction error:', retryError)
+          return null
+        }
+
+        return retryData
+      }
+
       console.error('recordCoinTransaction error:', error)
       return null
     }
@@ -162,7 +186,7 @@ export async function deductCoins(params: {
   metadata?: CoinTransactionMetadata
   supabaseClient?: any // Optional supabase client (for backend usage)
 }) {
-  const { userId, amount, type, coinType = 'paid', description, metadata, supabaseClient } = params
+  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient } = params
 
   // Use provided client or frontend supabase
   const sb = supabaseClient || frontendSupabase
@@ -172,10 +196,9 @@ export async function deductCoins(params: {
   }
 
   try {
-    // Get current balance
     const { data: profile, error: profileError } = await sb
       .from('user_profiles')
-      .select('paid_coin_balance, free_coin_balance')
+      .select('troll_coins_balance, free_coin_balance, role')
       .eq('id', userId)
       .single()
 
@@ -184,18 +207,12 @@ export async function deductCoins(params: {
       return { success: false, newBalance: 0, transaction: null, error: 'Profile not found' }
     }
 
-    const currentBalance = coinType === 'paid' 
-      ? (profile.paid_coin_balance || 0)
-      : (profile.free_coin_balance || 0)
+    const currentBalance =
+      coinType === 'troll_coins'
+        ? (profile.troll_coins_balance || 0)
+        : (profile.free_coin_balance || 0)
 
-    // Check sufficient balance (skip for admins)
-    const { data: userProfile } = await sb
-      .from('user_profiles')
-      .select('role')
-      .eq('id', userId)
-      .single()
-
-    const isAdmin = userProfile?.role === 'admin'
+    const isAdmin = profile.role === 'admin'
 
     if (!isAdmin && currentBalance < amount) {
       console.error('deductCoins: Insufficient balance', { currentBalance, amount })
@@ -206,7 +223,7 @@ export async function deductCoins(params: {
 
     // Update balance (only deduct for non-admins)
     if (!isAdmin) {
-      const updateField = coinType === 'paid' ? 'paid_coin_balance' : 'free_coin_balance'
+      const updateField = coinType === 'troll_coins' ? 'troll_coins' : 'trollmonds'
       const { error: updateError } = await sb
         .from('user_profiles')
         .update({ [updateField]: newBalance })
@@ -260,7 +277,7 @@ export async function addCoins(params: {
   metadata?: CoinTransactionMetadata
   supabaseClient?: any // Optional supabase client (for backend usage)
 }) {
-  const { userId, amount, type, coinType = 'free', description, metadata, supabaseClient } = params
+  const { userId, amount, type, coinType = 'trollmonds', description, metadata, supabaseClient } = params
 
   // Use provided client or frontend supabase
   const sb = supabaseClient || frontendSupabase
@@ -270,10 +287,9 @@ export async function addCoins(params: {
   }
 
   try {
-    // Get current balance
     const { data: profile, error: profileError } = await sb
       .from('user_profiles')
-      .select('paid_coin_balance, free_coin_balance')
+      .select('troll_coins_balance, free_coin_balance')
       .eq('id', userId)
       .single()
 
@@ -282,14 +298,14 @@ export async function addCoins(params: {
       return { success: false, newBalance: 0, transaction: null, error: 'Profile not found' }
     }
 
-    const currentBalance = coinType === 'paid'
-      ? (profile.paid_coin_balance || 0)
+    const currentBalance = coinType === 'troll_coins'
+      ? (profile.troll_coins_balance || 0)
       : (profile.free_coin_balance || 0)
 
     const newBalance = currentBalance + amount
 
     // Update balance
-    const updateField = coinType === 'paid' ? 'paid_coin_balance' : 'free_coin_balance'
+    const updateField = coinType === 'troll_coins' ? 'troll_coins_balance' : 'free_coin_balance'
     const { error: updateError } = await sb
       .from('user_profiles')
       .update({ [updateField]: newBalance })
@@ -312,8 +328,8 @@ export async function addCoins(params: {
       supabaseClient: sb
     })
 
-    // Family coin earning hook: Allocate 10% of paid coins to family stats
-    if (coinType === 'paid' && amount > 0) {
+    // Family coin earning hook: Allocate 10% of troll_coins to family stats
+    if (coinType === 'troll_coins' && amount > 0) {
       try {
         // Check if user is in a family
         const { data: familyMember } = await sb
@@ -323,7 +339,7 @@ export async function addCoins(params: {
           .single()
 
         if (familyMember?.family_id) {
-          const familyBonus = Math.floor(amount * 0.10) // 10% of earned paid coins
+          const familyBonus = Math.floor(amount * 0.10) // 10% of earned troll_coins
           if (familyBonus > 0) {
             // Use RPC function to atomically update family stats
             const { data: familyResult, error: familyError } = await sb.rpc('increment_family_stats', {

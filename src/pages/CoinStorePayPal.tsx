@@ -1,19 +1,17 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
-import { supabase, CoinPackage } from '../lib/supabase'
+import { supabase, CoinPackage, UserRole } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { createPayPalOrder, capturePayPalOrder, getPayPalConfig, testPayPalConnection, logPayPalAction } from '../lib/paypalUtils'
-import TrollerInsurance from './TrollerInsurance'
-
-// App version for cache busting
-const APP_VERSION = '1.0.0-' + Date.now().toString();
+import { getPayPalConfig, testPayPalConnection } from '../lib/paypalUtils'
+import RequireRole from '../components/RequireRole'
 
 export default function CoinStore() {
   const { user, profile, refreshProfile } = useAuthStore()
-  const navigate = useNavigate()
   const location = useLocation()
+  const STORE_TAB_KEY = 'tc-paypal-store-active-tab'
+  const STORE_COMPLETE_KEY = 'tc-paypal-store-complete'
   
   const [packages, setPackages] = useState<CoinPackage[]>([])
   const [promoCode, setPromoCode] = useState('')
@@ -23,6 +21,10 @@ export default function CoinStore() {
   const [activeTab, setActiveTab] = useState<'coins' | 'calls'>('coins')
   const [paypalConfig, setPaypalConfig] = useState<any>(null)
   const [connectionTest, setConnectionTest] = useState<{ tested: boolean; success: boolean; error?: string }>({ tested: false, success: false })
+  const [showPurchaseComplete, setShowPurchaseComplete] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return Boolean(sessionStorage.getItem('tc-paypal-store-complete'))
+  })
 
   // Load coin packages from database
   useEffect(() => {
@@ -149,6 +151,29 @@ export default function CoinStore() {
     }
   }, [location.state])
 
+  const showPurchaseCompleteOverlay = () => {
+    sessionStorage.setItem(STORE_COMPLETE_KEY, Date.now().toString())
+    setShowPurchaseComplete(true)
+  }
+
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem(STORE_TAB_KEY)
+    if (savedTab && savedTab !== activeTab) {
+      setActiveTab(savedTab as 'coins' | 'calls')
+    }
+  }, [])
+
+  useEffect(() => {
+    sessionStorage.setItem(STORE_TAB_KEY, activeTab)
+  }, [activeTab])
+
+  useEffect(() => {
+    if (!showPurchaseComplete) return
+    sessionStorage.removeItem(STORE_COMPLETE_KEY)
+    const timer = setTimeout(() => setShowPurchaseComplete(false), 1400)
+    return () => clearTimeout(timer)
+  }, [showPurchaseComplete])
+
   const applyPromoCode = async () => {
     if (!promoCode.trim()) {
       setPromoError('Enter a promo code')
@@ -205,10 +230,34 @@ export default function CoinStore() {
     [paypalClientId]
   )
 
+  const purchaseCompleteActive =
+    showPurchaseComplete ||
+    (typeof window !== 'undefined' && Boolean(sessionStorage.getItem(STORE_COMPLETE_KEY)))
+
+  useEffect(() => {
+    if (!purchaseCompleteActive || showPurchaseComplete) return
+    setShowPurchaseComplete(true)
+  }, [purchaseCompleteActive, showPurchaseComplete])
+
   if (!paypalClientId) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-400">
-        Missing PayPal Client ID
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">PayPal Configuration Error</h2>
+          <p className="text-lg">Missing PayPal Client ID</p>
+          <p className="text-sm text-gray-400 mt-2">Please contact support</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (purchaseCompleteActive) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="h-10 w-10 border-2 border-purple-400 rounded-full border-b-transparent animate-spin mx-auto mb-4"></div>
+          <div className="text-xl font-semibold">Your Troll City purchase is complete</div>
+        </div>
       </div>
     )
   }
@@ -236,9 +285,10 @@ export default function CoinStore() {
   )
 
   return (
-    <PayPalScriptProvider key={APP_VERSION} options={paypalOptions}>
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
-        <div className="max-w-6xl mx-auto">
+    <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER, UserRole.ADMIN]} fallbackPath="/dashboard">
+      <PayPalScriptProvider options={paypalOptions}>
+        <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+          <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-4xl font-bold">Troll City Coin Store</h1>
             {connectionTest.tested && (
@@ -254,7 +304,7 @@ export default function CoinStore() {
           <p className="text-gray-400 mb-6">
             Current Balance:{' '}
             <span className="font-bold text-purple-400">
-              {(profile?.paid_coin_balance || 0).toLocaleString()} paid coins
+              {(profile?.troll_coins_balance || 0).toLocaleString()} troll_coins
             </span>
           </p>
 
@@ -269,6 +319,7 @@ export default function CoinStore() {
                 className="flex-1 px-4 py-2 bg-zinc-800 rounded-lg"
               />
               <button
+                type="button"
                 onClick={applyPromoCode}
                 className="px-6 py-2 bg-purple-600 rounded-lg"
               >
@@ -286,6 +337,7 @@ export default function CoinStore() {
           {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b border-purple-600/30">
             <button
+              type="button"
               onClick={() => setActiveTab('coins')}
               className={`px-6 py-3 font-semibold transition ${
                 activeTab === 'coins'
@@ -296,6 +348,7 @@ export default function CoinStore() {
               Coin Packages
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('calls')}
               className={`px-6 py-3 font-semibold transition ${
                 activeTab === 'calls'
@@ -368,20 +421,8 @@ export default function CoinStore() {
                             });
                             const data = await res.json();
                             console.log("Create Order Response", data);
-
-                            if (!data?.id) {
-                              console.error("FATAL: create-order did not return a valid PayPal order ID");
-                              throw new Error("PayPal did not return a valid order ID. Cannot proceed with payment.");
-                            }
-
-                            // Validate PayPal order ID format
-                            if (typeof data.id !== 'string' || data.id.length < 10 || data.id.length > 25) {
-                              console.error("FATAL: Invalid PayPal order ID format:", data.id);
-                              throw new Error("Invalid PayPal order ID received. Cannot proceed with payment.");
-                            }
-
-                            console.log("✅ Valid PayPal Order ID returned from create-order:", data.id);
-                            return data.id;
+                            if (!data?.orderID) throw new Error("PayPal did not return an orderID");
+                            return data.orderID;
                           } catch (err) {
                             console.error("createOrder error", err);
                             toast.error("Unable to create PayPal order.");
@@ -389,9 +430,8 @@ export default function CoinStore() {
                             throw err;
                           }
                         }}
-                        onApprove={async (data, actions) => {
+                        onApprove={async (data) => {
                           try {
-                            console.log("Order ID sent to capture-order:", data.orderID);
                             const res = await fetch('/api/paypal/complete-order', {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
@@ -455,6 +495,7 @@ export default function CoinStore() {
                   </p>
                   <p className="text-xl font-bold mb-4">${pkg.price.toFixed(2)}</p>
                   <button
+                    type="button"
                     onClick={async () => {
                       if (!user?.id) {
                         toast.error('Please log in to purchase');
@@ -462,7 +503,7 @@ export default function CoinStore() {
                       }
                       setProcessingPackage(pkg.id);
                       try {
-                        const { data, error } = await supabase.rpc('add_call_minutes', {
+                        const { error } = await supabase.rpc('add_call_minutes', {
                           p_user_id: user.id,
                           p_minutes: pkg.minutes,
                           p_type: pkg.type
@@ -474,11 +515,13 @@ export default function CoinStore() {
                           user_id: user.id,
                           type: 'call_minutes',
                           amount: 0,
+                          coin_delta: 0,
                           description: `Purchased ${pkg.minutes} ${pkg.type} call minutes for $${pkg.price}`,
                           metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
                         });
                         
                         toast.success(`Added ${pkg.minutes} ${pkg.type} minutes!`);
+                        showPurchaseCompleteOverlay();
                         if (refreshProfile) await refreshProfile();
                       } catch (err: any) {
                         console.error('Purchase error:', err);
@@ -516,6 +559,7 @@ export default function CoinStore() {
                   </p>
                   <p className="text-xl font-bold mb-4">${pkg.price.toFixed(2)}</p>
                   <button
+                    type="button"
                     onClick={async () => {
                       if (!user?.id) {
                         toast.error('Please log in to purchase');
@@ -523,7 +567,7 @@ export default function CoinStore() {
                       }
                       setProcessingPackage(pkg.id);
                       try {
-                        const { data, error } = await supabase.rpc('add_call_minutes', {
+                        const { error } = await supabase.rpc('add_call_minutes', {
                           p_user_id: user.id,
                           p_minutes: pkg.minutes,
                           p_type: pkg.type
@@ -535,11 +579,13 @@ export default function CoinStore() {
                           user_id: user.id,
                           type: 'call_minutes',
                           amount: 0,
+                          coin_delta: 0,
                           description: `Purchased ${pkg.minutes} ${pkg.type} call minutes for $${pkg.price}`,
                           metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
                         });
                         
                         toast.success(`Added ${pkg.minutes} ${pkg.type} minutes!`);
+                        showPurchaseCompleteOverlay();
                         if (refreshProfile) await refreshProfile();
                       } catch (err: any) {
                         console.error('Purchase error:', err);
@@ -567,5 +613,6 @@ export default function CoinStore() {
         </div>
       </div>
     </PayPalScriptProvider>
-  )
+  </RequireRole>
+)
 }

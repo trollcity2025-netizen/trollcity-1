@@ -18,7 +18,7 @@ DECLARE
   v_gift_id UUID := gen_random_uuid();
 BEGIN
   -- Check sender's paid coin balance
-  SELECT paid_coin_balance INTO v_sender_balance
+  SELECT troll_coins_balance INTO v_sender_balance
   FROM user_profiles
   WHERE id = p_sender_id;
 
@@ -42,15 +42,15 @@ BEGIN
   -- Deduct coins from sender
   UPDATE user_profiles
   SET 
-    paid_coin_balance = paid_coin_balance - p_coin_amount,
+    troll_coins_balance = troll_coins_balance - p_coin_amount,
     total_spent_coins = COALESCE(total_spent_coins, 0) + p_coin_amount,
     updated_at = now()
   WHERE id = p_sender_id;
 
-  -- Add coins to receiver (as paid coins)
+  -- Add coins to receiver (as troll_coins_balance)
   UPDATE user_profiles
   SET 
-    paid_coin_balance = COALESCE(paid_coin_balance, 0) + p_coin_amount,
+    troll_coins_balance = COALESCE(troll_coins_balance, 0) + p_coin_amount,
     total_earned_coins = COALESCE(total_earned_coins, 0) + p_coin_amount,
     updated_at = now()
   WHERE id = p_receiver_id;
@@ -90,7 +90,7 @@ BEGIN
       p_sender_id,
       'gift',
       p_coin_amount,
-      'paid',
+      'troll_coins',
       format('Sent gift: %s', COALESCE(p_item, 'Gift')),
       jsonb_build_object(
         'receiver_id', p_receiver_id,
@@ -137,5 +137,5 @@ GRANT EXECUTE ON FUNCTION spend_coins(UUID, UUID, BIGINT, TEXT, TEXT) TO authent
 GRANT EXECUTE ON FUNCTION spend_coins(UUID, UUID, BIGINT, TEXT, TEXT) TO service_role;
 
 -- Add comment
-COMMENT ON FUNCTION spend_coins IS 'Simple function to send coins from one user to another. Deducts from sender and adds to receiver as paid coins.';
+COMMENT ON FUNCTION spend_coins IS 'Simple function to send coins from one user to another. Deducts from sender and adds to receiver as troll_coins_balance.';
 

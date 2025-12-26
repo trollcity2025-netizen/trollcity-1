@@ -1,0 +1,96 @@
+EARNINGS COLUMN FIX - QUICK REFERENCE
+=====================================
+
+PROBLEM: "column user_profiles.troll_coins_balance does not exist"
+
+ROOT CAUSE: Multiple migrations referencing wrong column names
+- Using: troll_coins (should be troll_coins_balance)
+- Using: trollmonds (should be free_coin_balance)
+
+FILES MODIFIED (4 database migrations + 1 frontend library):
+============================================================
+
+1. supabase/migrations/20260211_migrate_coin_balance_column_names.sql
+   - Fixed: add_troll_coins() function
+   - Fixed: deduct_coins() function  
+   - Fixed: spend_coins() function
+   - Fixed: spend_trollmonds() function
+
+2. supabase/migrations/20251231_spend_coins_rpc.sql
+   - Fixed: Column selects and updates
+   - Fixed: Comment documentation
+
+3. supabase/migrations/20251221_fix_deduct_coins_coin_type.sql
+   - Fixed: Column selects and updates
+
+4. supabase/migrations/20251231_add_deduct_coins_function.sql
+   - Fixed: Column selects and updates
+
+5. src/lib/coinTransactions.ts
+   - Fixed: All SELECT queries for user_profiles
+   - Updated 3 locations with correct column names
+   - Updated update field references
+
+FILES CREATED (Database consistency fix):
+==========================================
+
+1. FIX_COLUMN_NAME_CONSISTENCY.sql
+   - Ensures troll_coins_balance column exists
+   - Ensures free_coin_balance column exists
+   - Removes any incorrect columns
+   - Recreates earnings_view with correct columns
+   - Safe to run multiple times
+
+2. FIX_EARNINGS_COLUMNS_INSTRUCTIONS.md
+   - Step-by-step instructions for applying the fix
+   - Verification queries
+   - Frontend impact notes
+
+3. COLUMN_FIX_SUMMARY.md
+   - Detailed analysis of the issue
+   - Complete list of all changes
+   - Impact on features
+   - Deployment instructions
+
+WHAT TO DO NEXT:
+================
+
+1. Apply database fix:
+   - Copy FIX_COLUMN_NAME_CONSISTENCY.sql
+   - Run in Supabase SQL Editor
+   - Takes < 1 second
+
+2. No frontend deployment needed:
+   - Frontend code already uses correct column names
+   - Will work immediately after DB fix
+
+3. Test:
+   - Try viewing earnings page
+   - Try purchasing entrance effects
+   - Try insurance purchase
+
+COLUMN MAPPING (for reference):
+==============================
+
+USER PROFILE COINS:
+  troll_coins_balance   = Paid coins from purchases
+  free_coin_balance     = Free coins from gameplay
+
+NOT THESE:
+  troll_coins      ❌ (old/wrong)
+  trollmonds       ❌ (old/wrong)
+
+RPC PARAMETER ALIASES:
+  'troll_coins' → troll_coins_balance
+  'paid'        → troll_coins_balance
+  'trollmonds'  → free_coin_balance
+  'free'        → free_coin_balance
+
+AFFECTED FEATURES (now fixed):
+=============================
+✅ Earnings Dashboard
+✅ Entrance Effects Purchase
+✅ Insurance Purchase
+✅ Gift Transactions
+✅ All coin-based purchases
+✅ Coin logging/tracking

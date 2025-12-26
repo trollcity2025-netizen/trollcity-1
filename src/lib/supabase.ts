@@ -35,6 +35,8 @@ export interface UserProfile {
   level: number // Calculated from XP
   paid_coin_balance: number
   free_coin_balance: number
+  troll_coins?: number
+  trollmonds?: number
   total_earned_coins: number
   total_spent_coins: number
   insurance_level: string | null

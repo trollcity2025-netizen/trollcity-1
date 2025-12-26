@@ -1,7 +1,7 @@
--- Add Paid Coins RPC Function
+-- Add troll_coins RPC Function
 -- Used by webhooks and payment processing to add coins to user balance
 
-CREATE OR REPLACE FUNCTION add_paid_coins(
+CREATE OR REPLACE FUNCTION add_troll_coins(
   user_id_input uuid,
   coins_to_add int
 )
@@ -12,7 +12,7 @@ AS $$
 BEGIN
   UPDATE user_profiles
   SET 
-    paid_coin_balance = COALESCE(paid_coin_balance, 0) + coins_to_add,
+    troll_coins = COALESCE(troll_coins, 0) + coins_to_add,
     total_earned_coins = COALESCE(total_earned_coins, 0) + coins_to_add,
     updated_at = NOW()
   WHERE id = user_id_input;
@@ -20,6 +20,6 @@ END;
 $$;
 
 -- Grant execute permission
-GRANT EXECUTE ON FUNCTION add_paid_coins(uuid, int) TO service_role;
-GRANT EXECUTE ON FUNCTION add_paid_coins(uuid, int) TO authenticated;
+GRANT EXECUTE ON FUNCTION add_troll_coins(uuid, int) TO service_role;
+GRANT EXECUTE ON FUNCTION add_troll_coins(uuid, int) TO authenticated;
 

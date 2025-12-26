@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { X, AlertTriangle, Shield } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { isAdmin } from '../lib/adminCoins'
 import ReportModal from './ReportModal'
 import ClickableUsername from './ClickableUsername'
+import AdminProfilePanel from './AdminProfilePanel'
 
 interface UserProfilePopupProps {
   userId: string
@@ -13,15 +15,17 @@ interface UserProfilePopupProps {
 }
 
 export default function UserProfilePopup({ userId, username, onClose }: UserProfilePopupProps) {
-  const { user } = useAuthStore()
+  const { user, profile: userProfile } = useAuthStore()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<any>(null)
   const [showReportModal, setShowReportModal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [isAdminUser, setIsAdminUser] = useState(false)
 
   useEffect(() => {
     loadProfile()
-  }, [userId])
+    setIsAdminUser(isAdmin(user, userProfile))
+  }, [userId, user, userProfile])
 
   const loadProfile = async () => {
     try {
@@ -53,7 +57,7 @@ export default function UserProfilePopup({ userId, username, onClose }: UserProf
   return (
     <>
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-zinc-900 rounded-xl border border-purple-500/30 max-w-md w-full p-6 relative">
+        <div className="bg-zinc-900 rounded-xl border border-purple-500/30 max-w-md w-full max-h-[90vh] overflow-y-auto p-6 relative">
           <button
             type="button"
             onClick={onClose}
@@ -102,6 +106,13 @@ export default function UserProfilePopup({ userId, username, onClose }: UserProf
                 </button>
               )}
             </div>
+
+            {isAdminUser && user?.id !== userId && (
+              <>
+                <div className="border-t border-gray-700" />
+                <AdminProfilePanel userId={userId} username={username} />
+              </>
+            )}
           </div>
         </div>
       </div>

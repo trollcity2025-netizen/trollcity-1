@@ -49,14 +49,164 @@
   );
 }
 
+html {
+  width: 100%;
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--troll-bg-gradient);
   background-attachment: fixed;
   color: rgba(255, 255, 255, 0.9);
-  min-height: 100vh;
-  position: relative;
+  width: 100%;
+  min-height: 100%;
+  overflow-y: auto;
   overflow-x: hidden;
+  position: relative;
+}
+
+/* Safe area utilities for specific components */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+#root {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell-layout {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.app-shell-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-shell-main > header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
+.app-shell-main > div {
+  flex-shrink: 0;
+}
+
+.app-shell-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4rem;
+}
+
+@media (max-width: 768px) {
+  .app-shell-content {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Mobile responsiveness improvements */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+
+  /* Ensure proper touch targets */
+  button, .btn-neon, .gaming-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Improve readability on small screens */
+  .text-3xl {
+    font-size: 1.5rem;
+  }
+
+  .text-4xl {
+    font-size: 1.75rem;
+  }
+
+  /* Better spacing for mobile */
+  .p-6 {
+    padding: 1rem;
+  }
+
+  .gap-6 {
+    gap: 1rem;
+  }
+}
+
+/* Remove random white/grey boxes - ensure consistent dark theme */
+* {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+input, textarea, select {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Ensure all containers have proper scrolling */
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+/* Mobile-specific scrollbar hiding */
+@media (max-width: 768px) {
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide scrollbars on mobile for cleaner look */
+  .overflow-y-auto::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+body, html {
+  overscroll-behavior: none;
+  -webkit-overscroll-behavior: none;
+  -webkit-touch-callout: none;
+}
+
+button, a, [role="button"] {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button:active, a:active, [role="button"]:active {
+  transition-duration: 75ms;
 }
 
 /* Neon streak background effects from image */
@@ -691,7 +841,7 @@ img, video {
   top: -150px;
   width: 90px;
   height: 90px;
-  background-image: url('/images/trollface.png'); /* Replace with your troll image path */
+  background-image: url('/favicon.svg');
   background-size: contain;
   background-repeat: no-repeat;
   animation-name: fallTroll;
@@ -699,6 +849,36 @@ img, video {
   animation-iteration-count: infinite;
   pointer-events: none;
   z-index: 1;
+}
+
+/* 🧌 Fall Animation for Troll Like Button */
+@keyframes fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100px) rotate(360deg); opacity: 0; }
+}
+
+.animate-fall {
+  animation: fall 2s ease-out forwards;
+}
+
+/* Troll Battle Spinner Animation */
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 4s linear infinite;
+}
+
+/* Curtain Opening Animation */
+@keyframes curtain-open {
+  0% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0); opacity: 0; }
+}
+
+.animate-curtain-open {
+  animation: curtain-open 1.5s ease-out forwards;
 }
 
 /* 🧌 Walking Troll Animation */
@@ -1684,4 +1864,718 @@ iframe[src*="paypalobjects.com"] {
 
 .online-dot {
   animation: online-pulse 2s ease-in-out infinite;
+}
+
+/* Troll City neon RGB frame (used for live stream tiles). */
+@keyframes tc-rgb-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.tc-neon-frame {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.75);
+  box-shadow: 0 0 22px rgba(168, 85, 247, 0.18);
+}
+
+.tc-neon-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(120deg, #00ff88, #00d4ff, #ff0080, #ffd700, #00ff88);
+  background-size: 300% 300%;
+  animation: tc-rgb-shift 10s ease-in-out infinite;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 10px rgba(255, 0, 128, 0.14)) drop-shadow(0 0 12px rgba(0, 255, 255, 0.1));
+}
+
+.tc-neon-frame:focus-within {
+  box-shadow: 0 0 28px rgba(0, 255, 255, 0.18), 0 0 18px rgba(255, 0, 128, 0.14);
+}
+
+/* dYZ, Holiday Theme: Snowflakes - Crystal Snowflakes */
+.snowflake {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(#ffffff, #ffffff) center/2px 100% no-repeat;
+  border-radius: 2px;
+  opacity: 0.95;
+  animation: snowfall linear infinite;
+  z-index: -1;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+  transform-origin: center;
+}
+
+.snowflake::before,
+.snowflake::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#ffffff, #ffffff) center/2px 100% no-repeat;
+  transform-origin: center;
+}
+
+.snowflake::before {
+  transform: rotate(60deg);
+}
+
+.snowflake::after {
+  transform: rotate(120deg);
+}
+
+.snowflake:nth-child(odd) {
+  width: 10px;
+  height: 10px;
+  animation-duration: 16s;
+}
+
+.snowflake:nth-child(even) {
+  width: 16px;
+  height: 16px;
+  animation-duration: 22s;
+}
+
+.snowflake:nth-child(3n) {
+  width: 8px;
+  height: 8px;
+  animation-duration: 14s;
+}
+
+@keyframes snowfall {
+  0% {
+    transform: translateY(-120px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  92% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(calc(100vh - 180px)) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Snow sparkle effect */
+@keyframes snowSparkle {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.holiday-theme {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Snow ground and snowmen removed */
+
+/* Snowman styles removed */
+/* 🎄 Holiday Theme: Christmas Lights - Enhanced Realistic Lights */
+.christmas-lights {
+  position: absolute;
+  top: 15%;
+  width: 100%;
+  height: 0;
+  display: flex;
+  justify-content: space-between;
+  z-index: -1;
+}
+
+.christmas-light {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background-color: #ff0000;
+  border-radius: 50%;
+  box-shadow:
+    0 0 15px 3px rgba(255, 0, 0, 0.6),
+    0 0 25px 5px rgba(255, 0, 0, 0.3);
+  animation: lightTwinkle 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.christmas-light::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px 1px white;
+}
+
+.christmas-light:nth-child(odd) {
+  background-color: #00ff00;
+  box-shadow:
+    0 0 15px 3px rgba(0, 255, 0, 0.6),
+    0 0 25px 5px rgba(0, 255, 0, 0.3);
+}
+
+.christmas-light:nth-child(3n) {
+  background-color: #ffff00;
+  box-shadow:
+    0 0 15px 3px rgba(255, 255, 0, 0.6),
+    0 0 25px 5px rgba(255, 255, 0, 0.3);
+}
+
+.christmas-light:nth-child(5n) {
+  background-color: #00ffff;
+  box-shadow:
+    0 0 15px 3px rgba(0, 255, 255, 0.6),
+    0 0 25px 5px rgba(0, 255, 255, 0.3);
+}
+
+.christmas-light:nth-child(7n) {
+  background-color: #ff00ff;
+  box-shadow:
+    0 0 15px 3px rgba(255, 0, 255, 0.6),
+    0 0 25px 5px rgba(255, 0, 255, 0.3);
+}
+
+.christmas-light:nth-child(11n) {
+  background-color: #ff8800;
+  box-shadow:
+    0 0 15px 3px rgba(255, 136, 0, 0.6),
+    0 0 25px 5px rgba(255, 136, 0, 0.3);
+}
+
+.christmas-light:nth-child(13n) {
+  background-color: #8800ff;
+  box-shadow:
+    0 0 15px 3px rgba(136, 0, 255, 0.6),
+    0 0 25px 5px rgba(136, 0, 255, 0.3);
+}
+
+@keyframes lightTwinkle {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Light wire effect */
+.christmas-lights::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    rgba(50, 50, 50, 0.8) 0%,
+    rgba(100, 100, 100, 0.6) 50%,
+    rgba(50, 50, 50, 0.8) 100%);
+  transform: translateY(-1px);
+  z-index: -1;
+}
+
+/* 🎄 Holiday Theme: Candy Canes - Enhanced Realistic 3D Effect with Curve */
+.candy-cane {
+  position: absolute;
+  width: 48px;
+  height: 150px;
+  background-image:
+    repeating-linear-gradient(35deg, #e11d48 0 10px, #ffffff 10px 20px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 60%, rgba(0, 0, 0, 0.25));
+  border: 3px solid #ffffff;
+  border-radius: 14px;
+  z-index: -1;
+  box-shadow:
+    0 12px 22px rgba(0, 0, 0, 0.4),
+    inset 0 0 10px rgba(255, 255, 255, 0.5),
+    2px 2px 10px rgba(0, 0, 0, 0.2);
+  transform-style: preserve-3d;
+  animation: candyCaneGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes christmasLightChase {
+  0% {
+    background-color: #ff0000;
+    box-shadow:
+      0 0 12px 3px rgba(255, 0, 0, 0.6),
+      0 0 22px 5px rgba(255, 0, 0, 0.3);
+  }
+  16% {
+    background-color: #00ff00;
+    box-shadow:
+      0 0 12px 3px rgba(0, 255, 0, 0.6),
+      0 0 22px 5px rgba(0, 255, 0, 0.3);
+  }
+  32% {
+    background-color: #ffff00;
+    box-shadow:
+      0 0 12px 3px rgba(255, 255, 0, 0.6),
+      0 0 22px 5px rgba(255, 255, 0, 0.3);
+  }
+  48% {
+    background-color: #00ffff;
+    box-shadow:
+      0 0 12px 3px rgba(0, 255, 255, 0.6),
+      0 0 22px 5px rgba(0, 255, 255, 0.3);
+  }
+  64% {
+    background-color: #ff00ff;
+    box-shadow:
+      0 0 12px 3px rgba(255, 0, 255, 0.6),
+      0 0 22px 5px rgba(255, 0, 255, 0.3);
+  }
+  80% {
+    background-color: #ff8800;
+    box-shadow:
+      0 0 12px 3px rgba(255, 136, 0, 0.6),
+      0 0 22px 5px rgba(255, 136, 0, 0.3);
+  }
+  100% {
+    background-color: #8800ff;
+    box-shadow:
+      0 0 12px 3px rgba(136, 0, 255, 0.6),
+      0 0 22px 5px rgba(136, 0, 255, 0.3);
+  }
+}
+
+.candy-cane::before {
+  content: '';
+  position: absolute;
+  top: -30px;
+  left: -12px;
+  width: 78px;
+  height: 70px;
+  border: 10px solid #ffffff;
+  border-bottom: 0;
+  border-right: 0;
+  border-radius: 70px 0 0 0;
+  background-image:
+    repeating-linear-gradient(35deg, #e11d48 0 10px, #ffffff 10px 20px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+  box-shadow:
+    inset 0 0 8px rgba(255, 255, 255, 0.55),
+    0 5px 10px rgba(0, 0, 0, 0.2);
+}
+
+.candy-cane::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Candy cane highlight effect */
+.candy-cane-highlight {
+  position: absolute;
+  top: 12%;
+  left: 12%;
+  width: 76%;
+  height: 76%;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  border-radius: 12px;
+  opacity: 0.8;
+  transform: translateZ(2px);
+}
+
+/* Candy cane glow animation */
+@keyframes candyCaneGlow {
+  0% {
+    box-shadow:
+      0 15px 25px rgba(0, 0, 0, 0.4),
+      inset 0 0 12px rgba(255, 255, 255, 0.6),
+      2px 2px 10px rgba(0, 0, 0, 0.2);
+  }
+  100% {
+    box-shadow:
+      0 15px 25px rgba(0, 0, 0, 0.4),
+      inset 0 0 12px rgba(255, 255, 255, 0.8),
+      2px 2px 10px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(255, 255, 255, 0.4);
+  }
+}
+
+.candy-cane-left {
+  left: 3%;
+  top: 25%;
+  transform: rotate(-20deg) translateX(-20px);
+}
+
+.candy-cane-right {
+  right: 3%;
+  top: 35%;
+  transform: rotate(20deg) translateX(20px);
+}
+
+/* Candy cane wrapper for better positioning */
+.candy-cane-wrapper {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* dYZ, Holiday Theme: Christmas Gifts - Enhanced Realistic Gifts */
+.christmas-gifts {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  z-index: -1;
+  pointer-events: none;
+  animation: giftsBounce 4s ease-in-out infinite;
+}
+
+.gift-box {
+  position: relative;
+  width: 80px;
+  height: 70px;
+  border-radius: 12px;
+  box-shadow:
+    0 15px 25px rgba(0, 0, 0, 0.4),
+    inset 0 5px 10px rgba(255, 255, 255, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  transform: rotate(-2deg);
+  transition: transform 0.3s ease;
+}
+
+.gift-box::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%);
+}
+
+.gift-box::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 10px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.1) 70%,
+    rgba(255, 255, 255, 0) 100%);
+  opacity: 0.7;
+}
+
+.gift-ribbon {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.9) 40% 60%,
+    transparent 60%);
+  z-index: 1;
+}
+
+.gift-ribbon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.9) 40% 60%,
+    transparent 60%);
+  z-index: 1;
+}
+
+.gift-bow {
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  width: 30px;
+  height: 20px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 25% 50%, #fff 0 35%, rgba(255, 255, 255, 0) 36%),
+    radial-gradient(circle at 75% 50%, #fff 0 35%, rgba(255, 255, 255, 0) 36%);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.6);
+  border-radius: 50% 50% 0 0;
+}
+
+.gift-bow::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 15px;
+  height: 15px;
+  background: radial-gradient(circle, #fff 0 40%, rgba(255, 255, 255, 0) 41%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+}
+
+.gift-red {
+  background: linear-gradient(145deg, #ef4444, #b91c1c);
+  box-shadow:
+    0 15px 25px rgba(0, 0, 0, 0.4),
+    inset 0 5px 10px rgba(255, 100, 100, 0.2),
+    0 0 15px rgba(239, 68, 68, 0.3);
+}
+
+.gift-green {
+  background: linear-gradient(145deg, #22c55e, #15803d);
+  box-shadow:
+    0 15px 25px rgba(0, 0, 0, 0.4),
+    inset 0 5px 10px rgba(100, 255, 150, 0.2),
+    0 0 15px rgba(34, 197, 94, 0.3);
+}
+
+.gift-gold {
+  background: linear-gradient(145deg, #f59e0b, #b45309);
+  box-shadow:
+    0 15px 25px rgba(0, 0, 0, 0.4),
+    inset 0 5px 10px rgba(255, 200, 100, 0.3),
+    0 0 20px rgba(245, 158, 11, 0.4);
+}
+
+.gift-blue {
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  box-shadow:
+    0 15px 25px rgba(0, 0, 0, 0.4),
+    inset 0 5px 10px rgba(100, 180, 255, 0.2),
+    0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+/* Gift animation */
+@keyframes giftsBounce {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-5px);
+  }
+}
+
+.gift-box:hover {
+  transform: rotate(-2deg) scale(1.05);
+  box-shadow:
+    0 20px 35px rgba(0, 0, 0, 0.5),
+    inset 0 5px 10px rgba(255, 255, 255, 0.3),
+    0 0 25px rgba(255, 255, 255, 0.4);
+}
+
+
+
+/* Holiday Theme: Christmas Lights Outline - Realistic & Spaced Apart */
+.christmas-outline {
+  position: absolute;
+  inset: -15px;
+  pointer-events: none;
+  z-index: -1;
+  transform: none;
+  animation: none;
+}
+
+.christmas-outline .lights-row {
+  position: absolute;
+  left: 15px;
+  right: 15px;
+  height: 28px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.christmas-outline .lights-top {
+  top: 0;
+}
+
+.christmas-outline .lights-bottom {
+  bottom: 0;
+}
+
+.christmas-outline .lights-col {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  width: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.christmas-outline .lights-left {
+  left: 0;
+}
+
+.christmas-outline .lights-right {
+  right: 0;
+}
+
+.christmas-outline .outline-light {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  animation: lightTwinkleRealistic 2.5s ease-in-out infinite, christmasLightChase 12s linear infinite;
+  animation-delay: calc(var(--idx, 0) * 0.12s), calc(var(--idx, 0) * 0.35s);
+  animation-fill-mode: both;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.3) 40%, transparent 70%);
+  box-shadow:
+    0 0 8px rgba(255, 255, 255, 0.4),
+    inset -1px -1px 3px rgba(0, 0, 0, 0.3),
+    inset 1px 1px 3px rgba(255, 255, 255, 0.2);
+}
+
+.christmas-outline .outline-light::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.9), transparent 60%);
+  opacity: 0.7;
+}
+
+.christmas-outline .outline-light::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 2px;
+  height: 8px;
+  background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes lightTwinkleRealistic {
+  0%, 100% {
+    opacity: 0.5;
+    box-shadow:
+      0 0 8px rgba(255, 255, 255, 0.4),
+      inset -1px -1px 3px rgba(0, 0, 0, 0.3),
+      inset 1px 1px 3px rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 16px rgba(255, 255, 255, 0.8),
+      0 0 24px rgba(255, 255, 255, 0.4),
+      inset -1px -1px 3px rgba(0, 0, 0, 0.2),
+      inset 1px 1px 3px rgba(255, 255, 255, 0.4);
+  }
+}
+
+/* Custom scrollbar for New Trollerz section */
+.new-trollerz-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.new-trollerz-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.new-trollerz-scroll::-webkit-scrollbar-track {
+  background: var(--troll-purple-900);
+  border-radius: 4px;
+}
+
+.new-trollerz-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--troll-green-neon), var(--troll-pink-neon)) !important;
+  border-radius: 4px;
+}
+
+.new-trollerz-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(var(--troll-pink-neon), var(--troll-green-neon)) !important;
+}
+
+/* Birthday stream special theme */
+.birthday-stream {
+  animation: birthdayGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes birthdayGlow {
+  0% {
+    box-shadow:
+      0 0 25px rgba(255, 215, 0, 0.6),
+      0 0 50px rgba(255, 215, 0, 0.3),
+      inset 0 0 20px rgba(255, 215, 0, 0.1);
+  }
+  100% {
+    box-shadow:
+      0 0 35px rgba(255, 215, 0, 0.8),
+      0 0 70px rgba(255, 215, 0, 0.5),
+      inset 0 0 30px rgba(255, 215, 0, 0.2);
+  }
+}
+
+/* TrollCity Background Animations */
+.trollcity-background {
+  z-index: 1;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes windowFlicker {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  25% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  75% {
+    opacity: 0.8;
+  }
+}
+
+@supports (perspective: 1000px) {
+  .trollcity-background > .absolute {
+    perspective: 1000px;
+  }
 }

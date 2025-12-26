@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS user_payment_methods (
 CREATE TABLE IF NOT EXISTS user_entrance_effects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
-  effect_id text NOT NULL,
+  effect_id text NOT NULL REFERENCES entrance_effects(id) ON DELETE CASCADE,
   purchased_at timestamptz DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_user_effect ON user_entrance_effects(user_id, effect_id);

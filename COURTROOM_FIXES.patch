@@ -1,0 +1,228 @@
+--- src/pages/CourtRoom.tsx.original
++++ src/pages/CourtRoom.tsx.fixed
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useState, useMemo } from "react";
++import React, { useEffect, useState, useMemo, memo, useRef } from "react";
+ import { useParams, useNavigate } from "react-router-dom";
+ import { useAuthStore } from "../lib/store";
+ import { supabase, UserRole } from "../lib/supabase";
+@@ -14,6 +14,72 @@
+ import { Scale, Gavel, FileText, Users, CheckCircle, XCircle, Upload, Eye, AlertTriangle } from "lucide-react";
+ import { Track } from "livekit-client";
+ 
++// MEMOIZED COURT VIDEO GRID - Prevents remounting and flickering
++const CourtVideoGrid = memo(({ maxTiles }: { maxTiles: number }) => {
++  const tracks = useTracks(
++    [Track.Source.Camera, Track.Source.ScreenShare],
++    { onlySubscribed: true }
++  );
++
++  const visible = useMemo(() => 
++    (tracks || []).slice(0, Math.max(2, maxTiles || 2)),
++    [tracks, maxTiles]
++  );
++
++  const placeholders = Math.max(2, maxTiles || 2) - visible.length;
++
++  const getCols = () => {
++    const cols = Math.max(2, maxTiles || 2);
++    if (cols <= 2) return 2;
++    if (cols <= 3) return 3;
++    return Math.min(cols, 4);
++  };
++
++  return (
++    <div
++      className="w-full h-[60vh] gap-2 p-2"
++      style={{
++        display: 'grid',
++        gridTemplateColumns: `repeat(${getCols()}, minmax(0, 1fr))`
++      }}
++    >
++      {visible.map((t, index) => {
++        // Use stable key: participant SID + index for stability
++        const participantSid = t.participant?.sid || `participant-${index}`;
++        const stableKey = `${participantSid}-${index}`;
++        
++        return (
++          <div
++            key={stableKey}
++            className="tc-neon-frame"
++          >
++            <ParticipantTile trackRef={t} />
++          </div>
++        );
++      })}
++      {Array.from({ length: placeholders }).map((_, i) => (
++        <div 
++          key={`ph-${i}`} 
++          className="tc-neon-frame flex items-center justify-center"
++          style={{ pointerEvents: 'none' }}
++        >
++          <div className="text-gray-400 text-sm">Waiting for participant…</div>
++        </div>
++      ))}
++    </div>
++  );
++});
++
++CourtVideoGrid.displayName = 'CourtVideoGrid';
++
++// MEMOIZED TRACK COUNTER
++const CourtTrackCounter = memo(({ onCount }: { onCount: (count: number) => void }) => {
++  const tracks = useTracks(
++    [Track.Source.Camera, Track.Source.ScreenShare],
++    { onlySubscribed: true }
++  );
++
++  const activeCount = useMemo(() => {
++    const identities = new Set(
++      (tracks || []).map((t) => t.participant?.sid || t.participant?.identity)
++    );
++    return identities.size;
++  }, [tracks]);
++
++  useEffect(() => {
++    onCount(activeCount);
++  }, [activeCount, onCount]);
++
++  return null;
++});
++
++CourtTrackCounter.displayName = 'CourtTrackCounter';
++
+ export default function CourtRoom() {
+    const { user, profile } = useAuthStore();
+    const { courtId } = useParams();
+    const navigate = useNavigate();
+    const [token, setToken] = useState(null);
+    const [serverUrl, setServerUrl] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [participantsAllowed, setParticipantsAllowed] = useState([]);
+    const [courtSession, setCourtSession] = useState(null);
+    const [boxCount, setBoxCount] = useState(2);
+    const [joinBoxRequested, setJoinBoxRequested] = useState(false);
+    const [joinBoxLoading, setJoinBoxLoading] = useState(false);
+    const [activeBoxCount, setActiveBoxCount] = useState(0);
+
++   // Stabilize room ID once at mount
++   const roomIdRef = useRef<string | null>(null);
++   useEffect(() => {
++     if (courtId && !roomIdRef.current) {
++       roomIdRef.current = courtId;
++       console.log('[CourtRoom] Room ID stabilized:', courtId);
++     }
++   }, [courtId]);
++   const roomId = roomIdRef.current || courtId;
+
+   // Court functionality state
+   const [activeCase, setActiveCase] = useState(null);
+
+@@ -94,13 +160,29 @@
+   // Keep box count in sync for all viewers
+   useEffect(() => {
+     if (!courtId) return;
++    let lastBoxCount = boxCount;
++    
+     const id = window.setInterval(async () => {
+       try {
+         const { data } = await supabase
+           .from('court_sessions')
+           .select('max_boxes,status')
+           .eq('id', courtId)
+           .maybeSingle();
+
+         if (!data) return;
+         if (data.status && data.status !== 'active') {
+           toast.info('Court session ended');
+           navigate('/troll-court');
+           return;
+         }
+-        if (typeof data.max_boxes === 'number') setBoxCount(Math.min(6, Math.max(2, data.max_boxes)));
++        if (typeof data.max_boxes === 'number') {
++          const newBoxCount = Math.min(6, Math.max(2, data.max_boxes));
++          // Only update state if value actually changed (prevents unnecessary re-renders)
++          if (newBoxCount !== lastBoxCount) {
++            lastBoxCount = newBoxCount;
++            setBoxCount(newBoxCount);
++            console.log('[CourtRoom] BoxCount updated:', newBoxCount);
++          }
++        }
+       } catch {}
+     }, 5000);
+
+     return () => window.clearInterval(id);
+   }, [courtId]);
+
++   useEffect(() => {
++     console.log('[CourtRoom] Component mounted with courtId:', courtId);
++     return () => {
++       console.log('[CourtRoom] Component unmounting');
++     };
++   }, [courtId]);
+
+   const initCourtroom = async () => {
+
+@@ -316,70 +398,6-   const CourtVideoGrid = ({ maxTiles }) => {
+-     const tracks = useTracks(
+-       [Track.Source.Camera, Track.Source.ScreenShare],
+-       { onlySubscribed: true }
+-     );
+-
+-     const visible = (tracks || []).slice(0, Math.max(2, maxTiles || 2));
+-     const placeholders = Math.max(2, maxTiles || 2) - visible.length;
+-
+-     const getCols = () => {
+-       const cols = Math.max(2, maxTiles || 2);
+-       if (cols <= 2) return 2;
+-       if (cols <= 3) return 3;
+-       return Math.min(cols, 4);
+-     };
+-
+-     return (
+-       <div
+-         className="w-full h-[60vh] gap-2 p-2"
+-         style={{
+-           display: 'grid',
+-           gridTemplateColumns: `repeat(${getCols()}, minmax(0, 1fr))`
+-         }}
+-       >
+-         {visible.map((t, index) => (
+-           <div
+-             key={t.publication?.trackSid || t.participant?.identity || `track-${index}`}
+-             className="tc-neon-frame"
+-           >
+-             <ParticipantTile trackRef={t} />
+-           </div>
+-         ))}
+-         {Array.from({ length: placeholders }).map((_, i) => (
+-           <div key={`ph-${i}`} className="tc-neon-frame flex items-center justify-center">
+-             <div className="text-gray-400 text-sm">Waiting for participant…</div>
+-           </div>
+-         ))}
+-       </div>
+-     );
+-   };
+-
+-   const CourtTrackCounter = ({ onCount }) => {
+-     const tracks = useTracks(
+-       [Track.Source.Camera, Track.Source.ScreenShare],
+-       { onlySubscribed: true }
+-     );
+-
+-     const activeCount = useMemo(() => {
+-       const identities = new Set(
+-         (tracks || []).map((t) => t.participant?.identity || t.participant?.sid)
+-       );
+-       return identities.size;
+-     }, [tracks]);
+-
+-     useEffect(() => {
+-       onCount(activeCount);
+-     }, [activeCount, onCount]);
+-
+-     return null;
+-   };
+
+   // Court functions
+   const startNewCase = async (caseData) => {

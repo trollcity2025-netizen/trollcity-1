@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { useBackgroundProfileRefresh } from '../hooks/useBackgroundProfileRefresh'
 import { toast } from 'sonner'
 import { Camera, Upload, CheckCircle, XCircle, Shield, Coins, CreditCard } from 'lucide-react'
 
@@ -10,6 +11,7 @@ type Step = 'upload_id' | 'selfie' | 'processing' | 'result'
 export default function AIVerificationPage() {
   const { user, profile, refreshProfile } = useAuthStore()
   const navigate = useNavigate()
+  const { refreshProfileInBackground } = useBackgroundProfileRefresh()
   const [step, setStep] = useState<Step>('upload_id')
   const [idPhoto, setIdPhoto] = useState<File | null>(null)
   const [idPhotoUrl, setIdPhotoUrl] = useState<string | null>(null)
@@ -243,6 +245,7 @@ export default function AIVerificationPage() {
 
       toast.success('Verification purchased!')
       if (refreshProfile) await refreshProfile()
+      refreshProfileInBackground()
       navigate('/')
     } else {
       // PayPal flow (use existing verify-user-paypal function)

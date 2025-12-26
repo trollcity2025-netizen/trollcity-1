@@ -1,11 +1,11 @@
 /**
- * Admin Coin Grant System
- * Allows admins to grant coins to themselves without payment processing
+ * Admin Coin and Level Grant System
+ * Allows admins to grant/deduct coins and levels to any user
  */
 
 import { supabase } from './supabase'
 import { ADMIN_EMAIL, isAdminEmail } from './supabase'
-import { useAuthStore } from './store'
+import { recordCoinTransaction } from './coinTransactions'
 
 /**
  * Checks if a user is an admin
@@ -32,17 +32,20 @@ export function isAdmin(user: { email?: string; role?: string } | null, profile:
  * @param packageName - Optional package name for description
  * @returns Success status and new balance
  */
+export type AdminGrantCoinType = 'troll_coins' | 'trollmonds'
+
 export async function grantAdminCoins(
   userId: string,
   coinAmount: number,
   packageId?: string,
-  packageName?: string
+  packageName?: string,
+  coinType: AdminGrantCoinType = 'troll_coins'
 ): Promise<{ success: boolean; error?: string; newBalance?: number }> {
   try {
     // Verify user is admin
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('id, email, role, is_admin, paid_coin_balance')
+      .select('id, email, role, is_admin, troll_coins, trollmonds')
       .eq('id', userId)
       .single()
 
@@ -60,15 +63,15 @@ export async function grantAdminCoins(
       return { success: false, error: 'Only admins can grant coins' }
     }
 
-    // Get current balance
-    const currentBalance = profile.paid_coin_balance || 0
+    const targetField = coinType === 'troll_coins' ? 'troll_coins' : 'trollmonds'
+    const currentBalance = profile[targetField] || 0
     const newBalance = currentBalance + coinAmount
 
     // Update user balance
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update({
-        paid_coin_balance: newBalance,
+        [targetField]: newBalance,
         updated_at: new Date().toISOString()
       })
       .eq('id', userId)
@@ -85,7 +88,7 @@ export async function grantAdminCoins(
         user_id: userId,
         type: 'admin_grant',
         amount: coinAmount,
-        coin_type: 'paid',
+        coin_type: coinType,
         description: packageName 
           ? `Admin grant: ${packageName} (${coinAmount.toLocaleString()} coins)`
           : `Admin grant: ${coinAmount.toLocaleString()} coins`,
@@ -105,7 +108,7 @@ export async function grantAdminCoins(
       // Rollback balance update
       await supabase
         .from('user_profiles')
-        .update({ paid_coin_balance: currentBalance })
+        .update({ [targetField]: currentBalance })
         .eq('id', userId)
       return { success: false, error: 'Failed to create transaction record' }
     }
@@ -113,6 +116,179 @@ export async function grantAdminCoins(
     return { success: true, newBalance }
   } catch (error: any) {
     console.error('Error granting admin coins:', error)
+    return { success: false, error: error.message || 'Unknown error' }
+  }
+}
+
+/**
+ * Deducts coins from a user (admin action)
+ */
+export async function deductAdminCoins(
+  targetUserId: string,
+  coinAmount: number,
+  reason?: string,
+  coinType: AdminGrantCoinType = 'troll_coins'
+): Promise<{ success: boolean; error?: string; newBalance?: number }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: adminProfile } = await supabase
+      .from('user_profiles')
+      .select('role, is_admin, email')
+      .eq('id', user?.id || '')
+      .single()
+
+    if (!isAdmin(user, adminProfile)) {
+      return { success: false, error: 'Only admins can deduct coins' }
+    }
+
+    const { data: targetProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, troll_coins, trollmonds')
+      .eq('id', targetUserId)
+      .single()
+
+    if (profileError || !targetProfile) {
+      return { success: false, error: 'User not found' }
+    }
+
+    const targetField = coinType === 'troll_coins' ? 'troll_coins' : 'trollmonds'
+    const currentBalance = targetProfile[targetField] || 0
+    const newBalance = Math.max(0, currentBalance - coinAmount)
+
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        [targetField]: newBalance,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetUserId)
+
+    if (updateError) {
+      return { success: false, error: 'Failed to update balance' }
+    }
+
+    const description = reason ? `Admin deduct: ${reason}` : `Admin deduct: ${coinAmount.toLocaleString()} ${coinType}`
+    
+    await recordCoinTransaction({
+      userId: targetUserId,
+      amount: -coinAmount,
+      type: 'admin_deduct',
+      coinType,
+      description,
+      metadata: {
+        deducted_by: user?.id,
+        reason: reason || null,
+      },
+      balanceAfter: newBalance,
+    })
+
+    return { success: true, newBalance }
+  } catch (error: any) {
+    console.error('Error deducting admin coins:', error)
+    return { success: false, error: error.message || 'Unknown error' }
+  }
+}
+
+/**
+ * Grants levels to a user (admin action)
+ */
+export async function grantAdminLevels(
+  targetUserId: string,
+  levelAmount: number,
+  reason?: string
+): Promise<{ success: boolean; error?: string; newLevel?: number }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: adminProfile } = await supabase
+      .from('user_profiles')
+      .select('role, is_admin, email')
+      .eq('id', user?.id || '')
+      .single()
+
+    if (!isAdmin(user, adminProfile)) {
+      return { success: false, error: 'Only admins can grant levels' }
+    }
+
+    const { data: targetProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, level')
+      .eq('id', targetUserId)
+      .single()
+
+    if (profileError || !targetProfile) {
+      return { success: false, error: 'User not found' }
+    }
+
+    const currentLevel = targetProfile.level || 1
+    const newLevel = Math.max(1, currentLevel + levelAmount)
+
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        level: newLevel,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetUserId)
+
+    if (updateError) {
+      return { success: false, error: 'Failed to update level' }
+    }
+
+    return { success: true, newLevel }
+  } catch (error: any) {
+    console.error('Error granting admin levels:', error)
+    return { success: false, error: error.message || 'Unknown error' }
+  }
+}
+
+/**
+ * Deducts levels from a user (admin action)
+ */
+export async function deductAdminLevels(
+  targetUserId: string,
+  levelAmount: number,
+  reason?: string
+): Promise<{ success: boolean; error?: string; newLevel?: number }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: adminProfile } = await supabase
+      .from('user_profiles')
+      .select('role, is_admin, email')
+      .eq('id', user?.id || '')
+      .single()
+
+    if (!isAdmin(user, adminProfile)) {
+      return { success: false, error: 'Only admins can deduct levels' }
+    }
+
+    const { data: targetProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, level')
+      .eq('id', targetUserId)
+      .single()
+
+    if (profileError || !targetProfile) {
+      return { success: false, error: 'User not found' }
+    }
+
+    const currentLevel = targetProfile.level || 1
+    const newLevel = Math.max(1, currentLevel - levelAmount)
+
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        level: newLevel,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetUserId)
+
+    if (updateError) {
+      return { success: false, error: 'Failed to update level' }
+    }
+
+    return { success: true, newLevel }
+  } catch (error: any) {
+    console.error('Error deducting admin levels:', error)
     return { success: false, error: error.message || 'Unknown error' }
   }
 }

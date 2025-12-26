@@ -18,11 +18,12 @@ CREATE TABLE entrance_effects (
   name TEXT NOT NULL,
   icon TEXT NOT NULL,
   coin_cost INTEGER NOT NULL CHECK (coin_cost >= 0),
-  rarity TEXT NOT NULL CHECK (rarity IN ('Rare', 'Epic', 'Legendary', 'Mythic', 'Exclusive')),
+  rarity TEXT NOT NULL,
   description TEXT,
   animation_type TEXT, -- 'flame', 'money_shower', 'electric', etc.
   sound_effect TEXT, -- URL or identifier for sound
   duration_seconds INTEGER DEFAULT 5, -- How long the effect displays
+  image_url TEXT, -- URL to effect image
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -205,16 +206,36 @@ CREATE POLICY "Users can update their own insurances"
 -- =====================================================
 
 -- Insert entrance effects
-INSERT INTO entrance_effects (id, name, icon, coin_cost, rarity, description, animation_type) VALUES
-  ('effect_flame_burst', '🔥 Flame Burst', '🔥', 500, 'Rare', 'Enter with a burst of flames', 'flame'),
-  ('effect_money_shower', '💸 Money Shower', '💸', 1500, 'Epic', 'Rain money when you arrive', 'money_shower'),
-  ('effect_electric_flash', '⚡ Electric Flash', '⚡', 2800, 'Epic', 'Electric lightning entrance', 'electric'),
-  ('effect_royal_throne', '👑 Royal Throne', '👑', 5200, 'Legendary', 'Descend on a royal throne', 'throne'),
-  ('effect_rainbow_descent', '🌈 Rainbow Descent', '🌈', 8500, 'Legendary', 'Arrive on a rainbow', 'rainbow'),
-  ('effect_troll_rollup', '🚗 Troll Roll-Up', '🚗', 12000, 'Mythic', 'Drive in with style', 'car'),
-  ('effect_vip_siren', '🚨 VIP Siren Rush', '🚨', 25000, 'Mythic', 'VIP siren announcement', 'siren'),
-  ('effect_firework', '🎆 Firework Explosion', '🎆', 50000, 'Mythic', 'Explode onto the scene', 'firework'),
-  ('effect_troll_king', '🧌 Troll King Arrival', '🧌', 100000, 'Exclusive', 'Ultimate king entrance', 'king')
+INSERT INTO entrance_effects (id, name, icon, coin_cost, rarity, description, animation_type, image_url, is_active) VALUES
+  ('e1', 'Troll Entrance (Classic)', '🧌', 10, 'EXCLUSIVE', 'Classic troll entrance', 'troll_classic', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=classic%20troll%20entrance%20neon%20aura&image_size=square', true),
+  ('e2', 'Royal Sparkle Crown', '👑', 5000, 'EPIC', 'Royal crown sparkles', 'sparkle_crown', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=royal%20sparkle%20crown%20neon%20gold&image_size=square', true),
+  ('e3', 'Neon Meteor Shower', '☄️', 10000, 'MYTHIC', 'Neon meteor shower', 'meteor_shower', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=neon%20meteor%20shower%20cosmic&image_size=square', true),
+  ('e4', 'Lightning Strike Arrival', '⚡', 7500, 'EPIC', 'Lightning strike arrival', 'lightning_arrival', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=lightning%20strike%20arrival%20neon&image_size=square', true),
+  ('e5', 'Chaos Portal Arrival', '🌀', 15000, 'LEGENDARY', 'Chaos portal arrival', 'chaos_portal', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=chaos%20portal%20arrival%20neon%20warp&image_size=square', true),
+  ('e6', 'Galactic Warp Beam', '🛸', 25000, 'ULTRA', 'Galactic warp beam', 'warp_beam', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=galactic%20warp%20beam%20neon&image_size=square', true),
+  ('e7', 'Troll City VIP Flames', '🔥', 35000, 'LEGENDARY+', 'VIP flames', 'vip_flames', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=vip%20flames%20neon%20crown&image_size=square', true),
+  ('e8', 'Flaming Gold Crown Drop', '👑', 50000, 'EXOTIC', 'Flaming gold crown drop', 'gold_crown_drop', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=flaming%20gold%20crown%20drop&image_size=square', true),
+  ('e9', 'Aurora Storm Entrance', '🌌', 75000, 'MYTHIC', 'Aurora storm entrance', 'aurora_storm', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=aurora%20storm%20entrance&image_size=square', true),
+  ('e10', 'Black Hole Vortex', '🕳️', 100000, 'ULTRA', 'Black hole vortex', 'black_hole', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=black%20hole%20vortex%20neon&image_size=square', true),
+  ('e11', 'Money Shower Madness', '💸', 125000, 'RARE+', 'Money shower madness', 'money_shower', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=money%20shower%20madness%20neon&image_size=square', true),
+  ('e12', 'Floating Royal Throne', '👑', 150000, 'MYTHIC', 'Floating royal throne', 'royal_throne', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=floating%20royal%20throne%20neon&image_size=square', true),
+  ('e13', 'Platinum Fire Tornado', '🔥', 200000, 'LEGENDARY++', 'Platinum fire tornado', 'fire_tornado', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=platinum%20fire%20tornado%20neon&image_size=square', true),
+  ('e14', 'Cosmic Crown Meteor Fall', '☄️', 250000, 'ULTRA', 'Cosmic crown meteor fall', 'crown_meteor', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=cosmic%20crown%20meteor%20fall&image_size=square', true),
+  ('e15', 'Royal Diamond Explosion', '💎', 300000, 'EXOTIC', 'Royal diamond explosion', 'diamond_explosion', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=royal%20diamond%20explosion%20neon&image_size=square', true),
+  ('e16', 'Neon Chaos Warp', '🌀', 400000, 'MYTHIC', 'Neon chaos warp', 'chaos_warp', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=neon%20chaos%20warp&image_size=square', true),
+  ('e17', 'Supreme Emerald Storm', '💚', 500000, 'LEGENDARY++', 'Supreme emerald storm', 'emerald_storm', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=supreme%20emerald%20storm%20neon&image_size=square', true),
+  ('e18', 'Millionaire Troller Arrival', '🤑', 1000000, 'EXOTIC GOLD', 'Millionaire troller arrival', 'millionaire_arrival', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=millionaire%20troller%20arrival%20neon&image_size=square', true),
+  ('e19', 'Troll God Ascension', '🧌', 2500000, 'DIVINE', 'Troll god ascension', 'god_ascension', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=troll%20god%20ascension%20neon&image_size=square', true),
+  ('e20', 'Troll City World Domination', '🌍', 5000000, 'UNOBTAINABLE', 'World domination', 'world_domination', 'https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=world%20domination%20neon&image_size=square', true),
+  ('effect_flame_burst', '🔥 Flame Burst', '🔥', 500, 'Rare', 'Enter with a burst of flames', 'flame', '', true),
+  ('effect_money_shower', '💸 Money Shower', '💸', 1500, 'Epic', 'Rain money when you arrive', 'money_shower', '', true),
+  ('effect_electric_flash', '⚡ Electric Flash', '⚡', 2800, 'Epic', 'Electric lightning entrance', 'electric', '', true),
+  ('effect_royal_throne', '👑 Royal Throne', '👑', 5200, 'Legendary', 'Descend on a royal throne', 'throne', '', true),
+  ('effect_rainbow_descent', '🌈 Rainbow Descent', '🌈', 8500, 'Legendary', 'Arrive on a rainbow', 'rainbow', '', true),
+  ('effect_troll_rollup', '🚗 Troll Roll-Up', '🚗', 12000, 'Mythic', 'Drive in with style', 'car', '', true),
+  ('effect_vip_siren', '🚨 VIP Siren Rush', '🚨', 25000, 'Mythic', 'VIP siren announcement', 'siren', '', true),
+  ('effect_firework', '🎆 Firework Explosion', '🎆', 50000, 'Mythic', 'Explode onto the scene', 'firework', '', true),
+  ('effect_troll_king', '🧌 Troll King Arrival', '🧌', 100000, 'Exclusive', 'Ultimate king entrance', 'king', '', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert perks

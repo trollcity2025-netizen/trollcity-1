@@ -141,7 +141,7 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
         userId: profile.id,
         amount: package_.price,
         type: 'insurance_purchase',
-        coinType: 'paid',
+        coinType: 'troll_coins',
         description: `Purchased ${package_.name} insurance`,
         metadata: {
           insurance_id: package_.id,

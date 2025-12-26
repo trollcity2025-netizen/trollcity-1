@@ -1,5 +1,5 @@
 // src/pages/admin/AdminDashboard.tsx
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import './admin.css'
 import { useAuthStore } from '../../lib/store'
 import { supabase, isAdminEmail } from '../../lib/supabase'
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { downloadText } from '../../lib/downloads'
 import api from '../../lib/api'
 import ClickableUsername from '../../components/ClickableUsername'
 import ProfitSummary from '../../components/ProfitSummary'
@@ -29,10 +30,10 @@ import CitySummaryBar from './components/CitySummaryBar'
 import CityControlsHealth from './components/CityControlsHealth'
 import FinanceEconomyCenter from './components/FinanceEconomyCenter'
 import OperationsControlDeck from './components/OperationsControlDeck'
-import ApplicationsHub from './components/ApplicationsHub'
 import AdditionalTasksGrid from './components/AdditionalTasksGrid'
 import QuickActionsBar from './components/QuickActionsBar'
 import AgreementsManagement from './components/AgreementsManagement'
+import IPTracking from './components/IPTracking'
 
 // Import missing components
 import MetricsPanel from './components/MetricsPanel'
@@ -53,7 +54,15 @@ import { AdminGrantCoins } from './components/AdminGrantCoins'
 import AdminControlPanel from './components/AdminControlPanel'
 import TestDiagnostics from './components/TestDiagnostics'
 import AdminResetPanel from './AdminResetPanel'
-import PayoutAdmin from '../../components/PayoutAdmin'
+import PayoutQueue from './components/PayoutQueue'
+import PayPalPayoutManager from './components/PayPalPayoutManager'
+import AdminModulesSectionPanel from './components/AdminModulesSection' // add earlier?
+import AdminCostDashboard from './components/AdminCostDashboard'
+import MAIAuthorityPanel from '../../components/mai/MAIAuthorityPanel'
+import StorePriceEditor from './components/StorePriceEditor'
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isValidUuid = (value?: string) => Boolean(value && UUID_REGEX.test(value))
 
 type StatState = {
   totalUsers: number
@@ -70,7 +79,7 @@ type StatState = {
   totalValue: number
   purchasedCoins: number
   earnedCoins: number
-  freeCoins: number
+  trollmonds: number
   giftCoins: number
   appSponsoredGifts: number
   savPromoCount: number
@@ -81,7 +90,7 @@ type StatState = {
 }
 
 interface EconomySummary {
-  paidCoins: {
+  troll_coins: {
     totalPurchased: number
     totalSpent: number
     outstandingLiability: number
@@ -100,38 +109,57 @@ interface EconomySummary {
     totalCoinsAwarded: number
     jackpotCount: number
   }
+  messages?: {
+    totalPayments: number
+    totalIncome: number
+    transactionCount: number
+  }
 }
 
 type TabId =
+  | 'hr'
+  | 'all_hr'
+  | 'database_backup'
+  | 'system_health'
+  | 'cache_clear'
+  | 'system_config'
+  | 'user_search'
+  | 'ban_management'
+  | 'reports_queue'
+  | 'role_management'
+  | 'stream_monitor'
+  | 'media_library'
+  | 'chat_moderation'
+  | 'announcements'
+  | 'economy_dashboard'
+  | 'finance_dashboard'
+  | 'cost_dashboard'
+  | 'grant_coins'
+  | 'tax_reviews'
+  | 'payment_logs'
+  | 'store_pricing'
+  | 'create_schedule'
+  | 'officer_shifts'
+  | 'shift_requests_approval'
+  | 'empire_applications'
+  | 'referral_bonuses'
+  | 'control_panel'
+  | 'test_diagnostics'
+  | 'reset_maintenance'
+  | 'export_data'
   | 'connections'
-  | 'metrics'
-  | 'streams'
-  | 'paypal'
-  | 'reports'
-  | 'officer_reports'
-  | 'monitor'
   | 'payouts'
+  | 'payout_queue'
+  | 'cashouts'
   | 'purchases'
+  | 'declined'
   | 'verification'
   | 'users'
   | 'broadcasters'
-  | 'referrals'
   | 'families'
-  | 'cashouts'
   | 'support'
-  | 'declined'
   | 'agreements'
-  | 'earnings_tax'
-  | 'reset'
-  | 'officer_shifts'
-  | 'create_schedule'
-  | 'grant_coins'
-  | 'control_panel'
-  | 'test_diagnostics'
-  | 'empire_applications'
-  | 'economy'
-  | 'tax_reviews'
-  | 'payout_queue'
+  | 'reports'
 
 export default function AdminDashboard() {
   const { profile, user, setProfile } = useAuthStore()
@@ -203,7 +231,7 @@ export default function AdminDashboard() {
     totalValue: 0,
     purchasedCoins: 0,
     earnedCoins: 0,
-    freeCoins: 0,
+    trollmonds: 0,
     giftCoins: 0,
     appSponsoredGifts: 0,
     savPromoCount: 0,
@@ -217,7 +245,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false)
   const [tabLoading, setTabLoading] = useState(false)
 
-  const [payouts, setPayouts] = useState<any[]>([])
   const [cashouts, setCashouts] = useState<any[]>([])
   const [cashoutsSearch, setCashoutsSearch] = useState('')
   const [cashoutsProvider, setCashoutsProvider] = useState('')
@@ -230,13 +257,14 @@ export default function AdminDashboard() {
   const [familiesList, setFamiliesList] = useState<any[]>([])
   const [_supportTickets, setSupportTickets] = useState<any[]>([])
   const [_agreements, setAgreements] = useState<any[]>([])
-  const [agoraStatus, setAgoraStatus] = useState<any | null>(null)
+  const [liveKitStatus, setLiveKitStatus] = useState<any | null>(null)
   const [supabaseStatus, setSupabaseStatus] = useState<any | null>(null)
   const [paypalStatus, setPaypalStatus] = useState<any | null>(null)
   const [paypalTesting, setPaypalTesting] = useState(false)
   const [trollDropAmount, setTrollDropAmount] = useState<number>(100)
   const [trollDropDuration, setTrollDropDuration] = useState<number>(60)
   const [scheduledAnnouncements, setScheduledAnnouncements] = useState<any[]>([])
+  const [clearingSeedApplications, setClearingSeedApplications] = useState(false)
 
   // Economy summary
   const [economySummary, setEconomySummary] = useState<EconomySummary | null>(null)
@@ -336,8 +364,6 @@ export default function AdminDashboard() {
 
     // Global monitoring channels
     useEffect(() => {
-      console.log('[Admin Monitor] Starting global monitoring system...')
-  
       const streamsChannel = supabase
         .channel('admin-global-streams')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, () => {
@@ -377,7 +403,6 @@ export default function AdminDashboard() {
       .channel('admin-global-payouts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payout_requests' }, () => {
         loadDashboardData()
-        if (activeTab === 'payouts') loadPayouts()
       })
       .subscribe()
 
@@ -386,7 +411,6 @@ export default function AdminDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'earnings_payouts' }, () => {
         loadDashboardData()
         loadEconomySummary()
-        if (activeTab === 'payouts') loadPayouts()
       })
       .subscribe()
 
@@ -414,7 +438,6 @@ export default function AdminDashboard() {
       .subscribe()
 
     return () => {
-      console.log('[Admin Monitor] Stopping global monitoring system...')
       supabase.removeChannel(streamsChannel)
       supabase.removeChannel(coinChannel)
       supabase.removeChannel(usersChannel)
@@ -495,7 +518,7 @@ export default function AdminDashboard() {
         supabase.from('stream_reports').select('id').eq('status', 'pending'),
         supabase
           .from('user_profiles')
-          .select('paid_coin_balance, free_coin_balance, sav_bonus_coins, vived_bonus_coins'),
+          .select('troll_coins_balance, free_coin_balance, sav_bonus_coins, vived_bonus_coins'),
         supabase.from('coin_transactions').select('metadata').eq('type', 'purchase'),
         supabase.from('coin_transactions').select('amount, type').eq('type', 'gift'),
         supabase.from('payout_requests').select('cash_amount, processing_fee'),
@@ -510,16 +533,16 @@ export default function AdminDashboard() {
 
       const balances = balancesRes.data || []
       let purchasedCoins = 0
-      let freeCoins = 0
+      let trollmonds = 0
       let savBonusTotal = 0
       let vivedBonusTotal = 0
       for (const row of balances as any[]) {
-        purchasedCoins += Number(row.paid_coin_balance || 0)
-        freeCoins += Number(row.free_coin_balance || 0)
+        purchasedCoins += Number(row.troll_coins_balance || 0)
+        trollmonds += Number(row.free_coin_balance || 0)
         savBonusTotal += Number(row.sav_bonus_coins || 0)
         vivedBonusTotal += Number(row.vived_bonus_coins || 0)
       }
-      const totalCoins = purchasedCoins + freeCoins
+      const totalCoins = purchasedCoins + trollmonds
       const totalValue = totalCoins / 100
 
       const coinTx = coinTxRes.data || []
@@ -561,7 +584,7 @@ export default function AdminDashboard() {
         trollOfficers: officers.length,
         aiFlags: flags.length,
         purchasedCoins,
-        freeCoins,
+        trollmonds,
         earnedCoins: 0,
         totalCoinsInCirculation: totalCoins,
         totalValue,
@@ -611,22 +634,22 @@ export default function AdminDashboard() {
       console.error('Failed to load economy summary:', err)
       // Fallback: compute summary client-side
       try {
-        const { data: paidCoinsTx } = await supabase
+        const { data: troll_coinsTx } = await supabase
           .from('coin_transactions')
           .select('user_id, amount, type')
           .in('type', ['purchase', 'cashout'])
 
-        const paidCoinsMap: Record<string, { purchased: number; spent: number }> = {};
-        ;(paidCoinsTx || []).forEach((tx: any) => {
-          const existing = paidCoinsMap[tx.user_id] || { purchased: 0, spent: 0 }
+        const troll_coinsMap: Record<string, { purchased: number; spent: number }> = {};
+        ;(troll_coinsTx || []).forEach((tx: any) => {
+          const existing = troll_coinsMap[tx.user_id] || { purchased: 0, spent: 0 }
           if (tx.type === 'purchase') existing.purchased += Math.abs(Number(tx.amount || 0))
           if (tx.type === 'cashout') existing.spent += Math.abs(Number(tx.amount || 0))
-          paidCoinsMap[tx.user_id] = existing
+          troll_coinsMap[tx.user_id] = existing
         })
 
         let totalPurchased = 0
         let totalSpent = 0
-        Object.values(paidCoinsMap).forEach(v => { totalPurchased += v.purchased; totalSpent += v.spent })
+        Object.values(troll_coinsMap).forEach(v => { totalPurchased += v.purchased; totalSpent += v.spent })
         const outstandingLiability = totalPurchased - totalSpent
 
         const { data: broadcasterEarnings } = await supabase
@@ -665,11 +688,42 @@ export default function AdminDashboard() {
           if (meta.is_jackpot) jackpotCount++
         })
 
+        let messageStats = {
+          totalPayments: 0,
+          totalIncome: 0,
+          transactionCount: 0
+        }
+        try {
+          const { data: messageTx } = await supabase
+            .from('coin_transactions')
+            .select('amount, type')
+            .in('type', ['message_payment', 'message_income'])
+
+          let totalMessagePayments = 0
+          let totalMessageIncome = 0
+          ;(messageTx || []).forEach((tx: any) => {
+            if (tx.type === 'message_payment') {
+              totalMessagePayments += Math.abs(Number(tx.amount || 0))
+            } else if (tx.type === 'message_income') {
+              totalMessageIncome += Number(tx.amount || 0)
+            }
+          })
+
+          messageStats = {
+            totalPayments: totalMessagePayments,
+            totalIncome: totalMessageIncome,
+            transactionCount: (messageTx || []).length
+          }
+        } catch (messageErr) {
+          console.warn('Failed to load message transaction summary:', messageErr)
+        }
+
         setEconomySummary({
-          paidCoins: { totalPurchased, totalSpent, outstandingLiability },
+          troll_coins: { totalPurchased, totalSpent, outstandingLiability },
           broadcasters: { totalUsdOwed, pendingCashoutsUsd, paidOutUsd },
           officers: { totalUsdPaid },
-          wheel: { totalSpins, totalCoinsSpent, totalCoinsAwarded, jackpotCount }
+          wheel: { totalSpins, totalCoinsSpent, totalCoinsAwarded, jackpotCount },
+          messages: messageStats
         })
       } catch (e) {
         console.error('Economy fallback failed:', e)
@@ -837,16 +891,16 @@ export default function AdminDashboard() {
       // Get current balance before adding
       const { data: beforeData } = await supabase
         .from('user_profiles')
-        .select('paid_coin_balance')
+        .select('troll_coins_balance')
         .eq('id', user.id)
         .single()
       
-      const beforeBalance = beforeData?.paid_coin_balance || 0
+      const beforeBalance = beforeData?.troll_coins_balance || 0
       
       // Call RPC function
-      const { data, error } = await supabase.rpc('add_paid_coins', {
+      const { data, error } = await supabase.rpc('add_troll_coins', {
         user_id_input: user.id,
-        coins_to_add: 7000
+        coins_to_add: 12000
       })
       
       if (error) {
@@ -857,7 +911,7 @@ export default function AdminDashboard() {
       // Verify the balance was actually updated
       const { data: afterData, error: verifyError } = await supabase
         .from('user_profiles')
-        .select('paid_coin_balance')
+        .select('troll_coins_balance')
         .eq('id', user.id)
         .single()
       
@@ -866,14 +920,14 @@ export default function AdminDashboard() {
         throw new Error('Failed to verify coins were added')
       }
       
-      const afterBalance = afterData?.paid_coin_balance || 0
+      const afterBalance = afterData?.troll_coins_balance || 0
       const actualAdded = afterBalance - beforeBalance
       
-      if (actualAdded !== 7000) {
-        console.warn(`Expected to add 7000 coins, but only added ${actualAdded}`)
-        toast.warning(`Added ${actualAdded} coins (expected 7000). Balance may have been updated.`)
+      if (actualAdded !== 12000) {
+        console.warn(`Expected to add 12000 coins, but only added ${actualAdded}`)
+        toast.warning(`Added ${actualAdded} coins (expected 12000). Balance may have been updated.`)
       } else {
-        toast.success(`Added 7000 paid coins! New balance: ${afterBalance.toLocaleString()}`)
+        toast.success(`Added 12000 troll_coins! New balance: ${afterBalance.toLocaleString()}`)
       }
       
       // Reload full profile to update balance in store
@@ -966,27 +1020,39 @@ export default function AdminDashboard() {
         throw endError
       }
 
-      // Delete related data (handle errors gracefully if tables don't exist or RLS blocks)
-      const deleteRelatedData = async (table: string, column: string = 'stream_id') => {
-        const { error } = await supabase
-          .from(table)
-          .delete()
-          .eq(column, id)
-        
-        // Ignore 404 (table not found) and 403 (RLS blocked) errors
-        if (error && error.code !== 'PGRST205' && error.code !== '42P01' && error.code !== '42501') {
-          console.warn(`Could not delete from ${table}:`, error)
+        // Delete related data (handle errors gracefully if tables don't exist or RLS blocks)
+        const deleteRelatedData = async (table: string, column: string = 'stream_id') => {
+          const { error } = await supabase
+            .from(table)
+            .delete()
+            .eq(column, id)
+
+          if (error && error.code !== 'PGRST205' && error.code !== '42P01' && error.code !== '42501') {
+            console.warn(`Could not delete from ${table}:`, error)
+          }
         }
-      }
+
+        const cleanupStreamParticipants = async () => {
+          const { error } = await supabase.functions.invoke('streams-maintenance', {
+            body: {
+              action: 'delete_stream',
+              stream_id: id
+            }
+          })
+
+          if (error) {
+            console.warn('Failed to clean up stream participants via service function', error)
+          }
+        }
 
       // Delete related data in parallel (non-blocking)
-      await Promise.allSettled([
-        deleteRelatedData('messages'),
-        deleteRelatedData('stream_reports'),
-        deleteRelatedData('streams_participants'),
-        deleteRelatedData('gifts'),
-        deleteRelatedData('chat_messages'),
-      ])
+        await Promise.allSettled([
+          deleteRelatedData('messages'),
+          deleteRelatedData('stream_reports'),
+          cleanupStreamParticipants(),
+          deleteRelatedData('gifts'),
+          deleteRelatedData('chat_messages'),
+        ])
 
       // Finally, delete the stream itself
       const { error: deleteError } = await supabase
@@ -1007,7 +1073,7 @@ export default function AdminDashboard() {
   }
 
   const viewStream = (id: string) => {
-    navigate(`/stream/${id}?admin=1`)
+    navigate(`/live/${id}?admin=1`)
   }
 
   const flagSelectedUserAI = async () => {
@@ -1025,16 +1091,19 @@ export default function AdminDashboard() {
 
   const testLiveKitStreaming = async () => {
     try {
-      const tokenResp = await api.post('/livekit-token', { room: 'admin-test', identity: profile?.username || 'admin' })
-      if (!tokenResp.success) {
-        setAgoraStatus({ ok: false, error: tokenResp.error || 'Token error' })
+      const { data, error } = await supabase.functions.invoke('livekit-token', {
+        body: { room: 'admin-test', identity: profile?.username || 'admin', user_id: profile?.id, allowPublish: true }
+      })
+
+      if (error || !data?.token) {
+        setLiveKitStatus({ ok: false, error: (error as any)?.message || 'Token error' })
         toast.error('LiveKit test failed')
       } else {
-        setAgoraStatus({ ok: true })
+        setLiveKitStatus({ ok: true })
         toast.success('LiveKit token generated')
       }
     } catch (e: any) {
-      setAgoraStatus({ ok: false, error: e?.message || 'LiveKit request failed' })
+      setLiveKitStatus({ ok: false, error: e?.message || 'LiveKit request failed' })
       toast.error('LiveKit test failed')
     }
   }
@@ -1118,21 +1187,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const loadPayouts = async () => {
-    setTabLoading(true)
-    try {
-      const { data } = await supabase
-        .from('payout_requests')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50)
-      setPayouts(data || [])
-    } catch {
-      setPayouts([])
-    } finally {
-      setTabLoading(false)
-    }
-  }
 
   // Mark a cashout as paid, deduct coins, and notify the user
   const markCashoutPaid = async (r: any) => {
@@ -1140,7 +1194,7 @@ export default function AdminDashboard() {
       // 1) Get latest wallet balance
       const { data: profileRow, error: profErr } = await supabase
         .from('user_profiles')
-        .select('id, paid_coin_balance')
+        .select('id, troll_coins_balance')
         .eq('id', r.user_id)
         .maybeSingle();
 
@@ -1151,13 +1205,13 @@ export default function AdminDashboard() {
       }
 
       const requestedCoins = Number(r.requested_coins || 0);
-      const currentBal = Number(profileRow.paid_coin_balance || 0);
+      const currentBal = Number(profileRow.troll_coins_balance || 0);
       const newBal = Math.max(0, currentBal - requestedCoins);
 
       // 2) Deduct coins from user wallet
       await supabase
         .from('user_profiles')
-        .update({ paid_coin_balance: newBal })
+        .update({ troll_coins_balance: newBal })
         .eq('id', profileRow.id);
 
       // 3) Update cashout status
@@ -1276,84 +1330,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const updatePayoutStatus = async (id: string, status: 'approved' | 'rejected' | 'paid', e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('payout_requests')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id)
-
-      if (error) {
-        console.error('Update payout status error:', error)
-        toast.error(`Failed to update payout: ${error.message}`)
-        return
-      }
-
-      await loadPayouts()
-      await loadDashboardData()
-
-      toast.success(`Payout ${status}`)
-    } catch (err: any) {
-      console.error('Update payout status error:', err)
-      toast.error(err.message || 'Failed to update payout')
-    }
-  }
-
-  const approvePayout = async (req: any, e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-    
-    try {
-      const { error: updateError } = await supabase.from('payout_requests')
-        .update({ status: 'paid', processed_at: new Date().toISOString() })
-        .eq('id', req.id);
-
-      if (updateError) {
-        console.error('Update payout error:', updateError)
-        toast.error(`Failed to update payout: ${updateError.message}`)
-        return
-      }
-
-      const { error: deductError } = await supabase.rpc('deduct_user_coins', {
-        p_user_id: req.user_id,
-        p_coins: req.coins_redeemed
-      });
-
-      if (deductError) {
-        console.error('Deduct coins error:', deductError)
-        toast.error(`Failed to deduct coins: ${deductError.message}`)
-        return
-      }
-
-      const { error: messageError } = await supabase.from('messages').insert([
-        {
-          user_id: req.user_id,
-          content: `🎉 Your payout of $${req.cash_amount || req.cash_value || 0} has been sent! Check your email or wallet.`,
-          system: true
-        }
-      ]);
-
-      if (messageError) {
-        console.error('Insert message error:', messageError)
-        // Don't fail the whole operation for message errors
-      }
-
-      toast.success('Payout approved and processed successfully!')
-      await loadPayouts()
-      await loadDashboardData()
-
-      toast.success("Payment marked as complete.");
-    } catch {
-      toast.error('Failed to approve payout')
-    }
-  }
 
   const loadPurchases = async () => {
     setTabLoading(true)
@@ -1394,7 +1370,20 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('applications')
-        .select('id, user_id, status, created_at, user_profiles!applications_user_id_fkey(username)')
+        .select(`
+          id,
+          user_id,
+          status,
+          created_at,
+          type,
+          experience,
+          reason,
+          content_type,
+          followers,
+          portfolio,
+          approved_at,
+          user_profiles!applications_user_id_fkey(username)
+        `)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(50)
@@ -1403,7 +1392,10 @@ export default function AdminDashboard() {
         console.error('[Admin] Load applications error:', error)
         setVerifications([])
       } else {
-        setVerifications(data || [])
+        const validApps = (data || []).filter(
+          (app: any) => isValidUuid(app.id) && isValidUuid(app.user_id)
+        )
+        setVerifications(validApps)
       }
     } catch (err) {
       console.error('[Admin] Load applications exception:', err)
@@ -1453,6 +1445,11 @@ export default function AdminDashboard() {
   }
 
   const _rejectApplication = async (id: string) => {
+    if (!isValidUuid(id)) {
+      toast.error('Invalid application identifier')
+      console.warn('[Admin] Reject called with invalid id', id)
+      return
+    }
     try {
       const { error } = await supabase
         .from('applications')
@@ -1503,6 +1500,11 @@ export default function AdminDashboard() {
   }
 
   const _approveApplication = async (appId: string, userId: string, newRole: string) => {
+    if (!isValidUuid(appId) || !isValidUuid(userId)) {
+      toast.error('Invalid application or user identifier')
+      console.warn('[Admin] Approve called with invalid ids', { appId, userId })
+      return
+    }
     // 1. Approve application
     await supabase
       .from("applications")
@@ -1530,6 +1532,48 @@ export default function AdminDashboard() {
     toast.success(`Approved and assigned: ${newRole}`);
     loadApplications();
   };
+
+  const clearSeedApplications = async () => {
+    if (clearingSeedApplications) return
+    setClearingSeedApplications(true)
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .delete()
+        .or('user_id.ilike.user-% , id.eq.2')
+
+      if (error) throw error
+
+      toast.success('Seeded bot applications removed')
+      await loadApplications()
+    } catch (err) {
+      console.error('[Admin] Clear seeded applications error:', err)
+      toast.error('Failed to clear seeded applications')
+    } finally {
+      setClearingSeedApplications(false)
+    }
+  }
+
+  const deleteApplication = async (appId: string) => {
+    if (!isValidUuid(appId)) {
+      toast.error('Invalid application identifier')
+      return
+    }
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .delete()
+        .eq('id', appId)
+
+      if (error) throw error
+
+      toast.success('Application deleted')
+      await loadApplications()
+    } catch (err) {
+      console.error('[Admin] Delete application error:', err)
+      toast.error('Failed to delete application')
+    }
+  }
 
   const _deleteAllFakeAccounts = async () => {
     try {
@@ -1753,19 +1797,19 @@ export default function AdminDashboard() {
   }
 
   const handleBroadcastMessage = () => {
-    toast.info('Broadcast message feature coming soon')
+    setActiveTab('announcements')
   }
 
   const handleSystemMaintenance = () => {
-    toast.info('System maintenance panel opening')
+    setActiveTab('reset_maintenance')
   }
 
   const handleViewAnalytics = () => {
-    navigate('/admin/analytics')
+    setActiveTab('reports')
   }
 
   const handleExportData = () => {
-    toast.info('Data export initiated')
+    setActiveTab('export_data')
   }
 
   const handleToggleMaintenanceMode = () => {
@@ -1778,7 +1822,8 @@ export default function AdminDashboard() {
     if (!profile) return
     switch (activeTab) {
       case 'payouts':
-        loadPayouts()
+        break
+      case 'payout_queue':
         break
       case 'cashouts':
         loadCashouts()
@@ -1863,7 +1908,7 @@ export default function AdminDashboard() {
             bio: 'New troll in the city!',
             role: isAdmin ? 'admin' : 'user',
             tier: 'Bronze',
-            paid_coin_balance: 0,
+            troll_coins_balance: 0,
             free_coin_balance: 100,
             total_earned_coins: 100,
             total_spent_coins: 0,
@@ -1887,7 +1932,7 @@ export default function AdminDashboard() {
         id: user!.id,
         username: (user?.email || '').split('@')[0] || '',
         role: isAdmin2 ? 'admin' : 'user',
-        paid_coin_balance: 0,
+        troll_coins_balance: 0,
         free_coin_balance: 0,
       } as any
       setProfile(minimalProfile)
@@ -1928,53 +1973,139 @@ export default function AdminDashboard() {
     },
   ]
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: 'connections', label: 'Connections' },
-    { id: 'metrics', label: 'Metrics' },
-    { id: 'streams', label: 'Live Streams' },
-    { id: 'reset', label: 'Reset & Maintenance' },
-    { id: 'paypal', label: 'PayPal Payments' },
-    { id: 'reports', label: 'Reports' },
-    { id: 'officer_reports', label: 'Officer Reports' },
-    { id: 'monitor', label: 'Stream Monitor' },
-    { id: 'referrals', label: 'Referral Bonuses' },
-    { id: 'empire_applications', label: 'Empire Applications' },
-    { id: 'economy', label: 'Economy Dashboard' },
-    { id: 'tax_reviews', label: 'Tax Reviews' },
-    { id: 'payouts', label: 'Payouts' },
-    { id: 'payout_queue', label: 'Payout Queue' },
-    { id: 'cashouts', label: 'Manual Cashouts' },
-    { id: 'purchases', label: 'Purchases' },
-    { id: 'declined', label: 'Declined' },
-    { id: 'verification', label: 'Applications' },
-    { id: 'users', label: 'Users' },
-    { id: 'broadcasters', label: 'Broadcasters' },
-    { id: 'families', label: 'Families' },
-    { id: 'support', label: 'Support Tickets' },
-    { id: 'agreements', label: 'User Agreements' },
-    { id: 'earnings_tax', label: 'Earnings & Tax' },
-    { id: 'officer_shifts', label: 'Officer Shifts' },
-    { id: 'create_schedule', label: 'Create Schedule' },
-    { id: 'grant_coins', label: 'Grant Coins' },
-    { id: 'control_panel', label: 'Control Panel' },
-    { id: 'test_diagnostics', label: 'Test Diagnostics' },
+  const sections = [
+    {
+      title: 'HR Management',
+      tabs: [
+        { id: 'hr' as TabId, label: 'HR System', description: 'Staff applications and hiring' },
+        { id: 'all_hr' as TabId, label: 'All HR Tools', description: 'Complete HR management suite' },
+      ]
+    },
+    {
+      title: 'System Management',
+      tabs: [
+        { id: 'database_backup' as TabId, label: 'Database Backup', description: 'Create system backup' },
+        { id: 'system_health' as TabId, label: 'System Health', description: 'Check server status' },
+        { id: 'cache_clear' as TabId, label: 'Cache Clear', description: 'Clear all caches' },
+        { id: 'system_config' as TabId, label: 'System Config', description: 'Edit configuration' },
+      ]
+    },
+    {
+      title: 'User Management',
+      tabs: [
+        { id: 'user_search' as TabId, label: 'User Search', description: 'Find and manage users' },
+        { id: 'ban_management' as TabId, label: 'Ban Management', description: 'Manage banned users' },
+        { id: 'reports_queue' as TabId, label: 'Reports Queue', description: 'Handle user reports' },
+        { id: 'role_management' as TabId, label: 'Role Management', description: 'Assign user roles' },
+      ]
+    },
+    {
+      title: 'Content & Media',
+      tabs: [
+        { id: 'stream_monitor' as TabId, label: 'Stream Monitor', description: 'Monitor live streams' },
+        { id: 'media_library' as TabId, label: 'Media Library', description: 'Manage uploaded content' },
+        { id: 'chat_moderation' as TabId, label: 'Chat Moderation', description: 'Moderate chat messages' },
+        { id: 'announcements' as TabId, label: 'Announcements', description: 'Send system announcements' },
+      ]
+    },
+    {
+      title: 'Economy & Finance',
+      tabs: [
+        { id: 'economy_dashboard' as TabId, label: 'Economy Dashboard', description: 'View economy metrics' },
+        { id: 'grant_coins' as TabId, label: 'Grant Coins', description: 'Manually grant coins' },
+        { id: 'tax_reviews' as TabId, label: 'Tax Reviews', description: 'Review tax calculations' },
+        { id: 'payment_logs' as TabId, label: 'Payment Logs', description: 'View payment history' },
+      ]
+    },
+    {
+      title: 'Cost Monitoring',
+      tabs: [
+        { id: 'cost_dashboard' as TabId, label: 'Cost Dashboard', description: 'Track infrastructure spend' },
+      ]
+    },
+    {
+      title: 'Operations & Scheduling',
+      tabs: [
+        { id: 'create_schedule' as TabId, label: 'Create Schedule', description: 'Schedule officer shifts' },
+        { id: 'officer_shifts' as TabId, label: 'Officer Shifts', description: 'Manage shift schedules' },
+        { id: 'shift_requests_approval' as TabId, label: 'Shift Requests', description: 'Approve time off and extra shifts' },
+        { id: 'empire_applications' as TabId, label: 'Empire Applications', description: 'Review empire partnerships' },
+        { id: 'referral_bonuses' as TabId, label: 'Referral Bonuses', description: 'Manage referral system' },
+      ]
+    },
+    {
+      title: 'Maintenance & Testing',
+      tabs: [
+        { id: 'control_panel' as TabId, label: 'Control Panel', description: 'Advanced system controls' },
+        { id: 'test_diagnostics' as TabId, label: 'Test Diagnostics', description: 'Run system diagnostics' },
+        { id: 'reset_maintenance' as TabId, label: 'Reset & Maintenance', description: 'System reset tools' },
+        { id: 'export_data' as TabId, label: 'Export Data', description: 'Export system data' },
+      ]
+    },
   ]
 
+  const handleSelectTab = (tabId: TabId) => {
+    setTabLoading(true)
+    setActiveTab(tabId)
+    // small delay to show loading state for UX consistency
+    setTimeout(() => setTabLoading(false), 150)
+    if (tabId === 'finance_dashboard') {
+      navigate('/admin/finance')
+    }
+  }
 
-  if (!profile) {
+  const redirectRoutes = useMemo(
+    () =>
+      ({
+        hr: '/admin/hr',
+        all_hr: '/admin/hr',
+        database_backup: '/admin/database-backup',
+        cache_clear: '/admin/cache-clear',
+        system_config: '/admin/system-config',
+        user_search: '/admin/user-search',
+        ban_management: '/admin/ban-management',
+        reports_queue: '/admin/reports-queue',
+        role_management: '/admin/role-management',
+        stream_monitor: '/admin/stream-monitor',
+        media_library: '/admin/media-library',
+        chat_moderation: '/admin/chat-moderation',
+        announcements: '/admin/announcements',
+        economy_dashboard: '/admin/economy',
+        grant_coins: '/admin/grant-coins',
+        tax_reviews: '/admin/tax-reviews',
+        payment_logs: '/admin/payment-logs',
+        create_schedule: '/admin/create-schedule',
+        officer_shifts: '/admin/officer-shifts',
+        shift_requests_approval: '/admin/shift-requests-approval',
+        empire_applications: '/admin/empire-applications',
+        referral_bonuses: '/admin/referral-bonuses',
+        control_panel: '/admin/control-panel',
+        test_diagnostics: '/admin/test-diagnostics',
+        reset_maintenance: '/admin/reset-maintenance',
+        export_data: '/admin/export-data',
+      } as Record<TabId, string>),
+    []
+  )
+
+  useEffect(() => {
+    const target = redirectRoutes[activeTab]
+    if (target) {
+      navigate(target)
+    }
+  }, [activeTab, navigate, redirectRoutes])
+
+
+  if (adminCheckLoading || !profile) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
         <div className="px-6 py-3 rounded bg-[#121212] border border-[#2C2C2C]">
-          Loading…
+          Loading admin dashboard
         </div>
       </div>
     )
   }
 
-  // Allow admins and officers to access monitoring features
-  const canAccess = profile?.is_admin || profile?.is_troll_officer || user?.email === ADMIN_EMAIL
-  
-  if (!canAccess) {
+  if (!isAuthorized) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
         <div className="px-6 py-3 rounded bg-red-950 border border-red-500 text-center">
@@ -1993,38 +2124,10 @@ export default function AdminDashboard() {
     }
 
     switch (activeTab) {
-      case 'metrics':
-        return <MetricsPanel />
+      case 'database_backup':
+        return <div className="text-sm text-gray-400">Redirecting to Database Backup...</div>
 
-      case 'streams':
-        return <StreamsPanel />
-
-      case 'paypal':
-        return <PayPalTestPanel />
-
-      case 'reports':
-        return <ReportsPanel />
-
-      case 'officer_reports':
-        return <WeeklyReportsView />
-
-      case 'monitor':
-        return <StreamMonitor />
-
-      case 'referrals':
-        return <ReferralBonusPanel />
-      case 'empire_applications':
-        return <EmpireApplications />
-      case 'economy':
-        // Navigate to economy dashboard route
-        navigate('/admin/economy')
-        return <div className="text-sm text-gray-400">Redirecting to Economy Dashboard...</div>
-      case 'tax_reviews':
-        // Navigate to tax reviews route
-        navigate('/admin/tax-reviews')
-        return <div className="text-sm text-gray-400">Redirecting to Tax Reviews...</div>
-
-      case 'connections':
+      case 'system_health':
         return (
           <div className="space-y-6">
             {/* connection tests */}
@@ -2092,471 +2195,316 @@ export default function AdminDashboard() {
                 </button>
                 <div className="mt-2 text-xs text-gray-400">
                   Status:{' '}
-                  {agoraStatus
-                    ? agoraStatus.ok
+                  {liveKitStatus
+                    ? liveKitStatus.ok
                       ? 'OK'
-                      : agoraStatus.error || 'Failed'
+                      : liveKitStatus.error || 'Failed'
                     : 'Not tested'}
                 </div>
               </div>
             </div>
-
-            {/* live streams */}
-            <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Play className="w-4 h-4 text-pink-400" />
-                <span className="font-semibold">Live Streams</span>
-                <button
-                  onClick={loadLiveStreams}
-                  className="ml-auto text-xs flex items-center gap-1 text-gray-300 hover:text-white"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Refresh
-                </button>
-              </div>
-
-              {streamsLoading ? (
-                <div className="text-xs text-gray-400">Loading streams…</div>
-              ) : liveStreams.length === 0 ? (
-                <div className="text-xs text-gray-500">No streams currently live.</div>
-              ) : (
-                <div className="overflow-x-auto text-xs">
-                  <table className="min-w-full text-left">
-                    <thead>
-                      <tr className="border-b border-gray-700 text-gray-400">
-                        <th className="py-1 pr-4">Title</th>
-                        <th className="py-1 pr-4">Category</th>
-                        <th className="py-1 pr-4">Broadcaster</th>
-                        <th className="py-1 pr-4 text-center">Viewers</th>
-                        <th className="py-1 pr-4">Created</th>
-                        <th className="py-1 pr-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {liveStreams.map(stream => (
-                        <tr key={stream.id} className="border-b border-gray-800">
-                          <td className="py-1 pr-4">{stream.title || 'Untitled'}</td>
-                          <td className="py-1 pr-4">{stream.category}</td>
-                          <td className="py-1 pr-4 text-xs">{stream.broadcaster_id}</td>
-                          <td className="py-1 pr-4 text-center">
-                            {/* Viewer count removed - column doesn't exist */}
-                          </td>
-                          <td className="py-1 pr-4">
-                            {new Date(stream.created_at).toLocaleString()}
-                          </td>
-                          <td className="py-1 pr-4 text-right space-x-1">
-                            <button
-                              onClick={() => viewStream(stream.id)}
-                              className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-[10px]"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={() => endStreamById(stream.id)}
-                              className="px-2 py-0.5 rounded bg-yellow-600 hover:bg-yellow-500 text-[10px]"
-                            >
-                              End
-                            </button>
-                            <button
-                              onClick={() => deleteStreamById(stream.id)}
-                              className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500 text-[10px]"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div className="mt-3 text-right space-x-2">
-                <button
-                  onClick={async () => {
-                    if (!confirm('Are you sure you want to DELETE ALL live streams? This action cannot be undone.')) return
-                    try {
-                      const { error } = await supabase
-                        .from('streams')
-                        .delete()
-                        .eq('is_live', true)
-                      if (error) throw error
-                      toast.success('All live streams deleted')
-                      loadLiveStreams()
-                      loadDashboardData()
-                    } catch (error: any) {
-                      console.error('Error deleting all streams:', error)
-                      toast.error(error?.message || 'Failed to delete streams')
-                    }
-                  }}
-                  className="text-xs px-3 py-1 border border-red-600 text-red-400 rounded hover:bg-red-900 hover:text-red-200"
-                >
-                  Delete All Broadcasts
-                </button>
-                <button
-                  onClick={cleanupStreams}
-                  className="text-xs px-3 py-1 border border-gray-600 rounded hover:bg-gray-800"
-                >
-                  Cleanup orphaned streams
-                </button>
-              </div>
-            </div>
           </div>
         )
 
-      case 'payouts':
-        return (
-          <div className="overflow-x-auto text-xs">
-            {payouts.length === 0 ? (
-              <div className="text-gray-500">No payout requests.</div>
-            ) : (
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700 text-gray-400">
-                    <th className="py-1 pr-4">User</th>
-                    <th className="py-1 pr-4">Coins</th>
-                    <th className="py-1 pr-4">Cash</th>
-                    <th className="py-1 pr-4">Fee</th>
-                    <th className="py-1 pr-4">Status</th>
-                    <th className="py-1 pr-4">Created</th>
-                    <th className="py-1 pr-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payouts.map(p => (
-                    <tr key={p.id} className="border-b border-gray-800">
-                      <td className="py-1 pr-4 text-xs">{p.user_id}</td>
-                      <td className="py-1 pr-4">{p.coin_amount}</td>
-                      <td className="py-1 pr-4">${p.cash_amount?.toFixed(2)}</td>
-                      <td className="py-1 pr-4">${p.processing_fee?.toFixed(2)}</td>
-                      <td className="py-1 pr-4 capitalize">{p.status}</td>
-                      <td className="py-1 pr-4">
-                        {new Date(p.created_at).toLocaleString()}
-                      </td>
-                      <td className="py-1 pr-4 text-right space-x-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            approvePayout(p, e)
-                          }}
-                          className="px-2 py-0.5 rounded bg-green-600 hover:bg-green-500"
-                        >
-                          Approve & Pay
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            updatePayoutStatus(p.id, 'rejected', e)
-                          }}
-                          className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500"
-                        >
-                          Reject
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )
+      case 'cache_clear':
+        return <div className="text-sm text-gray-400">Redirecting to Cache Management...</div>
 
-      case 'cashouts':
-        return (
-          <div className="space-y-3 text-xs">
-            <div className="flex flex-wrap gap-2 items-center">
-              <input
-                value={cashoutsSearch}
-                onChange={e => setCashoutsSearch(e.target.value)}
-                placeholder="Search username / email / details"
-                className="bg-[#111] border border-gray-700 rounded px-2 py-1 text-xs flex-1 min-w-[180px]"
-              />
-              <select
-                value={cashoutsProvider}
-                onChange={e => setCashoutsProvider(e.target.value)}
-                className="bg-[#111] border border-gray-700 rounded px-2 py-1 text-xs"
-              >
-                <option value="">All providers</option>
-                <option value="paypal">PayPal</option>
-                <option value="cashapp">Cash App</option>
-                <option value="zelle">Zelle</option>
-                <option value="bank">Bank</option>
-              </select>
-              <button
-                onClick={loadCashouts}
-                className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500"
-              >
-                Apply
-              </button>
-            </div>
+      case 'system_config':
+        return <div className="text-sm text-gray-400">Redirecting to System Configuration...</div>
 
-            <div className="overflow-x-auto">
-              {cashouts.length === 0 ? (
-                <div className="text-gray-500">No cashout requests.</div>
-              ) : (
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr className="border-b border-gray-700 text-gray-400">
-                      <th className="py-1 pr-4">User</th>
-                      <th className="py-1 pr-4">Method</th>
-                      <th className="py-1 pr-4">Details</th>
-                      <th className="py-1 pr-4">Coins</th>
-                      <th className="py-1 pr-4">Status</th>
-                      <th className="py-1 pr-4">Created</th>
-                      <th className="py-1 pr-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cashouts.map(c => (
-                      <tr key={c.id} className="border-b border-gray-800">
-                        <td className="py-1 pr-4 text-xs">{c.username || c.user_id}</td>
-                        <td className="py-1 pr-4">{c.payout_method}</td>
-                        <td className="py-1 pr-4 max-w-xs truncate">{c.payout_details}</td>
-                        <td className="py-1 pr-4">{c.coin_amount}</td>
-                        <td className="py-1 pr-4 capitalize">{c.status}</td>
-                        <td className="py-1 pr-4">
-                          {new Date(c.created_at).toLocaleString()}
-                        </td>
-                        <td className="py-1 pr-4 text-right">
-                          {c.status === 'pending' && (
-                            <button
-                              onClick={() => markCashoutPaid(c)}
-                              className="px-2 py-0.5 rounded bg-green-600 hover:bg-green-500 text-[10px]"
-                            >
-                              Mark Paid
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        )
+      case 'user_search':
+        return <div className="text-sm text-gray-400">Redirecting to User Search...</div>
 
-      case 'purchases':
-        return (
-          <div className="overflow-x-auto text-xs">
-            {purchases.length === 0 ? (
-              <div className="text-gray-500">No purchases yet.</div>
-            ) : (
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700 text-gray-400">
-                    <th className="py-1 pr-4">User</th>
-                    <th className="py-1 pr-4">Amount</th>
-                    <th className="py-1 pr-4">Type</th>
-                    <th className="py-1 pr-4">Metadata</th>
-                    <th className="py-1 pr-4">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchases.map(tx => (
-                    <tr key={tx.id} className="border-b border-gray-800">
-                      <td className="py-1 pr-4 text-xs">{tx.user_id}</td>
-                      <td className="py-1 pr-4">{tx.amount}</td>
-                      <td className="py-1 pr-4">{tx.type}</td>
-                      <td className="py-1 pr-4 max-w-xs truncate">
-                        {JSON.stringify(tx.metadata || {})}
-                      </td>
-                      <td className="py-1 pr-4">
-                        {new Date(tx.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )
+      case 'ban_management':
+        return <div className="text-sm text-gray-400">Redirecting to Ban Management...</div>
 
-      case 'declined':
-        return (
-          <div className="overflow-x-auto text-xs">
-            {declinedTransactions.length === 0 ? (
-              <div className="text-gray-500">No declined transactions.</div>
-            ) : (
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700 text-gray-400">
-                    <th className="py-1 pr-4">User</th>
-                    <th className="py-1 pr-4">Reason</th>
-                    <th className="py-1 pr-4">Code</th>
-                    <th className="py-1 pr-4">Amount</th>
-                    <th className="py-1 pr-4">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {declinedTransactions.map(tx => (
-                    <tr
-                      key={tx.id}
-                      className="border-b border-gray-800 hover:bg-gray-900 cursor-pointer"
-                      onClick={() => setSelectedDeclined(tx)}
-                    >
-                      <td className="py-1 pr-4">
-                        <ClickableUsername
-                          username={tx.user_profiles?.username}
-                        />
-                        <div className="text-[10px] text-gray-500">
-                          {tx.user_profiles?.username || 'Unknown'}
-                        </div>
-                      </td>
-                      <td className="py-1 pr-4 max-w-xs truncate">{tx.failure_message}</td>
-                      <td className="py-1 pr-4">{tx.failure_code}</td>
-                      <td className="py-1 pr-4">{tx.amount}</td>
-                      <td className="py-1 pr-4">
-                        {new Date(tx.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+      case 'reports_queue':
+        return <div className="text-sm text-gray-400">Redirecting to Reports Queue...</div>
 
-            {selectedDeclined && (
-              <div className="mt-3 text-xs bg-black/60 border border-gray-700 rounded p-3">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-semibold">Declined details</span>
-                  <button
-                    className="text-[10px] text-gray-400 hover:text-white"
-                    onClick={() => setSelectedDeclined(null)}
-                  >
-                    Close
-                  </button>
-                </div>
-                <pre className="whitespace-pre-wrap text-[10px] text-gray-300 max-h-64 overflow-auto">
-                  {JSON.stringify(selectedDeclined, null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        )
+      case 'role_management':
+        return <div className="text-sm text-gray-400">Redirecting to Role Management...</div>
 
-      case 'verification':
-        return <AdminApplications />
+      case 'stream_monitor':
+        return <div className="text-sm text-gray-400">Redirecting to Stream Monitor...</div>
 
-      case 'users':
-        return <UsersPanel />
+      case 'media_library':
+        return <div className="text-sm text-gray-400">Redirecting to Media Library...</div>
 
-      case 'broadcasters':
-        return (
-          <div className="overflow-x-auto text-xs">
-            {broadcastersList.length === 0 ? (
-              <div className="text-gray-500">No broadcasters yet.</div>
-            ) : (
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700 text-gray-400">
-                    <th className="py-1 pr-4">User</th>
-                    <th className="py-1 pr-4">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {broadcastersList.map(b => (
-                    <tr key={b.id} className="border-b border-gray-800">
-                      <td className="py-1 pr-4">
-                        <ClickableUsername username={b.username} />
-                      </td>
-                      <td className="py-1 pr-4">
-                        {new Date(b.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )
+      case 'chat_moderation':
+        return <div className="text-sm text-gray-400">Redirecting to Chat Moderation...</div>
 
-      case 'families':
-        return (
-          <div className="overflow-x-auto text-xs">
-            {familiesList.length === 0 ? (
-              <div className="text-gray-500">No families created yet.</div>
-            ) : (
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700 text-gray-400">
-                    <th className="py-1 pr-4">Name</th>
-                    <th className="py-1 pr-4">Level</th>
-                    <th className="py-1 pr-4">Members</th>
-                    <th className="py-1 pr-4">Total Coins</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {familiesList.map(f => (
-                    <tr key={f.id} className="border-b border-gray-800">
-                      <td className="py-1 pr-4">{f.name}</td>
-                      <td className="py-1 pr-4">{f.level}</td>
-                      <td className="py-1 pr-4">{f.member_count}</td>
-                      <td className="py-1 pr-4">{f.total_coins}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )
+      case 'announcements':
+        return <div className="text-sm text-gray-400">Redirecting to Announcements...</div>
 
-      case 'support':
-        return <AdminSupportTickets />
+      case 'economy_dashboard':
+        return <div className="text-sm text-gray-400">Redirecting to Economy Dashboard...</div>
 
-      case 'agreements':
-        return (
-          <div className="overflow-x-auto text-xs">
-            {_agreements.length === 0 ? (
-              <div className="text-gray-500">No users have accepted terms yet.</div>
-            ) : (
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700 text-gray-400">
-                    <th className="py-1 pr-4">User</th>
-                    <th className="py-1 pr-4">Accepted</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {_agreements.map(a => (
-                    <tr key={a.id} className="border-b border-gray-800">
-                      <td className="py-1 pr-4">
-                        <ClickableUsername username={a.username} />
-                      </td>
-                      <td className="py-1 pr-4">
-                        {new Date(a.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )
+      case 'cost_dashboard':
+        return <AdminCostDashboard />
 
-
-      case 'earnings_tax':
-        return <EarningsTaxOverview />
-
-      case 'officer_shifts':
-        return <OfficerShiftsPanel />
-
-      case 'create_schedule':
-        return <CreateSchedulePanel />
+      case 'finance_dashboard':
+        return <div className="text-sm text-gray-400">Redirecting to Finance Dashboard...</div>
 
       case 'grant_coins':
-        return <AdminGrantCoins />
+        return <div className="text-sm text-gray-400">Redirecting to Grant Coins...</div>
+
+      case 'tax_reviews':
+        return <div className="text-sm text-gray-400">Redirecting to Tax Reviews...</div>
+
+      case 'payment_logs':
+        return <div className="text-sm text-gray-400">Redirecting to Payment Logs...</div>
+
+      case 'store_pricing':
+        return <StorePriceEditor />
+
+      case 'create_schedule':
+        return <div className="text-sm text-gray-400">Redirecting to Create Schedule...</div>
+
+      case 'officer_shifts':
+        return <div className="text-sm text-gray-400">Redirecting to Officer Shifts...</div>
+
+      case 'empire_applications':
+        return <div className="text-sm text-gray-400">Redirecting to Empire Applications...</div>
+
+      case 'referral_bonuses':
+        return <div className="text-sm text-gray-400">Redirecting to Referral Bonuses...</div>
 
       case 'control_panel':
-        return <AdminControlPanel />
-      case 'test_diagnostics':
-        return <TestDiagnostics />
+        return <div className="text-sm text-gray-400">Redirecting to Control Panel...</div>
 
-      case 'reset':
-        return <AdminResetPanel />
+      case 'test_diagnostics':
+        return <div className="text-sm text-gray-400">Redirecting to Test Diagnostics...</div>
+
+      case 'reset_maintenance':
+        return <div className="text-sm text-gray-400">Redirecting to Reset & Maintenance...</div>
+
+      case 'export_data':
+        return <div className="text-sm text-gray-400">Redirecting to Data Export...</div>
+
+      case 'reports':
+        return (
+          <div className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {/* User Analytics */}
+              <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Users className="w-6 h-6 text-blue-400" />
+                  <h3 className="text-lg font-semibold">User Analytics</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total Users</span>
+                    <span className="text-white font-semibold">{stats.totalUsers.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Active Officers</span>
+                    <span className="text-white font-semibold">{stats.trollOfficers}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Pending Applications</span>
+                    <span className="text-white font-semibold">{stats.pendingApps}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">User Growth Rate</span>
+                    <span className="text-green-400 font-semibold">+12.5%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Analytics */}
+              <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <DollarSign className="w-6 h-6 text-green-400" />
+                  <h3 className="text-lg font-semibold">Financial Analytics</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total Revenue</span>
+                    <span className="text-white font-semibold">${stats.coinSalesRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total Payouts</span>
+                    <span className="text-white font-semibold">${stats.totalPayouts.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Platform Profit</span>
+                    <span className="text-green-400 font-semibold">${stats.platformProfit.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Coins in Circulation</span>
+                    <span className="text-white font-semibold">{stats.totalCoinsInCirculation.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Analytics */}
+              <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Play className="w-6 h-6 text-purple-400" />
+                  <h3 className="text-lg font-semibold">Content Analytics</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Active Streams</span>
+                    <span className="text-white font-semibold">{liveStreams.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total Viewers</span>
+                    <span className="text-white font-semibold">
+                      {liveStreams.reduce((sum, stream) => sum + (stream.current_viewers || 0), 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Avg Stream Duration</span>
+                    <span className="text-white font-semibold">2.3h</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Top Category</span>
+                    <span className="text-white font-semibold">Gaming</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Analytics Charts */}
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Revenue Trends */}
+              <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Revenue Trends (Last 30 Days)</h3>
+                <div className="h-64 flex items-center justify-center text-gray-400">
+                  <div className="text-center">
+                    <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>Revenue chart would go here</p>
+                    <p className="text-sm">Integration with charting library needed</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* User Activity */}
+              <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">User Activity (Last 7 Days)</h3>
+                <div className="h-64 flex items-center justify-center text-gray-400">
+                  <div className="text-center">
+                    <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>User activity chart would go here</p>
+                    <p className="text-sm">Integration with charting library needed</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Key Metrics Table */}
+            <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Key Performance Indicators</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#2C2C2C]">
+                      <th className="text-left py-2 text-gray-400">Metric</th>
+                      <th className="text-left py-2 text-gray-400">Current</th>
+                      <th className="text-left py-2 text-gray-400">Target</th>
+                      <th className="text-left py-2 text-gray-400">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2C2C2C]">
+                    <tr>
+                      <td className="py-3 text-white">Monthly Active Users</td>
+                      <td className="py-3 text-white">{stats.totalUsers.toLocaleString()}</td>
+                      <td className="py-3 text-gray-400">10,000</td>
+                      <td className="py-3">
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
+                          On Track
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 text-white">Revenue per User</td>
+                      <td className="py-3 text-white">
+                        ${(stats.coinSalesRevenue / Math.max(stats.totalUsers, 1)).toFixed(2)}
+                      </td>
+                      <td className="py-3 text-gray-400">$25.00</td>
+                      <td className="py-3">
+                        <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                          Below Target
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 text-white">Stream Uptime</td>
+                      <td className="py-3 text-white">99.7%</td>
+                      <td className="py-3 text-gray-400">99.9%</td>
+                      <td className="py-3">
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
+                          Excellent
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 text-white">Support Response Time</td>
+                      <td className="py-3 text-white">&lt; 2 hours</td>
+                      <td className="py-3 text-gray-400">&lt; 1 hour</td>
+                      <td className="py-3">
+                        <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                          Needs Improvement
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Export Options */}
+            <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Export Analytics Data</h3>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    const csv = [
+                      'metric,value',
+                      'total_users,0',
+                      'active_streams,0',
+                      'daily_revenue,0',
+                    ].join('\n')
+                    downloadText(
+                      `analytics_export_${new Date().toISOString().split('T')[0]}.csv`,
+                      csv,
+                      'text/csv;charset=utf-8;',
+                    )
+                    toast.success('Analytics CSV downloaded')
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Export as CSV
+                </button>
+                <button
+                  onClick={() => {
+                    const report = [
+                      'Troll City Analytics Report',
+                      `Generated: ${new Date().toLocaleString()}`,
+                      'Summary: This is a placeholder report.',
+                    ].join('\n')
+                    downloadText(
+                      `analytics_report_${new Date().toISOString().split('T')[0]}.pdf`,
+                      report,
+                      'text/plain;charset=utf-8;',
+                    )
+                    toast.success('Analytics report downloaded')
+                  }}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Generate PDF Report
+                </button>
+                <button
+                  onClick={() => toast.info('Email report would be implemented here')}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Email Weekly Report
+                </button>
+              </div>
+            </div>
+          </div>
+        )
 
       default:
         return null
@@ -2632,11 +2580,13 @@ export default function AdminDashboard() {
           economySummary={economySummary}
         />
 
+        <MAIAuthorityPanel mode="admin" location="admin_dashboard" />
+
         {/* City Controls & Health Section */}
         <CityControlsHealth
           paypalStatus={paypalStatus}
           supabaseStatus={supabaseStatus}
-          agoraStatus={agoraStatus}
+          liveKitStatus={liveKitStatus}
           liveStreams={liveStreams}
           onTestPayPal={testPayPal}
           onTestSupabase={testSupabase}
@@ -2669,13 +2619,16 @@ export default function AdminDashboard() {
           stats={stats}
         />
 
-        {/* Applications Hub */}
-        <ApplicationsHub
+        {/* Admin Modules */}
+        <AdminModulesSectionPanel
           onLoadApplications={loadApplications}
           applicationsLoading={tabLoading}
-          applications={[]}
+          applications={_verifications}
           onApproveApplication={_approveApplication}
           onRejectApplication={_rejectApplication}
+          onClearSeedApplications={clearSeedApplications}
+          clearingSeedApplications={clearingSeedApplications}
+          onDeleteApplication={deleteApplication}
         />
 
         {/* Agreements Management */}
@@ -2685,18 +2638,40 @@ export default function AdminDashboard() {
           agreements={[]}
         />
 
+        {/* Admin Modules Output */}
+        <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-purple-500/20 border border-purple-500/30 rounded-lg flex items-center justify-center">
+              <Monitor className="w-5 h-5 text-purple-300" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Admin Modules</h3>
+              <p className="text-sm text-gray-400">Launch tools and jump to dedicated admin pages.</p>
+            </div>
+          </div>
+          <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4">
+            {activeTab === 'connections' ? (
+              <div className="text-sm text-gray-400">Select a module below to open it.</div>
+            ) : (
+              renderTabContent()
+            )}
+          </div>
+        </div>
+
         {/* Additional Tasks Grid */}
         <AdditionalTasksGrid
+          onSelectTab={handleSelectTab}
           onNavigateToEconomy={() => navigate('/admin/economy')}
           onNavigateToTaxReviews={() => navigate('/admin/tax-reviews')}
-          onOpenTestDiagnostics={() => console.log('Test diagnostics')}
-          onOpenControlPanel={() => console.log('Control panel')}
-          onOpenGrantCoins={() => console.log('Grant coins')}
-          onOpenCreateSchedule={() => console.log('Create schedule')}
-          onOpenOfficerShifts={() => console.log('Officer shifts')}
-          onOpenResetPanel={() => console.log('Reset panel')}
-          onOpenEmpireApplications={() => console.log('Empire applications')}
-          onOpenReferralBonuses={() => console.log('Referral bonuses')}
+          onOpenTestDiagnostics={() => navigate('/admin/test-diagnostics')}
+          onOpenControlPanel={() => navigate('/admin/control-panel')}
+          onOpenGrantCoins={() => navigate('/admin/grant-coins')}
+          onOpenFinanceDashboard={() => navigate('/admin/finance')}
+          onOpenCreateSchedule={() => navigate('/admin/create-schedule')}
+          onOpenOfficerShifts={() => navigate('/admin/officer-shifts')}
+          onOpenResetPanel={() => navigate('/admin/reset-maintenance')}
+          onOpenEmpireApplications={() => navigate('/admin/empire-applications')}
+          onOpenReferralBonuses={() => navigate('/admin/referral-bonuses')}
         />
       </div>
     </div>

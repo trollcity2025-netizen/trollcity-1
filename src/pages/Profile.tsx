@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Camera, Edit, Star, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift, AlertTriangle, Sword, Trophy, TrendingUp, Users, DollarSign, Calendar, BarChart3, Award, Target, Clock } from 'lucide-react'
+import { Camera, Edit, Star, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift, AlertTriangle, Sword, Trophy, TrendingUp, Users, DollarSign, Calendar, BarChart3, Award, Target, Clock, ShoppingCart } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { getTierFromXP, getLevelFromXP } from '../lib/tierSystem'
@@ -11,6 +11,7 @@ import GiftersModal from '../components/GiftersModal'
 import ReportModal from '../components/ReportModal'
 import { EmpireBadge } from '../components/EmpireBadge'
 import ClickableUsername from '../components/ClickableUsername'
+import { APP_DATA_REFETCH_EVENT_NAME } from '../lib/appEvents'
 
 // Import recharts for creator dashboard charts
 import {
@@ -27,19 +28,21 @@ import {
   Cell,
   Legend,
 } from 'recharts'
+import { useBackgroundProfileRefresh } from '../hooks/useBackgroundProfileRefresh'
 
 export default function Profile() {
   const { profile, user } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   const { username: routeUsername, userId } = useParams()
-  const [viewed, setViewed] = useState<any | null>(null)
+  const { refreshProfileInBackground } = useBackgroundProfileRefresh()
+  const [viewedState, setViewedState] = useState<any | null>(null)
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'referral_code',
     'profile_info',
     'stats',
     'creator_dashboard',
-    'entrance_effects',
+    'store_purchases',
     'account_settings'
   ])
   const [editingProfile, setEditingProfile] = useState(false)
@@ -50,8 +53,14 @@ export default function Profile() {
   const [followingCount, setFollowingCount] = useState(0)
   const [effects, setEffects] = useState<any[]>([])
   const [selectedEffectId, setSelectedEffectId] = useState<string>('')
+  const [perks, setPerks] = useState<any[]>([])
+  const [insurances, setInsurances] = useState<any[]>([])
+  const [selectedPerkId, setSelectedPerkId] = useState<string>('')
+  const [selectedInsuranceId, setSelectedInsuranceId] = useState<string>('')
   const [privateEnabled, setPrivateEnabled] = useState<boolean>(false)
   const [viewPrice, setViewPrice] = useState(0)
+  const [messagePrice, setMessagePrice] = useState(0)
+  const [paypalEmail, setPaypalEmail] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFollowing, setIsFollowing] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
@@ -67,7 +76,44 @@ export default function Profile() {
   const [newPostImage, setNewPostImage] = useState<File | null>(null)
   const [hasAccess, setHasAccess] = useState<boolean>(true)
   const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
-  const [royalTitle, setRoyalTitle] = useState<any>(null)
+  const [adminActionLoading, setAdminActionLoading] = useState<string | null>(null)
+
+  const profileRef = useRef(profile)
+  useEffect(() => {
+    profileRef.current = profile
+  }, [profile])
+
+  const normalizedRouteUsername = routeUsername ? routeUsername.trim().toLowerCase() : ''
+  const isProfileMeRoute = normalizedRouteUsername === 'me'
+  const routeTargetKey = userId
+    ? `id:${userId}`
+    : isProfileMeRoute
+      ? 'self'
+      : routeUsername
+        ? `name:${routeUsername}`
+        : null
+
+  const shouldShowViewed = !!routeTargetKey && routeTargetKey !== 'self'
+  const lastViewedRef = useRef<any | null>(null)
+
+  const updateViewedState = (value: any | null) => {
+    if (value) {
+      lastViewedRef.current = value
+    }
+    setViewedState(value)
+  }
+
+  useEffect(() => {
+    if (routeTargetKey === 'self') {
+      lastViewedRef.current = null
+      setViewedState(null)
+    }
+  }, [routeTargetKey])
+
+  const viewed = shouldShowViewed ? (viewedState ?? lastViewedRef.current) : null
+
+  const lastRouteTargetKeyRef = useRef<string | null>(null)
+  const lastSelfIdentityRef = useRef<string | null>(null)
 
   // Referral code state
   const [referralCode, setReferralCode] = useState('')
@@ -96,11 +142,14 @@ export default function Profile() {
   const [bonusSummary, setBonusSummary] = useState<any>(null)
   const [creatorLoading, setCreatorLoading] = useState(false)
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d')
+  const statsPollRef = useRef<number | null>(null)
 
   // Initialize view price and referral code from profile
   useEffect(() => {
     if (profile) {
       setViewPrice(Number((profile as any)?.profile_view_price ?? 0))
+      setMessagePrice(Number((profile as any)?.message_price ?? 0))
+      setPaypalEmail((profile as any)?.payout_paypal_email ?? '')
 
       // Set referral code and link
       const code = profile.id
@@ -127,60 +176,52 @@ export default function Profile() {
     )
   }
 
-  const loadBattleHistory = async (targetUserId: string) => {
+  const isValidUuid = (value: string) => (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  )
+
+  const loadBattleHistory = useCallback(async (targetUserId: string) => {
     setBattlesLoading(true)
     try {
       const { data, error } = await supabase
-        .from('tromody_battles')
+        .from('battle_history')
         .select(`
           *,
-          left_user:left_user_id (username, avatar_url),
-          right_user:right_user_id (username, avatar_url),
-          winner:winner_user_id (username, avatar_url)
+          opponent:opponent_id (username, avatar_url),
+          battle:battle_id (
+            host_id,
+            challenger_id,
+            winner_id,
+            host_troll_coins,
+            challenger_troll_coins,
+            host_trollmonds,
+            challenger_trollmonds
+          )
         `)
-        .or(`left_user_id.eq.${targetUserId},right_user_id.eq.${targetUserId}`)
-        .order('battle_ended_at', { ascending: false })
+        .eq('user_id', targetUserId)
+        .order('created_at', { ascending: false })
         .limit(50)
 
       if (error) throw error
 
-      // Transform Tromody battle data to match the expected format
-      const battleHistory = (data || []).map((battle: any) => {
-        const isLeftUser = battle.left_user_id === targetUserId
-        const opponent = isLeftUser ? battle.right_user : battle.left_user
-        const userGifts = isLeftUser ? battle.left_gifts_received : battle.right_gifts_received
-        const opponentGifts = isLeftUser ? battle.right_gifts_received : battle.left_gifts_received
-        const won = battle.winner_user_id === targetUserId
-
-        return {
-          id: battle.id,
-          user_id: targetUserId,
-          opponent_id: isLeftUser ? battle.right_user_id : battle.left_user_id,
-          won,
-          paid_coins_sent: 0, // Tromody battles don't track sent coins this way
-          created_at: battle.battle_ended_at,
-          battle_duration_seconds: battle.battle_duration_seconds,
-          opponent,
-          user_gifts: userGifts,
-          opponent_gifts: opponentGifts,
-          battle: {
-            winner_id: battle.winner_user_id,
-            host_id: battle.left_user_id,
-            challenger_id: battle.right_user_id
-          }
-        }
-      })
-
+      const battleHistory = data || []
       setBattles(battleHistory)
 
       // Calculate stats
       const wins = battleHistory.filter((b: any) => b.won).length
       const losses = battleHistory.filter((b: any) => !b.won && b.battle?.winner_id !== null).length
       const ties = battleHistory.filter((b: any) => b.battle?.winner_id === null).length
-
-      // Get total gifts received from Tromody battles
-      const totalCoinsReceived = battleHistory.reduce((sum: number, b: any) => sum + (b.user_gifts || 0), 0)
-
+      
+      // Get total coins (paid + free) from battle data
+      const totalCoinsReceived = battleHistory.reduce((sum: number, b: any) => {
+        if (!b.battle) return sum
+        const userTotal = b.battle.host_id === b.user_id
+          ? (b.battle.host_troll_coins || 0) + (b.battle.host_trollmonds || 0)
+          : (b.battle.challenger_troll_coins || 0) + (b.battle.challenger_trollmonds || 0)
+        return sum + userTotal
+      }, 0)
+      
+      const totalCoinsSent = battleHistory.reduce((sum: number, b: any) => sum + (b.troll_coins_sent || 0), 0)
       const winRate = battleHistory.length > 0 ? Math.round((wins / battleHistory.length) * 100) : 0
 
       setBattleStats({
@@ -190,14 +231,14 @@ export default function Profile() {
         ties,
         winRate,
         totalCoinsReceived,
-        totalCoinsSent: 0, // Not tracked for Tromody battles
+        totalCoinsSent,
       })
     } catch (err: any) {
-      console.error('Error loading Tromody battle history:', err)
+      console.error('Error loading battle history:', err)
     } finally {
       setBattlesLoading(false)
     }
-  }
+  }, [setBattles, setBattlesLoading, setBattleStats])
 
   // Creator Dashboard data loading functions
   const loadCreatorDashboardData = async () => {
@@ -239,17 +280,128 @@ export default function Profile() {
   }
 
   const loadTopGifters = async () => {
-    const { data, error } = await supabase.rpc('get_top_gifters', {
-      limit_count: 10
-    })
-    if (error) throw error
-    setTopGifters(data || [])
+    const limitCount = 10
+
+    try {
+      const { data, error } = await supabase.rpc('get_top_gifters', {
+        limit_count: limitCount
+      })
+      if (error) throw error
+      setTopGifters(data || [])
+      return
+    } catch (rpcError) {
+      console.warn('Top gifters RPC is not available, falling back to client aggregation', rpcError)
+    }
+
+    if (!user?.id) {
+      setTopGifters([])
+      return
+    }
+
+    try {
+      const { data: gifts, error: giftsError } = await supabase
+        .from('gifts')
+        .select('sender_id, coins_spent')
+        .eq('receiver_id', user.id)
+
+      if (giftsError) {
+        console.warn('Failed to load gifts for fallback leaderboard', giftsError)
+        setTopGifters([])
+        return
+      }
+
+      const totals = new Map<string, number>()
+      for (const gift of gifts || []) {
+        const senderId = gift?.sender_id
+        if (!senderId) continue
+        const coins = Number(gift.coins_spent || 0)
+        totals.set(senderId, (totals.get(senderId) ?? 0) + coins)
+      }
+
+      const sorted = Array.from(totals.entries())
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, limitCount)
+
+      if (!sorted.length) {
+        setTopGifters([])
+        return
+      }
+
+      const senderIds = sorted.map(([senderId]) => senderId)
+      const { data: senderProfiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, username, avatar_url')
+        .in('id', senderIds)
+
+      if (profilesError) {
+        console.warn('Unable to fetch sender profiles for fallback leaderboard', profilesError)
+      }
+
+      const profileMap = new Map((senderProfiles || []).map(profile => [profile.id, profile]))
+
+      const fallbackGifters = sorted.map(([senderId, totalCoins]) => ({
+        sender_id: senderId,
+        total_coins: totalCoins,
+        sender_username: profileMap.get(senderId)?.username ?? 'Unknown User',
+        sender_avatar_url: profileMap.get(senderId)?.avatar_url ?? ''
+      }))
+
+      setTopGifters(fallbackGifters)
+    } catch (fallbackError) {
+      console.warn('Failed to build fallback top gifters leaderboard', fallbackError)
+      setTopGifters([])
+    }
   }
 
   const loadBattleEventEarnings = async () => {
-    const { data, error } = await supabase.rpc('get_battle_and_event_earnings')
-    if (error) throw error
-    setBattleEvent(data || [])
+    try {
+      const { data, error } = await supabase.rpc('get_battle_and_net_earnings')
+      if (error) throw error
+      setBattleEvent(data || [])
+      return
+    } catch (rpcError) {
+      console.warn('Battle/event RPC missing, falling back to client aggregation', rpcError)
+    }
+
+    if (!user?.id) {
+      setBattleEvent([])
+      return
+    }
+
+    try {
+      const { data: gifts, error: giftsError } = await supabase
+        .from('gifts')
+        .select('coins_spent, battle_id, message')
+        .eq('receiver_id', user.id)
+
+      if (giftsError) throw giftsError
+
+      const totals = {
+        battle: 0,
+        event: 0,
+        other: 0,
+      }
+
+      for (const gift of gifts || []) {
+        const coins = Number(gift.coins_spent || 0)
+        if (gift.battle_id) {
+          totals.battle += coins
+        } else if (typeof gift.message === 'string' && gift.message.toLowerCase().includes('event')) {
+          totals.event += coins
+        } else {
+          totals.other += coins
+        }
+      }
+
+      setBattleEvent([
+        { source: 'battle', coins: totals.battle },
+        { source: 'event', coins: totals.event },
+        { source: 'other', coins: totals.other },
+      ])
+    } catch (fallbackError) {
+      console.warn('Fallback battle/event aggregation failed', fallbackError)
+      setBattleEvent([])
+    }
   }
 
 
@@ -302,316 +454,467 @@ export default function Profile() {
     }
   }
 
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        if (!profile?.id) {
-          console.log('Profile not loaded yet, waiting...')
-          return
-        }
-        
-        let target = profile
-        
-        // If viewing another user's profile by ID
-        if (userId && userId !== user?.id) {
-          try {
-            const { data, error } = await supabase
-              .from('user_profiles')
-              .select('*, avatar_url')
-              .eq('id', userId)
-              .maybeSingle()
-            
-            if (error) {
-              console.error('Error loading user by ID:', error)
-              toast.error('Failed to load user profile')
-              navigate('/profile/me')
-              return
-            }
-            
-            if (data) {
-              target = data
-              setViewed(data)
-            } else {
-              // User not found, redirect to own profile
-              toast.error('User not found')
-              navigate('/profile/me')
-              return
-            }
-          } catch (err) {
-            console.error('Error in userId lookup:', err)
-            toast.error('Failed to load profile')
-            navigate('/profile/me')
-            return
-          }
-        }
-        // If viewing another user's profile by username
-        else if (routeUsername && profile?.username !== routeUsername) {
-          try {
-            // Decode username in case it was URL encoded
-            const decodedUsername = decodeURIComponent(routeUsername)
-            
-            // First try to find by username
-            let { data, error } = await supabase
-              .from('user_profiles')
-              .select('*, avatar_url')
-              .eq('username', decodedUsername)
-              .maybeSingle()
-            
-            // If not found by username, try email prefix match
-            if (!data && !error) {
-              const { data: emailMatch, error: emailError } = await supabase
-                .from('user_profiles')
-                .select('*, avatar_url')
-                .ilike('email', `${decodedUsername}@%`)
-                .maybeSingle()
-              data = emailMatch
-              error = emailError
-            }
-            
-            if (error) {
-              console.error('Error loading user by username:', error)
-              toast.error('Failed to load user profile')
-              navigate('/profile/me')
-              return
-            }
-            
-            if (data) {
-              target = data
-              setViewed(data)
-            } else {
-              // User not found, redirect to own profile
-              toast.error('User not found')
-              navigate('/profile/me')
-              return
-            }
-          } catch (err) {
-            console.error('Error in username lookup:', err)
-            toast.error('Failed to load profile')
-            navigate('/profile/me')
-            return
-          }
-        } else {
-          // Viewing own profile
-          setViewed(null)
-        }
-        
-        // Ensure target is valid before proceeding
-        if (!target || !target.id) {
-          console.error('Invalid target profile:', target)
-          return
-        }
-        
-        // Load stats for the target profile
-        try {
-          const { data: streams, error: streamsError } = await supabase
-            .from('streams')
-            .select('id')
-            .eq('broadcaster_id', target.id)
-          
-          if (streamsError) {
-            console.error('Error loading streams:', streamsError)
-          } else {
-            setStreamsCreated((streams || []).length)
-          }
-        } catch (err) {
-          console.error('Error fetching streams:', err)
-        }
-        
-        try {
-          const { data: followers, error: followersError } = await supabase
-            .from('user_follows')
-            .select('id')
-            .eq('following_id', target.id)
-          
-          if (followersError) {
-            console.error('Error loading followers:', followersError)
-          } else {
-            setFollowersCount((followers || []).length)
-          }
-        } catch (err) {
-          console.error('Error fetching followers:', err)
-        }
-        
-        try {
-          const { data: following, error: followingError } = await supabase
-            .from('user_follows')
-            .select('id')
-            .eq('follower_id', target.id)
-          
-          if (followingError) {
-            console.error('Error loading following:', followingError)
-          } else {
-            setFollowingCount((following || []).length)
-          }
-        } catch (err) {
-          console.error('Error fetching following:', err)
-        }
-        
-        // Check if current user is following this profile
-        if (user?.id && target.id !== user.id) {
-          try {
-            const { data: followCheck, error: followError } = await supabase
-              .from('user_follows')
-              .select('id')
-              .eq('follower_id', user.id)
-              .eq('following_id', target.id)
-              .maybeSingle()
-            
-            if (!followError) {
-              setIsFollowing(!!followCheck)
-            }
-            
-            // Check if current user has blocked this profile
-            const { data: blockCheck, error: blockError } = await supabase
-              .from('blocked_users')
-              .select('id')
-              .eq('blocker_id', user.id)
-              .eq('blocked_id', target.id)
-              .maybeSingle()
-            
-            if (!blockError) {
-              setIsBlocked(!!blockCheck)
-            }
-            
-            // Check profile view access (don't auto-charge, just check)
-            const viewPrice = target.profile_view_price || 0
-            if (viewPrice > 0) {
-              const accessKey = `tc-view-access-${user.id}-${target.id}`
-              const lastAccess = localStorage.getItem(accessKey)
-              const accessExpiry = 24 * 60 * 60 * 1000 // 24 hours
-              
-              // Check if access is still valid
-              if (lastAccess && (Date.now() - parseInt(lastAccess)) < accessExpiry) {
-                setHasAccess(true)
-              } else {
-                // Access expired or never granted - user needs to unlock manually
-                setHasAccess(false)
-              }
-            } else {
-              setHasAccess(true) // Free profile
-            }
-          } catch (err) {
-            console.error('Error checking follow/block status:', err)
-            setHasAccess(true) // Default to true on error
-          }
-        } else {
-          setHasAccess(true) // Own profile always has access
-        }
-        
-        // Load coins received and sent from gifts table
-        try {
-          const { data: receivedGifts, error: receivedError } = await supabase
-            .from('gifts')
-            .select('coins_spent')
-            .eq('receiver_id', target.id)
-          
-          if (!receivedError && receivedGifts) {
-            const totalReceived = receivedGifts.reduce((sum, gift) => sum + (gift.coins_spent || 0), 0)
-            setCoinsReceived(totalReceived)
-          }
-        } catch (err) {
-          console.error('Error loading coins received:', err)
-        }
-        
-        try {
-          const { data: sentGifts, error: sentError } = await supabase
-            .from('gifts')
-            .select('coins_spent')
-            .eq('sender_id', target.id)
-          
-          if (!sentError && sentGifts) {
-            const totalSent = sentGifts.reduce((sum, gift) => sum + (gift.coins_spent || 0), 0)
-            setCoinsSent(totalSent)
-          }
-        } catch (err) {
-          console.error('Error loading coins sent:', err)
-        }
-        
-        // Try to load entrance effects (table might not exist yet)
-        try {
-          const { data: userEffects, error: effectsError } = await supabase
-            .from('user_entrance_effects')
-            .select('effect_id, entrance_effects:effect_id (*)')
-            .eq('user_id', target.id)
-          
-          if (!effectsError && userEffects) {
-            const mapped = (userEffects || []).map((row: any) => row.entrance_effects).filter(Boolean)
-            if (mapped.length) {
-              setEffects(mapped)
-              try { localStorage.setItem('tc-effects', JSON.stringify(mapped)) } catch {}
-            }
-          }
-        } catch (err) {
-          // Table doesn't exist yet, that's okay
-          console.log('Entrance effects table not available:', err)
-        }
-        
-        // Load battle history
-        try {
-          await loadBattleHistory(target.id)
-        } catch (err) {
-          console.error('Error loading battle history:', err)
-        }
+  const loadStats = useCallback(async (forceRefresh = false) => {
+    if (!routeTargetKey && !forceRefresh) {
+      return
+    }
 
-        // Check if user was recruited (only for viewed profiles, not own profile)
-        if (viewed && viewed.id !== profile?.id) {
-          try {
-            const { data: referralData, error: referralError } = await supabase
-              .from('referrals')
-              .select(`
-                referrer_id,
-                referrer:user_profiles!referrals_referrer_id_fkey (
-                  username
-                )
-              `)
-              .eq('referred_user_id', viewed.id)
-              .maybeSingle()
+    const selfIdentity = profile?.id || user?.id || null
+    const shouldRefetchSelf =
+      routeTargetKey === 'self' && selfIdentity && lastSelfIdentityRef.current !== selfIdentity
+    const shouldFetch =
+      forceRefresh ||
+      lastRouteTargetKeyRef.current !== routeTargetKey ||
+      shouldRefetchSelf
 
-            if (!referralError && referralData) {
-              setRecruitedBy(Array.isArray(referralData.referrer) ? referralData.referrer[0] : referralData.referrer)
-            }
-          } catch (err) {
-            console.error('Error loading referral data:', err)
-          }
-        }
+    if (!shouldFetch) {
+      return
+    }
 
-        // Load royal family title for the viewed user
-        try {
-          const { data: titleData, error: titleError } = await supabase
-            .from('current_royal_family')
-            .select('*')
-            .eq('user_id', target.id)
+    lastRouteTargetKeyRef.current = routeTargetKey
+    if (shouldRefetchSelf && selfIdentity) {
+      lastSelfIdentityRef.current = selfIdentity
+    }
+
+    const currentRouteKey = routeTargetKey
+    if (!currentRouteKey) {
+      updateViewedState(null)
+      return
+    }
+
+    try {
+      let target: any | null = null
+      const isSelfRoute = currentRouteKey === 'self'
+      const isRouteById = currentRouteKey.startsWith('id:')
+      const isRouteByName = currentRouteKey.startsWith('name:')
+
+      if (isSelfRoute) {
+        target = profileRef.current || profile
+        if ((!target || !target.id) && user?.id) {
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('*, avatar_url')
+            .eq('id', user.id)
             .maybeSingle()
 
-          if (!titleError && titleData) {
-            setRoyalTitle(titleData)
-          } else {
-            setRoyalTitle(null)
+          if (!error && data) {
+            target = data
+          } else if (error) {
+            console.error('Error loading self profile:', error)
+            toast.error('Failed to load user profile')
           }
-        } catch (err) {
-          console.error('Error loading royal title:', err)
-          setRoyalTitle(null)
+        }
+        updateViewedState(null)
+      } else if (isRouteById) {
+        const targetId = currentRouteKey.slice(3)
+        if (!isValidUuid(targetId)) {
+          const decodedUsername = decodeURIComponent(targetId)
+          let { data, error } = await supabase
+            .from('user_profiles')
+            .select('*, avatar_url')
+            .eq('username', decodedUsername)
+            .maybeSingle()
+
+          if (!data && !error) {
+            const { data: emailMatch, error: emailError } = await supabase
+              .from('user_profiles')
+              .select('*, avatar_url')
+              .ilike('email', `${decodedUsername}@%`)
+              .maybeSingle()
+            data = emailMatch
+            error = emailError
+          }
+
+          if (error) {
+            console.error('Error loading target profile by username:', error)
+            toast.error('Failed to load user profile')
+            updateViewedState(null)
+            return
+          }
+
+          if (!data) {
+            toast.error('User not found')
+            updateViewedState(null)
+            return
+          }
+
+          target = data
+          updateViewedState(data)
+        } else {
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('*, avatar_url')
+            .eq('id', targetId)
+            .maybeSingle()
+
+          if (error) {
+            console.error('Error loading target profile by ID:', error)
+            toast.error('Failed to load user profile')
+            updateViewedState(null)
+            return
+          }
+
+          if (!data) {
+            toast.error('User not found')
+            updateViewedState(null)
+            return
+          }
+
+          target = data
+          updateViewedState(data)
+        }
+      } else if (isRouteByName) {
+        const usernameParam = currentRouteKey.slice(5)
+        const decodedUsername = decodeURIComponent(usernameParam)
+        let { data, error } = await supabase
+          .from('user_profiles')
+          .select('*, avatar_url')
+          .eq('username', decodedUsername)
+          .maybeSingle()
+
+        if (!data && !error) {
+          const { data: emailMatch, error: emailError } = await supabase
+            .from('user_profiles')
+            .select('*, avatar_url')
+            .ilike('email', `${decodedUsername}@%`)
+            .maybeSingle()
+          data = emailMatch
+          error = emailError
+        }
+
+        if (error) {
+          console.error('Error loading target profile by username:', error)
+          toast.error('Failed to load user profile')
+          updateViewedState(null)
+          return
+        }
+
+        if (!data) {
+          toast.error('User not found')
+          updateViewedState(null)
+          return
+        }
+
+        target = data
+        updateViewedState(data)
+      } else {
+        updateViewedState(null)
+      }
+
+      if (!target || !target.id) {
+        console.error('Invalid target profile:', target)
+        return
+      }
+
+      if (lastRouteTargetKeyRef.current !== currentRouteKey) {
+        return
+      }
+
+      // Load stats for the target profile
+      try {
+        const { data: streams, error: streamsError } = await supabase
+          .from('streams')
+          .select('id')
+          .eq('broadcaster_id', target.id)
+
+        if (streamsError) {
+          console.error('Error loading streams:', streamsError)
+        } else {
+          setStreamsCreated((streams || []).length)
         }
       } catch (err) {
-        console.error('Error in loadStats:', err)
-        toast.error('Failed to load profile data')
+        console.error('Error fetching streams:', err)
       }
+
+      try {
+        const { data: followers, error: followersError } = await supabase
+          .from('user_follows')
+          .select('id')
+          .eq('following_id', target.id)
+
+        if (followersError) {
+          console.error('Error loading followers:', followersError)
+        } else {
+          setFollowersCount((followers || []).length)
+        }
+      } catch (err) {
+        console.error('Error fetching followers:', err)
+      }
+
+      try {
+        const { data: following, error: followingError } = await supabase
+          .from('user_follows')
+          .select('id')
+          .eq('follower_id', target.id)
+
+        if (followingError) {
+          console.error('Error loading following:', followingError)
+        } else {
+          setFollowingCount((following || []).length)
+        }
+      } catch (err) {
+        console.error('Error fetching following:', err)
+      }
+
+      // Check if current user is following this profile
+      if (user?.id && target.id !== user.id) {
+        try {
+          const { data: followCheck, error: followError } = await supabase
+            .from('user_follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', target.id)
+            .maybeSingle()
+
+          if (!followError) {
+            setIsFollowing(!!followCheck)
+          }
+
+          // Check if current user has blocked this profile
+          const { data: blockCheck, error: blockError } = await supabase
+            .from('blocked_users')
+            .select('id')
+            .eq('blocker_id', user.id)
+            .eq('blocked_id', target.id)
+            .maybeSingle()
+
+          if (!blockError) {
+            setIsBlocked(!!blockCheck)
+          }
+
+          // Check profile view access (don't auto-charge, just check)
+          const viewPrice = target.profile_view_price || 0
+          if (viewPrice > 0) {
+            const accessKey = `tc-view-access-${user.id}-${target.id}`
+            const lastAccess = localStorage.getItem(accessKey)
+            const accessExpiry = 24 * 60 * 60 * 1000 // 24 hours
+
+            // Check if access is still valid
+            if (lastAccess && (Date.now() - parseInt(lastAccess)) < accessExpiry) {
+              setHasAccess(true)
+            } else {
+              // Access expired or never granted - user needs to unlock manually
+              setHasAccess(false)
+            }
+          } else {
+            setHasAccess(true) // Free profile
+          }
+        } catch (err) {
+          console.error('Error checking follow/block status:', err)
+          setHasAccess(true) // Default to true on error
+        }
+      } else {
+        setHasAccess(true) // Own profile always has access
+      }
+
+      // Load coins received and sent from gifts table
+      try {
+        const { data: receivedGifts, error: receivedError } = await supabase
+          .from('gifts')
+          .select('coins_spent')
+          .eq('receiver_id', target.id)
+
+        if (!receivedError && receivedGifts) {
+          const totalReceived = receivedGifts.reduce((sum, gift) => sum + (gift.coins_spent || 0), 0)
+          setCoinsReceived(totalReceived)
+        }
+      } catch (err) {
+        console.error('Error loading coins received:', err)
+      }
+
+      try {
+        const { data: sentGifts, error: sentError } = await supabase
+          .from('gifts')
+          .select('coins_spent')
+          .eq('sender_id', target.id)
+
+        if (!sentError && sentGifts) {
+          const totalSent = sentGifts.reduce((sum, gift) => sum + (gift.coins_spent || 0), 0)
+          setCoinsSent(totalSent)
+        }
+      } catch (err) {
+        console.error('Error loading coins sent:', err)
+      }
+
+      // Try to load entrance effects (table might not exist yet)
+      try {
+        const { data: userEffects, error: effectsError } = await supabase
+          .from('user_entrance_effects')
+          .select('effect_id, entrance_effects:effect_id (*)')
+          .eq('user_id', target.id)
+
+        if (!effectsError && userEffects) {
+          const mapped = (userEffects || []).map((row: any) => row.entrance_effects).filter(Boolean)
+          if (mapped.length) {
+            setEffects(mapped)
+            try { localStorage.setItem('tc-effects', JSON.stringify(mapped)) } catch {}
+          }
+        }
+      } catch (err) {
+        // Table doesn't exist yet, that's okay
+        console.log('Entrance effects table not available:', err)
+      }
+
+      try {
+        const { data: userPerks, error: perksError } = await supabase
+          .from('user_perks')
+          .select('id, perk_id, expires_at, is_active, perks:perk_id (*)')
+          .eq('user_id', target.id)
+          .order('created_at', { ascending: false })
+
+        if (!perksError && userPerks) {
+          setPerks(userPerks)
+        }
+      } catch (err) {
+        console.log('Perks table not available:', err)
+      }
+
+      try {
+        const { data: userInsurances, error: insuranceError } = await supabase
+          .from('user_insurances')
+          .select('id, insurance_id, expires_at, is_active, protection_type, insurance_options:insurance_id (*)')
+          .eq('user_id', target.id)
+          .order('created_at', { ascending: false })
+
+        if (!insuranceError && userInsurances) {
+          setInsurances(userInsurances)
+        }
+      } catch (err) {
+        console.log('Insurance table not available:', err)
+      }
+
+      // Load battle history
+      try {
+        await loadBattleHistory(target.id)
+      } catch (err) {
+        console.error('Error loading battle history:', err)
+      }
+
+      const viewerId = user?.id || profileRef.current?.id || profile?.id
+      const isViewingSelf = !!viewerId && target?.id === viewerId
+
+      if (!isViewingSelf) {
+        setRecruitedBy(null)
+      } else {
+        try {
+          const { data: referralData, error: referralError } = await supabase
+            .from('referrals')
+            .select(`
+              referrer_id,
+              referrer:user_profiles!referrals_referrer_id_fkey (
+                username
+              )
+            `)
+            .eq('referred_user_id', target.id)
+            .maybeSingle()
+
+          if (!referralError && referralData) {
+            setRecruitedBy(Array.isArray(referralData.referrer) ? referralData.referrer[0] : referralData.referrer)
+          }
+        } catch (err) {
+          console.error('Error loading referral data:', err)
+        }
+      }
+    } catch (err) {
+      console.error('Error in loadStats:', err)
+      toast.error('Failed to load profile data')
     }
-    loadStats()
+  }, [routeTargetKey, user, profile, loadBattleHistory, toast])
+
+  useEffect(() => {
+    void loadStats()
+  }, [loadStats])
+
+  useEffect(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('tc-effects') || '[]')
       setEffects(Array.isArray(cached) ? cached : [])
     } catch {}
+
     try {
       if (user?.id) {
         const sel = localStorage.getItem(`tc-selected-effect-${user.id}`) || ''
         setSelectedEffectId(sel)
+        const perkSel = localStorage.getItem(`tc-selected-perk-${user.id}`) || ''
+        setSelectedPerkId(perkSel)
+        const insuranceSel = localStorage.getItem(`tc-selected-insurance-${user.id}`) || ''
+        setSelectedInsuranceId(insuranceSel)
         const priv = localStorage.getItem(`tc-private-profile-${user.id}`)
         setPrivateEnabled(priv === 'true')
       }
     } catch {}
+  }, [user?.id])
 
-  }, [profile?.id, user?.id, routeUsername])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleRefetch = () => {
+      if (!shouldShowViewed) return
+      void loadStats(true)
+    }
+
+    window.addEventListener(APP_DATA_REFETCH_EVENT_NAME, handleRefetch)
+    window.addEventListener('appDataRefetch', handleRefetch)
+    return () => {
+      window.removeEventListener(APP_DATA_REFETCH_EVENT_NAME, handleRefetch)
+      window.removeEventListener('appDataRefetch', handleRefetch)
+    }
+  }, [loadStats, shouldShowViewed])
+
+  // Keep key stats fresh (avoid showing stale data after coin/follow changes)
+  useEffect(() => {
+    const targetId = viewed?.id || profile?.id
+    if (!targetId) return
+
+    const refreshNow = async () => {
+      try {
+        const { data: freshProfile } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', targetId)
+          .maybeSingle()
+
+        if (freshProfile) {
+          if (viewed && viewed.id === targetId) updateViewedState(freshProfile)
+          if (!viewed && profile?.id === targetId) {
+            const shouldUpdateProfile =
+              !profile ||
+              profile.id !== freshProfile.id ||
+              (freshProfile.updated_at &&
+                profile.updated_at !== freshProfile.updated_at)
+
+            if (shouldUpdateProfile) {
+              try {
+                useAuthStore.getState().setProfile(freshProfile as any)
+              } catch {}
+            }
+          }
+        }
+
+        const [{ count: streamsCount }, { count: followersCount }, { count: followingCount }] = await Promise.all([
+          supabase.from('streams').select('id', { count: 'exact', head: true }).eq('broadcaster_id', targetId),
+          supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('following_id', targetId),
+          supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('follower_id', targetId),
+        ])
+
+        if (typeof streamsCount === 'number') setStreamsCreated(streamsCount)
+        if (typeof followersCount === 'number') setFollowersCount(followersCount)
+        if (typeof followingCount === 'number') setFollowingCount(followingCount)
+      } catch {
+        // non-fatal
+      }
+    }
+
+    refreshNow()
+
+    if (statsPollRef.current) window.clearInterval(statsPollRef.current)
+    statsPollRef.current = window.setInterval(refreshNow, 10000)
+
+    return () => {
+      if (statsPollRef.current) window.clearInterval(statsPollRef.current)
+      statsPollRef.current = null
+    }
+  }, [profile?.id, viewed?.id])
 
   // Load creator dashboard data
   useEffect(() => {
@@ -727,7 +1030,7 @@ export default function Profile() {
       
       if (error) {
         if (error.message.includes('Insufficient')) {
-          toast.error('Not enough paid coins')
+          toast.error('Not enough troll_coins')
         } else {
           toast.error('Failed to unlock profile')
         }
@@ -777,10 +1080,10 @@ export default function Profile() {
     }
     
     // Following requires coins - use spend_coins RPC
-    const FOLLOW_COST = 100 // 100 paid coins to follow
+    const FOLLOW_COST = 100 // 100 troll_coins to follow
     try {
-      if ((profile?.paid_coin_balance || 0) < FOLLOW_COST) {
-        toast.error(`You need ${FOLLOW_COST} paid coins to follow`)
+      if ((profile?.troll_coins_balance || 0) < FOLLOW_COST) {
+        toast.error(`You need ${FOLLOW_COST} troll_coins to follow`)
         return
       }
       
@@ -892,14 +1195,34 @@ export default function Profile() {
       }
     }
 
-    navigate(`/messages?user=${viewed.username}`)
+    navigate(`/messages?user=${viewed.id}`)
   }
 
   const handleSelectEffect = (id: string) => {
     if (!user) return
-    setSelectedEffectId(id)
-    try { localStorage.setItem(`tc-selected-effect-${user.id}`, id) } catch {}
-    toast.success('Entrance effect selected')
+    if (selectedEffectId === id) {
+      setSelectedEffectId('')
+      try { localStorage.setItem(`tc-selected-effect-${user.id}`, '') } catch {}
+      toast.success('Entrance effect deselected')
+    } else {
+      setSelectedEffectId(id)
+      try { localStorage.setItem(`tc-selected-effect-${user.id}`, id) } catch {}
+      toast.success('Entrance effect selected')
+    }
+  }
+
+  const handleSelectPerk = (id: string) => {
+    if (!user) return
+    setSelectedPerkId(id)
+    try { localStorage.setItem(`tc-selected-perk-${user.id}`, id) } catch {}
+    toast.success('Perk selected')
+  }
+
+  const handleSelectInsurance = (id: string) => {
+    if (!user) return
+    setSelectedInsuranceId(id)
+    try { localStorage.setItem(`tc-selected-insurance-${user.id}`, id) } catch {}
+    toast.success('Insurance selected')
   }
 
   const triggerAvatarUpload = () => {
@@ -990,20 +1313,21 @@ export default function Profile() {
     if (!profile || !user) return
     if (!privateEnabled) {
       const cost = 2000
-      if ((profile.paid_coin_balance || 0) < cost) {
-        toast.error('Requires 2,000 paid coins')
+      if ((profile.troll_coins_balance || 0) < cost) {
+        toast.error('Requires 2,000 troll_coins')
         return
       }
       try {
         const { error: updErr } = await supabase
           .from('user_profiles')
-          .update({ paid_coin_balance: profile.paid_coin_balance - cost, updated_at: new Date().toISOString() })
+          .update({ troll_coins_balance: profile.troll_coins_balance - cost, updated_at: new Date().toISOString() })
           .eq('id', profile.id)
         if (updErr) throw updErr
         await supabase
           .from('coin_transactions')
           .insert([{ user_id: profile.id, type: 'purchase', amount: -cost, description: 'Private profile activation', metadata: { feature: 'private_profile' } }])
-        useAuthStore.getState().setProfile({ ...profile, paid_coin_balance: profile.paid_coin_balance - cost } as any)
+        useAuthStore.getState().setProfile({ ...profile, troll_coins_balance: profile.troll_coins_balance - cost } as any)
+        refreshProfileInBackground()
         setPrivateEnabled(true)
         try { localStorage.setItem(`tc-private-profile-${user.id}`, 'true') } catch {}
         toast.success('Private profile enabled')
@@ -1019,12 +1343,182 @@ export default function Profile() {
 
   // Define this before sections array since it's used inside
   const isViewingOtherUser = viewed && user && viewed.id !== user.id
+  const isAdminViewer = profile?.role === 'admin' || (profile as any)?.is_admin
+  const isLeadOfficerViewer = profile?.role === 'lead_troll_officer' || profile?.is_lead_officer
+  const isViewingOwnProfile = !viewed || viewed.id === profile?.id
+  const emailToShow = isAdminViewer
+    ? (viewed?.email || user?.email || '')
+    : (isViewingOwnProfile ? (user?.email || '') : '')
+
+  const displayProfile = isViewingOtherUser ? viewed : profile
+  const displayUsername = displayProfile?.username || 'User'
+  const displayXP = displayProfile?.xp || 0
+  const displayRole = displayProfile?.role || (displayProfile?.is_admin ? 'admin' : undefined)
+  const displayLevel = getLevelFromXP(displayXP, displayRole === 'admin')
+  const displayTier = getTierFromXP(displayXP)
+  const displayTotalEarned = displayProfile?.total_earned_coins || 0
+  const displaytroll_coins = displayProfile?.troll_coins_balance || 0
+  const displaytrollmonds = displayProfile?.free_coin_balance || 0
+  const canModerateProfile = Boolean(isViewingOtherUser && (isAdminViewer || isLeadOfficerViewer))
+  const targetIsBanned = Boolean(displayProfile?.is_banned)
+  const targetIsDisabled = Boolean(displayProfile?.account_deleted_at)
   
   // Check if the viewed user is admin, officer, or troller (cannot be blocked)
   const viewedUserRole = viewed?.role || viewed?.is_admin ? 'admin' : 
                          viewed?.is_troll_officer || viewed?.role === 'troll_officer' ? 'troll_officer' :
                          viewed?.is_troller || viewed?.role === 'troller' ? 'troller' : null
   const cannotBeBlocked = viewedUserRole === 'admin' || viewedUserRole === 'troll_officer' || viewedUserRole === 'troller'
+
+  async function handleAdminKick() {
+    if (!profile?.id || !viewed?.id) return
+    setAdminActionLoading('kick')
+    try {
+      const { data, error } = await supabase.rpc('kick_user', {
+        p_target_user_id: viewed.id,
+        p_kicker_user_id: profile.id,
+        p_stream_id: null
+      })
+
+      if (error) throw error
+
+      if (data?.success) {
+        toast.success(`Kicked @${displayUsername}`)
+      } else {
+        toast.error(data?.error || 'Failed to kick user')
+      }
+      await loadStats(true)
+    } catch (error: any) {
+      console.error('Kick user error:', error)
+      toast.error(error?.message || 'Failed to kick user')
+    } finally {
+      setAdminActionLoading(null)
+    }
+  }
+
+  async function handleAdminBan() {
+    if (!viewed?.id) return
+    if (!confirm(`Ban @${displayUsername}?`)) return
+    setAdminActionLoading('ban')
+    try {
+      const until = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+      const { error } = await supabase.rpc('ban_user', { p_user_id: viewed.id, p_until: until })
+      if (error) throw error
+      toast.success(`Banned @${displayUsername}`)
+      await loadStats(true)
+    } catch (error: any) {
+      console.error('Ban user error:', error)
+      toast.error(error?.message || 'Failed to ban user')
+    } finally {
+      setAdminActionLoading(null)
+    }
+  }
+
+  async function handleAdminUnban() {
+    if (!viewed?.id) return
+    setAdminActionLoading('unban')
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ is_banned: false, banned_until: null })
+        .eq('id', viewed.id)
+      if (error) throw error
+      toast.success(`Unbanned @${displayUsername}`)
+      await loadStats(true)
+    } catch (error: any) {
+      console.error('Unban user error:', error)
+      toast.error(error?.message || 'Failed to unban user')
+    } finally {
+      setAdminActionLoading(null)
+    }
+  }
+
+  async function handleAdminDisable() {
+    if (!viewed?.id) return
+    if (!confirm(`Disable @${displayUsername}'s account?`)) return
+    setAdminActionLoading('disable')
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          account_deleted_at: new Date().toISOString(),
+          account_deletion_cooldown_until: null
+        })
+        .eq('id', viewed.id)
+      if (error) throw error
+      toast.success(`Disabled @${displayUsername}`)
+      await loadStats(true)
+    } catch (error: any) {
+      console.error('Disable user error:', error)
+      toast.error(error?.message || 'Failed to disable user')
+    } finally {
+      setAdminActionLoading(null)
+    }
+  }
+
+  async function handleAdminEnable() {
+    if (!viewed?.id) return
+    setAdminActionLoading('enable')
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          account_deleted_at: null,
+          account_deletion_cooldown_until: null
+        })
+        .eq('id', viewed.id)
+      if (error) throw error
+      toast.success(`Enabled @${displayUsername}`)
+      await loadStats(true)
+    } catch (error: any) {
+      console.error('Enable user error:', error)
+      toast.error(error?.message || 'Failed to enable user')
+    } finally {
+      setAdminActionLoading(null)
+    }
+  }
+
+  async function handleAdminHardBan() {
+    if (!profile?.id || !viewed?.id) return
+    if (viewed.id === profile.id) {
+      toast.error('You cannot hard ban your own account')
+      return
+    }
+    if (!confirm(`Hard ban + wipe @${displayUsername}? This deletes the account and bans their IP.`)) {
+      return
+    }
+    setAdminActionLoading('hard_ban')
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-hard-ban', {
+        body: {
+          target_user_id: viewed.id,
+          reason: `Hard ban from profile by ${profile.username || profile.id}`
+        }
+      })
+
+      if (error) throw error
+
+      if (data?.success) {
+        toast.success(`Hard banned @${displayUsername}`)
+        navigate('/')
+      } else {
+        const warning = Array.isArray(data?.warnings) ? data.warnings[0] : null
+        toast.error(data?.error || warning || 'Hard ban failed')
+      }
+    } catch (error: any) {
+      console.error('Hard ban error:', error)
+
+      // Check if the error is due to function not being deployed
+      if (error?.message?.includes('Failed to send a request') ||
+          error?.message?.includes('function was not found') ||
+          error?.message?.includes('404')) {
+        toast.error('Hard ban function is not available. Please contact system administrator.')
+      } else {
+        toast.error(error?.message || 'Hard ban failed')
+      }
+    } finally {
+      setAdminActionLoading(null)
+    }
+  }
 
   // Filter sections based on whether viewing own profile or another user's
   const allSections = [
@@ -1072,7 +1566,7 @@ export default function Profile() {
               </button>
             </div>
             <div className="text-xs text-gray-400 mt-2">
-              Share this link with friends! When they sign up and earn 40,000 paid coins within 21 days, you'll get 10,000 coins as a reward.
+              Share this link with friends! When they sign up and earn 40,000 troll_coins within 21 days, you'll get 10,000 coins as a reward.
             </div>
           </div>
         </div>
@@ -1084,66 +1578,126 @@ export default function Profile() {
       icon: <Camera className="w-5 h-5" />,
       content: (
         <div className="space-y-4">
-          {user?.email && (!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (
+          {!!emailToShow && (isViewingOwnProfile || isAdminViewer) && (
             <div className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C]">
               <div className="text-xs text-gray-500 mb-1">Email</div>
-              <div className="text-sm text-gray-300">{user.email}</div>
+              <div className="text-sm text-gray-300">{emailToShow}</div>
             </div>
           )}
           <p className="text-gray-300">{bio}</p>
           
           {isViewingOtherUser && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              <button
-                onClick={handleFollow}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  isFollowing
-                    ? 'bg-gray-600 hover:bg-gray-700 text-white'
-                    : 'bg-purple-600 hover:bg-purple-700 text-white'
-                }`}
-              >
-                {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                {isFollowing ? 'Unfollow' : 'Follow'}
-              </button>
-              
-              <button
-                onClick={handleMessage}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Message
-              </button>
-              
-              <button
-                onClick={() => setShowGiftModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-              >
-                <Gift className="w-4 h-4" />
-                Send Gift
-              </button>
-              
-              {!cannotBeBlocked && (
+            <React.Fragment>
+              <div className="flex flex-wrap gap-2 mt-4">
                 <button
-                  onClick={handleBlock}
+                  onClick={handleFollow}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                    isBlocked
+                    isFollowing
                       ? 'bg-gray-600 hover:bg-gray-700 text-white'
-                      : 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'bg-purple-600 hover:bg-purple-700 text-white'
                   }`}
                 >
-                  <Ban className="w-4 h-4" />
-                  {isBlocked ? 'Unblock' : 'Block'}
+                  {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                  {isFollowing ? 'Unfollow' : 'Follow'}
                 </button>
+                
+                <button
+                  onClick={handleMessage}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Message
+                </button>
+                
+                <button
+                  onClick={() => setShowGiftModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                >
+                  <Gift className="w-4 h-4" />
+                  Send Gift
+                </button>
+                
+                {!cannotBeBlocked && (
+                  <button
+                    onClick={handleBlock}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      isBlocked
+                        ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                        : 'bg-red-600 hover:bg-red-700 text-white'
+                    }`}
+                  >
+                    <Ban className="w-4 h-4" />
+                    {isBlocked ? 'Unblock' : 'Block'}
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  Report User
+                </button>
+              </div>
+
+              {canModerateProfile && (
+                <div className="mt-4 rounded-lg border border-red-500/40 bg-[#0D0D0D] p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-red-300 mb-3">
+                    Admin Actions
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={handleAdminKick}
+                      disabled={adminActionLoading === 'kick'}
+                      className="px-3 py-2 rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                    >
+                      Kick
+                    </button>
+                    {targetIsBanned ? (
+                      <button
+                        onClick={handleAdminUnban}
+                        disabled={adminActionLoading === 'unban'}
+                        className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                      >
+                        Unban
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleAdminBan}
+                        disabled={adminActionLoading === 'ban'}
+                        className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                      >
+                        Ban
+                      </button>
+                    )}
+                    {targetIsDisabled ? (
+                      <button
+                        onClick={handleAdminEnable}
+                        disabled={adminActionLoading === 'enable'}
+                        className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                      >
+                        Enable
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleAdminDisable}
+                        disabled={adminActionLoading === 'disable'}
+                        className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                      >
+                        Disable
+                      </button>
+                    )}
+                    <button
+                      onClick={handleAdminHardBan}
+                      disabled={adminActionLoading === 'hard_ban'}
+                      className="px-3 py-2 rounded-lg bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+                    >
+                      IP Ban + Wipe
+                    </button>
+                  </div>
+                </div>
               )}
-              
-              <button
-                onClick={() => setShowReportModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
-              >
-                <AlertTriangle className="w-4 h-4" />
-                Report User
-              </button>
-            </div>
+            </React.Fragment>
           )}
           
           {editingProfile ? (
@@ -1242,7 +1796,7 @@ export default function Profile() {
               <div className="bg-[#0D0D0D] rounded-lg p-4">
                 <div className="text-gray-400 text-sm">Level</div>
                 <div className="text-white text-2xl font-bold">
-                  {getLevelFromXP((viewed?.xp || profile?.xp) || 0, (viewed?.role || profile?.role) === 'admin')}
+                  {displayLevel}
                 </div>
               </div>
               <div
@@ -1269,7 +1823,7 @@ export default function Profile() {
               </div>
               <div className="bg-[#0D0D0D] rounded-lg p-4">
                 <div className="text-gray-400 text-sm">Total Earned</div>
-                <div className="text-white text-2xl font-bold">{(viewed?.total_earned_coins || profile?.total_earned_coins || 0).toLocaleString()}</div>
+                <div className="text-white text-2xl font-bold">{displayTotalEarned.toLocaleString()}</div>
               </div>
             </div>
           </div>
@@ -1307,7 +1861,7 @@ export default function Profile() {
                   <div className="text-red-400 text-2xl font-bold">{battleStats.losses}</div>
                 </div>
                 <div className="bg-[#0D0D0D] rounded-lg p-4">
-                  <div className="text-gray-400 text-sm">Gifts from Battles</div>
+                  <div className="text-gray-400 text-sm">Coins from Battles</div>
                   <div className="text-yellow-400 text-2xl font-bold">{battleStats.totalCoinsReceived.toLocaleString()}</div>
                 </div>
                 <div className="bg-[#0D0D0D] rounded-lg p-4">
@@ -1338,6 +1892,17 @@ export default function Profile() {
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {battles.map((battle: any) => {
+                const totalCoins = battle.battle
+                  ? (battle.battle.host_id === battle.user_id
+                      ? (battle.battle.host_troll_coins || 0) + (battle.battle.host_trollmonds || 0)
+                      : (battle.battle.challenger_troll_coins || 0) + (battle.battle.challenger_trollmonds || 0))
+                  : 0
+                const opponentTotalCoins = battle.battle
+                  ? (battle.battle.host_id === battle.opponent_id
+                      ? (battle.battle.host_troll_coins || 0) + (battle.battle.host_trollmonds || 0)
+                      : (battle.battle.challenger_troll_coins || 0) + (battle.battle.challenger_trollmonds || 0))
+                  : 0
+
                 return (
                   <div
                     key={battle.id}
@@ -1373,12 +1938,12 @@ export default function Profile() {
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <div className="text-xs text-gray-400 mb-1">Your Gifts</div>
-                        <div className="text-yellow-400 font-semibold">{(battle.user_gifts || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-400 mb-1">Your Coins</div>
+                        <div className="text-yellow-400 font-semibold">{totalCoins.toLocaleString()}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-400 mb-1">Opponent Gifts</div>
-                        <div className="text-gray-400 font-semibold">{(battle.opponent_gifts || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-400 mb-1">Opponent Coins</div>
+                        <div className="text-gray-400 font-semibold">{opponentTotalCoins.toLocaleString()}</div>
                       </div>
                     </div>
                   </div>
@@ -1391,29 +1956,111 @@ export default function Profile() {
     },
     
     {
-      id: 'entrance_effects',
-      title: 'Entrance Effects',
-      icon: <Star className="w-5 h-5 text-purple-500" />,
+      id: 'store_purchases',
+      title: 'Store Purchases',
+      icon: <ShoppingCart className="w-5 h-5 text-purple-500" />,
       badge: null,
       content: (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {effects.map((e: any) => (
-              <div key={e.id} className={`bg-[#0D0D0D] rounded-lg p-4 text-center border ${selectedEffectId===e.id?'border-purple-500':'border-[#2C2C2C]'}`}>
-                <div className="text-2xl mb-2">{e.icon || '⭐'}</div>
-                <div className="text-white font-medium mb-2">{e.name}</div>
-                <button onClick={() => handleSelectEffect(e.id)} className={`w-full py-2 rounded ${selectedEffectId===e.id?'bg-purple-600 text-white':'bg-[#2C2C2C] text-gray-300'}`}>{selectedEffectId===e.id?'Selected':'Use'}</button>
-              </div>
-            ))}
-          </div>
+        <div className="space-y-6">
+          {!(isViewingOwnProfile && isAdminViewer) && (
+            <div>
+              <div className="text-sm font-semibold text-gray-300 mb-3">Entrance Effects</div>
+              {effects.length === 0 ? (
+                <div className="bg-[#0D0D0D] rounded-lg border border-[#2C2C2C] p-4 text-gray-400">
+                  No entrance effects yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {effects.map((e: any) => (
+                    <div key={e.id} className={`bg-[#0D0D0D] rounded-lg p-4 text-center border ${selectedEffectId===e.id?'border-purple-500':'border-[#2C2C2C]'}`}>
+                      <div className="text-2xl mb-2">{e.icon || '??'}</div>
+                      <div className="text-white font-medium mb-2">{e.name}</div>
+                      <button onClick={() => handleSelectEffect(e.id)} className={`w-full py-2 rounded ${selectedEffectId===e.id?'bg-purple-600 text-white':'bg-[#2C2C2C] text-gray-300'}`}>
+                        {selectedEffectId===e.id ? 'Deselect' : 'Use'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
-            <button onClick={() => navigate('/store')} className="px-4 py-2 rounded bg-purple-600 text-white">Browse Effects</button>
+            <div className="text-sm font-semibold text-gray-300 mb-3">Perks</div>
+            {perks.length === 0 ? (
+              <div className="bg-[#0D0D0D] rounded-lg border border-[#2C2C2C] p-4 text-gray-400">
+                No perks purchased yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {perks.map((p: any) => {
+                  const perk = Array.isArray(p.perks) ? p.perks[0] : p.perks
+                  const expiresAt = p.expires_at ? new Date(p.expires_at) : null
+                  const isExpired = expiresAt ? expiresAt.getTime() < Date.now() : false
+                  const isActive = p.is_active && !isExpired
+                  return (
+                    <div key={p.id} className={`bg-[#0D0D0D] rounded-lg p-4 text-center border ${selectedPerkId===p.id?'border-purple-500':'border-[#2C2C2C]'}`}>
+                      <div className="text-white font-medium mb-1">{perk?.name || 'Perk'}</div>
+                      <div className="text-xs text-gray-500 mb-2">{perk?.description || 'Perk purchase'}</div>
+                      <div className="text-xs text-gray-500 mb-2">
+                        {expiresAt ? `Expires ${expiresAt.toLocaleDateString()}` : 'No expiry'}
+                      </div>
+                      <button
+                        onClick={() => handleSelectPerk(p.id)}
+                        disabled={!isActive}
+                        className={`w-full py-2 rounded ${selectedPerkId===p.id?'bg-purple-600 text-white':'bg-[#2C2C2C] text-gray-300'} ${!isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {selectedPerkId===p.id ? 'Selected' : isActive ? 'Use' : 'Inactive'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="text-sm font-semibold text-gray-300 mb-3">Insurance</div>
+            {insurances.length === 0 ? (
+              <div className="bg-[#0D0D0D] rounded-lg border border-[#2C2C2C] p-4 text-gray-400">
+                No insurance purchased yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {insurances.map((i: any) => {
+                  const plan = Array.isArray(i.insurance_options) ? i.insurance_options[0] : i.insurance_options
+                  const expiresAt = i.expires_at ? new Date(i.expires_at) : null
+                  const isExpired = expiresAt ? expiresAt.getTime() < Date.now() : false
+                  const isActive = i.is_active && !isExpired
+                  return (
+                    <div key={i.id} className={`bg-[#0D0D0D] rounded-lg p-4 text-center border ${selectedInsuranceId===i.id?'border-purple-500':'border-[#2C2C2C]'}`}>
+                      <div className="text-white font-medium mb-1">{plan?.name || 'Insurance'}</div>
+                      <div className="text-xs text-gray-500 mb-2">{plan?.description || i.protection_type || 'Protection plan'}</div>
+                      <div className="text-xs text-gray-500 mb-2">
+                        {expiresAt ? `Expires ${expiresAt.toLocaleDateString()}` : 'No expiry'}
+                      </div>
+                      <button
+                        onClick={() => handleSelectInsurance(i.id)}
+                        disabled={!isActive}
+                        className={`w-full py-2 rounded ${selectedInsuranceId===i.id?'bg-purple-600 text-white':'bg-[#2C2C2C] text-gray-300'} ${!isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {selectedInsuranceId===i.id ? 'Selected' : isActive ? 'Use' : 'Inactive'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <button onClick={() => navigate('/store')} className="px-4 py-2 rounded bg-purple-600 text-white">Browse Store</button>
           </div>
         </div>
       )
     },
-    {
-      id: 'account_settings',
+
+    { id: 'account_settings',
       title: 'Account Settings',
       icon: <Settings className="w-5 h-5" />,
       content: (
@@ -1436,10 +2083,10 @@ export default function Profile() {
             </button>
           </div>
 
-          {user?.email && (!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (
+          {!!emailToShow && (isViewingOwnProfile || isAdminViewer) && (
             <div className="p-3 rounded-lg bg-[#0D0D0D] border border-[#2C2C2C]">
               <div className="text-xs text-gray-500 mb-1">Account Email</div>
-              <div className="text-sm text-gray-300">{user.email}</div>
+              <div className="text-sm text-gray-300">{emailToShow}</div>
             </div>
           )}
           <div className="p-4 bg-[#0D0D0D] rounded-lg border border-purple-600/30">
@@ -1504,13 +2151,144 @@ export default function Profile() {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Viewers must pay this amount in paid coins to view your profile (max 2000 coins)
+              Viewers must pay this amount in troll_coins to view your profile (max 2000 coins)
+            </p>
+          </div>
+          <div className="mt-4 p-4 bg-[#0D0D0D] rounded-lg border border-purple-600/30">
+            <div className="text-white font-semibold mb-3">Message Price (coins)</div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <input
+                type="number"
+                min={0}
+                max={2000}
+                value={messagePrice}
+                onChange={(e) => {
+                  const val = Math.max(0, Math.min(2000, Number(e.target.value || 0)))
+                  setMessagePrice(val)
+                }}
+                placeholder="Enter price in coins"
+                className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg border border-purple-600 focus:border-purple-400 focus:outline-none"
+              />
+              <button
+                onClick={async () => {
+                  if (!profile?.id) {
+                    toast.error('Profile not loaded')
+                    return
+                  }
+
+                  const priceValue = Number(messagePrice)
+                  if (isNaN(priceValue) || priceValue < 0) {
+                    toast.error('Please enter a valid price (0-2000 coins)')
+                    return
+                  }
+
+                  try {
+                    const { error } = await supabase
+                      .from('user_profiles')
+                      .update({
+                        message_price: Math.floor(priceValue),
+                        updated_at: new Date().toISOString()
+                      })
+                      .eq('id', profile.id)
+
+                    if (error) {
+                      console.error('Error updating message price:', error)
+                      toast.error(error.message || 'Failed to save message price')
+                      return
+                    }
+
+                    useAuthStore.getState().setProfile({
+                      ...(profile as any),
+                      message_price: Math.floor(priceValue)
+                    } as any)
+
+                    toast.success(`Message price saved: ${Math.floor(priceValue)} coins`)
+                  } catch (err: any) {
+                    console.error('Error saving message price:', err)
+                    toast.error(err?.message || 'Failed to save message price')
+                  }
+                }}
+                disabled={isNaN(Number(messagePrice)) || Number(messagePrice) < 0}
+                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+              >
+                Save
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Require Troll coins before others can message you (max 2000 coins)
+            </p>
+          </div>
+          <div className="mt-4 p-4 bg-[#0D0D0D] rounded-lg border border-purple-600/30">
+            <div className="text-white font-semibold mb-3">PayPal Payout Email</div>
+            <div className="flex items-center gap-3">
+              <input
+                type="email"
+                value={paypalEmail}
+                onChange={(e) => setPaypalEmail(e.target.value)}
+                placeholder="Enter your PayPal email"
+                className="flex-1 bg-gray-900 text-white px-4 py-2 rounded-lg border border-purple-600 focus:border-purple-400 focus:outline-none"
+              />
+              <button
+                onClick={async () => {
+                  if (!profile?.id) {
+                    toast.error('Profile not loaded')
+                    return
+                  }
+
+                  const emailValue = paypalEmail.trim()
+                  if (!emailValue) {
+                    toast.error('Please enter a PayPal email')
+                    return
+                  }
+
+                  // Basic email validation
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                  if (!emailRegex.test(emailValue)) {
+                    toast.error('Please enter a valid email address')
+                    return
+                  }
+
+                  try {
+                    const { error } = await supabase
+                      .from('user_profiles')
+                      .update({
+                        payout_paypal_email: emailValue,
+                        updated_at: new Date().toISOString()
+                      })
+                      .eq('id', profile.id)
+
+                    if (error) {
+                      console.error('Error updating PayPal email:', error)
+                      toast.error(error.message || 'Failed to save PayPal email')
+                      return
+                    }
+
+                    // Update local profile state
+                    useAuthStore.getState().setProfile({
+                      ...(profile as any),
+                      payout_paypal_email: emailValue
+                    } as any)
+
+                    toast.success('PayPal email saved successfully!')
+                  } catch (err: any) {
+                    console.error('Error saving PayPal email:', err)
+                    toast.error(err?.message || 'Failed to save PayPal email')
+                  }
+                }}
+                disabled={!paypalEmail.trim() || paypalEmail.trim() === (profile as any)?.payout_paypal_email}
+                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+              >
+                Save
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              This email will be used for PayPal payouts when you request withdrawals
             </p>
           </div>
           <button
             onClick={async () => {
               // No confirmation - proceed directly
-              const hasEnoughCoins = profile?.paid_coin_balance >= 500;
+              const hasEnoughCoins = profile?.troll_coins_balance >= 500;
               const payEarly = hasEnoughCoins; // Auto-pay if user has enough coins
               
               try {
@@ -1560,7 +2338,7 @@ export default function Profile() {
           {creatorLoading ? (
             <div className="text-center py-8 text-gray-400">Loading creator analytics...</div>
           ) : (
-            <>
+            <React.Fragment>
               {/* TOP METRICS */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="bg-[#0D0D0D] rounded-lg p-4">
@@ -1603,8 +2381,8 @@ export default function Profile() {
                     ))}
                   </div>
                 </div>
-                <div style={{ width: "100%", height: 260 }}>
-                  <ResponsiveContainer>
+                <div style={{ width: "100%", height: 260, minHeight: 260 }}>
+                  <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={dailySeries || []}>
                       <XAxis
                         dataKey="day"
@@ -1639,7 +2417,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* TOP GIFTERS + TROLLTRACT ANALYTICS */}
+              {/* TOP GIFTERS + ANALYTICS */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* TOP GIFTERS */}
                 <div className="bg-[#0D0D0D] rounded-lg p-6">
@@ -1673,7 +2451,7 @@ export default function Profile() {
 
                 
               </div>
-            </>
+            </React.Fragment>
           )}
         </div>
       )
@@ -1681,9 +2459,12 @@ export default function Profile() {
   ]
 
   // Filter sections: when viewing another user, only show stats and action buttons
-  const sections = isViewingOtherUser 
+  // Only show referral code for approved Empire Partners
+  const filteredSections = isViewingOtherUser
     ? allSections.filter(s => s.id === 'stats' || s.id === 'profile_info')
-    : allSections
+    : allSections.filter(s => s.id !== 'referral_code' || (profile as any)?.empire_role === 'partner')
+
+  const sections = filteredSections
 
   console.log('Profile component - profile:', profile, 'user:', user, 'routeUsername:', routeUsername)
 
@@ -1712,7 +2493,7 @@ export default function Profile() {
   }
 
   return (
-    <>
+    <React.Fragment>
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
@@ -1721,7 +2502,7 @@ export default function Profile() {
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
               <div className="w-[360px] bg-[#121212] border border-purple-600 rounded-xl p-4">
                 <div className="font-semibold mb-2">Unlock @{viewed.username}'s profile</div>
-                <div className="text-xs text-gray-300 mb-3">Price: {viewedPrice()} paid coins</div>
+                <div className="text-xs text-gray-300 mb-3">Price: {viewedPrice()} troll_coins</div>
                 <div className="flex justify-end gap-2">
                   <button onClick={() => navigate('/store')} className="px-3 py-1 rounded bg-gray-700 text-white text-xs">Get Coins</button>
                   <button onClick={unlockViewedProfile} className="px-3 py-1 rounded bg-purple-600 text-white text-xs">Unlock</button>
@@ -1742,18 +2523,15 @@ export default function Profile() {
                 <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full overflow-hidden">
                   <img 
                     src={
-                      (isViewingOtherUser && viewed?.avatar_url) 
-                        ? viewed.avatar_url 
-                        : (!isViewingOtherUser && profile?.avatar_url)
-                        ? profile.avatar_url
-                        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${(viewed?.username || profile?.username || 'user')}`
+                      displayProfile?.avatar_url ||
+                      `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayUsername}`
                     } 
-                    alt={`${(viewed?.username || profile?.username || 'User')}'s avatar`}
+                    alt={`${displayUsername}'s avatar`}
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       // Fallback to dicebear if image fails to load
                       const target = e.target as HTMLImageElement
-                      target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${(viewed?.username || profile?.username || 'user')}`
+                      target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayUsername}`
                     }}
                   />
                 </div>
@@ -1776,37 +2554,18 @@ export default function Profile() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-white">
-                      {royalTitle && royalTitle.is_active ? (
-                        <span title="Status title earned through gifting. In-app role only.">
-                          Admin's {royalTitle.title_type === 'wife' ? 'Wife' : 'Husband'}
-                        </span>
-                      ) : (
-                        `@${(viewed?.username || profile.username)}`
-                      )}
-                    </h1>
-                    {royalTitle && royalTitle.is_active && (
-                      <div className="text-sm text-gray-400">
-                        @{viewed?.username || profile.username}
-                      </div>
-                    )}
-                    <EmpireBadge empireRole={viewed?.empire_role || profile?.empire_role} />
-                    {royalTitle && royalTitle.is_active && (
-                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-full flex items-center gap-1 border border-yellow-500/30">
-                        <Crown className="w-3 h-3" />
-                        ROYAL
-                      </span>
-                    )}
+                    <h1 className="text-2xl font-bold text-white">@{displayUsername}</h1>
+                    <EmpireBadge empireRole={displayProfile?.empire_role} />
                   </div>
                   {/* Admin Badge */}
-                  {(viewed?.role || profile.role) === 'admin' && (
+                  {(displayProfile?.role || displayProfile?.is_admin) === 'admin' && (
                     <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
                       <Shield className="w-3 h-3" />
                       ADMIN
                     </span>
                   )}
-                  {/* OG Badge - for all users until 2026-01-01 */}
-                  {new Date() < new Date('2026-01-01') && (
+                  {/* OG Badge - for early users (created before 2026-01-01) or Level 100 */}
+                  {(displayProfile?.badge === 'og' || getLevelFromXP((displayProfile?.xp || 0), (displayProfile?.role || displayProfile?.is_admin) === 'admin') === 100) && (
                     <span className="px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs font-bold rounded-full flex items-center gap-1">
                       <Crown className="w-3 h-3" />
                       OG
@@ -1816,22 +2575,22 @@ export default function Profile() {
                 {/* Tier and Level Display */}
                 <div className="mb-2">
                   <div className="text-purple-400 font-semibold text-sm">
-                    Level {getLevelFromXP((viewed?.xp || profile.xp) || 0, (viewed?.role || profile.role) === 'admin')} - {getTierFromXP((viewed?.xp || profile.xp) || 0).title}
+                    Level {displayLevel} - {displayTier.title}
                   </div>
                   {/* XP Progress Bar */}
                   <XPProgressBar
-                    key={(viewed?.xp || profile.xp) || 0}
-                    currentXP={(viewed?.xp || profile.xp) || 0}
-                    isAdmin={(viewed?.role || profile.role) === 'admin'}
+                    key={displayXP}
+                    currentXP={displayXP}
+                    isAdmin={displayRole === 'admin'}
                     className="mt-2"
                   />
                 </div>
-                {(!viewed || viewed.id === profile?.id || profile?.role === 'admin') && (
-                  <p className="text-gray-400 mb-3">{user?.email || ''}</p>
+                {!!emailToShow && (isViewingOwnProfile || isAdminViewer) && (
+                  <p className="text-gray-400 mb-3">{emailToShow}</p>
                 )}
                 <div className="flex items-center gap-2">
-                  <span className="text-yellow-400 text-xl font-bold">{(viewed?.paid_coin_balance ?? profile.paid_coin_balance)} Paid Coins</span>
-                  <span className="text-blue-400 text-xl font-bold">{(viewed?.free_coin_balance ?? profile.free_coin_balance)} Trollmonds</span>
+                  <span className="text-yellow-400 text-xl font-bold">{displaytroll_coins} Paid</span>
+                  <span className="text-blue-400 text-xl font-bold">{displaytrollmonds} Free</span>
                 </div>
 
                 {/* Recruited by display */}
@@ -1861,7 +2620,7 @@ export default function Profile() {
                     {section.badge && (
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         section.id === 'recent_streams' ? 'bg-red-500 text-white' :
-                        section.id === 'entrance_effects' ? 'bg-purple-500 text-white' :
+                        section.id === 'store_purchases' ? 'bg-purple-500 text-white' :
                         'bg-gray-600 text-white'
                       }`}>
                         {section.badge}
@@ -1905,7 +2664,10 @@ export default function Profile() {
         onSuccess={() => setShowReportModal(false)}
       />
     )}
-    </>
+    </React.Fragment>
   )
 }
+
+
+
 

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { Crown, Coins, CreditCard, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
-import api from '../lib/api'
+import { deductCoins } from '../lib/coinTransactions'
 
 export default function EmpirePartnerApply() {
   const { profile, user, refreshProfile } = useAuthStore()
@@ -24,7 +24,7 @@ export default function EmpirePartnerApply() {
     checkApplicationStatus()
 
     // If already approved, redirect to dashboard
-    if (profile?.empire_partner === true || profile?.partner_status === 'approved' || profile?.role === 'empire_partner') {
+    if (profile?.empire_role === 'partner') {
       navigate('/empire-partner')
       return
     }
@@ -55,22 +55,25 @@ export default function EmpirePartnerApply() {
     if (!user?.id || !profile) return
 
     const requiredCoins = 1500
-    if (profile.paid_coin_balance < requiredCoins) {
-      toast.error(`You need ${requiredCoins} paid coins. You have ${profile.paid_coin_balance}.`)
+    if (profile.troll_coins_balance < requiredCoins) {
+      toast.error(`You need ${requiredCoins} troll_coins. You have ${profile.troll_coins_balance}.`)
       return
     }
 
     setLoading(true)
     try {
-      // Deduct coins
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ 
-          paid_coin_balance: profile.paid_coin_balance - requiredCoins 
-        })
-        .eq('id', user.id)
+      const result = await deductCoins({
+        userId: user.id,
+        amount: requiredCoins,
+        type: 'purchase',
+        coinType: 'troll_coins',
+        description: 'Empire Partner application fee',
+        metadata: { feature: 'empire_partner_fee' },
+      })
 
-      if (updateError) throw updateError
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to deduct coins')
+      }
 
       // Create application
       const { error: appError } = await supabase
@@ -78,23 +81,19 @@ export default function EmpirePartnerApply() {
         .insert({
           user_id: user.id,
           status: 'pending',
-          payment_type: 'paid_coins',
+          payment_type: 'troll_coins',
           amount_paid: 1500,
           payment_id: `coins_${Date.now()}`
         })
 
       if (appError) {
-        // Rollback coin deduction
-        await supabase
-          .from('user_profiles')
-          .update({ paid_coin_balance: profile.paid_coin_balance })
-          .eq('id', user.id)
         throw appError
       }
 
       toast.success('Application submitted! Admin will review it shortly.')
       setHasApplication(true)
       setApplicationStatus('pending')
+      navigate('/empire-partner')
     } catch (error: any) {
       console.error('Error submitting application:', error)
       toast.error(error.message || 'Failed to submit application')
@@ -229,7 +228,7 @@ export default function EmpirePartnerApply() {
     )
   }
 
-  const hasEnoughCoins = (profile?.paid_coin_balance || 0) >= 1500
+  const hasEnoughCoins = (profile?.troll_coins_balance || 0) >= 1500
 
   return (
     <div className="min-h-screen bg-[#0A0814] text-white p-6">
@@ -255,7 +254,7 @@ export default function EmpirePartnerApply() {
               <CheckCircle2 className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
               <div>
                 <h3 className="font-semibold mb-1">5% Referral Bonus</h3>
-                <p className="text-sm text-gray-400">Earn 5% of referred users' monthly earnings (paid coins)</p>
+                <p className="text-sm text-gray-400">Earn 5% of referred users' monthly earnings (troll_coins)</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -292,12 +291,12 @@ export default function EmpirePartnerApply() {
             </div>
             <div className="mb-6">
               <p className="text-3xl font-bold text-yellow-400 mb-2">1,500</p>
-              <p className="text-sm text-gray-400">Paid coins required</p>
+              <p className="text-sm text-gray-400">troll_coins required</p>
             </div>
             <div className="mb-6">
               <p className="text-sm text-gray-400 mb-2">Your balance:</p>
               <p className="text-lg font-semibold">
-                {profile?.paid_coin_balance || 0} paid coins
+                {profile?.troll_coins_balance || 0} troll_coins
               </p>
             </div>
             <button
@@ -313,7 +312,7 @@ export default function EmpirePartnerApply() {
             </button>
             {!hasEnoughCoins && (
               <p className="text-sm text-gray-400 mt-2 text-center">
-                Need {1500 - (profile?.paid_coin_balance || 0)} more coins
+                Need {1500 - (profile?.troll_coins_balance || 0)} more coins
               </p>
             )}
           </div>
@@ -352,4 +351,3 @@ export default function EmpirePartnerApply() {
     </div>
   )
 }
-

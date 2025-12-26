@@ -1,189 +1,315 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../lib/store'
-import { Video, Mic, MicOff, Settings } from 'lucide-react'
-import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid'
-import { useLiveKit } from '../contexts/LiveKitContext'
-import { toast } from 'sonner'
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../lib/store';
+import { Video } from 'lucide-react';
+import BroadcasterApplicationForm from '../components/BroadcasterApplicationForm';
+import { toast } from 'sonner';
 
 const GoLive: React.FC = () => {
-  const navigate = useNavigate()
-  const { user, profile } = useAuthStore()
-  const { toggleMicrophone, toggleCamera, isConnected } = useLiveKit()
+  const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  // 🔒 HARD-LOCKED identifiers
-  const streamUuidRef = useRef<string>(crypto.randomUUID())
-  const roomNameRef = useRef<string>(`stream-${streamUuidRef.current}`)
-  const identityRef = useRef<string | null>(null)
+  const { user, profile } = useAuthStore.getState();
 
-  if (!identityRef.current && user?.id) {
-    identityRef.current = user.id
-  }
+  const [streamTitle, setStreamTitle] = useState('');
+  const [starting, setStarting] = useState(false);
 
-  const streamUuid = streamUuidRef.current
-  const roomName = roomNameRef.current
-  const identity = identityRef.current
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
 
-  const [streamTitle, setStreamTitle] = useState('')
-  const [started, setStarted] = useState(false)
-  const [creating, setCreating] = useState(false)
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
-  const [micEnabled, setMicEnabled] = useState(true)
-  const [camEnabled, setCamEnabled] = useState(true)
+  const [broadcasterStatus, setBroadcasterStatus] = useState<{
+    isApproved: boolean;
+    hasApplication: boolean;
+    applicationStatus: string | null;
+  } | null>(null);
 
-  const createdRef = useRef(false)
-  const navigatedRef = useRef(false)
-
-  // Default title
+  /* ----------------------------------------------------
+     CHECK BROADCASTER STATUS (NO UI BLOCKING)
+  ---------------------------------------------------- */
   useEffect(() => {
+    const run = async () => {
+      if (!user || !profile) return;
+
+      if (profile.is_broadcaster) {
+        setBroadcasterStatus({
+          isApproved: true,
+          hasApplication: true,
+          applicationStatus: 'approved',
+        });
+        return;
+      }
+
+      const { data } = await supabase
+        .from('broadcaster_applications')
+        .select('application_status')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data) {
+        setBroadcasterStatus({
+          isApproved: false,
+          hasApplication: false,
+          applicationStatus: null,
+        });
+      } else {
+        setBroadcasterStatus({
+          isApproved: data.application_status === 'approved',
+          hasApplication: true,
+          applicationStatus: data.application_status,
+        });
+      }
+    };
+
+    run();
+  }, []);
+
+  const isApprovedBroadcaster =
+    profile?.is_broadcaster ||
+    (broadcasterStatus?.isApproved &&
+      broadcasterStatus?.applicationStatus === 'approved');
+
+  /* ----------------------------------------------------
+     CAMERA PREVIEW (NO OVERLAY EVER)
+  ---------------------------------------------------- */
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+
+    const startPreview = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error('Camera or microphone permission denied.');
+      }
+    };
+
+    startPreview();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, []);
+
+  /* ----------------------------------------------------
+     THUMBNAIL HANDLING
+  ---------------------------------------------------- */
+  const handleThumbnailChange = (file: File | null) => {
+    if (!file) {
+      if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+      setThumbnailFile(null);
+      setThumbnailPreview(null);
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Thumbnail must be an image.');
+      return;
+    }
+
+    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+
+    setThumbnailFile(file);
+    setThumbnailPreview(URL.createObjectURL(file));
+  };
+
+  /* ----------------------------------------------------
+     START STREAM (NO WAIT SCREEN)
+  ---------------------------------------------------- */
+  const handleStartStream = async () => {
+    if (!user || !profile) {
+      toast.error('You must be logged in.');
+      return;
+    }
+
+    if (!isApprovedBroadcaster) {
+      toast.error('You are not approved to broadcast.');
+      return;
+    }
+
     if (!streamTitle.trim()) {
-      setStreamTitle(`Live with ${profile?.username || 'broadcaster'}`)
-    }
-  }, [profile?.username])
-
-  const startStream = async () => {
-    if (!identity || !profile?.id) {
-      toast.error('Not ready to stream')
-      return
+      toast.error('Stream title required.');
+      return;
     }
 
-    if (!streamTitle.trim()) {
-      toast.error('Enter a stream title')
-      return
-    }
+    setStarting(true);
 
-    // Browser media permission (required)
     try {
-      await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    } catch {
-      toast.error('Camera/microphone access required')
-      return
+      const streamId = crypto.randomUUID();
+      let thumbnailUrl: string | null = null;
+
+      if (thumbnailFile) {
+        setUploadingThumbnail(true);
+
+        const path = `thumbnails/${streamId}-${Date.now()}-${thumbnailFile.name}`;
+
+        const upload = await supabase.storage
+          .from('troll-city-assets')
+          .upload(path, thumbnailFile);
+
+        if (!upload.error) {
+          const { data } = supabase.storage
+            .from('troll-city-assets')
+            .getPublicUrl(path);
+
+          thumbnailUrl = data.publicUrl;
+        }
+
+        setUploadingThumbnail(false);
+      }
+
+      await supabase.from('streams').insert({
+        id: streamId,
+        broadcaster_id: user.id,
+        title: streamTitle,
+        room_name: streamId,
+        is_live: true,
+        status: 'live',
+        start_time: new Date().toISOString(),
+        thumbnail_url: thumbnailUrl,
+        viewer_count: 0,
+        current_viewers: 0,
+        total_gifts_coins: 0,
+        popularity: 0,
+      });
+
+      const { data, error } = await supabase.functions.invoke(
+        'livekit-token',
+        {
+          body: {
+            room: streamId,
+            identity: user.id,
+            user_id: user.id,
+            isHost: true,
+            allowPublish: true,
+          },
+        }
+      );
+
+      if (error || !data?.token) {
+        toast.error('LiveKit token failed.');
+        return;
+      }
+
+      navigate(`/live/${streamId}`, {
+        state: {
+          roomName: streamId,
+          serverUrl:
+            data.serverUrl ||
+            data.livekitUrl ||
+            import.meta.env.VITE_LIVEKIT_URL,
+          token: data.token,
+          isHost: true,
+          streamTitle,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to go live.');
+    } finally {
+      setStarting(false);
     }
+  };
 
-    setStarted(true)
-
-    if (createdRef.current) return
-    createdRef.current = true
-    setCreating(true)
-
-    const { error } = await supabase.from('streams').insert({
-      id: streamUuid,
-      broadcaster_id: profile.id,
-      title: streamTitle,
-      room_name: roomName,
-      is_live: true,
-      status: 'live',
-      start_time: new Date().toISOString(),
-      viewer_count: 0,
-      current_viewers: 0,
-      total_gifts_coins: 0,
-      popularity: 0,
-    })
-
-    setCreating(false)
-
-    if (error) {
-      console.error(error)
-      toast.error('Failed to create stream')
-      createdRef.current = false
-      setStarted(false)
-      return
-    }
-
-    if (!navigatedRef.current) {
-      navigatedRef.current = true
-      setTimeout(() => {
-        navigate(`/stream/${streamUuid}`, { replace: true })
-      }, 300)
-    }
+  /* ----------------------------------------------------
+     ACCESS DENIED
+  ---------------------------------------------------- */
+  if (!user || !profile || broadcasterStatus === null) {
+    return null; // prevents flicker / false denial
   }
 
-  // ================= UI =================
-
-  if (!started) {
+  if (!isApprovedBroadcaster) {
     return (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center p-6">
-        <div className="max-w-md w-full space-y-6">
-          <Video className="w-16 h-16 text-purple-400 mx-auto" />
-          <h1 className="text-3xl font-bold text-center">Ready to Go Live</h1>
+      <div className="max-w-6xl mx-auto space-y-6">
+        <h1 className="text-3xl font-extrabold flex items-center gap-2">
+          <Video className="text-troll-gold w-8 h-8" />
+          Go Live
+        </h1>
 
-          <input
-            value={streamTitle}
-            onChange={(e) => setStreamTitle(e.target.value)}
-            className="w-full bg-[#1C1C24] border border-purple-500/40 rounded px-4 py-3"
-          />
-
-          <button
-            onClick={startStream}
-            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded"
-          >
-            Start Streaming
-          </button>
+        <div className="bg-[#0E0A1A] border border-purple-700/40 p-6 rounded-xl text-center">
+          🚫 You must be an approved broadcaster.
         </div>
       </div>
-    )
+    );
   }
 
+  /* ----------------------------------------------------
+     RENDER
+  ---------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white">
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-            <h1 className="text-2xl font-bold">LIVE: {streamTitle}</h1>
-          </div>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <BroadcasterApplicationForm
+        isOpen={showApplicationForm}
+        onClose={() => setShowApplicationForm(false)}
+        onSubmitted={() => toast.success('Application submitted')}
+      />
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                toggleCamera()
-                setCamEnabled((v) => !v)
-              }}
-              disabled={!isConnected}
-              className={`p-2 rounded-lg ${
-                camEnabled ? 'bg-green-600' : 'bg-red-600'
-              } ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Video />
-            </button>
+      <h1 className="text-3xl font-extrabold flex items-center gap-2">
+        <Video className="text-troll-gold w-8 h-8" />
+        Go Live
+      </h1>
 
-            <button
-              onClick={() => {
-                toggleMicrophone()
-                setMicEnabled((v) => !v)
-              }}
-              disabled={!isConnected}
-              className={`p-2 rounded-lg ${
-                micEnabled ? 'bg-green-600' : 'bg-red-600'
-              } ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {micEnabled ? <Mic /> : <MicOff />}
-            </button>
+      <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+        />
+      </div>
 
-            <Settings />
-          </div>
-        </div>
+      <div className="bg-[#0E0A1A] border border-purple-700/40 p-6 rounded-xl space-y-4">
+        <input
+          value={streamTitle}
+          onChange={e => setStreamTitle(e.target.value)}
+          placeholder="Stream title"
+          className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-4 py-3"
+        />
 
-        <div className="w-full h-[70vh] bg-black rounded-lg overflow-hidden">
-          <LiveKitRoomWrapper
-            roomName={roomName}
-            identity={identity!}
-            role="broadcaster"
-            autoConnect
-            autoPublish
-            maxParticipants={6}
-            className="w-full h-full"
+        <input
+          type="file"
+          accept="image/*"
+          onChange={e =>
+            handleThumbnailChange(e.target.files?.[0] || null)
+          }
+          className="text-xs text-gray-300"
+        />
+
+        {thumbnailPreview && (
+          <img
+            src={thumbnailPreview}
+            className="w-full h-40 object-cover rounded-lg"
           />
-        </div>
+        )}
 
-        <div className="mt-4 text-sm text-gray-400 flex justify-between">
-          <span>Room: {roomName}</span>
-          <span>{creating ? 'Starting…' : 'Live'}</span>
-        </div>
+        <button
+          onClick={handleStartStream}
+          disabled={starting}
+          className="w-full py-3 rounded-lg bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-black font-bold"
+        >
+          {starting ? 'Starting…' : 'Go Live'}
+        </button>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default GoLive
+export default GoLive;

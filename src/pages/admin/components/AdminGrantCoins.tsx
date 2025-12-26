@@ -21,6 +21,7 @@ export function AdminGrantCoins({ targetUserId, targetUsername }: AdminGrantCoin
     targetUserId && targetUsername ? { id: targetUserId, username: targetUsername } : null
   )
   const [searching, setSearching] = useState(false)
+  const [coinType, setCoinType] = useState<'troll_coins' | 'trollmonds'>('troll_coins')
 
   // Verify admin status
   const isAdmin = profile?.role === 'admin' || profile?.is_admin || (user?.email && user.email.toLowerCase() === 'trollcity2025@gmail.com')
@@ -81,7 +82,8 @@ export function AdminGrantCoins({ targetUserId, targetUsername }: AdminGrantCoin
         selectedUser.id,
         amount,
         undefined,
-        `${amount.toLocaleString()} coins (Admin Grant)`
+        `${amount.toLocaleString()} coins (Admin Grant)`,
+        coinType
       )
 
       if (result.success) {

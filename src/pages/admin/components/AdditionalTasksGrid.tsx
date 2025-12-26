@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Gift,
   Coins,
+  ShoppingCart,
   Calendar,
   Bell,
   Download,
@@ -210,6 +211,14 @@ export default function AdditionalTasksGrid({
           label: 'Grant Coins',
           description: 'Manually grant coins',
           action: onOpenGrantCoins,
+          color: 'text-yellow-400',
+          bgColor: 'bg-yellow-500/20'
+        },
+        {
+          icon: <ShoppingCart className="w-5 h-5" />,
+          label: 'Store Pricing',
+          description: 'Adjust effects/perks/insurance price',
+          action: pickTab('store_pricing'),
           color: 'text-yellow-400',
           bgColor: 'bg-yellow-500/20'
         },
