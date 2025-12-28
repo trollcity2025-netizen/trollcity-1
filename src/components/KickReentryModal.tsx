@@ -26,7 +26,7 @@ export default function KickReentryModal({ isOpen, onClose, onSuccess }: KickRee
   const handlePayReentry = async () => {
     if (!user || !profile) return
 
-    if (profile.paid_coin_balance < 250) {
+    if (profile.troll_coins < 250) {
       toast.error('You need 250 paid coins to re-enter')
       return
     }
@@ -57,7 +57,7 @@ export default function KickReentryModal({ isOpen, onClose, onSuccess }: KickRee
   const handlePayBanRestoration = async () => {
     if (!user || !profile) return
 
-    if (profile.paid_coin_balance < 2000) {
+    if (profile.troll_coins < 2000) {
       toast.error('You need 2000 paid coins ($20) to restore your account')
       return
     }
@@ -122,7 +122,7 @@ export default function KickReentryModal({ isOpen, onClose, onSuccess }: KickRee
             </div>
             <button
               onClick={handlePayBanRestoration}
-              disabled={loading || (profile?.paid_coin_balance || 0) < 2000}
+              disabled={loading || (profile?.troll_coins || 0) < 2000}
               className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Processing...' : 'Pay $20 to Restore Account'}
@@ -148,7 +148,7 @@ export default function KickReentryModal({ isOpen, onClose, onSuccess }: KickRee
             </div>
             <button
               onClick={handlePayReentry}
-              disabled={loading || (profile?.paid_coin_balance || 0) < 250}
+              disabled={loading || (profile?.troll_coins || 0) < 250}
               className="w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Processing...' : 'Pay 250 Coins to Re-enter'}

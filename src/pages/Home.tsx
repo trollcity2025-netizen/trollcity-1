@@ -39,7 +39,7 @@ type HomeUser = {
   tier?: string | null;
   level?: number | null;
   free_coin_balance?: number | null;
-  troll_coins_balance?: number | null;
+  troll_coins?: number | null;
   created_at?: string | null;
   role?: string | null;
   is_banned?: boolean | null;
@@ -762,7 +762,7 @@ const HomePageContent = () => {
         } else {
           const { data: directData, error: directError } = await supabase
             .from('user_profiles')
-            .select('id, username, avatar_url, tier, level, free_coin_balance, troll_coins_balance, created_at, role, is_banned, banned_until')
+            .select('id, username, avatar_url, tier, level, free_coin_balance, troll_coins, created_at, role, is_banned, banned_until')
             .order('created_at', { ascending: false })
             .limit(100);
           if (directError) throw directError;

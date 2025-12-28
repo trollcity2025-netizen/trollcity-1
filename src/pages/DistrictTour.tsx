@@ -81,7 +81,8 @@ export default function DistrictTour() {
       commerce_district: [
         { feature_name: 'Coin Store', route_path: '/store' },
         { feature_name: 'Marketplace', route_path: '/marketplace' },
-        { feature_name: 'Trollmonds Store', route_path: '/trollmonds-store' },
+        { feature_name: 'Troll Gift Store', route_path: '/gift-store' },
+        { feature_name: 'Gift Inventory', route_path: '/gift-inventory' },
         { feature_name: 'My Inventory', route_path: '/inventory' },
         { feature_name: 'Sell on Troll City', route_path: '/sell' }
       ],

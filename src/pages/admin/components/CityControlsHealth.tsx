@@ -21,7 +21,7 @@ import {
 interface CityControlsHealthProps {
   paypalStatus: any
   supabaseStatus: any
-  agoraStatus: any
+  liveKitStatus: any
   liveStreams: any[]
   onTestPayPal: () => void
   onTestSupabase: () => void
@@ -38,7 +38,7 @@ interface CityControlsHealthProps {
 export default function CityControlsHealth({
   paypalStatus,
   supabaseStatus,
-  agoraStatus,
+  liveKitStatus,
   liveStreams,
   onTestPayPal,
   onTestSupabase,
@@ -72,9 +72,9 @@ export default function CityControlsHealth({
     },
     {
       name: 'LiveKit Streaming',
-      status: agoraStatus?.ok ? 'healthy' : 'error',
+      status: liveKitStatus?.ok ? 'healthy' : 'error',
       icon: <Camera className="w-4 h-4" />,
-      details: agoraStatus?.error || 'Connected'
+      details: liveKitStatus?.error || 'Connected'
     },
     {
       name: 'Active Streams',

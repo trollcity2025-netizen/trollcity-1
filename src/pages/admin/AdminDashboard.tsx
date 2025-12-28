@@ -10,53 +10,48 @@ import {
   DollarSign,
   Award,
   Shield,
-  RefreshCw,
   CreditCard,
-  Gift,
   Camera,
   Monitor,
   Play,
-  MessageSquare,
-  ChevronDown,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { downloadText } from '../../lib/downloads'
-import api from '../../lib/api'
-import ClickableUsername from '../../components/ClickableUsername'
-import ProfitSummary from '../../components/ProfitSummary'
-import { TestingModeControl } from '../../components/TestingModeControl'
+import _api from '../../lib/api'
+import _ClickableUsername from '../../components/ClickableUsername'
+import _ProfitSummary from '../../components/ProfitSummary'
+import { TestingModeControl as _TestingModeControl } from '../../components/TestingModeControl'
 import CitySummaryBar from './components/CitySummaryBar'
 import CityControlsHealth from './components/CityControlsHealth'
 import FinanceEconomyCenter from './components/FinanceEconomyCenter'
 import OperationsControlDeck from './components/OperationsControlDeck'
 import AdditionalTasksGrid from './components/AdditionalTasksGrid'
 import QuickActionsBar from './components/QuickActionsBar'
-import AgreementsManagement from './components/AgreementsManagement'
-import IPTracking from './components/IPTracking'
+import _AgreementsManagement from './components/AgreementsManagement'
+import _IPTracking from './components/IPTracking'
 
 // Import missing components
-import MetricsPanel from './components/MetricsPanel'
-import StreamsPanel from './components/StreamsPanel'
-import PayPalTestPanel from './components/PayPalTestPanel'
-import ReportsPanel from './components/ReportsPanel'
-import WeeklyReportsView from './WeeklyReportsView'
-import StreamMonitor from './components/StreamMonitor'
-import ReferralBonusPanel from './ReferralBonusPanel'
-import EmpireApplications from './EmpireApplications'
-import AdminApplications from './components/AdminApplications'
-import UsersPanel from './components/UsersPanel'
-import AdminSupportTickets from './components/AdminSupportTickets'
-import EarningsTaxOverview from './components/EarningsTaxOverview'
-import OfficerShiftsPanel from './components/OfficerShiftsPanel'
-import CreateSchedulePanel from './components/CreateSchedulePanel'
-import { AdminGrantCoins } from './components/AdminGrantCoins'
-import AdminControlPanel from './components/AdminControlPanel'
-import TestDiagnostics from './components/TestDiagnostics'
-import AdminResetPanel from './AdminResetPanel'
-import PayoutQueue from './components/PayoutQueue'
-import PayPalPayoutManager from './components/PayPalPayoutManager'
-import AdminModulesSectionPanel from './components/AdminModulesSection' // add earlier?
+import _MetricsPanel from './components/MetricsPanel'
+import _StreamsPanel from './components/StreamsPanel'
+import _PayPalTestPanel from './components/PayPalTestPanel'
+import _ReportsPanel from './components/ReportsPanel'
+import _WeeklyReportsView from './WeeklyReportsView'
+import _StreamMonitor from './components/StreamMonitor'
+import _ReferralBonusPanel from './ReferralBonusPanel'
+import _EmpireApplications from './EmpireApplications'
+import _AdminApplications from './components/AdminApplications'
+import _UsersPanel from './components/UsersPanel'
+import _AdminSupportTickets from './components/AdminSupportTickets'
+import _EarningsTaxOverview from './components/EarningsTaxOverview'
+import _OfficerShiftsPanel from './components/OfficerShiftsPanel'
+import _CreateSchedulePanel from './components/CreateSchedulePanel'
+import { AdminGrantCoins as _AdminGrantCoins } from './components/AdminGrantCoins'
+import _AdminControlPanel from './components/AdminControlPanel'
+import _TestDiagnostics from './components/TestDiagnostics'
+import _AdminResetPanel from './AdminResetPanel'
+import _PayoutQueue from './components/PayoutQueue'
+import _PayPalPayoutManager from './components/PayPalPayoutManager'
 import AdminCostDashboard from './components/AdminCostDashboard'
 import MAIAuthorityPanel from '../../components/mai/MAIAuthorityPanel'
 import StorePriceEditor from './components/StorePriceEditor'
@@ -79,6 +74,7 @@ type StatState = {
   totalValue: number
   purchasedCoins: number
   earnedCoins: number
+  freeCoins: number
   trollmonds: number
   giftCoins: number
   appSponsoredGifts: number
@@ -231,6 +227,7 @@ export default function AdminDashboard() {
     totalValue: 0,
     purchasedCoins: 0,
     earnedCoins: 0,
+    freeCoins: 0,
     trollmonds: 0,
     giftCoins: 0,
     appSponsoredGifts: 0,
@@ -242,19 +239,19 @@ export default function AdminDashboard() {
   })
 
   const [activeTab, setActiveTab] = useState<TabId>('connections')
-  const [loading, setLoading] = useState(false)
+  const [_loading, _setLoading] = useState(false)
   const [tabLoading, setTabLoading] = useState(false)
 
-  const [cashouts, setCashouts] = useState<any[]>([])
-  const [cashoutsSearch, setCashoutsSearch] = useState('')
-  const [cashoutsProvider, setCashoutsProvider] = useState('')
-  const [purchases, setPurchases] = useState<any[]>([])
-  const [declinedTransactions, setDeclinedTransactions] = useState<any[]>([])
-  const [selectedDeclined, setSelectedDeclined] = useState<any | null>(null)
+  const [_cashouts, _setCashouts] = useState<any[]>([])
+  const [_cashoutsSearch, _setCashoutsSearch] = useState('')
+  const [_cashoutsProvider, _setCashoutsProvider] = useState('')
+  const [_purchases, _setPurchases] = useState<any[]>([])
+  const [_declinedTransactions, _setDeclinedTransactions] = useState<any[]>([])
+  const [_selectedDeclined, _setSelectedDeclined] = useState<any | null>(null)
   const [_verifications, setVerifications] = useState<any[]>([])
   const [usersList, setUsersList] = useState<any[]>([])
-  const [broadcastersList, setBroadcastersList] = useState<any[]>([])
-  const [familiesList, setFamiliesList] = useState<any[]>([])
+  const [_broadcastersList, _setBroadcastersList] = useState<any[]>([])
+  const [_familiesList, _setFamiliesList] = useState<any[]>([])
   const [_supportTickets, setSupportTickets] = useState<any[]>([])
   const [_agreements, setAgreements] = useState<any[]>([])
   const [liveKitStatus, setLiveKitStatus] = useState<any | null>(null)
@@ -263,19 +260,19 @@ export default function AdminDashboard() {
   const [paypalTesting, setPaypalTesting] = useState(false)
   const [trollDropAmount, setTrollDropAmount] = useState<number>(100)
   const [trollDropDuration, setTrollDropDuration] = useState<number>(60)
-  const [scheduledAnnouncements, setScheduledAnnouncements] = useState<any[]>([])
+  const [_scheduledAnnouncements, _setScheduledAnnouncements] = useState<any[]>([])
   const [clearingSeedApplications, setClearingSeedApplications] = useState(false)
 
   // Economy summary
   const [economySummary, setEconomySummary] = useState<EconomySummary | null>(null)
-  const [economySummaryData, setEconomySummaryData] = useState<any>(null)
+  const [_economySummaryData, _setEconomySummaryData] = useState<any>(null)
   const [economyLoading, setEconomyLoading] = useState(false)
 
   // Risk overview
-  const [risk, setRisk] = useState<{ frozenCount: number; topHighRisk: any[] } | null>(null)
+  const [_risk, _setRisk] = useState<{ frozenCount: number; topHighRisk: any[] } | null>(null)
 
   // Shop revenue
-  const [shopRevenue, setShopRevenue] = useState<{
+  const [_shopRevenue, _setShopRevenue] = useState<{
     insuranceTotal: number
     effectsTotal: number
     perksTotal: number
@@ -286,8 +283,8 @@ export default function AdminDashboard() {
   const [liveStreams, setLiveStreams] = useState<any[]>([])
   const [selectedStream, setSelectedStream] = useState<any | null>(null)
   const [streamsLoading, setStreamsLoading] = useState(false)
-  const [selectedUserId, setSelectedUserId] = useState('')
-  const [actionUntil, setActionUntil] = useState('')
+  const [_selectedUserId, _setSelectedUserId] = useState('')
+  const [_actionUntil, _setActionUntil] = useState('')
 
   // New dashboard state
   const [maintenanceMode, setMaintenanceMode] = useState(false)
@@ -496,7 +493,7 @@ export default function AdminDashboard() {
   }, []);
 
   const loadDashboardData = async () => {
-    setLoading(true)
+    _setLoading(true)
     try {
       const [
         usersRes,
@@ -518,7 +515,7 @@ export default function AdminDashboard() {
         supabase.from('stream_reports').select('id').eq('status', 'pending'),
         supabase
           .from('user_profiles')
-          .select('troll_coins_balance, free_coin_balance, sav_bonus_coins, vived_bonus_coins'),
+          .select('troll_coins, free_coin_balance, sav_bonus_coins, vived_bonus_coins'),
         supabase.from('coin_transactions').select('metadata').eq('type', 'purchase'),
         supabase.from('coin_transactions').select('amount, type').eq('type', 'gift'),
         supabase.from('payout_requests').select('cash_amount, processing_fee'),
@@ -537,11 +534,12 @@ export default function AdminDashboard() {
       let savBonusTotal = 0
       let vivedBonusTotal = 0
       for (const row of balances as any[]) {
-        purchasedCoins += Number(row.troll_coins_balance || 0)
+        purchasedCoins += Number(row.troll_coins || 0)
         trollmonds += Number(row.free_coin_balance || 0)
         savBonusTotal += Number(row.sav_bonus_coins || 0)
         vivedBonusTotal += Number(row.vived_bonus_coins || 0)
       }
+      const freeCoins = trollmonds + savBonusTotal + vivedBonusTotal
       const totalCoins = purchasedCoins + trollmonds
       const totalValue = totalCoins / 100
 
@@ -586,6 +584,7 @@ export default function AdminDashboard() {
         purchasedCoins,
         trollmonds,
         earnedCoins: 0,
+        freeCoins,
         totalCoinsInCirculation: totalCoins,
         totalValue,
         coinSalesRevenue,
@@ -601,12 +600,12 @@ export default function AdminDashboard() {
         kick_ban_revenue: 0,
       }))
 
-      setBroadcastersList([])
+      _setBroadcastersList([])
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       toast.error('Failed to load dashboard data')
     } finally {
-      setLoading(false)
+      _setLoading(false)
     }
   }
 
@@ -621,7 +620,7 @@ export default function AdminDashboard() {
         .single()
       
       if (!summaryError && summary) {
-        setEconomySummaryData(summary)
+        _setEconomySummaryData(summary)
       } else {
         console.warn('Failed to load economy_summary view:', summaryError)
       }
@@ -783,7 +782,7 @@ export default function AdminDashboard() {
         .sort((a, b) => b.total - a.total)
         .slice(0, 10)
 
-      setShopRevenue({
+      _setShopRevenue({
         insuranceTotal,
         effectsTotal,
         perksTotal,
@@ -801,7 +800,7 @@ export default function AdminDashboard() {
       try {
         const json = await (await import('../../lib/api')).default.get('/admin/risk/overview')
         if (!json.success) throw new Error(json?.error || 'Failed risk')
-        setRisk(json.data)
+        _setRisk(json.data)
       } catch (e) {
         console.error(e)
       }
@@ -853,12 +852,12 @@ export default function AdminDashboard() {
     }
   }
 
-  const banSelectedUser = async () => {
-    if (!selectedUserId || !actionUntil) return
+  const _banSelectedUser = async () => {
+    if (!_selectedUserId || !_actionUntil) return
     try {
-      const until = new Date(actionUntil).toISOString()
+      const until = new Date(_actionUntil).toISOString()
       const { error } = await supabase.rpc('ban_user', {
-        p_user_id: selectedUserId,
+        p_user_id: _selectedUserId,
         p_until: until,
       })
       if (error) throw error
@@ -868,11 +867,11 @@ export default function AdminDashboard() {
     }
   }
 
-  const resetSelectedUserCoins = async () => {
-    if (!selectedUserId) return
+  const _resetSelectedUserCoins = async () => {
+    if (!_selectedUserId) return
     try {
       const { error } = await supabase.rpc('reset_user_coins', {
-        p_user_id: selectedUserId,
+        p_user_id: _selectedUserId,
       })
       if (error) throw error
       toast.success('Coins reset')
@@ -881,7 +880,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const addCoinsToAdmin = async () => {
+  const _addCoinsToAdmin = async () => {
     if (!user?.id) {
       toast.error('User ID not found')
       return
@@ -891,14 +890,14 @@ export default function AdminDashboard() {
       // Get current balance before adding
       const { data: beforeData } = await supabase
         .from('user_profiles')
-        .select('troll_coins_balance')
+        .select('troll_coins')
         .eq('id', user.id)
         .single()
       
-      const beforeBalance = beforeData?.troll_coins_balance || 0
+      const beforeBalance = beforeData?.troll_coins || 0
       
       // Call RPC function
-      const { data, error } = await supabase.rpc('add_troll_coins', {
+      const { data: _data, error } = await supabase.rpc('add_troll_coins', {
         user_id_input: user.id,
         coins_to_add: 12000
       })
@@ -911,7 +910,7 @@ export default function AdminDashboard() {
       // Verify the balance was actually updated
       const { data: afterData, error: verifyError } = await supabase
         .from('user_profiles')
-        .select('troll_coins_balance')
+        .select('troll_coins')
         .eq('id', user.id)
         .single()
       
@@ -920,7 +919,7 @@ export default function AdminDashboard() {
         throw new Error('Failed to verify coins were added')
       }
       
-      const afterBalance = afterData?.troll_coins_balance || 0
+      const afterBalance = afterData?.troll_coins || 0
       const actualAdded = afterBalance - beforeBalance
       
       if (actualAdded !== 12000) {
@@ -1076,12 +1075,12 @@ export default function AdminDashboard() {
     navigate(`/live/${id}?admin=1`)
   }
 
-  const flagSelectedUserAI = async () => {
-    if (!selectedUserId) return
+  const _flagSelectedUserAI = async () => {
+    if (!_selectedUserId) return
     try {
       const { error } = await supabase
         .from('admin_flags')
-        .insert({ user_id: selectedUserId, reason: 'ai_flag' })
+        .insert({ user_id: _selectedUserId, reason: 'ai_flag' })
       if (error) throw error
       toast.success('AI flag recorded')
     } catch {
@@ -1189,12 +1188,12 @@ export default function AdminDashboard() {
 
 
   // Mark a cashout as paid, deduct coins, and notify the user
-  const markCashoutPaid = async (r: any) => {
+  const _markCashoutPaid = async (r: any) => {
     try {
       // 1) Get latest wallet balance
       const { data: profileRow, error: profErr } = await supabase
         .from('user_profiles')
-        .select('id, troll_coins_balance')
+        .select('id, troll_coins')
         .eq('id', r.user_id)
         .maybeSingle();
 
@@ -1205,13 +1204,13 @@ export default function AdminDashboard() {
       }
 
       const requestedCoins = Number(r.requested_coins || 0);
-      const currentBal = Number(profileRow.troll_coins_balance || 0);
+      const currentBal = Number(profileRow.troll_coins || 0);
       const newBal = Math.max(0, currentBal - requestedCoins);
 
       // 2) Deduct coins from user wallet
       await supabase
         .from('user_profiles')
-        .update({ troll_coins_balance: newBal })
+        .update({ troll_coins: newBal })
         .eq('id', profileRow.id);
 
       // 3) Update cashout status
@@ -1249,14 +1248,14 @@ export default function AdminDashboard() {
     if (!profile?.id) return
     try {
       // First, try a simple query without ordering to check if table exists
-      const { data: testData, error: testError } = await supabase
+      const { data: _testData, error: testError } = await supabase
         .from('scheduled_announcements')
         .select('id')
         .limit(1)
       
       // If table doesn't exist (PGRST205 = table not found), skip silently
       if (testError?.code === 'PGRST205' || testError?.code === '42P01') {
-        setScheduledAnnouncements([])
+        _setScheduledAnnouncements([])
         return
       }
       
@@ -1277,7 +1276,7 @@ export default function AdminDashboard() {
           
           if (errorNoOrder) {
             // Table might have RLS issues, just skip
-            setScheduledAnnouncements([])
+            _setScheduledAnnouncements([])
             return
           }
           
@@ -1288,23 +1287,23 @@ export default function AdminDashboard() {
               const bTime = b.scheduled_time || b.created_at || ''
               return new Date(aTime).getTime() - new Date(bTime).getTime()
             })
-            setScheduledAnnouncements(sorted)
+            _setScheduledAnnouncements(sorted)
             return
           }
         }
         // For other errors, just skip silently
-        setScheduledAnnouncements([])
+        _setScheduledAnnouncements([])
         return
       }
       
       if (data) {
-        setScheduledAnnouncements(data)
+        _setScheduledAnnouncements(data)
       } else {
-        setScheduledAnnouncements([])
+        _setScheduledAnnouncements([])
       }
-    } catch (err) {
+    } catch {
       // Silently fail - this is a non-critical feature
-      setScheduledAnnouncements([])
+      _setScheduledAnnouncements([])
     }
   }
 
@@ -1316,15 +1315,15 @@ export default function AdminDashboard() {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(200)
-      if (cashoutsProvider) query = query.eq('payout_method', cashoutsProvider)
-      if (cashoutsSearch)
+      if (_cashoutsProvider) query = query.eq('payout_method', _cashoutsProvider)
+      if (_cashoutsSearch)
         query = query.or(
-          `username.ilike.*${cashoutsSearch}*,email.ilike.*${cashoutsSearch}*,payout_details.ilike.*${cashoutsSearch}*`
+          `username.ilike.*${_cashoutsSearch}*,email.ilike.*${_cashoutsSearch}*,payout_details.ilike.*${_cashoutsSearch}*`
         )
       const { data } = await query
-      setCashouts(data || [])
+      _setCashouts(data || [])
     } catch {
-      setCashouts([])
+      _setCashouts([])
     } finally {
       setTabLoading(false)
     }
@@ -1340,9 +1339,9 @@ export default function AdminDashboard() {
         .eq('type', 'purchase')
         .order('created_at', { ascending: false })
         .limit(50)
-      setPurchases(data || [])
+      _setPurchases(data || [])
     } catch {
-      setPurchases([])
+      _setPurchases([])
     } finally {
       setTabLoading(false)
     }
@@ -1356,10 +1355,10 @@ export default function AdminDashboard() {
         .select(`*, user_profiles!inner(username)`)
         .order('created_at', { ascending: false })
         .limit(100)
-      setDeclinedTransactions(data || [])
+      _setDeclinedTransactions(data || [])
     } catch (err) {
       console.error('Failed to load declined transactions:', err)
-      setDeclinedTransactions([])
+      _setDeclinedTransactions([])
     } finally {
       setTabLoading(false)
     }
@@ -1533,7 +1532,7 @@ export default function AdminDashboard() {
     loadApplications();
   };
 
-  const clearSeedApplications = async () => {
+  const _clearSeedApplications = async () => {
     if (clearingSeedApplications) return
     setClearingSeedApplications(true)
     try {
@@ -1554,7 +1553,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const deleteApplication = async (appId: string) => {
+  const _deleteApplication = async (appId: string) => {
     if (!isValidUuid(appId)) {
       toast.error('Invalid application identifier')
       return
@@ -1675,9 +1674,9 @@ export default function AdminDashboard() {
         .eq('role', 'broadcaster')
         .order('created_at', { ascending: false })
         .limit(50)
-      setBroadcastersList(data || [])
+      _setBroadcastersList(data || [])
     } catch {
-      setBroadcastersList([])
+      _setBroadcastersList([])
     } finally {
       setTabLoading(false)
     }
@@ -1691,9 +1690,9 @@ export default function AdminDashboard() {
         .select('id, name, total_coins, member_count, level')
         .order('total_coins', { ascending: false })
         .limit(20)
-      setFamiliesList(data || [])
+      _setFamiliesList(data || [])
     } catch {
-      setFamiliesList([])
+      _setFamiliesList([])
     } finally {
       setTabLoading(false)
     }
@@ -1768,7 +1767,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const cleanupStreams = () => {
+  const _cleanupStreams = () => {
     toast.success('Stream cleanup initiated')
     setTimeout(() => {
       toast.success('Stream cleanup completed')
@@ -1784,7 +1783,7 @@ export default function AdminDashboard() {
       await loadEconomySummary()
       await loadShopRevenue()
       toast.success('All data refreshed')
-    } catch (error) {
+    } catch {
       toast.error('Failed to refresh data')
     } finally {
       setRefreshing(false)
@@ -1908,7 +1907,7 @@ export default function AdminDashboard() {
             bio: 'New troll in the city!',
             role: isAdmin ? 'admin' : 'user',
             tier: 'Bronze',
-            troll_coins_balance: 0,
+            troll_coins: 0,
             free_coin_balance: 100,
             total_earned_coins: 100,
             total_spent_coins: 0,
@@ -1932,7 +1931,7 @@ export default function AdminDashboard() {
         id: user!.id,
         username: (user?.email || '').split('@')[0] || '',
         role: isAdmin2 ? 'admin' : 'user',
-        troll_coins_balance: 0,
+        troll_coins: 0,
         free_coin_balance: 0,
       } as any
       setProfile(minimalProfile)
@@ -1940,7 +1939,7 @@ export default function AdminDashboard() {
     ensureProfile()
   }, [profile, user?.id, setProfile])
 
-  const metricCards = [
+  const _metricCards = [
     {
       title: 'Users',
       value: stats.totalUsers,
@@ -1973,7 +1972,7 @@ export default function AdminDashboard() {
     },
   ]
 
-  const sections = [
+  const _sections = [
     {
       title: 'HR Management',
       tabs: [
@@ -2620,23 +2619,14 @@ export default function AdminDashboard() {
         />
 
         {/* Admin Modules */}
-        <AdminModulesSectionPanel
-          onLoadApplications={loadApplications}
-          applicationsLoading={tabLoading}
-          applications={_verifications}
-          onApproveApplication={_approveApplication}
-          onRejectApplication={_rejectApplication}
-          onClearSeedApplications={clearSeedApplications}
-          clearingSeedApplications={clearingSeedApplications}
-          onDeleteApplication={deleteApplication}
-        />
+        {/* <AdminApplications /> */}
 
         {/* Agreements Management */}
-        <AgreementsManagement
+        {/* <AgreementsManagement
           onLoadAgreements={() => console.log('Load agreements')}
           agreementsLoading={false}
           agreements={[]}
-        />
+        /> */}
 
         {/* Admin Modules Output */}
         <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">

@@ -139,22 +139,22 @@ export const handler = async (req: Request): Promise<Response> => {
         });
       }
 
-      // Update coins
-      const updates: Record<string, any> = {};
-      if (receiver_role === "host") {
-        if (is_paid) {
-          updates.host_paid_coins = (battle.host_paid_coins || 0) + amount;
-        } else {
-          updates.host_free_coins = (battle.host_free_coins || 0) + amount;
-        }
-      } else {
-        if (is_paid) {
-          updates.challenger_paid_coins = (battle.challenger_paid_coins || 0) + amount;
-        } else {
-          updates.challenger_free_coins = (battle.challenger_free_coins || 0) + amount;
-        }
+      // Update troll coin totals (skip trollmonds contributions)
+      const updates: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (is_paid) {
+        const column =
+          receiver_role === "host"
+            ? "host_troll_coins"
+            : "challenger_troll_coins";
+        const currentValue =
+          receiver_role === "host"
+            ? battle.host_troll_coins || 0
+            : battle.challenger_troll_coins || 0;
+        updates[column] = currentValue + amount;
       }
-      updates.updated_at = new Date().toISOString();
 
       const { error: updateError } = await supabase
         .from("troll_battles")
@@ -178,7 +178,7 @@ export const handler = async (req: Request): Promise<Response> => {
         amount
       });
 
-      return new Response(JSON.stringify({ success: true }), { 
+      return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -224,9 +224,8 @@ export const handler = async (req: Request): Promise<Response> => {
       }
 
       let winner_id: string | null = null;
-      // Count both paid AND free coins toward victory
-      const hostTotal = (battle.host_paid_coins || 0) + (battle.host_free_coins || 0);
-      const challengerTotal = (battle.challenger_paid_coins || 0) + (battle.challenger_free_coins || 0);
+      const hostTotal = battle.host_troll_coins || 0;
+      const challengerTotal = battle.challenger_troll_coins || 0;
       
       if (hostTotal > challengerTotal) {
         winner_id = battle.host_id;
@@ -274,7 +273,7 @@ export const handler = async (req: Request): Promise<Response> => {
           user_id: updated.host_id,
           opponent_id: updated.challenger_id,
           won: winner_id === updated.host_id,
-          paid_coins_received: updated.host_paid_coins,
+          paid_coins_received: updated.host_troll_coins,
           paid_coins_sent: hostPaidSent.data?.reduce((sum, g) => sum + (g.amount || 0), 0) || 0,
           battle_duration_seconds: duration,
         });
@@ -292,7 +291,7 @@ export const handler = async (req: Request): Promise<Response> => {
           user_id: updated.challenger_id,
           opponent_id: updated.host_id,
           won: winner_id === updated.challenger_id,
-          paid_coins_received: updated.challenger_paid_coins,
+          paid_coins_received: updated.challenger_troll_coins,
           paid_coins_sent: challengerPaidSent.data?.reduce((sum, g) => sum + (g.amount || 0), 0) || 0,
           battle_duration_seconds: duration,
         });

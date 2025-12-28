@@ -22,7 +22,7 @@ const CashoutPage: React.FC = () => {
   const [payoutMethod] = useState('PayPal');
   const [payoutDetails, setPayoutDetails] = useState(''); // PayPal email
 
-  const balance = Number(profile?.paid_coin_balance || 0);
+  const balance = Number(profile?.troll_coins || 0);
 
   useEffect(() => {
     if (!user?.id) return;

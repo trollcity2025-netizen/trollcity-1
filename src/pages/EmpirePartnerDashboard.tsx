@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { Users, Coins, TrendingUp, CheckCircle2, XCircle, Copy, ExternalLink, Clock, Target } from 'lucide-react'
+import { Users, Coins, CheckCircle2, Copy, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Referral {
@@ -14,7 +14,7 @@ interface Referral {
   referred_user: {
     username: string
     avatar_url: string
-    paid_coin_balance: number
+    troll_coins: number
   }
 }
 
@@ -114,7 +114,7 @@ export default function EmpirePartnerDashboard() {
           referred_user:user_profiles!referrals_referred_user_id_fkey (
             username,
             avatar_url,
-            paid_coin_balance
+            troll_coin_balance
           )
         `)
         .eq('referrer_id', user.id)
@@ -311,12 +311,6 @@ export default function EmpirePartnerDashboard() {
     }
   }
 
-  const formatMonth = (month: string) => {
-    const [year, monthNum] = month.split('-')
-    const date = new Date(parseInt(year), parseInt(monthNum) - 1)
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white p-6">
@@ -415,7 +409,7 @@ export default function EmpirePartnerDashboard() {
             <div className="space-y-4">
               {referrals.map((referral) => {
                 const daysRemaining = Math.max(0, Math.ceil((new Date(referral.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-                const progress = Math.min(100, (referral.referred_user?.paid_coin_balance || 0) / 40000 * 100)
+                const progress = Math.min(100, (referral.referred_user?.troll_coins || 0) / 40000 * 100)
                 const isExpired = new Date(referral.deadline) < new Date()
 
                 return (
@@ -457,7 +451,7 @@ export default function EmpirePartnerDashboard() {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Paid Coins Progress</span>
                         <span className="text-white font-medium">
-                          {(referral.referred_user?.paid_coin_balance || 0).toLocaleString()} / 40,000
+                          {(referral.referred_user?.troll_coins || 0).toLocaleString()} / 40,000
                         </span>
                       </div>
                       <div className="w-full bg-gray-700 rounded-full h-2">

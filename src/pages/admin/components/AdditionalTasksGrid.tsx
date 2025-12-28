@@ -52,11 +52,13 @@ interface AdditionalTasksGridProps {
   onOpenTestDiagnostics?: () => void
   onOpenControlPanel?: () => void
   onOpenGrantCoins?: () => void
+  onOpenFinanceDashboard?: () => void
   onOpenCreateSchedule?: () => void
   onOpenOfficerShifts?: () => void
   onOpenResetPanel?: () => void
   onOpenEmpireApplications?: () => void
   onOpenReferralBonuses?: () => void
+  onSelectTab?: (tabId: string) => void
 }
 
 export default function AdditionalTasksGrid({
@@ -65,12 +67,19 @@ export default function AdditionalTasksGrid({
   onOpenTestDiagnostics,
   onOpenControlPanel,
   onOpenGrantCoins,
+  onOpenFinanceDashboard,
   onOpenCreateSchedule,
   onOpenOfficerShifts,
   onOpenResetPanel,
   onOpenEmpireApplications,
-  onOpenReferralBonuses
+  onOpenReferralBonuses,
+  onSelectTab
 }: AdditionalTasksGridProps) {
+  const pickTab = (tabId: string) => () => {
+    if (!onSelectTab) return
+    onSelectTab(tabId)
+  }
+
   const taskGroups = [
     {
       title: 'System Management',
@@ -205,6 +214,14 @@ export default function AdditionalTasksGrid({
           action: onNavigateToEconomy,
           color: 'text-green-400',
           bgColor: 'bg-green-500/20'
+        },
+        {
+          icon: <TrendingUp className="w-5 h-5" />,
+          label: 'Finance Dashboard',
+          description: 'Open the finance overview',
+          action: onOpenFinanceDashboard,
+          color: 'text-emerald-400',
+          bgColor: 'bg-emerald-500/20'
         },
         {
           icon: <Coins className="w-5 h-5" />,

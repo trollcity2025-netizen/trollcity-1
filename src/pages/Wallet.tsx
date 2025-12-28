@@ -156,7 +156,7 @@ export default function Wallet() {
             <div className="text-sm opacity-70">Paid Coins</div>
           </div>
           <div className="text-2xl font-bold text-purple-300">
-            {profile?.paid_coin_balance?.toLocaleString() ?? 0}
+            {profile?.troll_coins?.toLocaleString() ?? 0}
           </div>
           <div className="text-xs text-gray-400 mt-1">
             Withdrawable balance

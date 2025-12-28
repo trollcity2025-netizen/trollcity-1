@@ -71,6 +71,7 @@ CREATE TABLE user_perks (
   expires_at TIMESTAMPTZ NOT NULL, -- calculated from duration_minutes
   is_active BOOLEAN DEFAULT true,
   metadata JSONB DEFAULT '{}', -- Store perk details
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, perk_id, purchased_at) -- Allow repurchasing same perk
 );
 
@@ -121,6 +122,7 @@ CREATE TABLE user_insurances (
   protection_type TEXT NOT NULL,
   times_triggered INTEGER DEFAULT 0, -- How many times insurance was used
   metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, insurance_id, purchased_at) -- Allow repurchasing
 );
 

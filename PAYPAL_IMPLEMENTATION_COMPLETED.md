@@ -153,18 +153,24 @@ PAYPAL_CLIENT_SECRET=your_paypal_client_secret
 ```
 
 ### **Supabase RPC Required:**
-Ensure the `add_paid_coins` RPC function exists in your Supabase database:
+Ensure the `add_troll_coins` RPC function exists in your Supabase database (it already updates earned totals):
 ```sql
-CREATE OR REPLACE FUNCTION add_paid_coins(
-  p_user_id uuid,
-  p_amount bigint
+CREATE OR REPLACE FUNCTION add_troll_coins(
+  user_id_input uuid,
+  coins_to_add int
 ) RETURNS void
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+BEGIN
   UPDATE user_profiles
-  SET paid_coin_balance = paid_coin_balance + p_amount
-  WHERE id = p_user_id;
+  SET 
+    troll_coins = COALESCE(troll_coins, 0) + coins_to_add,
+    troll_coins_balance = COALESCE(troll_coins_balance, 0) + coins_to_add,
+    total_earned_coins = COALESCE(total_earned_coins, 0) + coins_to_add,
+    updated_at = NOW()
+  WHERE id = user_id_input;
+END;
 $$;
 ```
 

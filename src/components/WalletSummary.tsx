@@ -1,4 +1,4 @@
-import { Coins, Gift, Crown } from 'lucide-react'
+import { Coins, DollarSign, Crown } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { getVipTier, isOG } from '../lib/vip'
 import { useNavigate } from 'react-router-dom'
@@ -15,8 +15,7 @@ export default function WalletSummary() {
   if (!user || !profile) return null
 
   // Use balances from hook (real-time) or fallback to profile
-  const paidCoins = balances.paid_coin_balance
-  const freeCoins = balances.free_coin_balance
+  const trollCoins = balances.troll_coins
   const totalEarned = balances.total_earned_coins
 
   const vip = getVipTier(totalEarned)
@@ -29,20 +28,17 @@ export default function WalletSummary() {
         <div className="flex gap-6 mt-1 text-sm flex-wrap">
           <div className="flex items-center gap-1">
             <Coins className="w-4 h-4 text-yellow-400" />
-            <span className="text-slate-400">Paid:</span>
+            <span className="text-slate-400">Troll Coins:</span>
             <span className="font-semibold text-yellow-300">
-              {loading ? '...' : paidCoins.toLocaleString()}
+              {loading ? '...' : trollCoins.toLocaleString()}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <Gift className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-400">TrollMonds:</span>
-            <button
-              className="font-semibold text-cyan-300 hover:text-cyan-200 underline cursor-pointer"
-              onClick={() => navigate('/trollmond-store')}
-            >
-              {loading ? '...' : freeCoins.toLocaleString()}
-            </button>
+            <DollarSign className="w-4 h-4 text-cyan-400" />
+            <span className="text-slate-400">Total earned:</span>
+            <span className="font-semibold text-cyan-300">
+              {loading ? '...' : totalEarned.toLocaleString()}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <Crown className="w-4 h-4 text-purple-400" />

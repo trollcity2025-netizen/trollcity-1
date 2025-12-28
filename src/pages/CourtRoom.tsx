@@ -9,8 +9,7 @@ import { toast } from "sonner";
 import RequireRole from "../components/RequireRole";
 import CourtAIAssistant from "../components/CourtAIAssistant";
 import MAIAuthorityPanel from "../components/mai/MAIAuthorityPanel";
-import CourtChatPanel from "../components/court/CourtChatPanel";
-import { Scale, Gavel, FileText, Users, CheckCircle, XCircle, Upload, Eye, AlertTriangle } from "lucide-react";
+import { Scale, Gavel, FileText, Users, CheckCircle, Upload } from "lucide-react";
 import { Track } from "livekit-client";
 
 // Memoized Court Video Grid - Prevents remounting and flickering
@@ -100,7 +99,7 @@ export default function CourtRoom() {
    const [token, setToken] = useState(null);
    const [serverUrl, setServerUrl] = useState(null);
    const [loading, setLoading] = useState(true);
-   const [participantsAllowed, setParticipantsAllowed] = useState([]);
+   const [_participantsAllowed, _setParticipantsAllowed] = useState([]);
    const [courtSession, setCourtSession] = useState(null);
    const [boxCount, setBoxCount] = useState(2);
    const [joinBoxRequested, setJoinBoxRequested] = useState(false);
@@ -115,7 +114,7 @@ export default function CourtRoom() {
       console.log('[CourtRoom] Room ID stabilized:', courtId);
     }
   }, [courtId]);
-  const roomId = roomIdRef.current || courtId;
+  const _roomId = roomIdRef.current || courtId;
 
   // Court functionality state
   const [activeCase, setActiveCase] = useState(null);
@@ -238,9 +237,9 @@ export default function CourtRoom() {
 
         if (sessionData) {
           setCourtSession(sessionData);
-          setBoxCount(Math.min(6, Math.max(2, sessionData.max_boxes || 2)));
+          setBoxCount(Math.min(6, Math.max(2, sessionData.maxBoxes || 2)));
         }
-      } catch (e) {
+      } catch {
         // non-fatal, still allow joining if token works
       }
 
@@ -267,7 +266,7 @@ export default function CourtRoom() {
 
       // who can broadcast?
       const allowed = ["admin", "lead_troll_officer", "defendant", "accuser", "witness", "attorney"];
-      setParticipantsAllowed(allowed);
+      _setParticipantsAllowed(allowed);
 
     } catch (err) {
       console.error("Courtroom token error:", err);
@@ -360,7 +359,8 @@ export default function CourtRoom() {
       const { data: sessionData, error: sessionError } = await startCourtSession({
         sessionId: targetCourtId,
         maxBoxes: 2,
-        roomName: targetCourtId
+        roomName: targetCourtId,
+        userId: user.id
       });
 
       if (sessionError) throw sessionError;
@@ -386,7 +386,7 @@ export default function CourtRoom() {
       if (tokenError) throw tokenError;
 
       setCourtSession(sessionData || { id: targetCourtId, status: 'active' });
-      setBoxCount(Math.min(6, Math.max(2, sessionData?.max_boxes || 2)));
+      setBoxCount(Math.min(6, Math.max(2, sessionData?.maxBoxes || 2)));
       setToken(tokenData?.token);
       setServerUrl(tokenData?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
       toast.success('Court session started');
@@ -409,11 +409,12 @@ export default function CourtRoom() {
     if (!isJudge || !courtId) return;
 
     try {
-      await supabase
-        .from('court_sessions')
-        .update({ status: 'ended', ended_at: new Date().toISOString() })
-        .eq('id', courtId);
+      const { error } = await supabase.rpc('end_court_session', {
+        p_session_id: courtId
+      });
 
+      if (error) throw error;
+      
       toast.success('Court session ended');
       navigate('/troll-court');
     } catch (err) {
@@ -429,10 +430,33 @@ export default function CourtRoom() {
     if (!isJudge) return;
 
     try {
+      // Resolve usernames to UUIDs
+      const { data: defendantData, error: defendantError } = await supabase
+        .from('user_profiles')
+        .select('id, username')
+        .eq('username', caseData.defendant)
+        .single();
+
+      if (defendantError || !defendantData) {
+        toast.error('Defendant username not found');
+        return;
+      }
+
+      const { data: accuserData, error: accuserError } = await supabase
+        .from('user_profiles')
+        .select('id, username')
+        .eq('username', caseData.accuser)
+        .single();
+
+      if (accuserError || !accuserData) {
+        toast.error('Accuser username not found');
+        return;
+      }
+
       const newCase = {
         title: caseData.title,
-        defendant: caseData.defendant,
-        accuser: caseData.accuser,
+        defendant_id: defendantData.id,
+        accuser_id: accuserData.id,
         description: caseData.description,
         status: 'in_session',
         started_at: new Date().toISOString(),
@@ -440,8 +464,8 @@ export default function CourtRoom() {
         witnesses: []
       };
 
-      setActiveCase(newCase);
-      setDefendant(caseData.defendant);
+      setActiveCase({ ...newCase, defendant: caseData.defendant, accuser: caseData.accuser });
+      setDefendant(defendantData.id); // Store UUID
       setCourtPhase('opening');
 
       // Save case to database
@@ -537,15 +561,15 @@ export default function CourtRoom() {
     }
   };
 
-  const assignDefendant = (userId) => {
+  const _assignDefendant = (_userId) => {
     if (!isJudge) return;
-    setDefendant(userId);
+    // setDefendant(userId);
   };
 
-  const callWitness = (userId) => {
+  const _callWitness = (_userId) => {
     if (!isJudge) return;
     // Logic to call witness to speak
-    toast.success('Witness called');
+    // toast.success('Witness called');
   };
 
   const fetchAvailableJudges = async () => {
@@ -600,10 +624,10 @@ export default function CourtRoom() {
       
       // Update court session with judge information
       if (courtId) {
-        await supabase
-          .from('court_sessions')
-          .update({ judge_id: judgeId })
-          .eq('id', courtId);
+        await supabase.rpc('update_court_judge', {
+          p_session_id: courtId,
+          p_judge_id: judgeId
+        });
       }
     } catch (err) {
       console.error('Error selecting judge:', err);
@@ -733,8 +757,8 @@ export default function CourtRoom() {
 
     try {
       // Determine if this is a downgrade or upgrade request
-      const isDowngrade = ['user', 'troll_officer'].includes(roleChangeRequest.newRole);
-      const isAdminRequest = roleChangeRequest.newRole === 'admin';
+      const _isDowngrade = ['user', 'troll_officer'].includes(roleChangeRequest.newRole);
+      const _isAdminRequest = roleChangeRequest.newRole === 'admin';
 
       // Only admins can directly change roles, others create requests
       if (effectiveRole !== 'admin') {
@@ -849,7 +873,7 @@ export default function CourtRoom() {
   }
 
   return (
-    <RequireRole roles={[UserRole.USER, UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER, UserRole.ADMIN]}>
+    <RequireRole roles={[UserRole.USER, UserRole.TROLL_OFFICER, UserRole.ADMIN]}>
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-4">
 
         {/* Header */}
@@ -955,7 +979,7 @@ export default function CourtRoom() {
               {activeCase && (
                 <div className="space-y-2 text-sm">
                   <div><strong>Case:</strong> {activeCase.title}</div>
-                  <div><strong>Defendant:</strong> {defendant || 'Not assigned'}</div>
+                  <div><strong>Defendant:</strong> {activeCase.defendant || defendant || 'Not assigned'}</div>
                   <div><strong>Description:</strong> {activeCase.description}</div>
                 </div>
               )}
@@ -1185,7 +1209,7 @@ export default function CourtRoom() {
             <CourtAIAssistant
               courtSession={courtSession}
               activeCase={activeCase}
-              courtPhase={courtPhase}
+              courtPhase={courtPhase as any}
               evidence={evidence}
               defendant={defendant}
               judge={judge}
@@ -1409,7 +1433,7 @@ export default function CourtRoom() {
             <div className="bg-zinc-900 rounded-xl p-6 max-w-2xl w-full">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Gavel className="w-5 h-5 text-purple-400" />
-                Sentencing Options for {defendant}
+                Sentencing Options for {activeCase?.defendant || 'Defendant'}
               </h3>
 
               <div className="grid md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
@@ -1575,7 +1599,7 @@ export default function CourtRoom() {
                     </div>
                     <div className="flex justify-between">
                       <span>From:</span>
-                      <span>{defendant} (Defendant)</span>
+                      <span>{activeCase?.defendant || 'Defendant'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>To:</span>

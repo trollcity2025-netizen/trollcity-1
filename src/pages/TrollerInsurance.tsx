@@ -3,7 +3,7 @@ import { Shield, Clock, Zap, Crown } from 'lucide-react'
 import { supabase, UserProfile } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { deductCoins } from '../lib/coinTransactions.ts'
+import { deductCoins } from '../lib/coinTransactions'
 
 interface InsurancePackage {
   id: 'basic' | 'premium' | 'ultimate'
@@ -116,8 +116,8 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
   const purchaseInsurance = async (package_: InsurancePackage) => {
     if (!profile) return
 
-    if ((profile.paid_coin_balance || 0) < package_.price) {
-      toast.error('Not enough coins! Visit the Coin Store.')
+    if ((profile.troll_coins || 0) < package_.price) {
+      toast.error('Not enough troll coins! Visit the Coin Store.')
       return
     }
 
@@ -141,7 +141,6 @@ type: (profile as any).insurance_type || profile.insurance_level || 'basic'
         userId: profile.id,
         amount: package_.price,
         type: 'insurance_purchase',
-        coinType: 'troll_coins',
         description: `Purchased ${package_.name} insurance`,
         metadata: {
           insurance_id: package_.id,

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { toast } from 'sonner'
-import { Shield, X, Search, CheckCircle } from 'lucide-react'
+import { Shield, Search } from 'lucide-react'
 import VerifiedBadge from '../../components/VerifiedBadge'
 
 interface VerifiedUser {

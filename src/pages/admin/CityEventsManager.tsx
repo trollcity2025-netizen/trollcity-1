@@ -5,7 +5,6 @@ import {
   Trophy,
   Gift,
   Play,
-  Clock,
   TrendingUp,
   Star,
   Zap,
@@ -13,7 +12,6 @@ import {
   Edit,
   Trash2,
   Eye,
-  Settings,
   BarChart3,
   X
 } from 'lucide-react';
@@ -49,6 +47,49 @@ interface StreamRanking {
     broadcaster?: { username: string };
   };
 }
+
+interface EventFormData {
+  event_type: string;
+  title: string;
+  description: string;
+  start_time: string;
+  end_time: string;
+  global_announcement: boolean;
+  is_active: boolean;
+  event_config: Record<string, any>;
+  rewards_config: Record<string, any>;
+}
+
+const buildEventFormData = (event?: CityEvent | null): EventFormData => {
+  if (event) {
+    return {
+      event_type: event.event_type,
+      title: event.title,
+      description: event.description,
+      start_time: new Date(event.start_time).toISOString().slice(0, 16),
+      end_time: new Date(event.end_time).toISOString().slice(0, 16),
+      global_announcement: event.global_announcement,
+      is_active: event.is_active,
+      event_config: {},
+      rewards_config: {}
+    };
+  }
+
+  const start = new Date(Date.now() + 3600000).toISOString().slice(0, 16);
+  const end = new Date(Date.now() + 7200000).toISOString().slice(0, 16);
+
+  return {
+    event_type: 'global_boost',
+    title: '',
+    description: '',
+    start_time: start,
+    end_time: end,
+    global_announcement: false,
+    is_active: false,
+    event_config: {},
+    rewards_config: {}
+  };
+};
 
 export default function CityEventsManager() {
   const [activeTab, setActiveTab] = useState('events');
@@ -230,10 +271,13 @@ export default function CityEventsManager() {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">City Events</h2>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2"
-                >
+              <button
+                onClick={() => {
+                  setEditingEvent(null);
+                  setShowCreateModal(true);
+                }}
+                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2"
+              >
                   <Plus className="w-4 h-4" />
                   Create Event
                 </button>
@@ -415,6 +459,7 @@ export default function CityEventsManager() {
           {/* Create/Edit Event Modal */}
           {(showCreateModal || editingEvent) && (
             <EventModal
+              key={editingEvent?.id ?? 'create'}
               event={editingEvent}
               onSave={editingEvent ? (data) => updateEventStatus(editingEvent.id, data.is_active) : createEvent}
               onClose={() => {
@@ -432,48 +477,10 @@ export default function CityEventsManager() {
 // Event Modal Component
 function EventModal({ event, onSave, onClose }: {
   event: CityEvent | null;
-  onSave: (data: any) => void;
+  onSave: (data: EventFormData) => void;
   onClose: () => void;
 }) {
-  const [formData, setFormData] = useState({
-    event_type: 'global_boost',
-    title: '',
-    description: '',
-    start_time: '',
-    end_time: '',
-    global_announcement: false,
-    is_active: false,
-    event_config: {},
-    rewards_config: {}
-  });
-
-  useEffect(() => {
-    if (event) {
-      setFormData({
-        event_type: event.event_type,
-        title: event.title,
-        description: event.description,
-        start_time: new Date(event.start_time).toISOString().slice(0, 16),
-        end_time: new Date(event.end_time).toISOString().slice(0, 16),
-        global_announcement: event.global_announcement,
-        is_active: event.is_active,
-        event_config: {},
-        rewards_config: {}
-      });
-    } else {
-      setFormData({
-        event_type: 'global_boost',
-        title: '',
-        description: '',
-        start_time: new Date(Date.now() + 3600000).toISOString().slice(0, 16), // 1 hour from now
-        end_time: new Date(Date.now() + 7200000).toISOString().slice(0, 16), // 2 hours from now
-        global_announcement: false,
-        is_active: false,
-        event_config: {},
-        rewards_config: {}
-      });
-    }
-  }, [event]);
+  const [formData, setFormData] = useState<EventFormData>(() => buildEventFormData(event));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

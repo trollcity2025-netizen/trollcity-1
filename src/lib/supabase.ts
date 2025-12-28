@@ -33,9 +33,7 @@ export interface UserProfile {
   tier: UserTier
   xp: number // Total XP points
   level: number // Calculated from XP
-  paid_coin_balance: number
-  free_coin_balance: number
-  troll_coins?: number
+  troll_coins: number
   trollmonds?: number
   total_earned_coins: number
   total_spent_coins: number
@@ -129,6 +127,12 @@ export interface UserProfile {
 
   // Profile view price
   profile_view_price?: number
+
+  // Application fields
+  court_recording_consent?: boolean
+  application_required?: boolean
+  application_submitted?: boolean
+  w9_status?: string
 }
 
 
@@ -234,6 +238,7 @@ export enum UserRole {
   USER = 'user',
   MODERATOR = 'moderator',
   ADMIN = 'admin',
+  HR_ADMIN = 'hr_admin',
   TROLL_OFFICER = 'troll_officer',
   TROLL_FAMILY = 'troll_family',
   TROLLER = 'troller',
@@ -294,6 +299,17 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.CREATE_CONTENT
   ],
   [UserRole.EMPIRE_PARTNER]: [
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
+  ],
+  [UserRole.HR_ADMIN]: [
+    // HR Admin has user management permissions
+    Permission.MANAGE_USERS,
+    Permission.MODERATE_CHAT,
+    Permission.MODERATE_STREAMS,
+    Permission.MANAGE_REPORTS,
+    Permission.ISSUE_WARNINGS,
     Permission.BROADCAST,
     Permission.CREATE_CONTENT,
     Permission.MONETIZE
@@ -392,8 +408,7 @@ export const validateProfile = (profile: UserProfile | null): {
   }
   
   // Balance validation
-  if (profile.paid_coin_balance < 0) errors.push('Negative paid coin balance')
-  if (profile.free_coin_balance < 0) errors.push('Negative free coin balance')
+  if (profile.troll_coins < 0) errors.push('Negative troll coins balance')
   if (profile.total_earned_coins < 0) errors.push('Negative total earned coins')
   
   // Permission warnings

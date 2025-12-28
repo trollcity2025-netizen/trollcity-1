@@ -122,7 +122,7 @@ async function runTest() {
       .eq('id', userId)
       .single()
 
-    const coinsAdded = profileAfter.paid_coin_balance - profileBefore.paid_coin_balance
+    const coinsAdded = profileAfter.paid_coin_balance - profileBefore.troll_coin_balance
     if (coinsAdded !== pkg.coin_amount) {
       throw new Error(`Balance mismatch: expected +${pkg.coin_amount}, got +${coinsAdded}`)
     }

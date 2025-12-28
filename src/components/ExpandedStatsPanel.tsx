@@ -89,7 +89,7 @@ export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPan
           xp: levelData.xp,
           totalXp: levelData.total_xp,
           nextLevelXp: levelData.next_level_xp,
-          paidCoins: profile?.paid_coin_balance || 0,
+          paidCoins: profile?.troll_coins || 0,
           trollmonds: profile?.free_coin_balance || 0,
           ...familyData,
           ...warStats,

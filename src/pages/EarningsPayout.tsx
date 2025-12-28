@@ -31,7 +31,7 @@ export default function EarningsPayout() {
   const [loading, setLoading] = useState(false)
   const [recentRequests, setRecentRequests] = useState<any[]>([])
 
-  const paidCoins = profile?.paid_coin_balance || 0
+  const paidCoins = profile?.troll_coins || 0
   const freeCoins = profile?.free_coin_balance || 0
 
   const eligibleTiers = useMemo(

@@ -187,7 +187,7 @@ export default function TestDiagnostics() {
       'username',
       'role',
       'empire_role',
-      'paid_coin_balance',
+      'troll_coins',
       'free_coin_balance',
       'is_troll_officer',
       'is_lead_officer',

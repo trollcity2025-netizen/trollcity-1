@@ -17,6 +17,8 @@ import OfficerInviteModal from '../components/stream/OfficerInviteModal';
 import TrollDrop from '../components/stream/TrollDrop';
 import { createTrollDrop, canDropTroll } from '../lib/trollDropUtils';
 import { TrollDrop as TrollDropType } from '../types/trollDrop';
+import GiftTray from '../components/GiftTray';
+import { getUserInventory, sendGiftFromInventory } from '../lib/giftEngine';
 
 interface GiftItem {
   id: string;
@@ -109,6 +111,12 @@ export default function StreamRoom() {
     }
   }, []);
 
+  const [isGiftTrayOpen, setIsGiftTrayOpen] = useState(false);
+  const [giftInventory, setGiftInventory] = useState<any[]>([]);
+  const [isLoadingGiftInventory, setIsLoadingGiftInventory] = useState(false);
+  const [giftFlash, setGiftFlash] = useState<null | { gift: any; quantity: number; senderName: string }>(null);
+  const giftFlashTimeout = useRef<NodeJS.Timeout | null>(null);
+
   // Moderation
   const [isOfficer, setIsOfficer] = useState(false);
 
@@ -161,6 +169,88 @@ export default function StreamRoom() {
     liveKitUser,
     liveKitOptions
   );
+
+  const loadGiftInventory = async () => {
+    if (!user?.id) return
+    setIsLoadingGiftInventory(true)
+    try {
+      const data = await getUserInventory(user.id)
+      setGiftInventory(data)
+    } catch (error) {
+      console.warn('Failed to load gift inventory', error)
+    } finally {
+      setIsLoadingGiftInventory(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!user?.id) {
+      setGiftInventory([])
+      setIsGiftTrayOpen(false)
+      return
+    }
+    loadGiftInventory()
+  }, [user?.id])
+
+  useEffect(() => {
+    return () => {
+      if (giftFlashTimeout.current) {
+        clearTimeout(giftFlashTimeout.current)
+      }
+    }
+  }, [])
+  
+  const handleOpenGiftTray = async () => {
+    if (!user?.id) {
+      toast.error('Sign in to open the Gift Tray.')
+      return
+    }
+    setIsGiftTrayOpen(true)
+    await loadGiftInventory()
+  }
+
+  const triggerGiftFlash = (gift, quantity, senderName) => {
+    if (giftFlashTimeout.current) {
+      clearTimeout(giftFlashTimeout.current)
+    }
+    setGiftFlash({ gift, quantity, senderName })
+    giftFlashTimeout.current = setTimeout(() => setGiftFlash(null), 3200)
+  }
+
+  const handleTraySendGift = async (giftSlug, quantity) => {
+    if (!user?.id || !profile) {
+      toast.error('Log in to send gifts.')
+      return
+    }
+    if (!stream?.broadcaster_id) {
+      toast.error('Broadcast not ready yet.')
+      return
+    }
+
+    try {
+      const result = await sendGiftFromInventory({
+        senderId: user.id,
+        giftSlug,
+        quantity,
+        receiverId: stream.broadcaster_id,
+        streamId: stream.id,
+        context: 'gift_tray',
+      })
+
+      if (!result.success) {
+        throw new Error(result.error || 'Gift delivery failed')
+      }
+
+      const senderName = profile.username || 'You'
+      toast.success(`${senderName} sent ${result.gift.name} x${quantity}`)
+      triggerGiftFlash(result.gift, quantity, senderName)
+      await loadGiftInventory()
+      setIsGiftTrayOpen(false)
+    } catch (error) {
+      console.error('Gift tray send error:', error)
+      toast.error(error.message || 'Failed to send gift')
+    }
+  }
 
   // `useLiveKitRoom` returns a participant map keyed by identity; normalize to an array for UI code.
   const participants = useMemo<any[]>(() => Object.values(participantsMap || {}), [participantsMap]);
@@ -244,7 +334,7 @@ export default function StreamRoom() {
 
         // Check paid entry
         if (data.is_paid && data.entry_price_coins > 0 && user && profile && !isHostUser) {
-          if (profile.troll_coins_balance < data.entry_price_coins) {
+          if (profile.troll_coins < data.entry_price_coins) {
             setError(`This stream requires ${data.entry_price_coins} Troll Coins to join`);
             setIsLoadingStream(false);
             return;
@@ -255,7 +345,6 @@ export default function StreamRoom() {
             userId: profile.id,
             amount: data.entry_price_coins,
             type: 'purchase',
-            coinType: 'troll_coins',
             description: `Entry fee for stream: ${data.title}`,
             metadata: { stream_id: data.id }
           });
@@ -515,7 +604,7 @@ export default function StreamRoom() {
               const currentProfile = useAuthStore.getState().profile;
               if (currentProfile) {
                 const isTrollmond = giftId.startsWith('trollmond:');
-                const balanceKey = isTrollmond ? 'free_coin_balance' : 'troll_coins_balance';
+                const balanceKey = isTrollmond ? 'free_coin_balance' : 'troll_coins';
                 const newBalance = (currentProfile[balanceKey] || 0) + delta;
                 useAuthStore.getState().setProfile({
                   ...currentProfile,
@@ -839,7 +928,7 @@ export default function StreamRoom() {
     if (!user || !profile || !stream?.id) return;
 
     const useTrollmonds = giftCurrency === 'trollmonds';
-    const availableBalance = useTrollmonds ? profile.free_coin_balance : profile.troll_coins_balance;
+    const availableBalance = useTrollmonds ? profile.free_coin_balance : profile.troll_coins;
 
     if ((availableBalance || 0) < gift.cost) {
       toast.error(useTrollmonds ? 'Not enough Trollmonds!' : 'Not enough Troll Coins!');
@@ -1497,6 +1586,14 @@ export default function StreamRoom() {
         isJoinApproved={isJoinApproved}
       />
 
+      <button
+        onClick={handleOpenGiftTray}
+        className="fixed bottom-6 left-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 text-3xl shadow-[0_0_25px_rgba(255,201,60,0.7)] transition hover:scale-105"
+        title="Open Gift Tray"
+      >
+        🎁
+      </button>
+
       {/* Host Controls */}
       {isHost && (
         <div className="absolute top-20 left-4 z-30">
@@ -1718,6 +1815,30 @@ export default function StreamRoom() {
           </div>
         </div>
       )}
+
+      {giftFlash && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-start justify-center px-4 py-12">
+          <div className="w-full max-w-3xl rounded-3xl border border-yellow-500/30 bg-black/60 p-5 text-center shadow-[0_0_50px_rgba(255,201,60,0.6)] backdrop-blur-xl">
+            <p className="text-xs uppercase tracking-[0.4em] text-yellow-200 mb-2">{giftFlash.senderName} just lit the court</p>
+            <p className="text-3xl font-semibold">{giftFlash.gift.name} ×{giftFlash.quantity}</p>
+            <p className="mt-1 text-sm text-gray-200">Sent via Gift Tray</p>
+            <span
+              className={`mt-4 inline-flex items-center justify-center text-6xl ${giftFlash.gift.animationType ? `gift-animation-${giftFlash.gift.animationType}` : 'animate-pulse'}`}
+            >
+              {giftFlash.gift.icon || '🎁'}
+            </span>
+          </div>
+        </div>
+      )}
+
+
+      <GiftTray
+        isOpen={isGiftTrayOpen}
+        onClose={() => setIsGiftTrayOpen(false)}
+        inventory={giftInventory}
+        onSendGift={handleTraySendGift}
+        isLoading={isLoadingGiftInventory}
+      />
 
       <JoinRequestsPanel
         streamId={stream?.id || id || ''}

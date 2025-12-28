@@ -19,7 +19,7 @@ export default function PayoutRequest() {
     );
   }
 
-  const balance = profile?.paid_coin_balance ?? 0;
+  const balance = profile?.troll_coins ?? 0;
   const parsed = Number(coins || "0");
   const usdEstimate =
     parsed && parsed > 0 ? (parsed / COINS_PER_DOLLAR).toFixed(2) : "0.00";

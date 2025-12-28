@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", session.id);
 
-      // Add coins to user's free_coin_balance
+      // Add coins to user's troll_coin_balance
       const { data: currentProfile } = await supabase
         .from("user_profiles")
         .select("free_coin_balance")

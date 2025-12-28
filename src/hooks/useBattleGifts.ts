@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { useCoins } from '../lib/hooks/useCoins'
 import { toast } from 'sonner'
 
 export function useBattleGifts(battleId: string | null, receiverId: string) {
   const { user, profile } = useAuthStore()
+  const { spendCoins } = useCoins()
   const [isSending, setIsSending] = useState(false)
 
   const sendBattleGift = async (
@@ -15,54 +17,19 @@ export function useBattleGifts(battleId: string | null, receiverId: string) {
       return false
     }
 
-    // Check balance
-    const balance = gift.type === 'paid' ? profile.paid_coin_balance : profile.free_coin_balance
-    if (balance < gift.coinCost) {
-      toast.error(`Insufficient ${gift.type === 'paid' ? 'paid' : 'free'} coins`)
-      return false
-    }
-
     setIsSending(true)
     try {
-      // Deduct from sender
-      if (gift.type === 'paid') {
-        await supabase
-          .from('user_profiles')
-          .update({
-            paid_coin_balance: (profile.paid_coin_balance || 0) - gift.coinCost,
-            total_spent_coins: (profile.total_spent_coins || 0) + gift.coinCost,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', user.id)
-      } else {
-        await supabase
-          .from('user_profiles')
-          .update({
-            free_coin_balance: (profile.free_coin_balance || 0) - gift.coinCost,
-            total_spent_coins: (profile.total_spent_coins || 0) + gift.coinCost,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', user.id)
-      }
+      // Use the spendCoins function to properly deduct and transfer coins
+      const success = await spendCoins({
+        senderId: user.id,
+        receiverId: receiverId,
+        amount: gift.coinCost,
+        source: 'gift',
+        item: gift.name,
+      })
 
-      // Add to receiver (only paid coins go to receiver's balance)
-      if (gift.type === 'paid') {
-        const { data: receiverProfile } = await supabase
-          .from('user_profiles')
-          .select('paid_coin_balance, total_earned_coins')
-          .eq('id', receiverId)
-          .single()
-
-        if (receiverProfile) {
-          await supabase
-            .from('user_profiles')
-            .update({
-              paid_coin_balance: (receiverProfile.paid_coin_balance || 0) + gift.coinCost,
-              total_earned_coins: (receiverProfile.total_earned_coins || 0) + gift.coinCost,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', receiverId)
-        }
+      if (!success) {
+        return false
       }
 
       // Record battle gift
@@ -76,27 +43,7 @@ export function useBattleGifts(battleId: string | null, receiverId: string) {
         message: gift.name,
       })
 
-      // Record transaction
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        type: 'gift',
-        transaction_type: 'battle_gift',
-        coins_used: gift.coinCost,
-        description: `Battle gift: ${gift.name}`,
-        created_at: new Date().toISOString(),
-      })
-
-      // Refresh profile
-      const { data: updatedProfile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (updatedProfile) {
-        useAuthStore.getState().setProfile(updatedProfile)
-      }
-
+      toast.success(`Sent ${gift.name} gift!`)
       return true
     } catch (error: any) {
       console.error('Error sending battle gift:', error)

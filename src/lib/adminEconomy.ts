@@ -39,7 +39,7 @@ export async function resetAdminEconomy(): Promise<{ success: boolean; error?: s
     const { error: profileUpdateError } = await supabase
       .from('user_profiles')
       .update({
-        paid_coin_balance: 0,
+        troll_coins: 0,
         free_coin_balance: 0,
         updated_at: new Date().toISOString()
       })

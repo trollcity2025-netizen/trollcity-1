@@ -67,7 +67,7 @@ export const checkBalance = async (
   try {
     const { data: profile, error } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance, free_coin_balance, total_earned_coins')
+      .select('troll_coins, free_coin_balance, total_earned_coins')
       .eq('id', userId)
       .single()
 
@@ -79,13 +79,13 @@ export const checkBalance = async (
 
     switch (coinType) {
       case 'paid':
-        currentBalance = profile.paid_coin_balance || 0
+        currentBalance = profile.troll_coins || 0
         break
       case 'free':
         currentBalance = profile.free_coin_balance || 0
         break
       case 'either':
-        currentBalance = (profile.paid_coin_balance || 0) + (profile.free_coin_balance || 0)
+        currentBalance = (profile.troll_coins || 0) + (profile.free_coin_balance || 0)
         break
     }
 

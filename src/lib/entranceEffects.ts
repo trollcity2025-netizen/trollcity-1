@@ -225,7 +225,7 @@ export async function purchaseEntranceEffect(userId: string, effectKey: Entrance
     // Check if user has enough coins
     const { data: userProfile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', userId)
       .single();
 
@@ -233,7 +233,7 @@ export async function purchaseEntranceEffect(userId: string, effectKey: Entrance
       return { success: false, error: 'User profile not found' };
     }
 
-    if ((userProfile.paid_coin_balance || 0) < effectConfig.cost) {
+    if ((userProfile.troll_coins || 0) < effectConfig.cost) {
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
@@ -389,11 +389,11 @@ export async function canAffordEntranceEffect(userId: string, effectKey: Entranc
 
     const { data: userProfile } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', userId)
       .single();
 
-    return (userProfile?.paid_coin_balance || 0) >= effectConfig.cost;
+    return (userProfile?.troll_coins || 0) >= effectConfig.cost;
   } catch (err) {
     console.error('Error checking affordability:', err);
     return false;

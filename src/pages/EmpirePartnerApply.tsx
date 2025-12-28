@@ -55,19 +55,18 @@ export default function EmpirePartnerApply() {
     if (!user?.id || !profile) return
 
     const requiredCoins = 1500
-    if (profile.troll_coins_balance < requiredCoins) {
-      toast.error(`You need ${requiredCoins} troll_coins. You have ${profile.troll_coins_balance}.`)
+    if (profile.troll_coins < requiredCoins) {
+      toast.error(`You need ${requiredCoins} troll_coins. You have ${profile.troll_coins}.`)
       return
     }
 
     setLoading(true)
     try {
-      const result = await deductCoins({
-        userId: user.id,
-        amount: requiredCoins,
-        type: 'purchase',
-        coinType: 'troll_coins',
-        description: 'Empire Partner application fee',
+    const result = await deductCoins({
+      userId: user.id,
+      amount: requiredCoins,
+      type: 'purchase',
+      description: 'Empire Partner application fee',
         metadata: { feature: 'empire_partner_fee' },
       })
 
@@ -228,7 +227,7 @@ export default function EmpirePartnerApply() {
     )
   }
 
-  const hasEnoughCoins = (profile?.troll_coins_balance || 0) >= 1500
+  const hasEnoughCoins = (profile?.troll_coins || 0) >= 1500
 
   return (
     <div className="min-h-screen bg-[#0A0814] text-white p-6">
@@ -296,7 +295,7 @@ export default function EmpirePartnerApply() {
             <div className="mb-6">
               <p className="text-sm text-gray-400 mb-2">Your balance:</p>
               <p className="text-lg font-semibold">
-                {profile?.troll_coins_balance || 0} troll_coins
+                {profile?.troll_coins || 0} troll_coins
               </p>
             </div>
             <button
@@ -312,7 +311,7 @@ export default function EmpirePartnerApply() {
             </button>
             {!hasEnoughCoins && (
               <p className="text-sm text-gray-400 mt-2 text-center">
-                Need {1500 - (profile?.troll_coins_balance || 0)} more coins
+                Need {1500 - (profile?.troll_coins || 0)} more coins
               </p>
             )}
           </div>

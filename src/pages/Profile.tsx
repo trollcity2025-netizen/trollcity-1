@@ -193,9 +193,7 @@ export default function Profile() {
             challenger_id,
             winner_id,
             host_troll_coins,
-            challenger_troll_coins,
-            host_trollmonds,
-            challenger_trollmonds
+            challenger_troll_coins
           )
         `)
         .eq('user_id', targetUserId)
@@ -213,13 +211,13 @@ export default function Profile() {
       const ties = battleHistory.filter((b: any) => b.battle?.winner_id === null).length
       
       // Get total coins (paid + free) from battle data
-      const totalCoinsReceived = battleHistory.reduce((sum: number, b: any) => {
-        if (!b.battle) return sum
-        const userTotal = b.battle.host_id === b.user_id
-          ? (b.battle.host_troll_coins || 0) + (b.battle.host_trollmonds || 0)
-          : (b.battle.challenger_troll_coins || 0) + (b.battle.challenger_trollmonds || 0)
-        return sum + userTotal
-      }, 0)
+        const totalCoinsReceived = battleHistory.reduce((sum: number, b: any) => {
+          if (!b.battle) return sum
+          const userTotal = b.battle.host_id === b.user_id
+          ? (b.battle.host_troll_coins || 0)
+          : (b.battle.challenger_troll_coins || 0)
+          return sum + userTotal
+        }, 0)
       
       const totalCoinsSent = battleHistory.reduce((sum: number, b: any) => sum + (b.troll_coins_sent || 0), 0)
       const winRate = battleHistory.length > 0 ? Math.round((wins / battleHistory.length) * 100) : 0
@@ -1082,7 +1080,7 @@ export default function Profile() {
     // Following requires coins - use spend_coins RPC
     const FOLLOW_COST = 100 // 100 troll_coins to follow
     try {
-      if ((profile?.troll_coins_balance || 0) < FOLLOW_COST) {
+      if ((profile?.troll_coins || 0) < FOLLOW_COST) {
         toast.error(`You need ${FOLLOW_COST} troll_coins to follow`)
         return
       }
@@ -1313,20 +1311,20 @@ export default function Profile() {
     if (!profile || !user) return
     if (!privateEnabled) {
       const cost = 2000
-      if ((profile.troll_coins_balance || 0) < cost) {
+      if ((profile.troll_coins || 0) < cost) {
         toast.error('Requires 2,000 troll_coins')
         return
       }
       try {
         const { error: updErr } = await supabase
           .from('user_profiles')
-          .update({ troll_coins_balance: profile.troll_coins_balance - cost, updated_at: new Date().toISOString() })
+          .update({ troll_coins: profile.troll_coins - cost, updated_at: new Date().toISOString() })
           .eq('id', profile.id)
         if (updErr) throw updErr
         await supabase
           .from('coin_transactions')
           .insert([{ user_id: profile.id, type: 'purchase', amount: -cost, description: 'Private profile activation', metadata: { feature: 'private_profile' } }])
-        useAuthStore.getState().setProfile({ ...profile, troll_coins_balance: profile.troll_coins_balance - cost } as any)
+        useAuthStore.getState().setProfile({ ...profile, troll_coins: profile.troll_coins - cost } as any)
         refreshProfileInBackground()
         setPrivateEnabled(true)
         try { localStorage.setItem(`tc-private-profile-${user.id}`, 'true') } catch {}
@@ -1357,7 +1355,7 @@ export default function Profile() {
   const displayLevel = getLevelFromXP(displayXP, displayRole === 'admin')
   const displayTier = getTierFromXP(displayXP)
   const displayTotalEarned = displayProfile?.total_earned_coins || 0
-  const displaytroll_coins = displayProfile?.troll_coins_balance || 0
+  const displaytroll_coins = displayProfile?.troll_coins || 0
   const displaytrollmonds = displayProfile?.free_coin_balance || 0
   const canModerateProfile = Boolean(isViewingOtherUser && (isAdminViewer || isLeadOfficerViewer))
   const targetIsBanned = Boolean(displayProfile?.is_banned)
@@ -1894,13 +1892,13 @@ export default function Profile() {
               {battles.map((battle: any) => {
                 const totalCoins = battle.battle
                   ? (battle.battle.host_id === battle.user_id
-                      ? (battle.battle.host_troll_coins || 0) + (battle.battle.host_trollmonds || 0)
-                      : (battle.battle.challenger_troll_coins || 0) + (battle.battle.challenger_trollmonds || 0))
+                      ? (battle.battle.host_troll_coins || 0)
+                      : (battle.battle.challenger_troll_coins || 0))
                   : 0
                 const opponentTotalCoins = battle.battle
                   ? (battle.battle.host_id === battle.opponent_id
-                      ? (battle.battle.host_troll_coins || 0) + (battle.battle.host_trollmonds || 0)
-                      : (battle.battle.challenger_troll_coins || 0) + (battle.battle.challenger_trollmonds || 0))
+                      ? (battle.battle.host_troll_coins || 0)
+                      : (battle.battle.challenger_troll_coins || 0))
                   : 0
 
                 return (
@@ -2288,7 +2286,7 @@ export default function Profile() {
           <button
             onClick={async () => {
               // No confirmation - proceed directly
-              const hasEnoughCoins = profile?.troll_coins_balance >= 500;
+              const hasEnoughCoins = profile?.troll_coins >= 500;
               const payEarly = hasEnoughCoins; // Auto-pay if user has enough coins
               
               try {

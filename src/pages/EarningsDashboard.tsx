@@ -175,7 +175,7 @@ export default function EarningsDashboard() {
   }
 
   const totalEarned = summary?.total_earned_coins || profile.total_earned_coins || 0
-  const withdrawable = profile.paid_coin_balance || 0
+  const withdrawable = profile.troll_coins || 0
   const yearlyPaid = summary?.yearly_paid_usd || 0
   const thresholdProgress = Math.min((yearlyPaid / 600) * 100, 100)
   const isOverThreshold = summary?.irs_threshold_status === 'over_threshold'

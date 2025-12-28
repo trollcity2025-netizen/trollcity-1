@@ -31,7 +31,7 @@ export default function KickUserButton({
       return
     }
 
-    if (profile.paid_coin_balance < 500) {
+    if (profile.troll_coins < 500) {
       toast.error('You need 500 paid coins to kick a user')
       return
     }
@@ -71,9 +71,9 @@ export default function KickUserButton({
   return (
     <button
       onClick={handleKick}
-      disabled={kicking || profile.paid_coin_balance < 500}
+      disabled={kicking || profile.troll_coins < 500}
       className="px-3 py-1 bg-red-600/80 hover:bg-red-600 rounded-lg text-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      title={profile.paid_coin_balance < 500 ? 'Need 500 paid coins to kick' : `Kick ${targetUsername} (costs 500 paid coins)`}
+      title={profile.troll_coins < 500 ? 'Need 500 paid coins to kick' : `Kick ${targetUsername} (costs 500 paid coins)`}
     >
       <UserX size={14} />
       {kicking ? 'Kicking...' : 'Kick User'}

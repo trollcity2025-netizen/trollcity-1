@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
           const currentBalance = recruiterProfile?.paid_coin_balance || 0
           const newBalance = currentBalance + bonusAmount
           
-          // Update recruiter's paid_coin_balance
+          // Update recruiter's troll_coin_balance
           const { error: updateError } = await supabase
             .from('user_profiles')
             .update({ paid_coin_balance: newBalance })

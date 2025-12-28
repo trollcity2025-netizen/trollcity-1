@@ -91,7 +91,7 @@ const AuthCallback = () => {
                   username: '', // Keep empty to force profile setup
                   bio: null,
                   role: u.email === ADMIN_EMAIL ? 'admin' : 'user', 
-                  paid_coin_balance: 0, 
+                  troll_coins: 0, 
                   free_coin_balance: 0, 
                   avatar_url: u.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${suggestedUsername}`,
                   created_at: new Date().toISOString(), 

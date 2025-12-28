@@ -239,7 +239,7 @@ export function AdminGrantCoins({ targetUserId, targetUsername }: AdminGrantCoin
         <h3 className="font-semibold mb-2">ℹ️ Admin Coin Grants</h3>
         <ul className="text-sm text-gray-300 space-y-1">
           <li>• Grants are logged in coin_transactions with type: 'admin_grant'</li>
-          <li>• Coins are added to the user's paid_coin_balance</li>
+          <li>• Coins are added to the user's troll_coins</li>
           <li>• All grants are auditable in the transaction history</li>
           <li>• No payment processing is involved</li>
         </ul>

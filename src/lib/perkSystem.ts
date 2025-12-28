@@ -2,6 +2,7 @@
 // Framework-agnostic but structured for React + Supabase
 
 import { supabase } from './supabase';
+import { deductCoins } from './coinTransactions';
 
 // Perk configuration - static data describing all available perks
 export const PERK_CONFIG = {
@@ -142,7 +143,7 @@ export async function purchasePerk(userId: string, perkKey: PerkKey): Promise<{s
     // Check if user has enough coins
     const { data: userProfile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', userId)
       .single();
 
@@ -150,19 +151,25 @@ export async function purchasePerk(userId: string, perkKey: PerkKey): Promise<{s
       return { success: false, error: 'User profile not found' };
     }
 
-    if ((userProfile.paid_coin_balance || 0) < perkConfig.cost) {
+    if ((userProfile.troll_coins || 0) < perkConfig.cost) {
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
-    // Deduct coins
-    const { error: deductError } = await supabase.rpc('deduct_coins', {
-      p_user_id: userId,
-      p_amount: perkConfig.cost,
-      p_coin_type: 'paid'
+    // Deduct coins using the proper coin transaction system
+    const deductResult = await deductCoins({
+      userId,
+      amount: perkConfig.cost,
+      type: 'perk_purchase',
+      description: `Purchased ${perkConfig.name} perk`,
+      metadata: {
+        perk_id: perkKey,
+        perk_name: perkConfig.name,
+        duration_minutes: perkConfig.duration_minutes
+      }
     });
 
-    if (deductError) {
-      console.error('Coin deduction error:', deductError);
+    if (!deductResult.success) {
+      console.error('Coin deduction error:', deductResult.error);
       return { success: false, error: 'Failed to deduct coins' };
     }
 
@@ -243,11 +250,11 @@ export async function canAffordPerk(userId: string, perkKey: PerkKey): Promise<b
 
     const { data: userProfile } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', userId)
       .single();
 
-    return (userProfile?.paid_coin_balance || 0) >= perkConfig.cost;
+    return (userProfile?.troll_coins || 0) >= perkConfig.cost;
   } catch (err) {
     console.error('Error checking affordability:', err);
     return false;

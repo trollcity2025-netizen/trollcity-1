@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
-import TrollTractBadge from '../components/TrollTractBadge';
 import { 
   Crown, 
   TrendingUp, 
@@ -75,12 +74,6 @@ interface BattleEventEarnings {
   coins: number;
 }
 
-interface TrollTractBonusSummary {
-  total_bonus: number;
-  total_base: number;
-  total_gifts: number;
-}
-
 export default function CreatorDashboard() {
   const { profile, user } = useAuthStore();
   const [overview, setOverview] = useState<EarningsOverview | null>(null);
@@ -88,11 +81,8 @@ export default function CreatorDashboard() {
   const [hourly, setHourly] = useState<HourlyActivity[]>([]);
   const [topGifters, setTopGifters] = useState<TopGifter[]>([]);
   const [battleEvent, setBattleEvent] = useState<BattleEventEarnings[]>([]);
-  const [bonusSummary, setBonusSummary] = useState<TrollTractBonusSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
-
-  const isTrollTract = profile?.is_trolltract;
 
   useEffect(() => {
     if (user) {
@@ -108,8 +98,7 @@ export default function CreatorDashboard() {
         loadDailyEarningsSeries(),
         loadHourlyActivity(),
         loadTopGifters(),
-        loadBattleEventEarnings(),
-        loadTrollTractBonusSummary()
+        loadBattleEventEarnings()
       ]);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -153,12 +142,6 @@ export default function CreatorDashboard() {
     setBattleEvent(data || []);
   };
 
-  const loadTrollTractBonusSummary = async () => {
-    const { data, error } = await supabase.rpc('get_trolltract_bonus_summary');
-    if (error) throw error;
-    setBonusSummary(data?.[0] || { total_bonus: 0, total_base: 0, total_gifts: 0 });
-  };
-
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0A0A14] text-white p-6 flex items-center justify-center">
@@ -182,10 +165,9 @@ export default function CreatorDashboard() {
               <Crown className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3">
-                Creator Earnings Dashboard
-                {isTrollTract && <TrollTractBadge profile={profile} size="lg" />}
-              </h1>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              Creator Earnings Dashboard
+            </h1>
               <p className="text-gray-400">
                 Track your gifts, bonuses, payouts, and performance.
               </p>
@@ -195,11 +177,13 @@ export default function CreatorDashboard() {
           <div className="text-right">
             <p className="text-sm text-gray-400">Status</p>
             <p className="font-semibold">
-              {isTrollTract ? 'TrollTract Active' : 'Standard Creator'}
+              {profile?.role
+                ? profile.role.replace(/_/g, ' ')
+                : 'Creator'}
             </p>
-            {isTrollTract && profile?.trolltract_activated_at && (
+            {profile?.created_at && (
               <p className="text-xs text-gray-500">
-                Since {new Date(profile.trolltract_activated_at).toLocaleDateString()}
+                Member since {new Date(profile.created_at).toLocaleDateString()}
               </p>
             )}
           </div>
@@ -423,48 +407,6 @@ export default function CreatorDashboard() {
             </table>
           </section>
 
-          {/* TROLLTRACT ANALYTICS */}
-          <section style={card}>
-            <h2 style={{ fontSize: "18px", marginBottom: "8px", fontWeight: 700 }}>
-              TrollTract Analytics
-            </h2>
-            {isTrollTract ? (
-              <>
-                <div style={{ marginBottom: "10px", fontSize: "14px" }}>
-                  <b>Total TrollTract Bonus Coins:</b>{" "}
-                  <span style={{ color: "#7CFC00" }}>
-                    +{bonusSummary?.total_bonus?.toLocaleString() ?? 0}
-                  </span>
-                </div>
-                <div style={{ marginBottom: "6px", fontSize: "14px" }}>
-                  <b>Gifts that triggered bonus:</b>{" "}
-                  {bonusSummary?.total_gifts ?? 0}
-                </div>
-                <div style={{ marginBottom: "6px", fontSize: "14px" }}>
-                  <b>Base coins from those gifts:</b>{" "}
-                  {bonusSummary?.total_base?.toLocaleString() ?? 0}
-                </div>
-                <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "10px" }}>
-                  Your contract adds <b>10% extra</b> on qualifying gifts.  
-                  This block shows how much extra you've earned **because**
-                  you went TrollTract.
-                </p>
-              </>
-            ) : (
-              <div>
-                <p style={{ fontSize: "13px", opacity: 0.7, marginBottom: "12px" }}>
-                  Activate the TrollTract Creator Contract to unlock +10% bonus
-                  earnings, ranking boosts, and detailed contract analytics.
-                </p>
-                <button 
-                  onClick={() => window.location.href = '/trolltract'}
-                  className="bg-gradient-to-r from-purple-600 to-gold-600 hover:from-purple-700 hover:to-gold-700 px-4 py-2 rounded-lg font-semibold transition-all text-sm"
-                >
-                  Activate TrollTract
-                </button>
-              </div>
-            )}
-          </section>
         </div>
 
         {loading && (

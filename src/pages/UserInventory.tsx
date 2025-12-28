@@ -27,21 +27,41 @@ export default function UserInventory() {
       // Load user's inventory with item details
       const { data, error } = await supabase
         .from('user_inventory')
-        .select(`
-          *,
-          marketplace_items (
-            id,
-            title,
-            description,
-            thumbnail_url,
-            type
-          )
-        `)
+        .select('*')
         .eq('user_id', user!.id)
         .order('acquired_at', { ascending: false })
 
       if (error) throw error
-      setInventory(data || [])
+      const inventoryData = data || []
+
+      const itemIds = Array.from(
+        new Set(
+          inventoryData
+            .map((entry: any) => entry.item_id)
+            .filter(Boolean),
+        ),
+      )
+
+      const itemDetailsMap: Record<string, any> = {}
+      if (itemIds.length) {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('marketplace_items')
+          .select('id, title, description, thumbnail_url, type')
+          .in('id', itemIds)
+
+        if (itemsError) throw itemsError
+
+        itemsData?.forEach((item) => {
+          itemDetailsMap[item.id] = item
+        })
+      }
+
+      const combinedInventory = inventoryData.map((entry) => ({
+        ...entry,
+        marketplace_item: itemDetailsMap[entry.item_id] || null,
+      }))
+
+      setInventory(combinedInventory)
 
       // Load active digital items
       const { data: activeData } = await supabase
@@ -164,16 +184,16 @@ export default function UserInventory() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {inventory.map((item) => {
               const isActive = activeItems.has(item.item_id)
-              const isDigital = ['effect', 'badge', 'digital'].includes(item.marketplace_items?.type)
+              const isDigital = ['effect', 'badge', 'digital'].includes(item.marketplace_item?.type)
 
               return (
                 <div key={item.id} className="bg-zinc-900 rounded-xl p-6 border border-purple-500/20 hover:border-purple-500/40 transition-all">
                   {/* Item Image */}
-                  {item.marketplace_items?.thumbnail_url && (
+                  {item.marketplace_item?.thumbnail_url && (
                     <div className="mb-4">
                       <img
-                        src={item.marketplace_items.thumbnail_url}
-                        alt={item.marketplace_items.title}
+                        src={item.marketplace_item.thumbnail_url}
+                        alt={item.marketplace_item.title}
                         className="w-full h-32 object-cover rounded-lg"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none'
@@ -185,9 +205,9 @@ export default function UserInventory() {
                   {/* Item Info */}
                   <div className="mb-4">
                     <div className="flex items-center gap-2 mb-2">
-                      {getItemIcon(item.marketplace_items?.type)}
+                      {getItemIcon(item.marketplace_item?.type)}
                       <span className="text-sm text-gray-400">
-                        {getItemTypeLabel(item.marketplace_items?.type)}
+                        {getItemTypeLabel(item.marketplace_item?.type)}
                       </span>
                       {isActive && (
                         <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">
@@ -197,11 +217,11 @@ export default function UserInventory() {
                     </div>
 
                     <h3 className="text-xl font-bold text-white mb-1">
-                      {item.marketplace_items?.title}
+                      {item.marketplace_item?.title}
                     </h3>
 
                     <p className="text-gray-400 text-sm mb-2">
-                      {item.marketplace_items?.description}
+                      {item.marketplace_item?.description}
                     </p>
 
                     <p className="text-xs text-gray-500">
@@ -212,7 +232,7 @@ export default function UserInventory() {
                   {/* Action Button */}
                   {isDigital ? (
                     <button
-                      onClick={() => toggleItemActivation(item.item_id, item.marketplace_items?.type)}
+                      onClick={() => toggleItemActivation(item.item_id, item.marketplace_item?.type)}
                       className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                         isActive
                           ? 'bg-red-600 hover:bg-red-700 text-white'

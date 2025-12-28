@@ -150,7 +150,7 @@ export default function AdminProfilePanel({ userId, username }: AdminProfilePane
         <div className="grid grid-cols-3 gap-2 text-xs">
           <div className="bg-black/50 rounded p-2">
             <div className="text-gray-400">Troll Coins</div>
-            <div className="text-yellow-400 font-bold">{targetProfile.troll_coins_balance || 0}</div>
+            <div className="text-yellow-400 font-bold">{targetProfile.troll_coins || 0}</div>
           </div>
           <div className="bg-black/50 rounded p-2">
             <div className="text-gray-400">Trollmonds</div>

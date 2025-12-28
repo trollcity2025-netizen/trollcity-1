@@ -74,9 +74,9 @@ export default async function handler(req: Request) {
     }
 
     // Add coins
-    await supabase.rpc("add_paid_coins", {
-      p_user_id: uid,
-      p_amount: coinAmount
+    await supabase.rpc("add_troll_coins", {
+      user_id_input: uid,
+      coins_to_add: coinAmount
     });
 
     return new Response(

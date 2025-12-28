@@ -9,11 +9,9 @@ import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
 import GlobalErrorBanner from "./components/GlobalErrorBanner";
 import { useGlobalApp } from "./contexts/GlobalAppContext";
 import { updateRoute } from "./utils/sessionStorage";
-import { useCityRealtime } from "./hooks/useCityRealtime";
 import { useDebouncedProfileUpdate } from "./hooks/useDebouncedProfileUpdate";
+import { APP_DATA_REFETCH_EVENT_NAME } from "./lib/appEvents";
 
-// Constants
-const APP_DATA_REFETCH_EVENT_NAME = 'appDataRefetch';
 // Layout
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
@@ -39,7 +37,8 @@ import Leaderboard from "./pages/Leaderboard";
 import TrollCityWall from "./pages/TrollCityWall";
 import TrollCourt from "./pages/TrollCourt";
 import EmpirePartnerDashboard from "./pages/EmpirePartnerDashboard";
-import TrollmondsStore from "./pages/TrollmondsStore";
+import GiftStorePage from "./pages/GiftStorePage";
+import GiftInventoryPage from "./pages/GiftInventoryPage";
 import Application from "./pages/Application";
 import ApplicationPage from "./pages/ApplicationPage";
 import TrollsTownPage from "./pages/TrollsTownPage";
@@ -144,7 +143,7 @@ const ShopPartnerPage = lazy(() => import("./pages/ShopPartnerPage"));
 const CommandBattleGoLive = lazy(() => import("./pages/CommandBattleGoLive"));
 const TrollBattleSetup = lazy(() => import("./pages/TrollBattleSetup"));
 const ShopView = lazy(() => import("./pages/ShopView"));
-const CourtRoom = lazy(() => import("./pages/CourtRoom.tsx"));
+const CourtRoom = lazy(() => import("./pages/CourtRoom"));
 const InterviewRoom = lazy(() => import("./pages/InterviewRoom"));
 
 // Admin pages
@@ -183,7 +182,6 @@ function AppContent() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  useCityRealtime(user?.id);
   const mainRef = useRef<HTMLElement | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalLoading] = useState(false);
@@ -517,7 +515,7 @@ function AppContent() {
                   {/* 💰 Earnings & Coins */}
                   <Route path="/store" element={<CoinStore />} />
                   <Route path="/coins" element={<CoinStore />} />
-                  <Route path="/trollmonds-store" element={<TrollmondsStore />} />
+                  <Route path="/gift-store" element={<GiftStorePage />} />
                   <Route path="/coins/complete" element={<CoinsComplete />} />
                   <Route path="/wallet" element={<Wallet />} />
                   <Route path="/payouts/setup" element={<PayoutSetupPage />} />
@@ -531,6 +529,7 @@ function AppContent() {
                   <Route path="/shop-partner" element={<ShopPartnerPage />} />
                   <Route path="/sell" element={<SellOnTrollCity />} />
                   <Route path="/seller/earnings" element={<ShopEarnings />} />
+                  <Route path="/gift-inventory" element={<GiftInventoryPage />} />
 
                   {/* 👨‍👩‍👧 Family */}
                   <Route path="/family" element={<TrollFamily />} />

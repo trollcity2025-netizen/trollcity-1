@@ -229,7 +229,7 @@ export default function TrollmondsStore() {
 
   const convertCoins = async () => {
     if (!user || !profile) return
-    if ((profile.paid_coin_balance || 0) < convertAmount) return toast.error('Not enough Paid Coins')
+    if ((profile.troll_coins || 0) < convertAmount) return toast.error('Not enough Paid Coins')
 
     setConverting(true)
     try {
@@ -318,7 +318,7 @@ export default function TrollmondsStore() {
             <div className="bg-[#15151A] p-4 rounded-lg border border-[#2C2C2C]">
               <p className="text-sm text-gray-400 mb-1">Paid Coins Balance</p>
               <p className="text-2xl font-bold text-yellow-400">
-                {(profile?.paid_coin_balance || 0).toLocaleString()}
+                {(profile?.troll_coins || 0).toLocaleString()}
               </p>
             </div>
             <div className="bg-[#15151A] p-4 rounded-lg border border-[#2C2C2C]">
@@ -342,7 +342,7 @@ export default function TrollmondsStore() {
                 <button
                   key={amount}
                   onClick={() => setConvertAmount(amount)}
-                  disabled={(profile?.paid_coin_balance || 0) < amount}
+                  disabled={(profile?.troll_coins || 0) < amount}
                   className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
                     convertAmount === amount
                       ? 'bg-purple-600 text-white'
@@ -357,7 +357,7 @@ export default function TrollmondsStore() {
 
           <button
             onClick={() => setShowConvertModal(true)}
-            disabled={(profile?.paid_coin_balance || 0) < convertAmount}
+            disabled={(profile?.troll_coins || 0) < convertAmount}
             className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white rounded-lg font-bold transition-all flex items-center justify-center gap-2"
           >
             <ArrowRight className="w-5 h-5" />

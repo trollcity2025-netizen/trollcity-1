@@ -7,23 +7,7 @@ import {
   Clock,
   Users,
   Radio,
-  Shield,
-  Settings,
-  Power,
-  MessageSquare,
-  DollarSign,
-  Eye,
-  Zap,
-  Server,
-  Wifi,
-  WifiOff,
-  Play,
-  Pause,
-  Lock,
-  Unlock,
-  StopCircle,
-  RefreshCw,
-  FileText
+  Shield
 } from 'lucide-react';
 import { useAuthStore } from '../../lib/store';
 import { supabase, UserRole } from '../../lib/supabase';

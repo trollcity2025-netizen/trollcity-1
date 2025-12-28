@@ -158,11 +158,11 @@ export default function ModerationMenu({ target, streamId, onClose, onActionComp
             // Get current user's profile to check balance
             const { data: kickerProfile } = await supabase
               .from('user_profiles')
-              .select('paid_coin_balance')
+              .select('troll_coins')
               .eq('id', currentUser.id)
               .single()
 
-            if (!kickerProfile || kickerProfile.paid_coin_balance < 500) {
+            if (!kickerProfile || kickerProfile.troll_coins < 500) {
               toast.error('You need 500 paid coins to kick a user')
               return
             }

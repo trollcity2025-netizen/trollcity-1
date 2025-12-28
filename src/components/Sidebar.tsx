@@ -1,8 +1,8 @@
- import React, { useEffect, useState } from 'react'
- import { Link, useLocation, useNavigate } from 'react-router-dom'
- import CourtEntryModal from './CourtEntryModal'
- import ExpandedStatsPanel from './ExpandedStatsPanel'
- import {
+import React, { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import CourtEntryModal from './CourtEntryModal'
+import ExpandedStatsPanel from './ExpandedStatsPanel'
+import {
    Home,
    MessageSquare,
    Radio,
@@ -25,24 +25,20 @@
    Trophy,
    FerrisWheel,
    MessageCircle,
-   Headphones,
-   Package,
-   Scale,
- } from 'lucide-react'
- import { useAuthStore } from '../lib/store'
- import { supabase, isAdminEmail } from '../lib/supabase'
+  Headphones,
+  Package,
+  Scale,
+} from 'lucide-react'
+
+import { useAuthStore } from '../lib/store'
+import { supabase, isAdminEmail } from '../lib/supabase'
+import { toast } from 'sonner'
 
 export default function Sidebar() {
   const { profile, user } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
   const isActive = (path: string) => location.pathname === path
-
-  // Real-time wallet state
-  const [walletData, setWalletData] = useState({
-    paid_coins: profile?.paid_coin_balance || 0,
-    trollmonds: profile?.free_coin_balance || 0,
-  })
 
   const badge =
     profile?.role === 'admin'
@@ -64,43 +60,6 @@ export default function Sidebar() {
     profile?.role === "troll_officer" ||
     profile?.is_broadcaster ||
     profile?.is_lead_officer;
-
-  // Real-time wallet updates
-  useEffect(() => {
-    if (!profile) return
-
-    setWalletData({
-      paid_coins: profile.paid_coin_balance || 0,
-      trollmonds: profile.free_coin_balance || 0,
-    })
-
-    // Realtime Supabase listener for profile updates
-    const channel = supabase
-      .channel("wallet_updates_sidebar")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_profiles",
-          filter: `id=eq.${profile.id}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            const profileData = payload.new as any
-            setWalletData({
-              paid_coins: profileData.paid_coin_balance || 0,
-              trollmonds: profileData.free_coin_balance || 0,
-            })
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [profile?.id, profile?.paid_coin_balance, profile?.free_coin_balance])
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -186,33 +145,21 @@ export default function Sidebar() {
           {/* TROLL COINS */}
           <div
             onClick={() => navigate("/earnings")}
-            className="flex items-center justify-between bg-[#1C1C24] px-3 py-2 rounded-lg border border-green-500/40 text-green-300 cursor-pointer hover:bg-[#252530] transition-colors"
+            className="flex items-center gap-2 bg-[#1C1C24] px-3 py-2 rounded-lg border border-green-500/40 text-green-300 cursor-pointer hover:bg-[#252530] transition-colors"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💰</span>
-              <span className="text-sm font-semibold">Troll Coins</span>
-            </div>
-            <span className="font-bold">
-              {walletData.paid_coins?.toLocaleString() ?? 0}
-            </span>
+            <span className="text-sm font-semibold">Troll Coins</span>
           </div>
 
-          {/* TROLLMONDS */}
+          {/* GIFT STORE */}
           <div
-            onClick={() => navigate("/trollmonds-store")}
-            className="flex items-center justify-between bg-[#1C1C24] px-3 py-2 rounded-lg border border-green-500/40 text-green-300 cursor-pointer hover:bg-[#252530] transition-colors"
+            onClick={() => navigate("/gift-store")}
+            className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 px-3 py-2 rounded-lg border border-yellow-500/40 text-yellow-300 cursor-pointer hover:border-yellow-300 transition-colors"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💎</span>
-              <span className="text-sm font-semibold">Trollmonds</span>
-            </div>
-            <span className="font-bold">
-              {walletData.trollmonds?.toLocaleString() ?? 0}
-            </span>
+            <Gift className="w-5 h-5 text-yellow-400" />
+            <span className="text-sm font-semibold">Gift Store</span>
           </div>
         </div>
       </div>
-
       {/* Main Menu */}
       <nav className="flex-1 p-4 space-y-1">
         <MenuLink to="/" icon={<Home className="w-5 h-5 text-green-400" />} label="Home" active={isActive('/')} />
@@ -226,7 +173,6 @@ export default function Sidebar() {
         <MenuLink to="/leaderboard" icon={<Trophy className="w-5 h-5 text-yellow-500" />} label="Leaderboard" active={isActive('/leaderboard')} />
         <MenuLink to="/wall" icon={<MessageCircle className="w-5 h-5 text-cyan-400" />} label="Troll City Wall" active={isActive('/wall')} />
 
-        <MenuLink to="/tromody" icon={<Mic className="w-5 h-5 text-purple-400" />} label="Tromody Show" active={isActive('/tromody')} />
         <button
           onClick={() => setShowCourtModal(true)}
           className={`flex items-center gap-3 px-4 py-2 rounded-lg transition w-full text-left ${
@@ -241,7 +187,14 @@ export default function Sidebar() {
           <span>Troll Court</span>
         </button>
         <MenuLink to="/empire-partner" icon={<UserPlus className="w-5 h-5 text-green-400" />} label="Empire Partner" active={isActive('/empire-partner')} />
-        <MenuLink to="/troll-wheel" icon={<FerrisWheel className="w-5 h-5 text-pink-500" />} label="Troll Wheel" active={isActive('/troll-wheel')} />
+        <button
+          type="button"
+          onClick={() => toast('Troll Wheel is under construction', { icon: '🛠️' })}
+          className="flex items-center gap-3 px-4 py-2 rounded-lg transition w-full text-left hover:bg-[#1F1F2E] text-gray-300"
+        >
+          <FerrisWheel className="w-5 h-5 text-pink-500" />
+          Troll Wheel
+        </button>
         
         {/* Applications - Show for everyone */}
         <MenuLink to="/apply" icon={<FileText className="w-5 h-5 text-slate-400" />} label="Applications" active={isActive('/apply')} />
@@ -336,3 +289,5 @@ function MenuLink({ to, icon, label, active }: any) {
     </Link>
   )
 }
+
+

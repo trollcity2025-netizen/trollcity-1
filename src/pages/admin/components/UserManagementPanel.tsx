@@ -9,7 +9,7 @@ interface UserProfile {
   username: string
   email: string
   role: string
-  paid_coin_balance: number
+  troll_coins: number
   free_coin_balance: number
   level: number
   is_troll_officer: boolean
@@ -34,7 +34,7 @@ export default function UserManagementPanel() {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, email, role, paid_coin_balance, free_coin_balance, level, is_troll_officer, is_admin, is_troller, created_at')
+        .select('id, username, email, role, troll_coins, free_coin_balance, level, is_troll_officer, is_admin, is_troller, created_at')
         .order('created_at', { ascending: false })
         .limit(100)
 
@@ -66,7 +66,7 @@ export default function UserManagementPanel() {
 
   const handleEditUser = (user: UserProfile) => {
     setSelectedUser(user)
-    setEditingCoins({ paid: user.paid_coin_balance || 0, free: user.free_coin_balance || 0 })
+    setEditingCoins({ paid: user.troll_coins || 0, free: user.free_coin_balance || 0 })
     setEditingLevel(user.level || 1)
     setEditingRole(user.role || 'user')
   }
@@ -86,7 +86,7 @@ export default function UserManagementPanel() {
     setSaving(true)
     try {
       const updates: any = {
-        paid_coin_balance: editingCoins.paid,
+        troll_coins: editingCoins.paid,
         free_coin_balance: editingCoins.free,
         level: editingLevel,
         role: editingRole,
@@ -123,11 +123,11 @@ export default function UserManagementPanel() {
       await supabase.from('coin_transactions').insert({
         user_id: selectedUser.id,
         type: 'admin_adjustment',
-        amount: editingCoins.paid - (selectedUser.paid_coin_balance || 0),
+        amount: editingCoins.paid - (selectedUser.troll_coins || 0),
         description: `Admin adjustment: ${adminProfile.username} updated user ${selectedUser.username}`,
         metadata: {
           admin_id: adminProfile.id,
-          previous_balance: selectedUser.paid_coin_balance,
+          previous_balance: selectedUser.troll_coins,
           new_balance: editingCoins.paid,
           previous_level: selectedUser.level,
           new_level: editingLevel,
@@ -218,7 +218,7 @@ export default function UserManagementPanel() {
                     </span>
                   </td>
                   <td className="py-3 text-white">{user.level || 1}</td>
-                  <td className="py-3 text-purple-300">{user.paid_coin_balance?.toLocaleString() || 0}</td>
+                  <td className="py-3 text-purple-300">{user.troll_coins?.toLocaleString() || 0}</td>
                   <td className="py-3 text-green-300">{user.free_coin_balance?.toLocaleString() || 0}</td>
                   <td className="py-3">
                     <button

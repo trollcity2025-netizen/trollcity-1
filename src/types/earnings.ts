@@ -4,8 +4,7 @@ export interface EarningsView {
   id: string
   username: string
   total_earned_coins: number
-  paid_coin_balance: number
-  free_coin_balance: number
+  troll_coins: number
   current_month_earnings: number
   current_month_transactions: number
   current_month_paid_out: number
@@ -27,8 +26,7 @@ export interface MonthlyEarnings {
   coins_earned_from_gifts: number
   gift_count: number
   unique_gifters: number
-  paid_coins_earned: number
-  free_coins_earned: number
+  troll_coins_earned: number
 }
 
 export interface PayoutRequest {

@@ -28,7 +28,7 @@ function determineUserRole(profile: any): UserRole {
 
   // Check VIP/Donor status (high coin spending or balance)
   const totalSpent = profile.total_spent_coins || 0
-  const paidBalance = profile.paid_coin_balance || 0
+  const paidBalance = profile.troll_coins || 0
 
   if (totalSpent > 100000 || paidBalance > 50000) {
     return 'donor'
@@ -51,7 +51,7 @@ export default function EntranceChatPanel({ streamId }: EntranceChatPanelProps) 
         // Fetch user profile
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('username, role, total_spent_coins, paid_coin_balance, is_troll_officer, is_og_user, officer_level')
+          .select('username, role, total_spent_coins, troll_coins, is_troll_officer, is_og_user, officer_level')
           .eq('id', entranceData.user_id)
           .single()
 

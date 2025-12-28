@@ -91,7 +91,7 @@ Deno.serve(async () => {
         clockedOutCount++
 
         // Optionally: Credit coins to officer's account
-        // This would require additional logic to update user_profiles.paid_coin_balance
+        // This would require additional logic to update user_profiles.troll_coin_balance
         // Uncomment if you want automatic coin crediting:
         /*
         const { error: creditError } = await supabase

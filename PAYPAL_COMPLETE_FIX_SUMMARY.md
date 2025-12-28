@@ -45,7 +45,7 @@
 - ✅ Captures payment if needed
 - ✅ Extracts user metadata from `custom_id`
 - ✅ Duplicate transaction check
-- ✅ Updates `user_profiles.paid_coin_balance`
+- ✅ Updates `user_profiles.troll_coin_balance`
 - ✅ Inserts into `coin_transactions` with:
   - `type: "purchase"`
   - `coins: purchasedCoins`
@@ -80,7 +80,7 @@ All 3 functions now return:
 The `paypal-complete-order` function now:
 1. Fetches current `paid_coin_balance` from `user_profiles`
 2. Calculates new balance: `currentBalance + purchasedCoins`
-3. Updates `user_profiles.paid_coin_balance`
+3. Updates `user_profiles.troll_coin_balance`
 4. Inserts transaction record into `coin_transactions`
 
 ### 5. Database Schema

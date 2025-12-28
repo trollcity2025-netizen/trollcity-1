@@ -30,7 +30,7 @@ export default function AdminResetPanel() {
     // Handle reset_coin_balances with direct RPC call
     if (action === 'reset_coin_balances') {
       try {
-        const { data, error } = await supabase.rpc("reset_coin_balances", {})
+        const { error } = await supabase.rpc("reset_coin_balances", {})
 
         if (error) {
           console.error('Reset error:', error)

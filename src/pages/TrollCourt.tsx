@@ -61,19 +61,23 @@ export default function TrollCourt() {
     setIsStartingSession(true)
     try {
       const courtId = crypto.randomUUID()
-    const { data, error } = await startCourtSession({
-      sessionId: courtId,
-      maxBoxes: 2,
-      roomName: courtId
-    })
+      const { data, error: startError } = await startCourtSession({
+        sessionId: courtId,
+        maxBoxes: 2,
+        roomName: courtId,
+        userId: user.id
+      })
 
-      if (error) throw error
+      if (startError) throw startError
 
       setCourtSession(data)
       navigate(`/court/${courtId}`)
-    } catch (error) {
-      console.error('Error starting court session:', error)
-      toast.error('Failed to start court session')
+    } catch (startError) {
+      console.error('Error starting court session:', startError)
+      const message =
+        startError?.message ||
+        (typeof startError === 'string' ? startError : 'Failed to start court session')
+      toast.error(`Error starting court session: ${message}`)
     } finally {
       setIsStartingSession(false)
     }

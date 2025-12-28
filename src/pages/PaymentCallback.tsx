@@ -150,7 +150,7 @@ const PaymentCallback = () => {
                 <p className="text-3xl font-bold text-purple-400">{coinsAwarded.toLocaleString()}</p>
                 {profile && (
                   <p className="text-sm text-gray-500 mt-2">
-                    New Balance: {((profile.paid_coin_balance || 0) + coinsAwarded).toLocaleString()} coins
+                    New Balance: {((profile.troll_coins || 0) + coinsAwarded).toLocaleString()} coins
                   </p>
                 )}
               </div>

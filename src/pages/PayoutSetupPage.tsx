@@ -80,7 +80,7 @@ export default function PayoutSetupPage() {
     return null
   }
 
-  const paidCoins = profile?.paid_coin_balance || 0
+  const paidCoins = profile?.troll_coins || 0
   const earnedCoins = profile?.total_earned_coins || 0
 
   return (

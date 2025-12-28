@@ -21,7 +21,6 @@ I've migrated your Express API routes to Supabase Edge Functions:
 Open PowerShell and run:
 
 ```powershell
-npx supabase login
 ```
 
 This will open your browser. Log in with: **trollcity2025@gmail.com**

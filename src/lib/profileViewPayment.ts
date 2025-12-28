@@ -28,7 +28,7 @@ export async function checkProfileViewPayment(
   // Get viewer's balance
   const { data: viewerProfile, error } = await supabase
     .from('user_profiles')
-    .select('paid_coin_balance, role, is_troll_officer, is_troller')
+    .select('troll_coins, role, is_troll_officer, is_troller')
     .eq('id', viewerId)
     .single()
 
@@ -47,7 +47,7 @@ export async function checkProfileViewPayment(
   }
 
   // Check balance
-  const balance = viewerProfile.paid_coin_balance || 0
+  const balance = viewerProfile.troll_coins || 0
   if (balance < profileViewPrice) {
     return { canView: false, requiredCoins: profileViewPrice }
   }
@@ -71,7 +71,7 @@ export async function chargeProfileView(
     // Deduct from viewer
     const { data: viewerProfile, error: viewerError } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', viewerId)
       .single()
 
@@ -79,7 +79,7 @@ export async function chargeProfileView(
       return { success: false, error: 'Failed to load viewer balance' }
     }
 
-    const newBalance = (viewerProfile.paid_coin_balance || 0) - profileViewPrice
+    const newBalance = (viewerProfile.troll_coins || 0) - profileViewPrice
 
     if (newBalance < 0) {
       return { success: false, error: 'Insufficient balance' }
@@ -88,7 +88,7 @@ export async function chargeProfileView(
     // Update viewer balance
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update({ paid_coin_balance: newBalance })
+      .update({ troll_coins: newBalance })
       .eq('id', viewerId)
 
     if (updateError) {

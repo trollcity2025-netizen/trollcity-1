@@ -14,7 +14,7 @@ export default function Leaderboard() {
       try {
         const { data: users } = await supabase
           .from('user_profiles')
-          .select('id, username, total_earned_coins, paid_coin_balance')
+          .select('id, username, total_earned_coins, troll_coins')
           .order('total_earned_coins', { ascending: false })
           .limit(50) // Get more to filter
 

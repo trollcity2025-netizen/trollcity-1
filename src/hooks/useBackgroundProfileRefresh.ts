@@ -25,7 +25,7 @@ export const useBackgroundProfileRefresh = () => {
         
         // Only update if values actually changed to prevent unnecessary UI updates
         if (currentProfile && 
-            currentProfile.troll_coins_balance === data.troll_coins_balance &&
+            currentProfile.troll_coins === data.troll_coins &&
             currentProfile.free_coin_balance === data.free_coin_balance &&
             currentProfile.total_earned_coins === data.total_earned_coins &&
             currentProfile.total_spent_coins === data.total_spent_coins) {

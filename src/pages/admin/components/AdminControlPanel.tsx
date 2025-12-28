@@ -24,7 +24,7 @@ export default function AdminControlPanel() {
     id: string
     username: string
     email: string
-    paid_coin_balance?: number
+    troll_coins?: number
     free_coin_balance?: number
     role?: string
   }>>([])
@@ -56,7 +56,7 @@ export default function AdminControlPanel() {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, email, paid_coin_balance, free_coin_balance, role')
+        .select('id, username, email, troll_coins, free_coin_balance, role')
         .ilike('username', `%${searchTerm}%`)
         .limit(20)
         .order('username', { ascending: true })
@@ -138,18 +138,18 @@ export default function AdminControlPanel() {
           // Get current balance
           const { data: currentProfile } = await supabase
             .from('user_profiles')
-            .select('paid_coin_balance, free_coin_balance')
+            .select('troll_coins, free_coin_balance')
             .eq('id', selectedUser.id)
             .single()
 
           if (currentProfile) {
-            const totalCoins = (currentProfile.paid_coin_balance || 0) + (currentProfile.free_coin_balance || 0)
+            const totalCoins = (currentProfile.troll_coins || 0) + (currentProfile.free_coin_balance || 0)
 
             // Set both balances to 0
             const { error: updateError } = await supabase
               .from('user_profiles')
               .update({
-                paid_coin_balance: 0,
+                troll_coins: 0,
                 free_coin_balance: 0,
                 updated_at: new Date().toISOString()
               })
@@ -459,7 +459,7 @@ export default function AdminControlPanel() {
               {searchResults.length > 0 && (
                 <div className="bg-zinc-900/90 border border-gray-700 rounded-lg max-h-64 overflow-y-auto">
                   {searchResults.map((u) => {
-                    const totalCoins = (u.paid_coin_balance || 0) + (u.free_coin_balance || 0)
+                    const totalCoins = (u.troll_coins || 0) + (u.free_coin_balance || 0)
                     return (
                       <div
                         key={u.id}
@@ -496,7 +496,7 @@ export default function AdminControlPanel() {
                               {totalCoins.toLocaleString()} coins
                             </div>
                             <div className="text-xs text-gray-500">
-                              Paid: {(u.paid_coin_balance || 0).toLocaleString()} | Free: {(u.free_coin_balance || 0).toLocaleString()}
+                              Paid: {(u.troll_coins || 0).toLocaleString()} | Free: {(u.free_coin_balance || 0).toLocaleString()}
                             </div>
                           </div>
                         </div>

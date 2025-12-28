@@ -73,17 +73,15 @@ export default function ShopView() {
 
     setPurchasing(item.id)
     try {
-      // Check if user has enough coins
+      // Check if user has enough troll_coins (purchases use troll_coins specifically)
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('troll_coins_balance, free_coin_balance')
+        .select('troll_coins')
         .eq('id', user.id)
         .single()
 
-      const totalCoins = (profile?.troll_coins_balance || 0) + (profile?.free_coin_balance || 0)
-
-      if (totalCoins < item.price) {
-        toast.error('Not enough coins!')
+      if ((profile?.troll_coins || 0) < item.price) {
+        toast.error('Not enough troll coins!')
         return
       }
 
@@ -98,7 +96,6 @@ export default function ShopView() {
         userId: user.id,
         amount: item.price,
         type: 'purchase',
-        coinType: 'troll_coins',
         description: `Purchase: ${item.name} from ${shop.name}`,
         metadata: {
           shop_id: shop.id,

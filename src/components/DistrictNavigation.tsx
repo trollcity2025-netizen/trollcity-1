@@ -104,8 +104,9 @@ export default function DistrictNavigation() {
       commerce_district: [
         { feature_name: 'Coin Store', route_path: '/store', required_role: 'user' },
         { feature_name: 'Marketplace', route_path: '/marketplace', required_role: 'user' },
-        { feature_name: 'Trollmonds Store', route_path: '/trollmonds-store', required_role: 'user' },
+        { feature_name: 'Troll Gift Store', route_path: '/gift-store', required_role: 'user' },
         { feature_name: 'My Inventory', route_path: '/inventory', required_role: 'user' },
+        { feature_name: 'Gift Inventory', route_path: '/gift-inventory', required_role: 'user' },
         { feature_name: 'Sell on Troll City', route_path: '/sell', required_role: 'user' }
       ],
       justice_district: [

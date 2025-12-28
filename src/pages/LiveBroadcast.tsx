@@ -47,7 +47,7 @@ interface UserProfile {
   level: number
   role: UserRole
   troll_family_id?: string
-  paid_coin_balance?: number
+  troll_coins?: number
   free_coin_balance?: number
   xp?: number
   is_admin?: boolean
@@ -122,7 +122,7 @@ const LiveBroadcast: React.FC = () => {
       }
 
       const cost = stream.pricing_value
-      const paid = profile.paid_coin_balance || 0
+      const paid = profile.troll_coins || 0
       const free = profile.free_coin_balance || 0
 
       if (paid + free < cost) {
@@ -137,7 +137,7 @@ const LiveBroadcast: React.FC = () => {
       await supabase
         .from('user_profiles')
         .update({
-          paid_coin_balance: newPaid,
+          troll_coins: newPaid,
           free_coin_balance: newFree,
         })
         .eq('id', profile.id)

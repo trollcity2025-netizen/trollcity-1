@@ -36,7 +36,11 @@ const AdminPayoutMobile: React.FC = () => {
   };
 
   useEffect(() => {
-    loadRequests();
+    const init = async () => {
+      await loadRequests();
+    };
+
+    void init();
 
     const channel = supabase
       .channel("admin-payouts")

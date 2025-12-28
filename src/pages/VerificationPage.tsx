@@ -97,7 +97,7 @@ export default function VerificationPage() {
   const payWithCoins = async () => {
     if (processing) return
 
-    const paidCoins = profile?.paid_coin_balance || 0
+    const paidCoins = profile?.troll_coins || 0
     if (paidCoins < 500) {
       toast.error('You need 500 paid coins to verify. You have ' + paidCoins)
       return
@@ -115,18 +115,18 @@ export default function VerificationPage() {
         // Fallback: direct update
         const { data: currentProfile } = await supabase
           .from('user_profiles')
-          .select('paid_coin_balance')
+          .select('troll_coins')
           .eq('id', user.id)
           .single()
 
-        if ((currentProfile?.paid_coin_balance || 0) < 500) {
+        if ((currentProfile?.troll_coins || 0) < 500) {
           throw new Error('Insufficient paid coins')
         }
 
         await supabase
           .from('user_profiles')
           .update({
-            paid_coin_balance: (currentProfile?.paid_coin_balance || 0) - 500
+            troll_coins: (currentProfile?.troll_coins || 0) - 500
           })
           .eq('id', user.id)
       }
@@ -162,7 +162,7 @@ export default function VerificationPage() {
     }
   }
 
-  const paidCoins = profile?.paid_coin_balance || 0
+  const paidCoins = profile?.troll_coins || 0
   const canPayWithCoins = paidCoins >= 500
 
   return (

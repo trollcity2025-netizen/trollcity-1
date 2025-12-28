@@ -18,7 +18,7 @@ export default function FamilyApplication() {
     if (!profile) return toast.error('Please sign in')
     if (!reason.trim() || !commitment.trim()) return toast.error('Complete all fields')
     const requiredCoins = 1000
-    if ((profile.troll_coins_balance || 0) < requiredCoins) {
+    if ((profile.troll_coins || 0) < requiredCoins) {
       toast.error('Requires 1,000 troll_coins to apply. Redirecting to Store...')
       navigate('/store?tab=packages')
       return
@@ -29,7 +29,7 @@ export default function FamilyApplication() {
       
       const { error: coinErr } = await supabase
         .from('user_profiles')
-        .update({ troll_coins_balance: profile.troll_coins_balance - requiredCoins, updated_at: now })
+        .update({ troll_coins: profile.troll_coins - requiredCoins, updated_at: now })
         .eq('id', profile.id)
       
       if (coinErr) throw coinErr
@@ -51,7 +51,7 @@ export default function FamilyApplication() {
         throw error
       }
       toast.success('Application submitted! An admin will review it soon.')
-      useAuthStore.getState().setProfile({ ...profile, troll_coins_balance: profile.troll_coins_balance - requiredCoins } as any)
+      useAuthStore.getState().setProfile({ ...profile, troll_coins: profile.troll_coins - requiredCoins } as any)
       refreshProfileInBackground()
       setReason('')
       setCommitment('')

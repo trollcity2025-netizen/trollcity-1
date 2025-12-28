@@ -101,7 +101,7 @@ export async function purchaseInsurance(userId: string, planId: string): Promise
     // Check if user has enough coins
     const { data: userProfile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', userId)
       .single();
 
@@ -109,7 +109,7 @@ export async function purchaseInsurance(userId: string, planId: string): Promise
       return { success: false, error: 'User profile not found' };
     }
 
-    if ((userProfile.paid_coin_balance || 0) < plan.cost) {
+    if ((userProfile.troll_coins || 0) < plan.cost) {
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
@@ -288,7 +288,7 @@ async function wipeWallet(userId: string): Promise<void> {
     await supabase
       .from('user_profiles')
       .update({
-        paid_coin_balance: 0,
+        troll_coins: 0,
         free_coin_balance: 0,
         updated_at: new Date().toISOString()
       })
@@ -331,11 +331,11 @@ export async function canAffordInsurance(userId: string, planId: string): Promis
 
     const { data: userProfile } = await supabase
       .from('user_profiles')
-      .select('paid_coin_balance')
+      .select('troll_coins')
       .eq('id', userId)
       .single();
 
-    return (userProfile?.paid_coin_balance || 0) >= plan.cost;
+    return (userProfile?.troll_coins || 0) >= plan.cost;
   } catch (err) {
     console.error('Error checking affordability:', err);
     return false;

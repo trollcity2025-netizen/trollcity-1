@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Trophy, Timer, Coins, Zap } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
@@ -13,11 +13,17 @@ interface BattleArenaProps {
   onBattleEnd: (winnerId: string | null) => void
 }
 
+type BattleParticipant = {
+  user_id: string
+  username?: string
+  avatar_url?: string
+  role?: string
+  joined_at?: string
+}
+
 interface BattleStats {
-  broadcaster1PaidCoins: number
-  broadcaster2PaidCoins: number
-  broadcaster1FreeCoins: number
-  broadcaster2FreeCoins: number
+  hostTrollCoins: number
+  challengerTrollCoins: number
   timeRemaining: number
   status: string
 }
@@ -32,10 +38,8 @@ export default function BattleArena({
 }: BattleArenaProps) {
   const { profile } = useAuthStore()
   const [battleStats, setBattleStats] = useState<BattleStats>({
-    broadcaster1PaidCoins: 0,
-    broadcaster2PaidCoins: 0,
-    broadcaster1FreeCoins: 0,
-    broadcaster2FreeCoins: 0,
+    hostTrollCoins: 0,
+    challengerTrollCoins: 0,
     timeRemaining: 120, // 2 minutes
     status: 'countdown',
   })
@@ -44,6 +48,13 @@ export default function BattleArena({
   const [broadcaster2, setBroadcaster2] = useState<any>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+  const [battleGuests, setBattleGuests] = useState<{
+    hostGuests: BattleParticipant[]
+    challengerGuests: BattleParticipant[]
+  }>({
+    hostGuests: [],
+    challengerGuests: [],
+  })
 
   // Load broadcaster profiles
   useEffect(() => {
@@ -65,6 +76,26 @@ export default function BattleArena({
     }
     loadBroadcasters()
   }, [broadcaster1Id, broadcaster2Id])
+
+  const loadBattleArenaView = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('battle_arena_view')
+      .select('host_guests, challenger_guests')
+      .eq('id', battleId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Failed to load battle guests:', error)
+      return
+    }
+
+    if (data) {
+      setBattleGuests({
+        hostGuests: data.host_guests || [],
+        challengerGuests: data.challenger_guests || [],
+      })
+    }
+  }, [battleId])
 
   // Countdown before battle starts
   useEffect(() => {
@@ -125,14 +156,13 @@ export default function BattleArena({
         },
         (payload) => {
           const updated = payload.new as any
-          setBattleStats({
-            broadcaster1PaidCoins: updated.broadcaster_1_paid_coins || 0,
-            broadcaster2PaidCoins: updated.broadcaster_2_paid_coins || 0,
-            broadcaster1FreeCoins: updated.broadcaster_1_free_coins || 0,
-            broadcaster2FreeCoins: updated.broadcaster_2_free_coins || 0,
-            timeRemaining: battleStats.timeRemaining,
+          setBattleStats((prev) => ({
+            ...prev,
+            hostTrollCoins: updated.host_troll_coins || 0,
+            challengerTrollCoins: updated.challenger_troll_coins || 0,
             status: updated.status,
-          })
+          }))
+          loadBattleArenaView().catch(console.error)
         }
       )
       .subscribe()
@@ -140,7 +170,7 @@ export default function BattleArena({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [battleId])
+  }, [battleId, loadBattleArenaView])
 
   // Load initial battle stats
   useEffect(() => {
@@ -158,17 +188,16 @@ export default function BattleArena({
         const remaining = Math.max(0, 120 - elapsed)
 
         setBattleStats({
-          broadcaster1PaidCoins: data.broadcaster_1_paid_coins || 0,
-          broadcaster2PaidCoins: data.broadcaster_2_paid_coins || 0,
-          broadcaster1FreeCoins: data.broadcaster_1_free_coins || 0,
-          broadcaster2FreeCoins: data.broadcaster_2_free_coins || 0,
+          hostTrollCoins: data.host_troll_coins || 0,
+          challengerTrollCoins: data.challenger_troll_coins || 0,
           timeRemaining: remaining,
           status: data.status,
         })
+        loadBattleArenaView().catch(console.error)
       }
     }
     loadBattleStats()
-  }, [battleId])
+  }, [battleId, loadBattleArenaView])
 
   const endBattle = async () => {
     const { data, error } = await supabase.rpc('end_battle_and_declare_winner', {
@@ -193,8 +222,8 @@ export default function BattleArena({
   }
 
   const getLeadingBroadcaster = () => {
-    if (battleStats.broadcaster1PaidCoins > battleStats.broadcaster2PaidCoins) return 1
-    if (battleStats.broadcaster2PaidCoins > battleStats.broadcaster1PaidCoins) return 2
+    if (battleStats.hostTrollCoins > battleStats.challengerTrollCoins) return 1
+    if (battleStats.challengerTrollCoins > battleStats.hostTrollCoins) return 2
     return null
   }
 
@@ -253,20 +282,33 @@ export default function BattleArena({
 
           {/* Coin Bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4 border-t-2 border-troll-neon-blue">
-            <div className="flex items-center gap-2 mb-2">
-              <Coins className="w-5 h-5 text-troll-gold" />
-              <span className="text-sm text-gray-400">Paid Coins (Winning):</span>
-              <span className="text-xl font-bold text-troll-gold">
-                {battleStats.broadcaster1PaidCoins.toLocaleString()}
-              </span>
+          <div className="flex items-center gap-2 mb-2">
+            <Coins className="w-5 h-5 text-troll-gold" />
+            <span className="text-sm text-gray-400">Troll Coins (Winning)</span>
+            <span className="text-xl font-bold text-troll-gold">
+              {battleStats.hostTrollCoins.toLocaleString()}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500">
+            Only Troll Coins earned during the battle determine victory.
+          </div>
+          <div className="mt-3 text-[10px] uppercase tracking-wide text-gray-500">
+            Guests (max 4)
+          </div>
+          {battleGuests.hostGuests.length === 0 ? (
+            <div className="text-xs text-gray-500 mt-1">No guests yet.</div>
+          ) : (
+            <div className="flex flex-wrap gap-2 mt-1">
+              {battleGuests.hostGuests.map((guest) => (
+                <span
+                  key={`${guest.user_id}-host`}
+                  className="px-2 py-1 rounded-full bg-white/10 text-[10px] text-white border border-white/10"
+                >
+                  {guest.username || guest.user_id}
+                </span>
+              ))}
             </div>
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-troll-neon-green" />
-              <span className="text-xs text-gray-500">Free Coins (Effects):</span>
-              <span className="text-sm text-troll-neon-green">
-                {battleStats.broadcaster1FreeCoins.toLocaleString()}
-              </span>
-            </div>
+          )}
           </div>
         </div>
 
@@ -300,20 +342,33 @@ export default function BattleArena({
 
           {/* Coin Bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4 border-t-2 border-troll-neon-blue">
-            <div className="flex items-center gap-2 mb-2">
-              <Coins className="w-5 h-5 text-troll-gold" />
-              <span className="text-sm text-gray-400">Paid Coins (Winning):</span>
-              <span className="text-xl font-bold text-troll-gold">
-                {battleStats.broadcaster2PaidCoins.toLocaleString()}
-              </span>
+          <div className="flex items-center gap-2 mb-2">
+            <Coins className="w-5 h-5 text-troll-gold" />
+            <span className="text-sm text-gray-400">Troll Coins (Winning)</span>
+            <span className="text-xl font-bold text-troll-gold">
+              {battleStats.challengerTrollCoins.toLocaleString()}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500">
+            Only Troll Coins earned during the battle determine victory.
+          </div>
+          <div className="mt-3 text-[10px] uppercase tracking-wide text-gray-500">
+            Guests (max 4)
+          </div>
+          {battleGuests.challengerGuests.length === 0 ? (
+            <div className="text-xs text-gray-500 mt-1">No guests yet.</div>
+          ) : (
+            <div className="flex flex-wrap gap-2 mt-1">
+              {battleGuests.challengerGuests.map((guest) => (
+                <span
+                  key={`${guest.user_id}-challenger`}
+                  className="px-2 py-1 rounded-full bg-white/10 text-[10px] text-white border border-white/10"
+                >
+                  {guest.username || guest.user_id}
+                </span>
+              ))}
             </div>
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-troll-neon-green" />
-              <span className="text-xs text-gray-500">Free Coins (Effects):</span>
-              <span className="text-sm text-troll-neon-green">
-                {battleStats.broadcaster2FreeCoins.toLocaleString()}
-              </span>
-            </div>
+          )}
           </div>
         </div>
       </div>

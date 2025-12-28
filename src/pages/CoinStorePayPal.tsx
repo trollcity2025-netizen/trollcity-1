@@ -222,10 +222,7 @@ export default function CoinStore() {
       clientId: paypalClientId,
       intent: 'capture' as const,
       currency: 'USD',
-      components: 'buttons' as const,
-      'data-color': 'black' as const,
-      'data-branding': true,
-      'disable-funding': 'paylater,venmo' as const
+      components: 'buttons'
     }),
     [paypalClientId]
   )
@@ -285,7 +282,7 @@ export default function CoinStore() {
   )
 
   return (
-    <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER, UserRole.ADMIN]} fallbackPath="/dashboard">
+    <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} fallbackPath="/dashboard">
       <PayPalScriptProvider options={paypalOptions}>
         <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
           <div className="max-w-6xl mx-auto">
@@ -304,7 +301,7 @@ export default function CoinStore() {
           <p className="text-gray-400 mb-6">
             Current Balance:{' '}
             <span className="font-bold text-purple-400">
-              {(profile?.troll_coins_balance || 0).toLocaleString()} troll_coins
+              {(profile?.troll_coins || 0).toLocaleString()} troll_coins
             </span>
           </p>
 
@@ -406,7 +403,6 @@ export default function CoinStore() {
                           shape: 'rect',
                           height: 45
                         }}
-                        fundingSource="paypal"
                         createOrder={async () => {
                           setProcessingPackage(pkg.id);
                           try {

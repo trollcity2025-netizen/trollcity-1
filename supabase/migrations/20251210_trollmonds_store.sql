@@ -31,6 +31,8 @@ DECLARE
   v_total_cost bigint;
   v_balance bigint;
   v_inventory_id uuid;
+  v_balance_column text;
+  v_coin_type text;
 BEGIN
   -- Get item details
   SELECT value, currency INTO v_item_price, v_item_currency
@@ -47,20 +49,46 @@ BEGIN
 
   v_total_cost := v_item_price * p_quantity;
 
-  -- Check balance (free_coin_balance is Trollmonds)
-  SELECT free_coin_balance INTO v_balance
-  FROM user_profiles
-  WHERE id = p_user_id;
+  -- Detect which balance column exists on user_profiles
+  SELECT column_name
+  INTO v_balance_column
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'user_profiles'
+    AND column_name IN ('trollmonds', 'free_coin_balance', 'troll_coins')
+  ORDER BY CASE column_name
+    WHEN 'trollmonds' THEN 1
+    WHEN 'free_coin_balance' THEN 2
+    ELSE 3
+  END
+  LIMIT 1;
+
+  IF v_balance_column IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Trollmonds balance column missing');
+  END IF;
+
+  v_coin_type := CASE v_balance_column
+    WHEN 'trollmonds' THEN 'trollmonds'
+    WHEN 'free_coin_balance' THEN 'free'
+    ELSE 'troll_coins'
+  END;
+
+  EXECUTE format('SELECT COALESCE(%I, 0) FROM user_profiles WHERE id = $1', v_balance_column)
+  INTO v_balance
+  USING p_user_id;
 
   IF v_balance < v_total_cost THEN
     RETURN jsonb_build_object('success', false, 'error', 'Insufficient Trollmonds');
   END IF;
 
-  -- Deduct Trollmonds
-  UPDATE user_profiles
-  SET free_coin_balance = free_coin_balance - v_total_cost,
-      updated_at = now()
-  WHERE id = p_user_id;
+  -- Deduct from the detected balance column
+  EXECUTE format(
+    'UPDATE user_profiles SET %1$I = %1$I - $1, updated_at = now() WHERE id = $2',
+    v_balance_column
+  )
+  USING v_total_cost, p_user_id;
+
+  v_balance := v_balance - v_total_cost;
 
   -- Add to inventory
   INSERT INTO user_inventory (user_id, item_id, quantity)
@@ -81,12 +109,12 @@ BEGIN
     p_user_id,
     'store_purchase',
     -v_total_cost,
-    'free',
+    v_coin_type,
     'Purchased item from Trollmonds Store',
     jsonb_build_object('item_id', p_item_id, 'quantity', p_quantity)
   );
 
-  RETURN jsonb_build_object('success', true, 'inventory_id', v_inventory_id, 'new_balance', v_balance - v_total_cost);
+  RETURN jsonb_build_object('success', true, 'inventory_id', v_inventory_id, 'new_balance', v_balance);
 END;
 $$;
 

@@ -78,8 +78,14 @@ const AuthorityPanel: React.FC = () => {
     const hasAuthority = [...admins, ...leadOfficers, ...officers].length > 0;
 
     if (hasAuthority) {
-      // Try to auto-start court
-      autoStartCourt();
+      // Don't auto-start if session was just created (within last 5 seconds)
+      const createdAt = new Date(courtSession.created_at);
+      const timeSinceCreation = Date.now() - createdAt.getTime();
+      
+      if (timeSinceCreation > 5000) {
+        // Try to auto-start court
+        autoStartCourt();
+      }
     }
   }, [courtSession, currentLocation, admins, leadOfficers, officers]);
 

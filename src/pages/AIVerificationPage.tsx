@@ -217,7 +217,7 @@ export default function AIVerificationPage() {
     setPaymentMethod(method)
     
     if (method === 'coins') {
-      const paidCoins = profile?.paid_coin_balance || 0
+      const paidCoins = profile?.troll_coins || 0
       if (paidCoins < 500) {
         toast.error(`You need 500 paid coins. You have ${paidCoins}`)
         return
@@ -233,7 +233,7 @@ export default function AIVerificationPage() {
         // Fallback direct update
         await supabase
           .from('user_profiles')
-          .update({ paid_coin_balance: (profile?.paid_coin_balance || 0) - 500 })
+          .update({ troll_coins: (profile?.troll_coins || 0) - 500 })
           .eq('id', user.id)
       }
 
@@ -421,11 +421,11 @@ export default function AIVerificationPage() {
                   </button>
                   <button
                     onClick={() => handlePayment('coins')}
-                    disabled={(profile?.paid_coin_balance || 0) < 500}
+                    disabled={(profile?.troll_coins || 0) < 500}
                     className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <Coins className="w-5 h-5" />
-                    Pay 500 Paid Coins (You have {profile?.paid_coin_balance || 0})
+                    Pay 500 Paid Coins (You have {profile?.troll_coins || 0})
                   </button>
                 </div>
               </>

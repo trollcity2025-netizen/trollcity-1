@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { CreditCard, Coins, DollarSign, Shield, Check, X, Star } from 'lucide-react'
+import { CreditCard, Coins, DollarSign, Check, X, Star } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
+import { deductCoins } from '../lib/coinTransactions'
+import { useCoins } from '../lib/hooks/useCoins'
 import { toast } from 'sonner'
 
 interface EntranceEffect {
@@ -40,10 +42,11 @@ const DEFAULT_EFFECTS: EntranceEffect[] = [
 
 const EntranceEffects = () => {
   const { profile } = useAuthStore()
+  const { refreshCoins } = useCoins()
   const [effects, setEffects] = useState<EntranceEffect[]>([])
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState<string | null>(null)
-  const [backgroundLoading, setBackgroundLoading] = useState(false)
+  const [_backgroundLoading, setBackgroundLoading] = useState(false)
 
   useEffect(() => {
     try {
@@ -80,55 +83,49 @@ const EntranceEffects = () => {
       return
     }
 
-    if ((profile.troll_coins_balance || 0) < effect.coin_cost) {
+    if ((profile.troll_coins || 0) < effect.coin_cost) {
       toast.error('Insufficient coins. Please purchase more coins.')
       return
     }
 
     try {
       setPurchasing(effect.id)
-      
-      // Deduct coins from user balance
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ 
-          troll_coins_balance: (profile.troll_coins_balance || 0) - effect.coin_cost 
-        })
-        .eq('id', profile.id)
 
-      if (updateError) throw updateError
+      // Deduct coins using the proper coin transaction system
+      const deductResult = await deductCoins({
+        userId: profile.id,
+        amount: effect.coin_cost,
+        type: 'entrance_effect',
+        description: `Purchased ${effect.name} entrance effect`,
+        metadata: {
+          effect_id: effect.id,
+          effect_name: effect.name
+        }
+      })
+
+      if (!deductResult.success) {
+        toast.error('Failed to process payment')
+        return
+      }
 
       // Add effect to user's purchased effects
       const { error: purchaseError } = await supabase
         .from('user_entrance_effects')
-        .insert({
+        .upsert({
           user_id: profile.id,
           effect_id: effect.id,
           purchased_at: new Date().toISOString()
-        })
+        }, { onConflict: 'user_id, effect_id' })
 
       if (purchaseError) throw purchaseError
 
-      // Record coin transaction
-      const { error: transactionError } = await supabase
-        .from('coin_transactions')
-        .insert({
-          user_id: profile.id,
-          type: 'entrance_effect',
-          amount: -effect.coin_cost,
-          description: `Purchased ${effect.name} entrance effect`,
-          metadata: { effect_id: effect.id, effect_name: effect.name },
-          created_at: new Date().toISOString()
-        })
-
-      if (transactionError) throw transactionError
-
+      await refreshCoins().catch(err => console.warn('Failed to refresh coins after purchase:', err))
       toast.success(`Successfully purchased ${effect.name}!`)
-      
+
       // Update local profile immediately (optimistic)
       const optimisticProfile = {
         ...profile,
-        troll_coins_balance: (profile.troll_coins_balance || 0) - effect.coin_cost
+        troll_coins: deductResult.newBalance
       }
       useAuthStore.getState().setProfile(optimisticProfile)
 
@@ -159,8 +156,8 @@ const EntranceEffects = () => {
         
         // Only update if coins actually changed (prevent flickering)
         if (currentProfile &&
-            currentProfile.troll_coins_balance === data.troll_coins_balance &&
-            currentProfile.free_coin_balance === data.free_coin_balance &&
+            currentProfile.troll_coins === data.troll_coins &&
+            currentProfile.trollmonds === data.trollmonds &&
             currentProfile.total_earned_coins === data.total_earned_coins &&
             currentProfile.total_spent_coins === data.total_spent_coins) {
           return
@@ -186,18 +183,6 @@ const EntranceEffects = () => {
     return 'bg-gradient-to-r from-[#666666] to-[#888888]'
   }
 
-  const getRarityGlow = (rarity: string) => {
-    const r = rarity.toLowerCase()
-    if (r.includes('unobtainable')) return 'shadow-lg shadow-black/40'
-    if (r.includes('divine')) return 'shadow-lg shadow-yellow-400/40'
-    if (r.includes('ultra')) return 'shadow-lg shadow-purple-500/30'
-    if (r.includes('mythic')) return 'shadow-lg shadow-pink-500/30'
-    if (r.includes('legendary')) return 'shadow-lg shadow-[#FFC93C]/30'
-    if (r.includes('exotic')) return 'shadow-lg shadow-emerald-500/30'
-    if (r.includes('exclusive')) return 'shadow-lg shadow-cyan-500/30'
-    if (r.includes('rare')) return 'shadow-lg shadow-[#E2E2E2]/20'
-    return 'shadow-lg shadow-[#666666]/20'
-  }
 
   const getCardGradient = (rarity: string) => {
     const r = rarity.toLowerCase()
@@ -286,7 +271,7 @@ const EntranceEffects = () => {
               </div>
               <button
                 onClick={() => purchaseEffect(effect)}
-                disabled={purchasing === effect.id || (profile && (profile.troll_coins_balance || 0) < effect.coin_cost)}
+                disabled={purchasing === effect.id || (profile && (profile.troll_coins || 0) < effect.coin_cost)}
                 className="px-6 py-2 bg-gradient-to-r from-troll-neon-pink to-troll-neon-purple text-white font-bold rounded-lg hover:from-troll-neon-pink/80 hover:to-troll-neon-purple/80 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 {purchasing === effect.id ? 'Purchasing...' : 'Purchase'}
@@ -316,13 +301,13 @@ const EntranceEffects = () => {
             <DollarSign className="w-6 h-6 text-troll-neon-gold" />
           </div>
           <div className="text-3xl font-bold text-white mb-4">
-            {profile ? profile.troll_coins_balance + profile.free_coin_balance : 0}
+            {profile ? (profile.troll_coins || 0) + (profile.trollmonds || 0) : 0}
           </div>
           <div className="border-t border-troll-neon-green/20 pt-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-troll-neon-blue/70">Total Value:</span>
               <span className="text-troll-neon-green font-bold">
-                ${((profile ? profile.troll_coins_balance + profile.free_coin_balance : 0) * 0.01).toFixed(2)}
+                ${(((profile ? (profile.troll_coins || 0) + (profile.trollmonds || 0) : 0)) * 0.01).toFixed(2)}
               </span>
             </div>
           </div>
@@ -338,13 +323,13 @@ const EntranceEffects = () => {
             </div>
           </div>
           <div className="text-3xl font-bold text-troll-neon-green mb-4">
-            {profile ? profile.troll_coins_balance : 0}
+            {profile ? profile.troll_coins : 0}
           </div>
           <div className="border-t border-troll-neon-green/20 pt-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-troll-neon-blue/70">Value:</span>
               <span className="text-troll-neon-purple font-bold">
-                ${(profile ? profile.troll_coins_balance : 0 * 0.01).toFixed(2)}
+                ${(profile ? profile.troll_coins : 0 * 0.01).toFixed(2)}
               </span>
             </div>
             <p className="text-xs text-troll-neon-blue/50">Real value • Can spend</p>
@@ -361,7 +346,7 @@ const EntranceEffects = () => {
             </div>
           </div>
           <div className="text-3xl font-bold text-troll-neon-red mb-4">
-            {profile ? profile.free_coin_balance : 0}
+            {profile ? (profile.trollmonds || 0) : 0}
           </div>
           <div className="border-t border-troll-neon-red/20 pt-4">
             <div className="flex items-center justify-between mb-2">

@@ -33,7 +33,7 @@ export function useGiftSystem(
 
     // Validate balance based on gift type (paid or free)
     const balance = gift.type === 'paid' 
-      ? (profile.paid_coin_balance || 0)
+      ? (profile.troll_coins || 0)
       : (profile.free_coin_balance || 0)
 
     if (balance < gift.coinCost) {

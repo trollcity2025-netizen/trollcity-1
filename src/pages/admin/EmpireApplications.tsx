@@ -18,7 +18,7 @@ interface EmpireApplication {
   user: {
     username: string
     avatar_url: string
-    paid_coin_balance: number
+    troll_coins: number
   }
   reviewer: {
     username: string
@@ -45,7 +45,7 @@ export default function EmpireApplications() {
           user:user_profiles!empire_applications_user_id_fkey (
             username,
             avatar_url,
-            paid_coin_balance
+            troll_coin_balance
           ),
           reviewer:user_profiles!empire_applications_reviewed_by_fkey (
             username

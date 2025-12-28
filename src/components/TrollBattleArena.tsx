@@ -1,20 +1,30 @@
 // src/components/TrollBattleArena.tsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../lib/store";
 import { Trophy, Sword, Flame, Clock, Coins } from "lucide-react";
+
+type BattleParticipant = {
+  user_id: string;
+  username?: string;
+  avatar_url?: string;
+  role?: string;
+  joined_at?: string;
+};
 
 type TrollBattle = {
   id: string;
   host_id: string;
   challenger_id: string;
-  host_paid_coins: number;
-  challenger_paid_coins: number;
-  host_free_coins: number;
-  challenger_free_coins: number;
+  host_troll_coins: number;
+  challenger_troll_coins: number;
+  host_stream_id?: string | null;
+  challenger_stream_id?: string | null;
+  host_guests?: BattleParticipant[];
+  challenger_guests?: BattleParticipant[];
   start_time: string;
   end_time: string;
-  status: "pending" | "active" | "completed";
+  status: "pending" | "active" | "completed" | "cancelled";
   winner_id: string | null;
 };
 
@@ -38,30 +48,32 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
   const [loadedHostUsername, setLoadedHostUsername] = useState(hostUsername);
   const [loadedChallengerUsername, setLoadedChallengerUsername] = useState(challengerUsername);
 
-  // Load battle data and usernames
-  useEffect(() => {
-    const loadBattle = async () => {
-      const { data, error } = await supabase
-        .from("troll_battles")
-        .select("*")
-        .eq("id", battleId)
-        .single();
+  const loadBattle = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("battle_arena_view")
+      .select("*")
+      .eq("id", battleId)
+      .maybeSingle();
 
-      if (!error && data) {
-        setBattle(data as TrollBattle);
-        
-        // Load usernames
-        const [hostData, challengerData] = await Promise.all([
-          supabase.from('user_profiles').select('username').eq('id', data.host_id).single(),
-          supabase.from('user_profiles').select('username').eq('id', data.challenger_id).single(),
-        ]);
-        
-        if (hostData.data) setLoadedHostUsername(hostData.data.username);
-        if (challengerData.data) setLoadedChallengerUsername(challengerData.data.username);
-      }
-    };
-    loadBattle();
+    if (error) {
+      console.error("Failed to load battle:", error);
+      return;
+    }
+
+    if (data) {
+      setBattle(data as TrollBattle);
+      const [hostData, challengerData] = await Promise.all([
+        supabase.from("user_profiles").select("username").eq("id", data.host_id).single(),
+        supabase.from("user_profiles").select("username").eq("id", data.challenger_id).single(),
+      ]);
+      if (hostData.data) setLoadedHostUsername(hostData.data.username);
+      if (challengerData.data) setLoadedChallengerUsername(challengerData.data.username);
+    }
   }, [battleId]);
+
+  useEffect(() => {
+    loadBattle();
+  }, [loadBattle]);
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -75,8 +87,8 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
           table: "troll_battles",
           filter: `id=eq.${battleId}`
         },
-        (payload) => {
-          setBattle(payload.new as TrollBattle);
+        () => {
+          loadBattle().catch(console.error);
         }
       )
       .subscribe();
@@ -84,7 +96,7 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [battleId]);
+  }, [battleId, loadBattle]);
 
   // Timer
   useEffect(() => {
@@ -150,18 +162,17 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
     );
   }
 
-  const hostPaid = battle.host_paid_coins || 0;
-  const challengerPaid = battle.challenger_paid_coins || 0;
-  const hostFree = battle.host_free_coins || 0;
-  const challengerFree = battle.challenger_free_coins || 0;
-  
-  // Total coins (paid + free) count toward victory
-  const hostTotal = hostPaid + hostFree;
-  const challengerTotal = challengerPaid + challengerFree;
-  
-  const totalFree = hostFree + challengerFree || 1;
-  const hostFreePct = Math.round((hostFree / totalFree) * 100);
-  const challengerFreePct = 100 - hostFreePct;
+  const hostTrollCoins = battle.host_troll_coins || 0;
+  const challengerTrollCoins = battle.challenger_troll_coins || 0;
+  const hostGuests = battle.host_guests || [];
+  const challengerGuests = battle.challenger_guests || [];
+
+  const hostTotal = hostTrollCoins;
+  const challengerTotal = challengerTrollCoins;
+
+  const totalContribution = hostTotal + challengerTotal || 1;
+  const hostPct = Math.round((hostTotal / totalContribution) * 100);
+  const challengerPct = 100 - hostPct;
 
   const isCompleted = battle.status === "completed";
   const winnerIsHost = battle.winner_id && battle.winner_id === battle.host_id;
@@ -212,13 +223,29 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
           <div className="flex items-center justify-between text-xs text-yellow-300 mb-1">
             <div className="flex items-center gap-1">
               <Coins className="w-4 h-4" />
-              <span>Total Coins</span>
+              <span>Troll Coins</span>
             </div>
             <span className="font-mono text-sm font-bold">{hostTotal}</span>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-gray-400">
-            <span>Paid: {hostPaid}</span>
-            <span>Free: {hostFree}</span>
+          <div className="text-[10px] text-gray-400">
+            All Troll Coins powering this battle come from paying viewers.
+          </div>
+          <div className="mt-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500">Guests (max 4)</div>
+            {hostGuests.length === 0 ? (
+              <div className="text-[10px] text-gray-500 mt-1">Waiting for flagged guests.</div>
+            ) : (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {hostGuests.map((guest) => (
+                  <span
+                    key={`${guest.user_id}-host`}
+                    className="px-2 py-1 rounded-full bg-white/10 text-[10px] text-white border border-white/10"
+                  >
+                    {guest.username || guest.user_id}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -242,36 +269,52 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
           <div className="flex items-center justify-between text-xs text-yellow-300 mb-1">
             <div className="flex items-center gap-1">
               <Coins className="w-4 h-4" />
-              <span>Total Coins</span>
+              <span>Troll Coins</span>
             </div>
             <span className="font-mono text-sm font-bold">{challengerTotal}</span>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-gray-400">
-            <span>Paid: {challengerPaid}</span>
-            <span>Free: {challengerFree}</span>
+          <div className="text-[10px] text-gray-400">
+            These Troll Coins determine who wins the battle.
+          </div>
+          <div className="mt-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500">Guests (max 4)</div>
+            {challengerGuests.length === 0 ? (
+              <div className="text-[10px] text-gray-500 mt-1">Waiting for challenger guests.</div>
+            ) : (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {challengerGuests.map((guest) => (
+                  <span
+                    key={`${guest.user_id}-challenger`}
+                    className="px-2 py-1 rounded-full bg-white/10 text-[10px] text-white border border-white/10"
+                  >
+                    {guest.username || guest.user_id}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Coin breakdown bar */}
+      {/* Troll Coin breakdown */}
       <div className="mt-2">
         <div className="flex items-center justify-between text-[10px] text-gray-300 mb-1">
-          <span>All coins count toward victory (paid + free)</span>
+          <span>Only Troll Coins shape the ruler of this battle</span>
           <Flame className="w-3 h-3" />
         </div>
         <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden flex">
           <div
             className="h-full bg-purple-500/80"
-            style={{ width: `${hostFreePct}%` }}
+            style={{ width: `${hostPct}%` }}
           />
           <div
             className="h-full bg-amber-500/80"
-            style={{ width: `${challengerFreePct}%` }}
+            style={{ width: `${challengerPct}%` }}
           />
         </div>
         <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-          <span>Host: {hostFree} free</span>
-          <span>Challenger: {challengerFree} free</span>
+          <span>Host: {hostTotal} Troll Coins</span>
+          <span>Challenger: {challengerTotal} Troll Coins</span>
         </div>
       </div>
 
@@ -297,7 +340,7 @@ const TrollBattleArena: React.FC<TrollBattleArenaProps> = ({
 
       {/* Tiny footer note */}
       <div className="mt-1 text-[10px] text-gray-500 text-center">
-        All coins (paid + free) count toward victory!
+        Only Troll Coins determine who earns the crown.
       </div>
     </div>
   );

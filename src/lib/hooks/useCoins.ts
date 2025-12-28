@@ -5,24 +5,9 @@ import { UserProfile } from '../supabase'
 import { toast } from 'sonner'
 
 interface CoinBalance {
-  troll_coins_balance: number
-  free_coin_balance: number
+  troll_coins: number
   total_earned_coins: number
   total_spent_coins: number
-}
-
-const getPaidBalanceFromProfile = (profile?: Partial<UserProfile> | null) => {
-  if (!profile) return undefined
-  if (typeof profile.troll_coins === 'number') return profile.troll_coins
-  if (typeof profile.troll_coins_balance === 'number') return profile.troll_coins_balance
-  return undefined
-}
-
-const getFreeBalanceFromProfile = (profile?: Partial<UserProfile> | null) => {
-  if (!profile) return undefined
-  if (typeof profile.trollmonds === 'number') return profile.trollmonds
-  if (typeof profile.free_coin_balance === 'number') return profile.free_coin_balance
-  return undefined
 }
 
 interface SpendCoinsParams {
@@ -47,8 +32,7 @@ export function useCoins() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [balances, setBalances] = useState<CoinBalance>({
-    troll_coins_balance: (profile?.troll_coins || profile?.troll_coins_balance) || 0,
-    free_coin_balance: (profile?.trollmonds || profile?.free_coin_balance) || 0,
+    troll_coins: profile?.troll_coins ?? 0,
     total_earned_coins: profile?.total_earned_coins || 0,
     total_spent_coins: profile?.total_spent_coins || 0,
   })
@@ -66,7 +50,7 @@ export function useCoins() {
     try {
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('*')
+        .select('troll_coins, total_earned_coins, total_spent_coins')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -76,12 +60,8 @@ export function useCoins() {
 
       const currentProfile = useAuthStore.getState().profile
       const paidBalance =
-        getPaidBalanceFromProfile(profileData) ??
-        getPaidBalanceFromProfile(currentProfile) ??
-        0
-      const freeBalance =
-        getFreeBalanceFromProfile(profileData) ??
-        getFreeBalanceFromProfile(currentProfile) ??
+        profileData?.troll_coins ??
+        currentProfile?.troll_coins ??
         0
       const nextTotals = {
         total_earned_coins:
@@ -95,16 +75,14 @@ export function useCoins() {
       }
 
       const nextBalances = {
-        troll_coins_balance: paidBalance,
-        free_coin_balance: freeBalance,
+        troll_coins: paidBalance,
         total_earned_coins: nextTotals.total_earned_coins,
         total_spent_coins: nextTotals.total_spent_coins,
       }
 
       setBalances((prev) => {
         const isSame =
-          prev.troll_coins_balance === nextBalances.troll_coins_balance &&
-          prev.free_coin_balance === nextBalances.free_coin_balance &&
+          prev.troll_coins === nextBalances.troll_coins &&
           prev.total_earned_coins === nextBalances.total_earned_coins &&
           prev.total_spent_coins === nextBalances.total_spent_coins
 
@@ -113,20 +91,14 @@ export function useCoins() {
 
       if (currentProfile) {
         const profileNeedsUpdate =
-          currentProfile.troll_coins_balance !== paidBalance ||
-          currentProfile.free_coin_balance !== freeBalance ||
           currentProfile.troll_coins !== paidBalance ||
-          currentProfile.trollmonds !== freeBalance ||
           currentProfile.total_earned_coins !== nextTotals.total_earned_coins ||
           currentProfile.total_spent_coins !== nextTotals.total_spent_coins
 
         if (profileNeedsUpdate) {
           useAuthStore.getState().setProfile({
             ...currentProfile,
-            troll_coins_balance: paidBalance,
-            free_coin_balance: freeBalance,
             troll_coins: paidBalance,
-            trollmonds: freeBalance,
             total_earned_coins: nextTotals.total_earned_coins,
             total_spent_coins: nextTotals.total_spent_coins,
           } as UserProfile)
@@ -156,7 +128,7 @@ export function useCoins() {
     }
 
     // Validate balance
-    if (balances.troll_coins_balance < params.amount) {
+    if (balances.troll_coins < params.amount) {
       toast.error('Not enough coins!')
       return false
     }
@@ -217,7 +189,7 @@ export function useCoins() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, balances.troll_coins_balance, refreshCoins])
+  }, [user?.id, balances.troll_coins, refreshCoins])
 
   // Set up real-time subscription for coin balance updates
   useEffect(() => {
@@ -280,8 +252,7 @@ export function useCoins() {
     refreshCoins,
     spendCoins,
     // Convenience getters
-    troll_coins: balances.troll_coins_balance,
-    trollmonds: balances.free_coin_balance,
+    troll_coins: balances.troll_coins,
     totalEarned: balances.total_earned_coins,
     totalSpent: balances.total_spent_coins,
   }

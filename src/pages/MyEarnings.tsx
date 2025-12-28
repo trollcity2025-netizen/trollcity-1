@@ -74,8 +74,7 @@ export default function MyEarnings() {
             id: profile?.id || '',
             username: profile?.username || '',
             total_earned_coins: profile?.total_earned_coins || 0,
-            paid_coin_balance: profile?.paid_coin_balance || 0,
-            free_coin_balance: profile?.free_coin_balance || 0,
+            troll_coins: profile?.troll_coins || 0,
             current_month_earnings: 0,
             current_month_transactions: 0,
             current_month_paid_out: 0,
@@ -100,8 +99,7 @@ export default function MyEarnings() {
           id: profile?.id || '',
           username: profile?.username || '',
           total_earned_coins: profile?.total_earned_coins || 0,
-          paid_coin_balance: profile?.paid_coin_balance || 0,
-          free_coin_balance: profile?.free_coin_balance || 0,
+          troll_coins: profile?.troll_coins || 0,
           current_month_earnings: 0,
           current_month_transactions: 0,
           current_month_paid_out: 0,
@@ -143,8 +141,7 @@ export default function MyEarnings() {
               coins_earned_from_gifts: m.coins_earned_from_gifts || 0,
               gift_count: m.gift_count || 0,
               unique_gifters: m.unique_gifters || 0,
-              paid_coins_earned: m.paid_coins_earned || 0,
-              free_coins_earned: m.free_coins_earned || 0
+              troll_coins_earned: (m.paid_coins_earned || 0) + (m.free_coins_earned || 0)
             })))
           } else {
             setMonthlyEarnings([])
@@ -200,7 +197,7 @@ export default function MyEarnings() {
   }
 
   const totalEarned = earningsData?.total_earned_coins || profile.total_earned_coins || 0
-  const availableCoins = earningsData?.paid_coin_balance || profile.paid_coin_balance || 0
+  const availableCoins = earningsData?.troll_coins || profile.troll_coins || 0
   const pendingPayouts = earningsData?.current_month_pending || 0
   const totalCashedOut = earningsData?.lifetime_paid_usd || 0
   const yearlyPaid = earningsData?.yearly_paid_usd || 0
@@ -452,8 +449,8 @@ export default function MyEarnings() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {monthlyEarnings.map((month, idx) => {
-                    // Handle month format (YYYY-MM string or Date object)
-                    const monthStr = typeof month.month === 'string' ? month.month : month.month.toISOString().slice(0, 7)
+                    // Handle month format (YYYY-MM string)
+                    const monthStr = month.month
                     const monthDate = new Date(monthStr + '-01')
                     const monthName = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
                     

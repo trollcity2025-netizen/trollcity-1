@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Loader2, CheckCircle, XCircle, Clock, Eye, User, Calendar, FileText } from 'lucide-react';
-import { getAllCreatorApplications, reviewCreatorApplication } from '../../lib/trolltractApi';
+import { supabase } from '../../lib/supabase';
 
 export function CreatorApplicationsPanel() {
   const [applications, setApplications] = useState([]);
@@ -20,7 +20,11 @@ export function CreatorApplicationsPanel() {
   const loadApplications = async () => {
     try {
       setLoading(true);
-      const data = await getAllCreatorApplications();
+      const { data, error } = await supabase.rpc('get_all_creator_applications');
+      if (error) {
+        console.error('Error fetching creator applications:', error);
+        return;
+      }
       setApplications(data || []);
     } catch (error) {
       console.error('Error loading applications:', error);
@@ -37,7 +41,14 @@ export function CreatorApplicationsPanel() {
 
     try {
       setReviewing(true);
-      await reviewCreatorApplication(applicationId, status, reviewNotes);
+      const { error } = await supabase.rpc('review_creator_application', {
+        p_application_id: applicationId,
+        p_status: status,
+        p_reviewer_notes: reviewNotes,
+      });
+      if (error) {
+        throw error;
+      }
       await loadApplications();
       setSelectedApplication(null);
       setReviewNotes('');

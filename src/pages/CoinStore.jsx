@@ -52,12 +52,11 @@ const isMissingTableError = (error) =>
 export default function CoinStore() {
   const { user, profile, refreshProfile } = useAuthStore();
   const navigate = useNavigate();
-  const { troll_coins, trollmonds, refreshCoins } = useCoins();
+  const { troll_coins, refreshCoins } = useCoins();
   const STORE_TAB_KEY = 'tc-store-active-tab';
   const STORE_COMPLETE_KEY = 'tc-store-show-complete';
   const [loading, setLoading] = useState(true);
   const [loadingPackage, setLoadingPackage] = useState(null);
-  const [walletMeta, setWalletMeta] = useState(null);
   const [tab, setTab] = useState('coins');
   const [effects, setEffects] = useState([]);
   const [perks, setPerks] = useState([]);
@@ -91,10 +90,8 @@ export default function CoinStore() {
     ],
   };
 
-  const trollPassExpiresAt =
-    walletMeta?.trollPassExpiresAt || profile?.troll_pass_expires_at || null;
-  const trollPassLastPurchasedAt =
-    walletMeta?.trollPassLastPurchasedAt || profile?.troll_pass_last_purchased_at || null;
+  const trollPassExpiresAt = profile?.troll_pass_expires_at || null;
+  const trollPassLastPurchasedAt = profile?.troll_pass_last_purchased_at || null;
   const trollPassActive = Boolean(
     trollPassExpiresAt && new Date(trollPassExpiresAt).getTime() > Date.now(),
   );
@@ -192,22 +189,6 @@ export default function CoinStore() {
 
       await refreshCoins();
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('troll_pass_expires_at, troll_pass_last_purchased_at')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError) {
-        console.warn('Failed to load wallet metadata:', profileError);
-      }
-
-      setWalletMeta({
-        trollPassExpiresAt: profileData?.troll_pass_expires_at || profile?.troll_pass_expires_at || null,
-        trollPassLastPurchasedAt:
-          profileData?.troll_pass_last_purchased_at || profile?.troll_pass_last_purchased_at || null,
-      });
-
       const [effRes, perkRes, planRes] = await Promise.all([
         supabase.from('entrance_effects').select('*').order('created_at', { ascending: false }),
         supabase.from('perks').select('*').order('created_at', { ascending: false }),
@@ -267,10 +248,6 @@ export default function CoinStore() {
     } catch (err) {
       console.error('? Error loading wallet data:', err);
       toast.error('Failed to load wallet data');
-      setWalletMeta({
-        trollPassExpiresAt: profile?.troll_pass_expires_at || null,
-        trollPassLastPurchasedAt: profile?.troll_pass_last_purchased_at || null,
-      });
     } finally {
       if (showLoading) setLoading(false);
       console.log('?? Wallet data loading complete');
@@ -355,41 +332,10 @@ export default function CoinStore() {
     }
   };
 
-  const deducttroll_coins = async (amount) => {
-    if (amount <= 0) return { error: new Error('Invalid coin amount') }
-
-    const result = await supabase.rpc('deduct_troll_coins', {
-      p_user_id: user.id,
-      p_amount: amount
-    })
-
-    if (result.error) {
-      const message = result.error.message || 'Failed to deduct troll_coins'
-      return { error: new Error(message) }
-    }
-
-    return result
-  }
-
-  const logCoinTransaction = async (payload) => {
-    const attempts = [
-      { ...payload, coin_type: 'troll_coins' },
-      { ...payload, coin_type: 'paid' }
-    ]
-
-    for (const entry of attempts) {
-      const { error } = await supabase.from('coin_transactions').insert([entry])
-      if (!error) return
-
-      const message = error.message || ''
-      const isCoinTypeError =
-        message.toLowerCase().includes('coin type') ||
-        message.toLowerCase().includes('coin_type') ||
-        message.toLowerCase().includes('check constraint')
-
-      if (!isCoinTypeError) return
-    }
-  }
+  const formatDeductErrorMessage = (error) =>
+    typeof error === 'string'
+      ? error
+      : error?.message || 'Failed to deduct coins'
 
   const buyEffect = async (effect) => {
    try {
@@ -404,14 +350,23 @@ export default function CoinStore() {
        return
      }
      
-      const { error: deductErr } = await deducttroll_coins(price)
-     
-     if (deductErr) {
-       console.error('Coin deduction error:', deductErr)
-       toast.error(deductErr.message || 'Failed to deduct coins')
-       return
-     }
-     
+      const { error: deductErr } = await deductCoins({
+        userId: user.id,
+        amount: price,
+        type: 'entrance_effect',
+        description: `Purchased entrance effect: ${effect.name}`,
+        metadata: { effect_id: effect.id },
+        supabaseClient: supabase,
+      })
+    
+    if (deductErr) {
+      console.error('Coin deduction error:', deductErr)
+      toast.error(formatDeductErrorMessage(deductErr))
+      return
+    }
+    
+    await refreshCoins()
+
      const { error: insertErr } = await supabase
        .from('user_entrance_effects')
        .upsert(
@@ -428,17 +383,7 @@ export default function CoinStore() {
        return
      }
      
-     // Log the transaction
-      await logCoinTransaction({
-        user_id: user.id,
-        type: 'entrance_effect',
-        amount: price,
-        coin_delta: -price,
-        description: `Purchased entrance effect: ${effect.name}`,
-        metadata: { effect_id: effect.id }
-      })
-     
-     toast.success('Entrance effect purchased')
+      toast.success('Entrance effect purchased')
      showPurchaseCompleteOverlay()
      await loadWalletData(false)
    } catch (err) {
@@ -464,14 +409,23 @@ export default function CoinStore() {
      
      const expiresAt = new Date(Date.now() + Math.max(1, durationMinutes) * 60 * 1000).toISOString()
      
-      const { error: deductErr } = await deducttroll_coins(price)
-     
-     if (deductErr) {
-       console.error('Coin deduction error:', deductErr)
-       toast.error(deductErr.message || 'Failed to deduct coins')
-       return
-     }
-     
+    const { error: deductErr } = await deductCoins({
+      userId: user.id,
+      amount: price,
+      type: 'perk_purchase',
+      description: `Purchased perk: ${perk.name}`,
+      metadata: { perk_id: perk.id },
+      supabaseClient: supabase,
+    })
+    
+    if (deductErr) {
+      console.error('Coin deduction error:', deductErr)
+      toast.error(formatDeductErrorMessage(deductErr))
+      return
+    }
+    
+    await refreshCoins()
+
      const { error: insertErr } = await supabase.from('user_perks').insert([{
        user_id: user.id,
        perk_id: perk.id,
@@ -492,17 +446,7 @@ export default function CoinStore() {
        return
      }
      
-     // Log the transaction
-      await logCoinTransaction({
-        user_id: user.id,
-        type: 'perk_purchase',
-        amount: price,
-        coin_delta: -price,
-        description: `Purchased perk: ${perk.name}`,
-        metadata: { perk_id: perk.id }
-      })
-     
-     toast.success('Perk purchased')
+      toast.success('Perk purchased')
      showPurchaseCompleteOverlay()
      await loadWalletData(false)
    } catch (err) {
@@ -526,14 +470,23 @@ export default function CoinStore() {
        return
      }
      
-      const { error: deductErr } = await deducttroll_coins(price)
+    const { error: deductErr } = await deductCoins({
+      userId: user.id,
+      amount: price,
+      type: 'insurance_purchase',
+      description: `Purchased insurance: ${plan.name}`,
+      metadata: { insurance_id: plan.id },
+      supabaseClient: supabase,
+    })
      
-     if (deductErr) {
-       console.error('Coin deduction error:', deductErr)
-       toast.error(deductErr.message || 'Failed to deduct coins')
-       return
-     }
+      if (deductErr) {
+        console.error('Coin deduction error:', deductErr)
+        toast.error(formatDeductErrorMessage(deductErr))
+        return
+      }
      
+      await refreshCoins()
+
      const expiresAt = new Date(Date.now() + Math.max(1, durationHours) * 60 * 60 * 1000).toISOString()
      
      const { error: insertErr } = await supabase.from('user_insurances').insert([{
@@ -556,17 +509,7 @@ export default function CoinStore() {
        return
      }
      
-     // Log the transaction
-      await logCoinTransaction({
-        user_id: user.id,
-        type: 'insurance_purchase',
-        amount: price,
-        coin_delta: -price,
-        description: `Purchased insurance: ${plan.name}`,
-        metadata: { insurance_id: plan.id }
-      })
-     
-     toast.success('Insurance purchased')
+      toast.success('Insurance purchased')
      showPurchaseCompleteOverlay()
      await loadWalletData(false)
    } catch (err) {
@@ -581,50 +524,30 @@ export default function CoinStore() {
       return;
     }
 
-    const paidCost = Math.floor(pkg.totalCost / 2);
-    const freeCost = pkg.totalCost - paidCost;
+    const totalCost = Number(pkg.totalCost || 0);
+    if (!Number.isFinite(totalCost) || totalCost <= 0) {
+      toast.error('Invalid package cost');
+      return;
+    }
 
-    if (troll_coins < paidCost || trollmonds < freeCost) {
-      toast.error(
-        `Need ${formatCoins(paidCost)} troll_coins and ${formatCoins(freeCost)} trollmonds to purchase.`
-      );
+    if (troll_coins < totalCost) {
+      toast.error(`Need ${formatCoins(totalCost)} troll_coins to purchase this package.`);
       return;
     }
 
     setLoadingPackage(pkg.id);
     try {
-      const paidResult = await deductCoins({
+      const deduction = await deductCoins({
         userId: user.id,
-        amount: paidCost,
+        amount: totalCost,
         type: 'call_minutes',
-        coinType: 'troll_coins',
         description: `Purchased ${pkg.minutes} ${pkg.type} call minutes`,
-        metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
+        metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type },
+        supabaseClient: supabase,
       });
 
-      if (!paidResult?.success) {
-        throw new Error(paidResult?.error || 'Failed to deduct troll_coins');
-      }
-
-      const freeResult = await deductCoins({
-        userId: user.id,
-        amount: freeCost,
-        type: 'call_minutes',
-        coinType: 'trollmonds',
-        description: `Purchased ${pkg.minutes} ${pkg.type} call minutes`,
-        metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
-      });
-
-      if (!freeResult?.success) {
-        await addCoins({
-          userId: user.id,
-          amount: paidCost,
-          type: 'refund',
-          coinType: 'troll_coins',
-          description: `Refund for ${pkg.minutes} ${pkg.type} call minutes`,
-          metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
-        });
-        throw new Error(freeResult?.error || 'Failed to deduct trollmonds');
+      if (!deduction?.success) {
+        throw new Error(deduction?.error || 'Failed to deduct troll_coins');
       }
 
       const { error } = await supabase.rpc('add_call_minutes', {
@@ -636,19 +559,12 @@ export default function CoinStore() {
       if (error) {
         await addCoins({
           userId: user.id,
-          amount: paidCost,
+          amount: totalCost,
           type: 'refund',
           coinType: 'troll_coins',
           description: `Refund for ${pkg.minutes} ${pkg.type} call minutes`,
-          metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
-        });
-        await addCoins({
-          userId: user.id,
-          amount: freeCost,
-          type: 'refund',
-          coinType: 'trollmonds',
-          description: `Refund for ${pkg.minutes} ${pkg.type} call minutes`,
-          metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type }
+          metadata: { package_id: pkg.id, minutes: pkg.minutes, call_type: pkg.type },
+          supabaseClient: supabase
         });
         throw error;
       }
@@ -764,25 +680,6 @@ export default function CoinStore() {
     );
   }
 
-  if (!walletMeta && !loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
-        <div className="max-w-4xl mx-auto bg-zinc-900 border border-gray-700 rounded-xl p-8 text-center">
-          <Coins className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Wallet Data Not Available</h2>
-          <p className="text-gray-400 mb-6">Unable to load your wallet information</p>
-          <button
-            type="button"
-            onClick={loadWalletData}
-            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
         <PayPalScriptProvider
         options={{
@@ -828,41 +725,16 @@ export default function CoinStore() {
               Your Wallet Balance
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Total Coins */}
-              <div className="bg-zinc-900 rounded-lg p-4 border border-purple-500/30">
-                <div className="flex items-center gap-2 mb-2">
-                  <Coins className="w-5 h-5 text-purple-400" />
-                  <span className="text-sm text-gray-400">Total Coins</span>
-                </div>
-                <p className="text-2xl font-bold text-purple-400">
-                  {formatCoins(troll_coins + trollmonds)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Troll Coins + Trollmonds combined</p>
-              </div>
-
-              {/* troll_coins */}
+            <div className="grid grid-cols-1 gap-4">
               <div className="bg-zinc-900 rounded-lg p-4 border border-yellow-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Coins className="w-5 h-5 text-yellow-400" />
-                <span className="text-sm text-gray-400">Troll Coins</span>
-              </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Coins className="w-5 h-5 text-yellow-400" />
+                  <span className="text-sm text-gray-400">Troll Coins</span>
+                </div>
                 <p className="text-2xl font-bold text-yellow-400">
                   {formatCoins(troll_coins)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">withdrawable balance</p>
-              </div>
-
-              {/* trollmonds */}
-              <div className="bg-zinc-900 rounded-lg p-4 border border-green-500/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Coins className="w-5 h-5 text-green-400" />
-                <span className="text-sm text-gray-400">Trollmonds</span>
-              </div>
-                <p className="text-2xl font-bold text-green-400">
-                  {formatCoins(trollmonds)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">earned from activities</p>
               </div>
             </div>
 
@@ -1086,10 +958,6 @@ export default function CoinStore() {
                             console.error("❌ PayPal error:", err);
                             toast.error("PayPal checkout error. Please try again later.");
                           }}
-                          createBillingAgreement={async () => {
-                            // This is for subscriptions, but we'll provide it for completeness
-                            throw new Error("Subscriptions not supported");
-                          }}
                         />
                         <div className="mt-2 text-xs text-gray-400 text-center">
                           Secure PayPal checkout
@@ -1149,61 +1017,53 @@ export default function CoinStore() {
               <>
                 <h2 className="text-xl font-bold mb-4">Call Minutes</h2>
                 <p className="text-sm text-gray-400 mb-6">
-                  Call minutes are split 50/50 between troll_coins and trollmonds.
+                  Call minutes are priced in Troll Coins only.
                 </p>
 
                 <div className="space-y-6">
                   <div>
                     <h3 className="text-lg font-semibold text-purple-300 mb-3">Audio Call Packages</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {callPackages.audio.map((pkg) => {
-                        const paidCost = Math.floor(pkg.totalCost / 2);
-                        const freeCost = pkg.totalCost - paidCost;
-                        return (
-                          <div key={pkg.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
-                            <div className="font-semibold mb-1">{pkg.name}</div>
-                            <div className="text-sm text-gray-400 mb-3">{pkg.minutes.toLocaleString()} minutes</div>
-                            <div className="text-sm text-gray-300">
-                              {formatCoins(paidCost)} troll_coins + {formatCoins(freeCost)} trollmonds
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => buyCallMinutes({ ...pkg, type: 'audio' })}
-                              disabled={loadingPackage === pkg.id}
-                              className="mt-4 w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded font-semibold"
-                            >
-                              {loadingPackage === pkg.id ? 'Processing...' : 'Purchase'}
-                            </button>
+                      {callPackages.audio.map((pkg) => (
+                        <div key={pkg.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
+                          <div className="font-semibold mb-1">{pkg.name}</div>
+                          <div className="text-sm text-gray-400 mb-3">{pkg.minutes.toLocaleString()} minutes</div>
+                          <div className="text-sm text-gray-300">
+                            {formatCoins(pkg.totalCost)} Troll Coins
                           </div>
-                        );
-                      })}
+                          <button
+                            type="button"
+                            onClick={() => buyCallMinutes({ ...pkg, type: 'audio' })}
+                            disabled={loadingPackage === pkg.id}
+                            className="mt-4 w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded font-semibold"
+                          >
+                            {loadingPackage === pkg.id ? 'Processing...' : 'Purchase'}
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-lg font-semibold text-purple-300 mb-3">Video Call Packages</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {callPackages.video.map((pkg) => {
-                        const paidCost = Math.floor(pkg.totalCost / 2);
-                        const freeCost = pkg.totalCost - paidCost;
-                        return (
-                          <div key={pkg.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
-                            <div className="font-semibold mb-1">{pkg.name}</div>
-                            <div className="text-sm text-gray-400 mb-3">{pkg.minutes.toLocaleString()} minutes</div>
-                            <div className="text-sm text-gray-300">
-                              {formatCoins(paidCost)} troll_coins + {formatCoins(freeCost)} trollmonds
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => buyCallMinutes({ ...pkg, type: 'video' })}
-                              disabled={loadingPackage === pkg.id}
-                              className="mt-4 w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded font-semibold"
-                            >
-                              {loadingPackage === pkg.id ? 'Processing...' : 'Purchase'}
-                            </button>
+                      {callPackages.video.map((pkg) => (
+                        <div key={pkg.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20">
+                          <div className="font-semibold mb-1">{pkg.name}</div>
+                          <div className="text-sm text-gray-400 mb-3">{pkg.minutes.toLocaleString()} minutes</div>
+                          <div className="text-sm text-gray-300">
+                            {formatCoins(pkg.totalCost)} Troll Coins
                           </div>
-                        );
-                      })}
+                          <button
+                            type="button"
+                            onClick={() => buyCallMinutes({ ...pkg, type: 'video' })}
+                            disabled={loadingPackage === pkg.id}
+                            className="mt-4 w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded font-semibold"
+                          >
+                            {loadingPackage === pkg.id ? 'Processing...' : 'Purchase'}
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

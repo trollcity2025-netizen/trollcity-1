@@ -17,12 +17,12 @@ export default function Withdraw() {
     
     const { data } = await supabase
       .from("user_profiles")
-      .select("paid_coin_balance, total_earned_coins")
+      .select("troll_coins, total_earned_coins")
       .eq("id", user.id)
       .single();
 
-    // Use paid_coin_balance for withdrawals (withdrawable coins)
-    setBalance(data?.paid_coin_balance || data?.total_earned_coins || 0);
+    // Use troll_coins for withdrawals (withdrawable coins)
+    setBalance(data?.troll_coins || data?.total_earned_coins || 0);
   };
 
   const requestPayout = async () => {

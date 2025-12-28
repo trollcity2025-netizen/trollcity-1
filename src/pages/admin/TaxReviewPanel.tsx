@@ -208,7 +208,7 @@ export default function TaxReviewPanel() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-yellow-400 font-semibold">
-                        {(review.paid_coin_balance || 0).toLocaleString()} coins
+                        {(review.troll_coins || 0).toLocaleString()} coins
                       </div>
                     </td>
                     <td className="px-4 py-3">

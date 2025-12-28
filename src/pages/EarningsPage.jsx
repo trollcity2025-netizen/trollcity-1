@@ -39,11 +39,26 @@ export default function EarningsPage() {
       // Load user profile data with coin balances
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('paid_coin_balance, free_coin_balance, total_earned_coins, role, username')
+        .select(
+          'troll_coins, total_earned_coins, role, username'
+        )
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) throw profileError;
+
+      const fallbackProfile = {
+        troll_coins: profile?.troll_coins ?? 0,
+        total_earned_coins: profile?.total_earned_coins || 0,
+        role: profile?.role || 'broadcaster',
+        username: profile?.username || 'Streamer',
+      };
+
+      const earningsProfile = profileData || fallbackProfile;
+
+      const paidBalance = earningsProfile.troll_coins ?? 0;
+
+      const totalCoins = calculateTotalCoins(paidBalance, 0);
 
       // Load payout history
       const { data: payoutHistory, error: payoutError } = await supabase
@@ -53,16 +68,21 @@ export default function EarningsPage() {
         .order('created_at', { ascending: false })
         .limit(5);
 
+      if (payoutError) throw payoutError;
+
       setEarningsData({
-        ...profileData,
+        ...earningsProfile,
+        troll_coins: paidBalance,
         payoutHistory: payoutHistory || [],
-        totalCoins: calculateTotalCoins(profileData.paid_coin_balance, profileData.free_coin_balance)
+        totalCoins,
       });
 
     } catch (err) {
       console.error('Error loading earnings data:', err);
-      setError('Failed to load earnings data. Please try again.');
-      toast.error('Failed to load earnings data');
+      const errorMessage =
+        err?.message || 'Failed to load earnings data. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -75,7 +95,7 @@ export default function EarningsPage() {
       setProcessing(true);
 
       // Validate that user has enough coins
-      const totalCoins = calculateTotalCoins(profile.paid_coin_balance, profile.free_coin_balance);
+    const totalCoins = calculateTotalCoins(profile.troll_coins || 0, 0);
       if (totalCoins < tier.coins) {
         toast.error(`You need at least ${formatCoins(tier.coins)} coins for this tier`);
         return;
@@ -183,17 +203,17 @@ export default function EarningsPage() {
           </div>
 
           {/* Stats Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Total Coins */}
             <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-xl p-6 border border-purple-500/30 shadow-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Coins className="w-5 h-5 text-purple-400" />
-                <span className="text-sm text-gray-400">Total Coins</span>
+                <span className="text-sm text-gray-400">Total Troll Coins</span>
               </div>
               <p className="text-3xl font-bold text-purple-400">
                 {formatCoins(totalCoins)}
               </p>
-              <p className="text-xs text-gray-500 mt-1">paid + free coins combined</p>
+              <p className="text-xs text-gray-500 mt-1">all trolling spending balance</p>
             </div>
 
             {/* Paid Coins */}
@@ -203,21 +223,9 @@ export default function EarningsPage() {
                 <span className="text-sm text-gray-400">Troll Coins</span>
               </div>
               <p className="text-3xl font-bold text-yellow-400">
-                {formatCoins(earningsData.paid_coin_balance || 0)}
+                {formatCoins(earningsData.troll_coins || 0)}
               </p>
               <p className="text-xs text-gray-500 mt-1">withdrawable balance</p>
-            </div>
-
-            {/* Free Coins */}
-            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-xl p-6 border border-green-500/30 shadow-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Coins className="w-5 h-5 text-green-400" />
-                <span className="text-sm text-gray-400">Trollmonds</span>
-              </div>
-              <p className="text-3xl font-bold text-green-400">
-                {formatCoins(earningsData.free_coin_balance || 0)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">earned from activities</p>
             </div>
           </div>
 
