@@ -51,7 +51,6 @@ import FamilyLeaderboard from "./pages/FamilyLeaderboard.jsx";
 import FamilyShop from "./pages/FamilyShop.jsx";
 import Support from "./pages/Support";
 import Safety from "./pages/Safety";
-import OfflinePage from "./pages/Offline";
 import AdminRFC from "./components/AdminRFC";
 import AdminEarningsDashboard from "./pages/admin/AdminEarningsDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -437,7 +436,6 @@ function AppContent() {
             <main ref={mainRef} className="flex-1 overflow-y-auto bg-transparent safe-area-bottom">
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
-                  <Route path="/offline" element={<OfflinePage />} />
                 {/* 🚪 Public Routes */}
                 <Route path="/" element={user ? <Home /> : <LandingPage />} />
                 <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
