@@ -30,7 +30,6 @@ import {
 } from 'lucide-react'
 
 interface QuickActionsBarProps {
-  onRefreshAll: () => void
   onEmergencyStop: () => void
   onBroadcastMessage: () => void
   onSystemMaintenance: () => void
@@ -38,11 +37,9 @@ interface QuickActionsBarProps {
   onExportData: () => void
   onToggleMaintenanceMode: () => void
   maintenanceMode: boolean
-  refreshing: boolean
 }
 
 export default function QuickActionsBar({
-  onRefreshAll,
   onEmergencyStop,
   onBroadcastMessage,
   onSystemMaintenance,
@@ -50,19 +47,8 @@ export default function QuickActionsBar({
   onExportData,
   onToggleMaintenanceMode,
   maintenanceMode,
-  refreshing
 }: QuickActionsBarProps) {
   const quickActions = [
-    {
-      icon: <RefreshCw className="w-4 h-4" />,
-      label: 'Refresh All',
-      description: 'Update all data',
-      action: onRefreshAll,
-      color: 'text-cyan-400',
-      bgColor: 'bg-cyan-500/20',
-      borderColor: 'border-cyan-500/30',
-      disabled: refreshing
-    },
     {
       icon: <Bell className="w-4 h-4" />,
       label: 'Broadcast',

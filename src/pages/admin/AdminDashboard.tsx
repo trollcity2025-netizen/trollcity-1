@@ -288,7 +288,6 @@ export default function AdminDashboard() {
 
   // New dashboard state
   const [maintenanceMode, setMaintenanceMode] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
 
   // Admin Guard: Check admin status on mount
   useEffect(() => {
@@ -1775,21 +1774,6 @@ export default function AdminDashboard() {
   }
 
   // New dashboard handlers
-  const handleRefreshAll = async () => {
-    setRefreshing(true)
-    try {
-      await loadDashboardData()
-      await loadLiveStreams()
-      await loadEconomySummary()
-      await loadShopRevenue()
-      toast.success('All data refreshed')
-    } catch {
-      toast.error('Failed to refresh data')
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
   const handleEmergencyStop = () => {
     toast.warning('Emergency stop initiated - stopping all streams')
     // Implement emergency stop logic
@@ -2544,7 +2528,6 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
       {/* Quick Actions Bar */}
       <QuickActionsBar
-        onRefreshAll={handleRefreshAll}
         onEmergencyStop={handleEmergencyStop}
         onBroadcastMessage={handleBroadcastMessage}
         onSystemMaintenance={handleSystemMaintenance}
