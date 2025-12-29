@@ -5,7 +5,6 @@ import './index.css'
 import { LiveKitProvider } from './contexts/LiveKitContext'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
-import DesktopOnlyGuard from './components/DesktopOnlyGuard'
 // GlobalAppProvider intentionally removed per required root layout
 
 // App version for cache busting
@@ -27,8 +26,7 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <DesktopOnlyGuard>
-    <LiveKitProvider>
+  <LiveKitProvider>
       <AuthProvider>
         <GlobalAppProvider>
           <BrowserRouter>
@@ -37,5 +35,4 @@ createRoot(rootElement).render(
         </GlobalAppProvider>
       </AuthProvider>
     </LiveKitProvider>
-  </DesktopOnlyGuard>
 )
