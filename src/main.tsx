@@ -32,6 +32,14 @@ if (!rootElement) {
   throw new Error('Root element (#root) not found')
 }
 
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister()
+    }
+  })
+}
+
 createRoot(rootElement).render(
   <LiveKitProvider>
       <AuthProvider>
