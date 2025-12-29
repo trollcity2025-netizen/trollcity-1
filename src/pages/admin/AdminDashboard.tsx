@@ -195,10 +195,21 @@ export default function AdminDashboard() {
         }
 
         // Check if user is admin
-        const isAdmin = 
-          profileData?.role === 'admin' || 
+        const email = session.user.email || ''
+        const isAdminEmailMatch = isAdminEmail(email)
+        const isAdmin =
+          profileData?.role === 'admin' ||
           profileData?.is_admin === true ||
-          session.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+          isAdminEmailMatch
+
+        const isOfficerRole =
+          profileData?.role === 'troll_officer' ||
+          profileData?.role === 'lead_troll_officer'
+
+        if (isOfficerRole) {
+          setIsAuthorized(false)
+          return
+        }
 
         setIsAuthorized(isAdmin)
       } catch (error) {
@@ -2094,7 +2105,7 @@ export default function AdminDashboard() {
         <div className="px-6 py-3 rounded bg-red-950 border border-red-500 text-center">
           <p className="font-bold mb-1">Access Restricted</p>
           <p className="text-sm text-red-200">
-            This dashboard is restricted to admins and troll officers.
+            This dashboard is limited to administrators only.
           </p>
         </div>
       </div>
