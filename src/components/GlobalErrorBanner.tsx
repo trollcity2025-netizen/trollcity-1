@@ -2,7 +2,7 @@ import React from 'react';
 import { useGlobalApp } from '../contexts/GlobalAppContext';
 
 const GlobalErrorBanner: React.FC = () => {
-  const { error, errorType, clearError } = useGlobalApp();
+  const { error, clearError } = useGlobalApp();
 
   if (!error) return null;
 
@@ -14,9 +14,7 @@ const GlobalErrorBanner: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
           <div>
-            <p className="font-medium">
-              {errorType === 'offline' ? 'Connection Error' : 'Error'}
-            </p>
+            <p className="font-medium">Error</p>
             <p className="text-sm opacity-90">{error}</p>
           </div>
         </div>

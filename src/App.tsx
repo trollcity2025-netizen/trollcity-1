@@ -196,7 +196,6 @@ function AppContent() {
     isLoading: globalLoading,
     loadingMessage,
     error,
-    errorType,
     retryLastAction,
     isReconnecting,
     reconnectMessage,
@@ -417,9 +416,9 @@ function AppContent() {
 
       {/* Global Error Overlay (for critical errors) */}
       <GlobalLoadingOverlay
-        isVisible={!!error && errorType !== 'offline' && !isReconnecting}
+        isVisible={!!error && !isReconnecting}
         message={error || ''}
-        type={errorType as 'error' | 'offline'}
+        type="error"
         onRetry={retryLastAction}
       />
 
