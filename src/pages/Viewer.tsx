@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Users, Mic, MicOff, Video, VideoOff, Gift, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
@@ -10,17 +10,25 @@ import SendGiftModal from '../components/SendGiftModal'
 import GiftEventOverlay from './GiftEventOverlay'
 import { useGiftEvents } from '../lib/hooks/useGiftEvents'
 import { useStreamEarnings } from '../lib/hooks/useStreamEarnings'
+import { useLiveKitRoom, LiveKitParticipantState, LiveKitConnectionStatus } from '../hooks/useLiveKitRoom'
 
 export default function ViewerPage() {
   const { user, profile } = useAuthStore()
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-
   const [streamData, setStreamData] = useState<any>(null)
   const [viewerCount, setViewerCount] = useState(0)
   const [messages, setMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
   const [showGiftModal, setShowGiftModal] = useState(false)
   const [showEntrance, setShowEntrance] = useState(false)
+  const liveKitUser = useMemo(() => {
+    if (!user) return null
+    return {
+      id: user.id,
+      username: profile?.username || user.email?.split('@')[0] || 'Viewer',
+      role: profile?.role || (profile as any)?.troll_role || 'viewer',
+      level: profile?.level ?? 1,
+    }
+  }, [user, profile])
 
   // Load stream
   useEffect(() => {
@@ -96,6 +104,29 @@ export default function ViewerPage() {
     return () => { void supabase.removeChannel(subscription) }
   }, [streamData])
 
+  const {
+    participantsList,
+    connectionStatus: liveKitStatus,
+    error: liveKitError,
+  } = useLiveKitRoom({
+    roomName: streamData?.id || '',
+    user: liveKitUser,
+    allowPublish: false,
+    autoPublish: false,
+  })
+
+  const sortedParticipants = useMemo(() => {
+    if (!participantsList.length) return []
+    if (!streamData?.broadcaster_id) return participantsList
+    const hostIndex = participantsList.findIndex(
+      (participant) => participant.identity === streamData.broadcaster_id
+    )
+    if (hostIndex === -1) return participantsList
+    const host = participantsList[hostIndex]
+    const others = participantsList.filter((_, index) => index !== hostIndex)
+    return [host, ...others]
+  }, [participantsList, streamData?.broadcaster_id])
+
   const sendMessage = async () => {
     if (!chatInput.trim() || !streamData) return
     await supabase.from('messages').insert({
@@ -118,7 +149,13 @@ export default function ViewerPage() {
 
       {/* STREAM PLAYER */}
       <div className="relative flex-1 bg-gray-900">
-        <video ref={videoRef} autoPlay playsInline muted={false} className="w-full h-full object-contain" />
+        <ViewerVideoPanel
+          participants={sortedParticipants}
+          hostIdentity={streamData?.broadcaster_id}
+          status={liveKitStatus}
+          error={liveKitError}
+          participantCount={participantsList.length}
+        />
 
         {/* ENTRANCE EXPLOSION */}
         {showEntrance && (
@@ -266,4 +303,122 @@ export default function ViewerPage() {
     </div>
   </div>
 )
+}
+
+const connectionStatusLabels: Record<LiveKitConnectionStatus, string> = {
+  idle: 'Idle',
+  connecting: 'Connecting',
+  connected: 'Live',
+  reconnecting: 'Reconnecting',
+  disconnected: 'Disconnected',
+}
+
+const ViewerVideoPanel: React.FC<{
+  participants: LiveKitParticipantState[]
+  hostIdentity?: string
+  status: LiveKitConnectionStatus
+  error?: string | null
+  participantCount: number
+}> = ({ participants, hostIdentity, status, error, participantCount }) => {
+  const host = participants.find((participant) => participant.identity === hostIdentity) ?? participants[0]
+  const guests = host ? participants.filter((participant) => participant.identity !== host.identity) : []
+  const statusLabel = connectionStatusLabels[status] ?? 'Connecting'
+
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-black">
+      {host ? (
+        <div className="absolute inset-0">
+          <ParticipantMedia
+            participant={host}
+            label={host.identity === hostIdentity ? 'Host' : host.name}
+            withAudio
+            className="h-full w-full"
+          />
+          {guests.length > 0 && (
+            <div className="absolute bottom-4 left-4 flex gap-2">
+              {guests.slice(0, 4).map((guest) => (
+                <div key={guest.identity} className="h-16 w-24 overflow-hidden rounded-lg border border-white/10 bg-black/50">
+                  <ParticipantMedia participant={guest} className="h-full w-full" label={guest.name} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center px-6">
+          <p className="text-xs uppercase tracking-[0.4em] text-gray-300">{statusLabel}</p>
+          <p className="text-2xl font-semibold mt-2">Waiting for the broadcaster</p>
+          {error && <p className="mt-2 text-xs text-red-400 uppercase tracking-[0.3em]">{error}</p>}
+        </div>
+      )}
+
+      <div className="absolute top-4 right-4 text-[10px] uppercase tracking-[0.3em] text-gray-300">
+        {statusLabel}
+      </div>
+      <div className="absolute bottom-3 right-4 text-[10px] uppercase tracking-[0.3em] text-gray-400">
+        LiveKit participants: {participantCount}
+      </div>
+    </div>
+  )
+}
+
+const ParticipantMedia: React.FC<{
+  participant: LiveKitParticipantState
+  label?: string
+  withAudio?: boolean
+  className?: string
+}> = ({ participant, label, withAudio = false, className = '' }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  useEffect(() => {
+    const track = participant.videoTrack?.track
+    const el = videoRef.current
+    if (!track || !el) return
+    track.attach(el)
+    return () => {
+      try {
+        track.detach(el)
+      } catch {
+        //
+      }
+    }
+  }, [participant.videoTrack?.track])
+
+  useEffect(() => {
+    if (!withAudio) return
+    const track = participant.audioTrack?.track
+    const el = audioRef.current
+    if (!track || !el) return
+    track.attach(el)
+    return () => {
+      try {
+        track.detach(el)
+      } catch {
+        //
+      }
+    }
+  }, [participant.audioTrack?.track, withAudio])
+
+  return (
+    <div className={`relative overflow-hidden bg-black ${className}`}>
+      {participant.videoTrack?.track ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={participant.isLocal}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-black/80 text-center text-sm font-semibold uppercase tracking-[0.3em] text-white">
+          Waiting for video
+        </div>
+      )}
+      {withAudio && <audio ref={audioRef} autoPlay muted={participant.isLocal} />}
+      <div className="absolute bottom-3 left-3 rounded-full bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-white">
+        {label || participant.name || participant.identity}
+      </div>
+    </div>
+  )
 }

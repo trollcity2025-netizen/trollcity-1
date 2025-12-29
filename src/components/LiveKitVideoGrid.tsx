@@ -1,15 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveKit } from '../contexts/LiveKitContext'
 import { LiveKitParticipant } from '../lib/LiveKitService'
-
-// Fallback UserRole enum in case the module doesn't exist or type declarations are missing.
-// If you have a shared UserRole enum elsewhere, replace this with the correct import.
-export enum UserRole {
-  ADMIN = 'admin',
-  MODERATOR = 'moderator',
-  TROLL_OFFICER = 'troll_officer',
-  LEAD_TROLL_OFFICER = 'lead_troll_officer',
-}
+import { UserRole } from './LiveKitRoles'
 
 /* =======================
    VideoGrid
@@ -26,21 +18,26 @@ const VideoGrid: React.FC<VideoGridProps> = ({
 }) => {
   const { participants, localParticipant } = useLiveKit()
 
-  const allParticipants = Array.from(participants.values())
+  const visibleParticipants = useMemo(() => {
+    const allParticipants = Array.from(participants.values())
 
-  if (showLocalVideo && localParticipant) {
-    allParticipants.unshift(localParticipant)
-  }
+    // Local participant first if requested
+    if (showLocalVideo && localParticipant) {
+      const alreadyInList = allParticipants.some(
+        (p) => p.identity === localParticipant.identity
+      )
+      if (!alreadyInList) {
+        allParticipants.unshift(localParticipant)
+      }
+    }
 
-  const visibleParticipants = allParticipants.slice(0, maxParticipants)
+    return allParticipants.slice(0, maxParticipants)
+  }, [participants, localParticipant, showLocalVideo, maxParticipants])
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 h-full">
       {visibleParticipants.map((participant) => (
-        <ParticipantVideo
-          key={participant.identity}
-          participant={participant}
-        />
+        <ParticipantVideo key={participant.identity} participant={participant} />
       ))}
     </div>
   )
@@ -63,25 +60,44 @@ const ParticipantVideo: React.FC<ParticipantVideoProps> = ({ participant }) => {
     const audioTrack = participant.audioTrack?.track
 
     if (videoTrack && videoRef.current) {
-      videoTrack.attach(videoRef.current)
+      try {
+        videoTrack.attach(videoRef.current)
+      } catch (e) {
+        console.warn('Video attach failed:', e)
+      }
     }
 
     if (audioTrack && audioRef.current) {
-      audioTrack.attach(audioRef.current)
+      try {
+        audioTrack.attach(audioRef.current)
+      } catch (e) {
+        console.warn('Audio attach failed:', e)
+      }
     }
 
     return () => {
-      if (videoTrack && videoRef.current) {
-        videoTrack.detach(videoRef.current)
+      try {
+        if (videoTrack && videoRef.current) {
+          videoTrack.detach(videoRef.current)
+        }
+      } catch (e) {
+        console.warn('Video detach failed:', e)
       }
-      if (audioTrack && audioRef.current) {
-        audioTrack.detach(audioRef.current)
+
+      try {
+        if (audioTrack && audioRef.current) {
+          audioTrack.detach(audioRef.current)
+        }
+      } catch (e) {
+        console.warn('Audio detach failed:', e)
       }
     }
   }, [participant.videoTrack?.track, participant.audioTrack?.track])
 
+  const displayName = participant.name || participant.identity
+
   return (
-    <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">
+    <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video border border-white/10">
       {participant.videoTrack?.track ? (
         <video
           ref={videoRef}
@@ -96,18 +112,19 @@ const ParticipantVideo: React.FC<ParticipantVideoProps> = ({ participant }) => {
             <div className="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-2 flex items-center justify-center">
               <span className="text-2xl">👤</span>
             </div>
-            <div className="text-sm">
-              {participant.name || participant.identity}
-            </div>
+            <div className="text-sm font-semibold">{displayName}</div>
+            <div className="text-xs opacity-70 mt-1">Waiting for video…</div>
           </div>
         </div>
       )}
 
+      {/* audio always exists as element so remote audio can play */}
       <audio ref={audioRef} autoPlay />
 
-      <div className="absolute bottom-2 left-2 text-white text-sm bg-black/50 px-2 py-1 rounded">
-        {participant.name || participant.identity}
-        {participant.isMicrophoneEnabled ? ' 🎤' : ' 🔇'}
+      <div className="absolute bottom-2 left-2 text-white text-xs bg-black/60 px-2 py-1 rounded flex items-center gap-2">
+        <span className="font-semibold">{displayName}</span>
+        <span>{participant.isMicrophoneEnabled ? '🎤' : '🔇'}</span>
+        <span>{participant.isCameraEnabled ? '📷' : '🚫'}</span>
       </div>
     </div>
   )
@@ -124,10 +141,19 @@ interface LiveKitRoomWrapperProps {
   showLocalVideo?: boolean
   maxParticipants?: number
   role?: UserRole | 'viewer'
+  autoPublish?: boolean
   autoConnect?: boolean
   children?: React.ReactNode
 }
 
+/**
+ * Drop-in replacement for your existing wrapper.
+ *
+ * IMPORTANT:
+ * - It will connect ONLY when roomName + identity exist.
+ * - It will retry connect if those values load later.
+ * - It will auto-publish if allowed and autoPublish is enabled.
+ */
 export function LiveKitRoomWrapper({
   roomName,
   identity,
@@ -136,6 +162,7 @@ export function LiveKitRoomWrapper({
   showLocalVideo = true,
   maxParticipants = 6,
   role = 'viewer',
+  autoPublish = true,
   autoConnect = true,
 }: LiveKitRoomWrapperProps) {
   const {
@@ -151,7 +178,7 @@ export function LiveKitRoomWrapper({
   const didConnectRef = useRef(false)
 
   /* =======================
-     ROLE INTENT (UI ONLY)
+     ROLE CHECK (UI INTENT)
   ======================= */
   const roleAllowsPublish =
     role === UserRole.ADMIN ||
@@ -159,21 +186,21 @@ export function LiveKitRoomWrapper({
     role === UserRole.TROLL_OFFICER ||
     role === UserRole.LEAD_TROLL_OFFICER
 
-  /* =======================
-     TOKEN PERMISSION (TRUTH)
-  ======================= */
-  const tokenAllowsPublish =
-    (localParticipant as any)?.permissions?.canPublish !== false &&
-    (localParticipant as any)?.participantInfo?.permissions?.canPublish !== false
-
-  const canPublish = roleAllowsPublish && tokenAllowsPublish
+  /**
+   * IMPORTANT:
+   * We DO NOT try to read token permissions from localParticipant because
+   * LiveKit doesn't expose them that way reliably.
+   *
+   * TRUE permission enforcement must happen on the token endpoint.
+   * If token forbids publishing, startPublishing() will fail.
+   */
+  const canAttemptPublish = roleAllowsPublish
 
   const isAlreadyPublishing =
-    !!localParticipant?.videoTrack?.track ||
-    !!localParticipant?.audioTrack?.track
+    !!localParticipant?.videoTrack?.track || !!localParticipant?.audioTrack?.track
 
   const handleStartPublishing = async () => {
-    if (!canPublish || isAlreadyPublishing) return
+    if (!canAttemptPublish || isAlreadyPublishing) return
 
     setIsPublishing(true)
     try {
@@ -186,45 +213,70 @@ export function LiveKitRoomWrapper({
   }
 
   /* =======================
-     CONNECT (PASS ROLE)
+     CONNECT (FIXED)
+     - waits for identity+roomName
+     - retries if they load after initial render
   ======================= */
   useEffect(() => {
     if (!autoConnect) return
-    if (didConnectRef.current) return
+    if (!roomName || !identity) return
 
-    didConnectRef.current = true
+    // Only connect once per identity+roomName combo
+    const connectKey = `${roomName}:${identity}:${role}`
+    if ((didConnectRef.current as any) === connectKey) return
 
-    // `role` is not part of the declared LiveKitServiceConfig type; cast options to `any`
-    // so the runtime value is still passed through without a type error.
+    ;(didConnectRef.current as any) = connectKey
+
     connect(roomName, identity, {
-      autoPublish: true,
+      autoPublish,
       role,
     } as any).catch((err) => {
       console.error('LiveKit connect failed:', err)
-      didConnectRef.current = false
+      // allow retry
+      didConnectRef.current = false as any
     })
-  }, [])
+  }, [autoConnect, roomName, identity, role, autoPublish, connect])
 
   /* =======================
      AUTO-PUBLISH
   ======================= */
   useEffect(() => {
     if (!isConnected) return
-    if (!canPublish) return
+    if (!autoPublish) return
+    if (!canAttemptPublish) return
     if (isAlreadyPublishing) return
+    if (isPublishing) return
 
-    startPublishing().catch(console.error)
-  }, [isConnected, canPublish, isAlreadyPublishing])
+    startPublishing().catch((err) => {
+      console.error('Auto publish failed:', err)
+    })
+  }, [isConnected, autoPublish, canAttemptPublish, isAlreadyPublishing])
 
   /* =======================
      STATES
   ======================= */
+  if (!roomName || !identity) {
+    return (
+      <div className={`flex items-center justify-center bg-black ${className}`}>
+        <div className="text-center text-white">
+          <div className="text-sm opacity-80">Preparing live room…</div>
+          <div className="text-xs opacity-50 mt-2">
+            Waiting for room + user identity…
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (isConnecting) {
     return (
       <div className={`flex items-center justify-center bg-black ${className}`}>
         <div className="text-center text-white">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-2" />
           <div className="text-sm">Connecting to stream…</div>
+          <div className="text-xs opacity-60 mt-1">
+            Room: {roomName}
+          </div>
         </div>
       </div>
     )
@@ -232,10 +284,18 @@ export function LiveKitRoomWrapper({
 
   if (error) {
     return (
-      <div className={`flex items-center justify-center bg-black border-2 border-red-500 ${className}`}>
-        <div className="text-center text-red-400">
+      <div
+        className={`flex items-center justify-center bg-black border-2 border-red-500 ${className}`}
+      >
+        <div className="text-center text-red-400 p-4">
           <div className="text-2xl mb-2">❌</div>
-          <div className="text-sm">{error}</div>
+          <div className="text-sm font-semibold">LiveKit Error</div>
+          <div className="text-xs opacity-80 mt-2 max-w-md break-words">
+            {error}
+          </div>
+          <div className="text-xs opacity-60 mt-3">
+            Room: {roomName}
+          </div>
         </div>
       </div>
     )
@@ -246,12 +306,10 @@ export function LiveKitRoomWrapper({
   ======================= */
   return (
     <div className={className}>
-      <VideoGrid
-        showLocalVideo={showLocalVideo}
-        maxParticipants={maxParticipants}
-      />
+      <VideoGrid showLocalVideo={showLocalVideo} maxParticipants={maxParticipants} />
 
-      {isConnected && canPublish && !isAlreadyPublishing && (
+      {/* Manual publish button if connected, allowed, but not yet publishing */}
+      {isConnected && canAttemptPublish && !isAlreadyPublishing && (
         <div className="mt-4 flex justify-center">
           <button
             onClick={handleStartPublishing}
@@ -270,7 +328,8 @@ export function LiveKitRoomWrapper({
         </div>
       )}
 
-      {isConnected && !canPublish && (
+      {/* Viewer notice */}
+      {isConnected && !canAttemptPublish && (
         <div className="mt-4 text-center text-gray-400">
           You are viewing this stream as a spectator.
         </div>
