@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
@@ -13,10 +13,55 @@ export default function TermsAgreement() {
   const [paymentAgreed, setPaymentAgreed] = useState(false)
   const [creatorAgreed, setCreatorAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [authRequired, setAuthRequired] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!mounted) return
+        if (!data?.user) {
+          setAuthRequired(true)
+          navigate('/auth', { replace: true })
+          return
+        }
+        setAuthChecked(true)
+      })
+      .catch((error) => {
+        if (!mounted) return
+        console.error('[Terms] auth check failed', error)
+        setAuthRequired(true)
+        navigate('/auth', { replace: true })
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [navigate])
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg text-gray-300">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleAgree = async () => {
     if (!agreed || !privacyAgreed || !paymentAgreed || !creatorAgreed) {
       toast.error('You must agree to all terms to continue')
+      return
+    }
+    if (!authChecked || authRequired) {
+      toast.error('You need to be logged in to accept the terms.')
+      return
+    }
+    if (!profile) {
+      toast.error('Profile not loaded yet. Please wait a moment.')
       return
     }
 
