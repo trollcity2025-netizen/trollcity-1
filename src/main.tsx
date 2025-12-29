@@ -32,12 +32,22 @@ if (!rootElement) {
   throw new Error('Root element (#root) not found')
 }
 
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  void navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister()
-    }
-  })
+if (typeof window !== 'undefined') {
+  if ('serviceWorker' in navigator) {
+    void navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister()
+      }
+    })
+  }
+
+  if ('caches' in window) {
+    void caches.keys().then((cacheNames) => {
+      for (const cacheName of cacheNames) {
+        void caches.delete(cacheName)
+      }
+    })
+  }
 }
 
 createRoot(rootElement).render(
