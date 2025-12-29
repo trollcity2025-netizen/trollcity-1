@@ -28,6 +28,7 @@ const fallbackCatalogs: Record<TableKey, any[]> = {
     { id: 'perk_chat_shine', name: 'Chat Shine', cost: 2000, duration_minutes: 1440, perk_type: 'visibility' },
     { id: 'perk_coin_magnet', name: 'Coin Magnet', cost: 4500, duration_minutes: 1440, perk_type: 'boost' },
     { id: 'perk_global_highlight', name: 'Glowing Username', cost: 8000, duration_minutes: 60, perk_type: 'cosmetic' },
+    { id: 'perk_rgb_username', name: 'RGB Username', cost: 420, duration_minutes: 1440, perk_type: 'cosmetic' },
   ],
   insurance_options: [
     { id: 'insurance_basic_week', name: 'Basic Coverage', cost: 8000, duration_hours: 168, protection_type: 'gambling' },

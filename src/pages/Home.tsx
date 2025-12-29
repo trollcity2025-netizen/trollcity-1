@@ -515,6 +515,53 @@ const HomePageContent = () => {
     }
   }
 
+  useEffect(() => {
+    if (typeof document === 'undefined' || !document.body) return
+
+    const bannerTerms = [
+      'refresh now to load the latest experience',
+      'update available',
+    ]
+
+    const matchesBanner = (text?: string) => {
+      if (!text) return false
+      const lowerText = text.toLowerCase()
+      return bannerTerms.some((term) => lowerText.includes(term))
+    }
+
+    const removeCurrentBanner = () => {
+      const body = document.body
+      if (!body) return false
+      const candidate = Array.from(body.querySelectorAll<HTMLElement>('*')).find((element) =>
+        matchesBanner(element.textContent || '')
+      )
+      if (candidate) {
+        candidate.remove()
+        return true
+      }
+      return false
+    }
+
+    let observer: MutationObserver | null = null
+    if (!removeCurrentBanner() && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(() => {
+        if (removeCurrentBanner()) {
+          observer?.disconnect()
+          observer = null
+        }
+      })
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      })
+    }
+
+    return () => {
+      observer?.disconnect()
+    }
+  }, [])
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [liveStreams, setLiveStreams] = useState<HomeStream[]>([]);
   const [bufferedStreams, setBufferedStreams] = useState<HomeStream[]>([]); // dY Step 5: Buffered state for smooth transitions

@@ -33,6 +33,7 @@ async function seedData() {
       { id: 'perk_ghost_mode', name: 'Ghost Mode (30m)', cost: 1200, description: 'View streams in stealth without status indicators', duration_minutes: 30, perk_type: 'visibility' },
       { id: 'perk_message_admin', name: 'Message Admin (Officer Only)', cost: 250, description: 'Unlock DM to Admin', duration_minutes: 10080, perk_type: 'chat' },
       { id: 'perk_global_highlight', name: 'Glowing Username (1h)', cost: 8000, description: 'Your username glows neon in all chats & gift animations', duration_minutes: 60, perk_type: 'cosmetic' },
+      { id: 'perk_rgb_username', name: 'RGB Username (24h)', cost: 420, description: 'Rainbow glow visible to everyone', duration_minutes: 1440, perk_type: 'cosmetic' },
       { id: 'perk_slowmo_chat', name: 'Slow-Motion Chat Control (5hrs)', cost: 15000, description: 'Activate chat slow-mode in any live stream', duration_minutes: 300, perk_type: 'chat' },
       { id: 'perk_troll_alarm', name: 'Troll Alarm Arrival (100hrs)', cost: 2000, description: 'Sound + flash announces your arrival', duration_minutes: 6000, perk_type: 'cosmetic' },
       { id: 'perk_ban_shield', name: 'Ban Shield (2hrs)', cost: 1700, description: 'Immunity from kick, mute, or ban for 2 hours', duration_minutes: 120, perk_type: 'protection' },

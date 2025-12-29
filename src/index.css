@@ -248,6 +248,53 @@ body::before {
   text-shadow: 0 0 10px var(--troll-gold), 0 0 20px var(--troll-gold);
 }
 
+@keyframes rgb-glow {
+  0% {
+    color: #ff4d4d;
+    text-shadow:
+      0 0 6px rgba(255, 77, 77, 0.7),
+      0 0 12px rgba(0, 255, 255, 0.6),
+      0 0 18px rgba(255, 255, 0, 0.6);
+  }
+  25% {
+    color: #ffd700;
+    text-shadow:
+      0 0 8px rgba(255, 215, 0, 0.8),
+      0 0 14px rgba(0, 255, 136, 0.6),
+      0 0 20px rgba(255, 0, 128, 0.6);
+  }
+  50% {
+    color: #00ffff;
+    text-shadow:
+      0 0 8px rgba(0, 255, 255, 0.8),
+      0 0 14px rgba(255, 0, 204, 0.6),
+      0 0 20px rgba(255, 255, 0, 0.6);
+  }
+  75% {
+    color: #ff0080;
+    text-shadow:
+      0 0 6px rgba(255, 0, 128, 0.8),
+      0 0 12px rgba(0, 255, 136, 0.6),
+      0 0 18px rgba(255, 204, 0, 0.6);
+  }
+  100% {
+    color: #9d4edd;
+    text-shadow:
+      0 0 10px rgba(157, 78, 221, 0.8),
+      0 0 16px rgba(0, 255, 255, 0.5),
+      0 0 24px rgba(255, 255, 255, 0.5);
+  }
+}
+
+.rgb-username {
+  animation: rgb-glow 3s ease-in-out infinite alternate;
+  background: linear-gradient(90deg, #ff0080, #ffea00, #00ffff, #ff4d4d, #9d4edd);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-weight: 700;
+}
+
 /* Neon borders and glows matching image */
 .neon-border-green {
   border: 1px solid var(--troll-green-neon);

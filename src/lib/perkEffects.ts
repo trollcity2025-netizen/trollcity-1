@@ -32,6 +32,9 @@ export async function canMessageAdmin(userId: string): Promise<boolean> {
  * Add neon glow effect to username
  */
 export async function getUsernameGlowClass(userId: string): Promise<string> {
+  if (await isPerkActive(userId, 'perk_rgb_username')) {
+    return 'rgb-username';
+  }
   const isActive = await isPerkActive(userId, 'perk_global_highlight');
   return isActive ? 'glowing-username' : '';
 }
@@ -114,8 +117,6 @@ export function applyGlowingUsername(usernameElement: HTMLElement, userId: strin
   getUsernameGlowClass(userId).then(glowClass => {
     if (glowClass) {
       usernameElement.classList.add(glowClass);
-      // Add CSS animation
-      usernameElement.style.animation = 'glow 2s ease-in-out infinite alternate';
     }
   });
 }

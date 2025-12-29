@@ -1,10 +1,13 @@
+// LiveBroadcast.tsx (drop-in replacement)
+// Notes: fixes role logic, stable LiveKit identity, safer chat hydration, autoscroll,
+// type cleanup, and an optional atomic entry-payment RPC with a safe fallback.
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid'
-import { useLiveKit } from '../contexts/LiveKitContext'
 import { useGiftSystem, GiftItem } from '../lib/hooks/useGiftSystem'
 import { UserRole } from '../lib/supabase'
 import type { LucideIcon } from 'lucide-react'
@@ -20,6 +23,7 @@ import {
   Power,
   Settings,
 } from 'lucide-react'
+import { useLiveKit } from '../contexts/LiveKitContext'
 
 type StreamData = {
   id: string
@@ -41,6 +45,7 @@ type StreamData = {
   total_gifts_coins: number
   status: string
   room_name?: string
+  is_live?: boolean
 }
 
 type UserProfile = {
@@ -50,7 +55,6 @@ type UserProfile = {
   role: UserRole
   troll_family_id?: string
   troll_coins?: number
-  troll_coins?: number
   xp?: number
   is_admin?: boolean
   is_lead_officer?: boolean
@@ -58,13 +62,19 @@ type UserProfile = {
 
 type StreamMessage = {
   id: string
+  stream_id?: string
   user_id: string
-  username: string
+  username?: string
   content: string
   message_type?: string
   created_at: string
   role?: string
   level?: number
+  user_profiles?: {
+    username?: string
+    role?: string
+    level?: number
+  }
 }
 
 type ProfileCacheEntry = {
@@ -82,9 +92,7 @@ type ActionButtonProps = {
 const formatTimer = (seconds: number) => {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
-  return `${minutes.toString().padStart(2, '0')}:${secs
-    .toString()
-    .padStart(2, '0')}`
+  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 const ActionButton: React.FC<ActionButtonProps> = ({ icon: Icon, label, onClick }) => {
@@ -111,109 +119,144 @@ const GIFT_OFFERS: GiftItem[] = [
   { id: 'crown', name: 'Royal Crown', coinCost: 1200, type: 'paid' },
 ]
 
+const LOCAL_VIEWER_ID_KEY = 'trollcity_viewer_id_v1'
+
 const LiveBroadcast: React.FC = () => {
   const { streamId } = useParams<{ streamId: string }>()
   const { user, profile } = useAuthStore()
 
   const [stream, setStream] = useState<StreamData | null>(null)
   const [broadcaster, setBroadcaster] = useState<UserProfile | null>(null)
+
   const [likeCount, setLikeCount] = useState(0)
   const [hasPaidEntry, setHasPaidEntry] = useState(false)
+
   const [showGiftDrawer, setShowGiftDrawer] = useState(false)
   const [messages, setMessages] = useState<StreamMessage[]>([])
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [chatTable, setChatTable] = useState<'stream_messages' | 'messages'>('stream_messages')
+
   const [showGuestPanel, setShowGuestPanel] = useState(false)
   const [showMenuPanel, setShowMenuPanel] = useState(false)
-  const [mediaRequestState, setMediaRequestState] = useState<'idle' | 'requesting' | 'granted' | 'denied'>(
-    'idle'
-  )
+
+  const [mediaRequestState, setMediaRequestState] = useState<
+    'idle' | 'requesting' | 'granted' | 'denied'
+  >('idle')
   const [activeGiftId, setActiveGiftId] = useState<string | null>(null)
   const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [liveSeconds, setLiveSeconds] = useState(0)
+
   const [chatDraft, setChatDraft] = useState('')
   const [maxGuestSlots, setMaxGuestSlots] = useState(3)
+
   const profileCacheRef = useRef<Map<string, ProfileCacheEntry>>(new Map())
-  const messageSelectFields = `
-    id,
-    user_id,
-    content,
-    created_at,
-    user_profiles (
-      username,
-      role,
-      level
-    )
-  `
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
+  const chatScrollRef = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScrollRef = useRef(true)
+
+  const messageSelectFields = useMemo(
+    () => `
+      id,
+      stream_id,
+      user_id,
+      content,
+      created_at,
+      message_type,
+      user_profiles (
+        username,
+        role,
+        level
+      )
+    `,
+    []
+  )
+
+  const viewerIdentity = useMemo(() => {
+    if (user?.id) return user.id
+    if (typeof window === 'undefined') return `viewer-server`
+    const existing = window.localStorage.getItem(LOCAL_VIEWER_ID_KEY)
+    if (existing) return existing
+    const created = `viewer-${crypto.randomUUID()}`
+    window.localStorage.setItem(LOCAL_VIEWER_ID_KEY, created)
+    return created
+  }, [user?.id])
 
   const ensureProfileInfo = useCallback(async (userId: string) => {
-    if (!userId) {
-      return { username: 'Anonymous', role: 'viewer', level: 1 }
-    }
+    if (!userId) return { username: 'Anonymous', role: 'viewer', level: 1 }
     const cached = profileCacheRef.current.get(userId)
-    if (cached) {
-      return cached
-    }
-    const { data } = await supabase
+    if (cached) return cached
+
+    const { data, error } = await supabase
       .from('user_profiles')
       .select('username, role, level')
       .eq('id', userId)
       .maybeSingle()
 
+    if (error) {
+      // soft-fail
+      const fallback = { username: 'Anonymous', role: 'viewer', level: 1 }
+      profileCacheRef.current.set(userId, fallback)
+      return fallback
+    }
+
     const profileInfo: ProfileCacheEntry = {
       username: data?.username || 'Anonymous',
-      role: data?.role || 'viewer',
+      role: (data?.role as string) || 'viewer',
       level: data?.level ?? 1,
     }
     profileCacheRef.current.set(userId, profileInfo)
     return profileInfo
   }, [])
 
-  const buildStreamMessage = useCallback(
-    (
-      row: StreamMessage & { user_profiles?: ProfileCacheEntry },
-      profileOverride?: ProfileCacheEntry
-    ): StreamMessage => {
-      const profileData =
-        profileOverride ??
-        row.user_profiles ??
-        (row.user_id ? profileCacheRef.current.get(row.user_id) : undefined)
-      const username = row.username || profileData?.username || 'Anonymous'
-      const role = row.role || profileData?.role
-      const level = row.level ?? profileData?.level ?? 1
+  const normalizeMessage = useCallback(
+    async (row: StreamMessage): Promise<StreamMessage> => {
+      const embedded = row.user_profiles
+      const cached = row.user_id ? profileCacheRef.current.get(row.user_id) : undefined
 
-      if (row.user_id) {
-        profileCacheRef.current.set(row.user_id, { username, role, level })
+      const hasEmbedded =
+        Boolean(embedded?.username) && typeof embedded?.level === 'number' && embedded?.role !== undefined
+
+      let username = row.username || embedded?.username || cached?.username
+      let role = row.role || embedded?.role || cached?.role
+      let level = row.level ?? embedded?.level ?? cached?.level
+
+      if (!username || role === undefined || typeof level !== 'number') {
+        const hydrated = await ensureProfileInfo(row.user_id)
+        username = username || hydrated.username
+        role = role ?? hydrated.role
+        level = typeof level === 'number' ? level : hydrated.level
       }
 
+      // minimal required validation
       if (!row.id || !row.user_id || !row.created_at) {
-        throw new Error('Stream message missing required identifiers')
+        // if DB row is malformed, don't crash the whole UI
+        return {
+          id: row.id || crypto.randomUUID(),
+          user_id: row.user_id || 'unknown',
+          created_at: row.created_at || new Date().toISOString(),
+          content: row.content || '',
+          username: username || 'Anonymous',
+          role: role || 'viewer',
+          level: typeof level === 'number' ? level : 1,
+        }
+      }
+
+      if (row.user_id) {
+        profileCacheRef.current.set(row.user_id, {
+          username: username || 'Anonymous',
+          role: role || 'viewer',
+          level: typeof level === 'number' ? level : 1,
+        })
       }
 
       return {
-        id: row.id,
-        user_id: row.user_id,
-        username,
-        content: row.content || '',
-        created_at: row.created_at,
-        role,
-        level,
+        ...row,
+        username: username || 'Anonymous',
+        role: role || 'viewer',
+        level: typeof level === 'number' ? level : 1,
       }
     },
-    []
-  )
-
-  const processIncomingMessage = useCallback(
-    async (message: StreamMessage) => {
-      const needsProfileInfo =
-        !message.username || typeof message.level !== 'number' || message.role === undefined
-      if (!needsProfileInfo) {
-        return buildStreamMessage(message)
-      }
-      const profileInfo = await ensureProfileInfo(message.user_id)
-      return buildStreamMessage(message, profileInfo)
-    },
-    [buildStreamMessage, ensureProfileInfo]
+    [ensureProfileInfo]
   )
 
   const {
@@ -232,19 +275,20 @@ const LiveBroadcast: React.FC = () => {
     stream?.id || null
   )
 
-  const roomName = `stream-${streamId}`
+  const roomName = useMemo(() => `stream-${streamId}`, [streamId])
 
+  // Load stream + broadcaster
   useEffect(() => {
     if (!streamId) return
 
     const loadStream = async () => {
-      const { data: streamData } = await supabase
+      const { data: streamData, error: streamError } = await supabase
         .from('streams')
         .select('*')
         .eq('id', streamId)
         .single()
 
-      if (!streamData) return
+      if (streamError || !streamData) return
       setStream(streamData)
 
       const { data: broadcasterData } = await supabase
@@ -253,12 +297,13 @@ const LiveBroadcast: React.FC = () => {
         .eq('id', streamData.broadcaster_id)
         .single()
 
-      setBroadcaster(broadcasterData as UserProfile)
+      setBroadcaster((broadcasterData as UserProfile) || null)
     }
 
     loadStream()
   }, [streamId])
 
+  // Keep guest slots in sync (0..5)
   useEffect(() => {
     if (typeof stream?.max_guest_slots === 'number') {
       const normalized = Math.min(Math.max(stream.max_guest_slots, 0), 5)
@@ -266,6 +311,48 @@ const LiveBroadcast: React.FC = () => {
     }
   }, [stream?.max_guest_slots])
 
+  const isBroadcaster = useMemo(() => {
+    return Boolean(profile?.id && stream?.broadcaster_id && profile.id === stream.broadcaster_id)
+  }, [profile?.id, stream?.broadcaster_id])
+
+  const isStaff = useMemo(() => {
+    return (
+      profile?.role === UserRole.ADMIN ||
+      profile?.role === UserRole.MODERATOR ||
+      profile?.role === UserRole.TROLL_OFFICER
+    )
+  }, [profile?.role])
+
+  const liveKitRole: string = isBroadcaster ? (profile?.role || 'broadcaster') : 'viewer'
+
+  const hasLocalTracks = useMemo(() => {
+    return Boolean(localParticipant?.videoTrack?.track) && Boolean(localParticipant?.audioTrack?.track)
+  }, [localParticipant?.videoTrack?.track, localParticipant?.audioTrack?.track])
+
+  const showGoLiveOverlay = isBroadcaster && isConnected && !hasLocalTracks
+
+  // Optional atomic entry payment:
+  // If you create a Supabase RPC named `pay_stream_entry` that handles coin deduction + stream_entries upsert
+  // in a transaction, this will use it. Otherwise it falls back to the current client-side approach.
+  const attemptAtomicEntryPayment = useCallback(
+    async (streamIdValue: string, userIdValue: string, cost: number) => {
+      try {
+        const { data, error } = await supabase.rpc('pay_stream_entry', {
+          p_stream_id: streamIdValue,
+          p_user_id: userIdValue,
+          p_cost: cost,
+        })
+        if (error) throw error
+        // If your RPC returns anything, you can interpret it here. For now: success means no error.
+        return { ok: true as const, data }
+      } catch {
+        return { ok: false as const }
+      }
+    },
+    []
+  )
+
+  // Check entry (free or paid)
   useEffect(() => {
     if (!user || !profile || !stream) return
 
@@ -275,68 +362,87 @@ const LiveBroadcast: React.FC = () => {
     }
 
     const checkEntry = async () => {
-      const { data } = await supabase
-        .from('stream_entries')
-        .select('has_paid_entry')
-        .eq('stream_id', stream.id)
-        .eq('user_id', user.id)
-        .single()
-
-      if (data?.has_paid_entry) {
+      // If officers can free-join, allow that (only if you intended this flag)
+      if (stream.allow_officer_free_join && isStaff) {
         setHasPaidEntry(true)
         return
       }
 
-      const cost = stream.pricing_value
-      const paid = profile.troll_coins || 0
-     
+      const { data: entryRow } = await supabase
+        .from('stream_entries')
+        .select('has_paid_entry')
+        .eq('stream_id', stream.id)
+        .eq('user_id', user.id)
+        .maybeSingle()
 
-      if (paid < cost) {
-        toast.error('Insufficient coins to enter stream')
+      if (entryRow?.has_paid_entry) {
+        setHasPaidEntry(true)
         return
       }
 
-      const newPaid = Math.max(0, paid - cost)
-      const remaining = cost - paid
+      const cost = Number(stream.pricing_value || 0)
+      const paid = Number(profile.troll_coins || 0)
 
-      await supabase
+      if (paid < cost) {
+        toast.error(`Insufficient coins to enter stream. You need ${cost - paid} more.`)
+        return
+      }
+
+      // Try atomic server-side payment first
+      const atomic = await attemptAtomicEntryPayment(stream.id, user.id, cost)
+      if (atomic.ok) {
+        setHasPaidEntry(true)
+        toast.success(`Paid ${cost} coins to enter stream`)
+        return
+      }
+
+      // Fallback (non-atomic). Works, but RPC is strongly recommended.
+      const newPaid = paid - cost
+
+      const { error: coinErr } = await supabase
         .from('user_profiles')
-        .update({
-          troll_coins: newPaid,
-        })
+        .update({ troll_coins: newPaid })
         .eq('id', profile.id)
 
-      await supabase.from('stream_entries').upsert({
+      if (coinErr) {
+        toast.error('Unable to process entry payment.')
+        return
+      }
+
+      const { error: entryErr } = await supabase.from('stream_entries').upsert({
         stream_id: stream.id,
         user_id: user.id,
         has_paid_entry: true,
         entry_time: new Date().toISOString(),
       })
 
+      if (entryErr) {
+        toast.error('Payment processed, but entry failed. Contact support.')
+        return
+      }
+
       setHasPaidEntry(true)
       toast.success(`Paid ${cost} coins to enter stream`)
     }
 
     checkEntry()
-  }, [stream, user, profile])
+  }, [stream, user, profile, attemptAtomicEntryPayment, isStaff])
 
+  // Live timer
   useEffect(() => {
     if (!isConnected) {
       setLiveSeconds(0)
       return
     }
 
-    const interval = setInterval(() => {
-      setLiveSeconds((prev) => prev + 1)
-    }, 1000)
-
+    const interval = setInterval(() => setLiveSeconds((prev) => prev + 1), 1000)
     return () => clearInterval(interval)
   }, [isConnected])
 
-  const effectiveMaxGuests = Math.min(Math.max(maxGuestSlots, 0), 5)
+  const effectiveMaxGuests = useMemo(() => Math.min(Math.max(maxGuestSlots, 0), 5), [maxGuestSlots])
 
   const guestParticipants = useMemo(
-    () => Array.from(participants.values()).filter((participant) => !participant.isLocal),
+    () => Array.from(participants.values()).filter((p) => !p.isLocal),
     [participants]
   )
 
@@ -349,9 +455,12 @@ const LiveBroadcast: React.FC = () => {
     [effectiveMaxGuests, guestParticipants]
   )
 
-  const liveKitMaxParticipants = Math.min(1 + effectiveMaxGuests, 6)
+  const liveKitMaxParticipants = useMemo(
+    () => Math.min(1 + effectiveMaxGuests, 6),
+    [effectiveMaxGuests]
+  )
 
-  const quickReactions = ['❤️', '🔥', '✨', '🎉']
+  const quickReactions = useMemo(() => ['❤️', '🔥', '✨', '🎉'], [])
 
   const menuOptions = useMemo(
     () => [
@@ -363,7 +472,7 @@ const LiveBroadcast: React.FC = () => {
             const url =
               stream?.id && typeof window !== 'undefined'
                 ? `${window.location.origin}/live/${stream.id}`
-                : window?.location?.href || ''
+                : ''
             if (!url) throw new Error('Unable to determine share link')
             await navigator.clipboard.writeText(url)
             toast.success('Stream link copied to clipboard')
@@ -388,18 +497,8 @@ const LiveBroadcast: React.FC = () => {
         },
       },
     ],
-    [stream?.id, setShowMenuPanel]
+    [stream?.id]
   )
-
-  const isBroadcaster =
-    profile?.role === UserRole.ADMIN ||
-    profile?.role === UserRole.MODERATOR ||
-    profile?.role === UserRole.TROLL_OFFICER
-
-  const liveKitRole: string = isBroadcaster ? profile?.role || 'admin' : 'viewer'
-  const hasLocalTracks =
-    Boolean(localParticipant?.videoTrack?.track) && Boolean(localParticipant?.audioTrack?.track)
-  const showGoLiveOverlay = isBroadcaster && isConnected && !hasLocalTracks
 
   const handleGoLive = useCallback(async () => {
     if (!startPublishing) return
@@ -410,11 +509,7 @@ const LiveBroadcast: React.FC = () => {
 
     setMediaRequestState('requesting')
     try {
-      await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      })
-
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       await startPublishing()
       setMediaRequestState('granted')
     } catch (error: any) {
@@ -469,7 +564,6 @@ const LiveBroadcast: React.FC = () => {
       if (!isBroadcaster || !stream?.id) return
       const current = Math.min(Math.max(maxGuestSlots, 0), 5)
       const target = Math.min(Math.max(current + delta, 0), 5)
-
       if (target === current) return
 
       try {
@@ -482,9 +576,7 @@ const LiveBroadcast: React.FC = () => {
 
         setMaxGuestSlots(target)
         setStream((prev) => (prev ? { ...prev, max_guest_slots: target } : prev))
-        toast.success(
-          target > 0 ? `Guest slots limited to ${target}` : 'Guest slots disabled'
-        )
+        toast.success(target > 0 ? `Guest slots limited to ${target}` : 'Guest slots disabled')
       } catch (error) {
         console.error('Failed to update guest slots:', error)
         toast.error('Unable to adjust guest slots.')
@@ -493,76 +585,61 @@ const LiveBroadcast: React.FC = () => {
     [isBroadcaster, stream?.id, maxGuestSlots]
   )
 
-  const handleOpenGuestPanel = useCallback(() => setShowGuestPanel(true), [setShowGuestPanel])
-  const handleOpenGiftDrawer = useCallback(() => setShowGiftDrawer(true), [setShowGiftDrawer])
-  const handleOpenMenuPanel = useCallback(() => setShowMenuPanel(true), [setShowMenuPanel])
+  const handleOpenGuestPanel = useCallback(() => setShowGuestPanel(true), [])
+  const handleOpenGiftDrawer = useCallback(() => setShowGiftDrawer(true), [])
+  const handleOpenMenuPanel = useCallback(() => setShowMenuPanel(true), [])
 
   const verticalActions = useMemo(
     () => [
-      {
-        id: 'gifts',
-        icon: Gift,
-        label: 'Gifts',
-        onClick: handleOpenGiftDrawer,
-      },
-      {
-        id: 'guests',
-        icon: Users,
-        label: 'Guests',
-        onClick: handleOpenGuestPanel,
-      },
-      {
-        id: 'menu',
-        icon: Menu,
-        label: 'Menu',
-        onClick: handleOpenMenuPanel,
-      },
+      { id: 'gifts', icon: Gift, label: 'Gifts', onClick: handleOpenGiftDrawer },
+      { id: 'guests', icon: Users, label: 'Guests', onClick: handleOpenGuestPanel },
+      { id: 'menu', icon: Menu, label: 'Menu', onClick: handleOpenMenuPanel },
     ],
     [handleOpenGiftDrawer, handleOpenGuestPanel, handleOpenMenuPanel]
   )
 
-    const loadMessages = useCallback(async () => {
-      if (!stream?.id) return
-      setIsChatLoading(true)
-      try {
-        const { data, error } = await supabase
-          .from(chatTable)
-          .select(messageSelectFields)
-          .eq('stream_id', stream.id)
-          .order('created_at', { ascending: true })
-          .limit(40)
+  const loadMessages = useCallback(async () => {
+    if (!stream?.id) return
+    setIsChatLoading(true)
 
-        if (error) {
-          if (chatTable === 'stream_messages') {
-            setChatTable('messages')
-            return
-          }
-          throw error
+    try {
+      const { data, error } = await supabase
+        .from(chatTable)
+        .select(messageSelectFields)
+        .eq('stream_id', stream.id)
+        .order('created_at', { ascending: true })
+        .limit(50)
+
+      if (error) {
+        if (chatTable === 'stream_messages') {
+          setChatTable('messages')
+          return
         }
-
-        const normalized = (data || []).map((row: any) => buildStreamMessage(row))
-        setMessages(normalized)
-      } catch (error) {
-        console.error('Unable to load chat messages', error)
-      } finally {
-        setIsChatLoading(false)
+        throw error
       }
-    }, [stream?.id, chatTable, buildStreamMessage])
+
+      const rows = (data || []) as StreamMessage[]
+      const normalized = await Promise.all(rows.map((row) => normalizeMessage(row)))
+      setMessages(normalized)
+    } catch (error) {
+      console.error('Unable to load chat messages', error)
+    } finally {
+      setIsChatLoading(false)
+    }
+  }, [stream?.id, chatTable, messageSelectFields, normalizeMessage])
 
   useEffect(() => {
     loadMessages()
   }, [loadMessages])
 
+  // Realtime chat subscribe
   useEffect(() => {
     if (!stream?.id) return
     let isSubscribed = true
+
     const channelName = `livechat-${stream.id}-${chatTable}`
     const channel = supabase
-      .channel(channelName, {
-        config: {
-          broadcast: { self: true },
-        },
-      })
+      .channel(channelName, { config: { broadcast: { self: true } } })
       .on(
         'postgres_changes',
         {
@@ -572,19 +649,18 @@ const LiveBroadcast: React.FC = () => {
           filter: `stream_id=eq.${stream.id}`,
         },
         (payload) => {
-          const newMessage = payload.new as StreamMessage
-          if (!newMessage?.id) return
-          processIncomingMessage(newMessage)
-            .then((message) => {
-              if (!isSubscribed || !message) return
+          const incoming = payload.new as StreamMessage
+          if (!incoming) return
+
+          normalizeMessage(incoming)
+            .then((msg) => {
+              if (!isSubscribed || !msg?.id) return
               setMessages((prev) => {
-                if (prev.some((msg) => msg.id === message.id)) return prev
-                return [...prev.slice(-49), message]
+                if (prev.some((m) => m.id === msg.id)) return prev
+                return [...prev, msg].slice(-60)
               })
             })
-            .catch((error) => {
-              console.error('Failed to hydrate chat message', error)
-            })
+            .catch((e) => console.error('Failed to normalize incoming message', e))
         }
       )
       .subscribe()
@@ -594,7 +670,13 @@ const LiveBroadcast: React.FC = () => {
       channel.unsubscribe()
       supabase.removeChannel(channel)
     }
-  }, [stream?.id, chatTable, processIncomingMessage])
+  }, [stream?.id, chatTable, normalizeMessage])
+
+  // Chat autoscroll (keeps it feeling "live")
+  useEffect(() => {
+    if (!shouldAutoScrollRef.current) return
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length])
 
   const sendMessage = useCallback(
     async (rawMessage: string, tableOverride?: 'stream_messages' | 'messages') => {
@@ -622,26 +704,16 @@ const LiveBroadcast: React.FC = () => {
           throw error
         }
 
-        if (data) {
-          const inserted = buildStreamMessage(data)
-          setMessages((prev) => [...prev.slice(-49), inserted])
-        }
-
         setChatDraft('')
       } catch (err) {
         console.error('Failed to send chat message', err)
         toast.error('Failed to send chat message')
       }
     },
-    [chatTable, stream?.id, user, buildStreamMessage]
+    [chatTable, stream?.id, user, messageSelectFields, normalizeMessage]
   )
 
-  const handleQuickReaction = useCallback(
-    (emoji: string) => {
-      sendMessage(emoji)
-    },
-    [sendMessage]
-  )
+  const handleQuickReaction = useCallback((emoji: string) => sendMessage(emoji), [sendMessage])
 
   const handleSendGift = useCallback(
     async (gift: GiftItem) => {
@@ -656,12 +728,12 @@ const LiveBroadcast: React.FC = () => {
     [sendGiftToStreamer, stream?.broadcaster_id]
   )
 
-  const handleRetryPermission = () => {
+  const handleRetryPermission = useCallback(() => {
     setShowPermissionModal(false)
     handleGoLive()
-  }
+  }, [handleGoLive])
 
-  if (!stream || !hasPaidEntry || !profile) {
+  if (!stream || !profile || (!hasPaidEntry && stream.pricing_type !== 'free')) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#04000c] via-[#08031b] to-[#120321] text-white flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -687,23 +759,27 @@ const LiveBroadcast: React.FC = () => {
               <div className="flex flex-col gap-1">
                 <div className="text-lg font-semibold">{broadcaster?.username}</div>
                 <div className="text-xs uppercase tracking-[0.3em] text-gray-300">
-                  Level {broadcaster?.level}
+                  Level {broadcaster?.level ?? 1}
                 </div>
               </div>
             </div>
+
             <div className="flex items-center gap-6 text-sm text-gray-200">
               <div className="flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs uppercase tracking-wider text-green-300 shadow-[0_0_20px_rgba(34,197,94,0.45)]">
                 <span className="h-2 w-2 rounded-full bg-green-400" />
                 LIVE
               </div>
+
               <div className="flex flex-col text-right">
                 <span className="text-xs text-gray-400">Timer</span>
                 <span className="text-base font-semibold text-white">{formatTimer(liveSeconds)}</span>
               </div>
+
               <div className="flex flex-col text-right">
                 <span className="text-xs text-gray-400">Viewers</span>
                 <span className="text-base font-semibold text-white">{stream.viewer_count}</span>
               </div>
+
               <button
                 onClick={() => setLikeCount((prev) => prev + 1)}
                 className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-sm text-pink-300 shadow-[0_0_20px_rgba(239,68,68,0.35)]"
@@ -711,12 +787,14 @@ const LiveBroadcast: React.FC = () => {
                 <Heart className="h-4 w-4 text-pink-400" />
                 {likeCount}
               </button>
+
               <div className="flex items-center gap-2 rounded-full border border-yellow-400/40 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-yellow-300">
                 <Coins className="h-4 w-4" />
                 {stream.total_gifts_coins?.toLocaleString() || '0'}
               </div>
             </div>
           </div>
+
           <div className="mt-4 text-sm text-gray-400">
             {stream.title || 'Troll City broadcast'} — Modern neon vibes with glassified overlays.
           </div>
@@ -729,7 +807,7 @@ const LiveBroadcast: React.FC = () => {
                 <div className="relative overflow-hidden rounded-3xl border border-purple-500/20 bg-black/80">
                   <LiveKitRoomWrapper
                     roomName={roomName}
-                    identity={user?.id || `viewer-${crypto.randomUUID()}`}
+                    identity={viewerIdentity}
                     role={liveKitRole}
                     autoPublish={isBroadcaster ? false : true}
                     maxParticipants={liveKitMaxParticipants}
@@ -757,12 +835,14 @@ const LiveBroadcast: React.FC = () => {
                     <p className="my-3 text-xs text-purple-200">
                       Allow camera and microphone, then publish tracks to open the Troll City stage.
                     </p>
+
                     {isConnecting && (
                       <div className="flex items-center justify-center gap-2 text-xs text-gray-300">
                         <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
                         Connecting to the broadcast…
                       </div>
                     )}
+
                     <button
                       onClick={handleGoLive}
                       disabled={!isConnected || mediaRequestState === 'requesting'}
@@ -770,6 +850,7 @@ const LiveBroadcast: React.FC = () => {
                     >
                       {mediaRequestState === 'requesting' ? 'Requesting permissions…' : 'Go Live'}
                     </button>
+
                     <div className="mt-3 text-[11px] text-gray-400">
                       Permissions are required before the broadcast room renders for your audience.
                     </div>
@@ -798,12 +879,14 @@ const LiveBroadcast: React.FC = () => {
                   </div>
                 </div>
               )}
+
               <div className="grid gap-3 sm:grid-cols-3">
                 {guestSlotEntries.length > 0 ? (
                   guestSlotEntries.map((slot) => {
                     const participant = slot.participant
                     const displayName =
                       participant?.name || participant?.identity || `Guest ${slot.slotIndex + 1}`
+
                     return (
                       <div
                         key={`guest-slot-${slot.slotIndex}`}
@@ -813,12 +896,15 @@ const LiveBroadcast: React.FC = () => {
                           <span>Slot {slot.slotIndex + 1}</span>
                           <span>{participant ? 'Live' : 'Waiting'}</span>
                         </div>
+
                         {participant ? (
                           <>
                             <div className="text-base font-semibold text-white">{displayName}</div>
                             <div className="flex items-center gap-2 text-[11px] text-gray-300">
                               <span>{participant.isCameraEnabled ? 'Camera On' : 'Camera Off'}</span>
-                              <span>{participant.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}</span>
+                              <span>
+                                {participant.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}
+                              </span>
                             </div>
                             <div className="text-[10px] text-purple-300">ID: {participant.identity}</div>
                           </>
@@ -861,67 +947,81 @@ const LiveBroadcast: React.FC = () => {
                     {stream.viewer_count} viewers
                   </span>
                 </div>
-                  <div className="flex flex-1 flex-col gap-3 overflow-hidden rounded-2xl border border-purple-500/20 bg-black/40 p-3">
-                    <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-2">
-                      {isChatLoading ? (
-                        <div className="text-center text-sm text-gray-400">Loading chat…</div>
-                      ) : messages.length === 0 ? (
-                        <div className="text-center text-sm text-gray-400">No chat yet</div>
-                      ) : (
-                        messages.map((message) => (
-                          <div key={message.id} className="flex gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-purple-500/60 bg-gradient-to-br from-purple-600 to-pink-500 text-xs font-bold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(111,66,193,0.45)]">
-                              {message.username?.charAt(0) || 'T'}
-                            </div>
-                            <div className="flex-1 rounded-2xl border border-purple-500/20 bg-white/5 p-3 text-xs text-gray-200">
-                              <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-purple-300">
-                                <span>{message.username}</span>
-                                <span>
-                                  {message.role || 'Viewer'}
-                                  {message.level ? ` · Lvl ${message.level}` : ''}
-                                </span>
-                              </div>
-                              <p className="mt-1 leading-relaxed text-sm text-white">{message.content}</p>
-                            </div>
+
+                <div className="flex flex-1 flex-col gap-3 overflow-hidden rounded-2xl border border-purple-500/20 bg-black/40 p-3">
+                  <div
+                    ref={chatScrollRef}
+                    onScroll={() => {
+                      const el = chatScrollRef.current
+                      if (!el) return
+                      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+                      shouldAutoScrollRef.current = distanceFromBottom < 140 // px threshold
+                    }}
+                    className="flex flex-1 flex-col gap-3 overflow-y-auto pr-2"
+                  >
+                    {isChatLoading ? (
+                      <div className="text-center text-sm text-gray-400">Loading chat…</div>
+                    ) : messages.length === 0 ? (
+                      <div className="text-center text-sm text-gray-400">No chat yet</div>
+                    ) : (
+                      messages.map((message) => (
+                        <div key={message.id} className="flex gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-purple-500/60 bg-gradient-to-br from-purple-600 to-pink-500 text-xs font-bold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(111,66,193,0.45)]">
+                            {(message.username || 'T').charAt(0)}
                           </div>
-                        ))
-                      )}
+                          <div className="flex-1 rounded-2xl border border-purple-500/20 bg-white/5 p-3 text-xs text-gray-200">
+                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-purple-300">
+                              <span>{message.username || 'Anonymous'}</span>
+                              <span>
+                                {message.role || 'Viewer'}
+                                {typeof message.level === 'number' ? ` · Lvl ${message.level}` : ''}
+                              </span>
+                            </div>
+                            <p className="mt-1 leading-relaxed text-sm text-white">{message.content}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <textarea
+                        value={chatDraft}
+                        onChange={(event) => setChatDraft(event.target.value)}
+                        placeholder="Type a message…"
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault()
+                            sendMessage(chatDraft)
+                          }
+                        }}
+                        className="flex-1 rounded-2xl border border-purple-500/40 bg-black/70 px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <button
+                        onClick={() => sendMessage(chatDraft)}
+                        disabled={!chatDraft.trim()}
+                        className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Send
+                      </button>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <textarea
-                          value={chatDraft}
-                          onChange={(event) => setChatDraft(event.target.value)}
-                          placeholder="Type a message…"
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' && !event.shiftKey) {
-                              event.preventDefault()
-                              sendMessage(chatDraft)
-                            }
-                          }}
-                          className="flex-1 rounded-2xl border border-purple-500/40 bg-black/70 px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
+
+                    <div className="flex items-center gap-2 text-xl">
+                      {quickReactions.map((emoji) => (
                         <button
-                          onClick={() => sendMessage(chatDraft)}
-                          className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110"
+                          key={emoji}
+                          onClick={() => handleQuickReaction(emoji)}
+                          className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1 transition hover:bg-white/10"
                         >
-                          Send
+                          {emoji}
                         </button>
-                      </div>
-                      <div className="flex items-center gap-2 text-xl">
-                        {quickReactions.map((emoji) => (
-                          <button
-                            key={emoji}
-                            onClick={() => handleQuickReaction(emoji)}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1 transition hover:bg-white/10"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                        <MessageCircle className="h-4 w-4" />
-                      </div>
+                      ))}
+                      <MessageCircle className="h-4 w-4" />
                     </div>
                   </div>
+                </div>
               </div>
             </aside>
           </div>
@@ -934,6 +1034,7 @@ const LiveBroadcast: React.FC = () => {
               <Mic className={`h-4 w-4 ${micEnabled ? 'text-emerald-300' : 'text-red-400'}`} />
               {micEnabled ? 'Mute Mic' : 'Unmute Mic'}
             </button>
+
             <button
               onClick={handleToggleCamera}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-cyan-400"
@@ -941,6 +1042,7 @@ const LiveBroadcast: React.FC = () => {
               <Video className={`h-4 w-4 ${cameraEnabled ? 'text-cyan-300' : 'text-red-400'}`} />
               {cameraEnabled ? 'Camera On' : 'Camera Off'}
             </button>
+
             <button
               onClick={handleOpenGuestPanel}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-purple-300"
@@ -948,6 +1050,7 @@ const LiveBroadcast: React.FC = () => {
               <Users className="h-4 w-4" />
               Guests
             </button>
+
             <button
               onClick={handleEndStream}
               disabled={!isBroadcaster}
@@ -956,6 +1059,7 @@ const LiveBroadcast: React.FC = () => {
               <Power className="h-4 w-4" />
               End Live
             </button>
+
             <button
               onClick={handleOpenMenuPanel}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-yellow-400"
@@ -963,6 +1067,7 @@ const LiveBroadcast: React.FC = () => {
               <Settings className="h-4 w-4" />
               Settings
             </button>
+
             <button
               onClick={handleOpenGiftDrawer}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-fuchsia-400"
@@ -986,6 +1091,7 @@ const LiveBroadcast: React.FC = () => {
                 Close
               </button>
             </div>
+
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {GIFT_OFFERS.map((gift) => (
                 <button
@@ -1018,6 +1124,7 @@ const LiveBroadcast: React.FC = () => {
                 Close
               </button>
             </div>
+
             {isBroadcaster && (
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-purple-500/40 bg-black/40 px-4 py-3 text-[10px] uppercase tracking-[0.3em] text-gray-200">
                 <span>Guest slots allowed: {effectiveMaxGuests}</span>
@@ -1039,12 +1146,14 @@ const LiveBroadcast: React.FC = () => {
                 </div>
               </div>
             )}
+
             <div className="mt-5 grid gap-4 md:grid-cols-3">
               {guestSlotEntries.length > 0 ? (
                 guestSlotEntries.map((slot) => {
                   const participant = slot.participant
                   const displayName =
                     participant?.name || participant?.identity || `Guest ${slot.slotIndex + 1}`
+
                   return (
                     <div
                       key={`guest-panel-${slot.slotIndex}`}
@@ -1054,6 +1163,7 @@ const LiveBroadcast: React.FC = () => {
                         <span>Slot {slot.slotIndex + 1}</span>
                         <span>{participant ? 'Active' : 'Waiting'}</span>
                       </div>
+
                       {participant ? (
                         <>
                           <p className="mt-2 text-lg font-semibold text-white">{displayName}</p>

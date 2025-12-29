@@ -34,6 +34,13 @@ export const PERK_CONFIG = {
     description: 'Your username glows neon in all chats & gift animations',
     type: 'cosmetic'
   },
+  'perk_rgb_username': {
+    name: 'RGB Username (Permanent)',
+    duration_minutes: 1440,
+    cost: 420,
+    description: 'Lock in an RGB glow so your name shines everywhere',
+    type: 'cosmetic'
+  },
   'perk_slowmo_chat': {
     name: 'Slow-Motion Chat Control (5hrs)',
     duration_minutes: 300,

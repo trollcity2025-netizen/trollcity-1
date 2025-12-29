@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import VerifiedBadge from './VerifiedBadge'
 import OfficerTierBadge from './OfficerTierBadge'
 import { EmpireBadge } from './EmpireBadge'
 import { useNavigate } from 'react-router-dom'
 import { Shield, Crown, Skull, Star } from 'lucide-react'
+import { applyGlowingUsername } from '../lib/perkEffects'
 
 interface ClickableUsernameProps {
    username: string
@@ -38,6 +39,15 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
    userId
  }) => {
   const navigate = useNavigate()
+  const usernameRef = useRef<HTMLSpanElement>(null)
+  const targetUserId = userId || profile?.id
+
+  useEffect(() => {
+    if (!targetUserId || !usernameRef.current) {
+      return
+    }
+    applyGlowingUsername(usernameRef.current, targetUserId)
+  }, [targetUserId, username])
   
   // Use profile prop directly (parent component should fetch and pass it)
   const userProfile = profile
@@ -90,6 +100,7 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
   return (
     <span
       onClick={handleClick}
+      ref={usernameRef}
       className={`cursor-pointer hover:text-troll-gold transition-colors username ${isAdmin ? 'admin-user' : isOfficer ? 'officer-user' : isTroller ? 'troller-user' : ''} ${className}`}
       title={`View ${username}'s profile`}
     >
