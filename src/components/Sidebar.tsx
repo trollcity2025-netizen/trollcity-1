@@ -25,8 +25,10 @@ import {
    MessageCircle,
    Package,
    Scale,
-   ChevronDown,
-   ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -53,6 +55,7 @@ export default function Sidebar() {
   const [trollFamiliesCollapsed, setTrollFamiliesCollapsed] = useState(false)
   const [leadOfficerCollapsed, setLeadOfficerCollapsed] = useState(false)
   const [adminControlsCollapsed, setAdminControlsCollapsed] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   // Role logic for Go Live access
   const canGoLive =
@@ -103,7 +106,11 @@ export default function Sidebar() {
   if (!user) return null
 
   return (
-    <div className="w-64 min-h-screen bg-[#0A0A14] text-white flex flex-col border-r border-[#2C2C2C] shadow-xl">
+    <div
+      className={`min-h-screen bg-[#0A0A14] text-white flex flex-col border-r border-[#2C2C2C] shadow-xl transition-all duration-300 ${
+        isSidebarCollapsed ? 'w-20' : 'w-64'
+      }`}
+    >
 
       {/* Profile Block with Real-time Wallet */}
       <div className="p-5 text-center border-b border-[#2C2C2C]">
@@ -161,18 +168,90 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
+      <div className="flex justify-end px-3 mt-1">
+        <button
+          type="button"
+          onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+          className="p-2 rounded-full hover:bg-white/10 transition text-gray-400"
+          aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isSidebarCollapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
+        </button>
+      </div>
       {/* Main Menu */}
-      <nav className="flex-1 p-4 space-y-1">
-        <MenuLink to="/" icon={<Home className="w-5 h-5 text-green-400" />} label="Home" active={isActive('/')} />
-        <MenuLink to="/messages" icon={<MessageSquare className="w-5 h-5 text-blue-400" />} label="Messages" active={isActive('/messages')} />
-        <MenuLink to="/following" icon={<UserCheck className="w-5 h-5 text-indigo-400" />} label="Following" active={isActive('/following')} />
-        <MenuLink to="/store" icon={<Coins className="w-5 h-5 text-yellow-500" />} label="Coin Store" active={isActive('/store')} />
-        <MenuLink to="/marketplace" icon={<Store className="w-5 h-5 text-orange-500" />} label="Marketplace" active={isActive('/marketplace')} />
-        <MenuLink to="/inventory" icon={<Package className="w-5 h-5 text-cyan-500" />} label="My Inventory" active={isActive('/inventory')} />
-        <MenuLink to="/sell" icon={<Store className="w-5 h-5 text-emerald-500" />} label="Sell on Troll City" active={isActive('/sell')} />
+      <nav
+        className={`flex-1 flex flex-col gap-1 p-4 transition-all ${
+          isSidebarCollapsed ? 'items-center' : ''
+        }`}
+      >
+        <MenuLink
+          to="/"
+          icon={<Home className="w-5 h-5 text-green-400" />}
+          label="Home"
+          active={isActive('/')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/messages"
+          icon={<MessageSquare className="w-5 h-5 text-blue-400" />}
+          label="Messages"
+          active={isActive('/messages')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/following"
+          icon={<UserCheck className="w-5 h-5 text-indigo-400" />}
+          label="Following"
+          active={isActive('/following')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/store"
+          icon={<Coins className="w-5 h-5 text-yellow-500" />}
+          label="Coin Store"
+          active={isActive('/store')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/marketplace"
+          icon={<Store className="w-5 h-5 text-orange-500" />}
+          label="Marketplace"
+          active={isActive('/marketplace')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/inventory"
+          icon={<Package className="w-5 h-5 text-cyan-500" />}
+          label="My Inventory"
+          active={isActive('/inventory')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/sell"
+          icon={<Store className="w-5 h-5 text-emerald-500" />}
+          label="Sell on Troll City"
+          active={isActive('/sell')}
+          collapsed={isSidebarCollapsed}
+        />
 
-        <MenuLink to="/leaderboard" icon={<Trophy className="w-5 h-5 text-yellow-500" />} label="Leaderboard" active={isActive('/leaderboard')} />
-        <MenuLink to="/wall" icon={<MessageCircle className="w-5 h-5 text-cyan-400" />} label="Troll City Wall" active={isActive('/wall')} />
+        <MenuLink
+          to="/leaderboard"
+          icon={<Trophy className="w-5 h-5 text-yellow-500" />}
+          label="Leaderboard"
+          active={isActive('/leaderboard')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/wall"
+          icon={<MessageCircle className="w-5 h-5 text-cyan-400" />}
+          label="Troll City Wall"
+          active={isActive('/wall')}
+          collapsed={isSidebarCollapsed}
+        />
 
         <button
           onClick={() => setShowCourtModal(true)}
@@ -205,53 +284,126 @@ export default function Sidebar() {
         </button>
         
         {/* Applications - Show for everyone */}
-        <MenuLink to="/apply" icon={<FileText className="w-5 h-5 text-slate-400" />} label="Applications" active={isActive('/apply')} />
+        <MenuLink
+          to="/apply"
+          icon={<FileText className="w-5 h-5 text-slate-400" />}
+          label="Applications"
+          active={isActive('/apply')}
+          collapsed={isSidebarCollapsed}
+        />
 
         {/* Troll Officer Lounge - Only for admin and troll_officer role */}
         {canSeeOfficer && (
           <>
-            <MenuLink to="/officer/lounge" icon={<Shield className="w-5 h-5 text-red-500" />} label="Officer Lounge" active={isActive('/officer/lounge')} />
-            <MenuLink to="/officer/moderation" icon={<Shield className="w-5 h-5 text-orange-500" />} label="Officer Moderation" active={isActive('/officer/moderation')} />
+            <MenuLink
+              to="/officer/lounge"
+              icon={<Shield className="w-5 h-5 text-red-500" />}
+              label="Officer Lounge"
+              active={isActive('/officer/lounge')}
+              collapsed={isSidebarCollapsed}
+            />
+            <MenuLink
+              to="/officer/moderation"
+              icon={<Shield className="w-5 h-5 text-orange-500" />}
+              label="Officer Moderation"
+              active={isActive('/officer/moderation')}
+              collapsed={isSidebarCollapsed}
+            />
           </>
         )}
 
         {/* Troll Family Lounge - Only for admin, troll_officer, OR approved family app */}
         {canSeeFamilyLounge && (
           <>
-            <MenuLink to="/family" icon={<Users className="w-5 h-5 text-cyan-400" />} label="Troll Family Lounge" active={isActive('/family')} />
+            <MenuLink
+              to="/family"
+              icon={<Users className="w-5 h-5 text-cyan-400" />}
+              label="Troll Family Lounge"
+              active={isActive('/family')}
+              collapsed={isSidebarCollapsed}
+            />
 
             {/* Troll Families Section */}
             <div className="mt-4">
               <button
                 onClick={() => setTrollFamiliesCollapsed(!trollFamiliesCollapsed)}
                 className="flex items-center justify-between w-full text-gray-500 uppercase text-xs mb-2 px-4 hover:text-gray-400 transition-colors"
+                title="Toggle Troll Families"
               >
-                <span>Troll Families</span>
+                {!isSidebarCollapsed && <span>Troll Families</span>}
                 {trollFamiliesCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </button>
               {!trollFamiliesCollapsed && (
                 <>
-                  <MenuLink to="/family/lounge" icon={<Crown className="w-5 h-5 text-purple-400" />} label="Family Lounge" active={isActive('/family/lounge')} />
-                  <MenuLink to="/family/wars-hub" icon={<Sword className="w-5 h-5 text-red-400" />} label="Family War Hub" active={isActive('/family/wars-hub')} />
-                  <MenuLink to="/family/leaderboard" icon={<Trophy className="w-5 h-5 text-yellow-400" />} label="Family Leaderboard" active={isActive('/family/leaderboard')} />
-                  <MenuLink to="/family/shop" icon={<Coins className="w-5 h-5 text-green-400" />} label="Family Shop" active={isActive('/family/shop')} />
+                  <MenuLink
+                    to="/family/lounge"
+                    icon={<Crown className="w-5 h-5 text-purple-400" />}
+                    label="Family Lounge"
+                    active={isActive('/family/lounge')}
+                    collapsed={isSidebarCollapsed}
+                  />
+                  <MenuLink
+                    to="/family/wars-hub"
+                    icon={<Sword className="w-5 h-5 text-red-400" />}
+                    label="Family War Hub"
+                    active={isActive('/family/wars-hub')}
+                    collapsed={isSidebarCollapsed}
+                  />
+                  <MenuLink
+                    to="/family/leaderboard"
+                    icon={<Trophy className="w-5 h-5 text-yellow-400" />}
+                    label="Family Leaderboard"
+                    active={isActive('/family/leaderboard')}
+                    collapsed={isSidebarCollapsed}
+                  />
+                  <MenuLink
+                    to="/family/shop"
+                    icon={<Coins className="w-5 h-5 text-green-400" />}
+                    label="Family Shop"
+                    active={isActive('/family/shop')}
+                    collapsed={isSidebarCollapsed}
+                  />
                 </>
               )}
             </div>
           </>
         )}
 
-        <MenuLink to="/support" icon={<FileText className="w-5 h-5 text-gray-400" />} label="Support" active={isActive('/support')} />
-        <MenuLink to="/safety" icon={<Shield className="w-5 h-5 text-red-400" />} label="Safety & Policies" active={isActive('/safety')} />
+        <MenuLink
+          to="/support"
+          icon={<FileText className="w-5 h-5 text-gray-400" />}
+          label="Support"
+          active={isActive('/support')}
+          collapsed={isSidebarCollapsed}
+        />
+        <MenuLink
+          to="/safety"
+          icon={<Shield className="w-5 h-5 text-red-400" />}
+          label="Safety & Policies"
+          active={isActive('/safety')}
+          collapsed={isSidebarCollapsed}
+        />
 
         {/* 🔐 RFC — Only Admin */}
         {profile?.role === 'admin' && (
-          <MenuLink to="/rfc" icon={<Shield className="w-5 h-5 text-purple-500" />} label="RFC" active={isActive('/rfc')} />
+          <MenuLink
+            to="/rfc"
+            icon={<Shield className="w-5 h-5 text-purple-500" />}
+            label="RFC"
+            active={isActive('/rfc')}
+            collapsed={isSidebarCollapsed}
+          />
         )}
 
         {/* Admin Earnings Dashboard — Only Admin */}
         {profile?.role === 'admin' && (
-          <MenuLink to="/admin/earnings" icon={<Banknote className="w-5 h-5 text-green-500" />} label="Earnings Dashboard" active={isActive('/admin/earnings')} />
+          <MenuLink
+            to="/admin/earnings"
+            icon={<Banknote className="w-5 h-5 text-green-500" />}
+            label="Earnings Dashboard"
+            active={isActive('/admin/earnings')}
+            collapsed={isSidebarCollapsed}
+          />
         )}
       </nav>
 
@@ -261,12 +413,19 @@ export default function Sidebar() {
           <button
             onClick={() => setLeadOfficerCollapsed(!leadOfficerCollapsed)}
             className="flex items-center justify-between w-full text-gray-500 uppercase text-xs mb-2 hover:text-gray-400 transition-colors"
+            title="Toggle Lead Officer links"
           >
-            <span>Lead Officer</span>
+            {!isSidebarCollapsed && <span>Lead Officer</span>}
             {leadOfficerCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
           {!leadOfficerCollapsed && (
-            <MenuLink to="/lead-officer" icon={<Shield className="w-5 h-5 text-amber-500" />} label="Lead Officer HQ" active={isActive('/lead-officer')} />
+            <MenuLink
+              to="/lead-officer"
+              icon={<Shield className="w-5 h-5 text-amber-500" />}
+              label="Lead Officer HQ"
+              active={isActive('/lead-officer')}
+              collapsed={isSidebarCollapsed}
+            />
           )}
         </div>
       )}
@@ -277,19 +436,62 @@ export default function Sidebar() {
           <button
             onClick={() => setAdminControlsCollapsed(!adminControlsCollapsed)}
             className="flex items-center justify-between w-full text-gray-500 uppercase text-xs mb-2 hover:text-gray-400 transition-colors"
+            title="Toggle Admin controls"
           >
-            <span>Admin Controls</span>
+            {!isSidebarCollapsed && <span>Admin Controls</span>}
             {adminControlsCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
           {!adminControlsCollapsed && (
             <>
-              <MenuLink to="/admin" icon={<LayoutDashboard className="w-5 h-5 text-violet-500" />} label="Admin Dashboard" active={isActive('/admin')} />
-              <MenuLink to="/admin/applications" icon={<UserPlus className="w-5 h-5 text-blue-500" />} label="Applications" active={isActive('/admin/applications')} />
-              <MenuLink to="/admin/marketplace" icon={<Store className="w-5 h-5 text-orange-500" />} label="Marketplace Admin" active={isActive('/admin/marketplace')} />
-              <MenuLink to="/admin/officer-reports" icon={<FileText className="w-5 h-5 text-teal-500" />} label="Officer Reports" active={isActive('/admin/officer-reports')} />
-              <MenuLink to="/store-debug" icon={<Bug className="w-5 h-5 text-red-600" />} label="Store Debug" active={isActive('/store-debug')} />
-              <MenuLink to="/changelog" icon={<ListChecks className="w-5 h-5 text-lime-500" />} label="Updates & Changes" active={isActive('/changelog')} />
-              <MenuLink to="/admin/royal-family" icon={<Crown className="w-5 h-5 text-yellow-500" />} label="Royal Family" active={isActive('/admin/royal-family')} />
+              <MenuLink
+                to="/admin"
+                icon={<LayoutDashboard className="w-5 h-5 text-violet-500" />}
+                label="Admin Dashboard"
+                active={isActive('/admin')}
+                collapsed={isSidebarCollapsed}
+              />
+              <MenuLink
+                to="/admin/applications"
+                icon={<UserPlus className="w-5 h-5 text-blue-500" />}
+                label="Applications"
+                active={isActive('/admin/applications')}
+                collapsed={isSidebarCollapsed}
+              />
+              <MenuLink
+                to="/admin/marketplace"
+                icon={<Store className="w-5 h-5 text-orange-500" />}
+                label="Marketplace Admin"
+                active={isActive('/admin/marketplace')}
+                collapsed={isSidebarCollapsed}
+              />
+              <MenuLink
+                to="/admin/officer-reports"
+                icon={<FileText className="w-5 h-5 text-teal-500" />}
+                label="Officer Reports"
+                active={isActive('/admin/officer-reports')}
+                collapsed={isSidebarCollapsed}
+              />
+              <MenuLink
+                to="/store-debug"
+                icon={<Bug className="w-5 h-5 text-red-600" />}
+                label="Store Debug"
+                active={isActive('/store-debug')}
+                collapsed={isSidebarCollapsed}
+              />
+              <MenuLink
+                to="/changelog"
+                icon={<ListChecks className="w-5 h-5 text-lime-500" />}
+                label="Updates & Changes"
+                active={isActive('/changelog')}
+                collapsed={isSidebarCollapsed}
+              />
+              <MenuLink
+                to="/admin/royal-family"
+                icon={<Crown className="w-5 h-5 text-yellow-500" />}
+                label="Royal Family"
+                active={isActive('/admin/royal-family')}
+                collapsed={isSidebarCollapsed}
+              />
             </>
           )}
         </div>
@@ -310,18 +512,30 @@ export default function Sidebar() {
   )
 }
 
-function MenuLink({ to, icon, label, active }: any) {
+interface MenuLinkProps {
+  to: string
+  icon: React.ReactNode
+  label: string
+  active: boolean
+  collapsed?: boolean
+}
+
+function MenuLink({ to, icon, label, active, collapsed = false }: MenuLinkProps) {
+  const activeClasses = active
+    ? 'bg-purple-600 text-white border border-purple-400'
+    : 'hover:bg-[#1F1F2E] text-gray-300 border-transparent'
+
+  const layoutClasses = collapsed ? 'justify-center gap-0 px-2 py-3' : 'gap-3 px-4 py-2'
+
   return (
     <Link
       to={to}
-      className={`flex items-center gap-3 px-4 py-2 rounded-lg transition ${
-        active
-          ? 'bg-purple-600 text-white border border-purple-400'
-          : 'hover:bg-[#1F1F2E] text-gray-300'
-      }`}
+      aria-label={label}
+      title={label}
+      className={`flex w-full items-center rounded-lg transition ${activeClasses} ${layoutClasses}`}
     >
       <span className={`w-5 h-5 ${active ? 'text-white' : ''}`}>{icon}</span>
-      <span>{label}</span>
+      {!collapsed && <span className="flex-1 text-left">{label}</span>}
     </Link>
   )
 }

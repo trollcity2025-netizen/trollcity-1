@@ -497,12 +497,6 @@ export default function AdminApplications() {
                               <span className="text-white ml-2">{app.product_types}</span>
                             </div>
                           )}
-                          {app.contact_email && (
-                            <div>
-                              <span className="text-gray-400">Email:</span>
-                              <span className="text-white ml-2">{app.contact_email}</span>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -537,9 +531,8 @@ export default function AdminApplications() {
               <div key={app.id} className="bg-[#1A1A1A] border border-purple-500/30 rounded-lg p-4">
 
                 <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-white font-semibold">{app.username}</div>
-                    <div className="text-gray-400 text-sm">{app.email}</div>
+                    <div>
+                      <div className="text-white font-semibold">{app.username}</div>
                     <div className="text-xs text-gray-500 mt-1">
                       Applied: {new Date(app.created_at).toLocaleDateString()}
                     </div>
