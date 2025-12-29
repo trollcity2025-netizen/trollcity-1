@@ -1208,12 +1208,6 @@ const HomePageContent = () => {
                           </div>
                         </div>
                         
-                        <div className="relative z-10 w-full flex items-center justify-around text-xs text-gray-400 border-t border-white/10 pt-2">
-                          <div className="text-center">
-                            <div className="text-purple-400 font-semibold">{user.free_coin_balance ?? 0}</div>
-                            <div className="text-xs text-gray-500">Coins</div>
-                          </div>
-                        </div>
                       </button>
                     );
                   })}

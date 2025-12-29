@@ -107,7 +107,7 @@ export default function QuickActionsBar({
 
   return (
     <div className="bg-gradient-to-r from-[#0A0814] via-[#1a0b2e] to-[#0A0814] border-b border-[#2C2C2C] p-4 sticky top-0 z-10 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto">
+  <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-semibold text-white flex items-center gap-2">
             <Zap className="w-4 h-4 text-cyan-400" />
