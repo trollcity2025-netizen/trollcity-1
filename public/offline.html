@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Offline - Troll City</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        background: #03030a;
+        color: #f5f5f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        text-align: center;
+        padding: 2rem;
+      }
+      .card {
+        max-width: 640px;
+        border: 1px solid #3b3b5c;
+        padding: 2rem;
+        border-radius: 1.25rem;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      }
+      .card h1 {
+        margin-bottom: 0.75rem;
+        font-size: 2rem;
+      }
+      .card p {
+        color: #d0d0ec;
+      }
+      .card button {
+        margin-top: 1.25rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(135deg, #bb26ff, #00ffc3);
+        color: #03030a;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .card button:focus {
+        outline: 2px solid #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>You are offline</h1>
+      <p>The Troll City desktop shell is still available. Some live data is unavailable without a connection.</p>
+      <p>When you regain connectivity, reload the page to sync up.</p>
+      <button onclick="location.reload()">Try Again</button>
+    </div>
+  </body>
+</html>

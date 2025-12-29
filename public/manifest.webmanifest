@@ -1,13 +1,48 @@
 {
-  "name": "Troll City",
-  "short_name": "TrollCity",
+  "name": "Tromody Studio",
+  "short_name": "Tromody",
+  "description": "Desktop-only interactive broadcast platform.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0A0814",
-  "theme_color": "#0A0814",
-  "description": "Live streams, troll wheel, gifts, and more.",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#07060F",
+  "theme_color": "#FFB800",
+  "orientation": "landscape",
   "icons": [
-    { "src": "/icons/192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["entertainment", "social", "video"],
+  "shortcuts": [
+    {
+      "name": "Go Live",
+      "url": "/go-live",
+      "description": "Start broadcasting"
+    },
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Open dashboard"
+    },
+    {
+      "name": "Messages",
+      "url": "/messages",
+      "description": "Open messages"
+    }
   ]
 }

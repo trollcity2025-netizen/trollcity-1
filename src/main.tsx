@@ -5,6 +5,7 @@ import './index.css'
 import { LiveKitProvider } from './contexts/LiveKitContext'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
+import DesktopOnlyGuard from './components/DesktopOnlyGuard'
 // GlobalAppProvider intentionally removed per required root layout
 
 // App version for cache busting
@@ -19,16 +20,6 @@ if (storedVersion !== APP_VERSION) {
   localStorage.setItem('app_version', APP_VERSION)
 }
 
-// Unregister all service workers
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(registration => {
-      console.log('Unregistering service worker:', registration.scope)
-      registration.unregister()
-    })
-  })
-}
-
 const rootElement = document.getElementById('root')
 
 if (!rootElement) {
@@ -36,13 +27,15 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <LiveKitProvider>
-    <AuthProvider>
-      <GlobalAppProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </GlobalAppProvider>
-    </AuthProvider>
-  </LiveKitProvider>
+  <DesktopOnlyGuard>
+    <LiveKitProvider>
+      <AuthProvider>
+        <GlobalAppProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </GlobalAppProvider>
+      </AuthProvider>
+    </LiveKitProvider>
+  </DesktopOnlyGuard>
 )

@@ -16,6 +16,8 @@ import { APP_DATA_REFETCH_EVENT_NAME } from "./lib/appEvents";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
+import ServiceWorkerUpdateBanner from "./components/ServiceWorkerUpdateBanner";
+import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import ProfileSetupModal from "./components/ProfileSetupModal";
 import RequireRole from "./components/RequireRole";
 import { RequireLeadOrOwner } from "./components/auth/RequireLeadOrOwner";
@@ -51,6 +53,7 @@ import FamilyLeaderboard from "./pages/FamilyLeaderboard.jsx";
 import FamilyShop from "./pages/FamilyShop.jsx";
 import Support from "./pages/Support";
 import Safety from "./pages/Safety";
+import OfflinePage from "./pages/Offline";
 import AdminRFC from "./components/AdminRFC";
 import AdminEarningsDashboard from "./pages/admin/AdminEarningsDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -424,6 +427,9 @@ function AppContent() {
       />
 
 
+      <ServiceWorkerUpdateBanner />
+      <PwaInstallPrompt />
+
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
         <div className="flex min-h-screen">
           {/* Desktop Sidebar */}
@@ -436,6 +442,7 @@ function AppContent() {
             <main ref={mainRef} className="flex-1 overflow-y-auto bg-transparent safe-area-bottom">
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
+                  <Route path="/offline" element={<OfflinePage />} />
                 {/* 🚪 Public Routes */}
                 <Route path="/" element={user ? <Home /> : <LandingPage />} />
                 <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />

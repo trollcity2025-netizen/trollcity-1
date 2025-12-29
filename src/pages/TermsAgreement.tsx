@@ -74,8 +74,9 @@ export default function TermsAgreement() {
         // Update database first
         const { error: dbError } = await supabase
           .from('user_profiles')
-          .update({ 
+          .update({
             terms_accepted: true,
+            court_recording_consent: true,
             updated_at: new Date().toISOString()
           })
           .eq('id', profile.id)
@@ -90,9 +91,10 @@ export default function TermsAgreement() {
         console.log('[Terms] Database updated successfully')
         
         // Then update local store
-        const updatedProfile = { 
-          ...profile, 
+        const updatedProfile = {
+          ...profile,
           terms_accepted: true,
+          court_recording_consent: true,
           terms_accepted_at: new Date().toISOString()
         } as any
         
