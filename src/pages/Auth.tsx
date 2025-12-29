@@ -19,7 +19,6 @@ const Auth = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { user, profile, setAuth, setProfile } = useAuthStore()
-  const ADMIN_EMAIL = (import.meta as any).env?.VITE_ADMIN_EMAIL || 'trollcity2025@gmail.com'
   
   // Get referral code from URL
   const referralCode = searchParams.get('ref') || ''
@@ -203,7 +202,7 @@ const Auth = () => {
             navigate('/')
           } else {
             console.warn('Profile not found after 5 attempts, but user was created')
-            toast.success('Account created! Please refresh the page.')
+            toast.success('Account created successfully!')
             navigate('/')
           }
         } else {
