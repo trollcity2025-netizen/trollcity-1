@@ -8,15 +8,22 @@ import { GlobalAppProvider } from './contexts/GlobalAppContext'
 // GlobalAppProvider intentionally removed per required root layout
 
 // App version for cache busting
-const APP_VERSION = '1.0.0-' + Date.now().toString()
+const APP_VERSION =
+  (import.meta.env.VITE_APP_VERSION as string | undefined) ||
+  (import.meta.env.VITE_PUBLIC_APP_VERSION as string | undefined) ||
+  '1.0.0'
 
 // App version guard - clear storage on deploy
-const storedVersion = localStorage.getItem('app_version')
-if (storedVersion !== APP_VERSION) {
-  console.log('App version changed, clearing storage')
-  localStorage.clear()
-  sessionStorage.clear()
-  localStorage.setItem('app_version', APP_VERSION)
+try {
+  const storedVersion = localStorage.getItem('app_version')
+  if (storedVersion !== APP_VERSION) {
+    console.log('App version changed, clearing storage')
+    localStorage.clear()
+    sessionStorage.clear()
+    localStorage.setItem('app_version', APP_VERSION)
+  }
+} catch (error) {
+  console.warn('Unable to evaluate app version guard', error)
 }
 
 const rootElement = document.getElementById('root')
