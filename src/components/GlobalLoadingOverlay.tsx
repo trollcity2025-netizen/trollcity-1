@@ -4,7 +4,7 @@ import { useGlobalApp } from '../contexts/GlobalAppContext';
 interface GlobalLoadingOverlayProps {
   isVisible?: boolean;
   message?: string;
-  type?: 'loading' | 'reconnecting' | 'error' | 'offline';
+  type?: 'loading' | 'reconnecting' | 'error';
   onRetry?: () => void;
 }
 
@@ -14,7 +14,7 @@ const GlobalLoadingOverlay: React.FC<GlobalLoadingOverlayProps> = ({
   type = 'loading',
   onRetry
 }) => {
-  const { isLoading, loadingMessage, isReconnecting, reconnectMessage, error, errorType } = useGlobalApp();
+  const { isLoading, loadingMessage, isReconnecting, reconnectMessage, error } = useGlobalApp();
 
   // Use props if provided, otherwise use context values
   const showOverlay = isVisible || isLoading || isReconnecting || !!error;
@@ -23,7 +23,7 @@ const GlobalLoadingOverlay: React.FC<GlobalLoadingOverlayProps> = ({
     (isLoading ? loadingMessage : '') ||
     (error ? error : '');
 
-  const overlayType = type || (isReconnecting ? 'reconnecting' : errorType || 'loading');
+  const overlayType = type || (isReconnecting ? 'reconnecting' : error ? 'error' : 'loading');
 
   if (!showOverlay) return null;
 
@@ -45,13 +45,6 @@ const GlobalLoadingOverlay: React.FC<GlobalLoadingOverlayProps> = ({
             <div className="rounded-full h-12 w-12 bg-[#ef4444] mx-auto flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-          )}
-          {overlayType === 'offline' && (
-            <div className="rounded-full h-12 w-12 bg-[#6b7280] mx-auto flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-12.728 12.728m0-12.728l12.728 12.728M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
               </svg>
             </div>
           )}
@@ -82,8 +75,6 @@ function getDefaultMessage(type: string): string {
       return 'Reconnecting...';
     case 'error':
       return 'An error occurred';
-    case 'offline':
-      return 'You are offline';
     default:
       return 'Please wait...';
   }
