@@ -359,7 +359,7 @@ const GoLiveSetup: React.FC = () => {
             ) : (
               <>
                 <Video className="w-5 h-5" />
-                {isSpecialCategory ? 'Select another category to go live' : `dY"'" Go Live`}
+                {isSpecialCategory ? 'Select another category to go live' : 'Go Live'}
               </>
             )}
           </button>
