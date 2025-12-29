@@ -15,10 +15,8 @@ import {
   Gift,
   Menu,
   MessageCircle,
-  Sparkles,
   Mic,
   Video,
-  RotateCcw,
   Power,
   Settings,
 } from 'lucide-react'
@@ -134,6 +132,7 @@ const LiveBroadcast: React.FC = () => {
   const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [liveSeconds, setLiveSeconds] = useState(0)
   const [chatDraft, setChatDraft] = useState('')
+  const [maxGuestSlots, setMaxGuestSlots] = useState(3)
   const profileCacheRef = useRef<Map<string, ProfileCacheEntry>>(new Map())
   const messageSelectFields = `
     id,
@@ -219,11 +218,13 @@ const LiveBroadcast: React.FC = () => {
 
   const {
     localParticipant,
+    participants,
     startPublishing,
     toggleCamera,
     toggleMicrophone,
     isConnected,
     isConnecting,
+    disconnect,
   } = useLiveKit()
 
   const { sendGift: sendGiftToStreamer, isSending: isGiftSending } = useGiftSystem(
@@ -257,6 +258,13 @@ const LiveBroadcast: React.FC = () => {
 
     loadStream()
   }, [streamId])
+
+  useEffect(() => {
+    if (typeof stream?.max_guest_slots === 'number') {
+      const normalized = Math.min(Math.max(stream.max_guest_slots, 0), 5)
+      setMaxGuestSlots((prev) => (prev === normalized ? prev : normalized))
+    }
+  }, [stream?.max_guest_slots])
 
   useEffect(() => {
     if (!user || !profile || !stream) return
@@ -325,35 +333,23 @@ const LiveBroadcast: React.FC = () => {
     return () => clearInterval(interval)
   }, [isConnected])
 
-  const guestSlots = useMemo(
-    () => [
-      {
-        id: 'guest-1',
-        name: 'Mallory',
-        level: 17,
-        status: 'Live',
-        coins: '1.2K',
-        badge: 'Royal',
-      },
-      {
-        id: 'guest-2',
-        name: 'MasonLegend',
-        level: 21,
-        status: 'Queued',
-        coins: '925',
-        badge: 'Battle',
-      },
-      {
-        id: 'guest-3',
-        name: null,
-        level: null,
-        status: 'Empty',
-        coins: null,
-        badge: 'Tap to Join',
-      },
-    ],
-    []
+  const effectiveMaxGuests = Math.min(Math.max(maxGuestSlots, 0), 5)
+
+  const guestParticipants = useMemo(
+    () => Array.from(participants.values()).filter((participant) => !participant.isLocal),
+    [participants]
   )
+
+  const guestSlotEntries = useMemo(
+    () =>
+      Array.from({ length: effectiveMaxGuests }).map((_, index) => ({
+        slotIndex: index,
+        participant: guestParticipants[index] || null,
+      })),
+    [effectiveMaxGuests, guestParticipants]
+  )
+
+  const liveKitMaxParticipants = Math.min(1 + effectiveMaxGuests, 6)
 
   const quickReactions = ['❤️', '🔥', '✨', '🎉']
 
@@ -395,30 +391,6 @@ const LiveBroadcast: React.FC = () => {
     [stream?.id, setShowMenuPanel]
   )
 
-  const verticalActions = useMemo(
-    () => [
-      {
-        id: 'gifts',
-        icon: Gift,
-        label: 'Gifts',
-        onClick: () => setShowGiftDrawer(true),
-      },
-      {
-        id: 'guests',
-        icon: Users,
-        label: 'Guests',
-        onClick: () => toast('Guest queue is live — manage participants from the host controls.'),
-      },
-      {
-        id: 'menu',
-        icon: Menu,
-        label: 'Menu',
-        onClick: () => setShowMenuPanel(true),
-      },
-    ],
-    [setShowGiftDrawer, setShowGuestPanel, setShowMenuPanel]
-  )
-
   const isBroadcaster =
     profile?.role === UserRole.ADMIN ||
     profile?.role === UserRole.MODERATOR ||
@@ -452,6 +424,102 @@ const LiveBroadcast: React.FC = () => {
       toast.error('Camera and microphone access are required to go live.')
     }
   }, [startPublishing])
+
+  const handleToggleMicrophone = useCallback(async () => {
+    if (!toggleMicrophone) return
+    try {
+      await toggleMicrophone()
+    } catch (error) {
+      console.error('Toggle microphone failed:', error)
+      toast.error('Unable to toggle microphone.')
+    }
+  }, [toggleMicrophone])
+
+  const handleToggleCamera = useCallback(async () => {
+    if (!toggleCamera) return
+    try {
+      await toggleCamera()
+    } catch (error) {
+      console.error('Toggle camera failed:', error)
+      toast.error('Unable to toggle camera.')
+    }
+  }, [toggleCamera])
+
+  const handleEndStream = useCallback(async () => {
+    if (!isBroadcaster || !stream?.id) return
+    try {
+      const { error } = await supabase
+        .from('streams')
+        .update({ is_live: false, status: 'ended' })
+        .eq('id', stream.id)
+
+      if (error) throw error
+
+      setStream((prev) => (prev ? { ...prev, is_live: false, status: 'ended' } : prev))
+      disconnect()
+      toast.success('Stream ended successfully.')
+    } catch (err) {
+      console.error('Failed to end stream:', err)
+      toast.error('Unable to end the broadcast right now.')
+    }
+  }, [disconnect, isBroadcaster, stream?.id])
+
+  const adjustGuestSlots = useCallback(
+    async (delta: number) => {
+      if (!isBroadcaster || !stream?.id) return
+      const current = Math.min(Math.max(maxGuestSlots, 0), 5)
+      const target = Math.min(Math.max(current + delta, 0), 5)
+
+      if (target === current) return
+
+      try {
+        const { error } = await supabase
+          .from('streams')
+          .update({ max_guest_slots: target })
+          .eq('id', stream.id)
+
+        if (error) throw error
+
+        setMaxGuestSlots(target)
+        setStream((prev) => (prev ? { ...prev, max_guest_slots: target } : prev))
+        toast.success(
+          target > 0 ? `Guest slots limited to ${target}` : 'Guest slots disabled'
+        )
+      } catch (error) {
+        console.error('Failed to update guest slots:', error)
+        toast.error('Unable to adjust guest slots.')
+      }
+    },
+    [isBroadcaster, stream?.id, maxGuestSlots]
+  )
+
+  const handleOpenGuestPanel = useCallback(() => setShowGuestPanel(true), [setShowGuestPanel])
+  const handleOpenGiftDrawer = useCallback(() => setShowGiftDrawer(true), [setShowGiftDrawer])
+  const handleOpenMenuPanel = useCallback(() => setShowMenuPanel(true), [setShowMenuPanel])
+
+  const verticalActions = useMemo(
+    () => [
+      {
+        id: 'gifts',
+        icon: Gift,
+        label: 'Gifts',
+        onClick: handleOpenGiftDrawer,
+      },
+      {
+        id: 'guests',
+        icon: Users,
+        label: 'Guests',
+        onClick: handleOpenGuestPanel,
+      },
+      {
+        id: 'menu',
+        icon: Menu,
+        label: 'Menu',
+        onClick: handleOpenMenuPanel,
+      },
+    ],
+    [handleOpenGiftDrawer, handleOpenGuestPanel, handleOpenMenuPanel]
+  )
 
     const loadMessages = useCallback(async () => {
       if (!stream?.id) return
@@ -664,7 +732,7 @@ const LiveBroadcast: React.FC = () => {
                     identity={user?.id || `viewer-${crypto.randomUUID()}`}
                     role={liveKitRole}
                     autoPublish={isBroadcaster ? false : true}
-                    maxParticipants={6}
+                    maxParticipants={liveKitMaxParticipants}
                     className="h-[420px] w-full"
                   />
                 </div>
@@ -709,35 +777,67 @@ const LiveBroadcast: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                {guestSlots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="flex flex-col gap-2 rounded-2xl border border-purple-500/30 bg-black/60 p-4 text-sm text-gray-200 shadow-[0_20px_45px_rgba(72,49,150,0.3)]"
-                  >
-                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-purple-300">
-                      <span>{slot.id.split('-').join(' ').toUpperCase()}</span>
-                      <span>{slot.badge}</span>
-                    </div>
-                    {slot.name ? (
-                      <>
-                        <div className="text-base font-semibold text-white">{slot.name}</div>
-                        <div className="text-xs text-gray-400">Level {slot.level}</div>
-                        <div className="flex items-center justify-between text-xs text-gray-300">
-                          <span>{slot.status}</span>
-                          <span className="text-amber-300">{slot.coins} coins</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-1 flex-col items-center justify-center text-center text-xs text-gray-400">
-                        <span className="text-lg font-semibold text-white">Tap to Join</span>
-                        <span className="mt-1 text-[10px] uppercase tracking-[0.3em] text-purple-400">
-                          Seat available
-                        </span>
-                      </div>
-                    )}
+              {isBroadcaster && (
+                <div className="flex flex-wrap items-center justify-center gap-4 rounded-3xl border border-purple-500/30 bg-black/50 px-4 py-3 text-[10px] uppercase tracking-[0.3em] text-gray-300 shadow-[0_20px_40px_rgba(58,40,129,0.3)]">
+                  <span>Guest slots configured: {effectiveMaxGuests}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => adjustGuestSlots(-1)}
+                      disabled={effectiveMaxGuests <= 0}
+                      className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Remove
+                    </button>
+                    <button
+                      onClick={() => adjustGuestSlots(1)}
+                      disabled={effectiveMaxGuests >= 5}
+                      className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
                   </div>
-                ))}
+                </div>
+              )}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {guestSlotEntries.length > 0 ? (
+                  guestSlotEntries.map((slot) => {
+                    const participant = slot.participant
+                    const displayName =
+                      participant?.name || participant?.identity || `Guest ${slot.slotIndex + 1}`
+                    return (
+                      <div
+                        key={`guest-slot-${slot.slotIndex}`}
+                        className="flex flex-col gap-2 rounded-2xl border border-purple-500/30 bg-black/60 p-4 text-sm text-gray-200 shadow-[0_20px_45px_rgba(72,49,150,0.3)]"
+                      >
+                        <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-purple-300">
+                          <span>Slot {slot.slotIndex + 1}</span>
+                          <span>{participant ? 'Live' : 'Waiting'}</span>
+                        </div>
+                        {participant ? (
+                          <>
+                            <div className="text-base font-semibold text-white">{displayName}</div>
+                            <div className="flex items-center gap-2 text-[11px] text-gray-300">
+                              <span>{participant.isCameraEnabled ? 'Camera On' : 'Camera Off'}</span>
+                              <span>{participant.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}</span>
+                            </div>
+                            <div className="text-[10px] text-purple-300">ID: {participant.identity}</div>
+                          </>
+                        ) : (
+                          <div className="flex flex-1 flex-col items-center justify-center text-center text-xs text-gray-400">
+                            <span className="text-lg font-semibold text-white">Seat available</span>
+                            <span className="mt-1 text-[10px] uppercase tracking-[0.3em] text-purple-400">
+                              Waiting for guest
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="col-span-full rounded-2xl border border-purple-500/40 bg-black/60 p-6 text-center text-xs uppercase tracking-[0.3em] text-gray-400">
+                    Guest slots are currently closed. Add one to let trolls join the stream.
+                  </div>
+                )}
               </div>
             </section>
 
@@ -828,46 +928,47 @@ const LiveBroadcast: React.FC = () => {
 
           <section className="flex flex-wrap items-center justify-center gap-3 rounded-3xl border border-purple-500/40 bg-gradient-to-br from-[#0b0416] to-[#150024] p-4 text-xs uppercase tracking-[0.3em] text-white shadow-[0_25px_80px_rgba(82,36,160,0.35)]">
             <button
-              onClick={() => toggleMicrophone && toggleMicrophone()}
+              onClick={handleToggleMicrophone}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white shadow-[0_0_25px_rgba(239,68,68,0.35)] transition hover:border-pink-400"
             >
               <Mic className={`h-4 w-4 ${micEnabled ? 'text-emerald-300' : 'text-red-400'}`} />
               {micEnabled ? 'Mute Mic' : 'Unmute Mic'}
             </button>
             <button
-              onClick={() => toggleCamera && toggleCamera()}
+              onClick={handleToggleCamera}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-cyan-400"
             >
               <Video className={`h-4 w-4 ${cameraEnabled ? 'text-cyan-300' : 'text-red-400'}`} />
               {cameraEnabled ? 'Camera On' : 'Camera Off'}
             </button>
             <button
-              onClick={() => toast('Flip camera is working behind the scenes')}
+              onClick={handleOpenGuestPanel}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-purple-300"
             >
-              <RotateCcw className="h-4 w-4" />
-              Flip Camera
+              <Users className="h-4 w-4" />
+              Guests
             </button>
             <button
-              onClick={() => toast('Live ended (simulation)')}
-              className="flex items-center gap-2 rounded-full border border-red-500/80 bg-red-500/30 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-red-200 transition hover:bg-red-500/50"
+              onClick={handleEndStream}
+              disabled={!isBroadcaster}
+              className="flex items-center gap-2 rounded-full border border-red-500/80 bg-red-500/30 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-red-200 transition hover:bg-red-500/50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Power className="h-4 w-4" />
               End Live
             </button>
             <button
-              onClick={() => toast('Settings panel coming soon')}
+              onClick={handleOpenMenuPanel}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-yellow-400"
             >
               <Settings className="h-4 w-4" />
               Settings
             </button>
             <button
-              onClick={() => toast('Effects rack will be refreshed soon')}
+              onClick={handleOpenGiftDrawer}
               className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-fuchsia-400"
             >
-              <Sparkles className="h-4 w-4" />
-              Effects
+              <Gift className="h-4 w-4" />
+              Gifts
             </button>
           </section>
         </main>
@@ -917,25 +1018,64 @@ const LiveBroadcast: React.FC = () => {
                 Close
               </button>
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              {guestSlots.map((slot) => (
-                <div key={slot.id} className="rounded-2xl border border-purple-500/30 bg-white/5 p-4 text-sm text-gray-200">
-                  <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-purple-300">
-                    <span>{slot.id.replace('-', ' ')}</span>
-                    <span>{slot.badge}</span>
-                  </div>
-                  {slot.name ? (
-                    <>
-                      <p className="mt-2 text-lg font-semibold text-white">{slot.name}</p>
-                      <p className="text-xs text-gray-400">Level {slot.level}</p>
-                      <p className="mt-1 text-[11px] text-yellow-300">{slot.status}</p>
-                      <p className="text-[11px] text-amber-200">{slot.coins} coins</p>
-                    </>
-                  ) : (
-                    <p className="mt-4 text-xs text-gray-500">Seat available — click to invite</p>
-                  )}
+            {isBroadcaster && (
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-purple-500/40 bg-black/40 px-4 py-3 text-[10px] uppercase tracking-[0.3em] text-gray-200">
+                <span>Guest slots allowed: {effectiveMaxGuests}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => adjustGuestSlots(-1)}
+                    disabled={effectiveMaxGuests <= 0}
+                    className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Reduce
+                  </button>
+                  <button
+                    onClick={() => adjustGuestSlots(1)}
+                    disabled={effectiveMaxGuests >= 5}
+                    className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Increase
+                  </button>
                 </div>
-              ))}
+              </div>
+            )}
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              {guestSlotEntries.length > 0 ? (
+                guestSlotEntries.map((slot) => {
+                  const participant = slot.participant
+                  const displayName =
+                    participant?.name || participant?.identity || `Guest ${slot.slotIndex + 1}`
+                  return (
+                    <div
+                      key={`guest-panel-${slot.slotIndex}`}
+                      className="rounded-2xl border border-purple-500/30 bg-[#0f081f] p-4 text-sm text-gray-200"
+                    >
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-purple-300">
+                        <span>Slot {slot.slotIndex + 1}</span>
+                        <span>{participant ? 'Active' : 'Waiting'}</span>
+                      </div>
+                      {participant ? (
+                        <>
+                          <p className="mt-2 text-lg font-semibold text-white">{displayName}</p>
+                          <p className="text-[11px] text-gray-400">
+                            Camera: {participant.isCameraEnabled ? 'On' : 'Off'} · Mic:{' '}
+                            {participant.isMicrophoneEnabled ? 'On' : 'Off'}
+                          </p>
+                          <p className="text-[11px] text-purple-300">ID: {participant.identity}</p>
+                        </>
+                      ) : (
+                        <div className="mt-4 text-xs text-gray-400">
+                          Seat available — share the stream link to invite a guest.
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="col-span-full rounded-2xl border border-purple-500/40 bg-[#0b0416]/80 p-6 text-center text-xs uppercase tracking-[0.3em] text-gray-400">
+                  Guest slots are currently disabled. Enable some seats to let guests join.
+                </div>
+              )}
             </div>
           </div>
         </div>
