@@ -10,11 +10,14 @@ import { toast } from 'sonner';
 const GoLive: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewStreamRef = useRef<MediaStream | null>(null);
 
   const { user, profile } = useAuthStore.getState();
 
   const [streamTitle, setStreamTitle] = useState('');
   const [starting, setStarting] = useState(false);
+  const [permissionState, setPermissionState] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
+  const [permissionHint, setPermissionHint] = useState('Request camera + mic to ready the LiveKit cockpit.');
 
   const [showApplicationForm, setShowApplicationForm] = useState(false);
 
@@ -28,9 +31,6 @@ const GoLive: React.FC = () => {
     applicationStatus: string | null;
   } | null>(null);
 
-  /* ----------------------------------------------------
-     CHECK BROADCASTER STATUS (NO UI BLOCKING)
-  ---------------------------------------------------- */
   useEffect(() => {
     const run = async () => {
       if (!user || !profile) return;
@@ -72,46 +72,48 @@ const GoLive: React.FC = () => {
 
   const isApprovedBroadcaster =
     profile?.is_broadcaster ||
-    (broadcasterStatus?.isApproved &&
-      broadcasterStatus?.applicationStatus === 'approved');
+    (broadcasterStatus?.isApproved && broadcasterStatus?.applicationStatus === 'approved');
 
-  /* ----------------------------------------------------
-     CAMERA PREVIEW (NO OVERLAY EVER)
-  ---------------------------------------------------- */
   useEffect(() => {
-    let stream: MediaStream | null = null;
-
-    const startPreview = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error('Camera or microphone permission denied.');
-      }
-    };
-
-    startPreview();
-
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-      }
+      previewStreamRef.current?.getTracks().forEach(track => track.stop());
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
     };
   }, []);
 
-  /* ----------------------------------------------------
-     THUMBNAIL HANDLING
-  ---------------------------------------------------- */
+  const requestPermissions = useCallback(async () => {
+    setPermissionState('requesting');
+    setPermissionHint('Requesting camera and microphone access.');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+
+      previewStreamRef.current?.getTracks().forEach(track => track.stop());
+      previewStreamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      setPermissionState('granted');
+      setPermissionHint('LiveKit ready - camera + mic unlocked.');
+    } catch (error) {
+      console.error('Permission request failed', error);
+      setPermissionState('denied');
+      setPermissionHint('Permission denied. Retry to re-enable the preview.');
+      previewStreamRef.current?.getTracks().forEach(track => track.stop());
+      previewStreamRef.current = null;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    }
+  }, []);
+
   const handleThumbnailChange = (file: File | null) => {
     if (!file) {
       if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
@@ -131,9 +133,6 @@ const GoLive: React.FC = () => {
     setThumbnailPreview(URL.createObjectURL(file));
   };
 
-  /* ----------------------------------------------------
-     START STREAM (NO WAIT SCREEN)
-  ---------------------------------------------------- */
   const handleStartStream = async () => {
     if (!user || !profile) {
       toast.error('You must be logged in.');
@@ -142,6 +141,11 @@ const GoLive: React.FC = () => {
 
     if (!isApprovedBroadcaster) {
       toast.error('You are not approved to broadcast.');
+      return;
+    }
+
+    if (permissionState !== 'granted') {
+      toast.error('Unlock camera and microphone first.');
       return;
     }
 
@@ -191,18 +195,15 @@ const GoLive: React.FC = () => {
         popularity: 0,
       });
 
-      const { data, error } = await supabase.functions.invoke(
-        'livekit-token',
-        {
-          body: {
-            room: streamId,
-            identity: user.id,
-            user_id: user.id,
-            isHost: true,
-            allowPublish: true,
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('livekit-token', {
+        body: {
+          room: streamId,
+          identity: user.id,
+          user_id: user.id,
+          isHost: true,
+          allowPublish: true,
+        },
+      });
 
       if (error || !data?.token) {
         toast.error('LiveKit token failed.');
@@ -212,10 +213,7 @@ const GoLive: React.FC = () => {
       navigate(`/live/${streamId}`, {
         state: {
           roomName: streamId,
-          serverUrl:
-            data.serverUrl ||
-            data.livekitUrl ||
-            import.meta.env.VITE_LIVEKIT_URL,
+          serverUrl: data.serverUrl || data.livekitUrl || import.meta.env.VITE_LIVEKIT_URL,
           token: data.token,
           isHost: true,
           streamTitle,
@@ -231,8 +229,6 @@ const GoLive: React.FC = () => {
 
   const goLiveTest = useCallback(async () => {
     try {
-      console.log('🎥 Go Live clicked — requesting token...');
-
       const res = await fetch('/api/livekit/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -246,105 +242,213 @@ const GoLive: React.FC = () => {
       });
 
       const data = await res.json();
-      console.log('✅ Token response:', data);
-
       const room = new Room();
-      console.log('🔌 Connecting to room...');
-
       await room.connect(import.meta.env.VITE_LIVEKIT_URL, data.token);
-      console.log('✅ Connected to LiveKit!');
-
       const tracks = await createLocalTracks({ audio: true, video: true });
-      console.log('🎙️📷 Tracks created:', tracks);
-
       await room.localParticipant.publishTrack(tracks[0]);
       await room.localParticipant.publishTrack(tracks[1]);
-
-      console.log('🚀 Published local tracks successfully!');
     } catch (err) {
-      console.error('❌ Go Live failed:', err);
+      console.error('Go Live test failed:', err);
     }
   }, []);
 
-  /* ----------------------------------------------------
-     ACCESS DENIED
-  ---------------------------------------------------- */
   if (!user || !profile || broadcasterStatus === null) {
-    return null; // prevents flicker / false denial
+    return null;
   }
 
   if (!isApprovedBroadcaster) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6">
-        <h1 className="text-3xl font-extrabold flex items-center gap-2">
-          <Video className="text-troll-gold w-8 h-8" />
-          Go Live
-        </h1>
-
-        <div className="bg-[#0E0A1A] border border-purple-700/40 p-6 rounded-xl text-center">
-          🚫 You must be an approved broadcaster.
+      <div className="min-h-screen bg-[#02000a] px-4 py-10 text-white">
+        <div className="mx-auto max-w-4xl space-y-6 rounded-[32px] border border-purple-500/40 bg-[#050016] p-8 shadow-[0_0_40px_rgba(62,10,120,0.45)]">
+          <div className="flex items-center gap-3">
+            <Video className="text-cyan-300 w-9 h-9" />
+            <h1 className="text-4xl font-black tracking-tight">Go Live</h1>
+          </div>
+          <p className="text-sm text-gray-300">
+            Stream to Troll City with LiveKit. You currently need an approved broadcaster application to launch a neon RGB show.
+          </p>
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-purple-900/70 to-transparent p-6 text-center text-lg text-white">
+            dYs® You must be an approved broadcaster.
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowApplicationForm(true)}
+              className="rounded-full border border-white/30 bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-white transition hover:brightness-110"
+            >
+              Submit application
+            </button>
+            <button
+              onClick={goLiveTest}
+              className="rounded-full border border-white/30 px-6 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-white transition hover:border-cyan-400"
+            >
+              LiveKit test
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  /* ----------------------------------------------------
-     RENDER
-  ---------------------------------------------------- */
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <BroadcasterApplicationForm
-        isOpen={showApplicationForm}
-        onClose={() => setShowApplicationForm(false)}
-        onSubmitted={() => toast.success('Application submitted')}
-      />
-
-      <h1 className="text-3xl font-extrabold flex items-center gap-2">
-        <Video className="text-troll-gold w-8 h-8" />
-        Go Live
-      </h1>
-
-      <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-        />
-      </div>
-
-      <div className="bg-[#0E0A1A] border border-purple-700/40 p-6 rounded-xl space-y-4">
-        <input
-          value={streamTitle}
-          onChange={e => setStreamTitle(e.target.value)}
-          placeholder="Stream title"
-          className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-4 py-3"
+    <div className="min-h-screen bg-gradient-to-br from-[#030008] via-[#040117] to-[#050114] text-white">
+      <div className="mx-auto max-w-6xl px-6 py-10 space-y-8">
+        <BroadcasterApplicationForm
+          isOpen={showApplicationForm}
+          onClose={() => setShowApplicationForm(false)}
+          onSubmitted={() => toast.success('Application submitted')}
         />
 
-        <input
-          type="file"
-          accept="image/*"
-          onChange={e =>
-            handleThumbnailChange(e.target.files?.[0] || null)
-          }
-          className="text-xs text-gray-300"
-        />
+        <header className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 p-1">
+              <div className="rounded-full bg-black p-2">
+                <Video className="text-white w-7 h-7" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-4xl font-black tracking-tight text-white">Go Live</h1>
+              <p className="text-sm text-gray-400">
+                Your home page neon aesthetic, now elevated with LiveKit and RGB outlines. Request cam + mic permissions, polish your thumbnail, and broadcast to the city.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.4em] text-white/70">
+            <span className="rounded-full border border-white/20 px-3 py-1 text-white/80">LiveKit-powered</span>
+            <span className="rounded-full border border-white/20 px-3 py-1 text-white/80">Neon RGB outline</span>
+          </div>
+        </header>
 
-        {thumbnailPreview && (
-          <img
-            src={thumbnailPreview}
-            className="w-full h-40 object-cover rounded-lg"
-          />
-        )}
+        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="relative overflow-hidden rounded-[36px] border border-purple-500/40 bg-[#040017] p-6 shadow-[0_0_45px_rgba(44,5,80,0.7)]">
+            <div className="absolute inset-0 rounded-[36px] border border-gradient-to-r from-purple-500/40 via-pink-500/30 to-cyan-400/30 pointer-events-none" />
+            <div className="relative space-y-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.4em] text-purple-300">Broadcaster cockpit</span>
+                <span className="rounded-full border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.35em] text-white/70">
+                  LiveKit Studio
+                </span>
+              </div>
+              <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-black/70 px-1 py-1">
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 via-pink-500/20 to-cyan-500/20 blur-3xl shadow-[0_0_60px_rgba(130,46,217,0.6)]" />
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="relative z-10 h-[320px] w-full rounded-[28px] object-cover shadow-[0_20px_60px_rgba(10,0,40,0.7)]"
+                />
+                <div className="absolute bottom-4 left-4 right-4 z-10 rounded-2xl border border-white/20 bg-black/70 px-4 py-3 text-xs text-white/80 backdrop-blur">
+                  {permissionHint}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-white">
+                <button
+                  onClick={requestPermissions}
+                  disabled={permissionState === 'requesting'}
+                  className="rounded-full border border-white/30 bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-500 px-5 py-2 text-xs font-semibold uppercase tracking-[0.35em] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {permissionState === 'granted'
+                    ? 'Permissions Granted'
+                    : permissionState === 'requesting'
+                      ? 'Requesting...'
+                      : 'Request Camera & Mic'}
+                </button>
+                <span className="text-[11px] uppercase tracking-[0.35em] text-white/60">
+                  {permissionState === 'denied' ? 'Denied - retry' : 'Ready for LiveKit broadcast'}
+                </span>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-purple-900/60 to-transparent p-4 text-sm text-gray-300">
+                  <p className="text-[11px] uppercase tracking-[0.35em] text-purple-300">Preview</p>
+                  <p className="text-2xl font-bold text-white">LiveKit</p>
+                  <p className="text-xs text-white/70">
+                    Camera + mic stream locally, then LiveKit mirrors the feed to viewers.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-900/60 to-transparent p-4 text-sm text-gray-300">
+                  <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-300">Broadcast</p>
+                  <p className="text-2xl font-bold text-white">RGB neon</p>
+                  <p className="text-xs text-white/70">
+                    Outline, glow, and gradient neon overlays match the homepage aesthetic.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
 
-        <button
-          onClick={handleStartStream}
-          disabled={starting}
-          className="w-full py-3 rounded-lg bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-black font-bold"
-        >
-          {starting ? 'Starting…' : 'Go Live'}
-        </button>
+          <section className="space-y-6 rounded-[32px] border border-white/10 bg-[#03000b] p-6 shadow-[0_0_40px_rgba(2,10,40,0.45)]">
+            <div className="space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/60">Stream details</p>
+              <input
+                value={streamTitle}
+                onChange={e => setStreamTitle(e.target.value)}
+                placeholder="Stream title"
+                className="w-full rounded-2xl border border-purple-500/30 bg-[#0D0A1F] px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-purple-400 focus:outline-none"
+              />
+              <label className="text-[11px] font-semibold uppercase tracking-[0.4em] text-white/60">
+                Thumbnail
+              </label>
+              <div className="rounded-2xl border border-dashed border-white/20 p-4 text-[12px] text-gray-300">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => handleThumbnailChange(e.target.files?.[0] || null)}
+                  className="block w-full cursor-pointer text-[10px] uppercase tracking-[0.3em] text-white"
+                />
+                <p className="mt-2 text-[11px] text-white/60">
+                  1920x1080 recommended. RGB glow automatically applies to the stream cover.
+                </p>
+                {thumbnailPreview && (
+                  <img
+                    src={thumbnailPreview}
+                    className="mt-3 h-28 w-full rounded-xl object-cover shadow-lg shadow-purple-600/40"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-purple-600/30 bg-gradient-to-br from-purple-900/80 to-transparent p-4 text-sm text-gray-100">
+              <p className="text-[11px] uppercase tracking-[0.35em] text-white/60">LiveKit readiness</p>
+              <div className="flex items-center justify-between text-white">
+                <span>Token status</span>
+                <span className="text-xs font-semibold text-green-300">{starting ? 'requested' : 'secure'}</span>
+              </div>
+              <div className="flex items-center justify-between text-white">
+                <span>Approval</span>
+                <span className="text-xs font-semibold text-cyan-300">{isApprovedBroadcaster ? 'Approved' : 'Pending'}</span>
+              </div>
+              <p className="text-[12px] text-white/70">
+                When you tap Launch broadcast, LiveKit publishes your camera/mic to every viewer watching Troll City in real time.
+              </p>
+            </div>
+
+            <button
+              onClick={handleStartStream}
+              disabled={starting || permissionState !== 'granted'}
+              className="w-full rounded-2xl border border-purple-400/50 bg-gradient-to-r from-cyan-400 to-purple-500 px-4 py-3 text-sm font-black uppercase tracking-[0.4em] text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {permissionState !== 'granted' ? 'Unlock camera + mic first' : starting ? 'Launching live...' : 'Launch broadcast'}
+            </button>
+          </section>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-3xl border border-white/10 bg-[#04000e] p-4 text-center text-sm text-gray-300">
+            <p className="text-xs uppercase tracking-[0.3em] text-purple-300">LiveKit</p>
+            <p className="text-2xl font-bold text-white">Realtime</p>
+            <p className="text-[11px] text-white/60">Low-latency delivery to every viewer</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-[#04000e] p-4 text-center text-sm text-gray-300">
+            <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">Neon outline</p>
+            <p className="text-2xl font-bold text-white">RGB glow</p>
+            <p className="text-[11px] text-white/60">Matches the new home page design</p>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-[#04000e] p-4 text-center text-sm text-gray-300">
+            <p className="text-xs uppercase tracking-[0.3em] text-pink-300">Preview</p>
+            <p className="text-2xl font-bold text-white">Cam + Mic</p>
+            <p className="text-[11px] text-white/60">Request permissions before broadcast</p>
+          </div>
+        </div>
       </div>
     </div>
   );

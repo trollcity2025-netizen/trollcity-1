@@ -139,11 +139,7 @@ const LiveBroadcast: React.FC = () => {
   const [showGuestPanel, setShowGuestPanel] = useState(false)
   const [showMenuPanel, setShowMenuPanel] = useState(false)
 
-  const [mediaRequestState, setMediaRequestState] = useState<
-    'idle' | 'requesting' | 'granted' | 'denied'
-  >('idle')
   const [activeGiftId, setActiveGiftId] = useState<string | null>(null)
-  const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [liveSeconds, setLiveSeconds] = useState(0)
 
   const [chatDraft, setChatDraft] = useState('')
@@ -329,7 +325,6 @@ const LiveBroadcast: React.FC = () => {
     return Boolean(localParticipant?.videoTrack?.track) && Boolean(localParticipant?.audioTrack?.track)
   }, [localParticipant?.videoTrack?.track, localParticipant?.audioTrack?.track])
 
-  const showGoLiveOverlay = isBroadcaster && isConnected && !hasLocalTracks
 
   // Optional atomic entry payment:
   // If you create a Supabase RPC named `pay_stream_entry` that handles coin deduction + stream_entries upsert
@@ -500,25 +495,6 @@ const LiveBroadcast: React.FC = () => {
     [stream?.id]
   )
 
-  const handleGoLive = useCallback(async () => {
-    if (!startPublishing) return
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      toast.error('Your browser does not expose camera/microphone APIs.')
-      return
-    }
-
-    setMediaRequestState('requesting')
-    try {
-      await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      await startPublishing()
-      setMediaRequestState('granted')
-    } catch (error: any) {
-      console.error('Media permission failed:', error)
-      setMediaRequestState('denied')
-      setShowPermissionModal(true)
-      toast.error('Camera and microphone access are required to go live.')
-    }
-  }, [startPublishing])
 
   const handleToggleMicrophone = useCallback(async () => {
     if (!toggleMicrophone) return
@@ -588,6 +564,35 @@ const LiveBroadcast: React.FC = () => {
   const handleOpenGuestPanel = useCallback(() => setShowGuestPanel(true), [])
   const handleOpenGiftDrawer = useCallback(() => setShowGiftDrawer(true), [])
   const handleOpenMenuPanel = useCallback(() => setShowMenuPanel(true), [])
+
+  const handleGoLive = useCallback(async () => {
+    if (!startPublishing || !stream?.id) return
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      toast.error('Your browser does not expose camera/microphone APIs.')
+      return
+    }
+
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      await startPublishing()
+
+      // Update stream status to live
+      const { error } = await supabase
+        .from('streams')
+        .update({ is_live: true, status: 'live' })
+        .eq('id', stream.id)
+
+      if (error) {
+        console.error('Failed to update stream status:', error)
+      }
+
+      setStream((prev) => (prev ? { ...prev, is_live: true, status: 'live' } : prev))
+      toast.success('You are now live!')
+    } catch (error: any) {
+      console.error('Media permission failed:', error)
+      toast.error('Camera and microphone access are required to go live.')
+    }
+  }, [startPublishing, stream?.id])
 
   const verticalActions = useMemo(
     () => [
@@ -728,10 +733,6 @@ const LiveBroadcast: React.FC = () => {
     [sendGiftToStreamer, stream?.broadcaster_id]
   )
 
-  const handleRetryPermission = useCallback(() => {
-    setShowPermissionModal(false)
-    handleGoLive()
-  }, [handleGoLive])
 
   if (!stream || !profile || (!hasPaidEntry && stream.pricing_type !== 'free')) {
     return (
@@ -826,36 +827,6 @@ const LiveBroadcast: React.FC = () => {
                   ))}
                 </div>
 
-                {showGoLiveOverlay && (
-                  <div className="absolute inset-0 rounded-3xl bg-black/75 p-6 text-center text-sm text-white backdrop-blur">
-                    <p className="mb-2 text-xs uppercase tracking-[0.4em] text-purple-300">
-                      Host Control
-                    </p>
-                    <p className="text-lg font-semibold text-white">Live camera + mic pending</p>
-                    <p className="my-3 text-xs text-purple-200">
-                      Allow camera and microphone, then publish tracks to open the Troll City stage.
-                    </p>
-
-                    {isConnecting && (
-                      <div className="flex items-center justify-center gap-2 text-xs text-gray-300">
-                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
-                        Connecting to the broadcast…
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleGoLive}
-                      disabled={!isConnected || mediaRequestState === 'requesting'}
-                      className="mt-4 inline-flex items-center justify-center gap-2 rounded-full border border-purple-400/70 bg-gradient-to-br from-purple-600 to-pink-500 px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {mediaRequestState === 'requesting' ? 'Requesting permissions…' : 'Go Live'}
-                    </button>
-
-                    <div className="mt-3 text-[11px] text-gray-400">
-                      Permissions are required before the broadcast room renders for your audience.
-                    </div>
-                  </div>
-                )}
               </div>
 
               {isBroadcaster && (
@@ -1052,12 +1023,17 @@ const LiveBroadcast: React.FC = () => {
             </button>
 
             <button
-              onClick={handleEndStream}
+              onClick={isBroadcaster && !hasLocalTracks ? handleGoLive : handleEndStream}
               disabled={!isBroadcaster}
-              className="flex items-center gap-2 rounded-full border border-red-500/80 bg-red-500/30 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-red-200 transition hover:bg-red-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`relative group flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden ${
+                isBroadcaster && !hasLocalTracks
+                  ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-600 text-white shadow-lg shadow-pink-500/30 hover:shadow-xl hover:shadow-pink-500/50 border border-pink-500/80'
+                  : 'border border-red-500/80 bg-red-500/30 text-red-200 hover:bg-red-500/50'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
             >
-              <Power className="h-4 w-4" />
-              End Live
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 transform translate-x-full group-hover:translate-x-0 transition-transform duration-500" />
+              <Power className="h-4 w-4 relative z-10" />
+              <span className="relative z-10">{isBroadcaster && !hasLocalTracks ? 'Go Live' : 'End Live'}</span>
             </button>
 
             <button
@@ -1211,31 +1187,6 @@ const LiveBroadcast: React.FC = () => {
         </div>
       )}
 
-      {showPermissionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-md rounded-3xl border border-purple-500/60 bg-[#070114]/95 p-6 text-center">
-            <p className="text-sm uppercase tracking-[0.3em] text-purple-300">Permissions required</p>
-            <h2 className="mt-4 text-xl font-semibold">Camera & mic access blocked</h2>
-            <p className="mt-2 text-sm text-gray-300">
-              Troll City needs both camera and microphone access to publish the live broadcast.
-            </p>
-            <div className="mt-6 flex flex-col gap-3 text-xs uppercase tracking-[0.3em]">
-              <button
-                onClick={handleRetryPermission}
-                className="rounded-full border border-purple-400/70 bg-gradient-to-br from-purple-600 to-pink-500 px-4 py-3 font-semibold text-white shadow-[0_0_30px_rgba(214,127,255,0.45)]"
-              >
-                Retry
-              </button>
-              <button
-                onClick={() => setShowPermissionModal(false)}
-                className="rounded-full border border-white/20 px-4 py-3 text-white"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
