@@ -84,11 +84,27 @@ async function request<T = any>(
     let sessionData = await supabase.auth.getSession();
     let token = sessionData?.data?.session?.access_token;
     
+    if (endpoint.includes('broadcast')) {
+      console.log(`[API ${requestId}] Session check (before retry):`, {
+        hasSession: !!sessionData?.data?.session,
+        hasToken: !!token,
+        tokenLength: token?.length || 0,
+      });
+    }
+    
     // If no token and this might be right after signup, wait and retry once
     if (!token) {
       await new Promise(resolve => setTimeout(resolve, 100));
       sessionData = await supabase.auth.getSession();
       token = sessionData?.data?.session?.access_token;
+      
+      if (endpoint.includes('broadcast')) {
+        console.log(`[API ${requestId}] Session check (after retry):`, {
+          hasSession: !!sessionData?.data?.session,
+          hasToken: !!token,
+          tokenLength: token?.length || 0,
+        });
+      }
     }
     
     const sessionError = sessionData?.error;
@@ -131,6 +147,21 @@ async function request<T = any>(
       requestHeaders['Authorization'] = `Bearer ${supabaseAnonKey}`;
     } else if (token) {
       requestHeaders['Authorization'] = `Bearer ${token}`;
+    } else if (endpoint.includes('broadcast')) {
+      // For broadcast-seats, if no token, we have a problem - log it
+      console.warn(`[API ${requestId}] NO TOKEN for broadcast-seats endpoint`, {
+        endpoint,
+        hasToken: !!token,
+        sessionError: sessionError?.message,
+      });
+    }
+    
+    if (endpoint.includes('broadcast')) {
+      console.log(`[API ${requestId}] broadcast-seats headers:`, {
+        hasApiKey: !!requestHeaders['apikey'],
+        hasAuth: !!requestHeaders['Authorization'],
+        authPrefix: requestHeaders['Authorization']?.substring(0, 30),
+      });
     }
     
     // Add client info header

@@ -33,7 +33,8 @@ export interface LiveKitServiceConfig {
   onTrackSubscribed?: (track: any, participant: LiveKitParticipant) => void
   onTrackUnsubscribed?: (track: any, participant: LiveKitParticipant) => void
   onError?: (error: string) => void
-  autoPublish?: boolean // Whether to immediately publish camera/mic
+  allowPublish?: boolean // Whether to allow publishing camera/mic
+  preflightStream?: MediaStream
 }
 
 export class LiveKitService {
@@ -42,10 +43,12 @@ export class LiveKitService {
   private participants: Map<string, LiveKitParticipant> = new Map()
   private localVideoTrack: LocalVideoTrack | null = null
   private localAudioTrack: LocalAudioTrack | null = null
+  private preflightStream?: MediaStream
   private isConnecting = false
 
   constructor(config: LiveKitServiceConfig) {
     this.config = config
+    this.preflightStream = config.preflightStream
     console.log('[LiveKitService created]', Date.now())
     this.log('LiveKitService initialized', {
       roomName: config.roomName,
@@ -126,8 +129,8 @@ export class LiveKitService {
       // ✅ Hydrate participants already in the room (important when you join late)
       this.hydrateExistingRemoteParticipants()
 
-      // If autoPublish requested, enable and publish camera/mic immediately
-      if (this.config.autoPublish) {
+      // If allowPublish requested, enable and publish camera/mic immediately
+      if (this.config.allowPublish) {
         try {
           await this.room!.localParticipant.enableCameraAndMicrophone()
           this.log('✅ Camera and microphone enabled and published')
@@ -222,6 +225,48 @@ private hydrateExistingRemoteParticipants(): void {
         this.localAudioTrack = null
       }
 
+      throw error
+    }
+  }
+
+  private async publishMediaStream(stream: MediaStream): Promise<void> {
+    if (!this.room?.localParticipant) {
+      throw new Error('Room not connected')
+    }
+
+    const videoTrack = stream.getVideoTracks()[0]
+    const audioTrack = stream.getAudioTracks()[0]
+
+    if (!videoTrack && !audioTrack) {
+      throw new Error('No video or audio track available from preflight stream')
+    }
+
+    try {
+      if (videoTrack) {
+        this.log('dY"1 Wrapping preflight video track...')
+        this.localVideoTrack = new LocalVideoTrack(videoTrack)
+        await this.publishVideoTrack(this.localVideoTrack)
+      }
+      if (audioTrack) {
+        this.log('dY"1 Wrapping preflight audio track...')
+        this.localAudioTrack = new LocalAudioTrack(audioTrack)
+        await this.publishAudioTrack(this.localAudioTrack)
+      }
+
+      await this.room.localParticipant.setCameraEnabled(!!videoTrack)
+      await this.room.localParticipant.setMicrophoneEnabled(!!audioTrack)
+      this.updateLocalParticipantState()
+      this.log('ƒo. Preflight stream published')
+    } catch (error: any) {
+      this.log('ƒ?O Preflight stream publish failed:', error.message)
+      if (this.localVideoTrack) {
+        this.localVideoTrack.stop()
+        this.localVideoTrack = null
+      }
+      if (this.localAudioTrack) {
+        this.localAudioTrack.stop()
+        this.localAudioTrack = null
+      }
       throw error
     }
   }
@@ -437,6 +482,7 @@ private hydrateExistingRemoteParticipants(): void {
           this.config.user?.troll_role ||
           'viewer',
         level: this.config.user?.level || 1,
+        allowPublish: this.config.allowPublish !== false,
       })
 
       console.log('LiveKit token raw response:', response)

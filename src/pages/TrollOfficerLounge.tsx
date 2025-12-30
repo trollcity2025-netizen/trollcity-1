@@ -5,6 +5,7 @@ import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import ClickableUsername from '../components/ClickableUsername'
 import { downloadPayrollPDF } from '../lib/officerPayrollPDF'
+import { OfficerStreamGrid } from '../components/OfficerStreamGrid'
 import {
   Eye,
   Ban,
@@ -830,150 +831,160 @@ export default function TrollOfficerLounge() {
           </div>
         </section>
 
-        {/* LIVE STREAM GRID + PREVIEW */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Streams grid */}
-          <div className="lg:col-span-2">
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <Camera className="text-purple-300" />
-              Live Streams to Monitor
-            </h2>
+        {/* OFFICER STREAM GRID - 6 Box Layout */}
+        <section>
+          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <Camera className="text-purple-300" />
+            Officer Stream (6 Broadcast Seats)
+          </h2>
+          <OfficerStreamGrid />
+        </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {liveStreams.map((stream) => (
-                <div
-                  key={stream.id}
-                  className="bg-[#111320] border border-gray-700 rounded-lg p-4 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/30 transition cursor-pointer"
-                  onClick={() => setSelectedStream(stream)}
-                >
-                  <div className="h-36 bg-black/40 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden">
-                    <Camera className="w-10 h-10 text-gray-500" />
-                    <div className="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded-full">
-                      LIVE
+        {/* Alternative: LIVE STREAM MONITORING */}
+        {liveStreams.length > 0 && (
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+            {/* Streams grid */}
+            <div className="lg:col-span-2">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <Camera className="text-purple-300" />
+                Other Live Streams to Monitor
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {liveStreams.map((stream) => (
+                  <div
+                    key={stream.id}
+                    className="bg-[#111320] border border-gray-700 rounded-lg p-4 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/30 transition cursor-pointer"
+                    onClick={() => setSelectedStream(stream)}
+                  >
+                    <div className="h-36 bg-black/40 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden">
+                      <Camera className="w-10 h-10 text-gray-500" />
+                      <div className="absolute top-2 left-2 bg-red-600 text-xs px-2 py-1 rounded-full">
+                        LIVE
+                      </div>
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-xs px-2 py-1 rounded">
+                        👥 {stream.current_viewers || 0}
+                      </div>
                     </div>
-                    <div className="absolute bottom-2 right-2 bg-black/60 text-xs px-2 py-1 rounded">
-                      👥 {stream.current_viewers || 0}
+                    <h3 className="text-lg font-semibold">{stream.title}</h3>
+                    <p className="text-gray-400 text-sm">
+                      🎭 {stream.category || 'General'}
+                    </p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      Broadcaster: {stream.broadcaster_id}
+                    </p>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedStream(stream)
+                        }}
+                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-sm rounded-lg px-3 py-2 flex items-center justify-center gap-1"
+                      >
+                        <Eye className="w-4 h-4" /> Actions
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openStreamView(stream.id)
+                        }}
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-sm rounded-lg px-3 py-2 flex items-center justify-center gap-1"
+                      >
+                        <Camera className="w-4 h-4" /> Watch
+                      </button>
                     </div>
                   </div>
-                  <h3 className="text-lg font-semibold">{stream.title}</h3>
-                  <p className="text-gray-400 text-sm">
-                    🎭 {stream.category || 'General'}
-                  </p>
-                  <p className="text-gray-500 text-xs mt-1">
-                    Broadcaster: {stream.broadcaster_id}
-                  </p>
+                ))}
+              </div>
 
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedStream(stream)
-                      }}
-                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-sm rounded-lg px-3 py-2 flex items-center justify-center gap-1"
-                    >
-                      <Eye className="w-4 h-4" /> Actions
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openStreamView(stream.id)
-                      }}
-                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-sm rounded-lg px-3 py-2 flex items-center justify-center gap-1"
-                    >
-                      <Camera className="w-4 h-4" /> Watch
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {!loading && liveStreams.length === 0 && (
+                <p className="text-center text-gray-500 py-10">
+                  🚫 No other live streams at the moment.
+                </p>
+              )}
             </div>
 
-            {!loading && liveStreams.length === 0 && (
-              <p className="text-center text-gray-500 py-10">
-                🚫 No live streams at the moment. Time to sip coffee and wait for
-                chaos.
-              </p>
-            )}
-          </div>
+            {/* Live preview panel */}
+            <div className="bg-[#111320] border border-gray-700 rounded-xl p-5 h-full">
+              <h3 className="text-lg font-semibold flex items-center gap-2 text-cyan-300 mb-3">
+                <Eye className="w-5 h-5" />
+                Live Preview
+              </h3>
+              {!selectedStream && (
+                <p className="text-gray-500 text-sm">
+                  Select a live stream tile to see embedded preview and actions.
+                </p>
+              )}
 
-          {/* Live preview panel */}
-          <div className="bg-[#111320] border border-gray-700 rounded-xl p-5 h-full">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-cyan-300 mb-3">
-              <Eye className="w-5 h-5" />
-              Live Preview
-            </h3>
-            {!selectedStream && (
-              <p className="text-gray-500 text-sm">
-                Select a live stream tile to see embedded preview and actions.
-              </p>
-            )}
+              {selectedStream && (
+                <div className="space-y-4">
+                  <div className="aspect-video bg-black/60 rounded-lg flex items-center justify-center overflow-hidden">
+                    {getPlaybackUrl(selectedStream) ? (
+                      <video
+                        src={getPlaybackUrl(selectedStream) || undefined}
+                        className="w-full h-full object-cover"
+                        controls
+                        autoPlay
+                        muted
+                      />
+                    ) : (
+                      <div className="text-center text-gray-400 text-sm px-4">
+                        No direct playback URL set for this stream yet.
+                        <br />
+                        Use the full viewer via the{' '}
+                        <span className="text-purple-300 font-semibold">Watch</span>{' '}
+                        button or wire Agora/IVS player here later.
+                      </div>
+                    )}
+                  </div>
 
-            {selectedStream && (
-              <div className="space-y-4">
-                <div className="aspect-video bg-black/60 rounded-lg flex items-center justify-center overflow-hidden">
-                  {getPlaybackUrl(selectedStream) ? (
-                    <video
-                      src={getPlaybackUrl(selectedStream) || undefined}
-                      className="w-full h-full object-cover"
-                      controls
-                      autoPlay
-                      muted
-                    />
-                  ) : (
-                    <div className="text-center text-gray-400 text-sm px-4">
-                      No direct playback URL set for this stream yet.
-                      <br />
-                      Use the full viewer via the{' '}
-                      <span className="text-purple-300 font-semibold">Watch</span>{' '}
-                      button or wire Agora/IVS player here later.
+                  <div>
+                    <div className="font-semibold text-white">
+                      {selectedStream.title}
                     </div>
-                  )}
-                </div>
+                    <div className="text-gray-400 text-sm">
+                      {selectedStream.category || 'General'} • 👥{' '}
+                      {selectedStream.current_viewers || 0} viewers
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Broadcaster: {selectedStream.broadcaster_id}
+                    </div>
+                  </div>
 
-                <div>
-                  <div className="font-semibold text-white">
-                    {selectedStream.title}
-                  </div>
-                  <div className="text-gray-400 text-sm">
-                    {selectedStream.category || 'General'} • 👥{' '}
-                    {selectedStream.current_viewers || 0} viewers
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Broadcaster: {selectedStream.broadcaster_id}
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton
+                      label="End Stream"
+                      onClick={() =>
+                        endStream(selectedStream.id, selectedStream.broadcaster_id)
+                      }
+                      variant="danger"
+                      icon={<DoorOpen className="w-4 h-4" />}
+                    />
+                    <ActionButton
+                      label="Kick Viewer"
+                      onClick={() => kickUser('viewer')}
+                      variant="warning"
+                      icon={<Ban className="w-4 h-4" />}
+                    />
+                    <ActionButton
+                      label="Ban User"
+                      onClick={() => banUserFromApp('viewer')}
+                      variant="dangerOutline"
+                      icon={<Shield className="w-4 h-4" />}
+                    />
+                    <ActionButton
+                      label="Mute User"
+                      onClick={() => muteUser('viewer')}
+                      variant="neutral"
+                      icon={<VolumeX className="w-4 h-4" />}
+                    />
                   </div>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <ActionButton
-                    label="End Stream"
-                    onClick={() =>
-                      endStream(selectedStream.id, selectedStream.broadcaster_id)
-                    }
-                    variant="danger"
-                    icon={<DoorOpen className="w-4 h-4" />}
-                  />
-                  <ActionButton
-                    label="Kick Viewer"
-                    onClick={() => kickUser('viewer')}
-                    variant="warning"
-                    icon={<Ban className="w-4 h-4" />}
-                  />
-                  <ActionButton
-                    label="Ban User"
-                    onClick={() => banUserFromApp('viewer')}
-                    variant="dangerOutline"
-                    icon={<Shield className="w-4 h-4" />}
-                  />
-                  <ActionButton
-                    label="Mute User"
-                    onClick={() => muteUser('viewer')}
-                    variant="neutral"
-                    icon={<VolumeX className="w-4 h-4" />}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </div>
+          </section>
+        )}
         </>
         )}
 

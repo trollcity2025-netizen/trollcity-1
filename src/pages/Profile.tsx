@@ -1344,9 +1344,9 @@ export default function Profile() {
   const isAdminViewer = profile?.role === 'admin' || (profile as any)?.is_admin
   const isLeadOfficerViewer = profile?.role === 'lead_troll_officer' || profile?.is_lead_officer
   const isViewingOwnProfile = !viewed || viewed.id === profile?.id
-  const emailToShow = isAdminViewer
-    ? (viewed?.email || user?.email || '')
-    : (isViewingOwnProfile ? (user?.email || '') : '')
+  const canViewEmail = isViewingOwnProfile || isAdminViewer
+  const targetProfileEmail = viewed?.email || profile?.email || user?.email || ''
+  const emailToShow = canViewEmail ? targetProfileEmail : ''
 
   const displayProfile = isViewingOtherUser ? viewed : profile
   const displayUsername = displayProfile?.username || 'User'

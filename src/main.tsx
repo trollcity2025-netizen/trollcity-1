@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
-import { LiveKitProvider } from './contexts/LiveKitContext'
+import { LiveKitProvider } from './contexts/LiveKitProvider'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
 // GlobalAppProvider intentionally removed per required root layout

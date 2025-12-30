@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useLiveKit } from '../contexts/LiveKitContext'
+import { useLiveKit } from '../hooks/useLiveKit'
 import { LiveKitParticipant } from '../lib/LiveKitService'
 import { UserRole } from './LiveKitRoles'
 
@@ -140,8 +140,8 @@ interface LiveKitRoomWrapperProps {
   className?: string
   showLocalVideo?: boolean
   maxParticipants?: number
-  role?: UserRole | 'viewer'
-  autoPublish?: boolean
+  role?: UserRole | 'viewer' | 'broadcaster'
+  allowPublish?: boolean
   autoConnect?: boolean
   children?: React.ReactNode
 }
@@ -162,7 +162,7 @@ export function LiveKitRoomWrapper({
   showLocalVideo = true,
   maxParticipants = 6,
   role = 'viewer',
-  autoPublish = true,
+  allowPublish = true,
   autoConnect = true,
 }: LiveKitRoomWrapperProps) {
   const {
@@ -184,7 +184,8 @@ export function LiveKitRoomWrapper({
     role === UserRole.ADMIN ||
     role === UserRole.MODERATOR ||
     role === UserRole.TROLL_OFFICER ||
-    role === UserRole.LEAD_TROLL_OFFICER
+    role === UserRole.LEAD_TROLL_OFFICER ||
+    role === 'broadcaster'
 
   /**
    * IMPORTANT:
@@ -228,21 +229,21 @@ export function LiveKitRoomWrapper({
     ;(didConnectRef.current as any) = connectKey
 
     connect(roomName, identity, {
-      autoPublish,
+      allowPublish,
       role,
     } as any).catch((err) => {
       console.error('LiveKit connect failed:', err)
       // allow retry
       didConnectRef.current = false as any
     })
-  }, [autoConnect, roomName, identity, role, autoPublish, connect])
+  }, [autoConnect, roomName, identity, role, allowPublish, connect])
 
   /* =======================
      AUTO-PUBLISH
   ======================= */
   useEffect(() => {
     if (!isConnected) return
-    if (!autoPublish) return
+    if (!allowPublish) return
     if (!canAttemptPublish) return
     if (isAlreadyPublishing) return
     if (isPublishing) return
@@ -250,7 +251,7 @@ export function LiveKitRoomWrapper({
     startPublishing().catch((err) => {
       console.error('Auto publish failed:', err)
     })
-  }, [isConnected, autoPublish, canAttemptPublish, isAlreadyPublishing])
+  }, [isConnected, allowPublish, canAttemptPublish, isAlreadyPublishing])
 
   /* =======================
      STATES

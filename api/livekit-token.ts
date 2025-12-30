@@ -1,9 +1,9 @@
 import { AccessToken, TrackSource } from 'livekit-server-sdk'
 import { authorizeUser, OFFICER_ROLES, AuthorizedProfile } from './_shared/auth'
+import { LIVEKIT_URL } from './livekitconfig'
 
 const API_KEY = process.env.LIVEKIT_API_KEY
 const API_SECRET = process.env.LIVEKIT_API_SECRET
-const LIVEKIT_URL = process.env.LIVEKIT_URL
 
 if (!API_KEY || !API_SECRET || !LIVEKIT_URL) {
   throw new Error('LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and LIVEKIT_URL must be set')
@@ -38,7 +38,10 @@ function canPublish(profile: AuthorizedProfile, requested: TokenRequest): boolea
     Boolean(profile.is_admin) ||
     Boolean(profile.is_lead_officer) ||
     Boolean(profile.is_troll_officer)
-  return isOfficerRole
+  
+  const isBroadcaster = Boolean(profile.is_broadcaster)
+  
+  return isOfficerRole || isBroadcaster
 }
 
 export default async function handler(req: any, res: any) {
@@ -74,9 +77,11 @@ export default async function handler(req: any, res: any) {
     level: Number(payload.level ?? 1),
     participantName,
   }
+  
+  console.log(`[livekit-token] room=${roomName} user=${profile.id} allowPublish=${publishAllowed} isBroadcaster=${profile.is_broadcaster} isOfficer=${OFFICER_ROLES.has((profile.role || '').toLowerCase())}`)
 
   try {
-    const token = new AccessToken(API_KEY, API_SECRET, {
+    const token = new AccessToken(API_KEY!, API_SECRET!, {
       identity: profile.id,
       name: participantName,
       ttl: 60 * 60, // 1 hour

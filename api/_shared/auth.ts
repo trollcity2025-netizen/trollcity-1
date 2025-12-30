@@ -24,6 +24,7 @@ export interface AuthorizedProfile {
   is_admin?: boolean
   is_lead_officer?: boolean
   is_troll_officer?: boolean
+  is_broadcaster?: boolean
 }
 
 function extractToken(req: any): string {
@@ -43,7 +44,7 @@ function extractToken(req: any): string {
 async function lookupProfile(userId: string): Promise<AuthorizedProfile> {
   const { data: profile, error: profileError } = await supabaseAdmin
     .from('user_profiles')
-    .select('id, username, role, avatar_url, is_admin, is_lead_officer, is_troll_officer')
+    .select('id, username, role, avatar_url, is_admin, is_lead_officer, is_troll_officer, is_broadcaster')
     .eq('id', userId)
     .single()
 

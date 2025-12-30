@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from 'react'
-import { useLiveKit } from '../contexts/LiveKitContext'
+import { useLiveKit } from './useLiveKit'
 
 export interface UnifiedLiveKitConfig {
   roomName: string
   user: any
-  autoPublish?: boolean
+  allowPublish?: boolean
 }
 
 // Thin wrapper around the global LiveKit service that connects/disconnects at page level
@@ -28,7 +28,7 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
     if (!config.roomName || !config.user || !config.user.id) return
 
     connect(config.roomName, config.user, {
-      autoPublish: config.autoPublish !== false,
+      allowPublish: config.allowPublish !== false,
     })
 
     return () => {
@@ -39,16 +39,16 @@ export function useUnifiedLiveKit(config: UnifiedLiveKitConfig) {
     disconnect,
     config.roomName,
     config.user?.id,
-    config.autoPublish,
+    config.allowPublish,
   ])
 
   // Stable connect helper that reuses the current config by default
   const connectWithConfig = useMemo(
     () => () =>
       connect(config.roomName, config.user, {
-        autoPublish: config.autoPublish !== false,
+        allowPublish: config.allowPublish !== false,
       }),
-    [connect, config.roomName, config.user, config.autoPublish]
+    [connect, config.roomName, config.user, config.allowPublish]
   )
 
   return {

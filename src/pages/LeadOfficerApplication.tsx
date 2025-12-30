@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { Crown, Shield, CheckCircle } from 'lucide-react'
+import { Crown } from 'lucide-react'
 
 export default function LeadOfficerApplication() {
   const { profile, user } = useAuthStore()
@@ -97,7 +97,6 @@ export default function LeadOfficerApplication() {
               name="fullName"
               value={formData.fullName}
               onChange={handleChange}
-              required
               className="w-full bg-[#1A1A1A] border border-[#2C2C2C] rounded-lg px-4 py-2 text-white"
             />
           </div>
@@ -109,7 +108,6 @@ export default function LeadOfficerApplication() {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              required
               className="w-full bg-[#1A1A1A] border border-[#2C2C2C] rounded-lg px-4 py-2 text-white"
             />
           </div>
@@ -120,7 +118,6 @@ export default function LeadOfficerApplication() {
               name="whyApplying"
               value={formData.whyApplying}
               onChange={handleChange}
-              required
               rows={4}
               className="w-full bg-[#1A1A1A] border border-[#2C2C2C] rounded-lg px-4 py-2 text-white"
             />
@@ -132,7 +129,6 @@ export default function LeadOfficerApplication() {
               name="leadershipExperience"
               value={formData.leadershipExperience}
               onChange={handleChange}
-              required
               rows={4}
               placeholder="Describe your experience leading teams, moderating communities, or managing people"
               className="w-full bg-[#1A1A1A] border border-[#2C2C2C] rounded-lg px-4 py-2 text-white"
@@ -145,7 +141,6 @@ export default function LeadOfficerApplication() {
               name="vision"
               value={formData.vision}
               onChange={handleChange}
-              required
               rows={4}
               placeholder="What changes or improvements would you bring as Lead Officer?"
               className="w-full bg-[#1A1A1A] border border-[#2C2C2C] rounded-lg px-4 py-2 text-white"
@@ -158,7 +153,6 @@ export default function LeadOfficerApplication() {
               name="availability"
               value={formData.availability}
               onChange={handleChange}
-              required
               rows={3}
               placeholder="How many hours per week can you commit? What timezone are you in?"
               className="w-full bg-[#1A1A1A] border border-[#2C2C2C] rounded-lg px-4 py-2 text-white"

@@ -137,7 +137,6 @@ export default function OfficerApplication() {
                 onChange={handleChange}
                 placeholder="First and Last Name"
                 className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none"
-                required
               />
             </div>
 
@@ -153,7 +152,6 @@ export default function OfficerApplication() {
                   onChange={handleChange}
                   placeholder="your.email@example.com"
                   className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none"
-                  required
                 />
               </div>
 
@@ -182,7 +180,6 @@ export default function OfficerApplication() {
                   value={formData.timezone}
                   onChange={handleChange}
                   className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none"
-                  required
                 >
                   <option value="">Select timezone</option>
                   <option value="PST">PST (Pacific)</option>
@@ -208,7 +205,6 @@ export default function OfficerApplication() {
                   onChange={handleChange}
                   placeholder="e.g., Weekdays 6PM-10PM, Weekends flexible"
                   className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none"
-                  required
                 />
               </div>
             </div>
@@ -229,7 +225,6 @@ export default function OfficerApplication() {
                 placeholder="Describe your motivation and what makes you a good fit for this role..."
                 rows={4}
                 className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none resize-none"
-                required
               />
             </div>
 
@@ -244,7 +239,6 @@ export default function OfficerApplication() {
                 placeholder="List any previous moderation experience (Discord, Twitch, YouTube, forums, etc.). Include platforms, duration, and responsibilities..."
                 rows={5}
                 className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none resize-none"
-                required
               />
             </div>
 
@@ -262,7 +256,6 @@ export default function OfficerApplication() {
                 placeholder="Describe your approach to handling this situation..."
                 rows={5}
                 className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none resize-none"
-                required
               />
             </div>
 
@@ -294,7 +287,6 @@ export default function OfficerApplication() {
                 value={formData.weeklyCommitment}
                 onChange={handleChange}
                 className="w-full px-4 py-3 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-cyan-400 focus:outline-none"
-                required
               >
                 <option value="">Select hours per week</option>
                 <option value="5-10">5-10 hours/week</option>

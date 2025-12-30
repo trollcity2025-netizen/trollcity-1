@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { useAuthStore } from './store'
+import api, { API_ENDPOINTS } from './api'
 
 export interface LiveKitTokenResponse {
   token: string
@@ -36,57 +37,30 @@ export async function getLiveKitToken(
       throw new Error('No auth token available')
     }
 
-    const response = await fetch('/api/livekit-token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        roomName,
-        participantName: profile.username,
-        allowPublish,
-        level: profile.level || 1,
-        user_id: profile.id,
-        username: profile.username,
-        role: profile.role,
-      }),
-    })
-
-    const responseText = await response.text()
-    if (!response.ok) {
-      let errorData: any = null
-      if (responseText) {
-        try {
-          errorData = JSON.parse(responseText)
-        } catch {
-          //
-        }
-      }
-
-      console.error('[getLiveKitToken] Token request failed:', errorData || responseText)
-      throw new Error(
-        errorData?.error ||
-          errorData?.message ||
-          `Token request failed: ${response.status}`
-      )
+    const body = {
+      roomName,
+      participantName: profile.username,
+      allowPublish,
+      level: profile.level || 1,
+      user_id: profile.id,
+      username: profile.username,
+      role: profile.role,
     }
 
-    let data: LiveKitTokenResponse
-    try {
-      data = responseText ? JSON.parse(responseText) : ({} as LiveKitTokenResponse)
-    } catch (parseErr) {
-      console.error('[getLiveKitToken] Token parse failed:', parseErr)
-      throw new Error('Token response was not valid JSON')
+    const response = await api.post<LiveKitTokenResponse>(API_ENDPOINTS.livekit.token, body)
+
+    if (!response || !response.token) {
+      console.error('[getLiveKitToken] Token request failed:', response)
+      throw new Error(response?.error || 'Failed to fetch LiveKit token')
     }
 
-    console.log('[getLiveKitToken] ✅ Token obtained', {
-      room: data.room,
-      allowPublish: data.allowPublish,
-      identity: data.identity,
+    console.log('[getLiveKitToken] Token obtained', {
+      room: response.room,
+      allowPublish: response.allowPublish,
+      identity: response.identity,
     })
 
-    return data
+    return response
   } catch (err: any) {
     console.error('[getLiveKitToken] Fatal error:', err.message)
     throw err

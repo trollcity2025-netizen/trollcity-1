@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import api, { API_ENDPOINTS } from '../lib/api'
+import { useAuthStore } from '../lib/store'
 
-const ROOM_NAME = 'officer-stream'
+const DEFAULT_ROOM = 'officer-stream'
 const SEAT_COUNT = 6
 
 export type SeatAssignment = {
@@ -16,23 +16,23 @@ export type SeatAssignment = {
   assigned_at: string
 } | null
 
-type SeatActionPayload = {
-  action: 'claim' | 'release'
-  seat_index: number
-  room?: string
-  username?: string
-  avatar_url?: string | null
-  role?: string
-  metadata?: Record<string, any>
-  user_id?: string
-  force?: boolean
-}
-
-export function useSeatRoster() {
+export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
+  const { user, profile } = useAuthStore()
   const [seats, setSeats] = useState<SeatAssignment[]>(Array(SEAT_COUNT).fill(null))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isClaimingSeat, setIsClaimingSeat] = useState<number | null>(null)
+  const normalizeSeatIndex = useCallback((value: number) => {
+    const requested = Number.isFinite(value) ? Math.floor(value) : 0
+    const clamped = Math.min(Math.max(requested, 0), SEAT_COUNT - 1)
+    if (clamped !== requested || requested !== value) {
+      console.warn('[useSeatRoster] Seat index out of range, clamping', {
+        requestedValue: value,
+        normalized: clamped,
+      })
+    }
+    return clamped
+  }, [])
 
   const normalize = useCallback((data: any[]): SeatAssignment[] => {
     const map = new Map<number, any>()
@@ -60,31 +60,71 @@ export function useSeatRoster() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await api.get<{ seats: SeatAssignment[] }>(API_ENDPOINTS.broadcastSeats.list, { room: ROOM_NAME })
-      if (response.success && response.data?.seats) {
-        setSeats(normalize(response.data.seats))
-        setError(null)
-      } else {
-        throw new Error(response.error || 'Failed to fetch seats')
+      const { data, error: invokeError } = await supabase.functions.invoke('broadcast-seats', {
+        body: {
+          action: 'list',
+          room: roomName,
+        },
+      })
+
+      console.log('[useSeatRoster] raw invoke:', { data, error: invokeError })
+
+      if (invokeError) {
+        throw invokeError
       }
+
+      const payload: any = data
+
+      if (!payload) {
+        throw new Error('No response payload from broadcast-seats')
+      }
+
+      if (payload.success === false) {
+        throw new Error(payload.error || 'broadcast-seats failed')
+      }
+
+      const seats = payload.seats ?? payload.data?.seats ?? []
+      setSeats(normalize(seats))
+      setError(null)
     } catch (err: any) {
       console.error('[useSeatRoster] refresh failed', err)
       setError(err?.message || 'Unable to load seats')
     } finally {
       setLoading(false)
     }
-  }, [normalize])
+  }, [normalize, roomName])
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`broadcast-seats-${ROOM_NAME}`)
+    if (!user?.id) {
+      console.log('[useSeatRoster] Waiting for auth...')
+      return
+    }
+
+    const checkSessionThenSubscribe = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        console.warn('[useSeatRoster] Session token not available yet', {
+          hasSession: !!session,
+          hasToken: !!session?.access_token,
+          userId: user?.id,
+        })
+        return
+      }
+
+      console.log('[useSeatRoster] Session verified, subscribing to seats', {
+        userId: user?.id,
+        tokenLength: session.access_token.length,
+      })
+
+      const channel = supabase
+      .channel(`broadcast-seats-${roomName}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'broadcast_seats',
-          filter: `room=eq.${ROOM_NAME}`,
+          filter: `room=eq.${roomName}`,
         },
         () => {
           refresh()
@@ -92,80 +132,110 @@ export function useSeatRoster() {
       )
       .subscribe()
 
-    refresh()
+      refresh()
 
-    return () => {
-      channel.unsubscribe()
+      return () => {
+        channel.unsubscribe()
+      }
     }
-  }, [refresh])
+
+    checkSessionThenSubscribe()
+  }, [roomName, user?.id, refresh])
 
   const claimSeat = useCallback(
-    async (seatIndex: number, payload: { username: string; avatarUrl?: string | null; role: string; metadata?: Record<string, any> }) => {
-      setIsClaimingSeat(seatIndex)
+    async (
+      seatIndex: number,
+      payload?: {
+        username?: string
+        avatarUrl?: string | null
+        role?: string
+        metadata?: Record<string, any>
+      }
+    ) => {
+      const safeIndex = normalizeSeatIndex(seatIndex)
+      setIsClaimingSeat(safeIndex)
       try {
-      const response = await api.post(API_ENDPOINTS.broadcastSeats.action, {
-        action: 'claim',
-        room: ROOM_NAME,
-        seat_index: seatIndex + 1,
-        username: payload.username,
-        avatar_url: payload.avatarUrl ?? null,
-        role: payload.role,
-        metadata: payload.metadata ?? {},
-      })
+        const username = payload?.username ?? profile?.username ?? user?.email?.split('@')[0] ?? 'Officer'
+        const role = payload?.role ?? profile?.role ?? 'troll_officer'
+        const avatar_url = payload?.avatarUrl ?? profile?.avatar_url ?? null
+        const metadata = payload?.metadata ?? {}
 
-      if (!response.success) {
-        throw new Error(response.error || 'Seat claim failed')
-      }
+        const { data, error: invokeError } = await supabase.functions.invoke('broadcast-seats', {
+          body: {
+            action: 'claim',
+            room: roomName,
+            seat_index: safeIndex + 1,
+            username,
+            avatar_url,
+            role,
+            metadata,
+          },
+        })
 
-      const seat =
-        response?.seat ??
-        response?.data?.seat ??
-        response?.data?.data?.seat ??
-        response?.data?.payload?.seat ??
-        null
-      const created =
-        response?.created ??
-        response?.data?.created ??
-        response?.data?.data?.created ??
-        false
-      const isOwner =
-        response?.is_owner ??
-        response?.data?.is_owner ??
-        response?.data?.data?.is_owner ??
-        false
-      if (!seat) {
-        throw new Error('Seat claim returned no data')
-      }
+        console.log('[useSeatRoster] claim invoke:', { data, error: invokeError })
 
-      if (!created && !isOwner) {
-        throw new Error('Seat already occupied')
-      }
+        if (invokeError) {
+          throw invokeError
+        }
 
-      refresh()
-      return seat
+        const response: any = data
+
+        if (!response?.success) {
+          throw new Error(response?.error || 'Seat claim failed')
+        }
+
+        const seat = response?.seat
+        const created = response?.created ?? false
+        const isOwner = response?.is_owner ?? false
+
+        if (!seat) {
+          throw new Error('Seat claim returned no data')
+        }
+
+        if (!created && !isOwner) {
+          throw new Error('Seat already occupied')
+        }
+
+        refresh()
+        return seat
       } finally {
         setIsClaimingSeat(null)
       }
     },
-    [refresh]
+    [refresh, normalizeSeatIndex, profile, user, roomName]
   )
 
   const releaseSeat = useCallback(
-    async (seatIndex: number, userId: string, options?: { force?: boolean }) => {
+    async (seatIndex: number, userId?: string, options?: { force?: boolean }) => {
+      const safeIndex = normalizeSeatIndex(seatIndex)
+      const targetUserId = userId ?? user?.id
+      if (!targetUserId) {
+        console.warn('[useSeatRoster] releaseSeat skipped, missing userId')
+        return
+      }
       try {
-        await api.post(API_ENDPOINTS.broadcastSeats.action, {
-          action: 'release',
-          room: ROOM_NAME,
-          seat_index: seatIndex + 1,
-          user_id: userId,
-          force: Boolean(options?.force),
+        const { data, error: invokeError } = await supabase.functions.invoke('broadcast-seats', {
+          body: {
+            action: 'release',
+            room: roomName,
+            seat_index: safeIndex + 1,
+            user_id: targetUserId,
+            force: Boolean(options?.force),
+          },
         })
+
+        console.log('[useSeatRoster] release invoke:', { data, error: invokeError })
+
+        if (invokeError) {
+          throw invokeError
+        }
+
         refresh()
       } catch (err) {
         console.warn('[useSeatRoster] releaseSeat failed', err)
       }
     },
-    [refresh]
+    [refresh, normalizeSeatIndex, user, roomName]
   )
 
   const currentOccupants = useMemo(
