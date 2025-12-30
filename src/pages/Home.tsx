@@ -8,7 +8,6 @@ import { isBirthdayToday } from '../lib/birthdayUtils';
 import { useAuthStore } from '../lib/store';
 import BanPage from '../components/BanPage';
 import KickPage from '../components/KickPage';
-import ClickableUsername from '../components/ClickableUsername';
 
 type HomeStream = {
   id: string;
@@ -1018,41 +1017,6 @@ const HomePageContent = () => {
       </div>
 
       <div className="relative z-20 max-w-7xl mx-auto px-5 py-3">
-        <div className="mb-8">
-          <div className="relative overflow-hidden rounded-[32px] border border-cyan-500/30 bg-gradient-to-br from-[#050013] to-[#15002b] p-6 text-white shadow-[0_0_40px_rgba(72,9,121,0.55)]">
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/40 via-purple-500/25 to-transparent blur-3xl opacity-60 pointer-events-none" />
-            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="space-y-3">
-                <p className="text-[10px] uppercase tracking-[0.5em] text-cyan-200">Perk spotlight</p>
-                <div className="flex flex-wrap items-end gap-3">
-                  <ClickableUsername
-                    username={profile?.username || 'Troll City'}
-                    profile={profile ?? undefined}
-                    prefix=""
-                    className="text-3xl font-black uppercase tracking-[0.35em]"
-                  />
-                  <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
-                    RGB Username - 24h - 420 Troll Coins
-                  </span>
-                </div>
-                <p className="max-w-2xl text-sm text-white/70">
-                  Light up your handle with the RGB Username perk so the city can instantly recognize you. Activate it in the coin store, glow in every chat, and stay visible everywhere you broadcast.
-                </p>
-              </div>
-              <div className="flex flex-col items-start gap-2 lg:items-end">
-                <span className="rounded-full border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.4em] text-white/70">
-                  Visible to everyone
-                </span>
-                <button
-                  onClick={() => navigate('/coin-store?tab=perks')}
-                  className="rounded-full border border-purple-500/50 bg-gradient-to-r from-cyan-400 to-purple-500 px-6 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-black transition hover:shadow-[0_0_25px_rgba(79,70,229,0.35)] hover:brightness-105"
-                >
-                  Claim RGB Username
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
         <div className="mb-6 flex justify-center">
           <div className="w-full max-w-3xl rounded-3xl border border-yellow-400/50 bg-yellow-500/10 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-yellow-100 backdrop-blur-sm shadow-inner shadow-yellow-500/20 sm:text-sm">
             We're in test mode; please use support tickets for any issues. Thanks for understanding!
