@@ -174,8 +174,29 @@ export default function TrollOfficerLounge() {
       )
       .subscribe()
 
+    // Auto-delete messages older than 30 seconds every 10 seconds
+    const deleteInterval = setInterval(async () => {
+      try {
+        const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
+        const { error } = await supabase
+          .from('officer_chat_messages')
+          .delete()
+          .lt('created_at', thirtySecondsAgo)
+
+        if (error) {
+          console.warn('Failed to auto-delete old officer chat messages:', error)
+        } else {
+          // Refresh chat to reflect deletions
+          await loadOfficerChat()
+        }
+      } catch (err) {
+        console.warn('Error in auto-delete officer chat:', err)
+      }
+    }, 10000) // Check every 10 seconds
+
     return () => {
       void supabase.removeChannel(chatChannel)
+      clearInterval(deleteInterval)
     }
   }, [profile])
 
@@ -329,7 +350,7 @@ export default function TrollOfficerLounge() {
       }
 
       // Call the kick_user RPC function
-      const { data: kickResult, error: kickError } = await supabase.rpc('kick_user', {
+      const { data: _kickResult, error: kickError } = await supabase.rpc('kick_user', {
         p_target_user_id: targetUser.id,
         p_kicker_user_id: profile?.id,
         p_stream_id: selectedStream?.id || null
@@ -547,7 +568,7 @@ export default function TrollOfficerLounge() {
     navigate(`/stream/${streamId}`)
   }
 
-  const getPlaybackUrl = (stream: Stream | null) => {
+  const getPlaybackUrl = (_stream: Stream | null) => {
     return null
   }
 

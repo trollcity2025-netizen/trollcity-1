@@ -155,6 +155,12 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
       const safeIndex = normalizeSeatIndex(seatIndex)
       setIsClaimingSeat(safeIndex)
       try {
+        // Check if user already has a seat in this room
+        const existingSeat = seats.find(seat => seat?.user_id === user?.id)
+        if (existingSeat) {
+          throw new Error('You already have a seat in this stream. Please release your current seat first.')
+        }
+
         const username = payload?.username ?? profile?.username ?? user?.email?.split('@')[0] ?? 'Officer'
         const role = payload?.role ?? profile?.role ?? 'troll_officer'
         const avatar_url = payload?.avatarUrl ?? profile?.avatar_url ?? null
@@ -202,7 +208,7 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
         setIsClaimingSeat(null)
       }
     },
-    [refresh, normalizeSeatIndex, profile, user, roomName]
+    [refresh, normalizeSeatIndex, profile, user, roomName, seats]
   )
 
   const releaseSeat = useCallback(

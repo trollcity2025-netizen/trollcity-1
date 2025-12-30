@@ -823,7 +823,7 @@ const LiveBroadcast: React.FC = () => {
                     identity={viewerIdentity}
                     role={liveKitRole as any}
                     autoConnect={true}
-                    allowPublish={isBroadcaster ? false : true}
+                    allowPublish={isBroadcaster}
                     maxParticipants={liveKitMaxParticipants}
                     className="h-[420px] w-full"
                   />
@@ -923,7 +923,7 @@ const LiveBroadcast: React.FC = () => {
                 ))}
               </div>
 
-              <div className="flex flex-col gap-3 overflow-hidden rounded-3xl border border-purple-500/30 bg-[#0b0416]/80 p-4 shadow-[0_30px_90px_rgba(86,33,178,0.3)]">
+              <div className="flex flex-col gap-3 overflow-hidden rounded-3xl border border-purple-500/30 bg-[#0b0416]/80 p-4 shadow-[0_30px_90px_rgba(86,33,178,0.3)] max-h-[450px]">
                 <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-gray-400">
                   <span>Chat</span>
                   <span className="flex items-center gap-2 text-[11px] text-green-300">
@@ -1040,7 +1040,7 @@ const LiveBroadcast: React.FC = () => {
               disabled={!isBroadcaster}
               className={`relative group flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden ${
                 isBroadcaster && !hasLocalTracks
-                  ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-600 text-white shadow-lg shadow-pink-500/30 hover:shadow-xl hover:shadow-pink-500/50 border border-pink-500/80'
+                  ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-600 text-white border border-pink-500/80'
                   : 'border border-red-500/80 bg-red-500/30 text-red-200 hover:bg-red-500/50'
               } disabled:cursor-not-allowed disabled:opacity-60`}
             >

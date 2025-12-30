@@ -60,6 +60,21 @@ const GoLiveSetup: React.FC = () => {
     console.log(`[GoLiveSetup] Go Live clicked for "${configSnapshot.title}"`)
 
     setIsStarting(true)
+    let rollbackStreamId: string | null = null
+    const markStreamFailed = async () => {
+      if (!rollbackStreamId) return
+      const failedStreamId = rollbackStreamId
+      rollbackStreamId = null
+      try {
+        console.log(`[GoLiveSetup] Marking stream ${failedStreamId} as failed`)
+        await supabase
+          .from('streams')
+          .update({ status: 'failed' })
+          .eq('id', failedStreamId)
+      } catch (err) {
+        console.error('[GoLiveSetup] Failed to mark stream as failed:', err)
+      }
+    }
     try {
       console.log('[GoLiveSetup] Requesting camera and microphone permissions...')
       const grantedStream = await requestPermissions()
@@ -75,26 +90,33 @@ const GoLiveSetup: React.FC = () => {
         toast.error('Failed to create your stream')
         return
       }
+      rollbackStreamId = newStream.id
 
       console.log(`[GoLiveSetup] Stream record created: ${newStream.id}`)
       console.log('[GoLiveSetup] Requesting publish token...')
       const tokenData = await getToken(newStream.id, true)
       if (!tokenData) {
+        await markStreamFailed()
         toast.error('Failed to retrieve LiveKit permissions')
         return
       }
 
       console.log(`[GoLiveSetup] Token obtained for stream ${newStream.id} (allowPublish=${tokenData.allowPublish})`)
       console.log('[GoLiveSetup] Connecting to LiveKit with publish permissions...')
-      const connectedRoom = await connectToRoom(newStream.id, true)
+      const connectedRoom = await connectToRoom(newStream.id, true, tokenData)
       if (!connectedRoom) {
+        await markStreamFailed()
         toast.error('Failed to connect to LiveKit')
         return
       }
 
       console.log('[GoLiveSetup] Connected to LiveKit')
-      const published = await publishTracks()
+      const published =
+        grantedStream && grantedStream.active
+          ? await publishTracks(grantedStream)
+          : await publishTracks()
       if (!published) {
+        await markStreamFailed()
         toast.error('Failed to publish your camera and microphone')
         return
       }
@@ -112,14 +134,17 @@ const GoLiveSetup: React.FC = () => {
 
       if (updateError) {
         console.error('[GoLiveSetup] Stream update failed:', updateError)
+        await markStreamFailed()
         toast.error('Failed to update stream status')
         return
       }
 
+      rollbackStreamId = null
       console.log(`[GoLiveSetup] Stream ${newStream.id} is now live`)
       toast.success('You are live!')
       navigate(`/live/${newStream.id}`)
     } catch (err: any) {
+      await markStreamFailed()
       console.error('[GoLiveSetup] Go live flow failed:', err)
       toast.error('Something went wrong while starting your stream')
     } finally {
@@ -230,12 +255,15 @@ const GoLiveSetup: React.FC = () => {
                 <ul className="text-[11px] text-gray-300 space-y-1 list-disc pl-5">
                   <li>Only live broadcasters can trigger it; opponents must accept the popup within 10 seconds.</li>
                   <li>Each team can have 1 host + 3 guests (4 total), and guests count toward the score.</li>
-                  <li>Points are derived solely from gifts/coins; the timer runs for 180 seconds with VS energy effects.</li>
-                  <li>Support feeds highlight gift events, viewers send coins via preset tiers, and the winner screen shows top supporters.</li>
-                </ul>
-                <button
-                  type="button"
-                  onClick={handleTromodyStart}
+                <li>Points are derived solely from gifts/coins; the timer runs for 180 seconds with VS energy effects.</li>
+                <li>Support feeds highlight gift events, viewers send coins via preset tiers, and the winner screen shows top supporters.</li>
+              </ul>
+              <p className="text-xs text-gray-400">
+                Tromody Show is started from the Tromody Arena, not here.
+              </p>
+              <button
+                type="button"
+                onClick={handleTromodyStart}
                   disabled={!isBroadcaster}
                   className="w-full px-4 py-2 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-semibold shadow-lg shadow-yellow-400/40 disabled:opacity-40 disabled:cursor-not-allowed"
                 >

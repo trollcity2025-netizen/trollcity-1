@@ -75,6 +75,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
         user,
         allowPublish: options.allowPublish !== false,
         preflightStream: options.preflightStream,
+        autoPublish: options.autoPublish,
         onConnected: () => {
           setIsConnected(true)
           setIsConnecting(false)
@@ -204,8 +205,16 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
   }, [syncLocalParticipant])
 
   const startPublishing = useCallback(async () => {
-    console.log('[DEBUG] startPublishing called, service exists:', !!serviceRef.current)
+    console.log(
+      '[DEBUG] startPublishing called, service exists:',
+      !!serviceRef.current,
+      'service.isConnected:',
+      serviceRef.current?.isConnected()
+    )
     if (!serviceRef.current) return
+    if (!serviceRef.current.isConnected()) {
+      throw new Error('Room not connected')
+    }
     await serviceRef.current.startPublishing()
     syncLocalParticipant()
     setParticipants(new Map(serviceRef.current.getParticipants()))

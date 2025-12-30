@@ -20,9 +20,9 @@ export type LiveKitParticipantState = {
   isCameraOn: boolean
   isMicrophoneOn: boolean
   isMuted: boolean
-  audioLevel: number
   videoTrack?: RemoteVideoTrack | LocalVideoTrack
   audioTrack?: RemoteAudioTrack | LocalAudioTrack
+  metadata?: Record<string, unknown>
 }
 
 export type LiveKitConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
@@ -56,6 +56,16 @@ const buildTokenBody = (roomName: string, user: LiveKitRoomConfig['user'], allow
   allowPublish,
 })
 
+const parseParticipantMetadata = (metadata?: string): Record<string, unknown> | undefined => {
+  if (!metadata) return undefined
+  try {
+    return JSON.parse(metadata)
+  } catch (error) {
+    console.warn('[useLiveKitRoom] Failed to parse metadata for participant', { metadata, error })
+    return undefined
+  }
+}
+
 export function useLiveKitRoom(config: LiveKitRoomConfig) {
   const { roomName, user, allowPublish = false, autoPublish = false, roomOptions } = config
 
@@ -66,7 +76,6 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
   const [isPublishing, setIsPublishing] = useState(false)
 
   const localTracksRef = useRef<{ video?: LocalVideoTrack; audio?: LocalAudioTrack }>({})
-  const volumeListenersRef = useRef<Map<string, () => void>>(new Map())
   const roomRef = useRef<Room | null>(null)
 
   const connectingRef = useRef(false)
@@ -78,13 +87,14 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
       }
 
       const tokenResponse = await api.post<LiveKitTokenResponse>('/livekit-token', buildTokenBody(roomName, user, publish))
+      const data = tokenResponse.data || tokenResponse
 
-      if (!tokenResponse || !tokenResponse.token) {
-        const message = tokenResponse?.error || 'LiveKit token request failed'
+      if (!data || !data.token) {
+        const message = (data as any)?.error || (tokenResponse as any)?.error || 'LiveKit token request failed'
         throw new Error(message)
       }
 
-      return tokenResponse
+      return data as LiveKitTokenResponse
     },
     [roomName, user]
   )
@@ -100,9 +110,9 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
           isCameraOn: false,
           isMicrophoneOn: false,
           isMuted: true,
-          audioLevel: 0,
         }
-        next[identity] = { ...existing, ...patch }
+        const metadata = patch.metadata ?? existing.metadata
+        next[identity] = { ...existing, ...patch, metadata }
         return next
       })
     },
@@ -118,59 +128,45 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
     })
   }, [])
 
-  const cleanupVolumeListener = useCallback((track: RemoteAudioTrack | LocalAudioTrack) => {
-    const listener = volumeListenersRef.current.get(track.sid)
-    if (listener) {
-      listener()
-      volumeListenersRef.current.delete(track.sid)
-    }
-  }, [])
 
-  const attachVolumeListener = useCallback(
-    (track: RemoteAudioTrack | LocalAudioTrack, identity: string) => {
-      const handler = (volume: number) => {
-        updateParticipantState(identity, { audioLevel: volume })
-      }
-      track.on('volumeChanged', handler)
-      volumeListenersRef.current.set(track.sid, () => track.off('volumeChanged', handler))
-    },
-    [updateParticipantState]
-  )
 
   const handleTrackSubscribed = useCallback(
     (
-      track: RemoteAudioTrack | RemoteVideoTrack | LocalAudioTrack | LocalVideoTrack,
-      participant: Participant
+      track: any,
+      publication: any,
+      participant: any
     ) => {
       const identity = participant.identity
       if (track.kind === 'video') {
-        updateParticipantState(identity, { videoTrack: track as RemoteVideoTrack, isCameraOn: participant.isCameraEnabled })
+        updateParticipantState(identity, {
+          videoTrack: track as RemoteVideoTrack,
+          isCameraOn: participant.isCameraEnabled,
+          metadata: parseParticipantMetadata(participant.metadata),
+        })
       }
       if (track.kind === 'audio') {
-        cleanupVolumeListener(track as RemoteAudioTrack | LocalAudioTrack)
-        attachVolumeListener(track as RemoteAudioTrack | LocalAudioTrack, identity)
         updateParticipantState(identity, {
           audioTrack: track as RemoteAudioTrack,
           isMicrophoneOn: participant.isMicrophoneEnabled,
           isMuted: !participant.isMicrophoneEnabled,
+          metadata: parseParticipantMetadata(participant.metadata),
         })
       }
     },
-    [updateParticipantState, attachVolumeListener, cleanupVolumeListener]
+    [updateParticipantState]
   )
 
   const handleTrackUnsubscribed = useCallback(
-    (track: RemoteAudioTrack | RemoteVideoTrack | LocalAudioTrack | LocalVideoTrack, participant: Participant) => {
+    (track: any, publication: any, participant: any) => {
       const identity = participant.identity
       if (track.kind === 'video') {
         updateParticipantState(identity, { videoTrack: undefined })
       }
       if (track.kind === 'audio') {
-        cleanupVolumeListener(track as RemoteAudioTrack | LocalAudioTrack)
-        updateParticipantState(identity, { audioTrack: undefined, audioLevel: 0 })
+        updateParticipantState(identity, { audioTrack: undefined })
       }
     },
-    [updateParticipantState, cleanupVolumeListener]
+    [updateParticipantState]
   )
 
   const registerExistingParticipants = useCallback((connectedRoom: Room) => {
@@ -183,10 +179,11 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
         isCameraOn: local.isCameraEnabled,
         isMicrophoneOn: local.isMicrophoneEnabled,
         isMuted: !local.isMicrophoneEnabled,
+        metadata: parseParticipantMetadata(local.metadata),
       })
     }
 
-    connectedRoom.participants.forEach((participant) => {
+    connectedRoom.remoteParticipants.forEach((participant) => {
       updateParticipantState(participant.identity, {
         identity: participant.identity,
         name: participant.name || participant.identity,
@@ -194,10 +191,11 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
         isCameraOn: participant.isCameraEnabled,
         isMicrophoneOn: participant.isMicrophoneEnabled,
         isMuted: !participant.isMicrophoneEnabled,
+        metadata: parseParticipantMetadata(participant.metadata),
       })
-      participant.tracks.forEach((publication) => {
+      Array.from(participant.trackPublications.values()).forEach((publication) => {
         if (publication.track) {
-          handleTrackSubscribed(publication.track, participant)
+          handleTrackSubscribed(publication.track, publication, participant)
         }
       })
     })
@@ -212,6 +210,7 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
         isCameraOn: participant.isCameraEnabled,
         isMicrophoneOn: participant.isMicrophoneEnabled,
         isMuted: !participant.isMicrophoneEnabled,
+        metadata: parseParticipantMetadata(participant.metadata),
       })
     },
     [updateParticipantState]
@@ -230,6 +229,14 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
         createLocalVideoTrack(),
         createLocalAudioTrack(),
       ])
+
+      // Enable camera and microphone
+      if (videoTrack?.mediaStreamTrack) {
+        videoTrack.mediaStreamTrack.enabled = true
+      }
+      if (audioTrack?.mediaStreamTrack) {
+        audioTrack.mediaStreamTrack.enabled = true
+      }
 
       localTracksRef.current.video = videoTrack
       localTracksRef.current.audio = audioTrack

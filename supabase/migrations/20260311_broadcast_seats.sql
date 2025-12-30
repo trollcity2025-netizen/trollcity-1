@@ -49,29 +49,55 @@ RETURNS TABLE (
   is_owner BOOLEAN
 ) AS $$
 DECLARE
-  existing public.broadcast_seats%ROWTYPE;
+  existing_seat public.broadcast_seats%ROWTYPE;
+  user_existing_seat public.broadcast_seats%ROWTYPE;
 BEGIN
   LOCK public.broadcast_seats IN SHARE ROW EXCLUSIVE MODE;
-  SELECT * INTO existing
+
+  -- Check if user already has a seat in this room
+  SELECT * INTO user_existing_seat
+  FROM public.broadcast_seats
+  WHERE room = p_room AND user_id = p_user_id
+  FOR UPDATE;
+
+  IF FOUND THEN
+    -- User already has a seat, return that seat info
+    room := user_existing_seat.room;
+    seat_index := user_existing_seat.seat_index;
+    user_id := user_existing_seat.user_id;
+    username := user_existing_seat.username;
+    avatar_url := user_existing_seat.avatar_url;
+    role := user_existing_seat.role;
+    metadata := user_existing_seat.metadata;
+    assigned_at := user_existing_seat.assigned_at;
+    created := FALSE;
+    is_owner := TRUE;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  -- Check if the specific seat is already taken
+  SELECT * INTO existing_seat
   FROM public.broadcast_seats
   WHERE room = p_room AND seat_index = p_seat_index
   FOR UPDATE;
 
   IF FOUND THEN
-    room := existing.room;
-    seat_index := existing.seat_index;
-    user_id := existing.user_id;
-    username := existing.username;
-    avatar_url := existing.avatar_url;
-    role := existing.role;
-    metadata := existing.metadata;
-    assigned_at := existing.assigned_at;
+    room := existing_seat.room;
+    seat_index := existing_seat.seat_index;
+    user_id := existing_seat.user_id;
+    username := existing_seat.username;
+    avatar_url := existing_seat.avatar_url;
+    role := existing_seat.role;
+    metadata := existing_seat.metadata;
+    assigned_at := existing_seat.assigned_at;
     created := FALSE;
-    is_owner := existing.user_id = p_user_id;
+    is_owner := existing_seat.user_id = p_user_id;
     RETURN NEXT;
     RETURN;
   END IF;
 
+  -- Seat is available, claim it
   INSERT INTO public.broadcast_seats (
     room, seat_index, user_id, username, avatar_url, role, metadata
   ) VALUES (

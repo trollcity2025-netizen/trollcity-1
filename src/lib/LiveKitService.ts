@@ -19,6 +19,7 @@ export interface LiveKitParticipant {
   isCameraEnabled: boolean
   isMicrophoneEnabled: boolean
   isMuted: boolean
+  metadata?: string
 }
 
 export interface LiveKitServiceConfig {
@@ -35,6 +36,7 @@ export interface LiveKitServiceConfig {
   onError?: (error: string) => void
   allowPublish?: boolean // Whether to allow publishing camera/mic
   preflightStream?: MediaStream
+  autoPublish?: boolean
 }
 
 export class LiveKitService {
@@ -129,8 +131,8 @@ export class LiveKitService {
       // ✅ Hydrate participants already in the room (important when you join late)
       this.hydrateExistingRemoteParticipants()
 
-      // If allowPublish requested, enable and publish camera/mic immediately
-      if (this.config.allowPublish) {
+      const shouldAutoPublish = this.config.allowPublish && this.config.autoPublish !== false
+      if (shouldAutoPublish) {
         try {
           await this.room!.localParticipant.enableCameraAndMicrophone()
           this.log('✅ Camera and microphone enabled and published')
@@ -138,6 +140,8 @@ export class LiveKitService {
           this.log('❌ Failed to enable/publish camera and microphone:', e?.message)
           this.config.onError?.(e?.message || 'Failed to enable media')
         }
+      } else if (this.config.allowPublish) {
+        this.log('Auto publish disabled - waiting for manual startPublishing')
       }
 
       this.log('✅ Connection successful')
@@ -156,19 +160,20 @@ private hydrateExistingRemoteParticipants(): void {
   if (!this.room) return
 
   // remoteParticipants is a Map<string, RemoteParticipant> in the livekit-client types
-  this.room.remoteParticipants.forEach((participant: any) => {
-    if (this.participants.has(participant.identity)) return
+    this.room.remoteParticipants.forEach((participant: any) => {
+      if (this.participants.has(participant.identity)) return
 
-    const liveKitParticipant: LiveKitParticipant = {
-      identity: participant.identity,
-      name: participant.name || participant.identity,
-      isLocal: false,
-      isCameraEnabled: participant.isCameraEnabled,
-      isMicrophoneEnabled: participant.isMicrophoneEnabled,
-      isMuted: !participant.isMicrophoneEnabled,
-    }
+      const liveKitParticipant: LiveKitParticipant = {
+        identity: participant.identity,
+        name: participant.name || participant.identity,
+        isLocal: false,
+        isCameraEnabled: participant.isCameraEnabled,
+        isMicrophoneEnabled: participant.isMicrophoneEnabled,
+        isMuted: !participant.isMicrophoneEnabled,
+        metadata: participant.metadata,
+      }
 
-    this.participants.set(participant.identity, liveKitParticipant)
+      this.participants.set(participant.identity, liveKitParticipant)
     this.config.onParticipantJoined?.(liveKitParticipant)
   })
 }
@@ -279,7 +284,6 @@ private hydrateExistingRemoteParticipants(): void {
     try {
       this.log('📹 Capturing video track...')
       const track = await createLocalVideoTrack({
-        facingMode: 'user',
         resolution: { width: 1280, height: 720 },
         frameRate: { ideal: 30, max: 60 },
       } as any)
@@ -368,6 +372,7 @@ private hydrateExistingRemoteParticipants(): void {
       isCameraEnabled: p.isCameraEnabled,
       isMicrophoneEnabled: p.isMicrophoneEnabled,
       isMuted: !p.isMicrophoneEnabled,
+      metadata: p.metadata,
     }
 
     this.participants.set(localParticipant.identity, localParticipant)
@@ -403,6 +408,7 @@ private hydrateExistingRemoteParticipants(): void {
         isCameraEnabled: participant.isCameraEnabled,
         isMicrophoneEnabled: participant.isMicrophoneEnabled,
         isMuted: !participant.isMicrophoneEnabled,
+        metadata: participant.metadata,
       }
 
       this.participants.set(participant.identity, liveKitParticipant)
@@ -428,6 +434,7 @@ private hydrateExistingRemoteParticipants(): void {
         } else if (track.kind === 'audio') {
           liveKitParticipant.audioTrack = { track }
         }
+        liveKitParticipant.metadata = participant.metadata
         this.config.onTrackSubscribed?.(track, liveKitParticipant)
       }
     })

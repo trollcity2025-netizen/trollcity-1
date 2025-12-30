@@ -1,7 +1,7 @@
-import { useCallback, useState, useRef } from 'react'
+﻿import { useCallback, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { Room, RoomEvent, ParticipantEvent } from 'livekit-client'
+import { ConnectionState, Room, RoomEvent, ParticipantEvent, Track } from 'livekit-client'
 import { toast } from 'sonner'
 import { getLiveKitToken, type LiveKitTokenResponse } from '../lib/livekit-utils'
 
@@ -122,8 +122,8 @@ export const useGoLiveFlow = () => {
   )
 
   const connectToRoom = useCallback(
-    async (streamId: string, allowPublish: boolean) => {
-      console.log(`[useGoLiveFlow] connectToRoom called: streamId=${streamId} allowPublish=${allowPublish} state=${connectionState}`)
+    async (streamId: string, allowPublish: boolean, providedToken?: LiveKitTokenResponse) => {
+      console.log(`[useGoLiveFlow] connectToRoom called: streamId=${streamId} allowPublish=${allowPublish} state=${connectionState} tokenProvided=${Boolean(providedToken)}`)
       
       if (connectionState === 'connecting' || connectionState === 'connected' || connectionState === 'publishing') {
         console.warn('[useGoLiveFlow] Already connecting or connected')
@@ -134,8 +134,7 @@ export const useGoLiveFlow = () => {
       setError(null)
 
       try {
-        console.log(`[useGoLiveFlow] Getting token for stream ${streamId}...`)
-        const tokenData = await getToken(streamId, allowPublish)
+        const tokenData = providedToken ?? (await getToken(streamId, allowPublish))
         
         if (!tokenData) {
           console.error('[useGoLiveFlow] Failed to get token')
@@ -143,7 +142,7 @@ export const useGoLiveFlow = () => {
           return null
         }
 
-        console.log(`[useGoLiveFlow] Token received - allowPublish=${tokenData.allowPublish}`)
+        console.log(`[useGoLiveFlow] Token received - allowPublish=${tokenData.allowPublish} room=${tokenData.room}`)
 
         const newRoom = new Room({
           adaptiveStream: true,
@@ -167,11 +166,18 @@ export const useGoLiveFlow = () => {
 
         console.log(`[useGoLiveFlow] Connecting to LiveKit URL: ${tokenData.livekitUrl || import.meta.env.VITE_LIVEKIT_URL}`)
         await newRoom.connect(tokenData.livekitUrl || import.meta.env.VITE_LIVEKIT_URL, tokenData.token)
+        setConnectionState('connected')
 
         roomRef.current = newRoom
         setRoom(newRoom)
         
         console.log('[useGoLiveFlow] Room connection established')
+        console.log('[useGoLiveFlow] Room state after connect:', {
+          roomState: newRoom.state,
+          localParticipantId: newRoom.localParticipant?.identity,
+          isCameraEnabled: newRoom.localParticipant?.isCameraEnabled,
+          isMicrophoneEnabled: newRoom.localParticipant?.isMicrophoneEnabled,
+        })
         return newRoom
       } catch (err: any) {
         console.error('[useGoLiveFlow] Room connection failed:', err.message || err)
@@ -188,7 +194,7 @@ export const useGoLiveFlow = () => {
     setError(null)
     console.log('[useGoLiveFlow] Requesting camera and microphone permissions...')
 
-    try {
+      try {
       console.log('[useGoLiveFlow] Calling getUserMedia with video=true, audio=true')
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
@@ -215,65 +221,73 @@ export const useGoLiveFlow = () => {
     }
   }, [])
 
-  const publishTracks = useCallback(async () => {
-    console.log(`[useGoLiveFlow] publishTracks called - room=${!!roomRef.current} stream=${!!localStream} state=${connectionState}`)
-    
-    if (!roomRef.current) {
-      const err = 'Room not connected'
-      console.error('[useGoLiveFlow]', err)
-      setError(err)
-      return false
-    }
+  const publishTracks = useCallback(
+    async (stream?: MediaStream) => {
+      const activeStream = stream ?? localStream
+      const currentRoom = roomRef.current
+      console.log(
+        `[useGoLiveFlow] publishTracks called - room=${!!currentRoom} stream=${!!activeStream} state=${connectionState}`
+      )
 
-    if (!localStream) {
-      const err = 'Camera and microphone not enabled'
-      console.error('[useGoLiveFlow]', err)
-      setError(err)
-      return false
-    }
-
-    if (connectionState !== 'connected') {
-      const err = `Not connected to room - state=${connectionState}`
-      console.error('[useGoLiveFlow]', err)
-      setError(err)
-      return false
-    }
-
-    try {
-      setConnectionState('publishing')
-      console.log('[useGoLiveFlow] Starting track publishing...')
-
-      const videoTrack = localStream.getVideoTracks()[0]
-      const audioTrack = localStream.getAudioTracks()[0]
-
-      console.log(`[useGoLiveFlow] Available tracks - video=${!!videoTrack} audio=${!!audioTrack}`)
-
-      if (!videoTrack || !audioTrack) {
-        throw new Error('Missing video or audio track')
+      if (!currentRoom) {
+        const err = 'Room not connected'
+        console.error('[useGoLiveFlow]', err)
+        setError(err)
+        return false
       }
 
-      console.log('[useGoLiveFlow] Publishing video track...')
-      await roomRef.current.localParticipant.publishTrack(videoTrack, {
-        name: 'camera',
-      })
+      if (!activeStream) {
+        const err = 'Camera and microphone not enabled'
+        console.error('[useGoLiveFlow]', err)
+        setError(err)
+        return false
+      }
 
-      console.log('[useGoLiveFlow] Publishing audio track...')
-      await roomRef.current.localParticipant.publishTrack(audioTrack, {
-        name: 'microphone',
-      })
+      const roomState = currentRoom.state
+      if (roomState !== ConnectionState.Connected) {
+        const err = `Not connected to room - roomState=${roomState} state=${connectionState}`
+        console.error('[useGoLiveFlow]', err)
+        setError(err)
+        return false
+      }
 
-      localTracksRef.current = [videoTrack, audioTrack]
+      try {
+        setConnectionState('publishing')
+        console.log('[useGoLiveFlow] Starting track publishing...')
 
-      console.log(`[useGoLiveFlow] ✅ Successfully published ${localTracksRef.current.length} tracks`)
-      setConnectionState('connected')
+        const videoTrack = activeStream.getVideoTracks()[0]
+        const audioTrack = activeStream.getAudioTracks()[0]
 
-      return true
-    } catch (err: any) {
-      console.error('[useGoLiveFlow] Track publish failed:', err.message || err)
-      setConnectionState('error')
-      setError(err.message || 'Failed to publish tracks')
-      return false
-    }
+        console.log(`[useGoLiveFlow] Available tracks - video=${!!videoTrack} audio=${!!audioTrack}`)
+
+        if (!videoTrack || !audioTrack) {
+          throw new Error('Missing video or audio track')
+        }
+
+        console.log('[useGoLiveFlow] Publishing video track...')
+        await currentRoom.localParticipant.publishTrack(videoTrack, {
+          name: 'camera',
+          source: Track.Source.Camera,
+        })
+
+        console.log('[useGoLiveFlow] Publishing audio track...')
+        await currentRoom.localParticipant.publishTrack(audioTrack, {
+          name: 'microphone',
+          source: Track.Source.Microphone,
+        })
+
+        localTracksRef.current = [videoTrack, audioTrack]
+
+        console.log(`[useGoLiveFlow] ✅ Successfully published ${localTracksRef.current.length} tracks`)
+        setConnectionState('connected')
+
+        return true
+      } catch (err: any) {
+        console.error('[useGoLiveFlow] Track publish failed:', err.message || err)
+        setConnectionState('error')
+        setError(err.message || 'Failed to publish tracks')
+        return false
+      }
   }, [roomRef, localStream, connectionState])
 
   const initializeGoLive = useCallback(
@@ -349,7 +363,8 @@ export const useGoLiveFlow = () => {
         }
       }
 
-      console.log(`[useGoLiveFlow] Updating stream ${stream.id} status to live...`)
+      const r = targetStreamId
+      console.log(`[useGoLiveFlow] Updating stream ${r} status to live...`)
       const { error: updateError } = await supabase
         .from('streams')
         .update({
@@ -357,7 +372,7 @@ export const useGoLiveFlow = () => {
           status: 'live',
           start_time: new Date().toISOString(),
         })
-        .eq('id', stream.id)
+        .eq('id', r)
 
       if (updateError) {
         console.error('[useGoLiveFlow] Stream update failed:', updateError)
@@ -365,7 +380,7 @@ export const useGoLiveFlow = () => {
         return false
       }
 
-      console.log(`[useGoLiveFlow] ✅ Stream ${stream.id} is now live`)
+      console.log(`[useGoLiveFlow] ✅ Stream ${r} is now live`)
       toast.success('You are live!')
       return true
     } catch (err: any) {
@@ -404,3 +419,5 @@ export const useGoLiveFlow = () => {
     disconnect,
   }
 }
+
+
