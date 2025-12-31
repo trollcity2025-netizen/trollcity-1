@@ -38,7 +38,7 @@ export default function ChatWindow({
   const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
-  const [theirTyping, setTheirTyping] = useState(false)
+  const [_theirTyping, _setTheirTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const handleStartCall = async (callType: 'audio' | 'video') => {

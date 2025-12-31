@@ -202,7 +202,7 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
   }, [handleTrackSubscribed, updateParticipantState])
 
   const addParticipant = useCallback(
-    (participant: Participant) => {
+    async (participant: Participant) => {
       updateParticipantState(participant.identity, {
         identity: participant.identity,
         name: participant.name || participant.identity,
@@ -212,6 +212,16 @@ export function useLiveKitRoom(config: LiveKitRoomConfig) {
         isMuted: !participant.isMicrophoneEnabled,
         metadata: parseParticipantMetadata(participant.metadata),
       })
+
+      // Trigger entrance effect for remote participants (not local)
+      if (!participant.isLocal && participant.identity) {
+        try {
+          const { triggerUserEntranceEffect } = await import('../lib/entranceEffects')
+          await triggerUserEntranceEffect(participant.identity)
+        } catch (error) {
+          console.warn('Failed to trigger entrance effect:', error)
+        }
+      }
     },
     [updateParticipantState]
   )

@@ -94,8 +94,8 @@ const AuthorityPanel: React.FC = () => {
       const { data, error } = await supabase.rpc('get_current_court_session');
       if (error) throw error;
       setCourtSession(data?.[0] || null);
-    } catch (error) {
-      console.error('Error loading court session:', error);
+    } catch {
+      // Silently handle court session loading errors as they are non-critical
     }
   };
 

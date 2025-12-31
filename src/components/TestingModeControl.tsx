@@ -48,7 +48,7 @@ export function TestingModeControl() {
 
   useEffect(() => {
     fetchStatus()
-    const interval = setInterval(fetchStatus, 10000) // Refresh every 10 seconds
+    const interval = setInterval(fetchStatus, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -68,20 +68,17 @@ export function TestingModeControl() {
         setTestingMode(data.testingMode)
         toast.success(`Testing mode ${enabled ? 'enabled' : 'disabled'}${resetCounter ? ' and counter reset' : ''}`)
       } else if (data.success) {
-        // If success but no testingMode in response, refetch status
         await fetchStatus()
         toast.success(`Testing mode ${enabled ? 'enabled' : 'disabled'}${resetCounter ? ' and counter reset' : ''}`)
       } else {
         const errorMsg = data.error || 'Failed to toggle testing mode'
         console.error('Toggle testing mode error:', errorMsg, data)
         toast.error(errorMsg)
-        // Refetch status to ensure UI is in sync
         await fetchStatus()
       }
     } catch (error: any) {
       console.error('Toggle testing mode exception:', error)
       toast.error(error.message || 'Failed to toggle testing mode')
-      // Refetch status to ensure UI is in sync
       await fetchStatus()
     } finally {
       setLoading(false)
@@ -114,6 +111,13 @@ export function TestingModeControl() {
 
   return (
     <div className="bg-gradient-to-br from-purple-900/20 to-pink-900/20 rounded-xl p-6 border border-purple-500/30">
+      <style jsx global>{`
+        .purple-neon {
+          border: 2px solid #A78BFA;
+          box-shadow: 0 0 15px rgba(167, 139, 250, 0.6), inset 0 0 15px rgba(167, 139, 250, 0.2);
+        }
+      `}</style>
+      
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <TestTube className="w-6 h-6 text-purple-400" />
@@ -130,9 +134,9 @@ export function TestingModeControl() {
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/30">
+        <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30 purple-neon">
           <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-blue-400" />
+            <Users className="w-4 h-4 text-purple-400" />
             <p className="text-sm text-gray-400">Signups</p>
           </div>
           <p className="text-2xl font-bold text-white">
@@ -140,24 +144,24 @@ export function TestingModeControl() {
           </p>
           <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-blue-500 transition-all duration-300"
+              className="h-full bg-purple-500 transition-all duration-300"
               style={{ width: `${Math.min(progressPercent, 100)}%` }}
             />
           </div>
         </div>
 
-        <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30">
+        <div className="bg-pink-500/10 rounded-lg p-4 border border-pink-500/30 purple-neon">
           <div className="flex items-center gap-2 mb-2">
-            <TestTube className="w-4 h-4 text-purple-400" />
+            <TestTube className="w-4 h-4 text-pink-400" />
             <p className="text-sm text-gray-400">Test Users</p>
           </div>
           <p className="text-2xl font-bold text-white">{actualTestUsers}</p>
           <p className="text-xs text-gray-400 mt-1">Actual count in database</p>
         </div>
 
-        <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/30">
+        <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30 purple-neon">
           <div className="flex items-center gap-2 mb-2">
-            <Info className="w-4 h-4 text-green-400" />
+            <Info className="w-4 h-4 text-purple-400" />
             <p className="text-sm text-gray-400">Remaining</p>
           </div>
           <p className="text-2xl font-bold text-white">
@@ -170,8 +174,8 @@ export function TestingModeControl() {
       </div>
 
       {/* Benefits Info */}
-      <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30 mb-6">
-        <h3 className="text-sm font-semibold text-yellow-400 mb-2">Test User Benefits:</h3>
+      <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30 purple-neon mb-6">
+        <h3 className="text-sm font-semibold text-purple-400 mb-2">Test User Benefits:</h3>
         <ul className="text-sm text-gray-300 space-y-1">
           <li>• {benefits.free_coins.toLocaleString()} free coins on signup</li>
           <li>• {benefits.bypass_family_fee ? 'No fee' : 'Fee required'} for Troll Family applications</li>
@@ -186,7 +190,7 @@ export function TestingModeControl() {
           <button
             onClick={() => toggleTestingMode(true, true)}
             disabled={loading}
-            className="flex-1 min-w-[200px] px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="flex-1 min-w-[200px] px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 purple-neon"
           >
             <Power className="w-4 h-4" />
             Enable Testing Mode
@@ -195,7 +199,7 @@ export function TestingModeControl() {
           <button
             onClick={() => toggleTestingMode(false, false)}
             disabled={loading}
-            className="flex-1 min-w-[200px] px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="flex-1 min-w-[200px] px-4 py-3 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 purple-neon"
           >
             <PowerOff className="w-4 h-4" />
             Disable Testing Mode
@@ -205,7 +209,7 @@ export function TestingModeControl() {
         <button
           onClick={resetCounter}
           disabled={loading || !testingMode.enabled}
-          className="px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 purple-neon"
         >
           <RotateCcw className="w-4 h-4" />
           Reset Counter

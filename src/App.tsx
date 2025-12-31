@@ -63,6 +63,7 @@ import Changelog from "./pages/Changelog";
 import AccessDenied from "./pages/AccessDenied";
 import ReferralBonusPanel from "./pages/admin/ReferralBonusPanel";
 import { systemManagementRoutes } from "./pages/admin/adminRoutes";
+import TrollsNightPage from "./pages/TrollsNightPage";
 
 // Lazy-loaded pages
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
@@ -81,7 +82,13 @@ const AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
 
 // Lazy-loaded pages
 const GoLiveSetup = lazy(() => import("./pages/GoLiveSetup"));
+const Broadcast = lazy(() => import("./pages/Broadcast"));
+const BroadcastSummary = lazy(() => import("./pages/BroadcastSummary"));
+const KickFee = lazy(() => import("./pages/KickFee"));
+const BanFee = lazy(() => import("./pages/BanFee"));
+const TrollCourtSession = lazy(() => import("./pages/TrollCourtSession"));
 const TromodyShow = lazy(() => import("./pages/TromodyShow"));
+const TromodyShowBroadcast = lazy(() => import("./pages/TromodyShowBroadcast"));
 const OfficerLoungeStream = lazy(() => import("./pages/OfficerLoungeStream"));
 const LiveStreamPage = lazy(() => import("./pages/LiveStreamPage"));
 const Stream = lazy(() => import("./pages/Stream"));
@@ -464,10 +471,17 @@ function AppContent() {
                   <Route path="/profile/id/:userId" element={<Profile />} />
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="/trollstown" element={<TrollsTownPage />} />
+                  <Route path="/trolls-night" element={<TrollsNightPage />} />
 
                   {/* 🎥 Streaming */}
                   <Route path="/go-live" element={<GoLiveSetup />} />
+                  <Route path="/broadcast" element={<Broadcast />} />
+                  <Route path="/broadcast-summary" element={<BroadcastSummary />} />
+                  <Route path="/kick-fee" element={<KickFee />} />
+                  <Route path="/ban-fee" element={<BanFee />} />
+                  <Route path="/troll-court" element={<TrollCourtSession />} />
                   <Route path="/tromody" element={<TromodyShow />} />
+                  <Route path="/tromody-show/broadcast" element={<TromodyShowBroadcast />} />
                   <Route path="/live/:streamId" element={<LiveStreamPage />} />
                   <Route path="/interview/:sessionId" element={<InterviewRoom />} />
                   <Route path="/stream/:id" element={<Stream />} />

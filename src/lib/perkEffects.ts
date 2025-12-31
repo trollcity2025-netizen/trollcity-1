@@ -1,7 +1,8 @@
 // Perk Effect Implementations
 // Real-time logic for applying perk effects throughout the app
 
-import { isPerkActive, type PerkKey } from './perkSystem';
+import { supabase } from './supabase';
+import { isPerkActive } from './perkSystem';
 
 /**
  * GHOST MODE (30m)
@@ -35,6 +36,24 @@ export async function getUsernameGlowClass(userId: string): Promise<string> {
   if (await isPerkActive(userId, 'perk_rgb_username')) {
     return 'rgb-username';
   }
+
+  // Check for custom glowing username
+  const { data: customGlow } = await supabase
+    .from('user_perks')
+    .select('metadata')
+    .eq('user_id', userId)
+    .eq('perk_id', 'perk_global_highlight')
+    .eq('is_active', true)
+    .gt('expires_at', new Date().toISOString())
+    .order('expires_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (customGlow?.metadata?.glowColor) {
+    // Return a class that can be dynamically styled
+    return `custom-glowing-username-${customGlow.metadata.glowColor}`;
+  }
+
   const isActive = await isPerkActive(userId, 'perk_global_highlight');
   return isActive ? 'glowing-username' : '';
 }
@@ -114,9 +133,19 @@ export function applyDisappearingChat(messageElement: HTMLElement, userId: strin
  * Apply glowing username effect
  */
 export function applyGlowingUsername(usernameElement: HTMLElement, userId: string) {
-  getUsernameGlowClass(userId).then(glowClass => {
+  getUsernameGlowClass(userId).then(async (glowClass) => {
     if (glowClass) {
-      usernameElement.classList.add(glowClass);
+      if (glowClass.startsWith('custom-glowing-username-')) {
+        // Extract color from class name
+        const color = glowClass.replace('custom-glowing-username-', '');
+        // Apply custom glow effect with the chosen color
+        usernameElement.style.animation = 'glow 2s ease-in-out infinite alternate';
+        usernameElement.style.color = color;
+        usernameElement.style.fontWeight = 'bold';
+        usernameElement.style.textShadow = `0 0 5px ${color}, 0 0 10px ${color}, 0 0 15px ${color}, 0 0 20px ${color}`;
+      } else {
+        usernameElement.classList.add(glowClass);
+      }
     }
   });
 }
@@ -155,7 +184,7 @@ export function playArrivalEffects(userId: string) {
 /**
  * Check if moderation action should be blocked
  */
-export async function shouldBlockModeration(targetUserId: string, action: 'kick' | 'mute' | 'ban'): Promise<boolean> {
+export async function shouldBlockModeration(targetUserId: string, _action: 'kick' | 'mute' | 'ban'): Promise<boolean> {
   return await isProtectedFromModeration(targetUserId);
 }
 

@@ -7,6 +7,7 @@ import ClickableUsername from '../../components/ClickableUsername'
 import WeeklyReportForm from '../../components/WeeklyReportForm'
 import WeeklyReportsList from '../../components/WeeklyReportsList'
 import '../../styles/LeadOfficerDashboard.css'
+import TrollsNightReviewPanel from '../../components/TrollsNightReviewPanel'
 
 type Applicant = {
   id: string
@@ -1051,6 +1052,8 @@ export function LeadOfficerDashboard() {
           </div>
         </div>
       )}
+
+      <TrollsNightReviewPanel title="Trolls @ Night review desk" />
 
       {/* Weekly Reports Section */}
       <section className="rounded-2xl border border-green-800 bg-black/40 p-6 mt-6">

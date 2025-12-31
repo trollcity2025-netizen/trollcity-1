@@ -85,14 +85,14 @@ export function usePerkPurchase() {
   const { user } = useAuthStore();
   const [purchasing, setPurchasing] = useState(false);
 
-  const purchase = async (perkKey: PerkKey) => {
+  const purchase = async (perkKey: PerkKey, customOptions?: { glowColor?: string }) => {
     if (!user?.id) {
       throw new Error('User not authenticated');
     }
 
     setPurchasing(true);
     try {
-      const result = await purchasePerk(user.id, perkKey);
+      const result = await purchasePerk(user.id, perkKey, customOptions);
       return result;
     } finally {
       setPurchasing(false);

@@ -16,6 +16,7 @@ import CityControlsHealth from './components/CityControlsHealth'
 import FinanceEconomyCenter from './components/FinanceEconomyCenter'
 import OperationsControlDeck from './components/OperationsControlDeck'
 import AdditionalTasksGrid from './components/AdditionalTasksGrid'
+import TrollsNightReviewPanel from '../../components/TrollsNightReviewPanel'
 import QuickActionsBar from './components/QuickActionsBar'
 import _AgreementsManagement from './components/AgreementsManagement'
 import _IPTracking from './components/IPTracking'
@@ -2125,6 +2126,8 @@ export default function AdminDashboard() {
           onViewStream={viewStream}
           stats={stats}
         />
+
+        <TrollsNightReviewPanel title="Trolls @ Night verification desk" />
 
           {/* Admin Modules */}
           {/* <AdminApplications /> */}

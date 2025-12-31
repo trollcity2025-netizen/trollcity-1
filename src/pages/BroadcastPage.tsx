@@ -15,7 +15,7 @@ interface Participant {
   isSpeaking: boolean;
 }
 
-export default function GoLive() {
+export default function BroadcastPage() {
   const [viewerCount, setViewerCount] = useState(1284);
   const [trollLikeCount, setTrollLikeCount] = useState(3421);
   const [coinCount, setCoinCount] = useState(5280);

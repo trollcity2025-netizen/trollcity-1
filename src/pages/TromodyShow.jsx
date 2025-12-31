@@ -1,5 +1,5 @@
 // src/pages/TromodyShow.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import TromodyInstructions from "../components/tromody/TromodyInstructions";
 import TromodyChat from "../components/tromody/TromodyChat";
@@ -103,9 +103,11 @@ export default function TromodyShow() {
   }, [timer, curtainsOpen]);
 
   // Unified LiveKit room for Tromody Show
+  const liveKitOptions = useMemo(() => ({ allowPublish: true }), []);
   const { room, participants, isConnecting, connect, disconnect } = useLiveKitRoom(
     'tromody-show',
-    currentUser ? { ...currentUser, role: role, level: 1 } : null
+    currentUser ? { ...currentUser, role: role, level: 1 } : null,
+    liveKitOptions
   );
 
   // Handle LiveKit track events for video display
@@ -375,20 +377,39 @@ export default function TromodyShow() {
           toast.warning('Joined battle with video only - audio may be enabled later');
         }
 
-        // Set metadata for side with timeout and retry
+        // Set metadata for side with retries so transient delays don't log errors
         const metadata = JSON.stringify({
           side: side,
           user_id: currentUser.id,
           role: role
         });
 
+        const applyMetadataUpdate = async () => {
+          if (!room || !room.localParticipant) {
+            throw new Error('LiveKit participant missing while updating metadata');
+          }
+
+          const participant = room.localParticipant;
+          const attempts = 3;
+
+          for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            try {
+              await participant.setMetadata(metadata);
+              return;
+            } catch (metadataError) {
+              if (attempt === attempts) {
+                throw metadataError;
+              }
+              await new Promise(resolve => setTimeout(resolve, 500));
+              if (room.state !== 'connected') {
+                throw new Error('LiveKit disconnected before metadata update could complete');
+              }
+            }
+          }
+        };
+
         try {
-          await Promise.race([
-            room.localParticipant.setMetadata(metadata),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Metadata update timeout')), 5000)
-            )
-          ]);
+          await applyMetadataUpdate();
         } catch (metadataError) {
           console.warn('Metadata update failed, continuing without it:', metadataError);
           // Don't fail the whole join process for metadata issues
@@ -519,6 +540,19 @@ export default function TromodyShow() {
       launchConfetti();
     }
   }, [winner]);
+
+  const isUnderConstruction = true;
+
+  if (isUnderConstruction) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white px-4">
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-bold text-purple-400">Tromody Show</h1>
+          <p className="text-lg text-gray-300">This experience is temporarily under construction. Check back soon!</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-screen bg-black text-white flex pt-16 lg:pt-0">

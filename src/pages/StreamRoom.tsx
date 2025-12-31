@@ -129,7 +129,6 @@ export default function StreamRoom() {
   
   // Troll drops
   const [activeTrollDrop, setActiveTrollDrop] = useState<TrollDropType | null>(null);
-  const [trollDropCount, setTrollDropCount] = useState(0);
   const streamStartTimeRef = useRef<number>(0);
   const trollDropIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -162,13 +161,13 @@ export default function StreamRoom() {
   const {
     room,
     participants: participantsMap,
-    isConnecting,
+    connectionStatus,
     disconnect,
-  } = useLiveKitRoom(
-    stream?.id || id,
-    liveKitUser,
-    liveKitOptions
-  );
+  } = useLiveKitRoom({
+    roomName: stream?.id || id,
+    user: liveKitUser,
+    ...liveKitOptions
+  });
 
   const loadGiftInventory = async () => {
     if (!user?.id) return
@@ -305,7 +304,7 @@ export default function StreamRoom() {
             .single();
 
           if (!followData) {
-            setError('This stream is for followers only', 'error');
+            setError('This stream is for followers only');
             setIsLoadingStream(false);
             return;
           }
@@ -326,7 +325,7 @@ export default function StreamRoom() {
             .single();
 
           if (!memberData || !streamerFamilyData || memberData.family_id !== streamerFamilyData.family_id) {
-            setError('This stream is for family members only', 'error');
+            setError('This stream is for family members only');
             setIsLoadingStream(false);
             return;
           }
@@ -402,7 +401,6 @@ export default function StreamRoom() {
         
         if (drop) {
           setActiveTrollDrop(drop);
-          setTrollDropCount(c => c + 1);
         }
       } catch (err) {
         console.error('Error spawning troll drop:', err);
@@ -1284,7 +1282,7 @@ export default function StreamRoom() {
   };
 
   // Loading and error states
-  if (isLoadingStream || isConnecting) {
+  if (isLoadingStream || connectionStatus === 'connecting') {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -1591,10 +1589,10 @@ export default function StreamRoom() {
         {activeTrollDrop && (
           <TrollDrop
             drop={activeTrollDrop}
-            onExpire={(dropId) => {
+            onExpire={(_dropId) => {
               setActiveTrollDrop(null);
             }}
-            onClaimSuccess={(dropId, amount) => {
+            onClaimSuccess={(_dropId, _amount) => {
               setActiveTrollDrop(null);
             }}
           />
@@ -1932,6 +1930,7 @@ const VideoGrid = React.memo<{
   hostIdentity?: string;
 }>(({ room, participants, isHost, maxGuests, hostIdentity }) => {
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement }>({});
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const guestParticipants = useMemo(() => {
     if (!hostIdentity) return participants.filter((p) => participantHasVideo(p));
@@ -1998,11 +1997,11 @@ const VideoGrid = React.memo<{
   // Host local preview: attach local participant video using actual identity
   useEffect(() => {
     if (!room?.localParticipant) return;
-    
+
     // Use the actual local participant identity instead of hardcoded 'host'
     const localIdentity = room.localParticipant.identity;
     if (!localIdentity) return;
-    
+
     const el = videoRefs.current[localIdentity];
     if (!el) return;
 
@@ -2020,22 +2019,20 @@ const VideoGrid = React.memo<{
       // ignore
     }
   }, [room?.localParticipant, room?.localParticipant?.identity, participants.length]);
-  const totalSlots = 1 + Math.max(0, maxGuests);
-  const gridCols = totalSlots === 1 ? 1 : totalSlots <= 4 ? 2 : 3;
+
   const visibleGuests = guestParticipants.slice(0, Math.max(0, maxGuests));
-  const emptyGuestSlots = Math.max(0, maxGuests - visibleGuests.length);
+
+  useEffect(() => {
+    if (stageRef.current) {
+      console.log("stage size", stageRef.current.getBoundingClientRect());
+    }
+  }, []);
 
   return (
-    <div
-      className="grid gap-2 p-4 h-full min-h-0"
-      style={{
-        gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-        gridAutoRows: '1fr',
-      }}
-    >
-      {/* Host Video */}
-      {isHost ? (
-        <div className="relative tc-neon-frame aspect-video">
+    <div ref={stageRef} className="relative w-full h-full overflow-hidden">
+      {/* Main Video - Host's video, local for host, remote for viewers */}
+      <div className="absolute inset-0">
+        {isHost ? (
           <video
             ref={(el) => {
               if (el && room?.localParticipant?.identity) {
@@ -2049,20 +2046,39 @@ const VideoGrid = React.memo<{
             style={{ transform: 'scaleX(-1)' }}
             className="w-full h-full object-cover"
           />
-        </div>
-      ) : room?.state === 'connected' ? (
-        <div className="relative tc-neon-frame flex items-center justify-center aspect-video">
-          <div className="text-center text-gray-400">
-            <Users className="w-8 h-8 mx-auto mb-2" />
-            <div className="text-sm">Waiting for broadcaster...</div>
-            <div className="text-xs mt-1">Broadcaster is connecting to LiveKit</div>
-          </div>
-        </div>
-      ) : null}
+        ) : (
+          // For viewers, find the host participant
+          (() => {
+            const hostParticipant = participants.find(p => p.identity === hostIdentity);
+            return hostParticipant ? (
+              <video
+                ref={(el) => {
+                  if (el) videoRefs.current[hostParticipant.identity] = el;
+                }}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-black text-white">
+                <div className="text-center">
+                  <Users className="w-8 h-8 mx-auto mb-2" />
+                  <div className="text-sm">Waiting for broadcaster...</div>
+                  <div className="text-xs mt-1">Broadcaster is connecting to LiveKit</div>
+                </div>
+              </div>
+            );
+          })()
+        )}
+      </div>
 
-      {/* Guest Videos */}
-      {visibleGuests.map((participant) => (
-        <div key={participant.identity} className="relative tc-neon-frame aspect-video">
+      {/* Guest Videos as overlays */}
+      {visibleGuests.map((participant, index) => (
+        <div
+          key={participant.identity}
+          className="absolute bottom-4 w-32 h-24 bg-black border border-white/20 rounded overflow-hidden"
+          style={{ zIndex: 10, right: `${4 + index * 40}px` }}
+        >
           <video
             ref={(el) => {
               if (el) videoRefs.current[participant.identity] = el;
@@ -2071,15 +2087,6 @@ const VideoGrid = React.memo<{
             playsInline
             className="w-full h-full object-cover"
           />
-        </div>
-      ))}
-
-      {/* Empty Slots */}
-      {Array.from({ length: emptyGuestSlots }).map((_, idx) => (
-        <div
-          key={`empty-${idx}`}
-          className="relative tc-neon-frame aspect-video"
-        >
         </div>
       ))}
     </div>

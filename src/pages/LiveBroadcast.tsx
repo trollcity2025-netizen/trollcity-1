@@ -7,7 +7,6 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { LiveKitRoomWrapper } from '../components/LiveKitVideoGrid'
 import { useGiftSystem, GiftItem } from '../lib/hooks/useGiftSystem'
 import { UserRole } from '../lib/supabase'
 import type { LucideIcon } from 'lucide-react'
@@ -17,13 +16,18 @@ import {
   Coins,
   Gift,
   Menu,
-  MessageCircle,
   Mic,
   Video,
-  Power,
-  Settings,
 } from 'lucide-react'
 import { useLiveKit } from '../hooks/useLiveKit'
+import {
+  StreamControlBar,
+  StreamHeader,
+  StreamSidePanel,
+  StreamStage,
+  TrollmodShowPanel,
+  connectionStatusLabel,
+} from '../components/stream/StudioComponents'
 
 type StreamData = {
   id: string
@@ -60,6 +64,7 @@ type UserProfile = {
   xp?: number
   is_admin?: boolean
   is_lead_officer?: boolean
+  avatar_url?: string
 }
 
 type StreamMessage = {
@@ -262,6 +267,7 @@ const LiveBroadcast: React.FC = () => {
     toggleMicrophone,
     isConnected,
     isConnecting: _isConnecting,
+    error: liveKitError,
     disconnect,
     connect,
   } = useLiveKit()
@@ -759,92 +765,90 @@ const LiveBroadcast: React.FC = () => {
 
   const micEnabled = localParticipant?.isMicrophoneEnabled ?? true
   const cameraEnabled = localParticipant?.isCameraEnabled ?? true
+  const streamStatusLabel = connectionStatusLabel(isConnected, _isConnecting, liveKitError)
+  const streamStatusDetail =
+    stream?.status === 'live' ? `Live for ${formatTimer(liveSeconds)}` : stream?.status ?? 'Preparing'
+  const connectionColor = isConnected
+    ? 'text-emerald-300'
+    : _isConnecting
+    ? 'text-yellow-300'
+    : 'text-red-400'
+  const viewerBadge = stream?.viewer_count ? `${stream.viewer_count.toLocaleString()} viewers` : 'Live'
+  const coinsBadge =
+    stream?.total_gifts_coins && stream.total_gifts_coins > 0
+      ? `${stream.total_gifts_coins.toLocaleString()} coins`
+      : undefined
+  const isCurrentlyLive = stream?.status === 'live'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05010c] via-[#080216] to-[#12011e] text-white">
       <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-6 px-4 py-6">
-        <header className="rounded-3xl border border-purple-500/40 bg-white/5 bg-clip-padding p-5 shadow-[0_30px_90px_rgba(120,69,255,0.35)] backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-purple-400/60 bg-gradient-to-br from-purple-500/50 to-pink-500/20 text-lg font-bold shadow-[0_0_25px_rgba(201,91,255,0.45)]">
-                {broadcaster?.username?.charAt(0) || 'T'}
-              </div>
-              <div className="flex flex-col gap-1">
-                <div className="text-lg font-semibold">{broadcaster?.username}</div>
-                <div className="text-xs uppercase tracking-[0.3em] text-gray-300">
-                  Level {broadcaster?.level ?? 1}
-                </div>
-              </div>
-            </div>
+        <StreamHeader
+          title={stream?.title}
+          hostName={broadcaster?.username}
+          viewers={stream.viewer_count}
+          statusLabel={streamStatusLabel}
+          statusDetail={streamStatusDetail}
+          connectionColor={connectionColor}
+          avatarUrl={broadcaster?.avatar_url}
+        />
 
-            <div className="flex items-center gap-6 text-sm text-gray-200">
-              <div className="flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs uppercase tracking-wider text-green-300 shadow-[0_0_20px_rgba(34,197,94,0.45)]">
-                <span className="h-2 w-2 rounded-full bg-green-400" />
-                LIVE
-              </div>
+        <div className="grid gap-5 lg:grid-cols-[1.3fr,0.75fr]">
+          <div className="flex flex-col gap-5">
+            <StreamStage
+              roomName={roomName}
+              identity={viewerIdentity}
+              role={liveKitRole as any}
+              allowPublish={isBroadcaster}
+              maxParticipants={liveKitMaxParticipants}
+              isConnected={isConnected}
+              isConnecting={_isConnecting}
+              className="min-h-[520px]"
+            >
+              {verticalActions.map((action) => (
+                <ActionButton key={action.id} icon={action.icon} label={action.label} onClick={action.onClick} />
+              ))}
+            </StreamStage>
 
-              <div className="flex flex-col text-right">
-                <span className="text-xs text-gray-400">Timer</span>
-                <span className="text-base font-semibold text-white">{formatTimer(liveSeconds)}</span>
-              </div>
-
-              <div className="flex flex-col text-right">
-                <span className="text-xs text-gray-400">Viewers</span>
-                <span className="text-base font-semibold text-white">{stream.viewer_count}</span>
-              </div>
-
-              <button
-                onClick={() => setLikeCount((prev) => prev + 1)}
-                className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-sm text-pink-300 shadow-[0_0_20px_rgba(239,68,68,0.35)]"
-              >
-                <Heart className="h-4 w-4 text-pink-400" />
-                {likeCount}
-              </button>
-
-              <div className="flex items-center gap-2 rounded-full border border-yellow-400/40 bg-black/40 px-3 py-1 text-xs uppercase tracking-[0.2em] text-yellow-300">
-                <Coins className="h-4 w-4" />
-                {stream.total_gifts_coins?.toLocaleString() || '0'}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 text-sm text-gray-400">
-            {stream.title || 'Troll City broadcast'} — Modern neon vibes with glassified overlays.
-          </div>
-        </header>
-
-        <main className="flex-1 space-y-5">
-          <div className="grid gap-5 lg:grid-cols-[1.2fr,360px]">
-            <section className="space-y-4">
-              <div className="relative overflow-hidden rounded-[32px] border border-purple-500/30 bg-gradient-to-br from-[#090111]/80 to-[#150025]/80 p-5 shadow-[0_30px_90px_rgba(93,30,158,0.45)]">
-                <div className="relative overflow-hidden rounded-3xl border border-purple-500/20 bg-black/80">
-                  <LiveKitRoomWrapper
-                    roomName={roomName}
-                    identity={viewerIdentity}
-                    role={liveKitRole as any}
-                    autoConnect={true}
-                    allowPublish={isBroadcaster}
-                    maxParticipants={liveKitMaxParticipants}
-                    className="h-[420px] w-full"
+            <div className="flex flex-col gap-4">
+              <div className="lg:hidden flex items-center justify-center gap-3">
+                {verticalActions.map((action) => (
+                  <ActionButton
+                    key={`mobile-${action.id}`}
+                    icon={action.icon}
+                    label={action.label}
+                    onClick={action.onClick}
                   />
-                </div>
-
-                <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 flex-col items-center gap-4 lg:flex">
-                  {verticalActions.map((action) => (
-                    <ActionButton
-                      key={action.id}
-                      icon={action.icon}
-                      label={action.label}
-                      onClick={action.onClick}
-                    />
-                  ))}
-                </div>
-
+                ))}
               </div>
 
-              {isBroadcaster && (
-                <div className="flex flex-wrap items-center justify-center gap-4 rounded-3xl border border-purple-500/30 bg-black/50 px-4 py-3 text-[10px] uppercase tracking-[0.3em] text-gray-300 shadow-[0_20px_40px_rgba(58,40,129,0.3)]">
-                  <span>Guest slots configured: {effectiveMaxGuests}</span>
+              <StreamControlBar
+                micEnabled={micEnabled}
+                cameraEnabled={cameraEnabled}
+                onToggleMic={handleToggleMicrophone}
+                onToggleCamera={handleToggleCamera}
+                onDisconnect={handleEndStream}
+                onOpenGuestPanel={handleOpenGuestPanel}
+                onOpenGiftDrawer={handleOpenGiftDrawer}
+                onOpenMenuPanel={handleOpenMenuPanel}
+                isPublishing={isCurrentlyLive}
+              />
+            </div>
+
+            {isBroadcaster && (
+              <div className="flex flex-col gap-4 rounded-[32px] border border-purple-500/40 bg-black/50 px-4 py-4 text-[10px] uppercase tracking-[0.3em] text-white/70 shadow-[0_20px_40px_rgba(58,40,129,0.3)]">
+                <button
+                  onClick={isCurrentlyLive ? handleEndStream : handleGoLive}
+                  className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] transition ${
+                    isCurrentlyLive
+                      ? 'border border-red-500/70 bg-red-500/30 text-red-100 hover:bg-red-500/50'
+                      : 'border border-pink-500/70 bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-[0_10px_30px_rgba(219,39,119,0.45)]'
+                  }`}
+                >
+                  {isCurrentlyLive ? 'End Live' : 'Go Live'}
+                </button>
+                <div className="flex flex-wrap items-center justify-between gap-3 text-[10px]">
+                  <span className="text-white/60">Guest slots configured: {effectiveMaxGuests}</span>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => adjustGuestSlots(-1)}
@@ -862,210 +866,149 @@ const LiveBroadcast: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                {guestSlotEntries.length > 0 ? (
-                  guestSlotEntries.map((slot) => {
-                    const participant = slot.participant
-                    const displayName =
-                      participant?.name || participant?.identity || `Guest ${slot.slotIndex + 1}`
+            <div className="grid gap-3 sm:grid-cols-3">
+              {guestSlotEntries.length > 0 ? (
+                guestSlotEntries.map((slot) => {
+                  const participant = slot.participant
+                  const displayName =
+                    participant?.name || participant?.identity || `Guest ${slot.slotIndex + 1}`
 
-                    return (
-                      <div
-                        key={`guest-slot-${slot.slotIndex}`}
-                        className="flex flex-col gap-2 rounded-2xl border border-purple-500/30 bg-black/60 p-4 text-sm text-gray-200 shadow-[0_20px_45px_rgba(72,49,150,0.3)]"
-                      >
-                        <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-purple-300">
-                          <span>Slot {slot.slotIndex + 1}</span>
-                          <span>{participant ? 'Live' : 'Waiting'}</span>
-                        </div>
+                  return (
+                    <div
+                      key={`guest-slot-${slot.slotIndex}`}
+                      className="flex flex-col gap-2 rounded-2xl border border-purple-500/30 bg-black/60 p-4 text-sm text-gray-200 shadow-[0_20px_45px_rgba(72,49,150,0.3)]"
+                    >
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-purple-300">
+                        <span>Slot {slot.slotIndex + 1}</span>
+                        <span>{participant ? 'Live' : 'Waiting'}</span>
+                      </div>
 
-                        {participant ? (
-                          <>
-                            <div className="text-base font-semibold text-white">{displayName}</div>
-                            <div className="flex items-center gap-2 text-[11px] text-gray-300">
-                              <span>{participant.isCameraEnabled ? 'Camera On' : 'Camera Off'}</span>
-                              <span>
-                                {participant.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-purple-300">ID: {participant.identity}</div>
-                          </>
-                        ) : (
-                          <div className="flex flex-1 flex-col items-center justify-center text-center text-xs text-gray-400">
-                            <span className="text-lg font-semibold text-white">Seat available</span>
-                            <span className="mt-1 text-[10px] uppercase tracking-[0.3em] text-purple-400">
-                              Waiting for guest
+                      {participant ? (
+                        <>
+                          <div className="text-base font-semibold text-white">{displayName}</div>
+                          <div className="flex items-center gap-2 text-[11px] text-gray-300">
+                            <span>{participant.isCameraEnabled ? 'Camera On' : 'Camera Off'}</span>
+                            <span>
+                              {participant.isMicrophoneEnabled ? 'Mic On' : 'Mic Off'}
                             </span>
                           </div>
-                        )}
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="col-span-full rounded-2xl border border-purple-500/40 bg-black/60 p-6 text-center text-xs uppercase tracking-[0.3em] text-gray-400">
-                    Guest slots are currently closed. Add one to let trolls join the stream.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <aside className="space-y-4">
-              <div className="lg:hidden flex items-center justify-center gap-3">
-                {verticalActions.map((action) => (
-                  <ActionButton
-                    key={`mobile-${action.id}`}
-                    icon={action.icon}
-                    label={action.label}
-                    onClick={action.onClick}
-                  />
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-3 overflow-hidden rounded-3xl border border-purple-500/30 bg-[#0b0416]/80 p-4 shadow-[0_30px_90px_rgba(86,33,178,0.3)] max-h-[450px]">
-                <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-gray-400">
-                  <span>Chat</span>
-                  <span className="flex items-center gap-2 text-[11px] text-green-300">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-                    {stream.viewer_count} viewers
-                  </span>
-                </div>
-
-                <div className="flex flex-1 flex-col gap-3 overflow-hidden rounded-2xl border border-purple-500/20 bg-black/40 p-3">
-                  <div
-                    ref={chatScrollRef}
-                    onScroll={() => {
-                      const el = chatScrollRef.current
-                      if (!el) return
-                      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-                      shouldAutoScrollRef.current = distanceFromBottom < 140 // px threshold
-                    }}
-                    className="flex flex-1 flex-col gap-3 overflow-y-auto pr-2"
-                  >
-                    {isChatLoading ? (
-                      <div className="text-center text-sm text-gray-400">Loading chat…</div>
-                    ) : messages.length === 0 ? (
-                      <div className="text-center text-sm text-gray-400">No chat yet</div>
-                    ) : (
-                      messages.map((message) => (
-                        <div key={message.id} className="flex gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-purple-500/60 bg-gradient-to-br from-purple-600 to-pink-500 text-xs font-bold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(111,66,193,0.45)]">
-                            {(message.username || 'T').charAt(0)}
-                          </div>
-                          <div className="flex-1 rounded-2xl border border-purple-500/20 bg-white/5 p-3 text-xs text-gray-200">
-                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-purple-300">
-                              <span>{message.username || 'Anonymous'}</span>
-                              <span>
-                                {message.role || 'Viewer'}
-                                {typeof message.level === 'number' ? ` · Lvl ${message.level}` : ''}
-                              </span>
-                            </div>
-                            <p className="mt-1 leading-relaxed text-sm text-white">{message.content}</p>
-                          </div>
+                          <div className="text-[10px] text-purple-300">ID: {participant.identity}</div>
+                        </>
+                      ) : (
+                        <div className="flex flex-1 flex-col items-center justify-center text-center text-xs text-gray-400">
+                          <span className="text-lg font-semibold text-white">Seat available</span>
+                          <span className="mt-1 text-[10px] uppercase tracking-[0.3em] text-purple-400">
+                            Waiting for guest
+                          </span>
                         </div>
-                      ))
-                    )}
-                    <div ref={chatEndRef} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <textarea
-                        value={chatDraft}
-                        onChange={(event) => setChatDraft(event.target.value)}
-                        placeholder="Type a message…"
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault()
-                            sendMessage(chatDraft)
-                          }
-                        }}
-                        className="flex-1 rounded-2xl border border-purple-500/40 bg-black/70 px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                      <button
-                        onClick={() => sendMessage(chatDraft)}
-                        disabled={!chatDraft.trim()}
-                        className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Send
-                      </button>
+                      )}
                     </div>
-
-                    <div className="flex items-center gap-2 text-xl">
-                      {quickReactions.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => handleQuickReaction(emoji)}
-                          className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1 transition hover:bg-white/10"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                      <MessageCircle className="h-4 w-4" />
-                    </div>
-                  </div>
+                  )
+                })
+              ) : (
+                <div className="col-span-full rounded-2xl border border-purple-500/40 bg-black/60 p-6 text-center text-xs uppercase tracking-[0.3em] text-gray-400">
+                  Guest slots are currently closed. Add one to let trolls join the stream.
                 </div>
-              </div>
-            </aside>
+              )}
+            </div>
           </div>
 
-          <section className="flex flex-wrap items-center justify-center gap-3 rounded-3xl border border-purple-500/40 bg-gradient-to-br from-[#0b0416] to-[#150024] p-4 text-xs uppercase tracking-[0.3em] text-white shadow-[0_25px_80px_rgba(82,36,160,0.35)]">
-            <button
-              onClick={handleToggleMicrophone}
-              className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white shadow-[0_0_25px_rgba(239,68,68,0.35)] transition hover:border-pink-400"
-            >
-              <Mic className={`h-4 w-4 ${micEnabled ? 'text-emerald-300' : 'text-red-400'}`} />
-              {micEnabled ? 'Mute Mic' : 'Unmute Mic'}
-            </button>
+          <div className="flex flex-col gap-4">
+            <StreamSidePanel title="Chat" subtitle={stream?.category || 'Trolls @ Night'} badge={viewerBadge}>
+              <div className="flex flex-col gap-3">
+                <div
+                  ref={chatScrollRef}
+                  onScroll={() => {
+                    const el = chatScrollRef.current
+                    if (!el) return
+                    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+                    shouldAutoScrollRef.current = distanceFromBottom < 140
+                  }}
+                  className="max-h-[320px] flex flex-col gap-3 overflow-y-auto pr-2"
+                >
+                  {isChatLoading ? (
+                    <div className="text-center text-sm text-gray-400">Loading chat...</div>
+                  ) : messages.length === 0 ? (
+                    <div className="text-center text-sm text-gray-400">No chat yet</div>
+                  ) : (
+                    messages.map((message) => (
+                      <div key={message.id} className="flex gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-purple-500/60 bg-gradient-to-br from-purple-600 to-pink-500 text-xs font-bold uppercase tracking-wider text-white shadow-[0_10px_30px_rgba(111,66,193,0.45)]">
+                          {(message.username || 'T').charAt(0)}
+                        </div>
+                        <div className="flex-1 rounded-2xl border border-purple-500/20 bg-white/5 p-3 text-xs text-gray-200">
+                          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-purple-300">
+                            <span>{message.username || 'Anonymous'}</span>
+                            <span>
+                              {message.role || 'Viewer'}
+                              {typeof message.level === 'number' ? ` Lvl ${message.level}` : ''}
+                            </span>
+                          </div>
+                          <p className="mt-1 leading-relaxed text-sm text-white">{message.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
 
-            <button
-              onClick={handleToggleCamera}
-              className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-cyan-400"
-            >
-              <Video className={`h-4 w-4 ${cameraEnabled ? 'text-cyan-300' : 'text-red-400'}`} />
-              {cameraEnabled ? 'Camera On' : 'Camera Off'}
-            </button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <textarea
+                      value={chatDraft}
+                      onChange={(event) => setChatDraft(event.target.value)}
+                      placeholder="Type a message..."
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault()
+                          sendMessage(chatDraft)
+                        }
+                      }}
+                      className="flex-1 rounded-2xl border border-purple-500/40 bg-black/70 px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <button
+                      onClick={() => sendMessage(chatDraft)}
+                      disabled={!chatDraft.trim()}
+                      className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </StreamSidePanel>
 
-            <button
-              onClick={handleOpenGuestPanel}
-              className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-purple-300"
-            >
-              <Users className="h-4 w-4" />
-              Guests
-            </button>
+            <StreamSidePanel title="Gifts" subtitle="Rewards & coins" badge={coinsBadge}>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {quickReactions.map((emoji) => (
+                    <button
+                      key={`gift-reaction-${emoji}`}
+                      onClick={() => handleQuickReaction(emoji)}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white transition hover:border-white/60"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleOpenGiftDrawer}
+                  className="w-full rounded-2xl border border-yellow-400/70 bg-gradient-to-r from-yellow-500/30 to-yellow-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white shadow-[0_10px_30px_rgba(255,211,105,0.35)] transition hover:border-yellow-300"
+                >
+                  Open Gift Drawer
+                </button>
+                <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
+                  Total coins earned: {stream?.total_gifts_coins?.toLocaleString() ?? '0'}
+                </div>
+              </div>
+            </StreamSidePanel>
 
-            <button
-              onClick={isBroadcaster && !hasLocalTracks ? handleGoLive : handleEndStream}
-              disabled={!isBroadcaster}
-              className={`relative group flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] transition-all duration-300 transform hover:scale-105 active:scale-95 overflow-hidden ${
-                isBroadcaster && !hasLocalTracks
-                  ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-600 text-white border border-pink-500/80'
-                  : 'border border-red-500/80 bg-red-500/30 text-red-200 hover:bg-red-500/50'
-              } disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 transform translate-x-full group-hover:translate-x-0 transition-transform duration-500" />
-              <Power className="h-4 w-4 relative z-10" />
-              <span className="relative z-10">{isBroadcaster && !hasLocalTracks ? 'Go Live' : 'End Live'}</span>
-            </button>
-
-            <button
-              onClick={handleOpenMenuPanel}
-              className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-yellow-400"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </button>
-
-            <button
-              onClick={handleOpenGiftDrawer}
-              className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.3em] text-white transition hover:border-fuchsia-400"
-            >
-              <Gift className="h-4 w-4" />
-              Gifts
-            </button>
-          </section>
-        </main>
+            <TrollmodShowPanel />
+          </div>
+        </div>
       </div>
 
       {showGiftDrawer && (
@@ -1092,7 +1035,7 @@ const LiveBroadcast: React.FC = () => {
                   <div className="text-sm font-bold text-white">{gift.name}</div>
                   <div className="text-[10px] text-gray-400">{gift.coinCost.toLocaleString()} coins</div>
                   <span className="text-[10px] text-purple-300">
-                    {isGiftSending && activeGiftId === gift.id ? 'Sending…' : 'Send Gift'}
+                    {isGiftSending && activeGiftId === gift.id ? 'Sending...' : 'Send Gift'}
                   </span>
                 </button>
               ))}
@@ -1157,14 +1100,14 @@ const LiveBroadcast: React.FC = () => {
                         <>
                           <p className="mt-2 text-lg font-semibold text-white">{displayName}</p>
                           <p className="text-[11px] text-gray-400">
-                            Camera: {participant.isCameraEnabled ? 'On' : 'Off'} · Mic:{' '}
+                            Camera: {participant.isCameraEnabled ? 'On' : 'Off'} Mic:{' '}
                             {participant.isMicrophoneEnabled ? 'On' : 'Off'}
                           </p>
                           <p className="text-[11px] text-purple-300">ID: {participant.identity}</p>
                         </>
                       ) : (
                         <div className="mt-4 text-xs text-gray-400">
-                          Seat available — share the stream link to invite a guest.
+                          Seat available - share the stream link to invite a guest.
                         </div>
                       )}
                     </div>
@@ -1199,9 +1142,9 @@ const LiveBroadcast: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   )
 }
+
 
 export default LiveBroadcast

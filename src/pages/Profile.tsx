@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Camera, Edit, Star, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift, AlertTriangle, Sword, Trophy, TrendingUp, Users, DollarSign, Calendar, BarChart3, Award, Target, Clock, ShoppingCart } from 'lucide-react'
+import { Camera, Edit, Settings, ChevronDown, ChevronUp, Crown, Shield, UserPlus, UserMinus, MessageCircle, Ban, Gift, AlertTriangle, Sword, Trophy, Users, BarChart3, ShoppingCart } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { getTierFromXP, getLevelFromXP } from '../lib/tierSystem'
 import XPProgressBar from '../components/XPProgressBar'
 import SendGiftModal from '../components/SendGiftModal'
-import GiftersModal from '../components/GiftersModal'
 import ReportModal from '../components/ReportModal'
 import { EmpireBadge } from '../components/EmpireBadge'
 import ClickableUsername from '../components/ClickableUsername'
@@ -21,21 +20,14 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
 } from 'recharts'
-import { useBackgroundProfileRefresh } from '../hooks/useBackgroundProfileRefresh'
 
 export default function Profile() {
   const { profile, user } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
   const { username: routeUsername, userId } = useParams()
-  const { refreshProfileInBackground } = useBackgroundProfileRefresh()
   const [viewedState, setViewedState] = useState<any | null>(null)
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'referral_code',
@@ -57,7 +49,6 @@ export default function Profile() {
   const [insurances, setInsurances] = useState<any[]>([])
   const [selectedPerkId, setSelectedPerkId] = useState<string>('')
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string>('')
-  const [privateEnabled, setPrivateEnabled] = useState<boolean>(false)
   const [viewPrice, setViewPrice] = useState(0)
   const [messagePrice, setMessagePrice] = useState(0)
   const [paypalEmail, setPaypalEmail] = useState('')
@@ -65,15 +56,12 @@ export default function Profile() {
   const [isFollowing, setIsFollowing] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [showGiftModal, setShowGiftModal] = useState(false)
-  const [showGiftersModal, setShowGiftersModal] = useState(false)
-  const [giftersModalType, setGiftersModalType] = useState<'received' | 'sent'>('received')
   const [coinsReceived, setCoinsReceived] = useState(0)
   const [coinsSent, setCoinsSent] = useState(0)
   const [showReportModal, setShowReportModal] = useState(false)
-  const [userPosts, setUserPosts] = useState<any[]>([])
-  const [showCreatePost, setShowCreatePost] = useState(false)
-  const [newPostContent, setNewPostContent] = useState('')
-  const [newPostImage, setNewPostImage] = useState<File | null>(null)
+  const [_showGiftersModal, _setShowGiftersModal] = useState(false)
+  const [_giftersModalType, _setGiftersModalType] = useState<'received' | 'sent'>('received')
+  const [_privateEnabled, _setPrivateEnabled] = useState(false)
   const [hasAccess, setHasAccess] = useState<boolean>(true)
   const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
   const [adminActionLoading, setAdminActionLoading] = useState<string | null>(null)
@@ -136,10 +124,7 @@ export default function Profile() {
   // Creator Dashboard state
   const [creatorOverview, setCreatorOverview] = useState<any>(null)
   const [dailySeries, setDailySeries] = useState<any[]>([])
-  const [hourly, setHourly] = useState<any[]>([])
   const [topGifters, setTopGifters] = useState<any[]>([])
-  const [battleEvent, setBattleEvent] = useState<any[]>([])
-  const [bonusSummary, setBonusSummary] = useState<any>(null)
   const [creatorLoading, setCreatorLoading] = useState(false)
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d')
   const statsPollRef = useRef<number | null>(null)
@@ -245,9 +230,7 @@ export default function Profile() {
       await Promise.all([
         loadEarningsOverview(),
         loadDailyEarningsSeries(),
-        loadHourlyActivity(),
-        loadTopGifters(),
-        loadBattleEventEarnings()
+        loadTopGifters()
       ])
     } catch (error) {
       console.error('Error loading creator dashboard data:', error)
@@ -271,11 +254,6 @@ export default function Profile() {
     setDailySeries(data || [])
   }
 
-  const loadHourlyActivity = async () => {
-    const { data, error } = await supabase.rpc('get_hourly_activity')
-    if (error) throw error
-    setHourly(data || [])
-  }
 
   const loadTopGifters = async () => {
     const limitCount = 10
@@ -351,56 +329,6 @@ export default function Profile() {
     }
   }
 
-  const loadBattleEventEarnings = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_battle_and_net_earnings')
-      if (error) throw error
-      setBattleEvent(data || [])
-      return
-    } catch (rpcError) {
-      console.warn('Battle/event RPC missing, falling back to client aggregation', rpcError)
-    }
-
-    if (!user?.id) {
-      setBattleEvent([])
-      return
-    }
-
-    try {
-      const { data: gifts, error: giftsError } = await supabase
-        .from('gifts')
-        .select('coins_spent, battle_id, message')
-        .eq('receiver_id', user.id)
-
-      if (giftsError) throw giftsError
-
-      const totals = {
-        battle: 0,
-        event: 0,
-        other: 0,
-      }
-
-      for (const gift of gifts || []) {
-        const coins = Number(gift.coins_spent || 0)
-        if (gift.battle_id) {
-          totals.battle += coins
-        } else if (typeof gift.message === 'string' && gift.message.toLowerCase().includes('event')) {
-          totals.event += coins
-        } else {
-          totals.other += coins
-        }
-      }
-
-      setBattleEvent([
-        { source: 'battle', coins: totals.battle },
-        { source: 'event', coins: totals.event },
-        { source: 'other', coins: totals.other },
-      ])
-    } catch (fallbackError) {
-      console.warn('Fallback battle/event aggregation failed', fallbackError)
-      setBattleEvent([])
-    }
-  }
 
 
   const handleSaveProfile = async () => {
@@ -838,7 +766,7 @@ export default function Profile() {
         const insuranceSel = localStorage.getItem(`tc-selected-insurance-${user.id}`) || ''
         setSelectedInsuranceId(insuranceSel)
         const priv = localStorage.getItem(`tc-private-profile-${user.id}`)
-        setPrivateEnabled(priv === 'true')
+        _setPrivateEnabled(priv === 'true')
       }
     } catch {}
   }, [user?.id])
@@ -981,37 +909,6 @@ export default function Profile() {
     }
   }, [viewed?.id, user?.id, profile?.id])
 
-  const hasAccessToViewed = async () => {
-    if (!user || !viewed) return false
-    if (profile?.id === viewed.id) return true
-    const price = (useAuthStore.getState().profile?.role === 'admin') ? 0 : viewedPrice()
-    if (price <= 0) return true
-    
-    // Check if user has paid for access
-    try {
-      const { data, error } = await supabase.rpc('pay_for_profile_view', {
-        p_viewer_id: user.id,
-        p_profile_owner_id: viewed.id
-      })
-      
-      if (error) {
-        // If payment is required and user doesn't have access, return false
-        if (error.message.includes('Insufficient')) {
-          return false
-        }
-      }
-      
-      if (data?.has_access) {
-        return true
-      }
-      
-      // Fallback to localStorage check
-      const access = localStorage.getItem(`tc-view-access-${user.id}-${viewed.id}`)
-      return Boolean(access)
-    } catch {
-      return false
-    }
-  }
   const unlockViewedProfile = async () => {
     if (!user || !viewed || !profile) return
     const price = viewedPrice()
@@ -1307,37 +1204,6 @@ export default function Profile() {
     }
   }
 
-  const togglePrivateProfile = async () => {
-    if (!profile || !user) return
-    if (!privateEnabled) {
-      const cost = 2000
-      if ((profile.troll_coins || 0) < cost) {
-        toast.error('Requires 2,000 troll_coins')
-        return
-      }
-      try {
-        const { error: updErr } = await supabase
-          .from('user_profiles')
-          .update({ troll_coins: profile.troll_coins - cost, updated_at: new Date().toISOString() })
-          .eq('id', profile.id)
-        if (updErr) throw updErr
-        await supabase
-          .from('coin_transactions')
-          .insert([{ user_id: profile.id, type: 'purchase', amount: -cost, description: 'Private profile activation', metadata: { feature: 'private_profile' } }])
-        useAuthStore.getState().setProfile({ ...profile, troll_coins: profile.troll_coins - cost } as any)
-        refreshProfileInBackground()
-        setPrivateEnabled(true)
-        try { localStorage.setItem(`tc-private-profile-${user.id}`, 'true') } catch {}
-        toast.success('Private profile enabled')
-      } catch {
-        toast.error('Failed to enable private profile')
-      }
-    } else {
-      setPrivateEnabled(false)
-      try { localStorage.setItem(`tc-private-profile-${user.id}`, 'false') } catch {}
-      toast.success('Private profile disabled')
-    }
-  }
 
   // Define this before sections array since it's used inside
   const isViewingOtherUser = viewed && user && viewed.id !== user.id
@@ -1800,8 +1666,8 @@ export default function Profile() {
               <div
                 className="bg-[#0D0D0D] rounded-lg p-4 cursor-pointer hover:bg-[#1A1A1A] transition-colors"
                 onClick={() => {
-                  setGiftersModalType('received')
-                  setShowGiftersModal(true)
+                  _setGiftersModalType('received')
+                  _setShowGiftersModal(true)
                 }}
                 title="Click to see gifters"
               >
@@ -1811,8 +1677,8 @@ export default function Profile() {
               <div
                 className="bg-[#0D0D0D] rounded-lg p-4 cursor-pointer hover:bg-[#1A1A1A] transition-colors"
                 onClick={() => {
-                  setGiftersModalType('sent')
-                  setShowGiftersModal(true)
+                  _setGiftersModalType('sent')
+                  _setShowGiftersModal(true)
                 }}
                 title="Click to see recipients"
               >
@@ -2485,6 +2351,18 @@ export default function Profile() {
         <div className="text-center">
           <div className="text-xl mb-2">Loading profile...</div>
           <div className="text-sm text-gray-400">Checking access permissions...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading state while loading target profile data
+  if (isViewingOtherUser && !viewed) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl mb-2">Loading profile...</div>
+          <div className="text-sm text-gray-400">Fetching user data...</div>
         </div>
       </div>
     )

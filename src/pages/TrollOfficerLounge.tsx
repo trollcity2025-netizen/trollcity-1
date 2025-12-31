@@ -40,6 +40,7 @@ type OfficerChatMessage = {
   message: string
   created_at: string
   username?: string
+  role?: string
 }
 
 type OfficerStats = {
@@ -223,20 +224,21 @@ export default function TrollOfficerLounge() {
     try {
       const { data, error } = await supabase
         .from('officer_chat_messages')
-        .select('*, user_profiles!inner(username)')
+        .select('*, user_profiles!inner(username, role)')
         .order('created_at', { ascending: true })
         .limit(100)
 
       if (error) throw error
 
-      const mapped: OfficerChatMessage[] =
-        data?.map((row: any) => ({
-          id: row.id,
-          user_id: row.user_id,
-          message: row.message,
-          created_at: row.created_at,
-          username: row.user_profiles?.username || 'Officer'
-        })) || []
+        const mapped: OfficerChatMessage[] =
+          data?.map((row: any) => ({
+            id: row.id,
+            user_id: row.user_id,
+            message: row.message,
+            created_at: row.created_at,
+            username: row.user_profiles?.username || 'Officer',
+            role: row.user_profiles?.role || 'officer',
+          })) || []
 
       setOfficerChat(mapped)
     } catch (err) {
@@ -269,7 +271,8 @@ export default function TrollOfficerLounge() {
             user_id: data.user_id,
             message: data.message,
             created_at: data.created_at,
-            username: profile.username
+            username: profile.username,
+            role: profile.role || 'officer',
           }
         ])
       }
@@ -794,41 +797,76 @@ export default function TrollOfficerLounge() {
           </div>
 
           {/* Officer Chat */}
-          <div className="bg-[#0F111A] border border-gray-700 rounded-xl p-5 flex flex-col h-full">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-green-300 mb-3">
-              <MessageSquare className="w-5 h-5" />
-              Officer Chat (Private)
-            </h3>
-            <div className="text-xs text-gray-400 mb-2">
-              Only Troll Officers & Admins can see this channel.
+          <div className="bg-gradient-to-b from-[#120014] via-[#09000d] to-[#050008] border border-purple-600/40 rounded-[32px] p-6 flex flex-col gap-5 shadow-[0_20px_60px_rgba(12,2,18,0.85)] h-full">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.4em] text-purple-300">Officer Lounge</p>
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-white" />
+                  <h3 className="text-2xl font-bold text-white">Standby Chat</h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.4em] text-white">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                LIVE
+              </div>
             </div>
+            <p className="text-xs text-gray-400">
+              Only approved Troll Officers and Admins can view the discussion. Every greeting shows role information so you know who joined.
+            </p>
 
-            <div className="flex-1 bg-[#151726] rounded-lg p-3 overflow-y-auto mb-3 space-y-2">
+            <div className="flex-1 min-h-[220px] overflow-y-auto space-y-3">
               {chatLoading && (
-                <p className="text-gray-500 text-sm">Loading chat…</p>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/60 shadow-inner">
+                  Loading the briefing feed…
+                </div>
               )}
               {!chatLoading && officerChat.length === 0 && (
-                <p className="text-gray-500 text-sm">
-                  No messages yet. Start the first troll briefing.
-                </p>
+                <div className="rounded-2xl border border-dashed border-purple-500/40 bg-white/5 p-4 text-sm text-gray-200">
+                  No officers in chat yet. Start the briefing with a welcome message.
+                </div>
               )}
               {officerChat.map((msg) => (
-                <div key={msg.id} className="text-sm">
-                  <span className="text-purple-300 font-semibold">
-                    <ClickableUsername username={msg.username || 'Officer'} className="text-purple-300" />:{' '}
-                  </span>
-                  <span className="text-gray-200">{msg.message}</span>
-                  <span className="text-[10px] text-gray-500 ml-1">
-                    {new Date(msg.created_at).toLocaleTimeString()}
-                  </span>
-                </div>
+                <article
+                  key={msg.id}
+                  className="rounded-2xl border border-white/10 bg-[#0f081a]/80 p-4 shadow-[0_15px_40px_rgba(0,0,0,0.55)] focus-within:border-purple-400 transition"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-white">
+                        <ClickableUsername
+                          username={msg.username || 'Officer'}
+                          className="text-white"
+                        />
+                      </span>
+                      <span className="text-[10px] uppercase tracking-[0.3em] text-white/80 bg-purple-600/20 px-2 py-1 rounded-full">
+                        {(msg.role || 'officer').replace(/_/g, ' ').toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-gray-400">
+                      {new Date(msg.created_at).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-200 mt-3 leading-relaxed">{msg.message}</p>
+                  <div className="mt-3 text-[10px] text-white/60 flex items-center justify-between">
+                    <span>
+                      Joined • {(msg.role || 'officer').replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-purple-300">
+                      {(msg.username || 'Officer')} / {(msg.role || 'officer').replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                </article>
               ))}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <input
                 type="text"
-                className="flex-1 bg-[#1A1D2E] border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
+                className="flex-1 rounded-2xl border border-purple-500/60 bg-[#0c0b15] px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="Brief the other officers…"
                 value={newOfficerMessage}
                 onChange={(e) => setNewOfficerMessage(e.target.value)}
@@ -844,7 +882,7 @@ export default function TrollOfficerLounge() {
                   e.preventDefault()
                   sendOfficerMessage()
                 }}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold"
+                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-2xl text-xs font-semibold uppercase tracking-[0.3em] text-white transition"
               >
                 Send
               </button>

@@ -160,7 +160,7 @@ RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  UPDATE streams SET status = 'ended', end_time = now(), updated_at = now() WHERE id = p_stream_id;
+  UPDATE streams SET status = 'ended', is_live = false, end_time = now(), updated_at = now() WHERE id = p_stream_id;
 END;
 $$;
 

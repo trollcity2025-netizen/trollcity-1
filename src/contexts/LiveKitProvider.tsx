@@ -91,12 +91,23 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
           setLocalParticipant(null)
           options.onDisconnected?.()
         },
-        onParticipantJoined: (participant) => {
+        onParticipantJoined: async (participant) => {
           setParticipants((prev) => {
             const next = new Map(prev)
             next.set(participant.identity, participant)
             return next
           })
+
+          // Trigger entrance effect for remote participants
+          if (!participant.isLocal && participant.identity) {
+            try {
+              const { triggerUserEntranceEffect } = await import('../lib/entranceEffects')
+              await triggerUserEntranceEffect(participant.identity)
+            } catch (error) {
+              console.warn('Failed to trigger entrance effect:', error)
+            }
+          }
+
           options.onParticipantJoined?.(participant)
         },
         onParticipantLeft: (participant) => {

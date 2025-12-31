@@ -1238,6 +1238,7 @@ const HomePageContent = () => {
                         </div>
                         
                         <div className="relative z-10 text-center flex-1 w-full">
+                          <p className="text-lg font-semibold text-white truncate">{displayName}</p>
                           <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-all ${
                               isAdmin

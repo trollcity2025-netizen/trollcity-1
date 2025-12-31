@@ -209,6 +209,24 @@ export default function Sidebar() {
           active={isActive('/following')}
           collapsed={isSidebarCollapsed}
         />
+        <Link
+          to="/trolls-night"
+          className={`flex w-full items-center gap-3 rounded-lg border px-4 py-2 transition ${
+            isActive('/trolls-night')
+              ? 'border-yellow-400/80 bg-gradient-to-r from-red-600/30 to-black text-white shadow-[0_0_20px_rgba(255,0,48,0.65)]'
+              : 'border-yellow-300/40 bg-gradient-to-r from-red-500/20 to-black text-white/80 hover:border-yellow-300/60'
+          }`}
+        >
+          <Shield className="w-5 h-5 text-yellow-300" />
+          {!isSidebarCollapsed && (
+            <span
+              style={{ textShadow: '0 0 8px #ff3048, 0 0 16px #ffd65c' }}
+              className="flex-1 text-left text-xs font-black uppercase tracking-[0.5em] text-[#ff3159]"
+            >
+              TROLLS@NIGHT
+            </span>
+          )}
+        </Link>
         <MenuLink
           to="/store"
           icon={<Coins className="w-5 h-5 text-yellow-500" />}
@@ -254,7 +272,7 @@ export default function Sidebar() {
         />
 
         <button
-          onClick={() => setShowCourtModal(true)}
+          onClick={() => navigate('/troll-court')}
           className={`flex items-center gap-3 px-4 py-2 rounded-lg transition w-full text-left ${
             isActive('/troll-court') || isActive('/court-room')
               ? 'bg-purple-600 text-white border border-purple-400'

@@ -17,12 +17,17 @@ export default function TermsAgreement() {
   const [authRequired, setAuthRequired] = useState(false)
 
   useEffect(() => {
+    if (session?.user) {
+      setAuthChecked(true)
+      return
+    }
+
     let mounted = true
     supabase.auth
-      .getUser()
+      .getSession()
       .then(({ data }) => {
         if (!mounted) return
-        if (!data?.user) {
+        if (!data?.session?.user) {
           setAuthRequired(true)
           navigate('/auth', { replace: true })
           return
@@ -39,7 +44,7 @@ export default function TermsAgreement() {
     return () => {
       mounted = false
     }
-  }, [navigate])
+  }, [navigate, session])
 
   if (!authChecked) {
     return (

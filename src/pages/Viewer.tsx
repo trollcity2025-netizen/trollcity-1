@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Users, Mic, MicOff, Video, VideoOff, Gift, Trophy } from 'lucide-react'
+import { Users, Mic, MicOff, Video, VideoOff, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import ClickableUsername from '../components/ClickableUsername'
@@ -11,6 +11,13 @@ import GiftEventOverlay from './GiftEventOverlay'
 import { useGiftEvents } from '../lib/hooks/useGiftEvents'
 import { useStreamEarnings } from '../lib/hooks/useStreamEarnings'
 import { useLiveKitRoom, LiveKitParticipantState, LiveKitConnectionStatus } from '../hooks/useLiveKitRoom'
+import {
+  StreamControlBar,
+  StreamHeader,
+  StreamSidePanel,
+  TrollmodShowPanel,
+  connectionStatusLabel,
+} from '../components/stream/StudioComponents'
 
 export default function ViewerPage() {
   const { user, profile } = useAuthStore()
@@ -20,6 +27,7 @@ export default function ViewerPage() {
   const [chatInput, setChatInput] = useState('')
   const [showGiftModal, setShowGiftModal] = useState(false)
   const [showEntrance, setShowEntrance] = useState(false)
+  const [broadcasterProfile, setBroadcasterProfile] = useState<{ username: string; avatar_url?: string } | null>(null)
   const liveKitUser = useMemo(() => {
     if (!user) return null
     return {
@@ -45,6 +53,33 @@ export default function ViewerPage() {
     }
     loadStream()
   }, [])
+
+  useEffect(() => {
+    if (!streamData?.broadcaster_id) {
+      setBroadcasterProfile(null)
+      return
+    }
+
+    let isMounted = true
+
+    supabase
+      .from('user_profiles')
+      .select('username, avatar_url')
+      .eq('id', streamData.broadcaster_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!isMounted) return
+        setBroadcasterProfile(data || null)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setBroadcasterProfile(null)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [streamData?.broadcaster_id])
 
   // Entrance trigger
   useEffect(() => {
@@ -108,6 +143,8 @@ export default function ViewerPage() {
     participantsList,
     connectionStatus: liveKitStatus,
     error: liveKitError,
+    disconnect,
+    localParticipant,
   } = useLiveKitRoom({
     roomName: streamData?.id || '',
     user: liveKitUser,
@@ -142,117 +179,198 @@ export default function ViewerPage() {
   const { totalCoins, giftCount, topGifterId, topGifterCoins } = useStreamEarnings(streamData?.id)
   const formatCoins = (coins: number) =>
     coins.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const isConnected = liveKitStatus === 'connected'
+  const isConnecting = liveKitStatus === 'connecting' || liveKitStatus === 'reconnecting'
+  const statusLabel = connectionStatusLabel(isConnected, isConnecting, liveKitError)
+  const statusDetail = liveKitStatus
+  const connectionColor = isConnected ? 'text-emerald-300' : isConnecting ? 'text-yellow-300' : 'text-red-400'
+  const micEnabled = Boolean(localParticipant?.isMicrophoneOn)
+  const cameraEnabled = Boolean(localParticipant?.isCameraOn)
 
   return (
-    <div className="flex h-screen bg-black text-white pt-16 lg:pt-0">
-      <div className="flex-1 flex flex-col">
+    <div className="flex min-h-screen bg-black text-white pt-16 lg:pt-0">
+      <div className="flex-1 px-4 py-6">
+        <div className="mx-auto max-w-[1400px] space-y-5">
+          <StreamHeader
+            title={streamData?.title || 'Live Trolls @ Night'}
+            hostName={broadcasterProfile?.username || streamData?.broadcaster_id || 'Host'}
+            viewers={viewerCount}
+            statusLabel={statusLabel}
+            statusDetail={statusDetail}
+            connectionColor={connectionColor}
+            avatarUrl={broadcasterProfile?.avatar_url}
+          />
 
-      {/* STREAM PLAYER */}
-      <div className="relative flex-1 bg-gray-900">
-        <ViewerVideoPanel
-          participants={sortedParticipants}
-          hostIdentity={streamData?.broadcaster_id}
-          status={liveKitStatus}
-          error={liveKitError}
-          participantCount={participantsList.length}
-        />
+          <div className="grid gap-5 lg:grid-cols-[1.3fr,0.75fr]">
+            <div className="flex flex-col gap-5">
+              <div className="rounded-[32px] border border-purple-500/30 bg-gradient-to-br from-[#050112]/90 to-[#120027]/90 p-5 shadow-[0_30px_90px_rgba(48,12,104,0.55)]">
+                <div className="relative overflow-hidden rounded-[28px] border border-white/5 bg-black">
+                  <ViewerVideoPanel
+                    participants={sortedParticipants}
+                    hostIdentity={streamData?.broadcaster_id}
+                    status={liveKitStatus}
+                    error={liveKitError}
+                    participantCount={participantsList.length}
+                  />
 
-        {/* ENTRANCE EXPLOSION */}
-        {showEntrance && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[99]">
+                  {showEntrance && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[99]">
+                      {(profile as any)?.has_crown_badge ? (
+                        <div className="animate-fade-in-up bg-black/90 p-6 rounded-2xl border-2 border-[var(--troll-gold-neon)] shadow-[0_0_30px_rgba(255,201,60,0.8)] text-center">
+                          <div className="neon-pill neon-pill-gold text-[10px] w-max mx-auto mb-2 flex items-center gap-1">
+                            dY`` Royal Entrance
+                          </div>
+                          <div className="text-2xl font-extrabold text-yellow-300 animate-pulse-neon">
+                            <ClickableUsername username={profile?.username || 'Unknown'} className="text-yellow-300 font-extrabold" /> has entered - Troll Royalty Has Arrived!
+                          </div>
+                          <p className="text-yellow-200 text-sm mt-1">Family Champions Winner</p>
+                          {[...Array(10)].map((_, i) => (
+                            <div
+                              key={i}
+                              className="crown-rain"
+                              style={{ left: `${10 + i * 7}%`, animationDelay: `${i * 0.15}s` }}
+                            >
+                              dY``
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-black/70 px-8 py-4 rounded-2xl border border-[var(--troll-green-neon)] shadow-troll-glow animate-fade-in-up">
+                          <div className="neon-pill neon-pill-green mb-2 w-max mx-auto">Entrance</div>
+                          <div className="text-xl font-extrabold gradient-text-green-pink">
+                            <ClickableUsername username={profile?.username || 'Unknown'} className="gradient-text-green-pink" /> joined the stream!
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-            {/* IF CROWNED USER */}
-            {(profile as any)?.has_crown_badge ? (
-              <div className="animate-fade-in-up bg-black/90 p-6 rounded-2xl border-2 border-[var(--troll-gold-neon)] shadow-[0_0_30px_rgba(255,201,60,0.8)] text-center">
-                <div className="neon-pill neon-pill-gold text-[10px] w-max mx-auto mb-2 flex items-center gap-1">
-                  👑 Royal Entrance
+                  {lastGift && <GiftEventOverlay gift={lastGift} />}
+
+                  {streamData && (
+                    <div className="absolute top-3 left-3 bg-black/60 p-3 rounded-lg text-sm troll-card shadow-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold gradient-text-green-pink">{streamData.title}</span>
+                        <span className="neon-pill neon-pill-red text-[10px] live-indicator">LIVE</span>
+                      </div>
+                      <div className="flex gap-3 items-center text-xs mt-1">
+                        <span className="text-green-400">{streamData.category}</span>
+                        {streamData.mic_enabled ? <Mic size={16} /> : <MicOff size={16} />}
+                        {streamData.camera_enabled ? <Video size={16} /> : <VideoOff size={16} />}
+                        <span className="flex items-center">
+                          <Users size={16} className="mr-1" /> {viewerCount}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {streamData && (
+                    <div className="absolute top-3 right-3 bg-black/60 px-4 py-2 rounded-lg text-xs troll-card shadow-lg">
+                      <div className="flex items-center gap-2">
+                        <Trophy size={14} className="text-yellow-400" />
+                        <span className="font-semibold">Stream Earnings</span>
+                      </div>
+                      <div className="flex justify-between mt-1 gap-4">
+                        <span>Coins: <span className="text-green-400">{formatCoins(totalCoins)}</span></span>
+                        <span>Gifts: <span className="text-purple-300">{giftCount}</span></span>
+                      </div>
+                      {topGifterId && (
+                        <div className="flex gap-1 items-center text-[10px] mt-1">
+                          <span className="neon-pill neon-pill-green text-[8px]">Top Gifter</span>
+                          <span className="text-yellow-300">{formatCoins(topGifterCoins)} coins</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="text-2xl font-extrabold text-yellow-300 animate-pulse-neon">
-                  <ClickableUsername username={profile?.username || 'Unknown'} className="text-yellow-300 font-extrabold" /> has entered — Troll Royalty Has Arrived!
-                </div>
-                <p className="text-yellow-200 text-sm mt-1">Family Champions Winner</p>
+              </div>
 
-                {/* Crown emoji rain */}
-                {[...Array(10)].map((_, i) => (
+              <StreamControlBar
+                micEnabled={micEnabled}
+                cameraEnabled={cameraEnabled}
+                onToggleMic={() => {}}
+                onToggleCamera={() => {}}
+                onDisconnect={disconnect}
+                onOpenGiftDrawer={() => setShowGiftModal(true)}
+                isPublishing={false}
+              />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <StreamSidePanel title="Chat" subtitle={streamData?.category || 'Trolls @ Night'} badge={`${viewerCount.toLocaleString()} viewers`}>
+                <div className="flex flex-col gap-3">
                   <div
-                    key={i}
-                    className="crown-rain"
-                    style={{ left: `${10 + i * 7}%`, animationDelay: `${i * 0.15}s` }}
+                    className="max-h-[320px] flex flex-col gap-3 overflow-y-auto pr-2"
                   >
-                    👑
+                    {messages.map((m, i) => (
+                      <div key={i} className="text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-purple-300 font-semibold">{m.user_profiles?.username || ''}</span>
+                          {m.user_profiles?.has_crown_badge && (
+                            <span className="neon-pill neon-pill-gold text-[9px] flex items-center gap-1">
+                              dY`` Crowned
+                            </span>
+                          )}
+                        </div>
+                        <span>{m.content}</span>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
                   </div>
-                ))}
-              </div>
-            ) : (
-              // Normal entrance
-              <div className="bg-black/70 px-8 py-4 rounded-2xl border border-[var(--troll-green-neon)] shadow-troll-glow animate-fade-in-up">
-                <div className="neon-pill neon-pill-green mb-2 w-max mx-auto">Entrance</div>
-                <div className="text-xl font-extrabold gradient-text-green-pink">
-                  <ClickableUsername username={profile?.username || 'Unknown'} className="gradient-text-green-pink" /> joined the stream!
+
+                  <div className="flex gap-2">
+                    <textarea
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      className="flex-1 bg-gray-900/60 border border-purple-500/30 rounded-2xl px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Type a message..."
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault()
+                          sendMessage()
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={sendMessage}
+                      className="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:brightness-110"
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              </StreamSidePanel>
 
-        {/* Gift animation overlay */}
-        {lastGift && <GiftEventOverlay gift={lastGift} />}
+              <StreamSidePanel title="Gifts" subtitle="Rewards & coins" badge={`${formatCoins(totalCoins)} coins`}>
+                <div className="space-y-3">
+                  {streamData && (
+                    <GiftActionPanel streamerId={streamData.broadcaster_id} streamId={streamData.id} />
+                  )}
+                  <button
+                    onClick={() => setShowGiftModal(true)}
+                    className="w-full rounded-2xl border border-yellow-400/70 bg-gradient-to-r from-yellow-500/30 to-yellow-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:border-yellow-300"
+                  >
+                    Open Full Gift Menu
+                  </button>
+                  <div className="text-[10px] uppercase tracking-[0.3em] text-white/50">
+                    Gift count: {giftCount}
+                  </div>
+                </div>
+              </StreamSidePanel>
 
-        {/* STREAM INFO HEADER */}
-        {streamData && (
-          <div className="absolute top-3 left-3 bg-black/60 p-3 rounded-lg text-sm troll-card shadow-lg">
-            <div className="flex items-center gap-2">
-              <span className="font-bold gradient-text-green-pink">{streamData.title}</span>
-              <span className="neon-pill neon-pill-red text-[10px] live-indicator">LIVE</span>
-            </div>
-            <div className="flex gap-3 items-center text-xs mt-1">
-              <span className="text-green-400">{streamData.category}</span>
-              {streamData.mic_enabled ? <Mic size={16} /> : <MicOff size={16} />}
-              {streamData.camera_enabled ? <Video size={16} /> : <VideoOff size={16} />}
-              <span className="flex items-center">
-                <Users size={16} className="mr-1" /> {viewerCount}
-              </span>
+              <TrollmodShowPanel />
             </div>
           </div>
-        )}
-
-        {/* EARNINGS HUD */}
-        {streamData && (
-          <div className="absolute top-3 right-3 bg-black/60 px-4 py-2 rounded-lg text-xs troll-card shadow-lg">
-            <div className="flex items-center gap-2">
-              <Trophy size={14} className="text-yellow-400" />
-              <span className="font-semibold">Stream Earnings</span>
-            </div>
-            <div className="flex justify-between mt-1 gap-4">
-              <span>Coins: <span className="text-green-400">{formatCoins(totalCoins)}</span></span>
-              <span>Gifts: <span className="text-purple-300">{giftCount}</span></span>
-            </div>
-            {topGifterId && (
-              <div className="flex gap-1 items-center text-[10px] mt-1">
-                <span className="neon-pill neon-pill-green text-[8px]">Top Gifter</span>
-                <span className="text-yellow-300">{formatCoins(topGifterCoins)} coins</span>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* QUICK GIFT PANEL */}
-      <div className="bg-gray-900 border-t border-gray-800 p-2">
-        {streamData && <GiftActionPanel streamerId={streamData.broadcaster_id} streamId={streamData.id} />}
+      <div className="hidden lg:block">
+        <div className="sticky top-0 h-screen">
+          <AuthorityPanel />
+        </div>
       </div>
 
-      {/* FULL GIFT MODAL BUTTON */}
-      <div className="bg-gray-900 border-t border-gray-800 p-3 text-center">
-        <button
-          onClick={() => setShowGiftModal(true)}
-          className="gaming-button-pink px-4 py-2 flex items-center mx-auto"
-        >
-          <Gift size={16} className="mr-2" /> Open Full Gift Menu
-        </button>
-      </div>
-
-      {streamData && (
+      {showGiftModal && streamData && (
         <SendGiftModal
           isOpen={showGiftModal}
           onClose={() => setShowGiftModal(false)}
@@ -260,50 +378,10 @@ export default function ViewerPage() {
           streamId={streamData.id}
         />
       )}
-
-      {/* CHAT */}
-      <div className="h-64 bg-gray-800 flex border-t border-gray-700">
-        <div className="flex-1 flex flex-col p-3 overflow-hidden border-r-gray-700">
-          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-            {messages.map((m: any, i: number) => (
-              <div key={i} className="text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-purple-300 font-semibold">{m.user_profiles?.username || ''}</span>
-                  {m.user_profiles?.has_crown_badge && (
-                    <span className="neon-pill neon-pill-gold text-[9px] flex items-center gap-1">
-                      👑 Crowned
-                    </span>
-                  )}
-                </div>
-                <span>{m.content}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex mt-2">
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              className="flex-1 bg-gray-700 p-2 rounded-l-md text-sm"
-              placeholder="Type a message..."
-            />
-            <button onClick={sendMessage} className="bg-purple-600 px-4 rounded-r-md text-sm">
-              Send
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
-
-    {/* Authority Panel - Right Side Rail */}
-    <div className="hidden lg:block">
-      <div className="sticky top-0 h-screen">
-        <AuthorityPanel />
-      </div>
-    </div>
-  </div>
-)
+  )
 }
+
 
 const connectionStatusLabels: Record<LiveKitConnectionStatus, string> = {
   idle: 'Idle',

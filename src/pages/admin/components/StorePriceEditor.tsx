@@ -27,7 +27,7 @@ const fallbackCatalogs: Record<TableKey, any[]> = {
   perks: [
     { id: 'perk_chat_shine', name: 'Chat Shine', cost: 2000, duration_minutes: 1440, perk_type: 'visibility' },
     { id: 'perk_coin_magnet', name: 'Coin Magnet', cost: 4500, duration_minutes: 1440, perk_type: 'boost' },
-    { id: 'perk_global_highlight', name: 'Glowing Username', cost: 8000, duration_minutes: 60, perk_type: 'cosmetic' },
+    { id: 'perk_global_highlight', name: 'Glowing Username', cost: 3000, duration_minutes: 60, perk_type: 'cosmetic' },
     { id: 'perk_rgb_username', name: 'RGB Username', cost: 420, duration_minutes: 1440, perk_type: 'cosmetic' },
   ],
   insurance_options: [
@@ -105,7 +105,12 @@ export default function StorePriceEditor() {
   const [error, setError] = useState<string | null>(null)
   const [savingKeys, setSavingKeys] = useState<string[]>([])
   const [editedValues, setEditedValues] = useState<Record<string, string>>({})
-  const [catalogNotes, setCatalogNotes] = useState<Record<TableKey, string | null>>({})
+  const [catalogNotes, setCatalogNotes] = useState<Record<TableKey, string | null>>({
+    coin_packages: null,
+    entrance_effects: null,
+    perks: null,
+    insurance_options: null,
+  })
 
   const loadCatalogs = useCallback(async () => {
     setLoading(true)

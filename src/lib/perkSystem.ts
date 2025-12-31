@@ -30,7 +30,7 @@ export const PERK_CONFIG = {
   'perk_global_highlight': {
     name: 'Glowing Username (1h)',
     duration_minutes: 60,
-    cost: 5000,
+    cost: 3000,
     description: 'Your username glows neon in all chats & gift animations',
     type: 'cosmetic'
   },
@@ -140,7 +140,7 @@ export async function getActivePerks(userId: string): Promise<Array<{perk_id: Pe
 /**
  * Purchase a perk for a user
  */
-export async function purchasePerk(userId: string, perkKey: PerkKey): Promise<{success: boolean, error?: string, expiresAt?: string}> {
+export async function purchasePerk(userId: string, perkKey: PerkKey, customOptions?: { glowColor?: string }): Promise<{success: boolean, error?: string, expiresAt?: string}> {
   try {
     const perkConfig = PERK_CONFIG[perkKey];
     if (!perkConfig) {
@@ -184,6 +184,16 @@ export async function purchasePerk(userId: string, perkKey: PerkKey): Promise<{s
     const now = new Date();
     const expiresAt = new Date(now.getTime() + perkConfig.duration_minutes * 60 * 1000);
 
+    // Prepare metadata for custom options
+    const metadata: any = {
+      perk_name: perkConfig.name,
+      duration_minutes: perkConfig.duration_minutes
+    };
+
+    if (customOptions?.glowColor) {
+      metadata.glowColor = customOptions.glowColor;
+    }
+
     // Activate perk
     const { error: insertError } = await supabase
       .from('user_perks')
@@ -192,7 +202,8 @@ export async function purchasePerk(userId: string, perkKey: PerkKey): Promise<{s
         perk_id: perkKey,
         purchased_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
-        is_active: true
+        is_active: true,
+        metadata: metadata
       });
 
     if (insertError) {

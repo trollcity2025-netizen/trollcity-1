@@ -97,7 +97,7 @@ const ParticipantVideo: React.FC<ParticipantVideoProps> = ({ participant }) => {
   const displayName = participant.name || participant.identity
 
   return (
-    <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video border border-white/10">
+    <div className="relative rounded-lg overflow-hidden aspect-video border border-white/10 bg-[#04000b] shadow-[0_0_40px_rgba(0,0,0,0.55)]">
       {participant.videoTrack?.track ? (
         <video
           ref={videoRef}
@@ -121,7 +121,7 @@ const ParticipantVideo: React.FC<ParticipantVideoProps> = ({ participant }) => {
       {/* audio always exists as element so remote audio can play */}
       <audio ref={audioRef} autoPlay />
 
-      <div className="absolute bottom-2 left-2 text-white text-xs bg-black/60 px-2 py-1 rounded flex items-center gap-2">
+      <div className="absolute bottom-2 left-2 text-white text-xs bg-black/40 px-2 py-1 rounded flex items-center gap-2">
         <span className="font-semibold">{displayName}</span>
         <span>{participant.isMicrophoneEnabled ? '🎤' : '🔇'}</span>
         <span>{participant.isCameraEnabled ? '📷' : '🚫'}</span>

@@ -114,6 +114,9 @@ export interface UserProfile {
   verification_date?: string | null
   verification_paid_amount?: number | null
   verification_payment_method?: string | null
+  is_trolls_night_approved?: boolean
+  trolls_night_rejection_count?: number
+  date_of_birth?: string | null
 
   // Officer reputation
   officer_reputation_score?: number

@@ -1,5 +1,6 @@
 
 
+/* tailwindcss */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
@@ -1993,6 +1994,7 @@ iframe[src*="paypalobjects.com"] {
   background-size: 300% 300%;
   animation: tc-rgb-shift 10s ease-in-out infinite;
   pointer-events: none;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -2674,4 +2676,158 @@ iframe[src*="paypalobjects.com"] {
   .trollcity-background > .absolute {
     perspective: 1000px;
   }
+}
+
+/* Entrance Effects Animations */
+.entrance-animation {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  font-size: 4rem;
+  user-select: none;
+}
+
+.flame-burst {
+  font-size: 6rem;
+  color: #ff4500;
+  text-shadow: 0 0 20px #ff4500, 0 0 40px #ff4500;
+}
+
+.money-particle {
+  font-size: 2rem;
+  animation: money-fall linear infinite;
+}
+
+@keyframes money-fall {
+  0% { transform: translateY(0px) rotate(0deg); }
+  100% { transform: translateY(500px) rotate(720deg); }
+}
+
+.electric-flash {
+  font-size: 8rem;
+  color: #00ffff;
+  text-shadow: 0 0 30px #00ffff, 0 0 60px #00ffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.royal-throne {
+  font-size: 5rem;
+  filter: drop-shadow(0 0 20px gold);
+}
+
+.rainbow-descent {
+  font-size: 4rem;
+  filter: hue-rotate(0deg);
+  animation: rainbow-rotate 2s infinite;
+}
+
+@keyframes rainbow-rotate {
+  0%, 100% { filter: hue-rotate(0deg); }
+  25% { filter: hue-rotate(90deg); }
+  50% { filter: hue-rotate(180deg); }
+  75% { filter: hue-rotate(270deg); }
+}
+
+.troll-rollup {
+  font-size: 3rem;
+  bottom: 20px;
+}
+
+.vip-siren {
+  font-size: 5rem;
+  color: #ff0000;
+  text-shadow: 0 0 20px #ff0000;
+}
+
+.firework {
+  font-size: 3rem;
+}
+
+.troll-king {
+  font-size: 6rem;
+  filter: drop-shadow(0 0 30px purple);
+}
+
+/* Role-based animations */
+.admin-void-bg {
+  background: radial-gradient(circle, #000000 0%, #1a0033 50%, #000000 100%);
+}
+
+.admin-lightning {
+  filter: drop-shadow(0 0 30px #ffd700);
+}
+
+.admin-crown {
+  filter: drop-shadow(0 0 30px #ffd700) drop-shadow(0 0 60px #9932cc);
+}
+
+.admin-emblem {
+  filter: drop-shadow(0 0 20px #9932cc);
+}
+
+.admin-shockwave {
+  border: 3px solid #ffd700;
+  box-shadow: 0 0 50px #ffd700, 0 0 100px #9932cc;
+}
+
+@keyframes lead-officer-spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.lead-officer-swirl {
+  animation: lead-officer-spin 2s linear infinite;
+}
+
+.lead-officer-lightning {
+  filter: drop-shadow(0 0 20px #ffd700);
+}
+
+.lead-officer-badge {
+  filter: drop-shadow(0 0 25px #ffd700) drop-shadow(0 0 50px #9932cc);
+}
+
+@keyframes lead-officer-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+@keyframes officer-beam-sweep {
+  0% { transform: rotate(-10deg); opacity: 0; }
+  50% { transform: rotate(0deg); opacity: 1; }
+  100% { transform: rotate(10deg); opacity: 0; }
+}
+
+@keyframes officer-beam-sweep-reverse {
+  0% { transform: rotate(10deg); opacity: 0; }
+  50% { transform: rotate(0deg); opacity: 1; }
+  100% { transform: rotate(-10deg); opacity: 0; }
+}
+
+@keyframes officer-siren-pulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+  100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.6; }
+}
+
+.officer-red-beam {
+  animation: officer-beam-sweep 1.5s ease-in-out;
+}
+
+.officer-blue-beam {
+  animation: officer-beam-sweep-reverse 1.5s ease-in-out;
+}
+
+.officer-siren-glow {
+  animation: officer-siren-pulse 0.5s ease-in-out infinite alternate;
+}
+
+.officer-shield {
+  filter: drop-shadow(0 0 15px #ffd700);
+}
+
+.officer-streak {
+  filter: blur(1px);
 }

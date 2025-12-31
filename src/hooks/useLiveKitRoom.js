@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { LIVEKIT_URL, defaultLiveKitOptions } from '../lib/LiveKitConfig';
 import api, { API_ENDPOINTS } from '../lib/api';
@@ -8,24 +8,29 @@ export function useLiveKitRoom(roomName, user, options = {}) {
   const [participants, setParticipants] = useState({});
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
+  const roomRef = useRef(null);
 
-  // Merge default options with provided options
-  const roomOptions = { ...defaultLiveKitOptions, ...options };
+  const {
+    allowPublish = false,
+    onToken,
+    shouldConnect = true,
+    ...roomOptionOverrides
+  } = options;
+  const roomOptions = { ...defaultLiveKitOptions, ...roomOptionOverrides };
 
   const connect = useCallback(async () => {
+    if (!shouldConnect) {
+      return;
+    }
     if (!user || !roomName) {
-      setError("Missing room name or user");
+      setError('Missing room name or user');
       return;
     }
 
     setIsConnecting(true);
-    setError(null); // reset previous errors
+    setError(null);
 
     try {
-      // Fetch token from universal endpoint
-      // Use GET for viewers (POST is for broadcasters only)
-      const isPublishing = options.allowPublish === true;
-      
       const tokenParams = {
         room: roomName,
         identity: user.email || user.id,
@@ -34,9 +39,10 @@ export function useLiveKitRoom(roomName, user, options = {}) {
         level: user.level || 1,
       };
 
+      const isPublishing = allowPublish === true;
       let tokenResponse;
+
       if (isPublishing) {
-        // Broadcasters use POST with publish permission
         tokenResponse = await api.post('/livekit-token', {
           room: roomName,
           identity: user.email || user.id,
@@ -46,7 +52,6 @@ export function useLiveKitRoom(roomName, user, options = {}) {
           allowPublish: true,
         });
       } else {
-        // Viewers use GET (viewers can't publish)
         try {
           const response = await api.get(API_ENDPOINTS.livekit.token, tokenParams);
           if (!response.success || !response.token) {
@@ -67,18 +72,20 @@ export function useLiveKitRoom(roomName, user, options = {}) {
         throw new Error('Failed to get LiveKit token');
       }
 
-      // Create and configure room
+      onToken?.(tokenResponse.token);
+
       const newRoom = new Room(roomOptions);
 
-      // Set up event listeners
       newRoom.on(RoomEvent.Connected, () => {
-        console.log(`✅ Connected to LiveKit room: ${roomName}`);
+        console.log(`Connected to LiveKit room: ${roomName}`);
+        roomRef.current = newRoom;
         setIsConnecting(false);
         setRoom(newRoom);
       });
 
       newRoom.on(RoomEvent.Disconnected, () => {
-        console.log(`❌ Disconnected from LiveKit room: ${roomName}`);
+        console.log(`Disconnected from LiveKit room: ${roomName}`);
+        roomRef.current = null;
         setRoom(null);
         setParticipants({});
       });
@@ -87,7 +94,7 @@ export function useLiveKitRoom(roomName, user, options = {}) {
         console.log('Participant connected:', participant.identity);
         setParticipants(prev => ({
           ...prev,
-          [participant.identity]: participant
+          [participant.identity]: participant,
         }));
       });
 
@@ -108,49 +115,60 @@ export function useLiveKitRoom(roomName, user, options = {}) {
         console.log('Track unsubscribed:', track.kind);
       });
 
-      // Connect to room
       await newRoom.connect(LIVEKIT_URL, tokenResponse.token);
-
     } catch (err) {
       console.error('Error connecting to LiveKit room:', err);
       setError(err.message || 'Failed to connect to stream');
       setIsConnecting(false);
       setRoom(null);
+      roomRef.current = null;
     }
-  }, [roomName, user, roomOptions]);
+  }, [roomName, user, roomOptions, allowPublish, onToken, shouldConnect]);
 
   const disconnect = useCallback(() => {
-    if (room) {
+    const currentRoom = roomRef.current;
+    if (currentRoom) {
       try {
-        room.disconnect();
+        currentRoom.disconnect();
       } catch (err) {
         console.error('Error disconnecting from room:', err);
       }
+      roomRef.current = null;
       setRoom(null);
       setParticipants({});
+      setIsConnecting(false);
     }
-  }, [room]);
+  }, []);
 
-  // Auto-connect when roomName or user changes
   useEffect(() => {
-    if (roomName && user && !room && !isConnecting) {
-      connect();
+    if (!roomName || !user) {
+      return;
     }
 
-    // Cleanup on unmount or when roomName/user changes
-    return () => {
-      if (room) {
+    if (!shouldConnect) {
+      if (roomRef.current) {
         disconnect();
       }
-    };
-  }, [roomName, user, connect, disconnect, room, isConnecting]);
+      return;
+    }
 
-  // Handle page unload to prevent disconnect bugs
+    if (!roomRef.current && !isConnecting) {
+      connect();
+    }
+  }, [roomName, user, shouldConnect, isConnecting, connect, disconnect]);
+
+  useEffect(() => {
+    return () => {
+      disconnect();
+    };
+  }, [disconnect]);
+
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (room) {
+      const currentRoom = roomRef.current;
+      if (currentRoom) {
         try {
-          room.disconnect();
+          currentRoom.disconnect();
         } catch (err) {
           console.error('Error during page unload disconnect:', err);
         }
@@ -159,13 +177,13 @@ export function useLiveKitRoom(roomName, user, options = {}) {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [room]);
+  }, []);
 
   return {
     room,
     participants,
     isConnecting,
-    error,        // 🔥 expose error to parent
+    error,        // expose error to parent
     connect,
     disconnect,
   };
