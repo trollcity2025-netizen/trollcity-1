@@ -111,62 +111,6 @@ export default function ChatWindow({
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `message_type=eq.dm`
-        },
-        async (payload) => {
-          console.log('📨 New message received via real-time:', payload.new);
-          const newMsg = payload.new as any;
-          // Only add if it's a new message in this conversation
-          if (
-            (newMsg.sender_id === otherUserId && newMsg.receiver_id === profile.id) ||
-            (newMsg.sender_id === profile.id && newMsg.receiver_id === otherUserId)
-          ) {
-            // Fetch sender info immediately
-            let senderUsername = 'Unknown';
-            let senderAvatar = null;
-            
-            try {
-              const { data: senderData } = await supabase
-                .from('user_profiles')
-                .select('id, username, avatar_url')
-                .eq('id', newMsg.sender_id)
-                .single();
-              
-              if (senderData) {
-                senderUsername = senderData.username;
-                senderAvatar = senderData.avatar_url;
-              }
-            } catch (err) {
-              console.error('Error fetching sender info:', err);
-            }
-            
-            setMessages((prev) => {
-              // Avoid duplicates
-              if (prev.some((m) => m.id === newMsg.id)) {
-                console.log('⚠️ Duplicate message ignored:', newMsg.id);
-                return prev
-              }
-              console.log('✅ Adding new message to UI:', newMsg.id);
-              return [...prev, {
-                ...newMsg,
-                sender_username: senderUsername,
-                sender_avatar_url: senderAvatar
-              } as Message]
-            })
-            
-            // Scroll to bottom when new message arrives
-            setTimeout(() => {
-              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
           event: 'UPDATE',
           schema: 'public',
           table: 'messages',
@@ -307,14 +251,8 @@ export default function ChatWindow({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const handleMessageSent = async () => {
-    try {
-      await loadMessages()
-    } catch (error) {
-      console.error('Error refreshing messages after send:', error)
-    } finally {
-      scrollToBottom()
-    }
+  const handleMessageSent = () => {
+    // Message added via broadcast, no need to reload
   }
 
   const formatTime = (timestamp: string) => {
