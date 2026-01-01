@@ -266,6 +266,17 @@ export default function BroadcastPage() {
       return;
     }
 
+    // ✅ Check if stream data was passed via navigation state (from GoLive)
+    // This avoids database query and replication delay issues
+    const streamDataFromState = location.state?.streamData;
+    if (streamDataFromState && streamDataFromState.id === streamId) {
+      console.log('✅ Using stream data from navigation state (no DB query needed)');
+      setStream(streamDataFromState as StreamRow);
+      setCoinCount(Number(streamDataFromState.total_gifts_coins || 0));
+      setIsLoadingStream(false);
+      return;
+    }
+
     setIsLoadingStream(true);
     
     // ✅ Optimized: Skip connectivity test and go straight to stream query for faster loading
@@ -428,7 +439,7 @@ export default function BroadcastPage() {
     } else {
       toast.error('Failed to load stream information. Please try refreshing the page.');
     }
-  }, [streamId, profile, user]);
+  }, [streamId, profile, user, location.state]);
 
   // Seat management handlers
   const handleSeatClaim = useCallback(

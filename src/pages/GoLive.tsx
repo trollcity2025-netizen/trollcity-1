@@ -277,13 +277,29 @@ const GoLive: React.FC = () => {
       setIsStreaming(true);
       console.log('[GoLive] Stream created successfully, navigating to broadcast', { createdId });
       
-      // ✅ Small delay to ensure stream is fully committed to database before navigation
-      // This prevents the "Loading stream..." flash on BroadcastPage
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // ✅ Pass stream data directly via navigation state to avoid database query
+      // This eliminates replication delay issues
+      const streamDataForNavigation = {
+        id: insertedStream.id,
+        broadcaster_id: insertedStream.broadcaster_id || profile.id,
+        title: insertedStream.title || streamTitle,
+        category: insertedStream.category || category,
+        status: insertedStream.status || 'live',
+        is_live: insertedStream.is_live !== undefined ? insertedStream.is_live : true,
+        start_time: insertedStream.start_time || new Date().toISOString(),
+        current_viewers: insertedStream.current_viewers || 0,
+        total_gifts_coins: insertedStream.total_gifts_coins || 0,
+        total_unique_gifters: insertedStream.total_unique_gifters || 0,
+        thumbnail_url: insertedStream.thumbnail_url || thumbnailUrl,
+        created_at: insertedStream.created_at || new Date().toISOString(),
+        updated_at: insertedStream.updated_at || new Date().toISOString(),
+      };
       
       try {
-        navigate(`/broadcast/${createdId}?start=1`);
-        console.log('[GoLive] ✅ Navigation called successfully');
+        navigate(`/broadcast/${createdId}?start=1`, { 
+          state: { streamData: streamDataForNavigation } 
+        });
+        console.log('[GoLive] ✅ Navigation called successfully with stream data');
       } catch (navErr: any) {
         console.error('[GoLive] ❌ Navigation error', navErr);
         toast.error('Stream created but navigation failed. Please navigate manually.');
