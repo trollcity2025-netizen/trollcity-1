@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../lib/api';
+// import api from '../lib/api'; // Uncomment if needed
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { Video } from 'lucide-react';
@@ -10,28 +10,28 @@ const GoLive: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const { user, profile } = useAuthStore();
+  // const { user, profile } = useAuthStore(); // Using getState() instead for async operations
 
   const [streamTitle, setStreamTitle] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
 
   
-  const [isTestingMode, setIsTestingMode] = useState(false);
+  const [isTestingMode, _setIsTestingMode] = useState(false); // Testing mode state
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const [_uploadingThumbnail, setUploadingThumbnail] = useState(false); // Thumbnail upload state
   const [broadcasterName, setBroadcasterName] = useState<string>('');
   const [category, setCategory] = useState<string>('Chat');
   const [isPrivateStream, setIsPrivateStream] = useState<boolean>(false);
   const [enablePaidGuestBoxes, setEnablePaidGuestBoxes] = useState<boolean>(false);
 
-  const [broadcasterStatus, setBroadcasterStatus] = useState<{
+  const [_broadcasterStatus, setBroadcasterStatus] = useState<{
     isApproved: boolean;
     hasApplication: boolean;
     applicationStatus: string | null;
-  } | null>(null);
+  } | null>(null); // Broadcaster approval status
 
   // -------------------------------
   // CHECK BROADCASTER STATUS
@@ -144,10 +144,8 @@ const GoLive: React.FC = () => {
       // Optional quick DB health check to surface connectivity issues fast
       try {
         console.log('[GoLive] Running quick DB health check...');
-        const health = await withTimeout(
-          supabase.from('streams').select('id').limit(1).maybeSingle(),
-          5000
-        );
+        const healthQuery = supabase.from('streams').select('id').limit(1).maybeSingle();
+        const health = await withTimeout(Promise.resolve(healthQuery), 5000);
         console.log('[GoLive] DB health check result:', health);
       } catch (hErr) {
         console.error('[GoLive] DB health check failed:', hErr);
@@ -158,7 +156,7 @@ const GoLive: React.FC = () => {
       // Insert into streams table (use timeout to avoid hanging UI)
       console.log('[GoLive] Inserting stream row into DB...');
 
-      const insertPromise = supabase
+      const insertOperation = supabase
         .from('streams')
         .insert({
           id: streamId,
@@ -176,22 +174,17 @@ const GoLive: React.FC = () => {
           popularity: 0,
         })
         .select()
-        .single()
-        .then((r) => r)
-        .catch((e) => {
-          console.error('[GoLive] Supabase insert immediate error:', e);
-          throw e;
-        });
+        .single();
 
-      const res: any = await withTimeout(insertPromise, 30000);
+      const result: any = await withTimeout(Promise.resolve(insertOperation), 30000);
 
-      if (res.error) {
-        console.error('[GoLive] Insert returned error', res.error);
+      if (result.error) {
+        console.error('[GoLive] Supabase insert immediate error:', result.error);
         toast.error('Failed to start stream.');
         return;
       }
 
-      const insertedStream = res.data ?? res;
+      const insertedStream = result.data ?? result;
       const createdId = insertedStream?.id;
       if (!createdId) {
         console.error('[GoLive] Stream insert did not return an id', insertedStream);
