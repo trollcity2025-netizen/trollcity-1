@@ -678,6 +678,9 @@ export class LiveKitService {
 
       const json = await resp.json()
       console.log("[useLiveKitSession] token json:", json)
+      console.log("[useLiveKitSession] token json keys:", Object.keys(json || {}))
+      console.log("[useLiveKitSession] json.token type:", typeof json?.token)
+      console.log("[useLiveKitSession] json.token value:", json?.token)
 
       if (!resp.ok) {
         this.log('🔑 Token endpoint returned error', { status: resp.status, body: json })
@@ -686,17 +689,42 @@ export class LiveKitService {
       }
 
       // Extract token from response (handle both { token: "..." } and { data: { token: "..." } } formats)
-      const token = json.token || json.data?.token
+      let token = json.token || json.data?.token
 
-      // Validate token exists and is a string
+      // Validate token exists
       if (!token) {
-        this.log('❌ No token in endpoint response', json)
+        this.log('❌ No token in endpoint response', { 
+          json, 
+          hasToken: !!json.token, 
+          hasDataToken: !!json.data?.token,
+          jsonKeys: Object.keys(json || {})
+        })
         throw new Error('No token returned from token endpoint')
       }
 
+      // Convert token to string if it's not already (handle edge cases)
       if (typeof token !== 'string') {
-        this.log('❌ Token is not a string', { token, type: typeof token })
-        throw new Error('Invalid token type: expected string')
+        // Try to convert to string
+        const tokenStr = String(token)
+        if (tokenStr && tokenStr !== 'undefined' && tokenStr !== 'null' && tokenStr.trim() !== '') {
+          this.log('⚠️ Token was not a string, converted', { 
+            originalType: typeof token,
+            originalValue: token,
+            convertedValue: typeof tokenStr === 'string' ? tokenStr.substring(0, 20) + '...' : 'N/A'
+          })
+          token = tokenStr
+        } else {
+          this.log('❌ Token is not a string and cannot be converted', { 
+            token, 
+            type: typeof token,
+            tokenValue: String(token),
+            jsonToken: json.token,
+            jsonTokenType: typeof json.token,
+            jsonData: json.data,
+            fullJson: JSON.stringify(json, null, 2)
+          })
+          throw new Error(`Invalid token type: expected string, got ${typeof token}. Response: ${JSON.stringify(json)}`)
+        }
       }
 
       this.log('✅ Token received successfully:', {
