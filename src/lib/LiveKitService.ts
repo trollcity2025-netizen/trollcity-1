@@ -633,8 +633,12 @@ export class LiveKitService {
       })
 
       // Call external token endpoint (Vercel API route)
-      const tokenUrl = (import.meta as any).env?.VITE_LIVEKIT_TOKEN_URL ||
-        'https://maitrollcity.com/api/livekit-token'
+      const vercelTokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL;
+      const edgeBase = import.meta.env.VITE_EDGE_FUNCTIONS_URL; // supabase base
+      const edgeTokenUrl = edgeBase ? `${edgeBase}/livekit-token` : null;
+
+      const tokenUrl = vercelTokenUrl || edgeTokenUrl || "/api/livekit-token";
+      console.log("🔥 LiveKit tokenUrl selected:", tokenUrl);
 
       const accessToken = session.access_token
 
