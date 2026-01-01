@@ -134,7 +134,7 @@ export function useLiveKitSession(options: SessionOptions) {
                 const hasVideo = room.localParticipant.videoTrackPublications.size > 0
                 const hasAudio = room.localParticipant.audioTrackPublications.size > 0
                 if (hasVideo || hasAudio) return true
-              } catch (e) {
+              } catch {
                 // ignore and retry
               }
               // small delay

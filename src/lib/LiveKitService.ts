@@ -415,8 +415,10 @@ export class LiveKitService {
         now: Math.floor(Date.now() / 1000)
       })
 
-      // Call external token endpoint (Vercel). Set `VITE_LIVEKIT_TOKEN_URL` during frontend build
-      const tokenUrl = (import.meta as any).env?.VITE_LIVEKIT_TOKEN_URL || '/api/livekit-token'
+      // Call external token endpoint (Supabase Edge Function)
+      const tokenUrl = (import.meta as any).env?.VITE_LIVEKIT_TOKEN_URL ||
+        `${(import.meta as any).env?.VITE_EDGE_FUNCTIONS_URL}/livekit-token` ||
+        '/api/livekit-token'
 
       const resp = await fetch(tokenUrl, {
         method: 'POST',

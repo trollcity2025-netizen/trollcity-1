@@ -141,15 +141,46 @@ const GoLive: React.FC = () => {
         setUploadingThumbnail(false);
       }
 
-      // Optional quick DB health check to surface connectivity issues fast
+      // Enhanced DB health check with comprehensive logging
       try {
-        console.log('[GoLive] Running quick DB health check...');
-        const healthQuery = supabase.from('streams').select('id').limit(1).maybeSingle();
+        console.log('[GoLive] Running enhanced DB health check...');
+        
+        // Log environment variables (safely)
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        console.log('[GoLive] Environment check:', {
+          hasUrl: !!supabaseUrl,
+          urlLength: supabaseUrl?.length || 0,
+          hasAnonKey: !!supabaseAnonKey,
+          anonKeyLength: supabaseAnonKey?.length || 0,
+          url: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING'
+        });
+        
+        // Use the healthcheck RPC function for reliable connectivity testing
+        const healthQuery = supabase.rpc('healthcheck');
         const health = await withTimeout(Promise.resolve(healthQuery), 5000);
-        console.log('[GoLive] DB health check result:', health);
-      } catch (hErr) {
+        
+        console.log('[GoLive] DB health check result:', {
+          data: health.data,
+          error: health.error,
+          status: health.status,
+          statusText: health.statusText,
+          fullResponse: health
+        });
+        
+        if (health.error) {
+          console.error('[GoLive] Health check Supabase error:', health.error);
+          throw new Error(`Supabase health check failed: ${health.error.message || health.error}`);
+        }
+        
+        console.log('[GoLive] ✅ Database health check passed');
+      } catch (hErr: any) {
         console.error('[GoLive] DB health check failed:', hErr);
-        toast.error('Database health check failed — check network/Supabase.');
+        
+        // Show the exact Supabase error message in toast
+        const errorMessage = hErr?.message || hErr?.error?.message || 'Unknown database error';
+        toast.error(`Database health check failed: ${errorMessage}`);
+        
         // continue to attempt insert; health check is advisory
       }
 
@@ -179,8 +210,28 @@ const GoLive: React.FC = () => {
       const result: any = await withTimeout(Promise.resolve(insertOperation), 30000);
 
       if (result.error) {
-        console.error('[GoLive] Supabase insert immediate error:', result.error);
-        toast.error('Failed to start stream.');
+        console.error('[GoLive] Supabase insert immediate error:', {
+          error: result.error,
+          message: result.error?.message,
+          details: result.error?.details,
+          hint: result.error?.hint,
+          code: result.error?.code,
+          fullError: result.error
+        });
+        
+        // Show specific error message based on error type
+        let errorMessage = 'Failed to start stream.';
+        if (result.error?.message?.includes('permission')) {
+          errorMessage = 'Permission denied: You may not have broadcaster privileges.';
+        } else if (result.error?.message?.includes('duplicate')) {
+          errorMessage = 'Stream already exists or duplicate ID conflict.';
+        } else if (result.error?.code === '23505') {
+          errorMessage = 'Stream ID conflict - please try again.';
+        } else if (result.error?.message) {
+          errorMessage = `Database error: ${result.error.message}`;
+        }
+        
+        toast.error(errorMessage);
         return;
       }
 
@@ -196,11 +247,27 @@ const GoLive: React.FC = () => {
       console.log('[GoLive] Stream created successfully, navigating to broadcast', { createdId });
       navigate(`/broadcast/${createdId}?start=1`);
     } catch (err: any) {
-      console.error('[GoLive] Error starting stream:', err);
+      console.error('[GoLive] Error starting stream:', {
+        error: err,
+        message: err?.message,
+        stack: err?.stack,
+        name: err?.name,
+        cause: err?.cause
+      });
+      
+      // Provide specific error messages based on error type
       if (err?.message === 'timeout') {
         toast.error('Starting stream timed out — check network or Supabase and try again.');
+      } else if (err?.message?.includes('fetch')) {
+        toast.error('Network error: Unable to connect to Supabase. Check your internet connection.');
+      } else if (err?.message?.includes('permission') || err?.message?.includes('unauthorized')) {
+        toast.error('Permission denied: You may not have the required broadcaster privileges.');
+      } else if (err?.message?.includes('JWT')) {
+        toast.error('Authentication error: Please log out and log back in.');
+      } else if (err?.message) {
+        toast.error(`Stream startup failed: ${err.message}`);
       } else {
-        toast.error('Error starting stream.');
+        toast.error('Error starting stream. Please try again.');
       }
     } finally {
       try {
