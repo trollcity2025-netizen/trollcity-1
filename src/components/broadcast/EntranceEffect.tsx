@@ -9,9 +9,10 @@ export default function EntranceEffect({ username, role }: EntranceEffectProps) 
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
+    // ✅ Show entrance effect for 5 seconds as requested
     const timer = setTimeout(() => {
       setIsVisible(false);
-    }, 4000);
+    }, 5000);
 
     return () => clearTimeout(timer);
   }, []);

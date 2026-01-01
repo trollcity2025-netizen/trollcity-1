@@ -24,6 +24,7 @@ import CoinStoreModal from '../components/broadcast/CoinStoreModal';
 import { OfficerStreamGrid } from '../components/OfficerStreamGrid';
 import GiftEventOverlay from './GiftEventOverlay';
 import { useGiftEvents } from '../lib/hooks/useGiftEvents';
+import EntranceEffect from '../components/broadcast/EntranceEffect';
 
 // Constants
 const _TEXT_ENCODER = new TextEncoder();
@@ -146,6 +147,7 @@ export default function BroadcastPage() {
       : null,
     role: isBroadcaster ? 'broadcaster' : 'viewer',
     allowPublish: isBroadcaster && sessionReady,
+    autoPublish: true, // ✅ Enable auto-publish so tracks are published when joinAndPublish is called
     maxParticipants: SEAT_COUNT,
   });
 
@@ -199,6 +201,9 @@ export default function BroadcastPage() {
   const [claimingSeat, setClaimingSeat] = useState<number | null>(null);
   const [permissionErrorSeat, setPermissionErrorSeat] = useState<number | null>(null);
   const [permissionErrorMessage, setPermissionErrorMessage] = useState<string>('');
+  
+  // ✅ Entrance effects state
+  const [entranceEffect, setEntranceEffect] = useState<{ username: string; role: 'admin' | 'lead_troll_officer' | 'troll_officer' } | null>(null);
 
   // Refs for state tracking
   const autoStartRef = useRef(false);
@@ -485,6 +490,14 @@ export default function BroadcastPage() {
             throw new Error('Missing required information to join stream')
           }
 
+          // ✅ Ensure tracks are enabled before publishing
+          stream.getVideoTracks().forEach(track => {
+            track.enabled = true;
+          });
+          stream.getAudioTracks().forEach(track => {
+            track.enabled = true;
+          });
+          
           console.log('[BroadcastPage] Calling joinAndPublish with stream', {
             streamActive: stream?.active,
             videoTracks: stream?.getVideoTracks().length || 0,
@@ -492,7 +505,30 @@ export default function BroadcastPage() {
             videoTrackEnabled: stream?.getVideoTracks()[0]?.enabled,
             audioTrackEnabled: stream?.getAudioTracks()[0]?.enabled
           });
+          
           await joinAndPublish(stream);
+          
+          // ✅ Verify tracks were published after a short delay
+          setTimeout(async () => {
+            try {
+              const room = liveKit.getRoom();
+              if (room?.localParticipant) {
+                const hasVideo = room.localParticipant.videoTrackPublications.size > 0;
+                const hasAudio = room.localParticipant.audioTrackPublications.size > 0;
+                console.log('[BroadcastPage] Track publication status:', { hasVideo, hasAudio });
+                
+                if (!hasVideo && !hasAudio) {
+                  console.warn('[BroadcastPage] ⚠️ No tracks published after joinAndPublish, attempting manual publish...');
+                  const { startPublishing } = liveKit;
+                  if (typeof startPublishing === 'function') {
+                    await startPublishing();
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('[BroadcastPage] Failed to verify/manually publish tracks:', e);
+            }
+          }, 1500);
         } catch (liveKitErr: any) {
           // Extract the real error message from LiveKit join attempt
           const actualError = liveKitErr?.message || 'LiveKit join failed';
@@ -696,7 +732,79 @@ export default function BroadcastPage() {
 
   const lastGift = useGiftEvents(stream?.id);
 
+  // ✅ Monitor participants joining to show entrance effects
+  const shownParticipantsRef = useRef<Set<string>>(new Set());
   
+  useEffect(() => {
+    if (!participants || !profile) return;
+
+    participants.forEach((participant) => {
+      if (participant.isLocal) return; // Skip local participant
+      if (shownParticipantsRef.current.has(participant.identity)) return; // Already shown
+      
+      // Get participant role - check seat first, then metadata
+      let participantRole: string | null = null;
+      const seat = seats.find(s => s?.user_id === participant.identity);
+      if (seat?.role) {
+        participantRole = seat.role;
+      } else {
+        // Try to get from metadata
+        try {
+          const metadata = (participant as any).metadata;
+          if (typeof metadata === 'string') {
+            const parsed = JSON.parse(metadata);
+            participantRole = parsed?.role;
+          } else if (metadata?.role) {
+            participantRole = metadata.role;
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+      
+      // Also check if we need to fetch profile for role
+      if (!participantRole && participant.identity) {
+        // Check if it's the broadcaster
+        if (participant.identity === stream?.broadcaster_id) {
+          // Fetch broadcaster profile to get role
+          supabase
+            .from('user_profiles')
+            .select('role')
+            .eq('id', participant.identity)
+            .single()
+            .then(({ data }) => {
+              if (data?.role && (data.role === 'admin' || data.role === 'lead_troll_officer' || data.role === 'troll_officer')) {
+                if (!shownParticipantsRef.current.has(participant.identity)) {
+                  shownParticipantsRef.current.add(participant.identity);
+                  const username = participant.name || participant.identity || 'User';
+                  setEntranceEffect({
+                    username,
+                    role: data.role as 'admin' | 'lead_troll_officer' | 'troll_officer'
+                  });
+                  setTimeout(() => setEntranceEffect(null), 5000);
+                }
+              }
+            })
+            .catch(() => {});
+        }
+      }
+      
+      if (participantRole === 'admin' || participantRole === 'lead_troll_officer' || participantRole === 'troll_officer') {
+        const username = participant.name || participant.identity || 'User';
+        shownParticipantsRef.current.add(participant.identity);
+        
+        setEntranceEffect({
+          username,
+          role: participantRole as 'admin' | 'lead_troll_officer' | 'troll_officer'
+        });
+        
+        // Clear entrance effect after 5 seconds
+        setTimeout(() => {
+          setEntranceEffect(null);
+        }, 5000);
+      }
+    });
+  }, [participants, profile, seats, stream?.broadcaster_id]);
 
   // Effects
   useEffect(() => {
@@ -773,11 +881,59 @@ export default function BroadcastPage() {
               }
             : prev
         );
+        // ✅ Update coin counter from stream data
+        if (data.total_gifts_coins !== undefined) {
+          setCoinCount(Number(data.total_gifts_coins || 0));
+        }
       }
     }, STREAM_POLL_INTERVAL);
 
     return () => clearInterval(interval);
   }, [streamId]);
+
+  // ✅ Real-time subscription for gifts to update coin counter
+  useEffect(() => {
+    if (!stream?.id) return;
+
+    const giftsChannel = supabase
+      .channel(`stream_gifts_${stream.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'gifts',
+          filter: `stream_id=eq.${stream.id}`,
+        },
+        async (payload) => {
+          const newGift = payload.new;
+          const coinsSpent = Number(newGift.coins_spent || 0);
+          
+          // Update coin counter optimistically
+          setCoinCount(prev => prev + coinsSpent);
+          
+          // Also update stream total in database (this should be handled by RPC, but we sync UI)
+          try {
+            const { data: streamData } = await supabase
+              .from('streams')
+              .select('total_gifts_coins')
+              .eq('id', stream.id)
+              .single();
+            
+            if (streamData?.total_gifts_coins !== undefined) {
+              setCoinCount(Number(streamData.total_gifts_coins || 0));
+            }
+          } catch (e) {
+            console.warn('Failed to sync gift coins from stream:', e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(giftsChannel);
+    };
+  }, [stream?.id]);
 
   // Loading state
   if (isLoadingStream || !stream || !profile) {
@@ -795,6 +951,11 @@ export default function BroadcastPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#03010c] via-[#05031a] to-[#110117] text-white">
+      {/* Entrance Effect Overlay */}
+      {entranceEffect && (
+        <EntranceEffect username={entranceEffect.username} role={entranceEffect.role} />
+      )}
+
       {/* Permission Error Banner */}
       {permissionErrorSeat !== null && (
         <div className="fixed top-4 left-1/2 z-50 w-full max-w-2xl -translate-x-1/2 px-4">

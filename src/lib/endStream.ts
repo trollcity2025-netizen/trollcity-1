@@ -6,17 +6,39 @@ export async function endStream(streamId: string, room: Room | null) {
     // Disconnect LiveKit
     if (room) {
       try {
-        // Stop all local tracks
+        // ✅ Fix: Stop all local tracks BEFORE unpublishing to avoid "closed peer" error
         const trackPublications = room.localParticipant.trackPublications
         if (trackPublications) {
           const localTracks = Array.from(trackPublications.values())
+          
+          // First, stop all tracks
           localTracks.forEach((pub) => {
             if (pub.track) {
-              pub.track.stop()
-              room.localParticipant.unpublishTrack(pub.track)
+              try {
+                pub.track.stop()
+              } catch (e) {
+                console.warn('Error stopping track:', e)
+              }
+            }
+          })
+          
+          // Wait a moment for tracks to fully stop
+          await new Promise(resolve => setTimeout(resolve, 100))
+          
+          // Then unpublish tracks
+          localTracks.forEach((pub) => {
+            if (pub.track) {
+              try {
+                room.localParticipant.unpublishTrack(pub.track)
+              } catch (e) {
+                console.warn('Error unpublishing track:', e)
+              }
             }
           })
         }
+
+        // Wait a moment before disconnecting
+        await new Promise(resolve => setTimeout(resolve, 200))
 
         // Disconnect from room
         await room.disconnect()
