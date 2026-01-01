@@ -5,6 +5,7 @@ const SEAT_COUNT = 6
 
 type SeatPayload = {
   seat_index: number
+  action?: 'claim' | 'release'
   room?: string
   username?: string
   avatar_url?: string | null
