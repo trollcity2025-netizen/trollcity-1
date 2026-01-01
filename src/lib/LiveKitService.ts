@@ -235,9 +235,23 @@ export class LiveKitService {
         throw new Error('Invalid LiveKit token type')
       }
 
+      // Trim whitespace from token (in case of extra spaces)
+      token = token.trim()
+
+      // Validate token format (JWT should start with 'eyJ' which is base64 for '{"')
+      if (!token || token.length === 0) {
+        console.error('🚨 LiveKit token is empty', { tokenLength: token?.length })
+        throw new Error('Invalid LiveKit token format: token is empty')
+      }
+
       if (!token.startsWith('eyJ')) {
-        console.error('🚨 LiveKit token is not JWT', token)
-        throw new Error('Invalid LiveKit token format')
+        console.error('🚨 LiveKit token is not JWT format', { 
+          tokenPreview: token.substring(0, 50),
+          tokenLength: token.length,
+          firstChars: token.substring(0, 10),
+          startsWithEyJ: token.startsWith('eyJ')
+        })
+        throw new Error(`Invalid LiveKit token format: expected JWT starting with 'eyJ', got '${token.substring(0, 20)}...'`)
       }
 
       // Debug: log token length and decoded payload for troubleshooting publish permissions
@@ -725,6 +739,19 @@ export class LiveKitService {
           })
           throw new Error(`Invalid token type: expected string, got ${typeof token}. Response: ${JSON.stringify(json)}`)
         }
+      }
+
+      // Trim whitespace from token
+      token = token.trim()
+
+      // Validate token format (should be a JWT starting with 'eyJ')
+      if (!token.startsWith('eyJ')) {
+        this.log('❌ Token does not have valid JWT format', {
+          tokenPreview: token.substring(0, 50),
+          tokenLength: token.length,
+          firstChars: token.substring(0, 10)
+        })
+        throw new Error(`Invalid token format: expected JWT starting with 'eyJ', got '${token.substring(0, 20)}...'`)
       }
 
       this.log('✅ Token received successfully:', {
