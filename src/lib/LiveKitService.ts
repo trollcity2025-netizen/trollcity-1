@@ -253,7 +253,7 @@ export class LiveKitService {
             canPublish: payload?.allowPublish ?? payload?.canPublish ?? null,
           })
         } else {
-          this.log('🔐 LiveKit token (raw preview)', token.substring(0, 60) + '...')
+          this.log('🔐 LiveKit token (raw preview)', typeof token === 'string' ? token.substring(0, 60) + '...' : 'N/A')
         }
       } catch (e) {
         this.log('🔐 Failed to decode LiveKit token payload', e?.message || e)
@@ -316,7 +316,7 @@ export class LiveKitService {
           roomName: this.config.roomName,
           identity: this.config.identity,
           tokenLength: token?.length,
-          tokenPreview: token ? `${token.substring(0, 50)}...` : 'NO TOKEN'
+          tokenPreview: token && typeof token === 'string' ? `${token.substring(0, 50)}...` : 'NO TOKEN'
         })
         this.log('❌ Connection failed with error:', errorMsg)
         this.config.onError?.(errorMsg)
@@ -676,36 +676,37 @@ export class LiveKitService {
       })
       console.log("[useLiveKitSession] token response:", resp)
 
-      let data: any = null
-      try {
-        data = await resp.json()
-        console.log("[useLiveKitSession] token json:", data)
-      } catch (e) {
-        this.log('🔑 Failed to parse token endpoint response', e?.message || e)
-        throw new Error('Invalid token response from server')
-      }
-
-      console.log('🟢 getToken() response:', data)
+      const json = await resp.json()
+      console.log("[useLiveKitSession] token json:", json)
 
       if (!resp.ok) {
-        this.log('🔑 Token endpoint returned error', { status: resp.status, body: data })
-        const msg = data?.error || data?.message || `Token endpoint error ${resp.status}`
+        this.log('🔑 Token endpoint returned error', { status: resp.status, body: json })
+        const msg = json?.error || json?.message || `Token endpoint error ${resp.status}`
         throw new Error(msg)
       }
 
-      if (!data?.token) {
-        this.log('❌ No token in endpoint response', data)
+      // Extract token from response (handle both { token: "..." } and { data: { token: "..." } } formats)
+      const token = json.token || json.data?.token
+
+      // Validate token exists and is a string
+      if (!token) {
+        this.log('❌ No token in endpoint response', json)
         throw new Error('No token returned from token endpoint')
       }
 
+      if (typeof token !== 'string') {
+        this.log('❌ Token is not a string', { token, type: typeof token })
+        throw new Error('Invalid token type: expected string')
+      }
+
       this.log('✅ Token received successfully:', {
-        tokenLength: data.token.length,
-        tokenPreview: data.token.substring(0, 20) + '...',
-        livekitUrl: data.livekitUrl,
-        allowPublish: data.allowPublish,
+        tokenLength: token.length,
+        tokenPreview: typeof token === 'string' ? token.substring(0, 20) + '...' : 'N/A',
+        livekitUrl: json.livekitUrl,
+        allowPublish: json.allowPublish,
       })
 
-      return data
+      return { token, livekitUrl: json.livekitUrl, allowPublish: json.allowPublish }
     } catch (error: any) {
       this.log('❌ Token fetch failed:', {
         message: error.message,
