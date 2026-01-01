@@ -268,22 +268,9 @@ export default function BroadcastPage() {
 
     setIsLoadingStream(true);
     
-    // First, test database connectivity with a simple query
-    try {
-      console.log("🔍 Testing database connectivity...");
-      const connectivityTest = Promise.race([
-        supabase.from("streams").select("id").limit(1),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Connectivity test timeout')), 3000))
-      ]);
-      
-      await connectivityTest;
-      console.log("✅ Database connectivity confirmed");
-    } catch (connectErr: any) {
-      console.warn("⚠️ Database connectivity test failed, but continuing anyway:", connectErr?.message);
-      // Continue anyway - the actual query might still work
-    }
-
-    const maxRetries = 2; // Reduced retries since we test connectivity first
+    // ✅ Optimized: Skip connectivity test and go straight to stream query for faster loading
+    // The stream was just created, so it should be available immediately
+    const maxRetries = 3; // Increased retries for newly created streams
     let lastError: any = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -292,7 +279,8 @@ export default function BroadcastPage() {
 
         // Use maybeSingle() instead of single() - more lenient, won't error if not found
         // Select only essential fields to reduce payload size
-        const timeoutMs = attempt === 1 ? 6000 : 8000;
+        // ✅ Faster timeout for first attempt (newly created streams should be quick)
+        const timeoutMs = attempt === 1 ? 3000 : attempt === 2 ? 5000 : 8000;
         
         const streamQuery = supabase
           .from("streams")

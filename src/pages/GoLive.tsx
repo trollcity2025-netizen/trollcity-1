@@ -277,6 +277,10 @@ const GoLive: React.FC = () => {
       setIsStreaming(true);
       console.log('[GoLive] Stream created successfully, navigating to broadcast', { createdId });
       
+      // ✅ Small delay to ensure stream is fully committed to database before navigation
+      // This prevents the "Loading stream..." flash on BroadcastPage
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       try {
         navigate(`/broadcast/${createdId}?start=1`);
         console.log('[GoLive] ✅ Navigation called successfully');
