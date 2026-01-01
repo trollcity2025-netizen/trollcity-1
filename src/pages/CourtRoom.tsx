@@ -298,21 +298,39 @@ export default function CourtRoom() {
           ? 'troll_officer'
           : (profile as any)?.role || 'user';
 
-      const { data, error } = await supabase.functions.invoke("livekit-token", {
-        body: {
+      // Get token from Vercel endpoint
+      const vercelTokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL;
+      const edgeBase = import.meta.env.VITE_EDGE_FUNCTIONS_URL;
+      const edgeTokenUrl = edgeBase ? `${edgeBase}/livekit-token` : null;
+      const tokenUrl = vercelTokenUrl || edgeTokenUrl || "/api/livekit-token";
+
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error('No active session');
+
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
           room: courtId,
           identity: user.id,
           user_id: user.id,
           role: requestedRole,
           allowPublish: canRequestPublish,
-          isHost: canRequestPublish,
-        },
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Token request failed: ${response.status}`);
+      }
 
+      const data = await response.json();
       setToken(data?.token);
-      setServerUrl(data?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
+      setServerUrl(data?.livekitUrl || data?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
 
       // who can broadcast?
       const allowed = ["admin", "lead_troll_officer", "defendant", "accuser", "witness", "attorney"];
@@ -370,27 +388,45 @@ export default function CourtRoom() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("livekit-token", {
-        body: {
+      // Get token from Vercel endpoint
+      const vercelTokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL;
+      const edgeBase = import.meta.env.VITE_EDGE_FUNCTIONS_URL;
+      const edgeTokenUrl = edgeBase ? `${edgeBase}/livekit-token` : null;
+      const tokenUrl = vercelTokenUrl || edgeTokenUrl || "/api/livekit-token";
+
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error('No active session');
+
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
           room: courtId,
           identity: user.id,
           user_id: user.id,
           role: profile?.role,
           allowPublish: true,
-          isHost: false,
-        },
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Token request failed: ${response.status}`);
+      }
 
+      const data = await response.json();
       setToken(data?.token);
-      setServerUrl(data?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
+      setServerUrl(data?.livekitUrl || data?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
       setJoinBoxRequested(true);
       toast.success('Joined a court box');
     } catch (err) {
       console.error("Courtroom join box error:", err);
-      if (err?.status === 404) {
-        toast.error('LiveKit token service not deployed. Deploy the livekit-token edge function.');
+      if (err?.message?.includes('404') || err?.status === 404) {
+        toast.error('LiveKit token service not available. Please check configuration.');
       } else {
         toast.error('Unable to join a court box');
       }
@@ -418,38 +454,49 @@ export default function CourtRoom() {
 
       if (sessionError) throw sessionError;
 
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
-        body: {
+      // Get token from Vercel endpoint
+      const vercelTokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL;
+      const edgeBase = import.meta.env.VITE_EDGE_FUNCTIONS_URL;
+      const edgeTokenUrl = edgeBase ? `${edgeBase}/livekit-token` : null;
+      const tokenUrl = vercelTokenUrl || edgeTokenUrl || "/api/livekit-token";
+
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error('No active session');
+
+      const tokenResponse = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
           room: targetCourtId,
           identity: user.id,
           user_id: user.id,
           role: profile?.role,
           allowPublish: true,
-          isHost: true,
-          create_room: true,
-          room_metadata: {
-            type: 'troll_court',
-            max_participants: 6,
-            judge: user.id,
-            started_at: new Date().toISOString()
-          }
-        }
+        }),
       });
 
-      if (tokenError) throw tokenError;
+      if (!tokenResponse.ok) {
+        const errorData = await tokenResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Token request failed: ${tokenResponse.status}`);
+      }
 
+      const tokenData = await tokenResponse.json();
       setCourtSession(sessionData || { id: targetCourtId, status: 'active' });
       setBoxCount(Math.min(6, Math.max(2, sessionData?.maxBoxes || 2)));
       setToken(tokenData?.token);
-      setServerUrl(tokenData?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
+      setServerUrl(tokenData?.livekitUrl || tokenData?.serverUrl || import.meta.env.VITE_LIVEKIT_URL);
       toast.success('Court session started');
       if (targetCourtId !== courtId) {
         navigate(`/court/${targetCourtId}`);
       }
     } catch (err) {
       console.error('Error starting court session:', err);
-      if (err?.status === 404) {
-        toast.error('LiveKit token service not deployed. Deploy the livekit-token edge function.');
+      if (err?.message?.includes('404') || err?.status === 404) {
+        toast.error('LiveKit token service not available. Please check configuration.');
       } else {
         toast.error('Failed to start court session');
       }

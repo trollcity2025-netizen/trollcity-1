@@ -1082,12 +1082,38 @@ export default function AdminDashboard() {
 
   const testLiveKitStreaming = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('livekit-token', {
-        body: { room: 'admin-test', identity: profile?.username || 'admin', user_id: profile?.id, allowPublish: true }
-      })
+      // Get token from Vercel endpoint
+      const vercelTokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL;
+      const edgeBase = import.meta.env.VITE_EDGE_FUNCTIONS_URL;
+      const edgeTokenUrl = edgeBase ? `${edgeBase}/livekit-token` : null;
+      const tokenUrl = vercelTokenUrl || edgeTokenUrl || "/api/livekit-token";
 
-      if (error || !data?.token) {
-        setLiveKitStatus({ ok: false, error: (error as any)?.message || 'Token error' })
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error('No active session');
+
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          room: 'admin-test',
+          identity: profile?.username || 'admin',
+          user_id: profile?.id,
+          allowPublish: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Token request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data?.token) {
+        setLiveKitStatus({ ok: false, error: 'Token error' })
         toast.error('LiveKit test failed')
       } else {
         setLiveKitStatus({ ok: true })
