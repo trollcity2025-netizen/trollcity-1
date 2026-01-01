@@ -268,9 +268,6 @@ export default function BroadcastPage() {
 
     setIsLoadingStream(true);
     
-    // ✅ Add delay before first query to account for replication delay
-    await new Promise(r => setTimeout(r, 500));
-    
     // ✅ Optimized: Skip connectivity test and go straight to stream query for faster loading
     // The stream was just created, so it should be available immediately
     const maxRetries = 3; // Increased retries for newly created streams
@@ -278,12 +275,18 @@ export default function BroadcastPage() {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // ✅ Give Supabase a moment to replicate the row after insert (only on attempt 1)
+        if (attempt === 1) {
+          console.log("⏳ Waiting 500ms for stream row replication...");
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
         console.log(`📡 Loading stream info... (attempt ${attempt}/${maxRetries})`, streamId);
 
         // Use maybeSingle() instead of single() - more lenient, won't error if not found
         // Select only essential fields to reduce payload size
-        // ✅ Increased timeout for slow queries and replication delay
-        const timeoutMs = attempt === 1 ? 3000 : attempt === 2 ? 5000 : 15000;
+        // ✅ Increased timeout to 15000ms for all attempts to handle slow queries and replication delay
+        const timeoutMs = 15000;
         
         const streamQuery = supabase
           .from("streams")
@@ -306,7 +309,8 @@ export default function BroadcastPage() {
             lastError = streamErr;
             if (attempt < maxRetries) {
               console.log(`⚠️ Stream query timeout on attempt ${attempt}, retrying...`);
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              // ✅ Exponential backoff: 500ms * attempt
+              await new Promise(resolve => setTimeout(resolve, 500 * attempt));
               continue;
             }
           }
@@ -323,7 +327,8 @@ export default function BroadcastPage() {
           lastError = streamErr;
           if (attempt < maxRetries) {
             console.log(`⚠️ Stream query error on attempt ${attempt}, retrying...`, streamErr.message);
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            // ✅ Exponential backoff: 500ms * attempt
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
             continue;
           }
         }
@@ -331,7 +336,8 @@ export default function BroadcastPage() {
         if (!streamRow) {
           if (attempt < maxRetries) {
             console.log(`⚠️ No stream data on attempt ${attempt}, retrying...`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            // ✅ Exponential backoff: 500ms * attempt
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
             continue;
           }
           // Last attempt failed - use fallback if we have user/profile
@@ -373,7 +379,8 @@ export default function BroadcastPage() {
         // If it's a timeout, retry if we have attempts left
         if (error?.message?.includes('timeout') && attempt < maxRetries) {
           console.log(`⚠️ Stream query timeout on attempt ${attempt}, retrying...`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          // ✅ Exponential backoff: 500ms * attempt
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
           continue;
         }
         
