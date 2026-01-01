@@ -59,41 +59,17 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
         return
       }
 
-      // If not connected, attempt to connect first (wait for connect to resolve)
-      if (!isConnected) {
-        try {
-          const ok = await connect(roomName, {
-            id: user?.id,
-            username: profile?.username || user?.email?.split('@')[0] || 'Officer',
-            role: profile?.role || 'viewer'
-          }, { allowPublish: true, autoPublish: false })
-          if (!ok) {
-            alert('Unable to connect to stream. Please check your connection and try again.')
-            return
-          }
-        } catch (err: any) {
-          console.error('Connect attempt failed during claim:', err)
-          const errorMsg = err.message || 'Unknown error'
-          if (errorMsg.includes('sign in') || errorMsg.includes('Authentication failed')) {
-            alert('Please sign out and sign back in to join the stream.')
-          } else if (errorMsg.includes('No valid user session')) {
-            alert('Your session has expired. Please refresh the page and sign in again.')
-          } else {
-            alert('Unable to connect to stream. Please try again.')
-          }
-          return
-        }
-      }
-
       try {
         console.log('Requesting camera and microphone permissions...')
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('Media devices API not available')
         }
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        console.log('Permissions granted, stopping test stream...')
-        stream.getTracks().forEach(track => track.stop())
-        console.log('Test stream stopped, claiming seat...')
+        console.log('Permissions granted, claiming seat with active stream...', {
+          streamActive: stream.active,
+          videoTracks: stream.getVideoTracks().length,
+          audioTracks: stream.getAudioTracks().length
+        })
 
         await claimSeat(seatIndex, {
           username: profile.username || 'Officer',
@@ -101,10 +77,32 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
           role: 'officer',
         })
 
-        console.log('Claim successful, starting to publish...', { startPublishing: typeof startPublishing })
+        console.log('Claim successful, connecting to LiveKit with stream...')
+        
+        // ✅ Disconnect if already connected, then reconnect with the media stream as preflightStream
+        if (isConnected) {
+          console.log('Disconnecting to reconnect with media stream...')
+          disconnect()
+          // Wait a moment for disconnect to complete
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+        
+        // Connect with the media stream as preflightStream
+        const connectOk = await connect(roomName, liveKitUser, { 
+          allowPublish: true, 
+          autoPublish: false,
+          preflightStream: stream 
+        })
+        
+        if (!connectOk) {
+          throw new Error('Failed to connect to LiveKit with stream')
+        }
+        
+        console.log('Connected to LiveKit, starting to publish...', { startPublishing: typeof startPublishing })
         if (typeof startPublishing === 'function') {
           try {
             await startPublishing()
+            console.log('✅ Publishing started successfully')
           } catch (e: any) {
             console.error('Failed to start publishing:', e.message)
             alert('Failed to start publishing. Please try again.')
@@ -125,7 +123,7 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
       }
       disconnect()
     }
-  }, [profile, claimSeat, releaseSeat, disconnect, startPublishing, isConnected, connect, roomName, user])
+  }, [profile, claimSeat, releaseSeat, disconnect, startPublishing, isConnected, connect, roomName, user, liveKitUser])
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-3 gap-2">
