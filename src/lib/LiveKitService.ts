@@ -219,10 +219,32 @@ export class LiveKitService {
         try {
           const tokenResponse = await this.getToken()
           if (!tokenResponse?.token) {
-            throw new Error('Failed to get LiveKit token')
+            console.error('🚨 Token response missing token field', {
+              tokenResponse,
+              hasToken: !!tokenResponse?.token,
+              tokenResponseKeys: tokenResponse ? Object.keys(tokenResponse) : 'no response',
+              fullResponse: JSON.stringify(tokenResponse, null, 2)
+            })
+            throw new Error('Failed to get LiveKit token: token field missing in response')
           }
+          
+          // ✅ STRICT VALIDATION: Ensure tokenResponse.token is a string
+          if (typeof tokenResponse.token !== 'string') {
+            console.error('🚨 CRITICAL: tokenResponse.token is not a string!', {
+              tokenResponse,
+              tokenType: typeof tokenResponse.token,
+              tokenValue: tokenResponse.token,
+              fullResponse: JSON.stringify(tokenResponse, null, 2)
+            })
+            throw new Error(`Invalid token type in response: expected string, got ${typeof tokenResponse.token}. Response: ${JSON.stringify(tokenResponse, null, 2)}`)
+          }
+          
           token = tokenResponse.token
-          this.log('✅ LiveKit token received', { tokenLength: token.length })
+          this.log('✅ LiveKit token received', { 
+            tokenLength: token.length,
+            tokenType: typeof token,
+            tokenIsString: typeof token === 'string'
+          })
         } catch (tokenError: any) {
           this.log('❌ Token request failed:', tokenError?.message || tokenError)
           throw new Error(`Failed to get LiveKit token: ${tokenError?.message || 'Unknown error'}`)
@@ -284,8 +306,33 @@ export class LiveKitService {
       // Step 4: Connect to room
       this.log('Connecting to LiveKit room...', { LIVEKIT_URL, roomName: this.config.roomName, identity: this.config.identity })
 
+      // ✅ STRICT VALIDATION: Ensure token is a string before passing to room.connect()
+      if (typeof token !== 'string') {
+        console.error('🚨 CRITICAL: Token is not a string before room.connect()!', {
+          token,
+          tokenType: typeof token,
+          tokenValue: token,
+          tokenStringified: JSON.stringify(token),
+          tokenPreview: String(token).substring(0, 50)
+        })
+        this.log('❌ Token validation failed before connect: token is not a string', {
+          token,
+          tokenType: typeof token,
+          fullTokenValue: JSON.stringify(token, null, 2)
+        })
+        throw new Error(`Invalid token type before connect: expected string, got ${typeof token}. Token value: ${JSON.stringify(token)}`)
+      }
+
       // ✅ 2) Before room.connect:
-      console.log("[useLiveKitSession] about to connect", { url: LIVEKIT_URL, roomName: this.config.roomName, identity: this.config.identity, tokenLen: token?.length })
+      console.log("[useLiveKitSession] about to connect", { 
+        url: LIVEKIT_URL, 
+        roomName: this.config.roomName, 
+        identity: this.config.identity, 
+        tokenLen: token?.length,
+        tokenType: typeof token,
+        tokenIsString: typeof token === 'string',
+        tokenPreview: typeof token === 'string' ? token.substring(0, 20) + '...' : 'NOT A STRING'
+      })
 
       // Fallback check: LIVEKIT_URL should be a secure websocket endpoint
       if (typeof LIVEKIT_URL === 'string' && !LIVEKIT_URL.startsWith('wss://')) {
@@ -296,6 +343,10 @@ export class LiveKitService {
       }
 
       try {
+        // ✅ Final check: ensure token is still a string (defensive)
+        if (typeof token !== 'string') {
+          throw new Error(`Token became non-string before connect: ${typeof token}`)
+        }
         await this.room.connect(LIVEKIT_URL, token)
         console.log("[useLiveKitSession] ✅ Connected successfully")
         
@@ -760,40 +811,37 @@ export class LiveKitService {
       // Extract token from response (handle both { token: "..." } and { data: { token: "..." } } formats)
       let token = json.token || json.data?.token
 
-      // Validate token exists
-      if (!token) {
+      // ✅ STRICT VALIDATION: Token must be a string, not an object
+      if (typeof token !== 'string') {
+        console.error('🚨 CRITICAL: Token is not a string!', {
+          tokenType: typeof token,
+          tokenValue: token,
+          jsonToken: json.token,
+          jsonTokenType: typeof json.token,
+          jsonDataToken: json.data?.token,
+          jsonDataTokenType: typeof json.data?.token,
+          fullJson: JSON.stringify(json, null, 2),
+          jsonKeys: Object.keys(json || {}),
+          jsonStringified: JSON.stringify(json)
+        })
+        this.log('❌ Token extraction failed: token is not a string', {
+          token,
+          tokenType: typeof token,
+          fullJsonResponse: json
+        })
+        throw new Error(`Invalid token type: expected string, got ${typeof token}. Full response: ${JSON.stringify(json, null, 2)}`)
+      }
+
+      // Validate token exists and is not empty
+      if (!token || token.trim() === '') {
         this.log('❌ No token in endpoint response', { 
           json, 
           hasToken: !!json.token, 
           hasDataToken: !!json.data?.token,
-          jsonKeys: Object.keys(json || {})
+          jsonKeys: Object.keys(json || {}),
+          fullJson: JSON.stringify(json, null, 2)
         })
         throw new Error('No token returned from token endpoint')
-      }
-
-      // Convert token to string if it's not already (handle edge cases)
-      if (typeof token !== 'string') {
-        // Try to convert to string
-        const tokenStr = String(token)
-        if (tokenStr && tokenStr !== 'undefined' && tokenStr !== 'null' && tokenStr.trim() !== '') {
-          this.log('⚠️ Token was not a string, converted', { 
-            originalType: typeof token,
-            originalValue: token,
-            convertedValue: typeof tokenStr === 'string' ? tokenStr.substring(0, 20) + '...' : 'N/A'
-          })
-          token = tokenStr
-        } else {
-          this.log('❌ Token is not a string and cannot be converted', { 
-            token, 
-            type: typeof token,
-            tokenValue: String(token),
-            jsonToken: json.token,
-            jsonTokenType: typeof json.token,
-            jsonData: json.data,
-            fullJson: JSON.stringify(json, null, 2)
-          })
-          throw new Error(`Invalid token type: expected string, got ${typeof token}. Response: ${JSON.stringify(json)}`)
-        }
       }
 
       // Trim whitespace from token
@@ -809,14 +857,28 @@ export class LiveKitService {
         throw new Error(`Invalid token format: expected JWT starting with 'eyJ', got '${token.substring(0, 20)}...'`)
       }
 
+      // ✅ FINAL VALIDATION: Ensure token is still a string before returning
+      if (typeof token !== 'string') {
+        console.error('🚨 CRITICAL: Token became non-string before return!', {
+          token,
+          tokenType: typeof token,
+          tokenValue: token,
+          fullJson: JSON.stringify(json, null, 2)
+        })
+        throw new Error(`Token validation failed: expected string, got ${typeof token}. Full response: ${JSON.stringify(json, null, 2)}`)
+      }
+
       this.log('✅ Token received successfully:', {
         tokenLength: token.length,
+        tokenType: typeof token,
+        tokenIsString: typeof token === 'string',
         tokenPreview: typeof token === 'string' ? token.substring(0, 20) + '...' : 'N/A',
         livekitUrl: json.livekitUrl,
         allowPublish: json.allowPublish,
       })
 
-      return { token, livekitUrl: json.livekitUrl, allowPublish: json.allowPublish }
+      // ✅ Return token as string (json.token)
+      return { token: String(token), livekitUrl: json.livekitUrl, allowPublish: json.allowPublish }
     } catch (error: any) {
       this.log('❌ Token fetch failed:', {
         message: error.message,
