@@ -797,6 +797,10 @@ export class LiveKitService {
 
       // ✅ Parse JSON with error handling
       const json = await res.json().catch(() => null)
+      
+      // 🔥 TEMPORARY DEBUG: Log response to see what endpoint returns
+      console.log("🔥 LiveKit token endpoint response JSON:", json);
+      console.log("🔥 Token field type:", typeof json?.token);
 
       if (!res.ok) {
         this.log('🔑 Token endpoint returned error', { status: res.status, body: json })
