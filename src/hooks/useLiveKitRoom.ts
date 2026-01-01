@@ -320,9 +320,17 @@ export function useLiveKitRoom(config: LiveKitRoomOptions) {
 
     try {
       console.log('[useLiveKitRoom] publishLocalTracks: starting publish')
+      
       const [videoTrack, audioTrack] = await Promise.all([
-        createLocalVideoTrack(),
-        createLocalAudioTrack(),
+        createLocalVideoTrack({
+          facingMode: 'user',
+          resolution: { width: 1280, height: 720 }
+        }),
+        createLocalAudioTrack({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        })
       ])
 
       // Enable camera and microphone
@@ -339,20 +347,32 @@ export function useLiveKitRoom(config: LiveKitRoomOptions) {
       const participant = currentRoom.localParticipant
       if (videoTrack) {
         try {
-          await participant.publishTrack(videoTrack)
+          await participant.publishTrack(videoTrack, {
+            name: 'camera',
+            simulcast: false
+          })
           console.log('[useLiveKitRoom] publishLocalTracks: video published')
         } catch (err) {
           console.error('[useLiveKitRoom] publishLocalTracks: video publish failed', err)
+          throw err
         }
       }
       if (audioTrack) {
         try {
-          await participant.publishTrack(audioTrack)
+          await participant.publishTrack(audioTrack, {
+            name: 'microphone'
+          })
           console.log('[useLiveKitRoom] publishLocalTracks: audio published')
         } catch (err) {
           console.error('[useLiveKitRoom] publishLocalTracks: audio publish failed', err)
+          throw err
         }
       }
+      
+      console.log('[useLiveKitRoom] publishLocalTracks: all tracks published successfully')
+    } catch (error) {
+      console.error('[useLiveKitRoom] publishLocalTracks: failed', error)
+      throw error
     } finally {
       setIsPublishing(false)
     }

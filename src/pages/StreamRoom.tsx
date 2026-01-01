@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Room, RoomEvent, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
+import { Room, RoomEvent, ConnectionState, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { useLiveContextStore } from '../lib/liveContextStore';
@@ -19,6 +19,7 @@ import { createTrollDrop, canDropTroll } from '../lib/trollDropUtils';
 import { TrollDrop as TrollDropType } from '../types/trollDrop';
 import GiftTray from '../components/GiftTray';
 import { getUserInventory, sendGiftFromInventory } from '../lib/giftEngine';
+import StreamDiagnostics from '../components/StreamDiagnostics';
 
 interface GiftItem {
   id: string;
@@ -120,6 +121,7 @@ export default function StreamRoom() {
 
   // Moderation
   const [isOfficer, setIsOfficer] = useState(false);
+  const [isStreamAdmin, setIsStreamAdmin] = useState(false);
 
   // Multi-box controls
   const [guestSlots, setGuestSlots] = useState(0);
@@ -363,6 +365,9 @@ export default function StreamRoom() {
         // Check if user is officer
         const userRole = profile?.role;
         setIsOfficer(['admin', 'lead_troll_officer', 'troll_officer'].includes(userRole));
+        
+        // Check if user can end stream (admin, lead_troll_officer, troll_officer, broadcaster)
+        setIsStreamAdmin(['admin', 'lead_troll_officer', 'troll_officer', 'broadcaster'].includes(userRole));
 
         setIsLoadingStream(false);
       } catch (err: any) {
@@ -556,10 +561,10 @@ export default function StreamRoom() {
     loadStats();
     loadMessages();
 
-    // Subscribe to real-time updates
+    // Subscribe to real-time updates with improved error handling
     const likesChannel = engagementTables.likes
       ? supabase
-          .channel('stream_likes')
+          .channel(`stream_likes_${stream.id}`)
           .on(
             'postgres_changes',
             {
@@ -569,16 +574,21 @@ export default function StreamRoom() {
               filter: `stream_id=eq.${stream.id}`,
             },
             (payload) => {
+              console.log('🎆 Like received:', payload.new);
               if (engagementTables.likes === 'stream_reactions') {
                 if ((payload as any).new?.reaction_type !== 'like') return;
               }
+              // Trigger like animation or effect here
+              showGiftAnimation('👍');
             }
           )
-          .subscribe()
+          .subscribe((status) => {
+            console.log('📡 Likes subscription status:', status);
+          })
       : null;
 
     const giftsChannel = supabase
-      .channel('stream_gifts')
+      .channel(`stream_gifts_${stream.id}`)
         .on(
           'postgres_changes',
           {
@@ -587,18 +597,32 @@ export default function StreamRoom() {
             table: engagementTables.gifts,
             filter: `stream_id=eq.${stream.id}`,
           },
-          (payload) => {
+          async (payload) => {
+            console.log('🎁 Gift received:', payload.new);
             const isStreamGifts = engagementTables.gifts === 'stream_gifts';
             const giftId = isStreamGifts ? String((payload as any).new?.gift_id || '') : '';
             const delta = isStreamGifts
               ? Number((payload as any).new?.coins_amount || 0)
               : Number((payload as any).new?.coins_spent || 0);
 
-
             const receiverId = isStreamGifts
               ? (payload as any).new?.to_user_id
               : (payload as any).new?.receiver_id;
 
+            // Get sender info for gift display
+            let senderName = 'Someone';
+            try {
+              const { data: senderProfile } = await supabase
+                .from('user_profiles')
+                .select('username')
+                .eq('id', (payload as any).new?.from_user_id || (payload as any).new?.sender_id)
+                .single();
+              senderName = senderProfile?.username || senderName;
+            } catch (e) {
+              console.warn('Failed to get sender name:', e);
+            }
+
+            // Update profile balance if receiver is current user
             if (receiverId && receiverId === profile?.id) {
               const currentProfile = useAuthStore.getState().profile;
               if (currentProfile) {
@@ -611,12 +635,32 @@ export default function StreamRoom() {
                 });
               }
             }
+
+            // Show gift animation with sender info
+            const giftName = (payload as any).new?.message || giftId || 'Gift';
+            showGiftAnimation(giftName, senderName);
+            
+            // Add to messages for chat display
+            setMessages((prev) => [
+              ...prev.slice(-49),
+              {
+                id: `gift-${Date.now()}`,
+                user_id: (payload as any).new?.from_user_id || (payload as any).new?.sender_id || 'system',
+                username: senderName,
+                message: `sent ${giftName}`,
+                created_at: new Date().toISOString(),
+                role: 'system',
+                level: 1
+              }
+            ]);
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('📡 Gifts subscription status:', status);
+        });
 
     const messagesChannel = supabase
-      .channel('stream_messages')
+      .channel(`stream_messages_${stream.id}`)
       .on(
         'postgres_changes',
         {
@@ -626,6 +670,7 @@ export default function StreamRoom() {
           filter: `stream_id=eq.${stream.id}`,
         },
         async (payload) => {
+          console.log('💬 New message received:', payload.new);
           const { data: userData } = await supabase
             .from('user_profiles')
             .select('username, role, level')
@@ -655,11 +700,16 @@ export default function StreamRoom() {
             });
 
             const filtered = hasRecentLocalEcho ? prev.filter((m) => !m.id.startsWith('local-')) : prev;
-            return [...filtered.slice(-49), newMessage];
+            const finalMessages = [...filtered.slice(-49), newMessage];
+            
+            console.log('💬 Messages updated:', finalMessages.length);
+            return finalMessages;
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Messages subscription status:', status);
+      });
 
     // Join requests subscription (for hosts)
     let joinRequestsChannel: any = null;
@@ -760,29 +810,37 @@ export default function StreamRoom() {
     if (publishedTracksRef.current) return;
 
     let mounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
 
     const publishTracks = async () => {
       try {
-        // Wait for room to be connected
+        // Wait for room to be connected with better state checking
         if (room.state !== 'connected') {
           console.log('⏳ Room not connected yet, state:', room.state);
           
-          // Set up one-time listener for connection
+          // Set up persistent listener for connection
           const handleConnected = async () => {
             if (!mounted) return;
+            console.log('🎯 Room connected, starting track publishing...');
             await publishLocalTracks();
-            room.off(RoomEvent.Connected, handleConnected);
           };
           
-          room.once(RoomEvent.Connected, handleConnected);
+          room.on(RoomEvent.Connected, handleConnected);
+          
           return;
         }
 
         await publishLocalTracks();
       } catch (err) {
         console.error('❌ Error in publishTracks:', err);
-        if (mounted) {
+        if (mounted && retryCount < maxRetries) {
+          retryCount++;
+          console.log(`🔄 Retrying track publishing (${retryCount}/${maxRetries})...`);
+          setTimeout(publishTracks, 2000 * retryCount); // Exponential backoff
+        } else if (mounted) {
           publishedTracksRef.current = false;
+          toast.error('Failed to publish camera/microphone after multiple attempts');
         }
       }
     };
@@ -791,8 +849,19 @@ export default function StreamRoom() {
       if (!mounted || !room?.localParticipant) return;
 
       try {
-        const hasVideo = room.localParticipant.videoTrackPublications?.size > 0;
-        const hasAudio = room.localParticipant.audioTrackPublications?.size > 0;
+        // Check if tracks are already published
+        const videoPubs = room.localParticipant.videoTrackPublications;
+        const audioPubs = room.localParticipant.audioTrackPublications;
+        const hasVideo = videoPubs && videoPubs.size > 0;
+        const hasAudio = audioPubs && audioPubs.size > 0;
+        
+        console.log('📊 Track status:', { 
+          hasVideo, 
+          hasAudio, 
+          videoPubs: videoPubs?.size || 0, 
+          audioPubs: audioPubs?.size || 0,
+          roomState: room.state 
+        });
         
         if (hasVideo && hasAudio) {
           console.log('✅ Tracks already published');
@@ -800,55 +869,117 @@ export default function StreamRoom() {
           return;
         }
 
-        // Publish video track with error handling
+        // Publish video track with enhanced error handling
         if (!hasVideo) {
           try {
             console.log('📹 Creating video track...');
-            const videoTrack = await createLocalVideoTrack({ 
+            
+            // Get user media permissions first
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+              video: { 
+                facingMode: 'user',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              } 
+            });
+            
+            const videoTrack = await createLocalVideoTrack({
               facingMode: 'user',
               resolution: { width: 1280, height: 720 }
             });
             
             await room.localParticipant.publishTrack(videoTrack, {
               simulcast: false,
+              name: 'camera'
             });
-            console.log('✅ Video track published');
+            
+            console.log('✅ Video track published successfully');
+            toast.success('Camera connected');
           } catch (videoErr) {
             console.error('❌ Video track error:', videoErr);
-            // Try to recover - maybe no camera available
-            if ((videoErr as any).message?.includes('NotFoundError')) {
-              toast.error('Camera not found or permission denied');
-            } else {
-              toast.error('Failed to publish video');
+            let errorMsg = 'Failed to access camera';
+            if ((videoErr as any).name === 'NotAllowedError') {
+              errorMsg = 'Camera permission denied. Please allow camera access.';
+            } else if ((videoErr as any).name === 'NotFoundError') {
+              errorMsg = 'No camera found. Please connect a camera.';
+            } else if ((videoErr as any).name === 'NotReadableError') {
+              errorMsg = 'Camera is being used by another application.';
             }
+            toast.error(errorMsg);
           }
         }
 
-        // Publish audio track with error handling
+        // Publish audio track with enhanced error handling
         if (!hasAudio) {
           try {
             console.log('🎤 Creating audio track...');
-            const audioTrack = await createLocalAudioTrack();
             
-            await room.localParticipant.publishTrack(audioTrack);
-            console.log('✅ Audio track published');
+            // Get user media permissions first
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              }
+            });
+            
+            const audioTrack = await createLocalAudioTrack({
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            });
+            
+            await room.localParticipant.publishTrack(audioTrack, {
+              name: 'microphone'
+            });
+            
+            console.log('✅ Audio track published successfully');
+            toast.success('Microphone connected');
           } catch (audioErr) {
             console.error('❌ Audio track error:', audioErr);
-            if ((audioErr as any).message?.includes('NotFoundError')) {
-              toast.error('Microphone not found or permission denied');
-            } else {
-              toast.error('Failed to publish audio');
+            let errorMsg = 'Failed to access microphone';
+            if ((audioErr as any).name === 'NotAllowedError') {
+              errorMsg = 'Microphone permission denied. Please allow microphone access.';
+            } else if ((audioErr as any).name === 'NotFoundError') {
+              errorMsg = 'No microphone found. Please connect a microphone.';
+            } else if ((audioErr as any).name === 'NotReadableError') {
+              errorMsg = 'Microphone is being used by another application.';
             }
+            toast.error(errorMsg);
           }
         }
 
-        publishedTracksRef.current = true;
+        // Verify tracks were published
+        setTimeout(() => {
+          if (mounted) {
+            const finalVideoPubs = room.localParticipant.videoTrackPublications;
+            const finalAudioPubs = room.localParticipant.audioTrackPublications;
+            const finalHasVideo = finalVideoPubs && finalVideoPubs.size > 0;
+            const finalHasAudio = finalAudioPubs && finalAudioPubs.size > 0;
+            
+            console.log('🔍 Final track verification:', { 
+              finalHasVideo, 
+              finalHasAudio, 
+              finalVideoPubs: finalVideoPubs?.size || 0, 
+              finalAudioPubs: finalAudioPubs?.size || 0 
+            });
+            
+            if (finalHasVideo && finalHasAudio) {
+              publishedTracksRef.current = true;
+              console.log('✅ All tracks successfully published and verified');
+            } else {
+              console.warn('⚠️ Some tracks failed to publish:', { finalHasVideo, finalHasAudio });
+            }
+          }
+        }, 1000);
+        
       } catch (err) {
-        console.error('❌ Error publishing tracks:', err);
+        console.error('❌ Error in publishLocalTracks:', err);
         publishedTracksRef.current = false;
       }
     };
 
+    // Start publishing
     publishTracks();
 
     return () => {
@@ -861,6 +992,26 @@ export default function StreamRoom() {
     publishedTracksRef.current = false;
   }, [room?.name]);
 
+
+  // End stream functionality
+  const handleEndStream = async () => {
+    if (!stream?.id || !room) return;
+    
+    try {
+      const { endStream } = await import('../lib/endStream');
+      const success = await endStream(stream.id, room);
+      
+      if (success) {
+        // Navigate all users to the stream summary page
+        navigate(`/stream/${stream.id}/summary`);
+      } else {
+        toast.error('Failed to end stream properly');
+      }
+    } catch (error) {
+      console.error('Error ending stream:', error);
+      toast.error('Failed to end stream. Please try again.');
+    }
+  };
 
   // Send message
   const sendMessage = async () => {
@@ -1146,9 +1297,20 @@ export default function StreamRoom() {
     }
   };
 
-  const showGiftAnimation = (icon: string) => {
-    // Simple animation - could be enhanced
-    toast.success(`${icon} Gift sent!`);
+  const showGiftAnimation = (icon: string, senderName?: string) => {
+    // Enhanced gift animation with sender info
+    const message = senderName ? `${senderName} sent ${icon}!` : `${icon} Gift sent!`;
+    toast.success(message, {
+      duration: 3000,
+      style: {
+        background: 'linear-gradient(45deg, #ff6b6b, #4ecdc4)',
+        color: 'white',
+        border: 'none',
+      },
+    });
+    
+    // Trigger entrance effect for gift (placeholder for now)
+    console.log(`🎆 Gift animation: ${message}`);
   };
 
   const handleCoinPurchaseSuccess = async () => {
@@ -1635,6 +1797,20 @@ export default function StreamRoom() {
         🎁
       </button>
 
+      {/* End Stream Button - Visible to admins, lead troll officers, troll officers, and broadcasters */}
+      {isStreamAdmin && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30">
+          <button
+            onClick={handleEndStream}
+            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transition-colors flex items-center gap-2"
+            title="End Stream (Admin/Officer/Broadcaster only)"
+          >
+            <X className="w-5 h-5" />
+            End Stream
+          </button>
+        </div>
+      )}
+
       {/* Host Controls */}
       {isHost && (
         <div className="absolute top-20 left-4 z-30">
@@ -1892,6 +2068,12 @@ export default function StreamRoom() {
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onUserInvited={handleJoinRequestApproved}
+      />
+
+      {/* Stream Diagnostics Component */}
+      <StreamDiagnostics 
+        streamId={stream?.id || streamIdValue || ''} 
+        isHost={isHost} 
       />
     </div>
   );
