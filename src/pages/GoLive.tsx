@@ -356,14 +356,19 @@ const GoLive: React.FC = () => {
         },
       });
 
-      console.log('[GoLive] ✅ Permissions granted');
+      console.log('[GoLive] ✅ Permissions granted', {
+        hasStream: !!stream,
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+        videoTrackEnabled: stream.getVideoTracks()[0]?.enabled
+      });
+      
       setMediaStream(stream);
       setPermissionStatus('granted');
       setPermissionError(null);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      // Stream will be attached via useEffect when mediaStream state updates
+      // This ensures the video element is ready
 
       toast.success('Camera and microphone access granted!');
       return stream;
@@ -390,6 +395,29 @@ const GoLive: React.FC = () => {
       setPermissionError(errorMessage);
       toast.error(errorMessage, { duration: 6000 });
       return null;
+    }
+  }, [mediaStream]);
+
+  // -------------------------------
+  // Attach media stream to video element
+  // -------------------------------
+  useEffect(() => {
+    if (videoRef.current && mediaStream) {
+      console.log('[GoLive] Attaching stream to video element', {
+        hasStream: !!mediaStream,
+        videoTracks: mediaStream.getVideoTracks().length,
+        audioTracks: mediaStream.getAudioTracks().length,
+        videoTrackEnabled: mediaStream.getVideoTracks()[0]?.enabled
+      });
+      
+      videoRef.current.srcObject = mediaStream;
+      
+      // Ensure video plays
+      videoRef.current.play().catch((err) => {
+        console.error('[GoLive] Video play error:', err);
+      });
+    } else if (videoRef.current && !mediaStream) {
+      videoRef.current.srcObject = null;
     }
   }, [mediaStream]);
 
