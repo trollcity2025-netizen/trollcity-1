@@ -153,6 +153,9 @@ export class LiveKitService {
       // Step 4: Connect to room
       this.log('Connecting to LiveKit room...', { LIVEKIT_URL, roomName: this.config.roomName, identity: this.config.identity })
 
+      // ✅ 2) Before room.connect:
+      console.log("[useLiveKitSession] about to connect", { url: LIVEKIT_URL, roomName: this.config.roomName, identity: this.config.identity, tokenLen: token?.length })
+
       // Fallback check: LIVEKIT_URL should be a secure websocket endpoint
       if (typeof LIVEKIT_URL === 'string' && !LIVEKIT_URL.startsWith('wss://')) {
         console.error('LIVEKIT_URL does not start with wss:// — blocking connect', LIVEKIT_URL)
@@ -163,13 +166,10 @@ export class LiveKitService {
 
       try {
         await this.room.connect(LIVEKIT_URL, token)
+        console.log("[useLiveKitSession] ✅ Connected successfully")
+        return true
       } catch (err) {
-        // Log the full error object for debugging
-        console.error('LiveKit room.connect error:', err)
-        this.log('❌ room.connect threw an error', err)
-        toast.error('LiveKit connection failed: check LIVEKIT_URL, token, or server availability')
-        this.isConnecting = false
-        this.config.onError?.((err as any)?.message || 'LiveKit connect failed')
+        console.error("[LiveKitService] connect failed", err)
         return false
       }
 
@@ -434,9 +434,13 @@ export class LiveKitService {
         }),
       })
 
+      // ✅ 1) In your token fetch code:
+      console.log("[useLiveKitSession] token response:", resp)
+
       let data: any = null
       try {
         data = await resp.json()
+        console.log("[useLiveKitSession] token json:", data)
       } catch (e) {
         this.log('🔑 Failed to parse token endpoint response', e?.message || e)
         throw new Error('Invalid token response from server')

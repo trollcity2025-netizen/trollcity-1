@@ -217,7 +217,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
         syncLocalParticipant();
         return ok;
       } catch (err: any) {
-        console.error("[CONNECT FAILED]", err);
+        console.error("[LiveKitProvider] connect failed", err);
         setIsConnecting(false);
         const errorMsg = err?.message || "Failed to connect to LiveKit";
         setError(errorMsg);

@@ -138,7 +138,7 @@ export function useLiveKitSession(options: SessionOptions) {
                 // ignore and retry
               }
               // small delay
-              // eslint-disable-next-line no-await-in-loop
+
               await new Promise((r) => setTimeout(r, 250))
             }
             return false
@@ -163,7 +163,7 @@ export function useLiveKitSession(options: SessionOptions) {
 
         return true
       } catch (err: any) {
-        console.error('[useLiveKitSession] joinAndPublish failed:', err)
+        console.error('[useLiveKitSession] connect failed', err)
         const errorMsg = err?.message || 'Failed to join stream'
         setSessionError(errorMsg)
         joinStartedRef.current = false
@@ -210,7 +210,7 @@ export function useLiveKitSession(options: SessionOptions) {
         console.log('[useLiveKitSession] joinOnly connected')
         return true
       } catch (err: any) {
-        console.error('[useLiveKitSession] joinOnly failed:', err)
+        console.error('[useLiveKitSession] connect failed', err)
         setSessionError(err?.message || 'Failed to join stream')
         joinStartedRef.current = false
         return false
