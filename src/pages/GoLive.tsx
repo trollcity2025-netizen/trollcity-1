@@ -178,15 +178,16 @@ const GoLive: React.FC = () => {
           id: streamId,
           broadcaster_id: profile.id,
           title: streamTitle,
-          room_name: String(streamId),
+          category: category,
           is_live: true,
           status: 'live',
           start_time: new Date().toISOString(),
           thumbnail_url: thumbnailUrl,
-          viewer_count: 0,
           current_viewers: 0,
           total_gifts_coins: 0,
+          total_unique_gifters: 0,
           popularity: 0,
+          agora_channel: `stream_${streamId}`, // Generate channel name based on stream ID
         })
         .select()
         .single();

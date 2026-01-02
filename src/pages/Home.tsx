@@ -16,7 +16,6 @@ type HomeStream = {
   category?: string | null;
   current_viewers?: number | null;
   is_live?: boolean | null;
-  room_name?: string | null;
   livekit_url?: string | null;
   start_time?: string | null;
   broadcaster_id?: string | null;
@@ -804,7 +803,7 @@ const HomePageContent = () => {
             category,
             current_viewers,
             is_live,
-            room_name,
+
             livekit_url,
             start_time,
             broadcaster_id,
