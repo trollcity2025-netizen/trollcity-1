@@ -514,28 +514,53 @@ export default function BroadcastPage() {
           
           await joinAndPublish(stream);
           
-          // ✅ FIXED: Properly attach local video track to the correct seat video element
-          // Wait a moment for tracks to be published, then attach
+          // ✅ FIXED: Improved track attachment with better timing and error handling
           setTimeout(async () => {
             try {
               const videoEl = document.getElementById(`seat-video-${index}`) as HTMLVideoElement;
               if (videoEl) {
                 const room = liveKit.getRoom();
                 if (room && room.localParticipant) {
-                  // Get the camera track that was published
-                  const cameraTrack = room.localParticipant.getTrackPublication("camera")?.track;
-                  if (cameraTrack) {
-                    cameraTrack.attach(videoEl);
-                    console.log(`[BroadcastPage] ✅ Local video track attached to seat-video-${index}`);
-                  } else {
-                    console.warn(`[BroadcastPage] No camera track found for seat ${index}`);
+                  // Wait for tracks to be published with a more reliable check
+                  let attempts = 0;
+                  const maxAttempts = 20; // 5 seconds total
+                  
+                  while (attempts < maxAttempts) {
+                    const cameraTrack = room.localParticipant.getTrackPublication("camera")?.track;
+                    const microphoneTrack = room.localParticipant.getTrackPublication("microphone")?.track;
+                    
+                    if (cameraTrack || microphoneTrack) {
+                      // Attach video track if available
+                      if (cameraTrack) {
+                        cameraTrack.attach(videoEl);
+                        console.log(`[BroadcastPage] ✅ Local video track attached to seat-video-${index}`);
+                      }
+                      
+                      // Ensure tracks are enabled
+                      if (cameraTrack && cameraTrack.isEnabled !== undefined) {
+                        cameraTrack.enabled = true;
+                      }
+                      if (microphoneTrack && microphoneTrack.isEnabled !== undefined) {
+                        microphoneTrack.enabled = true;
+                      }
+                      
+                      break;
+                    }
+                    
+                    // Wait 250ms before next attempt
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                    attempts++;
+                  }
+                  
+                  if (attempts >= maxAttempts) {
+                    console.warn(`[BroadcastPage] Track attachment timeout for seat ${index}`);
                   }
                 }
               }
             } catch (err) {
               console.error('[BroadcastPage] Failed to attach local video track:', err);
             }
-          }, 500); // Small delay to ensure tracks are published
+          }, 1000); // Increased delay to 1 second for more reliable track publication
           
         } catch (liveKitErr: any) {
           // Extract the real error message from LiveKit join attempt
@@ -673,16 +698,12 @@ export default function BroadcastPage() {
       liveKit.disconnect();
       
       // Navigate to stream summary page
-      navigate(`/stream/${stream.id}/summary`);
+      navigate(`/broadcast-summary`);
     } catch (err) {
       console.error('Failed to end stream', err);
       toast.error('Failed to end stream');
       // Still try to navigate even if there's an error
-      if (stream?.id) {
-        navigate(`/stream/${stream.id}/summary`);
-      } else {
-        navigate('/');
-      }
+      navigate(`/broadcast-summary`);
     }
   }, [stream?.id, cleanupLocalStream, navigate, liveKit]);
 

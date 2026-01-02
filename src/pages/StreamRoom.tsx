@@ -1003,7 +1003,7 @@ export default function StreamRoom() {
       
       if (success) {
         // Navigate all users to the stream summary page
-        navigate(`/stream/${stream.id}/summary`);
+        navigate('/broadcast-summary');
       } else {
         toast.error('Failed to end stream properly');
       }

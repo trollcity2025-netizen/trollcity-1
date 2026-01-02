@@ -196,6 +196,14 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
 
     const videoTrack = participant.videoTrack?.track
     const audioTrack = participant.audioTrack?.track
+    
+    // Ensure tracks are properly initialized
+    console.log('OfficerStreamGrid: Participant tracks:', {
+      videoTrack: videoTrack ? 'available' : 'missing',
+      audioTrack: audioTrack ? 'available' : 'missing',
+      videoTrackObj: participant.videoTrack,
+      audioTrackObj: participant.audioTrack
+    });
 
     if (videoTrack && videoRef.current) {
       videoTrack.attach(videoRef.current)

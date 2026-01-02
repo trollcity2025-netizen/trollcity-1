@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 // import api from '../lib/api'; // Uncomment if needed
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../lib/store';
-import { Video, Camera, Mic, MicOff, CameraOff } from 'lucide-react';
+import { Video } from 'lucide-react';
 import { toast } from 'sonner';
 
 const GoLive: React.FC = () => {
@@ -349,19 +349,13 @@ const GoLive: React.FC = () => {
         Go Live
       </h1>
 
-      <div className="host-video-box relative rounded-xl overflow-hidden border border-purple-700/30">
-        <div className="w-full h-32 md:h-40 lg:h-48 relative bg-gradient-to-br from-purple-900/20 to-blue-900/20 flex items-center justify-center">
-          <div className="text-center text-gray-400">
-            <Video className="w-16 h-16 mx-auto mb-3 opacity-60" />
-            <h3 className="text-lg font-semibold text-white mb-2">Ready to Go Live!</h3>
-            <p className="text-sm text-gray-300 max-w-sm">
-              Camera and microphone will be activated when you join a seat in the broadcast.
-            </p>
-            <div className="mt-4 flex items-center justify-center gap-2 text-purple-300">
-              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Setup Mode</span>
-            </div>
-          </div>
+      <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-xl p-8 border border-purple-700/30">
+        <div className="text-center text-gray-300">
+          <Video className="w-16 h-16 mx-auto mb-3 text-purple-400" />
+          <h3 className="text-lg font-semibold text-white mb-2">Ready to Go Live!</h3>
+          <p className="text-sm text-gray-300 max-w-sm mx-auto">
+            Configure your stream settings and click "Go Live Now!" to start broadcasting.
+          </p>
         </div>
       </div>
 
@@ -456,11 +450,7 @@ const GoLive: React.FC = () => {
               )}
             </button>
 
-            {/* Stream setup status indicator */}
-            <div className="text-sm text-gray-400 flex flex-col items-end gap-1">
-              <span className="text-green-400">✓ Setup Ready</span>
-              <span className="text-blue-400 text-xs">Camera/mic will activate when joining seat</span>
-            </div>
+
           </div>
         </div>
       ) : (

@@ -41,7 +41,7 @@ export default function ControlBar({
     try {
       const success = await endStream(streamId, room)
       if (success) {
-        navigate('/stream-ended')
+        navigate('/broadcast-summary')
       } else {
         toast.error('Failed to end stream. Please try again.')
         setIsEnding(false)
