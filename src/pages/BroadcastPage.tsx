@@ -154,9 +154,9 @@ export default function BroadcastPage() {
   const { participants, service: _service } = liveKit;
   const { seats, claimSeat, releaseSeat: _releaseSeat } = useSeatRoster(roomName);
 
-  // Media state
+  // Media state - useRef to prevent re-renders that cause cleanup loops
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(null);
+  const preflightStreamRef = useRef<MediaStream | null>(null);
 
   // Defensive auth check: if Supabase reports no active session or refresh fails,
   // sign the user out and redirect to auth to avoid unhandled errors during LiveKit actions.
@@ -213,8 +213,10 @@ export default function BroadcastPage() {
 
   // Media access handlers
   const requestMediaAccess = useCallback(async (): Promise<MediaStream> => {
-    if (localMediaStream && localMediaStream.active) {
-      return localMediaStream;
+    // ✅ CRITICAL: Check if we already have a valid preflight stream
+    if (preflightStreamRef.current && preflightStreamRef.current.active) {
+      console.log('[BroadcastPage] Reusing existing preflight stream');
+      return preflightStreamRef.current;
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -226,7 +228,7 @@ export default function BroadcastPage() {
     }
 
     try {
-      console.log('[BroadcastPage] Requesting camera & mic');
+      console.log('[BroadcastPage] Requesting camera & mic (first time)');
       const stream = await navigator.mediaDevices.getUserMedia(DEFAULT_MEDIA_CONFIG);
       
       stream.getAudioTracks().forEach((track) => {
@@ -237,7 +239,9 @@ export default function BroadcastPage() {
         localVideoRef.current.srcObject = stream;
       }
       
-      setLocalMediaStream(stream);
+      // ✅ Store in ref instead of state to prevent re-renders
+      preflightStreamRef.current = stream;
+      console.log('[BroadcastPage] ✅ Preflight stream created and stored in ref');
       return stream;
     } catch (err: any) {
       console.error('[BroadcastPage] getUserMedia failed:', {
@@ -253,17 +257,26 @@ export default function BroadcastPage() {
       (error as any).originalError = err;
       throw error;
     }
-  }, [localMediaStream]);
+  }, []);
 
+  // ✅ FIXED: Only cleanup on explicit leave actions, not on re-renders
   const cleanupLocalStream = useCallback(() => {
-    if (localMediaStream) {
-      localMediaStream.getTracks().forEach((track) => track.stop());
-      setLocalMediaStream(null);
+    if (preflightStreamRef.current) {
+      console.log('[BroadcastPage] Cleaning up preflight stream (explicit cleanup)');
+      preflightStreamRef.current.getTracks().forEach((track) => {
+        console.log(`[BroadcastPage] Stopping track: ${track.kind}`, {
+          enabled: track.enabled,
+          readyState: track.readyState,
+          muted: track.muted
+        });
+        track.stop();
+      });
+      preflightStreamRef.current = null;
     }
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null;
     }
-  }, [localMediaStream]);
+  }, []);
 
   // Stream data loading with retry logic and fallback
   const loadStreamData = useCallback(async () => {
@@ -514,6 +527,50 @@ export default function BroadcastPage() {
           
           await joinAndPublish(stream);
           
+          // ✅ DEBUG: Log track state 2 seconds after publishing to confirm tracks aren't being ended
+          setTimeout(() => {
+            console.log('[BroadcastPage] 🔍 DEBUG: Track state 2 seconds after publishing:', {
+              streamActive: stream?.active,
+              videoTracks: stream?.getVideoTracks().map(track => ({
+                kind: track.kind,
+                enabled: track.enabled,
+                readyState: track.readyState,
+                muted: track.muted,
+                label: track.label
+              })) || [],
+              audioTracks: stream?.getAudioTracks().map(track => ({
+                kind: track.kind,
+                enabled: track.enabled,
+                readyState: track.readyState,
+                muted: track.muted,
+                label: track.label
+              })) || []
+            });
+            
+            // Also check LiveKit room tracks
+            const room = liveKit.getRoom();
+            if (room && room.localParticipant) {
+              const videoPubs = Array.from(room.localParticipant.videoTrackPublications.values());
+              const audioPubs = Array.from(room.localParticipant.audioTrackPublications.values());
+              console.log('[BroadcastPage] 🔍 DEBUG: LiveKit local track publications:', {
+                videoTracks: videoPubs.map((pub: any) => ({
+                  trackId: pub.trackSid,
+                  trackKind: pub.track?.kind,
+                  trackEnabled: pub.track?.isEnabled,
+                  trackMuted: pub.track?.isMuted,
+                  publicationEnabled: pub.isEnabled
+                })),
+                audioTracks: audioPubs.map((pub: any) => ({
+                  trackId: pub.trackSid,
+                  trackKind: pub.track?.kind,
+                  trackEnabled: pub.track?.isEnabled,
+                  trackMuted: pub.track?.isMuted,
+                  publicationEnabled: pub.isEnabled
+                }))
+              });
+            }
+          }, 2000);
+          
           // ✅ FIXED: Simplified track attachment - OfficerStreamGrid handles its own track attachment
           // No need for delayed attachment as OfficerStreamGrid component manages video elements
           console.log(`[BroadcastPage] Seat ${index} claimed and tracks published successfully`);
@@ -613,6 +670,43 @@ export default function BroadcastPage() {
     ]
   );
 
+  // ✅ NEW: Proper leaveSeat function to cleanly exit a seat
+  const leaveSeat = useCallback(async () => {
+    if (currentSeatIndex === null) {
+      console.log('[BroadcastPage] Not currently in a seat, nothing to leave');
+      return;
+    }
+
+    console.log(`[BroadcastPage] Leaving seat ${currentSeatIndex + 1}`);
+    
+    try {
+      // Release the seat first
+      if (_releaseSeat) {
+        await _releaseSeat(currentSeatIndex);
+      }
+      
+      // Stop publishing tracks by disconnecting from the room (which also cleans up tracks)
+      if (liveKit.service?.disconnect) {
+        await liveKit.service.disconnect();
+      }
+      
+      // Clean up our preflight stream
+      cleanupLocalStream();
+      
+      // Clear seat state
+      setCurrentSeatIndex(null);
+      
+      console.log(`[BroadcastPage] ✅ Successfully left seat ${currentSeatIndex + 1}`);
+      toast.success(`Left seat ${currentSeatIndex + 1}`);
+      
+    } catch (err: any) {
+      console.error('[BroadcastPage] Error leaving seat:', err);
+      // Still clear the seat state even if there's an error
+      setCurrentSeatIndex(null);
+      toast.error('Error leaving seat');
+    }
+  }, [currentSeatIndex, _releaseSeat, liveKit, cleanupLocalStream]);
+
 
 
   // Admin control handlers
@@ -636,6 +730,8 @@ export default function BroadcastPage() {
     }
 
     try {
+      console.log('[BroadcastPage] Ending stream...');
+      
       // Get LiveKit room for proper disconnection
       const room = liveKit.getRoom();
       
@@ -648,12 +744,6 @@ export default function BroadcastPage() {
         return;
       }
       
-      // Cleanup local media stream
-      cleanupLocalStream();
-      
-      // Disconnect from LiveKit
-      liveKit.disconnect();
-      
       // Navigate to stream summary page
       navigate(`/broadcast-summary`);
     } catch (err) {
@@ -662,7 +752,7 @@ export default function BroadcastPage() {
       // Still try to navigate even if there's an error
       navigate(`/broadcast-summary`);
     }
-  }, [stream?.id, cleanupLocalStream, navigate, liveKit]);
+  }, [stream?.id, currentSeatIndex, leaveSeat, navigate, liveKit]);
 
 
 
@@ -797,11 +887,8 @@ export default function BroadcastPage() {
   }, [participants, profile, seats, stream?.broadcaster_id]);
 
   // Effects
-  useEffect(() => {
-    return () => {
-      cleanupLocalStream();
-    };
-  }, [cleanupLocalStream]);
+  // ✅ REMOVED: The problematic useEffect that was causing cleanup loops
+  // Cleanup is now only called explicitly via leaveSeat() or endStream()
 
   useEffect(() => {
     loadStreamData();
@@ -879,7 +966,8 @@ export default function BroadcastPage() {
     
     if (hadAuth && !hasAuth) {
       console.warn("⚠️ Auth lost — redirecting to login and cleaning up broadcast state");
-      cleanupLocalStream();
+      // ✅ FIXED: Only clear refs, don't stop tracks (that should happen explicitly)
+      preflightStreamRef.current = null;
       connectRequestedRef.current = false;
       autoStartRef.current = false;
       toast.error("Session expired — please sign in again.");
@@ -887,7 +975,7 @@ export default function BroadcastPage() {
     }
     
     prevAuthRef.current = hasAuth;
-  }, [user, profile, navigate, cleanupLocalStream]);
+  }, [user, profile, navigate]);
 
   // Stream status polling
   useEffect(() => {
@@ -1049,6 +1137,14 @@ export default function BroadcastPage() {
                 >
                   End Stream
                 </button>
+                {currentSeatIndex !== null && (
+                  <button
+                    onClick={leaveSeat}
+                    className="px-4 py-2 bg-orange-700 hover:bg-orange-800 rounded text-sm font-semibold"
+                  >
+                    Leave Seat {currentSeatIndex + 1}
+                  </button>
+                )}
               </div>
             </div>
 
