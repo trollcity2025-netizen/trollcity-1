@@ -609,20 +609,24 @@ export default function BroadcastPage() {
 
         try {
           // ✅ 2) Only trigger joinAndPublish when ALL are true
+          console.log('[BroadcastPage] 🔍 Pre-flight checks before joining LiveKit room');
+          
           const { data: sessionData } = await supabase.auth.getSession()
           if (!sessionData.session) {
-            console.log("[BroadcastPage] No session yet — skipping joinAndPublish")
+            console.log("[BroadcastPage] ❌ No session yet — skipping joinAndPublish")
             throw new Error('No active session. Please sign in again.')
           }
           
           if (!roomName || !user?.id || !profile?.id) {
-            console.log("[BroadcastPage] Missing requirements — skipping joinAndPublish", {
+            console.log("[BroadcastPage] ❌ Missing requirements — skipping joinAndPublish", {
               roomName,
               hasUser: !!user,
               hasProfile: !!profile
             })
             throw new Error('Missing required information to join stream')
           }
+
+          console.log('[BroadcastPage] ✅ All pre-flight checks passed');
 
           // ✅ Ensure tracks are enabled before publishing
           stream.getVideoTracks().forEach(track => {
@@ -637,10 +641,23 @@ export default function BroadcastPage() {
             videoTracks: stream?.getVideoTracks().length || 0,
             audioTracks: stream?.getAudioTracks().length || 0,
             videoTrackEnabled: stream?.getVideoTracks()[0]?.enabled,
-            audioTrackEnabled: stream?.getAudioTracks()[0]?.enabled
+            audioTrackEnabled: stream?.getAudioTracks()[0]?.enabled,
+            roomName,
+            userId: user?.id,
+            profileId: profile?.id
           });
           
-          await joinAndPublish(stream);
+          // Add timeout wrapper for joinAndPublish
+          const joinTimeout = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('LiveKit room join timed out after 30 seconds')), 30000);
+          });
+          
+          await Promise.race([
+            joinAndPublish(stream),
+            joinTimeout
+          ]);
+          
+          console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
           
           // ✅ DEBUG: Log track state 2 seconds after publishing to confirm tracks aren't being ended
           setTimeout(() => {
@@ -694,8 +711,32 @@ export default function BroadcastPage() {
         } catch (liveKitErr: any) {
           // Extract the real error message from LiveKit join attempt
           const actualError = liveKitErr?.message || 'LiveKit join failed';
-          console.error('LiveKit join error details:', actualError);
-          throw new Error(actualError);
+          console.error('[BroadcastPage] ❌ LiveKit join error details:', {
+            error: actualError,
+            name: liveKitErr?.name,
+            code: liveKitErr?.code,
+            reason: liveKitErr?.reason,
+            roomName,
+            userId: user?.id,
+            profileId: profile?.id
+          });
+          
+          // Provide specific error messages based on error type
+          let userMessage = 'Failed to join LiveKit room. Please try again.';
+          
+          if (actualError.includes('timeout') || actualError.includes('Timeout')) {
+            userMessage = 'Connection timed out. Please check your internet connection and try again.';
+          } else if (actualError.includes('token') || actualError.includes('Token')) {
+            userMessage = 'Authentication failed. Please refresh the page and try again.';
+          } else if (actualError.includes('room') && actualError.includes('not found')) {
+            userMessage = 'Stream room not found. The stream may have ended. Please refresh the page.';
+          } else if (actualError.includes('unauthorized') || actualError.includes('401') || actualError.includes('403')) {
+            userMessage = 'Access denied. Please refresh the page and try again.';
+          } else if (actualError.includes('network') || actualError.includes('connection')) {
+            userMessage = 'Network error. Please check your internet connection and try again.';
+          }
+          
+          throw new Error(userMessage);
         }
 
         // Update stream status if broadcaster

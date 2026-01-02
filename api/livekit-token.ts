@@ -18,7 +18,10 @@ function parseAllowPublish(v: any): boolean {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log(`[livekit-token] 🔄 New request: ${req.method} ${req.url}`);
+  
   if (req.method !== "POST") {
+    console.log(`[livekit-token] ❌ Method not allowed: ${req.method}`);
     return res.status(405).json({ error: "Method not allowed" });
   }
 
@@ -27,8 +30,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const auth = req.headers.authorization || "";
     const jwt = auth.startsWith("Bearer ") ? auth.slice(7) : null;
     if (!jwt) {
+      console.log('[livekit-token] ❌ Missing Authorization header');
       return res.status(401).json({ error: "Missing Authorization header" });
     }
+    
+    console.log('[livekit-token] ✅ Authorization header found');
 
     // Parse request body
     const payload: TokenRequest = req.body || {};
@@ -36,26 +42,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let identity = payload.identity;
     const name = String(payload.name || payload.identity || "Anonymous");
 
+    console.log('[livekit-token] 📝 Request payload:', {
+      roomName,
+      identity,
+      name,
+      allowPublish: payload.allowPublish,
+      role: payload.role,
+      level: payload.level,
+      hasAuth: !!jwt
+    });
+
     if (!roomName) {
+      console.log('[livekit-token] ❌ Missing roomName');
       return res.status(400).json({ error: "Missing roomName" });
     }
+    
+    console.log('[livekit-token] ✅ Room name validated:', roomName);
 
     // Validate LiveKit environment variables
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     const livekitUrl = process.env.LIVEKIT_URL;
 
+    console.log('[livekit-token] 🔧 Environment check:', {
+      hasApiKey: !!apiKey,
+      hasApiSecret: !!apiSecret,
+      hasLivekitUrl: !!livekitUrl,
+      livekitUrl
+    });
+
     if (!apiKey || !apiSecret) {
+      console.error('[livekit-token] ❌ Missing LiveKit environment variables');
       return res.status(500).json({ error: "LiveKit env vars missing" });
     }
+    
+    console.log('[livekit-token] ✅ LiveKit environment variables validated');
 
     // Validate Supabase environment variables
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('[livekit-token] ❌ Missing Supabase environment variables');
       return res.status(500).json({ error: "Supabase env vars missing" });
     }
+    
+    console.log('[livekit-token] ✅ Supabase environment variables validated');
 
     // Create Supabase client with service role key
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

@@ -492,7 +492,10 @@ export function useLiveKitRoom(config: LiveKitRoomOptions) {
       console.log('[useLiveKitRoom] connect missing roomName or user, skipping')
       return
     }
-    if (connectingRef.current) return
+    if (connectingRef.current) {
+      console.log('[useLiveKitRoom] Already connecting, skipping duplicate call')
+      return
+    }
     connectingRef.current = true
 
     console.log('[useLiveKitRoom] connect start', {
@@ -505,107 +508,140 @@ export function useLiveKitRoom(config: LiveKitRoomOptions) {
     setConnectionStatus('connecting')
     setError(null)
 
-    try {
-      const tokenResponse = await fetchToken(allowPublish)
-      const targetUrl = tokenResponse.livekitUrl || LIVEKIT_URL
+    let retryCount = 0
+    const maxRetries = 3
+    const baseDelay = 1000 // 1 second
 
-      console.log('[useLiveKitRoom] Connecting to LiveKit:', {
-        url: targetUrl,
-        tokenLength: tokenResponse.token?.length,
-        tokenPreview: tokenResponse.token ? `${tokenResponse.token.substring(0, 50)}...` : null,
-        room: tokenResponse.room || roomName
-      })
+    while (retryCount <= maxRetries) {
+      try {
+        console.log(`[useLiveKitRoom] 🔄 Connection attempt ${retryCount + 1}/${maxRetries + 1}`)
+        
+        const tokenResponse = await fetchToken(allowPublish)
+        const targetUrl = tokenResponse.livekitUrl || LIVEKIT_URL
 
-      const newRoom = new Room({ ...defaultLiveKitOptions, ...roomOptions })
+        console.log('[useLiveKitRoom] Connecting to LiveKit:', {
+          url: targetUrl,
+          tokenLength: tokenResponse.token?.length,
+          tokenPreview: tokenResponse.token ? `${tokenResponse.token.substring(0, 50)}...` : null,
+          room: tokenResponse.room || roomName
+        })
 
-      newRoom.on(RoomEvent.Connected, () => {
-        console.log('[useLiveKitRoom] ✅ Room connected successfully')
-        setConnectionStatus('connected')
-        addParticipant(newRoom.localParticipant)
-        registerExistingParticipants(newRoom)
-        if (autoPublish && allowPublish) {
-          console.log('[useLiveKitRoom] autoPublish enabled, publishing local tracks')
-          void publishLocalTracks(newRoom)
+        const newRoom = new Room({ ...defaultLiveKitOptions, ...roomOptions })
+
+        // Set up event handlers
+        newRoom.on(RoomEvent.Connected, () => {
+          console.log('[useLiveKitRoom] ✅ Room connected successfully')
+          setConnectionStatus('connected')
+          addParticipant(newRoom.localParticipant)
+          registerExistingParticipants(newRoom)
+          if (autoPublish && allowPublish) {
+            console.log('[useLiveKitRoom] autoPublish enabled, publishing local tracks')
+            void publishLocalTracks(newRoom)
+          }
+        })
+
+        newRoom.on(RoomEvent.Reconnecting, () => {
+          console.log('[useLiveKitRoom] 🔄 Reconnecting...')
+          setConnectionStatus('reconnecting')
+        })
+
+        newRoom.on(RoomEvent.Disconnected, () => {
+          console.log('[useLiveKitRoom] 📡 Room disconnected')
+          setConnectionStatus('disconnected')
+          setRoom(null)
+          setParticipants({})
+        })
+
+        newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+          console.log('[useLiveKitRoom] 👤 Participant connected:', participant.identity)
+          addParticipant(participant)
+        })
+
+        newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
+          console.log('[useLiveKitRoom] 👋 Participant disconnected:', participant.identity)
+          removeParticipantState(participant.identity)
+        })
+
+        newRoom.on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
+        newRoom.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
+
+        roomRef.current = newRoom
+
+        console.log('[useLiveKitRoom] 🔗 Attempting LiveKit connection...')
+        await newRoom.connect(targetUrl, tokenResponse.token)
+        setRoom(newRoom)
+        
+        // Success! Break out of retry loop
+        console.log('[useLiveKitRoom] ✅ Connection successful!')
+        break
+        
+      } catch (err: any) {
+        // Comprehensive error logging for debugging
+        const errorDetails = {
+          name: err?.name,
+          message: err?.message,
+          stack: err?.stack,
+          code: err?.code,
+          reason: err?.reason,
+          statusCode: err?.statusCode,
+          status: err?.status,
+          raw: err,
+          // Connection context
+          roomName,
+          identity: user?.id,
+          allowPublish,
+          attempt: retryCount + 1,
+          maxRetries
         }
-      })
 
-      newRoom.on(RoomEvent.Reconnecting, () => {
-        console.log('[useLiveKitRoom] 🔄 Reconnecting...')
-        setConnectionStatus('reconnecting')
-      })
+        console.error(`[useLiveKitRoom] ❌ Connection attempt ${retryCount + 1} failed:`, errorDetails)
 
-      newRoom.on(RoomEvent.Disconnected, () => {
-        console.log('[useLiveKitRoom] 📡 Room disconnected')
-        setConnectionStatus('disconnected')
-        setRoom(null)
-        setParticipants({})
-      })
+        // Provide specific error analysis
+        let errorType = 'unknown'
+        let errorSuggestion = ''
+        let shouldRetry = true
 
-      newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        console.log('[useLiveKitRoom] 👤 Participant connected:', participant.identity)
-        addParticipant(participant)
-      })
+        if (err?.message?.includes('token') || err?.message?.includes('Token')) {
+          errorType = 'invalid_token'
+          errorSuggestion = 'Token validation failed - check JWT structure, expiry, and grants'
+          shouldRetry = false // Don't retry token errors
+        } else if (err?.message?.includes('401') || err?.message?.includes('403')) {
+          errorType = 'auth_failed'
+          errorSuggestion = 'Authentication failed - verify LiveKit project keys and API credentials'
+          shouldRetry = false // Don't retry auth errors
+        } else if (err?.message?.includes('room') && err?.message?.includes('not found')) {
+          errorType = 'room_not_found'
+          errorSuggestion = 'Room does not exist or is not accessible - check room name and permissions'
+        } else if (err?.message?.includes('connection') || err?.message?.includes('connect')) {
+          errorType = 'connection_failed'
+          errorSuggestion = 'Connection failed - check LiveKit URL and network connectivity'
+        } else if (err?.message?.includes('timeout') || err?.message?.includes('Timeout')) {
+          errorType = 'timeout'
+          errorSuggestion = 'Connection timed out - check network connectivity and LiveKit server status'
+        }
 
-      newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        console.log('[useLiveKitRoom] 👋 Participant disconnected:', participant.identity)
-        removeParticipantState(participant.identity)
-      })
+        console.error(`[useLiveKitRoom] 🔍 Error Analysis: ${errorType} - ${errorSuggestion}`)
 
-      newRoom.on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
-      newRoom.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
+        // Decide whether to retry
+        if (!shouldRetry || retryCount >= maxRetries) {
+          console.log(`[useLiveKitRoom] 🚫 Not retrying - max attempts reached or non-retryable error`)
+          setError(err?.message || 'Failed to connect to LiveKit')
+          setConnectionStatus('error')
+          setRoom(null)
+          break
+        }
 
-      roomRef.current = newRoom
-
-      console.log('[useLiveKitRoom] 🔗 Attempting LiveKit connection...')
-      await newRoom.connect(targetUrl, tokenResponse.token)
-      setRoom(newRoom)
-
-    } catch (err: any) {
-      // Comprehensive error logging for debugging
-      const errorDetails = {
-        name: err?.name,
-        message: err?.message,
-        stack: err?.stack,
-        code: err?.code,
-        reason: err?.reason,
-        statusCode: err?.statusCode,
-        status: err?.status,
-        raw: err,
-        // Connection context
-        roomName,
-        identity: user?.id,
-        allowPublish,
-        targetUrl: (err as any)?.url || LIVEKIT_URL
+        // Calculate delay with exponential backoff
+        const delay = baseDelay * Math.pow(2, retryCount)
+        console.log(`[useLiveKitRoom] ⏳ Retrying in ${delay}ms...`)
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, delay))
+        retryCount++
       }
-
-      console.error('[useLiveKitRoom] ❌ LiveKit connect failed:', errorDetails)
-
-      // Provide specific error analysis
-      let errorType = 'unknown'
-      let errorSuggestion = ''
-
-      if (err?.message?.includes('token') || err?.message?.includes('Token')) {
-        errorType = 'invalid_token'
-        errorSuggestion = 'Token validation failed - check JWT structure, expiry, and grants'
-      } else if (err?.message?.includes('401') || err?.message?.includes('403')) {
-        errorType = 'auth_failed'
-        errorSuggestion = 'Authentication failed - verify LiveKit project keys and API credentials'
-      } else if (err?.message?.includes('room') && err?.message?.includes('not found')) {
-        errorType = 'room_not_found'
-        errorSuggestion = 'Room does not exist or is not accessible - check room name and permissions'
-      } else if (err?.message?.includes('connection') || err?.message?.includes('connect')) {
-        errorType = 'connection_failed'
-        errorSuggestion = 'Connection failed - check LiveKit URL and network connectivity'
-      }
-
-      console.error(`[useLiveKitRoom] 🔍 Error Analysis: ${errorType} - ${errorSuggestion}`)
-
-      setError(err?.message || 'Failed to connect to LiveKit')
-      setConnectionStatus('error')
-      setRoom(null)
-    } finally {
-      connectingRef.current = false
     }
+    
+    connectingRef.current = false
   }, [
     roomName,
     user,
