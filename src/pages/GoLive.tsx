@@ -296,7 +296,7 @@ const GoLive: React.FC = () => {
       };
       
       try {
-        navigate(`/stream/${createdId}?setup=1`, { 
+        navigate(`/broadcast/${createdId}?setup=1`, { 
           state: { streamData: streamDataForNavigation, needsSeatJoin: true } 
         });
         console.log('[GoLive] ✅ Navigation called successfully - waiting for seat join');
