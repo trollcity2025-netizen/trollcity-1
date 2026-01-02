@@ -21,6 +21,26 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info)
+    
+    // Enhanced error detection and handling
+    const errorMessage = error.message || ''
+    
+    // Handle LiveKit context errors
+    if (errorMessage.includes('useLiveKit must be used within LiveKitProvider') || 
+        errorMessage.includes('no room provided') ||
+        errorMessage.includes('room context')) {
+      console.error('LiveKit context error detected:', errorMessage)
+      toast.error('Stream connection error. Please refresh to reconnect.')
+      return
+    }
+    
+    // Handle other specific error types
+    if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Network Error')) {
+      toast.error('Network connection issue. Please check your internet connection.')
+      return
+    }
+    
+    // Default error handling
     toast.error('A module failed to load. Please refresh to update.')
   }
 
