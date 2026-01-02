@@ -6,6 +6,8 @@ import { useLiveKitSession } from '../hooks/useLiveKitSession'
 import { LiveKitParticipant } from '../lib/LiveKitService'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
+import { ParticipantTile, useTracks } from '@livekit/components-react'
+import { Track } from 'livekit-client'
 
 interface OfficerStreamGridProps {
   roomName?: string
@@ -25,6 +27,18 @@ const parseLiveKitMetadataUserId = (metadata?: string): string | undefined => {
     // ignore invalid metadata
   }
   return undefined
+}
+
+// Get the correct participant for each seat
+const getParticipantForSeat = (seat, room, user) => {
+  if (!room || !seat) return null
+
+  // If seat belongs to me
+  if (seat.user_id === user?.id) return room.localParticipant
+
+  // Otherwise find remote participant by identity
+  return Array.from(room.remoteParticipants.values())
+    .find((p: any) => p.identity === seat.user_id)
 }
 
 const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
@@ -68,6 +82,9 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
 
   const { participants, localParticipant } = liveKit
   const participantsList = useMemo(() => Array.from(participants.values()), [participants])
+  
+  // Get the actual room instance
+  const room = liveKit.getRoom()
 
   // Listen for stream end events and redirect
   React.useEffect(() => {
@@ -215,18 +232,9 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
         const isCurrentUserSeat = seat?.user_id === user?.id
         const isClaimingSeat = claimedSeats.has(index)
         
-        // Find participant by seat user_id or by local participant for current user
-        let participant = participantsList?.find((p) => {
-          if (!seat?.user_id) return false
-          if (p.identity === seat.user_id) return true
-          const metadataUserId = parseLiveKitMetadataUserId(p.metadata)
-          return metadataUserId === seat.user_id
-        })
-        
-        // If no participant found but this is the current user's seat, use localParticipant
-        if (!participant && isCurrentUserSeat && localParticipant) {
-          participant = localParticipant as any
-        }
+  // Use the getParticipantForSeat function to get the correct participant
+  const room = liveKit.getRoom()
+  const participant = getParticipantForSeat(seat, room, user)
         
         const isSpeaking = Boolean((participant as any)?.audioLevel > 0.05 || (participant as any)?.isSpeaking)
         
@@ -273,92 +281,17 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
   onClaimClick,
   onSeatAction,
 }) => {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const audioRef = useRef<HTMLAudioElement>(null)
-
-  React.useEffect(() => {
-    if (!participant) return
-
-    const videoTrack = participant.videoTrack?.track
-    const audioTrack = participant.audioTrack?.track
-    
-    // Enhanced logging for debugging track issues
-    console.log('OfficerStreamGrid: Participant tracks:', {
-      identity: participant.identity,
-      isLocal: participant.isLocal,
-      videoTrack: videoTrack ? 'available' : 'missing',
-      audioTrack: audioTrack ? 'available' : 'missing',
-      videoTrackObj: participant.videoTrack,
-      audioTrackObj: participant.audioTrack,
-      seatIndex
-    })
-
-    // For local participant, ensure tracks are properly attached
-    if (participant.isLocal) {
-      console.log('OfficerStreamGrid: Handling local participant tracks for seat', seatIndex)
-      
-      // Wait a bit for tracks to be ready, then attach
-      const attachLocalTracks = () => {
-        if (videoTrack && videoRef.current) {
-          try {
-            videoTrack.attach(videoRef.current)
-            console.log('OfficerStreamGrid: ✅ Local video track attached for seat', seatIndex)
-          } catch (e) {
-            console.warn('OfficerStreamGrid: Failed to attach local video track:', e)
-          }
-        }
-        
-        if (audioTrack && audioRef.current) {
-          try {
-            audioTrack.attach(audioRef.current)
-            console.log('OfficerStreamGrid: ✅ Local audio track attached for seat', seatIndex)
-          } catch (e) {
-            console.warn('OfficerStreamGrid: Failed to attach local audio track:', e)
-          }
-        }
-      }
-      
-      // Attach immediately, then try again after a short delay
-      attachLocalTracks()
-      setTimeout(attachLocalTracks, 500)
-    } else {
-      // For remote participants, attach normally
-      if (videoTrack && videoRef.current) {
-        try {
-          videoTrack.attach(videoRef.current)
-          console.log('OfficerStreamGrid: ✅ Remote video track attached for seat', seatIndex)
-        } catch (e) {
-          console.warn('OfficerStreamGrid: Failed to attach remote video track:', e)
-        }
-      }
-
-      if (audioTrack && audioRef.current) {
-        try {
-          audioTrack.attach(audioRef.current)
-          console.log('OfficerStreamGrid: ✅ Remote audio track attached for seat', seatIndex)
-        } catch (e) {
-          console.warn('OfficerStreamGrid: Failed to attach remote audio track:', e)
-        }
-      }
-    }
-
-    return () => {
-      try {
-        if (videoTrack && videoRef.current) {
-          videoTrack.detach(videoRef.current)
-        }
-      } catch (e) {
-        console.warn('Video detach failed:', e)
-      }
-      try {
-        if (audioTrack && audioRef.current) {
-          audioTrack.detach(audioRef.current)
-        }
-      } catch (e) {
-        console.warn('Audio detach failed:', e)
-      }
-    }
-  }, [participant?.videoTrack?.track, participant?.audioTrack?.track, seatIndex, participant?.isLocal])
+  // Get tracks for ParticipantTile
+  const tracks = useTracks(
+    [Track.Source.Camera, Track.Source.Microphone],
+    { onlySubscribed: false }
+  )
+  
+  // Find the track for this participant
+  const participantTrack = tracks.find((t: any) => {
+    if (!participant) return false
+    return t.participant?.identity === participant.identity
+  })
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -377,9 +310,6 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
     onClaimClick()
   }
 
-  // Show video if participant exists and has video track, OR if it's the current user's seat
-  const shouldShowVideo = (participant && participant.videoTrack?.track) || isCurrentUserSeat
-
   return (
     <div
       role="button"
@@ -390,56 +320,13 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
     >
       <div className="tile-inner relative w-full h-full">
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-        {shouldShowVideo ? (
-          <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted={participant?.isLocal || false}
-              className="w-full h-full object-cover"
-            />
-            <audio ref={audioRef} autoPlay />
-          </>
-        ) : isOccupied ? (
-          <div className="text-center text-white">
-            <div className="mb-2 text-lg font-semibold">{seat?.username || 'User'}</div>
-            <div className="text-xs uppercase tracking-[0.4em]">
-              {isCurrentUserSeat ? 'You' : 'Connected'}
-            </div>
-            {isCurrentUserSeat && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSeatAction('leave')
-                }}
-                className="mt-2 w-8 h-8 rounded-full bg-red-600 text-white text-lg font-bold hover:bg-red-700 transition flex items-center justify-center"
-                title="Leave stream"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ) : isClaimingSeat ? (
-          <div className="text-white flex flex-col items-center gap-2">
-            <div className="text-3xl font-bold animate-pulse">⟳</div>
-            <div className="text-sm font-semibold">Joining...</div>
-          </div>
+        {participant && participantTrack ? (
+          <ParticipantTile trackRef={participantTrack} />
         ) : (
-          <>
-            {/* Video element for this seat */}
-            <video
-              id={`seat-video-${seatIndex}`}
-              autoPlay
-              playsInline
-              muted
-              style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-            />
-            <div className="text-white flex flex-col items-center gap-2">
-              <div className="text-3xl font-bold">+</div>
-              <div className="text-sm font-semibold">Click to Join</div>
-            </div>
-          </>
+          <button onClick={() => onClaimClick()} className="text-white flex flex-col items-center gap-2">
+            <div className="text-3xl font-bold">+</div>
+            <div className="text-sm font-semibold">Click to Join</div>
+          </button>
         )}
       </div>
 
