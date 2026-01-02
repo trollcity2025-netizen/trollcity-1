@@ -1082,20 +1082,12 @@ export default function BroadcastPage() {
                 <div className="relative flex-1 min-h-0">
                   {lastGift && <GiftEventOverlay gift={lastGift} />}
                   
-                  {/* Setup Mode Message */}
+                  {/* Setup Mode Notification - non-blocking */}
                   {needsSetup && needsSeatJoin && !broadcasterHasJoined && isBroadcaster && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                      <div className="text-center space-y-4 p-6 bg-gradient-to-b from-[#1a1530] to-[#0f0a1f] rounded-2xl border border-purple-500/30 shadow-2xl">
-                        <div className="text-6xl">🎥</div>
-                        <h3 className="text-2xl font-bold text-white">Ready to Go Live!</h3>
-                        <p className="text-gray-300 max-w-md">
-                          Click on any seat below to join and start broadcasting. 
-                          Your camera preview will appear once you join a seat.
-                        </p>
-                        <div className="flex items-center justify-center gap-2 text-purple-300">
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                          <span className="text-sm font-medium">Waiting for you to join a seat</span>
-                        </div>
+                    <div className="absolute top-4 left-4 z-20">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-yellow-600/90 backdrop-blur-sm rounded-full border border-yellow-500/30">
+                        <div className="w-2 h-2 bg-yellow-300 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium text-white">Ready to Go Live - Click any seat to start broadcasting</span>
                       </div>
                     </div>
                   )}

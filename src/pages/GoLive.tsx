@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 
 const GoLive: React.FC = () => {
   const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // Note: videoRef removed - no camera preview in setup
 
   // const { user, profile } = useAuthStore(); // Using getState() instead for async operations
 
@@ -24,13 +24,8 @@ const GoLive: React.FC = () => {
   const [isPrivateStream, setIsPrivateStream] = useState<boolean>(false);
   const [enablePaidGuestBoxes, setEnablePaidGuestBoxes] = useState<boolean>(false);
 
-  // Camera preview state
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean>(false);
-  const [isCameraOn, setIsCameraOn] = useState<boolean>(false);
-  const [isMicOn, setIsMicOn] = useState<boolean>(true);
-  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
-  const [previewError, setPreviewError] = useState<string>('');
-  const mediaStreamRef = useRef<MediaStream | null>(null);
+  // Note: Camera/mic permissions will be requested when joining seats in broadcast
+  // No camera preview needed in setup
 
 
 
@@ -40,230 +35,7 @@ const GoLive: React.FC = () => {
     applicationStatus: string | null;
   } | null>(null); // Broadcaster approval status
 
-  // -------------------------------
-  // CAMERA PREVIEW FUNCTIONS
-  // -------------------------------
-  const startCameraPreview = useCallback(async () => {
-    try {
-      setIsPreviewLoading(true);
-      setPreviewError('');
-      
-      // Stop any existing stream
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-        mediaStreamRef.current = null;
-      }
-
-      // Check if getUserMedia is available
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Media devices API not available');
-      }
-
-      // Progressive constraints with fallbacks
-      const constraintSets = [
-        // High quality first
-        {
-          video: {
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 },
-            frameRate: { ideal: 30, max: 60 },
-            facingMode: 'user'
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        },
-        // Medium quality fallback
-        {
-          video: {
-            width: { ideal: 640, max: 1280 },
-            height: { ideal: 480, max: 720 },
-            frameRate: { ideal: 30, max: 30 },
-            facingMode: 'user'
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        },
-        // Basic fallback
-        {
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          },
-          audio: true
-        }
-      ];
-
-      let stream: MediaStream | null = null;
-      let lastError: any = null;
-
-      // Try each constraint set until one works
-      for (const constraints of constraintSets) {
-        try {
-          console.log('🎥 Attempting camera access with constraints:', constraints);
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          break;
-        } catch (err: any) {
-          console.warn('Camera access failed with constraints:', constraints, err);
-          lastError = err;
-          
-          // If it's a permission error, don't try other constraints
-          if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
-            break;
-          }
-        }
-      }
-
-      if (!stream) {
-        throw lastError || new Error('Failed to access camera with any constraints');
-      }
-
-      mediaStreamRef.current = stream;
-      
-      // Set video element source with proper configuration
-      if (videoRef.current) {
-        const video = videoRef.current;
-        
-        // Configure video element for better compatibility
-        video.setAttribute('playsinline', 'true');
-        video.setAttribute('webkit-playsinline', 'true');
-        video.muted = true; // Required for autoplay
-        video.playsInline = true;
-        
-        // Set the stream
-        video.srcObject = stream;
-        
-        // Wait for metadata to load before playing
-        const playPromise = new Promise<void>((resolve, reject) => {
-          const handleLoadedMetadata = () => {
-            video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            video.removeEventListener('canplay', handleCanPlay);
-            
-            video.play()
-              .then(() => {
-                console.log('✅ Video playing successfully');
-                resolve();
-              })
-              .catch((playErr) => {
-                console.warn('Video play failed:', playErr);
-                // Don't reject here, video might still work
-                resolve();
-              });
-          };
-          
-          const handleCanPlay = () => {
-            video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            video.removeEventListener('canplay', handleCanPlay);
-            resolve();
-          };
-          
-          video.addEventListener('loadedmetadata', handleLoadedMetadata);
-          video.addEventListener('canplay', handleCanPlay);
-        });
-        
-        // Set a timeout for the play promise
-        await Promise.race([
-          playPromise,
-          new Promise<void>((_, reject) => 
-            setTimeout(() => reject(new Error('Video play timeout')), 3000)
-          )
-        ]);
-      }
-
-      // Verify stream has active tracks
-      const videoTracks = stream.getVideoTracks();
-      const audioTracks = stream.getAudioTracks();
-      
-      if (videoTracks.length === 0) {
-        throw new Error('No video tracks found in camera stream');
-      }
-      
-      console.log('✅ Camera preview started:', {
-        videoTracks: videoTracks.length,
-        audioTracks: audioTracks.length,
-        videoEnabled: videoTracks[0]?.enabled,
-        audioEnabled: audioTracks[0]?.enabled
-      });
-
-      setHasCameraPermission(true);
-      setIsCameraOn(true);
-      setIsMicOn(audioTracks.length > 0);
-      
-    } catch (error: any) {
-      console.error('Camera preview error:', error);
-      setPreviewError(error.message || 'Unknown error');
-      
-      let errorMessage = 'Failed to start camera preview.';
-      if (error.name === 'NotAllowedError' || error.message.includes('permission')) {
-        errorMessage = 'Camera/microphone access denied. Please allow permissions in your browser and try again.';
-      } else if (error.name === 'NotFoundError' || error.message.includes('not found')) {
-        errorMessage = 'No camera/microphone found. Please connect a device and try again.';
-      } else if (error.name === 'NotReadableError' || error.message.includes('in use')) {
-        errorMessage = 'Camera/microphone is already in use. Please close other applications and try again.';
-      } else if (error.name === 'OverconstrainedError') {
-        errorMessage = 'Camera/microphone constraints not supported. Please try a different device.';
-      } else if (error.message.includes('not available')) {
-        errorMessage = 'Media devices not available. Please check your browser support.';
-      } else if (error.message) {
-        errorMessage = `Camera error: ${error.message}`;
-      }
-      
-      toast.error(errorMessage);
-      setHasCameraPermission(false);
-      setIsCameraOn(false);
-      setIsMicOn(false);
-    } finally {
-      setIsPreviewLoading(false);
-    }
-  }, []);
-
-  const stopCameraPreview = useCallback(() => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    
-    setIsCameraOn(false);
-    setHasCameraPermission(false);
-  }, []);
-
-  const toggleCamera = useCallback(() => {
-    if (!mediaStreamRef.current) return;
-    
-    const videoTrack = mediaStreamRef.current.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.enabled = !videoTrack.enabled;
-      setIsCameraOn(videoTrack.enabled);
-    }
-  }, []);
-
-  const toggleMicrophone = useCallback(() => {
-    if (!mediaStreamRef.current) return;
-    
-    const audioTrack = mediaStreamRef.current.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !audioTrack.enabled;
-      setIsMicOn(audioTrack.enabled);
-    }
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
+  // Note: All camera/mic functionality moved to seat joining in broadcast page
 
   // -------------------------------
   // CHECK BROADCASTER STATUS
@@ -503,10 +275,7 @@ const GoLive: React.FC = () => {
       
       console.log('[GoLive] Stream created successfully:', createdId);
 
-      console.log('[GoLive] Stream created successfully, stopping camera preview...');
-      
-      // Stop camera preview before going to broadcast
-      stopCameraPreview();
+      console.log('[GoLive] Stream created successfully - camera/mic will be requested when joining seat');
       
       // ✅ Pass stream data directly via navigation state to avoid database query
       // This eliminates replication delay issues
@@ -581,92 +350,18 @@ const GoLive: React.FC = () => {
       </h1>
 
       <div className="host-video-box relative rounded-xl overflow-hidden border border-purple-700/30">
-        <div className="w-full h-32 md:h-40 lg:h-48 relative bg-black">
-          {!hasCameraPermission ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <Camera className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm mb-3">Camera preview</p>
-                {previewError && (
-                  <div className="mb-3 p-2 bg-red-900/30 border border-red-500/30 rounded text-red-300 text-xs max-w-xs">
-                    {previewError}
-                  </div>
-                )}
-                <button
-                  onClick={startCameraPreview}
-                  disabled={isPreviewLoading}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  {isPreviewLoading ? 'Starting...' : previewError ? 'Try Again' : 'Enable Camera'}
-                </button>
-              </div>
+        <div className="w-full h-32 md:h-40 lg:h-48 relative bg-gradient-to-br from-purple-900/20 to-blue-900/20 flex items-center justify-center">
+          <div className="text-center text-gray-400">
+            <Video className="w-16 h-16 mx-auto mb-3 opacity-60" />
+            <h3 className="text-lg font-semibold text-white mb-2">Ready to Go Live!</h3>
+            <p className="text-sm text-gray-300 max-w-sm">
+              Camera and microphone will be activated when you join a seat in the broadcast.
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-2 text-purple-300">
+              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Setup Mode</span>
             </div>
-          ) : (
-            <>
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                muted
-                playsInline
-                autoPlay
-                webkit-playsinline="true"
-                onLoadedMetadata={() => console.log('Video metadata loaded')}
-                onCanPlay={() => console.log('Video can play')}
-                onPlay={() => console.log('Video started playing')}
-                onError={(e) => {
-                  console.error('Video element error:', e);
-                  setPreviewError('Video display error');
-                }}
-              />
-              
-              {/* Camera Controls Overlay */}
-              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={toggleCamera}
-                    className={`p-2 rounded-full transition-colors ${
-                      isCameraOn 
-                        ? 'bg-gray-800/80 hover:bg-gray-700/80 text-white' 
-                        : 'bg-red-600/80 hover:bg-red-500/80 text-white'
-                    }`}
-                    title={isCameraOn ? 'Turn off camera' : 'Turn on camera'}
-                  >
-                    {isCameraOn ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
-                  </button>
-                  
-                  <button
-                    onClick={toggleMicrophone}
-                    className={`p-2 rounded-full transition-colors ${
-                      isMicOn 
-                        ? 'bg-gray-800/80 hover:bg-gray-700/80 text-white' 
-                        : 'bg-red-600/80 hover:bg-red-500/80 text-white'
-                    }`}
-                    title={isMicOn ? 'Mute microphone' : 'Unmute microphone'}
-                  >
-                    {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    isCameraOn && isMicOn 
-                      ? 'bg-green-600/80 text-white' 
-                      : 'bg-yellow-600/80 text-white'
-                  }`}>
-                    {isCameraOn && isMicOn ? 'Ready' : 'Check Settings'}
-                  </span>
-                </div>
-              </div>
-              
-              {/* Status indicator */}
-              <div className="absolute top-3 left-3">
-                <div className="flex items-center gap-2 px-3 py-1 bg-black/60 rounded-full">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-white text-sm font-medium">Preview</span>
-                </div>
-              </div>
-            </>
-          )}
+          </div>
         </div>
       </div>
 
@@ -748,7 +443,7 @@ const GoLive: React.FC = () => {
           <div className="flex items-center gap-4">
             <button
               onClick={handleStartStream}
-              disabled={isConnecting || !streamTitle.trim() || !broadcasterName.trim() || !hasCameraPermission || !isCameraOn}
+              disabled={isConnecting || !streamTitle.trim() || !broadcasterName.trim()}
               className="flex-1 py-3 rounded-lg bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isConnecting ? (
@@ -761,20 +456,10 @@ const GoLive: React.FC = () => {
               )}
             </button>
 
-            {/* Enhanced camera status indicator */}
+            {/* Stream setup status indicator */}
             <div className="text-sm text-gray-400 flex flex-col items-end gap-1">
-              {hasCameraPermission ? (
-                <>
-                  <span className="text-green-400">✓ Camera Ready</span>
-                  {!isCameraOn && <span className="text-yellow-400 text-xs">Camera is off</span>}
-                  {!isMicOn && <span className="text-yellow-400 text-xs">Mic is muted</span>}
-                </>
-              ) : (
-                <span className="text-yellow-400">⚠ Enable Camera</span>
-              )}
-              {isPreviewLoading && (
-                <span className="text-blue-400 text-xs">Loading camera...</span>
-              )}
+              <span className="text-green-400">✓ Setup Ready</span>
+              <span className="text-blue-400 text-xs">Camera/mic will activate when joining seat</span>
             </div>
           </div>
         </div>
