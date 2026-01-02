@@ -713,9 +713,9 @@ export class LiveKitService {
       if (accessToken && typeof accessToken === 'object') {
         this.log('⚠️ access_token is an object, attempting to extract string value', accessToken)
         // Try to get string value from object
-        if ('token' in accessToken && typeof (accessToken as any).token === 'string') {
+        if (accessToken && 'token' in accessToken && typeof (accessToken as any).token === 'string') {
           accessToken = (accessToken as any).token
-        } else if ('value' in accessToken && typeof (accessToken as any).value === 'string') {
+        } else if (accessToken && 'value' in accessToken && typeof (accessToken as any).value === 'string') {
           accessToken = (accessToken as any).value
         } else {
           this.log('❌ Cannot extract string from access_token object', accessToken)
