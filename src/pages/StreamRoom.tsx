@@ -1472,11 +1472,40 @@ export default function StreamRoom() {
     );
   }
 
-  if (!stream || !room) {
+  // Ensure we have both stream and room before rendering LiveKit components
+  if (!stream || !room || connectionStatus !== 'connected') {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <p className="text-white">Connecting...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-white">
+            {connectionStatus === 'connecting' ? 'Connecting to stream...' : 
+             connectionStatus === 'reconnecting' ? 'Reconnecting to stream...' :
+             connectionStatus === 'error' ? 'Connection failed' :
+             connectionStatus === 'disconnected' ? 'Disconnected from stream' :
+             'Connecting to LiveKit...'}
+          </p>
+          {connectionStatus === 'error' && (
+            <div className="mt-4">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
+              >
+                Retry Connection
+              </button>
+            </div>
+          )}
+          {connectionStatus === 'disconnected' && (
+            <div className="mt-4">
+              <p className="text-sm text-gray-400 mb-2">Stream has ended or connection was lost</p>
+              <button
+                onClick={() => navigate('/live')}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm"
+              >
+                Back to Live Streams
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1739,15 +1768,54 @@ export default function StreamRoom() {
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      {/* Connection Status Indicator */}
+      {connectionStatus !== 'connected' && (
+        <div className="absolute top-4 right-4 z-30">
+          <div className={`px-3 py-2 rounded-lg text-sm font-semibold ${
+            connectionStatus === 'connecting' ? 'bg-yellow-600/90 text-white' :
+            connectionStatus === 'reconnecting' ? 'bg-orange-600/90 text-white' :
+            connectionStatus === 'error' ? 'bg-red-600/90 text-white' :
+            connectionStatus === 'disconnected' ? 'bg-gray-600/90 text-white' :
+            'bg-blue-600/90 text-white'
+          }`}>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-400' :
+                connectionStatus === 'connecting' || connectionStatus === 'reconnecting' ? 'bg-yellow-400 animate-pulse' :
+                connectionStatus === 'error' ? 'bg-red-400' :
+                'bg-gray-400'
+              }`}></div>
+              <span>
+                {connectionStatus === 'connecting' ? 'Connecting...' :
+                 connectionStatus === 'reconnecting' ? 'Reconnecting...' :
+                 connectionStatus === 'error' ? 'Connection Error' :
+                 connectionStatus === 'disconnected' ? 'Disconnected' :
+                 'Connecting'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Video Area */}
       <div className="w-full h-screen bg-black">
-        <LiveVideoRoom
-          room={room}
-          participants={participants}
-          isHost={isHost}
-          guestSlots={guestSlots}
-          hostIdentity={stream?.broadcaster_id}
-        />
+        {room && connectionStatus === 'connected' ? (
+          <LiveVideoRoom
+            room={room}
+            participants={participants}
+            isHost={isHost}
+            guestSlots={guestSlots}
+            hostIdentity={stream?.broadcaster_id}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-black text-white">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+              <div className="text-sm">Connecting to stream...</div>
+              <div className="text-xs mt-1 text-gray-400">Initializing LiveKit connection</div>
+            </div>
+          </div>
+        )}
         
         {activeTrollDrop && (
           <TrollDrop
@@ -2093,6 +2161,22 @@ const LiveVideoRoom = React.memo(function LiveVideoRoom({
   guestSlots: number;
   hostIdentity?: string;
 }) {
+  // Additional safety check to ensure room is valid
+  if (!room || room.state !== 'connected') {
+    console.warn('[LiveVideoRoom] Room not available or not connected:', {
+      roomExists: !!room,
+      roomState: room?.state,
+      connectionStatus: room?.state
+    });
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <div className="text-sm">Waiting for room connection...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <VideoGrid
       room={room}
@@ -2112,6 +2196,17 @@ const VideoGrid = React.memo<{
   maxGuests: number;
   hostIdentity?: string;
 }>(({ room, participants, isHost, maxGuests, hostIdentity }) => {
+  // Additional safety check
+  if (!room || room.state !== 'connected') {
+    console.warn('[VideoGrid] Room not available or not connected');
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <div className="text-sm">Stream connection lost. Please refresh the page.</div>
+        </div>
+      </div>
+    );
+  }
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement }>({});
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -2121,7 +2216,14 @@ const VideoGrid = React.memo<{
   }, [participants, hostIdentity]);
 
   useEffect(() => {
-    if (!room) return;
+    if (!room || room.state !== 'connected') {
+      console.warn('[VideoGrid] Room not available or not connected:', {
+        roomExists: !!room,
+        roomState: room?.state,
+        connectionStatus: room?.state
+      });
+      return;
+    }
 
     const handleTrackSubscribed = (track: any, _publication: any, participant: any) => {
       if (track?.kind !== 'video') return;
@@ -2152,7 +2254,7 @@ const VideoGrid = React.memo<{
       room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed as any);
       room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed as any);
     };
-  }, [room]);
+  }, [room, room?.state]);
 
   // Attach already-subscribed tracks (covers cases where refs are set after subscription).
   useEffect(() => {
