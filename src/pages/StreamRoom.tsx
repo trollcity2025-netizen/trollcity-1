@@ -6,7 +6,7 @@ import { useAuthStore } from '../lib/store';
 import { useLiveContextStore } from '../lib/liveContextStore';
 import { toast } from 'sonner';
 import { Users, Shield, MessageSquare, Gift, Settings, X, Ban, VolumeX } from 'lucide-react';
-import { useLiveKitRoom } from '../hooks/useLiveKitRoom';
+import { useLiveKitRoom, LiveKitConnectionStatus } from '../hooks/useLiveKitRoom';
 import { deductCoins } from '../lib/coinTransactions';
 import { useGlobalApp } from '../contexts/GlobalAppContext';
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js';
@@ -1445,7 +1445,7 @@ export default function StreamRoom() {
   };
 
   // Loading and error states
-  if (isLoadingStream || connectionStatus === 'connecting') {
+  if (isLoadingStream || connectionStatus === ('connecting' as LiveKitConnectionStatus)) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -1479,7 +1479,7 @@ export default function StreamRoom() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
           <p className="text-white">
-            {connectionStatus === 'connecting' ? 'Connecting to stream...' : 
+            {connectionStatus === ('connecting' as LiveKitConnectionStatus) ? 'Connecting to stream...' : 
              connectionStatus === 'reconnecting' ? 'Reconnecting to stream...' :
              connectionStatus === 'error' ? 'Connection failed' :
              connectionStatus === 'disconnected' ? 'Disconnected from stream' :
@@ -1772,7 +1772,7 @@ export default function StreamRoom() {
       {connectionStatus !== 'connected' && (
         <div className="absolute top-4 right-4 z-30">
           <div className={`px-3 py-2 rounded-lg text-sm font-semibold ${
-            connectionStatus === 'connecting' ? 'bg-yellow-600/90 text-white' :
+            connectionStatus === ('connecting' as LiveKitConnectionStatus) ? 'bg-yellow-600/90 text-white' :
             connectionStatus === 'reconnecting' ? 'bg-orange-600/90 text-white' :
             connectionStatus === 'error' ? 'bg-red-600/90 text-white' :
             connectionStatus === 'disconnected' ? 'bg-gray-600/90 text-white' :
@@ -1781,12 +1781,12 @@ export default function StreamRoom() {
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${
                 connectionStatus === 'connected' ? 'bg-green-400' :
-                connectionStatus === 'connecting' || connectionStatus === 'reconnecting' ? 'bg-yellow-400 animate-pulse' :
+                connectionStatus === ('connecting' as LiveKitConnectionStatus) || connectionStatus === 'reconnecting' ? 'bg-yellow-400 animate-pulse' :
                 connectionStatus === 'error' ? 'bg-red-400' :
                 'bg-gray-400'
               }`}></div>
               <span>
-                {connectionStatus === 'connecting' ? 'Connecting...' :
+                {connectionStatus === ('connecting' as LiveKitConnectionStatus) ? 'Connecting...' :
                  connectionStatus === 'reconnecting' ? 'Reconnecting...' :
                  connectionStatus === 'error' ? 'Connection Error' :
                  connectionStatus === 'disconnected' ? 'Disconnected' :
