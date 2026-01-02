@@ -205,6 +205,10 @@ export default function BroadcastPage() {
   const [permissionErrorMessage, setPermissionErrorMessage] = useState<string>('');
   const [broadcasterHasJoined, setBroadcasterHasJoined] = useState<boolean>(false);
   
+  // ✅ NEW: Centralized box management state
+  const [activeBoxId, setActiveBoxId] = useState<string | null>(null);
+  const [localTracks, setLocalTracks] = useState<{ video?: MediaStreamTrack; audio?: MediaStreamTrack } | null>(null);
+  
   // ✅ Entrance effects state
   const [entranceEffect, setEntranceEffect] = useState<{ username: string; role: 'admin' | 'lead_troll_officer' | 'troll_officer' } | null>(null);
 
@@ -462,10 +466,100 @@ export default function BroadcastPage() {
     }
   }, [streamId, profile, user, location.state]);
 
+  // ✅ NEW: Centralized joinBox function
+  const joinBox = useCallback(async (boxId: string) => {
+    // Check if already in a box
+    if (activeBoxId && activeBoxId !== boxId) {
+      console.log('[BroadcastPage] User already in box:', activeBoxId, 'blocking join of:', boxId);
+      toast.error('You are already in a box. Please leave first.');
+      return false;
+    }
+
+    // If already in this box, don't join again
+    if (activeBoxId === boxId) {
+      console.log('[BroadcastPage] Already in box:', boxId);
+      return true;
+    }
+
+    console.log('[BroadcastPage] Joining box:', boxId);
+    setActiveBoxId(boxId);
+    
+    // Update UI state
+    setPermissionErrorSeat(null);
+    setPermissionErrorMessage('');
+    
+    return true;
+  }, [activeBoxId]);
+
+  // ✅ NEW: Centralized leaveBox function
+  const leaveBox = useCallback(async () => {
+    if (!activeBoxId) {
+      console.log('[BroadcastPage] Not in any box, nothing to leave');
+      return;
+    }
+
+    console.log('[BroadcastPage] Leaving box:', activeBoxId);
+    
+    try {
+      // Stop local tracks
+      if (localTracks) {
+        console.log('[BroadcastPage] Stopping local tracks');
+        if (localTracks.video) {
+          localTracks.video.stop();
+        }
+        if (localTracks.audio) {
+          localTracks.audio.stop();
+        }
+        setLocalTracks(null);
+      }
+      
+      // Clean up preflight stream
+      cleanupLocalStream();
+      
+      // Disconnect from LiveKit
+      if (liveKit.service?.disconnect) {
+        await liveKit.service.disconnect();
+      }
+      
+      // Release seat if we have one
+      if (currentSeatIndex !== null && _releaseSeat) {
+        await _releaseSeat(currentSeatIndex);
+      }
+      
+      // Clear all state
+      setActiveBoxId(null);
+      setCurrentSeatIndex(null);
+      setLocalTracks(null);
+      setClaimingSeat(null);
+      
+      console.log('[BroadcastPage] ✅ Successfully left box');
+      toast.success('Left box successfully');
+      
+    } catch (err: any) {
+      console.error('[BroadcastPage] Error leaving box:', err);
+      // Still clear state even if there's an error
+      setActiveBoxId(null);
+      setCurrentSeatIndex(null);
+      setLocalTracks(null);
+      setClaimingSeat(null);
+      toast.error('Error leaving box');
+    }
+  }, [activeBoxId, localTracks, cleanupLocalStream, liveKit, currentSeatIndex, _releaseSeat]);
+
   // Seat management handlers
   const handleSeatClaim = useCallback(
     async (index: number) => {
-      if (claimingSeat !== null || currentSeatIndex !== null) return;
+      // ✅ NEW: Check if already in a box
+      const boxId = `seat-${index}`;
+      const canJoin = await joinBox(boxId);
+      if (!canJoin) {
+        return;
+      }
+
+      if (claimingSeat !== null || currentSeatIndex !== null) {
+        console.log('[BroadcastPage] Already claiming or in seat, ignoring click');
+        return;
+      }
       
       console.log(`[BroadcastPage] Seat ${index + 1} clicked to join`);
       setClaimingSeat(index);
@@ -475,6 +569,17 @@ export default function BroadcastPage() {
       try {
         const stream = await requestMediaAccess();
         console.log('[BroadcastPage] Permissions granted');
+        
+        // ✅ Store local tracks for proper cleanup
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
+        if (videoTrack && audioTrack) {
+          setLocalTracks({ video: videoTrack, audio: audioTrack });
+          console.log('[BroadcastPage] ✅ Local tracks stored for cleanup:', {
+            videoTrack: videoTrack.label,
+            audioTrack: audioTrack.label
+          });
+        }
 
         const success = await claimSeat(index, {
           username: displayName,
@@ -615,6 +720,9 @@ export default function BroadcastPage() {
           originalError: err?.originalError
         });
         
+        // ✅ Clean up on error
+        await leaveBox();
+        
         const permissionDenied = ['NotAllowedError', 'NotFoundError', 'SecurityError', 'PermissionDeniedError', 'MediaAccessError'];
         const errorMsg = err?.message || '';
         const errorName = err?.name || err?.originalError?.name || '';
@@ -676,46 +784,17 @@ export default function BroadcastPage() {
       stream?.id, 
       roomName, 
       displayName,
-      liveKit
+      liveKit,
+      joinBox,
+      leaveBox
     ]
   );
 
   // ✅ NEW: Proper leaveSeat function to cleanly exit a seat
   const leaveSeat = useCallback(async () => {
-    if (currentSeatIndex === null) {
-      console.log('[BroadcastPage] Not currently in a seat, nothing to leave');
-      return;
-    }
-
-    console.log(`[BroadcastPage] Leaving seat ${currentSeatIndex + 1}`);
-    
-    try {
-      // Release the seat first
-      if (_releaseSeat) {
-        await _releaseSeat(currentSeatIndex);
-      }
-      
-      // Stop publishing tracks by disconnecting from the room (which also cleans up tracks)
-      if (liveKit.service?.disconnect) {
-        await liveKit.service.disconnect();
-      }
-      
-      // Clean up our preflight stream
-      cleanupLocalStream();
-      
-      // Clear seat state
-      setCurrentSeatIndex(null);
-      
-      console.log(`[BroadcastPage] ✅ Successfully left seat ${currentSeatIndex + 1}`);
-      toast.success(`Left seat ${currentSeatIndex + 1}`);
-      
-    } catch (err: any) {
-      console.error('[BroadcastPage] Error leaving seat:', err);
-      // Still clear the seat state even if there's an error
-      setCurrentSeatIndex(null);
-      toast.error('Error leaving seat');
-    }
-  }, [currentSeatIndex, _releaseSeat, liveKit, cleanupLocalStream]);
+    console.log('[BroadcastPage] leaveSeat called, delegating to leaveBox');
+    await leaveBox();
+  }, [leaveBox]);
 
 
 
@@ -1139,7 +1218,7 @@ export default function BroadcastPage() {
                   <div className="text-xs text-gray-300">Viewers</div>
                   <div className="text-lg font-bold flex items-center gap-2"><Users size={16} /> {(stream.current_viewers || 0).toLocaleString()}</div>
                 </div>
-                {needsSetup && needsSeatJoin && !broadcasterHasJoined ? (
+                {needsSetup && needsSeatJoin && !broadcasterHasJoined && !activeBoxId ? (
                   <div className="px-3 py-2 bg-yellow-600 text-white rounded-full text-sm font-semibold animate-pulse">
                     ⏳ Waiting for Broadcaster
                   </div>
@@ -1157,9 +1236,10 @@ export default function BroadcastPage() {
                 {currentSeatIndex !== null && (
                   <button
                     onClick={leaveSeat}
-                    className="px-4 py-2 bg-orange-700 hover:bg-orange-800 rounded text-sm font-semibold"
+                    className="px-4 py-2 bg-red-700 hover:bg-red-800 rounded text-sm font-semibold"
+                    title="Leave Box"
                   >
-                    Leave Seat {currentSeatIndex + 1}
+                    Leave Box {currentSeatIndex + 1}
                   </button>
                 )}
               </div>
@@ -1174,7 +1254,7 @@ export default function BroadcastPage() {
                   {lastGift && <GiftEventOverlay gift={lastGift} />}
                   
                   {/* Setup Mode Notification - non-blocking */}
-                  {needsSetup && needsSeatJoin && !broadcasterHasJoined && isBroadcaster && (
+                  {needsSetup && needsSeatJoin && !broadcasterHasJoined && !activeBoxId && isBroadcaster && (
                     <div className="absolute top-4 left-4 z-20">
                       <div className="flex items-center gap-2 px-4 py-2 bg-yellow-600/90 backdrop-blur-sm rounded-full border border-yellow-500/30">
                         <div className="w-2 h-2 bg-yellow-300 rounded-full animate-pulse"></div>
@@ -1186,6 +1266,7 @@ export default function BroadcastPage() {
                   <OfficerStreamGrid
                     roomName={roomName}
                     streamId={streamId}
+                    activeBoxId={activeBoxId}
                     onSeatClick={(idx) => {
                       setTargetSeatIndex(idx);
                       // Attempt to claim via existing handler for consistency

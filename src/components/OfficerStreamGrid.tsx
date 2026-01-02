@@ -11,6 +11,7 @@ interface OfficerStreamGridProps {
   roomName?: string
   onSeatClick?: (seatIndex: number, seat: SeatAssignment) => void
   streamId?: string
+  activeBoxId?: string | null
 }
 
 const parseLiveKitMetadataUserId = (metadata?: string): string | undefined => {
@@ -30,6 +31,7 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
   roomName = 'officer-stream',
   onSeatClick,
   streamId,
+  activeBoxId,
 }) => {
   const { seats, claimSeat, releaseSeat } = useSeatRoster(roomName)
   const { user, profile } = useAuthStore()
@@ -97,7 +99,21 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
   }, [streamId])
 
   const handleSeatAction = useCallback(async (action: 'claim' | 'release' | 'leave', seatIndex: number, seat?: SeatAssignment) => {
+    // ✅ NEW: Prevent multiple box joins
+    const boxId = `seat-${seatIndex}`;
     if (action === 'claim' && profile) {
+      if (activeBoxId && activeBoxId !== boxId) {
+        console.log('[OfficerStreamGrid] User already in box:', activeBoxId, 'blocking join of:', boxId);
+        alert('You are already in a box. Please leave first.');
+        return;
+      }
+      
+      // If already in this box, don't join again
+      if (activeBoxId === boxId) {
+        console.log('[OfficerStreamGrid] Already in box:', boxId);
+        return;
+      }
+      
       // Validate authentication before attempting to connect
       if (!user?.id) {
         alert('Please sign in to join the stream.')
@@ -190,7 +206,7 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
       }
       disconnect()
     }
-  }, [profile, claimSeat, releaseSeat, disconnect, joinAndPublish, roomName, user, liveKitUser])
+  }, [profile, claimSeat, releaseSeat, disconnect, joinAndPublish, roomName, user, liveKitUser, activeBoxId])
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-3 gap-2">
