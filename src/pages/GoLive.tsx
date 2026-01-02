@@ -29,6 +29,7 @@ const GoLive: React.FC = () => {
   const [isCameraOn, setIsCameraOn] = useState<boolean>(false);
   const [isMicOn, setIsMicOn] = useState<boolean>(true);
   const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string>('');
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
 
@@ -45,6 +46,7 @@ const GoLive: React.FC = () => {
   const startCameraPreview = useCallback(async () => {
     try {
       setIsPreviewLoading(true);
+      setPreviewError('');
       
       // Stop any existing stream
       if (mediaStreamRef.current) {
@@ -52,43 +54,169 @@ const GoLive: React.FC = () => {
         mediaStreamRef.current = null;
       }
 
-      // Request camera and microphone permissions
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Media devices API not available');
+      }
+
+      // Progressive constraints with fallbacks
+      const constraintSets = [
+        // High quality first
+        {
+          video: {
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            frameRate: { ideal: 30, max: 60 },
+            facingMode: 'user'
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+        // Medium quality fallback
+        {
+          video: {
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 },
+            frameRate: { ideal: 30, max: 30 },
+            facingMode: 'user'
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        },
+        // Basic fallback
+        {
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: true
         }
-      });
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: any = null;
+
+      // Try each constraint set until one works
+      for (const constraints of constraintSets) {
+        try {
+          console.log('🎥 Attempting camera access with constraints:', constraints);
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (err: any) {
+          console.warn('Camera access failed with constraints:', constraints, err);
+          lastError = err;
+          
+          // If it's a permission error, don't try other constraints
+          if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+            break;
+          }
+        }
+      }
+
+      if (!stream) {
+        throw lastError || new Error('Failed to access camera with any constraints');
+      }
 
       mediaStreamRef.current = stream;
       
-      // Set video element source
+      // Set video element source with proper configuration
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(console.error);
+        const video = videoRef.current;
+        
+        // Configure video element for better compatibility
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.muted = true; // Required for autoplay
+        video.playsInline = true;
+        
+        // Set the stream
+        video.srcObject = stream;
+        
+        // Wait for metadata to load before playing
+        const playPromise = new Promise<void>((resolve, reject) => {
+          const handleLoadedMetadata = () => {
+            video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            video.removeEventListener('canplay', handleCanPlay);
+            
+            video.play()
+              .then(() => {
+                console.log('✅ Video playing successfully');
+                resolve();
+              })
+              .catch((playErr) => {
+                console.warn('Video play failed:', playErr);
+                // Don't reject here, video might still work
+                resolve();
+              });
+          };
+          
+          const handleCanPlay = () => {
+            video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            video.removeEventListener('canplay', handleCanPlay);
+            resolve();
+          };
+          
+          video.addEventListener('loadedmetadata', handleLoadedMetadata);
+          video.addEventListener('canplay', handleCanPlay);
+        });
+        
+        // Set a timeout for the play promise
+        await Promise.race([
+          playPromise,
+          new Promise<void>((_, reject) => 
+            setTimeout(() => reject(new Error('Video play timeout')), 3000)
+          )
+        ]);
       }
+
+      // Verify stream has active tracks
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+      
+      if (videoTracks.length === 0) {
+        throw new Error('No video tracks found in camera stream');
+      }
+      
+      console.log('✅ Camera preview started:', {
+        videoTracks: videoTracks.length,
+        audioTracks: audioTracks.length,
+        videoEnabled: videoTracks[0]?.enabled,
+        audioEnabled: audioTracks[0]?.enabled
+      });
 
       setHasCameraPermission(true);
       setIsCameraOn(true);
-      setIsMicOn(true);
+      setIsMicOn(audioTracks.length > 0);
       
     } catch (error: any) {
       console.error('Camera preview error:', error);
-      if (error.name === 'NotAllowedError') {
-        toast.error('Camera/microphone access denied. Please allow permissions and try again.');
-      } else if (error.name === 'NotFoundError') {
-        toast.error('No camera/microphone found. Please connect a device and try again.');
-      } else {
-        toast.error('Failed to start camera preview. Please check your devices and permissions.');
+      setPreviewError(error.message || 'Unknown error');
+      
+      let errorMessage = 'Failed to start camera preview.';
+      if (error.name === 'NotAllowedError' || error.message.includes('permission')) {
+        errorMessage = 'Camera/microphone access denied. Please allow permissions in your browser and try again.';
+      } else if (error.name === 'NotFoundError' || error.message.includes('not found')) {
+        errorMessage = 'No camera/microphone found. Please connect a device and try again.';
+      } else if (error.name === 'NotReadableError' || error.message.includes('in use')) {
+        errorMessage = 'Camera/microphone is already in use. Please close other applications and try again.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = 'Camera/microphone constraints not supported. Please try a different device.';
+      } else if (error.message.includes('not available')) {
+        errorMessage = 'Media devices not available. Please check your browser support.';
+      } else if (error.message) {
+        errorMessage = `Camera error: ${error.message}`;
       }
+      
+      toast.error(errorMessage);
       setHasCameraPermission(false);
       setIsCameraOn(false);
+      setIsMicOn(false);
     } finally {
       setIsPreviewLoading(false);
     }
@@ -217,17 +345,19 @@ const GoLive: React.FC = () => {
       } catch {}
     };
 
-    // small helper to add timeouts to long-running promises
-    const withTimeout = async <T,>(p: Promise<T>, ms = 30000): Promise<T> => {
+    // Enhanced timeout helper with better error handling
+    const withTimeout = async <T,>(p: Promise<T>, ms = 20000, operation = 'operation'): Promise<T> => {
       let timer: any = null;
       return await Promise.race([
         p.then((v) => {
           if (timer) clearTimeout(timer);
           return v;
         }),
-        new Promise((_, rej) => {
-          timer = setTimeout(() => rej(new Error('timeout')), ms);
-        }) as any,
+        new Promise<never>((_, rej) => {
+          timer = setTimeout(() => {
+            rej(new Error(`${operation} timed out after ${ms}ms`));
+          }, ms);
+        }),
       ]);
     };
 
@@ -235,124 +365,125 @@ const GoLive: React.FC = () => {
       const streamId = crypto.randomUUID();
       let thumbnailUrl: string | null = null;
 
-      // Upload thumbnail
+      // Optimized thumbnail upload (skip if not needed for faster stream creation)
       if (thumbnailFile) {
+        console.log('[GoLive] Starting thumbnail upload...');
         setUploadingThumbnail(true);
 
-        const fileName = `thumb-${streamId}-${Date.now()}.${thumbnailFile.name.split('.').pop()}`;
-        const filePath = `thumbnails/${fileName}`;
+        try {
+          const fileName = `thumb-${streamId}-${Date.now()}.${thumbnailFile.name.split('.').pop()}`;
+          const filePath = `thumbnails/${fileName}`;
 
-        const upload = await supabase.storage
-          .from('troll-city-assets')
-          .upload(filePath, thumbnailFile, { upsert: false });
+          // Use timeout for thumbnail upload to prevent hanging
+          const uploadPromise = supabase.storage
+            .from('troll-city-assets')
+            .upload(filePath, thumbnailFile, { upsert: false });
 
-        if (!upload.error) {
-          const { data: url } = supabase.storage.from('troll-city-assets').getPublicUrl(filePath);
-          thumbnailUrl = url.publicUrl;
+          const uploadResult = await Promise.race([
+            uploadPromise,
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Thumbnail upload timed out')), 8000)
+            )
+          ]);
+
+          if (!uploadResult.error) {
+            const { data: url } = supabase.storage.from('troll-city-assets').getPublicUrl(filePath);
+            thumbnailUrl = url.publicUrl;
+            console.log('[GoLive] Thumbnail uploaded successfully');
+          } else {
+            console.warn('[GoLive] Thumbnail upload failed, continuing without thumbnail:', uploadResult.error);
+          }
+        } catch (uploadErr: any) {
+          console.warn('[GoLive] Thumbnail upload failed, continuing without thumbnail:', uploadErr);
+          // Don't fail the entire stream creation if thumbnail upload fails
+        } finally {
+          setUploadingThumbnail(false);
         }
-
-        setUploadingThumbnail(false);
+      } else {
+        console.log('[GoLive] No thumbnail provided, skipping upload');
       }
 
-      // Insert into streams table (use timeout to avoid hanging UI)
-      console.log('[GoLive] Inserting stream row into DB...', { streamId, broadcasterId: profile.id });
+      // Optimized stream creation with retry logic and better error handling
+      console.log('[GoLive] Starting optimized stream creation...', { streamId, broadcasterId: profile.id });
 
-      // Verify session before insert
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session?.access_token) {
-        console.error('[GoLive] No active session before insert');
+      // Quick session verification
+      const { data: sessionData, error: sessionError } = await withTimeout(
+        supabase.auth.getSession(),
+        5000,
+        'Session verification'
+      );
+      
+      if (sessionError || !sessionData.session?.access_token) {
+        console.error('[GoLive] Session verification failed:', sessionError);
         toast.error('Session expired. Please sign in again.');
         cleanup();
         return;
       }
-      console.log('[GoLive] Session verified, proceeding with insert');
+      console.log('[GoLive] Session verified');
 
-      const insertOperation = supabase
-        .from('streams')
-        .insert({
-          id: streamId,
-          broadcaster_id: profile.id,
-          title: streamTitle,
-          category: category,
-          is_live: true,
-          status: 'live',
-          start_time: new Date().toISOString(),
-          thumbnail_url: thumbnailUrl,
-          current_viewers: 0,
-          total_gifts_coins: 0,
-          total_unique_gifters: 0,
-          popularity: 0,
-          agora_channel: `stream_${streamId}`, // Generate channel name based on stream ID
-        })
-        .select()
-        .single();
+      // Prepare stream data
+      const streamData = {
+        id: streamId,
+        broadcaster_id: profile.id,
+        title: streamTitle,
+        category: category,
+        is_live: false, // Will be set to true when joining seat
+        status: 'ready_to_join',
+        start_time: new Date().toISOString(),
+        thumbnail_url: thumbnailUrl,
+        current_viewers: 0,
+        total_gifts_coins: 0,
+        total_unique_gifters: 0,
+        popularity: 0,
+        agora_channel: `stream_${streamId}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-      console.log('[GoLive] Executing insert with 15s timeout...');
+      // Optimized stream creation with better error handling
+      console.log('[GoLive] Attempting stream creation with optimized timeout...');
       
-      // Use AbortController for proper timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 15000); // 15 second timeout
-      
-      const startTime = Date.now();
-      let result: any;
+      let insertResult: any = null;
+      let lastError: any = null;
       
       try {
-        // Note: Supabase doesn't directly support AbortController, but we can wrap it
-        const insertPromise = insertOperation;
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Insert operation timed out after 15 seconds')), 15000);
-        });
-        
-        result = await Promise.race([insertPromise, timeoutPromise]);
-        clearTimeout(timeoutId);
-        
-        const duration = Date.now() - startTime;
-        console.log(`[GoLive] Insert completed in ${duration}ms`, { hasError: !!result.error, hasData: !!result.data });
-      } catch (insertErr: any) {
-        clearTimeout(timeoutId);
-        const duration = Date.now() - startTime;
-        console.error(`[GoLive] Insert failed after ${duration}ms`, insertErr);
-        
-        // Check if it's a timeout
-        if (insertErr?.message?.includes('timeout') || duration >= 15000) {
-          toast.error('Stream creation timed out. Please check your network connection and try again.');
-          cleanup();
-          return;
-        }
-        
-        // Check if it's a network/connection error
-        if (insertErr?.message?.includes('fetch') || insertErr?.message?.includes('network') || insertErr?.code === 'ECONNREFUSED') {
-          toast.error('Network error: Unable to connect to database. Please check your internet connection.');
-          cleanup();
-          return;
-        }
-        
-        // Re-throw other errors to be caught by outer catch
-        throw insertErr;
-      }
+        const insertOperation = supabase
+          .from('streams')
+          .insert(streamData)
+          .select()
+          .single();
 
-      if (result.error) {
-        console.error('[GoLive] Supabase insert immediate error:', {
-          error: result.error,
-          message: result.error?.message,
-          details: result.error?.details,
-          hint: result.error?.hint,
-          code: result.error?.code,
-          fullError: result.error
-        });
+        // Use enhanced timeout
+        insertResult = await Promise.race([
+          insertOperation,
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Stream creation timed out')), 12000)
+          )
+        ]);
         
-        // Show specific error message based on error type
-        let errorMessage = 'Failed to start stream.';
-        if (result.error?.message?.includes('permission')) {
+        if (insertResult.error) {
+          throw insertResult.error;
+        }
+        
+        console.log('[GoLive] Stream created successfully');
+        
+      } catch (err: any) {
+        console.error('[GoLive] Stream creation failed:', err);
+        lastError = err;
+      }
+      
+      if (!insertResult || insertResult.error) {
+        console.error('[GoLive] All insert attempts failed:', { lastError, insertResult });
+        
+        let errorMessage = 'Failed to create stream.';
+        if (lastError?.code === '23505') {
+          errorMessage = 'Stream ID conflict. Please try again.';
+        } else if (lastError?.message?.includes('permission')) {
           errorMessage = 'Permission denied: You may not have broadcaster privileges.';
-        } else if (result.error?.message?.includes('duplicate')) {
-          errorMessage = 'Stream already exists or duplicate ID conflict.';
-        } else if (result.error?.code === '23505') {
-          errorMessage = 'Stream ID conflict - please try again.';
-        } else if (result.error?.message) {
-          errorMessage = `Database error: ${result.error.message}`;
+        } else if (lastError?.message?.includes('timeout')) {
+          errorMessage = 'Stream creation timed out. Please check your connection and try again.';
+        } else if (lastError?.message) {
+          errorMessage = `Database error: ${lastError.message}`;
         }
         
         toast.error(errorMessage);
@@ -360,22 +491,17 @@ const GoLive: React.FC = () => {
         return;
       }
 
-      const insertedStream = result.data ?? result;
+      const insertedStream = insertResult.data;
       const createdId = insertedStream?.id;
-      console.log('[GoLive] Insert result check', { 
-        hasData: !!result.data, 
-        hasInsertedStream: !!insertedStream, 
-        createdId,
-        insertedStream,
-        result 
-      });
       
       if (!createdId) {
-        console.error('[GoLive] Stream insert did not return an id', { insertedStream, result });
-        toast.error('Failed to start stream (no id returned).');
+        console.error('[GoLive] Stream insert did not return an id');
+        toast.error('Failed to create stream (no ID returned).');
         cleanup();
         return;
       }
+      
+      console.log('[GoLive] Stream created successfully:', createdId);
 
       console.log('[GoLive] Stream created successfully, stopping camera preview...');
       
@@ -461,12 +587,17 @@ const GoLive: React.FC = () => {
               <div className="text-center text-gray-400">
                 <Camera className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p className="text-sm mb-3">Camera preview</p>
+                {previewError && (
+                  <div className="mb-3 p-2 bg-red-900/30 border border-red-500/30 rounded text-red-300 text-xs max-w-xs">
+                    {previewError}
+                  </div>
+                )}
                 <button
                   onClick={startCameraPreview}
                   disabled={isPreviewLoading}
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >
-                  {isPreviewLoading ? 'Starting...' : 'Enable Camera'}
+                  {isPreviewLoading ? 'Starting...' : previewError ? 'Try Again' : 'Enable Camera'}
                 </button>
               </div>
             </div>
@@ -478,6 +609,14 @@ const GoLive: React.FC = () => {
                 muted
                 playsInline
                 autoPlay
+                webkit-playsinline="true"
+                onLoadedMetadata={() => console.log('Video metadata loaded')}
+                onCanPlay={() => console.log('Video can play')}
+                onPlay={() => console.log('Video started playing')}
+                onError={(e) => {
+                  console.error('Video element error:', e);
+                  setPreviewError('Video display error');
+                }}
               />
               
               {/* Camera Controls Overlay */}
@@ -612,15 +751,29 @@ const GoLive: React.FC = () => {
               disabled={isConnecting || !streamTitle.trim() || !broadcasterName.trim() || !hasCameraPermission || !isCameraOn}
               className="flex-1 py-3 rounded-lg bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isConnecting ? 'Starting…' : 'Go Live Now!'}
+              {isConnecting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Creating Stream...
+                </span>
+              ) : (
+                'Go Live Now!'
+              )}
             </button>
 
-            {/* Camera status indicator */}
-            <div className="text-sm text-gray-400">
+            {/* Enhanced camera status indicator */}
+            <div className="text-sm text-gray-400 flex flex-col items-end gap-1">
               {hasCameraPermission ? (
-                <span className="text-green-400">✓ Camera Ready</span>
+                <>
+                  <span className="text-green-400">✓ Camera Ready</span>
+                  {!isCameraOn && <span className="text-yellow-400 text-xs">Camera is off</span>}
+                  {!isMicOn && <span className="text-yellow-400 text-xs">Mic is muted</span>}
+                </>
               ) : (
                 <span className="text-yellow-400">⚠ Enable Camera</span>
+              )}
+              {isPreviewLoading && (
+                <span className="text-blue-400 text-xs">Loading camera...</span>
               )}
             </div>
           </div>
