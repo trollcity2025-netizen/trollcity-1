@@ -117,8 +117,8 @@ const GoLive: React.FC = () => {
       } catch {}
     };
 
-    // Enhanced timeout helper with better error handling
-    const withTimeout = async <T,>(p: Promise<T>, ms = 20000, operation = 'operation'): Promise<T> => {
+    // Enhanced timeout helper with better error handling - increased timeouts for database operations
+    const withTimeout = async <T,>(p: Promise<T>, ms = 30000, operation = 'operation'): Promise<T> => {
       let timer: any = null;
       return await Promise.race([
         p.then((v) => {
@@ -154,7 +154,7 @@ const GoLive: React.FC = () => {
           const uploadResult = await Promise.race([
             uploadPromise,
             new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('Thumbnail upload timed out')), 8000)
+              setTimeout(() => reject(new Error('Thumbnail upload timed out')), 15000)
             )
           ]);
 
@@ -178,10 +178,10 @@ const GoLive: React.FC = () => {
       // Optimized stream creation with retry logic and better error handling
       console.log('[GoLive] Starting optimized stream creation...', { streamId, broadcasterId: profile.id });
 
-      // Quick session verification
+      // Quick session verification - increased timeout for slower networks
       const { data: sessionData, error: sessionError } = await withTimeout(
         supabase.auth.getSession(),
-        5000,
+        10000,
         'Session verification'
       );
       
@@ -225,11 +225,11 @@ const GoLive: React.FC = () => {
           .select()
           .single();
 
-        // Use enhanced timeout
+        // Use enhanced timeout - increased for database operations
         insertResult = await Promise.race([
           insertOperation,
           new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Stream creation timed out')), 12000)
+            setTimeout(() => reject(new Error('Stream creation timed out')), 25000)
           )
         ]);
         
@@ -318,9 +318,9 @@ const GoLive: React.FC = () => {
       
       // Provide specific error messages based on error type
       if (err?.message === 'timeout') {
-        toast.error('Starting stream timed out — check network or Supabase and try again.');
+        toast.error('Stream creation timed out. This usually takes 10-30 seconds on slower connections. Please try again.');
       } else if (err?.message?.includes('fetch')) {
-        toast.error('Network error: Unable to connect to Supabase. Check your internet connection.');
+        toast.error('Network connection issue. Please check your internet connection and try again.');
       } else if (err?.message?.includes('permission') || err?.message?.includes('unauthorized')) {
         toast.error('Permission denied: You may not have the required broadcaster privileges.');
       } else if (err?.message?.includes('JWT')) {
@@ -443,7 +443,10 @@ const GoLive: React.FC = () => {
               {isConnecting ? (
                 <span className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  Creating Stream...
+                  <div className="text-left">
+                    <div>Creating Stream...</div>
+                    <div className="text-xs opacity-75">This may take 10-30 seconds</div>
+                  </div>
                 </span>
               ) : (
                 'Go Live Now!'

@@ -142,7 +142,7 @@ export class LiveKitService {
         this.log('Starting session refresh (non-blocking)...')
         const refreshPromise = supabase.auth.refreshSession().catch((err: any) => {
           // Silently handle refresh errors - we'll use current session anyway
-          this.log('⚠️ Background session refresh failed (non-fatal)', { message: err?.message || err })
+          this.log('⚠️ Background session refresh failed (non-fatal)', err?.message || err)
         })
         
         // Get current session with timeout to prevent hanging - increased for slower networks
@@ -151,8 +151,8 @@ export class LiveKitService {
           supabase.auth.getSession(),
           new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Get session timeout')), 15000)
-          }),
-        ])
+          })
+        )
         
         try {
           sessionData = await getSessionWithTimeout
@@ -175,7 +175,7 @@ export class LiveKitService {
           try {
             sessionData = await retryGetSession
           } catch (retryErr: any) {
-            this.log('❌ Get session failed after retry', { message: retryErr?.message || retryErr })
+            this.log('❌ Get session failed after retry', retryErr?.message || retryErr)
             // Last resort: try store session even if expired
             if (storeSession?.access_token) {
               this.log('⚠️ Using expired store session as fallback')
@@ -195,7 +195,7 @@ export class LiveKitService {
       const { data, error: getSessionError } = sessionData
       
       if (getSessionError) {
-        this.log('❌ Get session error', { message: getSessionError.message })
+        this.log('❌ Get session error', getSessionError.message)
         throw new Error(`Session error: ${getSessionError.message}`)
       }
       
@@ -246,7 +246,7 @@ export class LiveKitService {
             tokenIsString: typeof token === 'string'
           })
         } catch (tokenError: any) {
-          this.log('❌ Token request failed:', { message: tokenError?.message || tokenError })
+          this.log('❌ Token request failed:', tokenError?.message || tokenError)
           throw new Error(`Failed to get LiveKit token: ${tokenError?.message || 'Unknown error'}`)
         }
       }
@@ -292,7 +292,7 @@ export class LiveKitService {
           this.log('🔐 LiveKit token (raw preview)', typeof token === 'string' ? token.substring(0, 60) + '...' : 'N/A')
         }
       } catch (e) {
-        this.log('🔐 Failed to decode LiveKit token payload', { error: e?.message || e })
+        this.log('🔐 Failed to decode LiveKit token payload', e?.message || e)
       }
 
       // Step 2: Create room with configuration
@@ -383,7 +383,7 @@ export class LiveKitService {
           tokenLength: token?.length,
           tokenPreview: token && typeof token === 'string' ? `${token.substring(0, 50)}...` : 'NO TOKEN'
         })
-        this.log('❌ Connection failed with error:', { message: errorMsg })
+        this.log('❌ Connection failed with error:', errorMsg)
         this.config.onError?.(errorMsg)
         this.isConnecting = false
         return false
@@ -645,14 +645,14 @@ export class LiveKitService {
         const { data: refreshData, error: refreshError } = await refreshWithTimeout as any
         
         if (refreshError) {
-          this.log('⚠️ Session refresh error (non-fatal):', { message: refreshError.message })
+          this.log('⚠️ Session refresh error (non-fatal):', refreshError.message)
           // Continue with existing session if refresh fails
         } else if (refreshData?.session) {
           session = refreshData.session
-          this.log('✅ Session refreshed successfully', {})
+          this.log('✅ Session refreshed successfully')
         }
       } catch (refreshErr: any) {
-        this.log('⚠️ Session refresh timeout/error (non-fatal):', { message: refreshErr?.message })
+        this.log('⚠️ Session refresh timeout/error (non-fatal):', refreshErr?.message)
         // Continue with existing session
       }
       
@@ -666,7 +666,7 @@ export class LiveKitService {
           }
           session = sessionData.session
         } catch (sessionErr: any) {
-          this.log('❌ Failed to get session:', { message: sessionErr?.message })
+          this.log('❌ Failed to get session:', sessionErr?.message)
           throw new Error('No active session. Please sign in again.')
         }
       }
@@ -682,7 +682,7 @@ export class LiveKitService {
             this.log('✅ Session refreshed')
           }
         } catch (e) {
-          this.log('⚠️ Failed to refresh expiring session:', { error: e })
+          this.log('⚠️ Failed to refresh expiring session:', e)
         }
       }
       
@@ -713,9 +713,9 @@ export class LiveKitService {
       if (accessToken && typeof accessToken === 'object') {
         this.log('⚠️ access_token is an object, attempting to extract string value', accessToken)
         // Try to get string value from object
-        if (accessToken && 'token' in accessToken && typeof (accessToken as any).token === 'string') {
+        if (accessToken !== null && 'token' in accessToken && typeof (accessToken as any).token === 'string') {
           accessToken = (accessToken as any).token
-        } else if (accessToken && 'value' in accessToken && typeof (accessToken as any).value === 'string') {
+        } else if (accessToken !== null && 'value' in accessToken && typeof (accessToken as any).value === 'string') {
           accessToken = (accessToken as any).value
         } else {
           this.log('❌ Cannot extract string from access_token object', accessToken)

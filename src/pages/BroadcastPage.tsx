@@ -321,8 +321,8 @@ export default function BroadcastPage() {
 
         // Use maybeSingle() instead of single() - more lenient, won't error if not found
         // Select only essential fields to reduce payload size
-        // ✅ Increased timeout to 15000ms for all attempts to handle slow queries and replication delay
-        const timeoutMs = 15000;
+        // ✅ Increased timeout to 25000ms for all attempts to handle slow queries and replication delay
+        const timeoutMs = 25000;
         
         const streamQuery = supabase
           .from("streams")
@@ -647,9 +647,9 @@ export default function BroadcastPage() {
             profileId: profile?.id
           });
           
-          // Add timeout wrapper for joinAndPublish
+          // Add timeout wrapper for joinAndPublish - increased for slower networks
           const joinTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('LiveKit room join timed out after 30 seconds')), 30000);
+            setTimeout(() => reject(new Error('LiveKit room join timed out after 45 seconds')), 45000);
           });
           
           await Promise.race([
@@ -725,7 +725,7 @@ export default function BroadcastPage() {
           let userMessage = 'Failed to join LiveKit room. Please try again.';
           
           if (actualError.includes('timeout') || actualError.includes('Timeout')) {
-            userMessage = 'Connection timed out. Please check your internet connection and try again.';
+            userMessage = '🔌 Connection timed out. Please check your internet connection and try again.';
           } else if (actualError.includes('token') || actualError.includes('Token')) {
             userMessage = 'Authentication failed. Please refresh the page and try again.';
           } else if (actualError.includes('room') && actualError.includes('not found')) {
@@ -1264,9 +1264,9 @@ export default function BroadcastPage() {
                     ⏳ Waiting for Broadcaster
                   </div>
                 ) : stream.is_live ? (
-                  <div className="px-3 py-2 bg-red-600 text-white rounded-full text-sm font-semibold">LIVE</div>
+                  <div className="px-3 py-2 bg-red-600 text-white rounded-full text-sm font-semibold">🔴 LIVE</div>
                 ) : (
-                  <div className="px-3 py-2 bg-gray-600 text-white rounded-full text-sm font-semibold">SETUP</div>
+                  <div className="px-3 py-2 bg-gray-600 text-white rounded-full text-sm font-semibold">⚙️ SETUP</div>
                 )}
                 <button
                   onClick={handleEndStream}
@@ -1300,6 +1300,16 @@ export default function BroadcastPage() {
                       <div className="flex items-center gap-2 px-4 py-2 bg-yellow-600/90 backdrop-blur-sm rounded-full border border-yellow-500/30">
                         <div className="w-2 h-2 bg-yellow-300 rounded-full animate-pulse"></div>
                         <span className="text-sm font-medium text-white">Ready to Go Live - Click any seat to start broadcasting</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Connection Progress Notification */}
+                  {claimingSeat !== null && (
+                    <div className="absolute top-4 right-4 z-20">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/90 backdrop-blur-sm rounded-full border border-blue-500/30">
+                        <div className="w-2 h-2 bg-blue-300 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium text-white">Connecting to stream... (up to 45s)</span>
                       </div>
                     </div>
                   )}
