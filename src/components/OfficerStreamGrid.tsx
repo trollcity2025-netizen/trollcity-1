@@ -289,6 +289,9 @@ const OfficerStreamVideoContent = ({ participant }: { participant: any }) => {
   
   const participantTrack = tracks.find((t: any) => {
     if (!participant) return false
+    return t.participant?.identity === participant.identity && t.source === Track.Source.Camera
+  }) || tracks.find((t: any) => {
+    if (!participant) return false
     return t.participant?.identity === participant.identity
   })
 
