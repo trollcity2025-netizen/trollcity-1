@@ -653,12 +653,20 @@ export default function BroadcastPage() {
             setTimeout(() => reject(new Error('LiveKit room join timed out after 45 seconds')), 45000);
           });
           
-          await Promise.race([
+          const joined = await Promise.race([
             joinAndPublish(stream),
             joinTimeout
           ]);
+
+          if (!joined) {
+            throw new Error('LiveKit connection failed (check console for details)');
+          }
           
           console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
+          
+          // ✅ Clear loading state immediately after success to remove banner
+          setClaimingSeat(null);
+          toast.success(`Joined seat ${index + 1} successfully!`);
           
           // ✅ DEBUG: Log track state 2 seconds after publishing to confirm tracks aren't being ended
           setTimeout(() => {
@@ -707,7 +715,7 @@ export default function BroadcastPage() {
           // ✅ FIXED: Simplified track attachment - OfficerStreamGrid handles its own track attachment
           // No need for delayed attachment as OfficerStreamGrid component manages video elements
           console.log(`[BroadcastPage] Seat ${index} claimed and tracks published successfully`);
-          toast.success(`Joined seat ${index + 1} successfully!`);
+          // toast.success(`Joined seat ${index + 1} successfully!`); // Moved up
           
         } catch (liveKitErr: any) {
           // Extract the real error message from LiveKit join attempt
