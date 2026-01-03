@@ -123,10 +123,7 @@ export class LiveKitService {
             expiresAt: expiresAt ? new Date(expiresAt * 1000).toISOString() : 'unknown'
           })
           
-          // Start background refresh for next time
-          supabase.auth.refreshSession().catch(() => {
-            // Silent fail - we have a valid session
-          })
+          // ✅ REMOVED: Forced background refresh (User Request #1)
           
           // Use the cached session - set sessionData here
           sessionData = { data: { session: storeSession }, error: null }
@@ -136,54 +133,42 @@ export class LiveKitService {
         }
       }
       
-      // If no valid cached session, get from Supabase (with timeout)
+      // If no valid cached session, get from Supabase
       if (!sessionData) {
-        // Start refresh in background (non-blocking)
-        this.log('Starting session refresh (non-blocking)...')
-        const refreshPromise = supabase.auth.refreshSession().catch((err: any) => {
-          // Silently handle refresh errors - we'll use current session anyway
-          this.log('⚠️ Background session refresh failed (non-fatal)', { message: err?.message || err })
-        })
-        
-        // Get current session with timeout to prevent hanging - increased for slower networks
         this.log('Getting session from Supabase...')
-        const getSessionWithTimeout = Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Get session timeout')), 15000)
-          }),
-        ])
         
+        // ✅ Fix #2: Check session first, ONLY refresh if missing
         try {
-          sessionData = await getSessionWithTimeout
-        } catch (getSessionErr: any) {
-          // If getSession times out, try one more time after a brief wait for refresh
-          this.log('⚠️ Get session timeout, waiting briefly for refresh...')
-          await Promise.race([
-            refreshPromise,
-            new Promise(resolve => setTimeout(resolve, 1000))
-          ])
-          
-          // Try getSession one more time with timeout - increased for slower networks
-          const retryGetSession = Promise.race([
-            supabase.auth.getSession(),
-            new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Get session retry timeout')), 12000)
-            })
-          ])
-          
-          try {
-            sessionData = await retryGetSession
-          } catch (retryErr: any) {
-            this.log('❌ Get session failed after retry', { message: retryErr?.message || retryErr })
-            // Last resort: try store session even if expired
+           const { data } = await supabase.auth.getSession()
+           
+           if (data.session?.access_token) {
+             sessionData = { data, error: null }
+           } else {
+             // Only refresh if truly missing
+             this.log('⚠️ No active session found, attempting refresh...')
+             
+             // ✅ Fix #3: Safe refresh with error handling
+             const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+             
+             if (refreshError || !refreshData.session) {
+               // Don't throw immediately, check if we have an expired store session to fall back on
+               this.log('⚠️ Refresh failed', refreshError)
+             } else {
+               sessionData = { data: refreshData, error: null }
+             }
+           }
+        } catch (err: any) {
+           this.log('❌ Session check failed', err)
+        }
+
+        // Final fallback if sessionData is still missing
+        if (!sessionData) {
             if (storeSession?.access_token) {
-              this.log('⚠️ Using expired store session as fallback')
-              sessionData = { data: { session: storeSession }, error: null }
+                this.log('⚠️ Using expired store session as fallback')
+                sessionData = { data: { session: storeSession }, error: null }
             } else {
-              throw new Error('Failed to get session. Please try refreshing the page.')
+                throw new Error('Failed to get session. Please try refreshing the page.')
             }
-          }
         }
       }
       
