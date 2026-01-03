@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useRef, useCallback, useState } from 'react'
+import React, { useMemo, useRef, useCallback, useState } from 'react'
 import { Mic, Video } from 'lucide-react'
 import { useSeatRoster, type SeatAssignment } from '../hooks/useSeatRoster'
 import { useLiveKit } from '../hooks/useLiveKit'
@@ -252,6 +252,7 @@ const OfficerStreamGrid: React.FC<OfficerStreamGridProps> = ({
             }}
             onSeatAction={(action) => handleSeatAction(action, index, seat)}
             data-speaking={isSpeaking}
+            room={room}
           />
         )
       })}
@@ -269,6 +270,7 @@ interface OfficerStreamBoxProps {
   children?: React.ReactNode
   onClaimClick: () => void
   onSeatAction: (action: 'claim' | 'release' | 'leave') => Promise<void>
+  room?: any
 }
 
 const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> = ({
@@ -280,11 +282,12 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
   isClaimingSeat,
   onClaimClick,
   onSeatAction,
+  room,
 }) => {
   // Get tracks for ParticipantTile
   const tracks = useTracks(
     [Track.Source.Camera, Track.Source.Microphone],
-    { onlySubscribed: false }
+    { onlySubscribed: false, room }
   )
   
   // Find the track for this participant
