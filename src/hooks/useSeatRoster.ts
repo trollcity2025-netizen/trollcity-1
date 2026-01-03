@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 
 const DEFAULT_ROOM = 'officer-stream'
 const SEAT_COUNT = 9
+
+// ✅ New: Prevent flicker after claim
+const CLAIM_GRACE_MS = 2500
 
 export type SeatAssignment = {
   room: string
@@ -22,6 +25,16 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isClaimingSeat, setIsClaimingSeat] = useState<number | null>(null)
+
+  // ✅ New refs to prevent UI flicker
+  const lastClaimAtRef = useRef<number>(0)
+  const lastClaimedSeatRef = useRef<number | null>(null)
+
+  // ✅ Use stable user identity always
+  const stableUserId = useMemo(() => {
+    return user?.id || profile?.id || null
+  }, [user?.id, profile?.id])
+
   const normalizeSeatIndex = useCallback((value: number) => {
     const requested = Number.isFinite(value) ? Math.floor(value) : 0
     const clamped = Math.min(Math.max(requested, 0), SEAT_COUNT - 1)
@@ -37,10 +50,12 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
   const normalize = useCallback((data: any[]): SeatAssignment[] => {
     const map = new Map<number, any>()
     data?.forEach((seat) => {
-      if (seat?.seat_index) {
+      // ✅ Fix: seat_index 0 should still count
+      if (seat?.seat_index !== undefined && seat?.seat_index !== null) {
         map.set(Number(seat.seat_index), seat)
       }
     })
+
     return Array.from({ length: SEAT_COUNT }, (_, index) => {
       const entry = map.get(index + 1)
       if (!entry) return null
@@ -86,8 +101,29 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
         throw new Error(payload.error || 'broadcast-seats failed')
       }
 
-      const seats = payload.seats ?? payload.data?.seats ?? []
-      setSeats(normalize(seats))
+      const seatRows = payload.seats ?? payload.data?.seats ?? []
+      const normalized = normalize(seatRows)
+
+      // ✅ Flicker protection: ignore refresh that loses your own seat
+      if (stableUserId) {
+        const mySeatExistsLocally = seats.some((s) => s?.user_id === stableUserId)
+        const mySeatExistsInIncoming = normalized.some((s) => s?.user_id === stableUserId)
+
+        const withinGrace =
+          lastClaimAtRef.current &&
+          Date.now() - lastClaimAtRef.current < CLAIM_GRACE_MS
+
+        if (withinGrace && mySeatExistsLocally && !mySeatExistsInIncoming) {
+          console.warn('[useSeatRoster] Ignoring refresh because backend is stale (claim grace window)', {
+            stableUserId,
+            withinGrace,
+          })
+          setLoading(false)
+          return
+        }
+      }
+
+      setSeats(normalized)
       setError(null)
     } catch (err: any) {
       console.error('[useSeatRoster] refresh failed', err)
@@ -95,10 +131,10 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
     } finally {
       setLoading(false)
     }
-  }, [normalize, roomName])
+  }, [normalize, roomName, stableUserId, seats])
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!stableUserId) {
       console.log('[useSeatRoster] Waiting for auth...')
       return
     }
@@ -109,31 +145,31 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
         console.warn('[useSeatRoster] Session token not available yet', {
           hasSession: !!session,
           hasToken: !!session?.access_token,
-          userId: user?.id,
+          userId: stableUserId,
         })
         return
       }
 
       console.log('[useSeatRoster] Session verified, subscribing to seats', {
-        userId: user?.id,
+        userId: stableUserId,
         tokenLength: session.access_token.length,
       })
 
       const channel = supabase
-      .channel(`broadcast-seats-${roomName}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'broadcast_seats',
-          filter: `room=eq.${roomName}`,
-        },
-        () => {
-          refresh()
-        }
-      )
-      .subscribe()
+        .channel(`broadcast-seats-${roomName}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'broadcast_seats',
+            filter: `room=eq.${roomName}`,
+          },
+          () => {
+            refresh()
+          }
+        )
+        .subscribe()
 
       refresh()
 
@@ -143,7 +179,7 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
     }
 
     checkSessionThenSubscribe()
-  }, [roomName, user?.id, refresh])
+  }, [roomName, stableUserId, refresh])
 
   const claimSeat = useCallback(
     async (
@@ -159,13 +195,17 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
       const safeIndex = normalizeSeatIndex(seatIndex)
       setIsClaimingSeat(safeIndex)
       try {
+        // ✅ Claim grace window begins now
+        lastClaimAtRef.current = Date.now()
+        lastClaimedSeatRef.current = safeIndex
+
         // Check if user already has a seat in this room
-        const existingSeat = seats.find(seat => seat?.user_id === user?.id)
+        const existingSeat = seats.find(seat => seat?.user_id === stableUserId)
         if (existingSeat) {
           throw new Error('You already have a seat in this stream. Please release your current seat first.')
         }
 
-        const userId = payload?.user_id ?? user?.id
+        const userId = payload?.user_id ?? stableUserId
         const username = payload?.username ?? profile?.username ?? user?.email?.split('@')[0] ?? 'Officer'
         const role = payload?.role ?? profile?.role ?? 'troll_officer'
         const avatar_url = payload?.avatarUrl ?? profile?.avatar_url ?? null
@@ -212,34 +252,31 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
         }
 
         // ✅ Optimistic update: Update local state immediately
-        // This prevents the UI from flickering to empty if the subsequent fetch is too fast
         setSeats(prev => {
           const newSeats = [...prev]
           if (seat.seat_index && seat.seat_index > 0 && seat.seat_index <= newSeats.length) {
-             newSeats[seat.seat_index - 1] = seat
+            newSeats[seat.seat_index - 1] = seat
           }
           return newSeats
         })
 
-        // We rely on the realtime subscription to confirm the state later
-        // but we don't force a refresh immediately to avoid race conditions with replication
-        // refresh() 
         return seat
       } finally {
         setIsClaimingSeat(null)
       }
     },
-    [refresh, normalizeSeatIndex, profile, user, roomName, seats]
+    [refresh, normalizeSeatIndex, profile, user, roomName, seats, stableUserId]
   )
 
   const releaseSeat = useCallback(
     async (seatIndex: number, userId?: string, options?: { force?: boolean }) => {
       const safeIndex = normalizeSeatIndex(seatIndex)
-      const targetUserId = userId ?? user?.id
+      const targetUserId = userId ?? stableUserId
       if (!targetUserId) {
         console.warn('[useSeatRoster] releaseSeat skipped, missing userId')
         return
       }
+
       try {
         const { data, error: invokeError } = await supabase.functions.invoke('broadcast-seats', {
           body: {
@@ -269,12 +306,15 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
           return newSeats
         })
 
-        // refresh() - relying on realtime subscription
+        // ✅ Reset claim tracking refs
+        lastClaimAtRef.current = 0
+        lastClaimedSeatRef.current = null
+
       } catch (err) {
         console.warn('[useSeatRoster] releaseSeat failed', err)
       }
     },
-    [refresh, normalizeSeatIndex, user, roomName]
+    [refresh, normalizeSeatIndex, stableUserId, roomName]
   )
 
   const currentOccupants = useMemo(

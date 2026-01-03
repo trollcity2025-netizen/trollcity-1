@@ -33,6 +33,10 @@ const SEAT_COUNT = 6;
 const _LOCAL_VIEWER_ID_KEY = "trollcity_viewer_id_v1";
 const STREAM_POLL_INTERVAL = 2000;
 
+// ✅ NEW: LiveKit join retry strategy
+const LIVEKIT_JOIN_RETRY_DELAY = 2000;
+const LIVEKIT_JOIN_MAX_RETRIES = 2;
+
 // Types
 interface StreamRow {
   id: string;
@@ -44,8 +48,6 @@ interface StreamRow {
   total_likes?: number;
   start_time?: string;
 }
-
-
 
 interface _ControlMessage {
   type: 'admin-action'
@@ -120,6 +122,13 @@ export default function BroadcastPage() {
   // Auth and user state
   const { user, profile } = useAuthStore();
   const displayName = useDisplayName(profile);
+
+  // ✅ Stable identity everywhere
+  const stableIdentity = useMemo(() => {
+    const id = user?.id || profile?.id;
+    if (!id) console.warn('[BroadcastPage] No stable identity found');
+    return id;
+  }, [user?.id, profile?.id]);
   
   // Stream state (defined early for useIsBroadcaster)
   const [stream, setStream] = useState<StreamRow | null>(null);
@@ -129,50 +138,47 @@ export default function BroadcastPage() {
   const _isAdmin = useIsAdmin(profile);
 
   // LiveKit integration
-  // ✅ 3) Ensure the hook is only mounted on BroadcastPage (not globally)
-  // Only initialize LiveKit when we have a valid stream and user
   const liveKit = useLiveKit();
   const roomName = useMemo(() => String(streamId || ''), [streamId]);
-  
-  // ✅ Only call useLiveKitSession when we have a valid streamId (prevents hook from running on home page)
-  // Don't initialize LiveKit at all if we don't have a streamId
+
   const hasValidStreamId = !!streamId && typeof streamId === 'string' && streamId.trim() !== '';
   const sessionReady = !!user && !!profile && hasValidStreamId;
-  
+
   // ✅ Fix #2: Consistent identity - defined at top level to be available for all hooks
   const livekitIdentity = useMemo(() => {
-    // Always prefer user.id (auth source of truth) to match useSeatRoster logic
-    const id = user?.id || profile?.id;
+    const id = stableIdentity;
     if (!id) console.warn('[BroadcastPage] No identity found for LiveKit');
     return id;
-  }, [user?.id, profile?.id]);
+  }, [stableIdentity]);
 
   const {
     joinAndPublish,
     isConnected,
     isConnecting,
   } = useLiveKitSession({
-    roomName: sessionReady && hasValidStreamId ? roomName : '', // Empty roomName prevents connection attempts
+    roomName: sessionReady && hasValidStreamId ? roomName : '',
     user: sessionReady && user
       ? { ...user, identity: livekitIdentity, role: profile?.role || 'broadcaster' }
       : null,
     role: isBroadcaster ? 'broadcaster' : 'viewer',
     allowPublish: isBroadcaster && sessionReady,
-    autoPublish: true, // ✅ Enable auto-publish so tracks are published when joinAndPublish is called
+    autoPublish: true,
     maxParticipants: SEAT_COUNT,
   });
 
   const { participants, service: _service } = liveKit;
+
+  // ✅ IMPORTANT: useSeatRoster uses roomName, must match EXACTLY livekitIdentity
   const { seats, seatsLoading, claimSeat, releaseSeat: _releaseSeat } = useSeatRoster(roomName);
-
-
 
   // Media state - useRef to prevent re-renders that cause cleanup loops
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const preflightStreamRef = useRef<MediaStream | null>(null);
 
-  // Defensive auth check: if Supabase reports no active session or refresh fails,
-  // sign the user out and redirect to auth to avoid unhandled errors during LiveKit actions.
+  // ✅ NEW: Prevent double-join spam
+  const joinLockRef = useRef(false);
+
+  // Defensive auth check
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -198,8 +204,6 @@ export default function BroadcastPage() {
     })();
     return () => { mounted = false };
   }, [navigate]);
-
-
 
   // UI state
   const [trollLikeCount, setTrollLikeCount] = useState(0);
@@ -231,7 +235,6 @@ export default function BroadcastPage() {
 
   // Media access handlers
   const requestMediaAccess = useCallback(async (): Promise<MediaStream> => {
-    // ✅ CRITICAL: Check if we already have a valid preflight stream
     if (preflightStreamRef.current && preflightStreamRef.current.active) {
       console.log('[BroadcastPage] Reusing existing preflight stream');
       return preflightStreamRef.current;
@@ -252,12 +255,14 @@ export default function BroadcastPage() {
       stream.getAudioTracks().forEach((track) => {
         track.enabled = true;
       });
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = true;
+      });
       
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
       
-      // ✅ Store in ref instead of state to prevent re-renders
       preflightStreamRef.current = stream;
       console.log('[BroadcastPage] ✅ Preflight stream created and stored in ref');
       return stream;
@@ -269,7 +274,6 @@ export default function BroadcastPage() {
         error: err
       });
       
-      // Preserve error name and message for better error handling upstream
       const error = new Error(err?.message || 'Failed to access camera/microphone');
       (error as any).name = err?.name || 'MediaAccessError';
       (error as any).originalError = err;
@@ -277,7 +281,7 @@ export default function BroadcastPage() {
     }
   }, []);
 
-  // ✅ FIXED: Only cleanup on explicit leave actions, not on re-renders
+  // ✅ FIXED: Only cleanup on explicit leave actions
   const cleanupLocalStream = useCallback(() => {
     if (preflightStreamRef.current) {
       console.log('[BroadcastPage] Cleaning up preflight stream (explicit cleanup)');
@@ -296,15 +300,13 @@ export default function BroadcastPage() {
     }
   }, []);
 
-  // Stream data loading with retry logic and fallback
+  // Stream data loading
   const loadStreamData = useCallback(async () => {
     if (!streamId) {
       setIsLoadingStream(false);
       return;
     }
 
-    // ✅ Check if stream data was passed via navigation state (from GoLive)
-    // This avoids database query and replication delay issues
     const streamDataFromState = location.state?.streamData;
     if (streamDataFromState && streamDataFromState.id === streamId) {
       console.log('✅ Using stream data from navigation state (no DB query needed)');
@@ -315,15 +317,11 @@ export default function BroadcastPage() {
     }
 
     setIsLoadingStream(true);
-    
-    // ✅ Optimized: Skip connectivity test and go straight to stream query for faster loading
-    // The stream was just created, so it should be available immediately
-    const maxRetries = 3; // Increased retries for newly created streams
+    const maxRetries = 3;
     let lastError: any = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // ✅ Give Supabase a moment to replicate the row after insert (only on attempt 1)
         if (attempt === 1) {
           console.log("⏳ Waiting 500ms for stream row replication...");
           await new Promise((r) => setTimeout(r, 500));
@@ -331,16 +329,13 @@ export default function BroadcastPage() {
 
         console.log(`📡 Loading stream info... (attempt ${attempt}/${maxRetries})`, streamId);
 
-        // Use maybeSingle() instead of single() - more lenient, won't error if not found
-        // Select only essential fields to reduce payload size
-        // ✅ Increased timeout to 25000ms for all attempts to handle slow queries and replication delay
         const timeoutMs = 25000;
         
         const streamQuery = supabase
           .from("streams")
           .select("id, broadcaster_id, title, category, status, start_time, end_time, current_viewers, total_gifts_coins, total_unique_gifters, is_live, thumbnail_url, created_at, updated_at")
           .eq("id", streamId)
-          .maybeSingle(); // Use maybeSingle() - returns null if not found instead of error
+          .maybeSingle();
 
         const streamQueryWithTimeout = Promise.race([
           streamQuery,
@@ -352,18 +347,15 @@ export default function BroadcastPage() {
         const { data: streamRow, error: streamErr } = await streamQueryWithTimeout as any;
 
         if (streamErr) {
-          // If it's a timeout error, retry
           if (streamErr.message?.includes('timeout') || streamErr.message?.includes('Timeout')) {
             lastError = streamErr;
             if (attempt < maxRetries) {
               console.log(`⚠️ Stream query timeout on attempt ${attempt}, retrying...`);
-              // ✅ Exponential backoff: 500ms * attempt
               await new Promise(resolve => setTimeout(resolve, 500 * attempt));
               continue;
             }
           }
           
-          // For other errors, check if it's a "not found" error
           if (streamErr.code === 'PGRST116' || streamErr.message?.includes('not found')) {
             console.error("❌ Stream not found:", streamErr);
             toast.error("Stream not found.");
@@ -371,11 +363,9 @@ export default function BroadcastPage() {
             return;
           }
           
-          // For other errors, retry if we have attempts left
           lastError = streamErr;
           if (attempt < maxRetries) {
             console.log(`⚠️ Stream query error on attempt ${attempt}, retrying...`, streamErr.message);
-            // ✅ Exponential backoff: 500ms * attempt
             await new Promise(resolve => setTimeout(resolve, 500 * attempt));
             continue;
           }
@@ -384,11 +374,9 @@ export default function BroadcastPage() {
         if (!streamRow) {
           if (attempt < maxRetries) {
             console.log(`⚠️ No stream data on attempt ${attempt}, retrying...`);
-            // ✅ Exponential backoff: 500ms * attempt
             await new Promise(resolve => setTimeout(resolve, 500 * attempt));
             continue;
           }
-          // Last attempt failed - use fallback if we have user/profile
           console.warn("⚠️ Stream load failed: No data returned after all retries");
           if (profile && user && streamId) {
             console.warn('⚠️ Using fallback stream data - some features may be limited');
@@ -414,7 +402,6 @@ export default function BroadcastPage() {
           return;
         }
 
-        // Success!
         console.log("✅ Stream loaded successfully:", streamRow.id);
         setStream(streamRow as StreamRow);
         setCoinCount(Number(streamRow.total_gifts_coins || 0));
@@ -424,20 +411,15 @@ export default function BroadcastPage() {
       } catch (error: any) {
         lastError = error;
         
-        // If it's a timeout, retry if we have attempts left
         if (error?.message?.includes('timeout') && attempt < maxRetries) {
           console.log(`⚠️ Stream query timeout on attempt ${attempt}, retrying...`);
-          // ✅ Exponential backoff: 500ms * attempt
           await new Promise(resolve => setTimeout(resolve, 500 * attempt));
           continue;
         }
         
-        // If it's the last attempt, try fallback
         if (attempt === maxRetries) {
           console.error('❌ Failed to load stream data after all retries:', error?.message || error);
           
-          // Fallback: Create minimal stream object from streamId and profile
-          // This allows the page to continue functioning even if we can't load full stream data
           if (profile && user && streamId) {
             console.warn('⚠️ Using fallback stream data - some features may be limited');
             const fallbackStream: StreamRow = {
@@ -469,7 +451,6 @@ export default function BroadcastPage() {
       }
     }
 
-    // If we get here, all retries failed
     setIsLoadingStream(false);
     if (lastError?.message?.includes('timeout')) {
       toast.error('Stream loading timed out. Please check your connection and refresh the page.');
@@ -480,14 +461,12 @@ export default function BroadcastPage() {
 
   // ✅ NEW: Centralized joinBox function
   const joinBox = useCallback(async (boxId: string) => {
-    // Check if already in a box
     if (activeBoxId && activeBoxId !== boxId) {
       console.log('[BroadcastPage] User already in box:', activeBoxId, 'blocking join of:', boxId);
       toast.error('You are already in a box. Please leave first.');
       return false;
     }
 
-    // If already in this box, don't join again
     if (activeBoxId === boxId) {
       console.log('[BroadcastPage] Already in box:', boxId);
       return true;
@@ -495,11 +474,8 @@ export default function BroadcastPage() {
 
     console.log('[BroadcastPage] Joining box:', boxId);
     setActiveBoxId(boxId);
-    
-    // Update UI state
     setPermissionErrorSeat(null);
     setPermissionErrorMessage('');
-    
     return true;
   }, [activeBoxId]);
 
@@ -513,7 +489,6 @@ export default function BroadcastPage() {
     console.log('[BroadcastPage] Leaving box:', activeBoxId);
     
     try {
-      // Stop local tracks
       if (localTracks) {
         console.log('[BroadcastPage] Stopping local tracks');
         if (localTracks.video) {
@@ -525,20 +500,16 @@ export default function BroadcastPage() {
         setLocalTracks(null);
       }
       
-      // Clean up preflight stream
       cleanupLocalStream();
       
-      // Disconnect from LiveKit
       if (liveKit.service?.disconnect) {
         await liveKit.service.disconnect();
       }
       
-      // Release seat if we have one
       if (currentSeatIndex !== null && _releaseSeat) {
         await _releaseSeat(currentSeatIndex);
       }
       
-      // Clear all state
       setActiveBoxId(null);
       setCurrentSeatIndex(null);
       setLocalTracks(null);
@@ -549,7 +520,6 @@ export default function BroadcastPage() {
       
     } catch (err: any) {
       console.error('[BroadcastPage] Error leaving box:', err);
-      // Still clear state even if there's an error
       setActiveBoxId(null);
       setCurrentSeatIndex(null);
       setLocalTracks(null);
@@ -558,23 +528,24 @@ export default function BroadcastPage() {
     }
   }, [activeBoxId, localTracks, cleanupLocalStream, liveKit, currentSeatIndex, _releaseSeat]);
 
-  // Seat management handlers
+  // ✅ Seat management handlers (FIXED)
   const handleSeatClaim = useCallback(
     async (index: number) => {
       console.log('[BroadcastPage] handleSeatClaim CALLED for index:', index);
-      
-      // ✅ Fix #3: Don't set activeBoxId early. Wait for success.
-      const boxId = `seat-${index}`;
-      // const canJoin = await joinBox(boxId); // <-- REMOVED early call
-      // if (!canJoin) {
-      //   return;
-      // }
 
-      if (claimingSeat !== null || currentSeatIndex !== null) {
+      if (!livekitIdentity) {
+        toast.error("No user identity found. Please refresh and try again.");
+        return;
+      }
+
+      const boxId = `seat-${index}`;
+
+      if (claimingSeat !== null || currentSeatIndex !== null || joinLockRef.current) {
         console.log('[BroadcastPage] Already claiming or in seat, ignoring click');
         return;
       }
-      
+
+      joinLockRef.current = true;
       console.log(`[BroadcastPage] Seat ${index + 1} clicked to join`);
       setClaimingSeat(index);
       setPermissionErrorSeat(null);
@@ -584,7 +555,6 @@ export default function BroadcastPage() {
         const stream = await requestMediaAccess();
         console.log('[BroadcastPage] Permissions granted');
         
-        // ✅ Store local tracks for proper cleanup
         const videoTrack = stream.getVideoTracks()[0];
         const audioTrack = stream.getAudioTracks()[0];
         if (videoTrack && audioTrack) {
@@ -595,181 +565,97 @@ export default function BroadcastPage() {
           });
         }
 
+        // ✅ CRITICAL FIX: Claim seat with explicit stable identity
         const success = await claimSeat(index, {
+          user_id: livekitIdentity,
           username: displayName,
           avatarUrl: profile?.avatar_url,
           role: profile?.role || 'broadcaster',
-          metadata: {},
+          metadata: { identity: livekitIdentity },
         });
 
         if (!success) {
           throw new Error('Seat claim failed');
         }
 
-        // ✅ Step 1: Get the claimed seat data with seatNumber and user_id
-        // ✅ Fix #2: Use consistent livekitIdentity
-        const claimedSeat = {
+        console.log("CLAIMED SEAT", {
           seat_number: index,
           user_id: livekitIdentity
-        };
-        
-        console.log("CLAIMED SEAT", claimedSeat);
+        });
 
-        // ✅ Fix #3: Set state ONLY after success
-        await joinBox(boxId); // Now we join the box
+        await joinBox(boxId);
         setCurrentSeatIndex(index);
-        
-        // Track if broadcaster has joined a seat (for setup flow)
+
         if (isBroadcaster) {
           setBroadcasterHasJoined(true);
         }
 
-        try {
-          // ✅ 2) Only trigger joinAndPublish when ALL are true
-          console.log('[BroadcastPage] 🔍 Pre-flight checks before joining LiveKit room');
-          
-          const { data: sessionData } = await supabase.auth.getSession()
-          if (!sessionData.session) {
-            console.log("[BroadcastPage] ❌ No session yet — skipping joinAndPublish")
-            throw new Error('No active session. Please sign in again.')
-          }
-          
-          if (!roomName || !livekitIdentity) {
-            console.log("[BroadcastPage] ❌ Missing requirements — skipping joinAndPublish", {
-              roomName,
-              hasIdentity: !!livekitIdentity
-            })
-            throw new Error('Missing required information to join stream')
-          }
+        // ✅ Join LiveKit with retries
+        console.log('[BroadcastPage] 🔍 Pre-flight checks before joining LiveKit room');
 
-          console.log('[BroadcastPage] ✅ All pre-flight checks passed');
-
-          // ✅ Ensure tracks are enabled before publishing
-          stream.getVideoTracks().forEach(track => {
-            track.enabled = true;
-          });
-          stream.getAudioTracks().forEach(track => {
-            track.enabled = true;
-          });
-          
-          console.log('[BroadcastPage] Calling joinAndPublish with stream', {
-            streamActive: stream?.active,
-            videoTracks: stream?.getVideoTracks().length || 0,
-            audioTracks: stream?.getAudioTracks().length || 0,
-            videoTrackEnabled: stream?.getVideoTracks()[0]?.enabled,
-            audioTrackEnabled: stream?.getAudioTracks()[0]?.enabled,
-            roomName,
-            identity: livekitIdentity
-          });
-          
-          // ✅ Fix #3 — Grace Period / Retry Logic
-          console.log('[BroadcastPage] Attempting to join LiveKit room...');
-          
-          let joined = await joinAndPublish(stream);
-          
-          if (!joined) {
-             console.warn("[BroadcastPage] Join returned false, retrying in 2s...");
-             await new Promise(r => setTimeout(r, 2000));
-             joined = await joinAndPublish(stream);
-             
-             if (!joined) {
-                throw new Error("LiveKit failed after retry");
-             }
-          }
-          
-          console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
-          
-          // ✅ Quick test: Check participants immediately after join
-          const room = liveKit.getRoom();
-          console.log("✅ room participants:", room?.participants?.size);
-          console.log("✅ local participant identity:", room?.localParticipant?.identity);
-          console.log("✅ liveKit hook participants size:", participants.size);
-          console.log("✅ participants keys:", Array.from(Object.keys(participants)));
-
-          // ✅ Clear loading state immediately after success to remove banner
-          setClaimingSeat(null);
-          toast.success(`Joined seat ${index + 1} successfully!`);
-          
-          // ✅ DEBUG: Log track state 2 seconds after publishing to confirm tracks aren't being ended
-          setTimeout(() => {
-            console.log('[BroadcastPage] 🔍 DEBUG: Track state 2 seconds after publishing:', {
-              streamActive: stream?.active,
-              videoTracks: stream?.getVideoTracks().map(track => ({
-                kind: track.kind,
-                enabled: track.enabled,
-                readyState: track.readyState,
-                muted: track.muted,
-                label: track.label
-              })) || [],
-              audioTracks: stream?.getAudioTracks().map(track => ({
-                kind: track.kind,
-                enabled: track.enabled,
-                readyState: track.readyState,
-                muted: track.muted,
-                label: track.label
-              })) || []
-            });
-            
-            // Also check LiveKit room tracks
-            const room = liveKit.getRoom();
-            if (room && room.localParticipant) {
-              const videoPubs = Array.from(room.localParticipant.videoTrackPublications.values());
-              const audioPubs = Array.from(room.localParticipant.audioTrackPublications.values());
-              console.log('[BroadcastPage] 🔍 DEBUG: LiveKit local track publications:', {
-                videoTracks: videoPubs.map((pub: any) => ({
-                  trackId: pub.trackSid,
-                  trackKind: pub.track?.kind,
-                  trackEnabled: pub.track?.isEnabled,
-                  trackMuted: pub.track?.isMuted,
-                  publicationEnabled: pub.isEnabled
-                })),
-                audioTracks: audioPubs.map((pub: any) => ({
-                  trackId: pub.trackSid,
-                  trackKind: pub.track?.kind,
-                  trackEnabled: pub.track?.isEnabled,
-                  trackMuted: pub.track?.isMuted,
-                  publicationEnabled: pub.isEnabled
-                }))
-              });
-            }
-          }, 2000);
-          
-          // ✅ FIXED: Simplified track attachment - OfficerStreamGrid handles its own track attachment
-          // No need for delayed attachment as OfficerStreamGrid component manages video elements
-          console.log(`[BroadcastPage] Seat ${index} claimed and tracks published successfully`);
-          // toast.success(`Joined seat ${index + 1} successfully!`); // Moved up
-          
-        } catch (liveKitErr: any) {
-          // Extract the real error message from LiveKit join attempt
-          const actualError = liveKitErr?.message || 'LiveKit join failed';
-          console.error('[BroadcastPage] ❌ LiveKit join error details:', {
-            error: actualError,
-            name: liveKitErr?.name,
-            code: liveKitErr?.code,
-            reason: liveKitErr?.reason,
-            roomName,
-            identity: livekitIdentity
-          });
-          
-          // Provide specific error messages based on error type
-          let userMessage = 'Failed to join LiveKit room. Please try again.';
-          
-          if (actualError.includes('timeout') || actualError.includes('Timeout')) {
-            userMessage = '🔌 Connection timed out. Please check your internet connection and try again.';
-          } else if (actualError.includes('token') || actualError.includes('Token')) {
-            userMessage = 'Authentication failed. Please refresh the page and try again.';
-          } else if (actualError.includes('room') && actualError.includes('not found')) {
-            userMessage = 'Stream room not found. The stream may have ended. Please refresh the page.';
-          } else if (actualError.includes('unauthorized') || actualError.includes('401') || actualError.includes('403')) {
-            userMessage = 'Access denied. Please refresh the page and try again.';
-          } else if (actualError.includes('network') || actualError.includes('connection')) {
-            userMessage = 'Network error. Please check your internet connection and try again.';
-          }
-          
-          throw new Error(userMessage);
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (!sessionData.session) {
+          throw new Error('No active session. Please sign in again.')
         }
 
-        // Update stream status if broadcaster
+        if (!roomName || !livekitIdentity) {
+          throw new Error('Missing required information to join stream')
+        }
+
+        console.log('[BroadcastPage] ✅ All pre-flight checks passed');
+
+        stream.getVideoTracks().forEach(track => track.enabled = true);
+        stream.getAudioTracks().forEach(track => track.enabled = true);
+
+        let joined = false;
+        for (let attempt = 1; attempt <= LIVEKIT_JOIN_MAX_RETRIES; attempt++) {
+          console.log(`[BroadcastPage] LiveKit join attempt ${attempt}/${LIVEKIT_JOIN_MAX_RETRIES}`);
+          joined = await joinAndPublish(stream);
+          if (joined) break;
+          console.warn("[BroadcastPage] Join returned false — retrying...");
+          await new Promise(r => setTimeout(r, LIVEKIT_JOIN_RETRY_DELAY));
+        }
+
+        if (!joined) {
+          // ✅ IMPORTANT: DO NOT AUTO LEAVE OR RELEASE SEAT
+          toast.error("LiveKit connection failed — seat reserved. Click seat again to retry.");
+          console.warn("[BroadcastPage] LiveKit join failed but seat stays reserved.");
+          return;
+        }
+
+        console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
+
+        // ✅ Track watchdog: Ensure LiveKit camera/mic enabled after join
+        setTimeout(async () => {
+          try {
+            const room = liveKit.getRoom();
+            const lp = room?.localParticipant;
+            if (!lp) return;
+
+            console.log('[BroadcastPage] 🔁 Track watchdog check');
+
+            if (!lp.isCameraEnabled) {
+              console.warn('[BroadcastPage] Camera not enabled — forcing enable');
+              await lp.setCameraEnabled(true);
+            }
+
+            if (!lp.isMicrophoneEnabled) {
+              console.warn('[BroadcastPage] Mic not enabled — forcing enable');
+              await lp.setMicrophoneEnabled(true);
+            }
+
+            console.log('[BroadcastPage] ✅ Track watchdog finished', {
+              camera: lp.isCameraEnabled,
+              mic: lp.isMicrophoneEnabled,
+            });
+          } catch (e) {
+            console.warn('[BroadcastPage] Track watchdog failed', e);
+          }
+        }, 1200);
+
+        setClaimingSeat(null);
+        toast.success(`Joined seat ${index + 1} successfully!`);
+
         if (isBroadcaster) {
           const { error: updateErr } = await supabase
             .from("streams")
@@ -783,6 +669,7 @@ export default function BroadcastPage() {
             
           if (updateErr) console.warn("Stream status update failed:", updateErr);
         }
+
       } catch (err: any) {
         console.error('Failed to claim seat:', {
           error: err,
@@ -790,21 +677,17 @@ export default function BroadcastPage() {
           message: err?.message,
           originalError: err?.originalError
         });
-        
-        // ✅ Fix #1 (Immediate Fix – 100% Required)
-        // REMOVED await leaveBox();
-        console.warn("Join failed — NOT leaving seat automatically. User can retry.");
-        
-        // Optional: Disconnect LiveKit without releasing the seat
+
+        // ✅ DO NOT AUTO-LEAVE SEAT
+        // ✅ Only disconnect LiveKit to allow retry
         try { 
           if (liveKit.service?.disconnect) await liveKit.service.disconnect(); 
         } catch {}
-        
+
         const permissionDenied = ['NotAllowedError', 'NotFoundError', 'SecurityError', 'PermissionDeniedError', 'MediaAccessError'];
         const errorMsg = err?.message || '';
         const errorName = err?.name || err?.originalError?.name || '';
         
-        // Check both the error name and message for permission issues
         const isPermissionError = permissionDenied.includes(errorName) || 
                                   errorMsg.toLowerCase().includes('permission') ||
                                   errorMsg.toLowerCase().includes('not allowed') ||
@@ -812,7 +695,6 @@ export default function BroadcastPage() {
         
         if (isPermissionError) {
           setPermissionErrorSeat(index);
-          // Provide helpful guidance based on error type
           let userMessage = 'Camera/Microphone access blocked. Please enable permissions and try again.';
           if (errorName === 'NotAllowedError' || errorMsg.includes('permission denied')) {
             userMessage = 'Camera/Microphone access was denied. Click the camera/mic icon in your browser\'s address bar to allow access, then click Retry.';
@@ -834,7 +716,6 @@ export default function BroadcastPage() {
             });
           }
         } else if (errorMsg.includes('No active session') || errorMsg.includes('session')) {
-          // Session expired during join attempt—redirect to auth
           toast.error('Your session has expired. Please sign in again.');
           try {
             await supabase.auth.signOut();
@@ -843,11 +724,11 @@ export default function BroadcastPage() {
           }
           navigate('/auth');
         } else {
-          // Show the actual error from LiveKit or other sources
           toast.error(`Failed to join: ${errorMsg || 'Unknown error'}`);
         }
       } finally {
         setClaimingSeat(null);
+        joinLockRef.current = false;
       }
     },
     [
@@ -874,12 +755,6 @@ export default function BroadcastPage() {
     await leaveBox();
   }, [leaveBox]);
 
-
-
-  // Admin control handlers
-
-
-
   // Permission retry handler
   const handlePermissionRetry = useCallback(async () => {
     if (permissionErrorSeat === null) return;
@@ -898,11 +773,7 @@ export default function BroadcastPage() {
 
     try {
       console.log('[BroadcastPage] Ending stream...');
-      
-      // Get LiveKit room for proper disconnection
       const room = liveKit.getRoom();
-      
-      // Import and use the endStream utility function
       const { endStream } = await import('../lib/endStream');
       const success = await endStream(stream.id, room);
       
@@ -911,20 +782,15 @@ export default function BroadcastPage() {
         return;
       }
       
-      // Navigate to stream summary page with stream ID
       navigate(`/stream-summary/${stream.id}`);
     } catch (err) {
       console.error('Failed to end stream', err);
       toast.error('Failed to end stream');
-      // Still try to navigate even if there's an error
       navigate(`/stream-summary/${stream?.id}`);
     }
   }, [stream?.id, currentSeatIndex, leaveSeat, navigate, liveKit]);
 
-
-
   const handleGiftSent = useCallback(async (amountOrGift: any) => {
-    // Support old numeric API and new object API from GiftBox/GiftModal
     let totalCoins = 0;
     let quantity = 1;
     let giftName = 'Manual Gift';
@@ -964,37 +830,28 @@ export default function BroadcastPage() {
     setIsCoinStoreOpen(false);
   }, []);
 
-  // ✅ Reconnect logic for page refresh
+  // ✅ Reconnect logic for page refresh (FIXED)
   useEffect(() => {
-    // Only run if seats are loaded, we have a user, and are not connected/connecting
-    if (seatsLoading || !seats || !user || isConnected || isConnecting || connectRequestedRef.current) return;
+    if (seatsLoading || !seats || !livekitIdentity || isConnected || isConnecting || connectRequestedRef.current) return;
 
-    // Find if user is in any seat
     const mySeatIndex = seats.findIndex(s => s?.user_id === livekitIdentity);
     
     if (mySeatIndex !== -1) {
       console.log('[BroadcastPage] Found user in seat after refresh, attempting reconnect...', mySeatIndex);
       connectRequestedRef.current = true;
 
-      // Set seat state locally so UI reflects it
       setCurrentSeatIndex(mySeatIndex);
       joinBox(`seat-${mySeatIndex}`);
 
-      // Attempt to rejoin
       const rejoin = async () => {
         try {
-           // We need to request media access again
            const stream = await requestMediaAccess();
-           
-           // Ensure tracks are enabled
+
            stream.getVideoTracks().forEach(t => t.enabled = true);
            stream.getAudioTracks().forEach(t => t.enabled = true);
 
-           // Call joinAndPublish
            await joinAndPublish(stream);
-           
-           // Force enable camera/mic state in LiveKit if needed
-           // (joinAndPublish usually handles this via startPublishing, but user requested explicit check)
+
            const room = liveKit.getRoom();
            if (room?.localParticipant) {
              const lp = room.localParticipant;
@@ -1012,7 +869,7 @@ export default function BroadcastPage() {
       
       rejoin();
     }
-  }, [seats, user, isConnected, isConnecting, seatsLoading, joinAndPublish, requestMediaAccess, joinBox, liveKit]);
+  }, [seats, livekitIdentity, isConnected, isConnecting, seatsLoading, joinAndPublish, requestMediaAccess, joinBox, liveKit]);
 
   // Computed values
   const renderSeats = useMemo(() => {
@@ -1025,7 +882,6 @@ export default function BroadcastPage() {
 
   const lastGift = useGiftEvents(stream?.id);
 
-  // ✅ Monitor participants joining to show entrance effects
   const shownParticipantsRef = useRef<Set<string>>(new Set());
   
   useEffect(() => {
@@ -1033,16 +889,14 @@ export default function BroadcastPage() {
 
     (async () => {
       for (const participant of participants.values()) {
-        if (participant.isLocal) continue; // Skip local participant
-        if (shownParticipantsRef.current.has(participant.identity)) continue; // Already shown
+        if (participant.isLocal) continue;
+        if (shownParticipantsRef.current.has(participant.identity)) continue;
         
-        // Get participant role - check seat first, then metadata
         let participantRole: string | null = null;
         const seat = seats.find(s => s?.user_id === participant.identity);
         if (seat?.role) {
           participantRole = seat.role;
         } else {
-          // Try to get from metadata
           try {
             const metadata = (participant as any).metadata;
             if (typeof metadata === 'string') {
@@ -1051,16 +905,11 @@ export default function BroadcastPage() {
             } else if (metadata?.role) {
               participantRole = metadata.role;
             }
-          } catch (e) {
-            // Ignore parse errors
-          }
+          } catch (e) {}
         }
         
-        // Also check if we need to fetch profile for role
         if (!participantRole && participant.identity) {
-          // Check if it's the broadcaster
           if (participant.identity === stream?.broadcaster_id) {
-            // Fetch broadcaster profile to get role
             try {
               const { data } = await supabase
                 .from('user_profiles')
@@ -1094,7 +943,6 @@ export default function BroadcastPage() {
             role: participantRole as 'admin' | 'lead_troll_officer' | 'troll_officer'
           });
           
-          // Clear entrance effect after 5 seconds
           setTimeout(() => {
             setEntranceEffect(null);
           }, 5000);
@@ -1103,24 +951,16 @@ export default function BroadcastPage() {
     })();
   }, [participants, profile, seats, stream?.broadcaster_id]);
 
-  // Effects
-  // ✅ REMOVED: The problematic useEffect that was causing cleanup loops
-  // Cleanup is now only called explicitly via leaveSeat() or endStream()
-
   useEffect(() => {
     loadStreamData();
   }, [loadStreamData]);
 
-  // Auto-start broadcaster when redirected from setup with ?start=1 or ?setup=1
-  // ✅ Fix #4: Only runs if URL has ?start=1 AND user has session
-  // ✅ For setup flow (?setup=1): only auto-start after broadcaster joins a seat
-  // ✅ Ensure broadcaster is placed in box 1 (seat index 0) with username shown
+  // Auto-start broadcaster
   useEffect(() => {
     if (!shouldAutoStart || !stream?.id || !profile?.id || !isBroadcaster || autoStartRef.current || !hasSession) {
       return;
     }
 
-    // For setup flow, only proceed after broadcaster has joined a seat
     if (needsSetup && needsSeatJoin && !broadcasterHasJoined) {
       console.log("🔄 Setup mode: Waiting for broadcaster to join a seat before starting...");
       return;
@@ -1130,13 +970,11 @@ export default function BroadcastPage() {
     const mode = needsSetup ? "setup" : "normal";
     console.log(`🔥 AutoStart detected (?start=1, mode: ${mode}). Starting broadcast in box 1...`);
     
-    // Automatically claim seat 0 (box 1) for broadcaster
     handleSeatClaim(0).catch((err) => {
       console.error('Failed to auto-start broadcaster in box 1:', err);
       toast.error('Failed to start broadcast. Please try clicking box 1 manually.');
     });
 
-    // Clean URL
     setTimeout(() => {
       const clean = location.pathname;
       window.history.replaceState({}, "", clean);
@@ -1149,7 +987,6 @@ export default function BroadcastPage() {
       autoStartRef.current = true;
       console.log("🔥 Broadcaster joined seat in setup mode. Starting stream...");
       
-      // Update stream status to live
       if (isBroadcaster && stream?.id) {
         supabase
           .from("streams")
@@ -1168,7 +1005,6 @@ export default function BroadcastPage() {
           });
       }
       
-      // Clean URL
       setTimeout(() => {
         const clean = location.pathname;
         window.history.replaceState({}, "", clean);
@@ -1183,7 +1019,6 @@ export default function BroadcastPage() {
     
     if (hadAuth && !hasAuth) {
       console.warn("⚠️ Auth lost — redirecting to login and cleaning up broadcast state");
-      // ✅ FIXED: Only clear refs, don't stop tracks (that should happen explicitly)
       preflightStreamRef.current = null;
       connectRequestedRef.current = false;
       autoStartRef.current = false;
@@ -1217,7 +1052,6 @@ export default function BroadcastPage() {
               }
             : prev
         );
-        // ✅ Update coin counter from stream data
         if (data.total_gifts_coins !== undefined) {
           setCoinCount(Number(data.total_gifts_coins || 0));
         }
@@ -1227,14 +1061,13 @@ export default function BroadcastPage() {
     return () => clearInterval(interval);
   }, [streamId]);
 
-  // ✅ Listen for stream end events and redirect users
   useStreamEndListener({
     streamId: streamId || '',
     enabled: !!streamId,
     redirectToSummary: true,
   });
 
-  // ✅ Real-time subscription for gifts to update coin counter
+  // Real-time subscription for gifts
   useEffect(() => {
     if (!stream?.id) return;
 
@@ -1252,10 +1085,8 @@ export default function BroadcastPage() {
           const newGift = payload.new;
           const coinsSpent = Number(newGift.coins_spent || 0);
           
-          // Update coin counter optimistically
           setCoinCount(prev => prev + coinsSpent);
           
-          // Also update stream total in database (this should be handled by RPC, but we sync UI)
           try {
             const { data: streamData } = await supabase
               .from('streams')
@@ -1373,23 +1204,11 @@ export default function BroadcastPage() {
 
             {/* Main Content */}
             <div className="h-full grid grid-cols-1 lg:grid-cols-4 gap-6">
-              {/* Left Column: Broadcast Grid + Like Button + Gifts (stacked) */}
+              {/* Left Column */}
               <div className="lg:col-span-3 h-full flex flex-col gap-1">
-                {/* Broadcast Grid */}
                 <div className="relative flex-1 min-h-0">
                   {lastGift && <GiftEventOverlay gift={lastGift} />}
                   
-                  {/* Setup Mode Notification - non-blocking - REMOVED */}
-                  {/* {needsSetup && needsSeatJoin && !broadcasterHasJoined && !activeBoxId && isBroadcaster && (
-                    <div className="absolute top-4 left-4 z-20">
-                      <div className="flex items-center gap-2 px-4 py-2 bg-yellow-600/90 backdrop-blur-sm rounded-full border border-yellow-500/30">
-                        <div className="w-2 h-2 bg-yellow-300 rounded-full animate-pulse"></div>
-                        <span className="text-sm font-medium text-white">Ready to Go Live - Click any seat to start broadcasting</span>
-                      </div>
-                    </div>
-                  )} */}
-                  
-                  {/* Connection Progress Notification */}
                   {claimingSeat !== null && (
                     <div className="absolute top-4 right-4 z-20">
                       <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/90 backdrop-blur-sm rounded-full border border-blue-500/30">
@@ -1405,18 +1224,15 @@ export default function BroadcastPage() {
                     activeBoxId={activeBoxId}
                     onSeatClick={(idx) => {
                       setTargetSeatIndex(idx);
-                      // Attempt to claim via existing handler for consistency
                       handleSeatClaim(idx).catch(() => {});
                     }}
                   />
                 </div>
 
-                {/* Like Button Row - aligned right */}
                 <div className="flex justify-end">
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      // optimistic
                       setTrollLikeCount((c) => c + 1);
                       try {
                         await supabase
@@ -1434,7 +1250,6 @@ export default function BroadcastPage() {
                   </button>
                 </div>
 
-                {/* Quick Gifts Panel */}
                 <div className="w-full">
                   <GiftBox
                     participants={renderSeats.filter(s => s.seat).map((s) => ({ name: s.seat?.username || 'Unknown' }))}
@@ -1443,11 +1258,9 @@ export default function BroadcastPage() {
                       const per = Number(gift?.coins) || 0;
                       const total = per * qty;
 
-                      // optimistic UI
                       setCoinCount(prev => prev + total);
 
                       try {
-                        // Insert into legacy gifts table to trigger real-time overlay
                         await supabase.from('gifts').insert({
                           stream_id: stream?.id,
                           sender_id: user?.id,
@@ -1472,7 +1285,7 @@ export default function BroadcastPage() {
                 </div>
               </div>
 
-              {/* Right Column: Chat */}
+              {/* Right Column */}
               <div className="lg:col-span-1 h-full flex flex-col gap-4">
                 <div className="flex-1 min-h-0">
                   <ChatBox
@@ -1486,8 +1299,6 @@ export default function BroadcastPage() {
             </div>
           </section>
         </main>
-
-        
       </div>
 
       {/* Hidden video element for local stream */}
@@ -1527,6 +1338,3 @@ export default function BroadcastPage() {
     </div>
   );
 }
-
-
-
