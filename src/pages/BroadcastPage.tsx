@@ -260,6 +260,7 @@ export default function BroadcastPage() {
   // Refs for state tracking
   const autoStartRef = useRef(false);
   const connectRequestedRef = useRef(false);
+  const publishingRef = useRef(false);
   const prevAuthRef = useRef<boolean>(Boolean(user && profile));
 
   // Media access handlers
@@ -528,6 +529,12 @@ export default function BroadcastPage() {
 
   // ✅ NEW: Centralized leaveBox function
   const leaveBox = useCallback(async () => {
+    if (publishingRef.current) {
+      console.warn('[BroadcastPage] Cannot leave box while publishing/joining logic is active');
+      toast.warning('Please wait, connection in progress...');
+      return;
+    }
+
     if (!activeBoxId) {
       console.log('[BroadcastPage] Not in any box, nothing to leave');
       return;
@@ -603,6 +610,7 @@ export default function BroadcastPage() {
                  });
                  
                  connectRequestedRef.current = true;
+                 publishingRef.current = true;
                  
                  // Pre-flight checks
                  if (!livekitIdentity) {
@@ -624,6 +632,7 @@ export default function BroadcastPage() {
                  if (!joined) {
                      toast.error("LiveKit connection failed — seat reserved. Click seat again to retry.");
                      connectRequestedRef.current = false;
+                     // publishingRef.current is reset in finally
                      return;
                  }
                  
@@ -669,6 +678,14 @@ export default function BroadcastPage() {
                  console.error("Failed to join via effect", err);
                  toast.error(`Failed to join: ${err?.message || 'Unknown error'}`);
                  connectRequestedRef.current = false;
+             } finally {
+                 // ✅ Always release the lock when the async process completes (success or fail)
+                 // Note: we might want to keep it locked if successful? 
+                 // No, "publishing" implies the *act* of establishing the connection.
+                 // Once connected, we are "published", but we are not "publishing" (verb).
+                 // The user said "ensure NOTHING calls disconnect while publishingRef.current === true".
+                 // This implies protection during the transition.
+                 publishingRef.current = false;
              }
         };
         performJoin();
