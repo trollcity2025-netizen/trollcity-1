@@ -122,13 +122,24 @@ const Auth = () => {
         
         // Use our API endpoint to create user without sending confirmation email
         console.log('Creating new user account...')
-        const signUpData = await (await import('../lib/api')).default.post('/auth/signup', {
+        console.log('Signup request payload:', {
+          email,
+          password: '***', // Don't log actual password
+          username: username.trim(),
+          referral_code: referralCode || undefined,
+          recruited_by: localStorage.getItem('recruited_by') || undefined
+        })
+        
+        const signUpData = await (await import('../lib/api')).default.post('/signup', {
           email,
           password,
           username: username.trim(),
           referral_code: referralCode || undefined,
           recruited_by: localStorage.getItem('recruited_by') || undefined
         })
+        
+        console.log('Signup response:', signUpData)
+        
         if (!signUpData.success) {
           console.error('Signup failed:', signUpData)
           throw new Error(signUpData.error || 'Signup failed')

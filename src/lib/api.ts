@@ -3,8 +3,8 @@ import { AuthApiError } from '@supabase/supabase-js'
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// Use relative API path for same-domain deployment
-const API_BASE_URL = '/api';
+// Use Supabase edge functions URL for proper API routing
+const API_BASE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL || '/api';
 // Centralized API endpoint definitions
 export const API_ENDPOINTS = {
   auth: {
@@ -69,6 +69,17 @@ async function request<T = any>(
 
     // Always ensure endpoint begins with a single slash
     let url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    
+    // Debug logging for signup endpoint
+    if (endpoint.includes('/auth/signup')) {
+      console.log(`[API ${requestId}] Signup request details:`, {
+        endpoint,
+        url,
+        apiBaseUrl: API_BASE_URL,
+        hasSupabaseAnonKey: !!supabaseAnonKey,
+        supabaseAnonKeyLength: supabaseAnonKey?.length || 0
+      });
+    }
 
     // Add query parameters if present
     if (params) {
