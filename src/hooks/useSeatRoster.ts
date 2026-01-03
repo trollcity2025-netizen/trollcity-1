@@ -211,7 +211,19 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
           throw new Error('Seat already occupied')
         }
 
-        refresh()
+        // ✅ Optimistic update: Update local state immediately
+        // This prevents the UI from flickering to empty if the subsequent fetch is too fast
+        setSeats(prev => {
+          const newSeats = [...prev]
+          if (seat.seat_index && seat.seat_index > 0 && seat.seat_index <= newSeats.length) {
+             newSeats[seat.seat_index - 1] = seat
+          }
+          return newSeats
+        })
+
+        // We rely on the realtime subscription to confirm the state later
+        // but we don't force a refresh immediately to avoid race conditions with replication
+        // refresh() 
         return seat
       } finally {
         setIsClaimingSeat(null)
@@ -248,7 +260,16 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
           throw invokeError
         }
 
-        refresh()
+        // ✅ Optimistic update: Clear the seat locally immediately
+        setSeats(prev => {
+          const newSeats = [...prev]
+          if (safeIndex >= 0 && safeIndex < newSeats.length) {
+            newSeats[safeIndex] = null
+          }
+          return newSeats
+        })
+
+        // refresh() - relying on realtime subscription
       } catch (err) {
         console.warn('[useSeatRoster] releaseSeat failed', err)
       }
