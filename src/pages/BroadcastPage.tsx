@@ -673,6 +673,13 @@ export default function BroadcastPage() {
           
           console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
           
+          // ✅ Quick test: Check participants immediately after join
+          const room = liveKit.getRoom();
+          console.log("✅ room participants:", room?.participants?.size);
+          console.log("✅ local participant identity:", room?.localParticipant?.identity);
+          console.log("✅ liveKit hook participants size:", participants.size);
+          console.log("✅ participants keys:", Array.from(Object.keys(participants)));
+
           // ✅ Clear loading state immediately after success to remove banner
           setClaimingSeat(null);
           toast.success(`Joined seat ${index + 1} successfully!`);

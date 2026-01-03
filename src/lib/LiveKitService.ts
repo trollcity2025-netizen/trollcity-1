@@ -361,11 +361,27 @@ export class LiveKitService {
         // ✅ Hydrate participants already in the room
         this.hydrateExistingRemoteParticipants()
 
-        // Publishing is handled by the caller/session hook to avoid duplicate preflight publishes.
+        // ✅ Handle publishing
         if (!this.canPublish()) {
           this.log('Viewer mode detected - publishing blocked')
+        } else if (this.config.autoPublish) {
+          try {
+            if (this.preflightStream) {
+              this.log('🚀 Auto-publishing preflight stream...')
+              await this.publishMediaStream(this.preflightStream)
+            } else {
+              this.log('🚀 Auto-publishing via setCameraEnabled/setMicrophoneEnabled...')
+              await Promise.all([
+                this.room.localParticipant.setCameraEnabled(true),
+                this.room.localParticipant.setMicrophoneEnabled(true)
+              ])
+            }
+          } catch (pubErr) {
+             console.error('[LiveKitService] Auto-publish failed', pubErr)
+             // Don't fail the connection if publish fails
+          }
         } else {
-          this.log('✅ Connected. Publishing handled by caller/session hook.')
+          this.log('✅ Connected. Waiting for manual publish.')
         }
 
         this.log('✅ Connection successful')

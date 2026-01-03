@@ -149,6 +149,7 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
     async (
       seatIndex: number,
       payload?: {
+        user_id?: string
         username?: string
         avatarUrl?: string | null
         role?: string
@@ -164,6 +165,7 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
           throw new Error('You already have a seat in this stream. Please release your current seat first.')
         }
 
+        const userId = payload?.user_id ?? user?.id
         const username = payload?.username ?? profile?.username ?? user?.email?.split('@')[0] ?? 'Officer'
         const role = payload?.role ?? profile?.role ?? 'troll_officer'
         const avatar_url = payload?.avatarUrl ?? profile?.avatar_url ?? null
@@ -174,6 +176,7 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
             action: 'claim',
             room: roomName,
             seat_index: safeIndex + 1,
+            user_id: userId,
             username,
             avatar_url,
             role,
