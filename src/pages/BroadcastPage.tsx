@@ -26,6 +26,7 @@ import { OfficerStreamGrid } from '../components/OfficerStreamGrid';
 import GiftEventOverlay from './GiftEventOverlay';
 import { useGiftEvents } from '../lib/hooks/useGiftEvents';
 import EntranceEffect from '../components/broadcast/EntranceEffect';
+import { useOfficerBroadcastTracking } from '../hooks/useOfficerBroadcastTracking';
 
 // Constants
 const _TEXT_ENCODER = new TextEncoder();
@@ -167,6 +168,12 @@ export default function BroadcastPage() {
   });
 
   const { participants, service: _service } = liveKit;
+  
+  // ✅ Track officer activity
+  useOfficerBroadcastTracking({
+    streamId,
+    connected: isConnected,
+  });
 
   // ✅ IMPORTANT: useSeatRoster uses roomName, must match EXACTLY livekitIdentity
   const { seats, seatsLoading, claimSeat, releaseSeat: _releaseSeat } = useSeatRoster(roomName);
