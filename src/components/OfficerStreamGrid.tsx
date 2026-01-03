@@ -6,7 +6,7 @@ import { useLiveKitSession } from '../hooks/useLiveKitSession'
 import { LiveKitParticipant } from '../lib/LiveKitService'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { ParticipantTile, useTracks } from '@livekit/components-react'
+import { LiveKitRoom, ParticipantTile, useTracks } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 
 interface OfficerStreamGridProps {
@@ -273,6 +273,29 @@ interface OfficerStreamBoxProps {
   room?: any
 }
 
+// Inner component to handle tracks within LiveKitRoom context
+const OfficerStreamVideoContent = ({ participant }: { participant: any }) => {
+  const tracks = useTracks(
+    [Track.Source.Camera, Track.Source.Microphone],
+    { onlySubscribed: false }
+  )
+  
+  const participantTrack = tracks.find((t: any) => {
+    if (!participant) return false
+    return t.participant?.identity === participant.identity
+  })
+
+  if (!participantTrack) {
+    return (
+      <div className="flex items-center justify-center w-full h-full text-white/50">
+        <div className="animate-pulse">Loading stream...</div>
+      </div>
+    )
+  }
+
+  return <ParticipantTile trackRef={participantTrack} />
+}
+
 const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> = ({
   seatIndex,
   seat,
@@ -284,18 +307,6 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
   onSeatAction,
   room,
 }) => {
-  // Get tracks for ParticipantTile
-  const tracks = useTracks(
-    [Track.Source.Camera, Track.Source.Microphone],
-    { onlySubscribed: false, room }
-  )
-  
-  // Find the track for this participant
-  const participantTrack = tracks.find((t: any) => {
-    if (!participant) return false
-    return t.participant?.identity === participant.identity
-  })
-
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
@@ -323,8 +334,15 @@ const OfficerStreamBox: React.FC<OfficerStreamBoxProps & { [k: string]: any }> =
     >
       <div className="tile-inner relative w-full h-full">
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
-        {participant && participantTrack ? (
-          <ParticipantTile trackRef={participantTrack} />
+        {participant && room ? (
+          // Wrap in LiveKitRoom to provide context for ParticipantTile
+          <LiveKitRoom 
+            room={room} 
+            connect={false}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <OfficerStreamVideoContent participant={participant} />
+          </LiveKitRoom>
         ) : (
           <button onClick={() => onClaimClick()} className="text-white flex flex-col items-center gap-2">
             <div className="text-3xl font-bold">+</div>
