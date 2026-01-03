@@ -133,27 +133,29 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
     }
   }, [normalize, roomName, stableUserId, seats])
 
+  // ✅ Ref to track active subscription channel
+  const subscriptionRef = useRef<boolean>(false)
+
   useEffect(() => {
-    if (!stableUserId) {
-      console.log('[useSeatRoster] Waiting for auth...')
+    // ✅ Fix: Only subscribe once per roomName
+    if (!user?.id || subscriptionRef.current) {
       return
     }
 
     const checkSessionThenSubscribe = async () => {
+      // ✅ Use cached session check if possible, or single check
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) {
-        console.warn('[useSeatRoster] Session token not available yet', {
-          hasSession: !!session,
-          hasToken: !!session?.access_token,
-          userId: stableUserId,
-        })
+        console.warn('[useSeatRoster] Session token not available yet')
         return
       }
 
       console.log('[useSeatRoster] Session verified, subscribing to seats', {
-        userId: stableUserId,
-        tokenLength: session.access_token.length,
+        room: roomName,
+        userId: user.id
       })
+      
+      subscriptionRef.current = true
 
       const channel = supabase
         .channel(`broadcast-seats-${roomName}`)
@@ -174,12 +176,18 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
       refresh()
 
       return () => {
-        channel.unsubscribe()
+        console.log('[useSeatRoster] Unsubscribing from seats', roomName)
+        subscriptionRef.current = false
+        supabase.removeChannel(channel)
       }
     }
 
-    checkSessionThenSubscribe()
-  }, [roomName, stableUserId, refresh])
+    const cleanupPromise = checkSessionThenSubscribe()
+    
+    return () => {
+      cleanupPromise.then(cleanup => cleanup && cleanup())
+    }
+  }, [roomName, user?.id]) // Removed 'refresh' and 'user' full object from dependencies
 
   const claimSeat = useCallback(
     async (

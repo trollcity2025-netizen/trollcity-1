@@ -75,10 +75,18 @@ export function useLiveKitSession(options: SessionOptions) {
       }
       
       // ✅ 1) Add a hard guard before LiveKit ever runs
-      // Check session FIRST - this is expected on load, not an error
-      const { supabase } = await import('../lib/supabase')
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session) {
+      // Check session FIRST - use cached user from options if available to avoid auth fetch
+      let hasValidSession = false
+      if (options.user && options.user.id) {
+        hasValidSession = true
+      } else {
+        const { supabase } = await import('../lib/supabase')
+        // Only fetch if we really don't have a user
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (sessionData.session) hasValidSession = true
+      }
+      
+      if (!hasValidSession) {
         console.log("[useLiveKitSession] No active session yet — skipping connect")
         return false
       }

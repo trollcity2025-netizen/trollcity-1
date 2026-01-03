@@ -135,6 +135,17 @@ export default function BroadcastPage() {
   // Stream state (defined early for useIsBroadcaster)
   const [stream, setStream] = useState<StreamRow | null>(null);
   const [isLoadingStream, setIsLoadingStream] = useState(true);
+
+  // ✅ NEW: Persist stream state to sessionStorage to prevent remount resets
+  useEffect(() => {
+    if (stream) {
+      try {
+        sessionStorage.setItem("activeStream", JSON.stringify(stream));
+      } catch (e) {
+        console.warn('Failed to save stream to sessionStorage', e);
+      }
+    }
+  }, [stream]);
   
   const isBroadcaster = useIsBroadcaster(profile, stream);
   const _isAdmin = useIsAdmin(profile);
@@ -330,6 +341,24 @@ export default function BroadcastPage() {
       setCoinCount(Number(streamDataFromState.total_gifts_coins || 0));
       setIsLoadingStream(false);
       return;
+    }
+
+    // ✅ NEW: Check sessionStorage fallback
+    try {
+      const storedStream = sessionStorage.getItem("activeStream");
+      if (storedStream) {
+        const parsedStream = JSON.parse(storedStream);
+        if (parsedStream.id === streamId) {
+          console.log('✅ Using stream data from sessionStorage fallback');
+          setStream(parsedStream);
+          setCoinCount(Number(parsedStream.total_gifts_coins || 0));
+          setIsLoadingStream(false);
+          // Return early to skip DB fetch, background polling will update it
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse stream from sessionStorage', e);
     }
 
     setIsLoadingStream(true);
