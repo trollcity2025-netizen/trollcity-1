@@ -662,18 +662,19 @@ export default function BroadcastPage() {
             identity: livekitIdentity
           });
           
-          // Add timeout wrapper for joinAndPublish - increased for slower networks
-          const joinTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('LiveKit room join timed out after 45 seconds')), 45000);
-          });
+          // ✅ Fix #3 — Grace Period / Retry Logic
+          console.log('[BroadcastPage] Attempting to join LiveKit room...');
           
-          const joined = await Promise.race([
-            joinAndPublish(stream),
-            joinTimeout
-          ]);
-
+          let joined = await joinAndPublish(stream);
+          
           if (!joined) {
-            throw new Error('LiveKit connection failed (check console for details)');
+             console.warn("[BroadcastPage] Join returned false, retrying in 2s...");
+             await new Promise(r => setTimeout(r, 2000));
+             joined = await joinAndPublish(stream);
+             
+             if (!joined) {
+                throw new Error("LiveKit failed after retry");
+             }
           }
           
           console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
@@ -790,8 +791,14 @@ export default function BroadcastPage() {
           originalError: err?.originalError
         });
         
-        // ✅ Clean up on error
-        await leaveBox();
+        // ✅ Fix #1 (Immediate Fix – 100% Required)
+        // REMOVED await leaveBox();
+        console.warn("Join failed — NOT leaving seat automatically. User can retry.");
+        
+        // Optional: Disconnect LiveKit without releasing the seat
+        try { 
+          if (liveKit.service?.disconnect) await liveKit.service.disconnect(); 
+        } catch {}
         
         const permissionDenied = ['NotAllowedError', 'NotFoundError', 'SecurityError', 'PermissionDeniedError', 'MediaAccessError'];
         const errorMsg = err?.message || '';
@@ -963,7 +970,7 @@ export default function BroadcastPage() {
     if (seatsLoading || !seats || !user || isConnected || isConnecting || connectRequestedRef.current) return;
 
     // Find if user is in any seat
-    const mySeatIndex = seats.findIndex(s => s?.user_id === user.id);
+    const mySeatIndex = seats.findIndex(s => s?.user_id === livekitIdentity);
     
     if (mySeatIndex !== -1) {
       console.log('[BroadcastPage] Found user in seat after refresh, attempting reconnect...', mySeatIndex);
