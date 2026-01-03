@@ -251,6 +251,8 @@ export default function BroadcastPage() {
   // ✅ NEW: Centralized box management state
   const [activeBoxId, setActiveBoxId] = useState<string | null>(null);
   const [localTracks, setLocalTracks] = useState<{ video?: MediaStreamTrack; audio?: MediaStreamTrack } | null>(null);
+  const [desiredPublish, setDesiredPublish] = useState(false);
+  const [tracksReady, setTracksReady] = useState(false);
   
   // ✅ Entrance effects state
   const [entranceEffect, setEntranceEffect] = useState<{ username: string; role: 'admin' | 'lead_troll_officer' | 'troll_officer' } | null>(null);
@@ -559,6 +561,8 @@ export default function BroadcastPage() {
       setCurrentSeatIndex(null);
       setLocalTracks(null);
       setClaimingSeat(null);
+      setDesiredPublish(false);
+      setTracksReady(false);
       
       console.log('[BroadcastPage] ✅ Successfully left box');
       toast.success('Left box successfully');
@@ -572,6 +576,104 @@ export default function BroadcastPage() {
       toast.error('Error leaving box');
     }
   }, [activeBoxId, localTracks, cleanupLocalStream, liveKit, currentSeatIndex, _releaseSeat]);
+
+  // ✅ NEW: Single effect to handle connection based on state
+  useEffect(() => {
+    // Conditions:
+    // 1. We want to publish (desiredPublish is true)
+    // 2. We have a valid seat (currentSeatIndex !== null)
+    // 3. We are not connected or connecting
+    // 4. We have the media stream ready
+    
+    if (
+      desiredPublish && 
+      currentSeatIndex !== null && 
+      !isConnected && 
+      !isConnecting && 
+      !connectRequestedRef.current &&
+      preflightStreamRef.current &&
+      tracksReady
+    ) {
+        const performJoin = async () => {
+             try {
+                 console.log('[BroadcastPage] 🚀 Triggering join from effect', {
+                    desiredPublish,
+                    currentSeatIndex,
+                    tracksReady
+                 });
+                 
+                 connectRequestedRef.current = true;
+                 
+                 // Pre-flight checks
+                 if (!livekitIdentity) {
+                     throw new Error('Missing identity');
+                 }
+
+                 preflightStreamRef.current?.getVideoTracks().forEach(track => track.enabled = true);
+                 preflightStreamRef.current?.getAudioTracks().forEach(track => track.enabled = true);
+                 
+                 let joined = false;
+                 for (let attempt = 1; attempt <= LIVEKIT_JOIN_MAX_RETRIES; attempt++) {
+                    console.log(`[BroadcastPage] LiveKit join attempt ${attempt}/${LIVEKIT_JOIN_MAX_RETRIES}`);
+                    joined = await joinAndPublish(preflightStreamRef.current!);
+                    if (joined) break;
+                    console.warn("[BroadcastPage] Join returned false — retrying...");
+                    await new Promise(r => setTimeout(r, LIVEKIT_JOIN_RETRY_DELAY));
+                 }
+                 
+                 if (!joined) {
+                     toast.error("LiveKit connection failed — seat reserved. Click seat again to retry.");
+                     connectRequestedRef.current = false;
+                     return;
+                 }
+                 
+                 // Post-join watchdog
+                 setTimeout(async () => {
+                    try {
+                        const room = liveKit.getRoom();
+                        const lp = room?.localParticipant;
+                        if (!lp) return;
+
+                        console.log('[BroadcastPage] 🔁 Track watchdog check');
+
+                        if (!lp.isCameraEnabled) {
+                            console.warn('[BroadcastPage] Camera not enabled — forcing enable');
+                            await lp.setCameraEnabled(true);
+                        }
+
+                        if (!lp.isMicrophoneEnabled) {
+                            console.warn('[BroadcastPage] Mic not enabled — forcing enable');
+                            await lp.setMicrophoneEnabled(true);
+                        }
+                    } catch (e) {
+                        console.warn('[BroadcastPage] Track watchdog failed', e);
+                    }
+                 }, 1200);
+
+                 // Update stream status if broadcaster
+                 if (isBroadcaster && stream?.id) {
+                     const { error: updateErr } = await supabase
+                        .from("streams")
+                        .update({ 
+                          status: "live", 
+                          is_live: true,
+                          start_time: new Date().toISOString(),
+                          current_viewers: 1
+                        })
+                        .eq("id", stream.id);
+                        
+                     if (updateErr) console.warn("Stream status update failed:", updateErr);
+                 }
+
+             } catch (err: any) {
+                 console.error("Failed to join via effect", err);
+                 toast.error(`Failed to join: ${err?.message || 'Unknown error'}`);
+                 connectRequestedRef.current = false;
+             }
+        };
+        performJoin();
+    }
+  }, [desiredPublish, currentSeatIndex, isConnected, isConnecting, joinAndPublish, tracksReady, livekitIdentity, isBroadcaster, stream?.id, liveKit]);
 
   // ✅ Seat management handlers (FIXED)
   const handleSeatClaim = useCallback(
@@ -635,85 +737,13 @@ export default function BroadcastPage() {
           setBroadcasterHasJoined(true);
         }
 
-        // ✅ Join LiveKit with retries
-        console.log('[BroadcastPage] 🔍 Pre-flight checks before joining LiveKit room');
-
-        const { data: sessionData } = await supabase.auth.getSession()
-        if (!sessionData.session) {
-          throw new Error('No active session. Please sign in again.')
-        }
-
-        if (!roomName || !livekitIdentity) {
-          throw new Error('Missing required information to join stream')
-        }
-
-        console.log('[BroadcastPage] ✅ All pre-flight checks passed');
-
-        stream.getVideoTracks().forEach(track => track.enabled = true);
-        stream.getAudioTracks().forEach(track => track.enabled = true);
-
-        let joined = false;
-        for (let attempt = 1; attempt <= LIVEKIT_JOIN_MAX_RETRIES; attempt++) {
-          console.log(`[BroadcastPage] LiveKit join attempt ${attempt}/${LIVEKIT_JOIN_MAX_RETRIES}`);
-          joined = await joinAndPublish(stream);
-          if (joined) break;
-          console.warn("[BroadcastPage] Join returned false — retrying...");
-          await new Promise(r => setTimeout(r, LIVEKIT_JOIN_RETRY_DELAY));
-        }
-
-        if (!joined) {
-          // ✅ IMPORTANT: DO NOT AUTO LEAVE OR RELEASE SEAT
-          toast.error("LiveKit connection failed — seat reserved. Click seat again to retry.");
-          console.warn("[BroadcastPage] LiveKit join failed but seat stays reserved.");
-          return;
-        }
-
-        console.log('[BroadcastPage] ✅ LiveKit room join completed successfully');
-
-        // ✅ Track watchdog: Ensure LiveKit camera/mic enabled after join
-        setTimeout(async () => {
-          try {
-            const room = liveKit.getRoom();
-            const lp = room?.localParticipant;
-            if (!lp) return;
-
-            console.log('[BroadcastPage] 🔁 Track watchdog check');
-
-            if (!lp.isCameraEnabled) {
-              console.warn('[BroadcastPage] Camera not enabled — forcing enable');
-              await lp.setCameraEnabled(true);
-            }
-
-            if (!lp.isMicrophoneEnabled) {
-              console.warn('[BroadcastPage] Mic not enabled — forcing enable');
-              await lp.setMicrophoneEnabled(true);
-            }
-
-            console.log('[BroadcastPage] ✅ Track watchdog finished', {
-              camera: lp.isCameraEnabled,
-              mic: lp.isMicrophoneEnabled,
-            });
-          } catch (e) {
-            console.warn('[BroadcastPage] Track watchdog failed', e);
-          }
-        }, 1200);
+        // ✅ Signal that we are ready to join (triggers effect)
+        console.log('[BroadcastPage] ✅ Seat claimed, signalling ready to join...');
+        setTracksReady(true);
+        setDesiredPublish(true);
 
         setClaimingSeat(null);
         toast.success(`Joined seat ${index + 1} successfully!`);
-
-        if (isBroadcaster) {
-          const { error: updateErr } = await supabase
-            .from("streams")
-            .update({ 
-              status: "live", 
-              is_live: true,
-              start_time: new Date().toISOString(),
-              current_viewers: 1
-            })
-            .eq("id", stream?.id);
-            
-          if (updateErr) console.warn("Stream status update failed:", updateErr);
-        }
 
       } catch (err: any) {
         console.error('Failed to claim seat:', {
