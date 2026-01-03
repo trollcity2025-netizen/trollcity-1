@@ -801,6 +801,20 @@ export class LiveKitService {
       // 🔥 TEMPORARY DEBUG: Log response to see what endpoint returns
       console.log("🔥 LiveKit token endpoint response JSON:", json);
       console.log("🔥 Token field type:", typeof json?.token);
+      
+      // ✅ Handle case where token is wrapped in data object (Supabase Edge Function format)
+      // Some edge functions return { data: { token: ... }, error: null }
+      let token = json?.token;
+      
+      if (!token && json?.data?.token) {
+        console.log("🔥 Token found in nested data object");
+        token = json.data.token;
+      }
+      
+      // If still no token but we have a direct string response (unlikely but possible)
+      if (!token && typeof json === 'string' && json.startsWith('eyJ')) {
+        token = json;
+      }
 
       if (!res.ok) {
         this.log('🔑 Token endpoint returned error', { status: res.status, body: json })
@@ -808,8 +822,8 @@ export class LiveKitService {
         throw new Error(msg)
       }
 
-      // ✅ Strict token extraction - ONLY from json.token (not json.data.token since we use fetch, not supabase.invoke)
-      const token = json?.token
+      // ✅ Strict token extraction - using the normalized token variable from above
+      // const token = json?.token <-- REMOVED, using 'token' variable from above logic
 
       // ✅ STRICT VALIDATION: Token must be a string
       if (!token || typeof token !== 'string') {
