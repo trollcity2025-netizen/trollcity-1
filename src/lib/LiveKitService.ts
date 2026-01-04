@@ -12,6 +12,9 @@ import { toast } from 'sonner'
 // Fix D: Audio toggle for debugging
 const ENABLE_AUDIO_PUBLISH = false;
 
+// Gold Standard: Cache LiveKit tokens per room/identity
+const tokenCache = new Map<string, { token: string, expiresAt: number }>();
+
 export interface LiveKitParticipant {
   identity: string
   name?: string
@@ -137,6 +140,23 @@ export class LiveKitService {
   async connect(tokenOverride?: string): Promise<boolean> {
     // Idempotent Connection: Disconnect existing room to prevent ghosts
     if (this.room) {
+       // Guard: Don't disconnect if publishing is in progress
+       if (this.publishingInProgress) {
+          this.log('🚫 connect called while publishing is in progress - ignoring');
+          return true;
+       }
+
+       // Fix B: Don't disconnect if already connected to the same room/user
+       // We check if the room is connected and matches our config
+       if (this.room.state === 'connected' && this.room.name === this.config.roomName) {
+           const localId = this.room.localParticipant?.identity;
+           if (localId && localId === this.config.identity) {
+               this.log('♻️ Already connected to this room - skipping disconnect/reconnect');
+               this.isConnecting = false;
+               return true;
+           }
+       }
+
        this.log('♻️ Disconnecting existing room before new connection...');
        try {
          await this.room.disconnect();
@@ -310,13 +330,32 @@ export class LiveKitService {
         const parts = token.split('.')
         if (parts.length >= 2) {
           const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1]))))
+          
+          // Helper to safely stringify objects
+          const safeStringify = (obj: any) => {
+            try { return JSON.stringify(obj, null, 2) } catch { return String(obj) }
+          }
+
           this.log('🔐 LiveKit token payload', payload)
-          // Helpful quick fields
-          this.log('🔐 Token room/canPublish', {
-            tokenRoom: payload?.video?.room ?? payload?.room ?? payload?.r ?? null,
-            canPublish: payload?.video?.canPublish ?? payload?.allowPublish ?? payload?.canPublish ?? null,
-            videoGrant: payload?.video
+          
+          // Specific grant checks
+          const videoGrant = payload?.video ?? payload?.v;
+          
+          this.log('🔐 Token Grants (Video/Room)', {
+            // Standard LiveKit grants are in 'video' field
+            videoGrant: videoGrant,
+            // Check specific permissions
+            room: videoGrant?.room,
+            canPublish: videoGrant?.canPublish,
+            canPublishSources: videoGrant?.canPublishSources,
+            // Check top-level (sometimes used in custom JWTs but LiveKit standard is inside video)
+            topLevelRoom: payload?.room,
+            topLevelCanPublish: payload?.canPublish,
           })
+
+          if (!videoGrant?.room) {
+             console.warn('⚠️ Token missing room grant in "video" field', { payloadKeys: Object.keys(payload) });
+          }
         } else {
           this.log('🔐 LiveKit token (raw preview)', typeof token === 'string' ? token.substring(0, 60) + '...' : 'N/A')
         }
@@ -661,6 +700,24 @@ export class LiveKitService {
 
     if (!this.config.identity) throw new Error('Identity is required for LiveKit token')
 
+    // ✅ Gold Standard: Check cache first
+    const cacheKey = `${this.config.roomName}:${this.config.identity}`;
+    const cached = tokenCache.get(cacheKey);
+    if (cached) {
+      const now = Math.floor(Date.now() / 1000);
+      if (cached.expiresAt > now + 60) { // 60s buffer
+         this.log('💎 Reusing cached LiveKit token', { 
+           expiresAt: new Date(cached.expiresAt * 1000).toISOString(),
+           timeLeft: cached.expiresAt - now 
+         });
+         // Assume URL/allowPublish haven't changed or are standard
+         return { token: cached.token, livekitUrl: LIVEKIT_URL, allowPublish: this.config.allowPublish };
+      } else {
+         this.log('💎 Cached token expired, fetching new one');
+         tokenCache.delete(cacheKey);
+      }
+    }
+
     try {
       // ✅ Only publish tokens when allowPublish === true (hard safety)
       const allowPublish = this.config.allowPublish === true
@@ -897,6 +954,20 @@ export class LiveKitService {
 
       // Trim whitespace
       const trimmedToken = token.trim()
+
+      // ✅ Gold Standard: Cache the new token
+      try {
+         const parts = trimmedToken.split('.');
+         if (parts.length >= 2) {
+            const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1]))));
+            if (payload.exp) {
+               tokenCache.set(cacheKey, { token: trimmedToken, expiresAt: payload.exp });
+               this.log('💎 Token cached', { expiresAt: new Date(payload.exp * 1000).toISOString() });
+            }
+         }
+      } catch (e) {
+         console.warn('Failed to parse token for caching', e);
+      }
 
       this.log('✅ Token received successfully:', {
         tokenLength: trimmedToken.length,

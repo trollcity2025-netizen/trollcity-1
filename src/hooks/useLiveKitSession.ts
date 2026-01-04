@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveKit } from './useLiveKit'
 import { LIVEKIT_URL } from '../lib/LiveKitConfig'
 import { toast } from 'sonner'
+import { createLocalTracks } from 'livekit-client'
 
 interface SessionOptions {
   roomName: string
@@ -10,6 +11,8 @@ interface SessionOptions {
   allowPublish?: boolean
   autoPublish?: boolean
   maxParticipants?: number
+  audio?: boolean
+  video?: boolean
 }
 
 // Shared join/publish helper used by Go Live, Officer Stream, Troll Court
@@ -52,7 +55,10 @@ export function useLiveKitSession(options: SessionOptions) {
 
   const joinAndPublish = useMemo(
     () => async (mediaStream?: MediaStream, tokenOverride?: string) => {
-      if (joinStartedRef.current) throw new Error('Join already in progress')
+      if (joinStartedRef.current) {
+        console.warn('🚫 joinAndPublish ignored: already in progress')
+        return false
+      }
       
       // ✅ CRITICAL: Early return if roomName is empty (prevents all connection attempts)
       // This prevents the hook from doing anything when not on a broadcast page
@@ -229,34 +235,41 @@ export function useLiveKitSession(options: SessionOptions) {
           if (activeService) activeService.publishingInProgress = true
 
           try {
-              console.log('[useLiveKitSession] Publishing local tracks via LiveKit session', {
+              // Fix D: Temporarily disable audio to prove it's the issue
+              const ENABLE_AUDIO_PUBLISH = false;
+
+              console.log('[useLiveKitSession] Publishing local tracks via LiveKit createLocalTracks', {
                 hasPreflightStream: !!mediaStream,
-                preflightStreamActive: mediaStream?.active
+                preflightStreamActive: mediaStream?.active,
+                ENABLE_AUDIO_PUBLISH
               })
               
-              if (mediaStream && mediaStream.active) {
-                 // Fix C: Use helper methods on the active service
-                 console.log('[useLiveKitSession] 📹 Publishing split tracks from preflight stream');
-                 
-                 const videoTrack = mediaStream.getVideoTracks()[0];
-                 if (videoTrack && activeService?.publishVideoTrack) {
-                    await activeService.publishVideoTrack(videoTrack);
-                 }
-
-                 // Fix A: Tiny delay between video and audio
-                 await new Promise(r => setTimeout(r, 150));
-
-                 const audioTrack = mediaStream.getAudioTracks()[0];
-                 if (audioTrack && activeService?.publishAudioTrack) {
-                    await activeService.publishAudioTrack(audioTrack);
-                 }
-              } else {
-                 // Fallback to startPublishing if no stream provided
-                 console.log('[useLiveKitSession] No preflight stream, capturing new tracks');
-                 await startPublishing(); 
+              // Fix C: Use createLocalTracks instead of preflight stream
+              // We intentionally ignore the passed mediaStream for publishing to let LiveKit manage track creation
+              // This avoids "converting it weirdly" and ensures cleaner state
+              
+              const tracks = await createLocalTracks({
+                audio: ENABLE_AUDIO_PUBLISH ? (options.audio ?? true) : false,
+                video: options.video ?? true,
+              });
+              
+              const videoTrack = tracks.find(t => t.kind === 'video');
+              const audioTrack = tracks.find(t => t.kind === 'audio');
+              
+              if (videoTrack && activeService?.publishVideoTrack) {
+                 // Pass underlying MediaStreamTrack to service
+                 await activeService.publishVideoTrack(videoTrack.mediaStreamTrack);
               }
 
-              console.log('[useLiveKitSession] Local tracks published')
+              // Fix A: Tiny delay between video and audio
+              await new Promise(r => setTimeout(r, 150));
+
+              if (audioTrack && activeService?.publishAudioTrack) {
+                 // Pass underlying MediaStreamTrack to service
+                 await activeService.publishAudioTrack(audioTrack.mediaStreamTrack);
+              }
+
+              console.log('[useLiveKitSession] Local tracks published successfully')
           } catch (spErr: any) {
             console.error('[useLiveKitSession] Publishing failed', spErr)
             throw new Error(`Failed to publish tracks: ${spErr?.message || 'Unknown error'}`)
@@ -296,7 +309,10 @@ export function useLiveKitSession(options: SessionOptions) {
 
   const joinOnly = useMemo(
     () => async () => {
-      if (joinStartedRef.current) throw new Error('Join already in progress')
+      if (joinStartedRef.current) {
+        console.warn('🚫 joinOnly ignored: already in progress')
+        return false
+      }
       if (!options.roomName || !options.user?.identity) {
         const msg = 'Missing room or user for LiveKit'
         setSessionError(msg)
