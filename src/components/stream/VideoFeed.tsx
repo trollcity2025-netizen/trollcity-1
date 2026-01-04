@@ -45,6 +45,14 @@ export default function VideoFeed({ room, isHost = false }: VideoFeedProps) {
 
         if (alreadyPublishing) {
           published = true
+          // ✅ Attach existing video track if available
+          const videoTrackPub = Array.from(room.localParticipant.videoTrackPublications.values())[0];
+          if (videoTrackPub && videoTrackPub.track && localVideoRef.current) {
+             videoTrackPub.track.attach(localVideoRef.current);
+             localVideoRef.current.muted = true;
+             localVideoRef.current.playsInline = true;
+             await localVideoRef.current.play().catch(() => {});
+          }
           return
         }
 
