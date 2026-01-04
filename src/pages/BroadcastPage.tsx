@@ -261,6 +261,7 @@ export default function BroadcastPage() {
   const autoStartRef = useRef(false);
   const connectRequestedRef = useRef(false);
   const publishingRef = useRef(false);
+  const joiningRef = useRef(false); // ✅ Fix: Explicit mutex for join attempts
   const prevAuthRef = useRef<boolean>(Boolean(user && profile));
 
   // Media access handlers
@@ -602,6 +603,14 @@ export default function BroadcastPage() {
       tracksReady
     ) {
         const performJoin = async () => {
+             // ✅ Fix: Hard mutex for join attempts
+             if (joiningRef.current) {
+                 console.warn('[BroadcastPage] Join already in progress - skipping');
+                 return;
+             }
+             
+             joiningRef.current = true;
+
              try {
                  console.log('[BroadcastPage] 🚀 Triggering join from effect', {
                     desiredPublish,
@@ -628,19 +637,13 @@ export default function BroadcastPage() {
                     });
                  });
                  
-                 let joined = false;
-                 for (let attempt = 1; attempt <= LIVEKIT_JOIN_MAX_RETRIES; attempt++) {
-                    console.log(`[BroadcastPage] LiveKit join attempt ${attempt}/${LIVEKIT_JOIN_MAX_RETRIES}`);
-                    joined = await joinAndPublish(preflightStreamRef.current!);
-                    if (joined) break;
-                    console.warn("[BroadcastPage] Join returned false — retrying...");
-                    await new Promise(r => setTimeout(r, LIVEKIT_JOIN_RETRY_DELAY));
-                 }
+                 // ✅ Fix: Single robust join attempt
+                 console.log(`[BroadcastPage] Attempting LiveKit join (single attempt)...`);
+                 const joined = await joinAndPublish(preflightStreamRef.current!);
                  
                  if (!joined) {
                      toast.error("LiveKit connection failed — seat reserved. Click seat again to retry.");
                      connectRequestedRef.current = false;
-                     // publishingRef.current is reset in finally
                      return;
                  }
                  
@@ -687,13 +690,8 @@ export default function BroadcastPage() {
                  toast.error(`Failed to join: ${err?.message || 'Unknown error'}`);
                  connectRequestedRef.current = false;
              } finally {
-                 // ✅ Always release the lock when the async process completes (success or fail)
-                 // Note: we might want to keep it locked if successful? 
-                 // No, "publishing" implies the *act* of establishing the connection.
-                 // Once connected, we are "published", but we are not "publishing" (verb).
-                 // The user said "ensure NOTHING calls disconnect while publishingRef.current === true".
-                 // This implies protection during the transition.
                  publishingRef.current = false;
+                 joiningRef.current = false; // Release mutex
              }
         };
         performJoin();

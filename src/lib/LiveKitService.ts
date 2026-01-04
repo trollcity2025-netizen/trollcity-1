@@ -54,6 +54,8 @@ export class LiveKitService {
   private localAudioTrack: LocalAudioTrack | null = null
   private preflightStream?: MediaStream
   private isConnecting = false
+  private targetRoom: string | null = null
+  private targetIdentity: string | null = null
   private lastConnectionError: string | null = null
   public publishingInProgress = false;
 
@@ -138,6 +140,12 @@ export class LiveKitService {
    ========================= */
 
   async connect(tokenOverride?: string): Promise<boolean> {
+    // Rule: Never call disconnect() if you are currently connecting to the same room/identity.
+    if (this.isConnecting && this.targetRoom === this.config.roomName && this.targetIdentity === this.config.identity) {
+      this.log('🛡️ Ignoring connect: already connecting to this room/identity');
+      return true;
+    }
+
     // Idempotent Connection: Disconnect existing room to prevent ghosts
     if (this.room) {
        // Guard: Don't disconnect if publishing is in progress
@@ -147,7 +155,6 @@ export class LiveKitService {
        }
 
        // Fix B: Don't disconnect if already connected to the same room/user
-       // We check if the room is connected and matches our config
        if (this.room.state === 'connected' && this.room.name === this.config.roomName) {
            const localId = this.room.localParticipant?.identity;
            if (localId && localId === this.config.identity) {
@@ -159,7 +166,10 @@ export class LiveKitService {
 
        this.log('♻️ Disconnecting existing room before new connection...');
        try {
-         await this.room.disconnect();
+         // Only disconnect if we have a valid room object
+         if (this.room.state !== 'disconnected') {
+            await this.room.disconnect();
+         }
        } catch (e) {
          this.log('⚠️ Error disconnecting existing room', e);
        }
@@ -167,6 +177,9 @@ export class LiveKitService {
     }
 
     this.isConnecting = true
+    this.targetRoom = this.config.roomName
+    this.targetIdentity = this.config.identity
+
     this.log('Starting connection process...', {
       allowPublish: this.config.allowPublish,
       role: this.config.role || this.config.user?.role,
@@ -1131,17 +1144,31 @@ export class LiveKitService {
         return;
     }
 
-    this.log('🔌 Disconnecting from LiveKit room...')
-    if (this.room) {
+    // Rule: Never call disconnect() if you are currently connecting to the same room/identity.
+    if (this.isConnecting && this.targetRoom === this.config.roomName && this.targetIdentity === this.config.identity) {
+      this.log('🛡️ Ignoring disconnect: currently connecting to this room/identity');
+      return;
+    }
+
+    this.log('🔌 Disconnecting from LiveKit room...', {
+        room: this.room ? this.room.name : 'null',
+        state: this.room ? this.room.state : 'null'
+    })
+
+    if (this.room && this.room.state !== 'disconnected') {
       try {
         this.room.disconnect()
-      } catch { }
-      this.room = null; // Ensure room is cleared
+      } catch (e) { 
+        this.log('⚠️ Error disconnecting', e);
+      }
     }
+    this.room = null; // Ensure room is cleared
     
     // Clear participants
     this.participants.clear();
     this.isConnecting = false;
+    this.targetRoom = null;
+    this.targetIdentity = null;
     
     this.cleanup()
     this.config.onDisconnected?.();
