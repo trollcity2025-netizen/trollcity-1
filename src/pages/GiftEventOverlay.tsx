@@ -3,7 +3,7 @@ import GiftSoundPlayer from './GiftSoundPlayer'
 import WheelModal from './WheelModal'
 import ClickableUsername from '../components/ClickableUsername'
 
-export default function GiftEventOverlay({ gift }: any) {
+export default function GiftEventOverlay({ gift, onProfileClick }: { gift: any, onProfileClick?: (profile: any) => void }) {
   const [visible, setVisible] = useState(false)
   const megaGift = gift?.coinCost >= 1000
 

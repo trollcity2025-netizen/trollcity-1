@@ -27,7 +27,7 @@ import ProfileModal from '../components/broadcast/ProfileModal';
 import CoinStoreModal from '../components/broadcast/CoinStoreModal';
 import GiftEventOverlay from './GiftEventOverlay';
 import { useGiftEvents } from '../lib/hooks/useGiftEvents';
-// EntranceEffect removed (unused)
+import EntranceEffect from '../components/broadcast/EntranceEffect';
 import { useOfficerBroadcastTracking } from '../hooks/useOfficerBroadcastTracking';
 import { attachLiveKitDebug } from '../lib/livekit-debug';
 import VideoFeed from '../components/stream/VideoFeed';
@@ -223,7 +223,41 @@ export default function BroadcastPage() {
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
   const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false);
   
-  // const [entranceEffect, setEntranceEffect] = useState<{ username: string; role: 'admin' | 'lead_troll_officer' | 'troll_officer' } | null>(null);
+  const [entranceEffect, setEntranceEffect] = useState<{ username: string; role: any; profile?: any } | null>(null);
+
+  // Real-time listeners for Entrance
+  useEffect(() => {
+    if (!streamId) return;
+
+    const channel = supabase
+      .channel(`broadcast-updates-${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload) => {
+          const msg = payload.new;
+          if (msg.message_type === 'entrance') {
+            try {
+              const data = JSON.parse(msg.content);
+              setEntranceEffect(data);
+              setTimeout(() => setEntranceEffect(null), 5000);
+            } catch (e) {
+              console.error('Failed to parse entrance effect', e);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId]);
 
   const handleGiftFromProfile = useCallback((targetProfile: any) => {
     setGiftRecipient(targetProfile);
@@ -388,7 +422,7 @@ export default function BroadcastPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#03010c] via-[#05031a] to-[#110117] text-white">
-      {/* {entranceEffect && <EntranceEffect username={entranceEffect.username} role={entranceEffect.role} />} */}
+      {entranceEffect && <EntranceEffect username={entranceEffect.username} role={entranceEffect.role} profile={entranceEffect.profile} />}
       
       <div className="flex h-screen flex-col">
         <main className="flex-1 px-6 py-5">
