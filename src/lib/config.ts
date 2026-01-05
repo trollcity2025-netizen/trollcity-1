@@ -10,6 +10,9 @@ export const API_ENDPOINTS = {
   agora: {
     token: `${EDGE_URL}/admin/agora-token`,
   },
+  livekit: {
+    token: `${EDGE_URL}/livekit-token`,
+  },
   admin: {
     trollDrop: `${EDGE_URL}/admin/troll-drop`,
   },

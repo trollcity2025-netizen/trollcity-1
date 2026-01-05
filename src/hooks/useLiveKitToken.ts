@@ -76,11 +76,17 @@ export function useLiveKitToken({
         }
 
         const data = await response.json();
+        console.log('[useLiveKitToken] Raw response data:', data);
         
         // Handle different response formats (direct token or nested data)
         const tokenValue = data.token || data.data?.token;
         // Prioritize URL from response, fallback to env
         const urlValue = data.url || data.livekitUrl || data.ws_url || import.meta.env.VITE_LIVEKIT_URL;
+        
+        if (!urlValue) {
+            console.error('[useLiveKitToken] No LiveKit URL found. Env:', import.meta.env.VITE_LIVEKIT_URL, 'Response:', data);
+        }
+
         const identityValue = data.identity || data.data?.identity;
         const roomValue = data.room || data.roomName || data.data?.room;
 

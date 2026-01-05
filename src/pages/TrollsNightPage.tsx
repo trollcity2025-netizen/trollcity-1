@@ -18,8 +18,28 @@ const MOCK_STREAMS = [
   { id: 6, title: 'Troll Court Debates', user: '@GlowPainter', viewers: '1.8k', category: 'Debate', color: 'from-red-600 to-purple-600' },
 ]
 
-export default function TrollsNightPage() {
-  const navigate = useNavigate()
+  const { user, profile } = useAuthStore()
+  
+  const isAdmin = profile?.role === 'admin' || profile?.is_admin
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#050012] text-white flex flex-col items-center justify-center p-8 text-center">
+        <h1 className="text-4xl md:text-6xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 mb-4">
+          TROLLS @ NIGHT
+        </h1>
+        <div className="text-2xl font-bold text-yellow-400 mb-2 flex items-center gap-2">
+          <span className="animate-pulse">⚠️</span>
+          UNDER CONSTRUCTION
+          <span className="animate-pulse">⚠️</span>
+        </div>
+        <p className="text-purple-200/80 max-w-md">
+          This exclusive late-night zone is currently being built by the troll architects. 
+          Check back later for chaos, streams, and neon lights.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#050012] text-white overflow-x-hidden pb-20">

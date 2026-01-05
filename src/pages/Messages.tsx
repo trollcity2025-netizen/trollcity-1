@@ -181,7 +181,7 @@ export default function Messages() {
   }
 
   return (
-    <div className="h-screen flex bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] overflow-hidden">
+    <div className="h-full flex bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] overflow-hidden">
       {/* Column 1: Sidebar with Conversations */}
       <InboxSidebar
         activeConversation={activeConversation}

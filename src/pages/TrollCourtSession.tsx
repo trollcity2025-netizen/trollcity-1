@@ -8,7 +8,7 @@ import { useAuthStore } from "@/lib/store";
 export default function TrollCourtSession() {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  const [activeSession, setActiveSession] = useState(courtSystem.activeSessions.values().next().value || null);
+  const [activeSession, setActiveSession] = useState(null);
   const [chatMessages, setChatMessages] = useState<{ user: string; message: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [courtRoomRef, setCourtRoomRef] = useState<RoomInstance | null>(null);
@@ -25,6 +25,9 @@ export default function TrollCourtSession() {
 
   const initializeInstantCourt = useCallback(async () => {
     if (isInitializing) return;
+    if (courtRoomRefRef.current) return;
+    if (activeSession) return;
+
     setIsInitializing(true);
 
     try {
@@ -95,6 +98,10 @@ export default function TrollCourtSession() {
       alert("Court session ended. Verdict recorded.");
       if (courtRoomRef) {
         roomManager.disconnectRoom(courtRoomRef.id);
+      }
+      if (courtRoomRefRef.current) {
+        roomManager.disconnectRoom(courtRoomRefRef.current.id);
+        courtRoomRefRef.current = null;
       }
       setActiveSession(null);
       navigate("/");
@@ -220,7 +227,17 @@ export default function TrollCourtSession() {
                   <p className="font-bold text-xs break-all">{courtRoomRef?.roomName}</p>
                 </div>
                 <button
-                  onClick={() => navigate("/")}
+                  onClick={() => {
+                    console.log("🛑 [TrollCourt] Force ending session...");
+                    if (courtRoomRefRef.current) {
+                      roomManager.disconnectRoom(courtRoomRefRef.current.id);
+                      courtRoomRefRef.current = null;
+                    }
+                    setCourtRoomRef(null);
+                    setActiveSession(null);
+                    setChatMessages([]);
+                    navigate("/");
+                  }}
                   className="w-full mt-4 py-2 bg-red-600 hover:bg-red-700 rounded font-bold transition flex items-center justify-center gap-2"
                 >
                   <LogOut size={16} />

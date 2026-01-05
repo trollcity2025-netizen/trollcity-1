@@ -23,33 +23,45 @@ export default function TrollCityWall() {
     setLoading(true)
     try {
       const { data, error } = await supabase
-        .from('troll_wall_posts_view')
-        .select('*')
+        .from('troll_wall_posts')
+        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user)')
         .order('created_at', { ascending: false })
         .limit(100)
 
       if (error) throw error
 
-      if (data && user?.id) {
+      if (data) {
         // Check which posts the user has liked
         const postIds = data.map(p => p.id)
-        const { data: userLikes } = await supabase
-          .from('troll_wall_likes')
-          .select('post_id')
-          .eq('user_id', user.id)
-          .in('post_id', postIds)
+        let likedPostIds = new Set<string>()
 
-        const likedPostIds = new Set(userLikes?.map(l => l.post_id) || [])
+        if (user?.id) {
+          const { data: userLikes } = await supabase
+            .from('troll_wall_likes')
+            .select('post_id')
+            .eq('user_id', user.id)
+            .in('post_id', postIds)
+          
+          likedPostIds = new Set(userLikes?.map(l => l.post_id) || [])
+        }
 
-        // Merge posts with like status
-        const postsWithLikes = data.map(post => ({
-          ...post,
-          user_liked: likedPostIds.has(post.id)
-        }))
+        // Merge posts with user profile data and like status
+        const postsWithLikes = data.map((post: any) => {
+          const profile = post.user_profiles || {}
+          return {
+            ...post,
+            username: profile.username,
+            avatar_url: profile.avatar_url,
+            is_admin: profile.is_admin,
+            is_troll_officer: profile.is_troll_officer,
+            is_og_user: profile.is_og_user,
+            user_liked: likedPostIds.has(post.id)
+          }
+        })
 
         setPosts(postsWithLikes as WallPost[])
       } else {
-        setPosts(data || [])
+        setPosts([])
       }
     } catch (err: any) {
       console.error('Error loading wall posts:', err)

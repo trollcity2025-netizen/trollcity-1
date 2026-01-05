@@ -126,13 +126,20 @@ export default function LivePage() {
     serverUrl, 
     identity: tokenIdentity, 
     roomName: tokenRoomName, 
-    ready: tokenReady 
+    ready: tokenReady,
+    error: tokenError
   } = useLiveKitToken({
     streamId,
     isHost: isBroadcaster,
     userId: user?.id,
     roomName: roomName,
   });
+
+  useEffect(() => {
+    if (tokenError) {
+      console.error('[LivePage] Token fetch error:', tokenError);
+    }
+  }, [tokenError]);
 
   const canConnect = tokenReady && !!token && !!serverUrl && !!user?.id && !!roomName;
 
