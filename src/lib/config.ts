@@ -1,4 +1,4 @@
-export const EDGE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL
+export const EDGE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
 
 export const API_ENDPOINTS = {
   auth: {

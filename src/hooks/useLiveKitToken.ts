@@ -40,10 +40,12 @@ export function useLiveKitToken({
       try {
         setIsLoading(true);
         
-        const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
+        const functionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
         if (!functionsUrl) {
-            throw new Error('Missing VITE_SUPABASE_FUNCTIONS_URL');
+            console.warn('Missing VITE_EDGE_FUNCTIONS_URL, using default fallback');
         }
+        
+        const baseUrl = functionsUrl || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
 
         console.log('[useLiveKitToken] Fetching token...', { roomName, isHost, userId });
 
@@ -55,7 +57,7 @@ export function useLiveKitToken({
             throw new Error('No active session');
         }
 
-        const response = await fetch(`${functionsUrl}/livekit-token`, {
+        const response = await fetch(`${baseUrl}/livekit-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
