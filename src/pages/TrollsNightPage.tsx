@@ -1,5 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '@/lib/store'
 import { 
   Play, 
   Users, 
@@ -18,6 +19,8 @@ const MOCK_STREAMS = [
   { id: 6, title: 'Troll Court Debates', user: '@GlowPainter', viewers: '1.8k', category: 'Debate', color: 'from-red-600 to-purple-600' },
 ]
 
+export default function TrollsNightPage() {
+  const navigate = useNavigate()
   const { user, profile } = useAuthStore()
   
   const isAdmin = profile?.role === 'admin' || profile?.is_admin
