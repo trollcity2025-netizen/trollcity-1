@@ -219,10 +219,17 @@ export default function BroadcastPage() {
 
   // UI State
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+  const [giftRecipient, setGiftRecipient] = useState<any>(null);
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
   const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false);
   
   // const [entranceEffect, setEntranceEffect] = useState<{ username: string; role: 'admin' | 'lead_troll_officer' | 'troll_officer' } | null>(null);
+
+  const handleGiftFromProfile = useCallback((targetProfile: any) => {
+    setGiftRecipient(targetProfile);
+    setSelectedProfile(null);
+    setIsGiftModalOpen(true);
+  }, []);
 
   // Load Stream Data
   const loadStreamData = useCallback(async () => {
@@ -343,11 +350,12 @@ export default function BroadcastPage() {
 
     // setCoinCount(prev => prev + totalCoins);
     setIsGiftModalOpen(false);
+    
     try {
       await supabase.from('gifts').insert({
         stream_id: streamId,
         sender_id: user?.id,
-        receiver_id: null,
+        receiver_id: giftRecipient?.id || null,
         coins_spent: totalCoins,
         gift_type: 'paid',
         message: giftName,
@@ -356,8 +364,10 @@ export default function BroadcastPage() {
       });
     } catch (e) {
       console.error('Failed to record manual gift event:', e);
+    } finally {
+      setGiftRecipient(null);
     }
-  }, [streamId, user?.id]);
+  }, [streamId, user?.id, giftRecipient]);
 
   const handleCoinsPurchased = useCallback((_amount: number) => {
     // setCoinCount(prev => prev + amount);
