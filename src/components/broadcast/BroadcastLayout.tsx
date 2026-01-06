@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, Suspense } from 'react'
 import { useRoomParticipants } from '../../hooks/useRoomParticipants'
 import { Room } from 'livekit-client'
 import { User, Minus, Plus } from 'lucide-react'
-import VideoTile from './VideoTile'
+
+// Lazy load VideoTile to avoid circular dependency issues
+const VideoTile = React.lazy(() => import('./VideoTile'))
 
 interface BroadcastLayoutProps {
   room: Room
@@ -34,12 +36,14 @@ export default function BroadcastLayout({ room, broadcasterId, isHost, totalCoin
       <div className="relative flex-none h-[60%] min-h-[300px] w-full flex justify-center">
         <div className="relative aspect-video h-full max-w-full bg-black rounded-2xl overflow-hidden border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
           {broadcaster ? (
-            <VideoTile 
-                participant={broadcaster} 
-                isBroadcaster={true} 
-                className="w-full h-full" 
-                isLocal={isHost}
-            />
+            <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-white/30">Loading...</div>}>
+              <VideoTile 
+                  participant={broadcaster} 
+                  isBroadcaster={true} 
+                  className="w-full h-full" 
+                  isLocal={isHost}
+              />
+            </Suspense>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white/30">
               Waiting for broadcaster...
@@ -98,12 +102,14 @@ export default function BroadcastLayout({ room, broadcasterId, isHost, totalCoin
           {Array.from({ length: guestSlotCount }).map((_, i) => (
             <div key={i} className="aspect-video h-[120px] md:h-[140px] shrink-0 bg-white/5 rounded-lg border border-white/5 overflow-hidden relative group">
               {guests[i] ? (
-                <VideoTile 
-                  participant={guests[i]} 
-                  className="w-full h-full"
-                  isLocal={guests[i].identity === room.localParticipant.identity}
-                  onLeave={guests[i].identity === room.localParticipant.identity ? onLeaveSession : undefined}
-                />
+                <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-white/10"><User size={20} className="animate-pulse" /></div>}>
+                  <VideoTile 
+                    participant={guests[i]} 
+                    className="w-full h-full"
+                    isLocal={guests[i].identity === room.localParticipant.identity}
+                    onLeave={guests[i].identity === room.localParticipant.identity ? onLeaveSession : undefined}
+                  />
+                </Suspense>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-white/10 hover:bg-white/10 transition-colors">
                   {!isHost && onJoinRequest ? (
