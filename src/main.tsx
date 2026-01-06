@@ -39,21 +39,20 @@ if (!rootElement) {
 }
 
 if (typeof window !== 'undefined') {
-  if ('serviceWorker' in navigator) {
-    void navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (const registration of registrations) {
-        registration.unregister()
-      }
+  // PWA Service Worker Registration
+  // We use vite-plugin-pwa's virtual module to handle registration and updates
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    const updateSW = registerSW({
+      onNeedRefresh() {
+        if (confirm('New content available. Reload?')) {
+          updateSW(true)
+        }
+      },
+      onOfflineReady() {
+        console.log('App ready to work offline')
+      },
     })
-  }
-
-  if ('caches' in window) {
-    void caches.keys().then((cacheNames) => {
-      for (const cacheName of cacheNames) {
-        void caches.delete(cacheName)
-      }
-    })
-  }
+  })
 }
 
 createRoot(rootElement).render(

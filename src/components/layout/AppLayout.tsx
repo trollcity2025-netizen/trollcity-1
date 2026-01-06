@@ -3,6 +3,7 @@ import BottomNavigation from '../BottomNavigation'
 import Sidebar from '../Sidebar'
 import Header from '../Header'
 import { useLocation } from 'react-router-dom'
+import PWAInstallPrompt from '../PWAInstallPrompt'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -32,6 +33,7 @@ export default function AppLayout({
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#05010a] text-white flex">
+      <PWAInstallPrompt />
       {/* Desktop Sidebar - Hidden on Mobile */}
       {effectiveShowSidebar && (
         <div className="hidden md:block w-64 h-full shrink-0 border-r border-white/5 bg-[#0A0814] z-20">
