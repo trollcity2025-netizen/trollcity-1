@@ -1,23 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Participant, Track, LocalParticipant } from 'livekit-client'
-import { User, Mic, MicOff, Camera, CameraOff, X, RefreshCw } from 'lucide-react'
+import { User, Mic, MicOff, Camera, CameraOff, X, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface VideoTileProps {
   participant: Participant
   isBroadcaster?: boolean
   className?: string
+  style?: React.CSSProperties
   onLeave?: () => void
   isLocal?: boolean
+  showControls?: boolean
+  fit?: 'cover' | 'contain'
 }
 
-export default function VideoTile({ participant, isBroadcaster, className, onLeave, isLocal }: VideoTileProps) {
+export default function VideoTile({ 
+  participant, 
+  isBroadcaster, 
+  className = '', 
+  style,
+  onLeave, 
+  isLocal,
+  fit = 'cover'
+}: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [speaking, setSpeaking] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
-  const [showControls, setShowControls] = useState(false);
+  const [showLocalControls, setShowLocalControls] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [objectFit, setObjectFit] = useState<'cover' | 'contain'>(fit);
+
+  // Sync prop fit with state
+  useEffect(() => {
+    setObjectFit(fit);
+  }, [fit]);
 
   // Fetch profile for avatar
   useEffect(() => {
@@ -91,8 +108,6 @@ export default function VideoTile({ participant, isBroadcaster, className, onLea
       e.stopPropagation();
       if (participant instanceof LocalParticipant) {
           const enabled = await participant.setMicrophoneEnabled(!isAudioEnabled);
-          // setMicrophoneEnabled returns Promise<void> in recent versions, or Promise<boolean> in others.
-          // We can check isAudioEnabled state or check track publication
           const pub = participant.getTrackPublication(Track.Source.Microphone);
           setIsAudioEnabled(pub ? !pub.isMuted : false);
       }
@@ -100,7 +115,6 @@ export default function VideoTile({ participant, isBroadcaster, className, onLea
 
   const switchCamera = async (e: React.MouseEvent) => {
       e.stopPropagation();
-      // @ts-ignore - internal method but widely used
       if (participant instanceof LocalParticipant) {
          try {
              const devices = await navigator.mediaDevices.enumerateDevices();
@@ -110,18 +124,8 @@ export default function VideoTile({ participant, isBroadcaster, className, onLea
                  const currentDeviceId = currentTrack?.mediaStreamTrack.getSettings().deviceId;
                  const nextDevice = videoDevices.find(d => d.deviceId !== currentDeviceId);
                  if (nextDevice) {
-                     // Check if switchCamera exists on videoTrack (it might not on LocalTrack)
-                     // or create new track and publish
-                     // For now, simpler approach if supported:
-                     // @ts-ignore
-                     if (participant.switchCamera) {
-                        // @ts-ignore
-                        await participant.switchCamera(nextDevice.deviceId);
-                     } else {
-                        // Restart track with new device
-                        await participant.setCameraEnabled(false);
-                        await participant.setCameraEnabled(true, { deviceId: nextDevice.deviceId });
-                     }
+                     await participant.setCameraEnabled(false);
+                     await participant.setCameraEnabled(true, { deviceId: nextDevice.deviceId });
                  }
              }
          } catch (err) {
@@ -130,52 +134,86 @@ export default function VideoTile({ participant, isBroadcaster, className, onLea
       }
   };
 
+  const toggleFit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setObjectFit(prev => prev === 'cover' ? 'contain' : 'cover');
+  };
+
   return (
     <div 
-        className={`relative bg-black rounded-lg overflow-hidden transition-all duration-300 group ${className} ${speaking ? 'border-2 border-purple-500' : 'border border-white/10'}`}
-        onClick={() => isLocal && setShowControls(!showControls)}
+        className={`relative bg-zinc-900 rounded-2xl overflow-hidden transition-all duration-300 group shadow-lg ${className} ${speaking ? 'ring-2 ring-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]' : 'ring-1 ring-white/10'}`}
+        style={style}
+        onClick={() => isLocal && setShowLocalControls(!showLocalControls)}
     >
       {/* Video Element */}
-      <video ref={videoRef} className={`w-full h-full object-cover ${isVideoEnabled ? 'block' : 'hidden'}`} />
+      <video 
+        ref={videoRef} 
+        className="w-full h-full transition-all duration-300"
+        style={{ objectFit }}
+      />
       
       {/* Fallback Profile Picture */}
       {!isVideoEnabled && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
-              {avatarUrl ? (
-                  <img src={avatarUrl} alt={participant.identity} className="w-20 h-20 rounded-full border-2 border-white/20" />
-              ) : (
-                  <User size={40} className="text-white/20" />
-              )}
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#1a1625] to-[#0b091f]">
+              <div className={`relative ${speaking ? 'animate-pulse' : ''}`}>
+                  {avatarUrl ? (
+                      <img src={avatarUrl} alt={participant.identity} className="w-24 h-24 rounded-full border-4 border-purple-500/30 shadow-xl" />
+                  ) : (
+                      <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border-4 border-white/10">
+                        <User size={40} className="text-white/20" />
+                      </div>
+                  )}
+                  {!isAudioEnabled && (
+                    <div className="absolute bottom-0 right-0 bg-red-500 rounded-full p-1.5 border-2 border-[#1a1625]">
+                        <MicOff size={12} className="text-white" />
+                    </div>
+                  )}
+              </div>
+              <p className="mt-3 text-white/50 text-sm font-medium">Camera Off</p>
           </div>
       )}
 
       {/* Name Label */}
-      <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-xs font-bold text-white backdrop-blur-sm z-10">
-        {isBroadcaster ? '👑 ' : ''}{participant.name || participant.identity || 'Guest'}
+      <div className="absolute bottom-3 left-3 flex items-center gap-2 max-w-[80%] z-10">
+        <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/5">
+            {isBroadcaster && <span className="text-yellow-400 text-xs">👑</span>}
+            <span className="text-xs font-bold text-white truncate max-w-[100px]">{participant.name || participant.identity || 'Guest'}</span>
+            {!isAudioEnabled && <MicOff size={10} className="text-red-400" />}
+        </div>
       </div>
 
+      {/* View Fit Toggle (Hover only) */}
+      <button 
+        onClick={toggleFit}
+        className="absolute top-3 right-3 p-2 bg-black/40 backdrop-blur-md rounded-full text-white/70 hover:text-white hover:bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+        title="Toggle Fit"
+      >
+        {objectFit === 'cover' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+      </button>
+
       {/* Local Controls Overlay */}
-      {isLocal && showControls && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-4 animate-fadeIn">
-              <div className="flex items-center gap-4">
-                  <button onClick={toggleMic} className={`p-3 rounded-full ${isAudioEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600'}`}>
-                      {isAudioEnabled ? <Mic size={24} /> : <MicOff size={24} />}
+      {isLocal && showLocalControls && (
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-6 animate-fadeIn">
+              <div className="flex items-center gap-6">
+                  <button onClick={toggleMic} className={`p-4 rounded-full transition-transform hover:scale-110 ${isAudioEnabled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'}`}>
+                      {isAudioEnabled ? <Mic size={28} /> : <MicOff size={28} />}
                   </button>
-                  <button onClick={toggleCamera} className={`p-3 rounded-full ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600'}`}>
-                      {isVideoEnabled ? <Camera size={24} /> : <CameraOff size={24} />}
+                  <button onClick={toggleCamera} className={`p-4 rounded-full transition-transform hover:scale-110 ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'}`}>
+                      {isVideoEnabled ? <Camera size={28} /> : <CameraOff size={28} />}
                   </button>
-                  <button onClick={switchCamera} className="p-3 rounded-full bg-white/10 hover:bg-white/20">
-                      <RefreshCw size={24} />
+                  <button onClick={switchCamera} className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition-transform hover:scale-110">
+                      <RefreshCw size={28} />
                   </button>
               </div>
               {onLeave && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); onLeave(); }}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-sm flex items-center gap-2"
+                    className="px-6 py-2 bg-red-600/20 border border-red-500/50 hover:bg-red-600 hover:text-white text-red-400 rounded-full font-bold text-sm flex items-center gap-2 transition-all"
                   >
-                      <X size={16} /> Leave Box
+                      <X size={16} /> Leave Seat
                   </button>
               )}
+              <p className="text-white/30 text-xs mt-4">Tap anywhere to close</p>
           </div>
       )}
     </div>

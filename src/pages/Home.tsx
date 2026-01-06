@@ -9,6 +9,8 @@ import { useAuthStore } from '../lib/store';
 import { areUsersLive, getUserLiveStreamId } from '../lib/liveUtils';
 import BanPage from '../components/BanPage';
 import KickPage from '../components/KickPage';
+import EmptyStateLiveNow from '../components/ui/EmptyStateLiveNow';
+import TrollPassBanner from '../components/ui/TrollPassBanner';
 
 type HomeStream = {
   id: string;
@@ -1128,18 +1130,8 @@ const HomePageContent = () => {
         </div>
         {/* Live Now */}
         <section className="mb-8 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-          <div className="mb-4 flex justify-center">
-            <Link
-              to="/coins"
-              className="w-full max-w-3xl bg-gradient-to-r from-purple-700/80 via-pink-600/70 to-indigo-600/70 text-white rounded-2xl px-4 py-3 shadow-lg backdrop-blur-sm transform hover:scale-[1.02] transition-all duration-200 flex items-center justify-between gap-4"
-              aria-label="Get TrollPass - open coin store"
-            >
-              <div className="flex items-center gap-3">
-                <div className="text-sm font-bold">TrollPass — Unlock exclusive perks</div>
-                <div className="text-xs opacity-80">Available now in the Coin Store</div>
-              </div>
-              <div className="text-sm font-semibold bg-white/10 px-3 py-1 rounded-full">Get TrollPass</div>
-            </Link>
+          <div className="mb-8">
+            <TrollPassBanner />
           </div>
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
@@ -1289,11 +1281,7 @@ const HomePageContent = () => {
               </div>
             )}
 
-            {!hasLiveData && (
-              <div className="rounded-2xl border border-[#2C2C3A] bg-[#0A0811] p-6 text-center text-gray-300">
-                <p>No one is live right now…</p>
-              </div>
-            )}
+            {!hasLiveData && <EmptyStateLiveNow />}
           </div>
         </section>
 

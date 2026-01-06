@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { getTierFromXP } from '../lib/tierSystem'
 import ClickableUsername from './ClickableUsername'
+import ProfileDropdown from './ui/ProfileDropdown'
 
 const Header = () => {
   const { user, profile } = useAuthStore()
@@ -301,55 +302,7 @@ const Header = () => {
           )}
         </Link>
         
-        <Link 
-          to={profile?.username ? `/profile/${profile.username}` : '/profile/me'}
-          className={`p-3 text-green-400 hover:text-green-300 transition-all duration-300 group ${!profile?.username ? 'cursor-not-allowed opacity-50' : ''}`}
-          onClick={() => {
-            // allow navigation even if username not set (routes handle 'me')
-          }}
-        >
-          <User className="w-6 h-6" />
-        </Link>
-
-        <div className="flex items-center space-x-4">
-          <Link 
-            to={profileLink}
-            className={`flex items-center space-x-4 hover:scale-105 transition-transform duration-300`}
-          >
-            <div className="text-right">
-              <p className={`text-sm font-bold ${profile?.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > new Date() ? 'rgb-username' : 'text-white'}`}>
-                {profile?.username || 'Set up profile'}
-              </p>
-              <p className="text-xs text-troll-neon-blue/70 capitalize font-semibold">
-                {profile?.username ? (profile?.tier || getTierFromXP(profile?.xp || 0).title) : 'Set up profile'}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-troll-neon-gold to-troll-neon-orange rounded-full flex items-center justify-center shadow-lg shadow-troll-neon-gold/50 border-2 border-troll-neon-gold/50 overflow-hidden">
-              {profile?.avatar_url ? (
-                <img 
-                  src={profile.avatar_url} 
-                  alt="Avatar" 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback to initial if image fails to load
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                    target.nextElementSibling?.classList.remove('hidden')
-                  }}
-                />
-              ) : null}
-              <span className={`text-troll-dark-bg font-bold text-lg ${profile?.avatar_url ? 'hidden' : ''}`}>
-                {profile?.username?.[0]?.toUpperCase() || 'U'}
-              </span>
-            </div>
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm font-bold bg-gradient-to-r from-troll-neon-pink to-troll-neon-purple hover:from-troll-neon-pink/80 hover:to-troll-neon-purple/80 text-white rounded-xl transition-all duration-300 shadow-lg hover:shadow-troll-neon-pink/50 hover:scale-105"
-          >
-            Logout
-          </button>
-        </div>
+        <ProfileDropdown onLogout={handleLogout} />
       </div>
     </header>
   )
