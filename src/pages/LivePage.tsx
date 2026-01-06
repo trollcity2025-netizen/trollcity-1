@@ -34,6 +34,7 @@ import EntranceEffect from '../components/broadcast/EntranceEffect';
 import { useOfficerBroadcastTracking } from '../hooks/useOfficerBroadcastTracking';
 import { attachLiveKitDebug } from '../lib/livekit-debug';
 import VideoFeed from '../components/stream/VideoFeed';
+import BroadcastLayout from '../components/broadcast/BroadcastLayout';
 
 // Constants
 const STREAM_POLL_INTERVAL = 2000;
@@ -409,6 +410,8 @@ export default function LivePage() {
 
   }, [isBroadcaster, streamId, isConnected, roomName, stream?.status, stream?.is_live]);
 
+  const [activeMobileTab, setActiveMobileTab] = useState<'chat' | 'gifts'>('chat');
+
   // Stream polling
   useEffect(() => {
     if (!streamId) return;
@@ -439,7 +442,20 @@ export default function LivePage() {
   });
 
   // Gift subscription
-  const lastGift = useGiftEvents(stream?.id);
+  const lastGift = useGiftEvents(streamId);
+
+  // Update coin count instantly when a gift is received
+  useEffect(() => {
+    if (lastGift && stream) {
+      const amount = Number(lastGift.coinCost || 0);
+      if (amount > 0) {
+         setStream(prev => prev ? { 
+           ...prev, 
+           total_gifts_coins: (prev.total_gifts_coins || 0) + amount 
+         } : prev);
+      }
+    }
+  }, [lastGift]);
 
   const handleGiftSent = useCallback(async (amountOrGift: any) => {
     let totalCoins = 0;
@@ -504,68 +520,91 @@ export default function LivePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#03010c] via-[#05031a] to-[#110117] text-white">
+    <div className="h-full w-full flex flex-col bg-[#05010a] text-white overflow-hidden">
       {/* Entrance effect for all users */}
       {entranceEffect && <EntranceEffect username={entranceEffect.username} role={entranceEffect.role} profile={entranceEffect.profile} />}
       
-      <div className="flex h-screen flex-col">
-        <main className="flex-1 px-6 py-5">
-          <section className="h-full rounded-[32px] border border-white/10 bg-gradient-to-b from-[#050113] to-[#0b091f] p-6 shadow-2xl flex flex-col">
-            {/* Header */}
-            <div className="mb-5 flex items-center justify-between shrink-0">
-               <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-white/50">{isBroadcaster ? 'Broadcast' : 'Watching'}</p>
-                  <p className="text-sm text-white/70">{stream.title || 'Live Stream'}</p>
-               </div>
-               <div className="flex items-center gap-4">
-                  <TrollLikeButton 
-                    streamId={streamId || ''} 
-                    currentLikes={stream?.total_likes || 0}
-                  />
-                  <div className="px-4 py-2 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
-                    <Heart size={16} className="text-purple-400" /> <span className="font-bold">{stream?.total_likes || 0}</span>
-                  </div>
-                  <div className="px-4 py-2 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
-                    <Users size={16} className="text-green-400" /> <span className="font-bold">{(stream.current_viewers || 0).toLocaleString()}</span>
-                  </div>
-                  {stream.is_live && <div className="px-3 py-1 bg-red-600 rounded-full text-xs font-bold animate-pulse">LIVE</div>}
-                  
-                  {isBroadcaster && (
-                    <>
-                      <button onClick={toggleMic} className={`p-2 rounded-lg border ${micOn ? 'bg-purple-600 border-purple-400' : 'bg-red-900/50 border-red-500'}`}>
-                        {micOn ? <Mic size={18} /> : <MicOff size={18} />}
-                      </button>
-                      <button onClick={toggleCamera} className={`p-2 rounded-lg border ${cameraOn ? 'bg-purple-600 border-purple-400' : 'bg-red-900/50 border-red-500'}`}>
-                        {cameraOn ? <Camera size={18} /> : <CameraOff size={18} />}
-                      </button>
-                      <button onClick={endStream} className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm font-bold flex items-center gap-2">
-                        <Square size={16} fill="currentColor" /> End
-                      </button>
-                    </>
-                  )}
-               </div>
+      {/* Header Area */}
+      <div className="shrink-0 p-4 pb-2 flex justify-between items-center z-10">
+         <div>
+            <p className="text-xs uppercase tracking-[0.4em] text-white/50">{isBroadcaster ? 'Broadcast' : 'Watching'}</p>
+            <p className="text-sm text-white/70">{stream.title || 'Live Stream'}</p>
+         </div>
+         <div className="flex items-center gap-4">
+            <TrollLikeButton 
+              streamId={streamId || ''} 
+              currentLikes={stream?.total_likes || 0}
+            />
+            <div className="hidden lg:flex px-4 py-2 bg-white/5 rounded-lg border border-white/10 items-center gap-2">
+              <Heart size={16} className="text-purple-400" /> <span className="font-bold">{stream?.total_likes || 0}</span>
             </div>
-
-            {/* Content Grid */}
-            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-6">
-               {/* Main Video Area */}
-               <div className="lg:col-span-3 relative rounded-2xl overflow-hidden bg-black border border-white/10 shadow-inner">
-                  <VideoFeed room={liveKit.getRoom()} isHost={isBroadcaster} />
-                  {lastGift && <GiftEventOverlay gift={lastGift} />}
-               </div>
-
-               {/* Right Panel */}
-               <div className="lg:col-span-1 h-full flex flex-col gap-4 min-h-0">
-                  <GiftBox onSendGift={handleGiftSent} />
-                  <ChatBox 
-                    streamId={streamId || ''}
-                    onProfileClick={setSelectedProfile}
-                    onCoinSend={handleSendCoinsToUser}
-                  />
-               </div>
+            <div className="px-3 py-2 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
+              <Users size={16} className="text-green-400" /> <span className="font-bold">{(stream.current_viewers || 0).toLocaleString()}</span>
             </div>
-          </section>
-        </main>
+            {stream.is_live && <div className="px-3 py-1 bg-red-600 rounded-full text-xs font-bold animate-pulse">LIVE</div>}
+            
+            {isBroadcaster && (
+              <>
+                <button onClick={toggleMic} className={`p-2 rounded-lg border ${micOn ? 'bg-purple-600 border-purple-400' : 'bg-red-900/50 border-red-500'}`}>
+                  {micOn ? <Mic size={18} /> : <MicOff size={18} />}
+                </button>
+                <button onClick={toggleCamera} className={`p-2 rounded-lg border ${cameraOn ? 'bg-purple-600 border-purple-400' : 'bg-red-900/50 border-red-500'}`}>
+                  {cameraOn ? <Camera size={18} /> : <CameraOff size={18} />}
+                </button>
+                <button onClick={endStream} className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm font-bold flex items-center gap-2">
+                  <Square size={16} fill="currentColor" /> End
+                </button>
+              </>
+            )}
+         </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-2 lg:p-4 pt-0 overflow-hidden">
+         {/* Broadcast Layout (Streamer + Guests) */}
+         <div className="lg:w-3/4 h-[55%] lg:h-full min-h-0 flex flex-col relative z-0">
+            <BroadcastLayout 
+              room={liveKit.getRoom()} 
+              broadcasterId={stream.broadcaster_id}
+              isHost={isBroadcaster}
+              totalCoins={stream.total_gifts_coins || 0}
+            >
+               {lastGift && <div className="absolute bottom-4 left-4 z-50 pointer-events-none"><GiftEventOverlay gift={lastGift} /></div>}
+            </BroadcastLayout>
+         </div>
+
+         {/* Mobile Tab Bar */}
+         <div className="flex lg:hidden bg-white/5 rounded-lg p-1 shrink-0 gap-2">
+            <button 
+              onClick={() => setActiveMobileTab('chat')}
+              className={`flex-1 py-2 rounded-md font-bold text-sm transition-all ${activeMobileTab === 'chat' ? 'bg-purple-600 text-white shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+            >
+              Chat
+            </button>
+            <button 
+              onClick={() => setActiveMobileTab('gifts')}
+              className={`flex-1 py-2 rounded-md font-bold text-sm transition-all ${activeMobileTab === 'gifts' ? 'bg-purple-600 text-white shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+            >
+              Gifts
+            </button>
+         </div>
+
+         {/* Right Panel (Chat/Gifts) */}
+         <div className="lg:w-1/4 flex-1 lg:h-full min-h-0 flex flex-col gap-4 overflow-hidden relative z-0">
+            {/* GiftBox - Hidden on mobile if chat tab active */}
+            <div className={`${activeMobileTab === 'gifts' ? 'flex' : 'hidden'} lg:flex flex-col shrink-0 lg:shrink`}>
+               <GiftBox onSendGift={handleGiftSent} />
+            </div>
+            
+            {/* ChatBox - Hidden on mobile if gifts tab active */}
+            <div className={`${activeMobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-h-0`}>
+               <ChatBox 
+                 streamId={streamId || ''}
+                 onProfileClick={setSelectedProfile}
+                 onCoinSend={handleSendCoinsToUser}
+               />
+            </div>
+         </div>
       </div>
 
       {/* Modals */}

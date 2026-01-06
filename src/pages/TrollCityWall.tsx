@@ -224,9 +224,9 @@ export default function TrollCityWall() {
   }
 
   const handleShare = (post: WallPost) => {
-    const name = post.username || 'Deleted User'
-    navigator.clipboard.writeText(`${name}: ${post.content}`)
-    toast.success('Copied to clipboard!')
+    const url = `${window.location.origin}/wall/${post.id}`
+    navigator.clipboard.writeText(url)
+    toast.success('Link copied to clipboard!')
   }
 
   const getPostIcon = (type: WallPostType) => {

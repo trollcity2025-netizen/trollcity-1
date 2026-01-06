@@ -37,6 +37,7 @@
     "sonner": "^1.7.0",
     "tailwind-merge": "^3.0.2",
     "tesseract.js": "^2.1.5",
+    "vite-plugin-pwa": "^1.2.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

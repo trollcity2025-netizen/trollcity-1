@@ -1,48 +1,67 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Gift } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+
+interface GiftItem {
+  id: string;
+  name: string;
+  icon: string;
+  value: number;
+  category: string;
+}
 
 interface GiftBoxProps {
-  onSendGift?: (gift: { id: number; coins: number; name?: string }, recipient?: string | null) => void;
+  onSendGift?: (gift: { id: string; coins: number; name: string }, recipient?: string | null) => void;
   participants?: Array<{ name: string }>;
 }
 
 export default function GiftBox({ onSendGift, participants = [] }: GiftBoxProps) {
-  const gifts = React.useMemo(() => [
-    { id: 16, name: "Troll", emoji: "🧟", coins: 1, rarity: 'troll' },
-    { id: 1, name: "Rose", emoji: "🌹", coins: 10, rarity: 'common' },
-    { id: 2, name: "Heart", emoji: "💗", coins: 50, rarity: 'common' },
-    { id: 3, name: "Diamond", emoji: "💎", coins: 100, rarity: 'rare' },
-    { id: 4, name: "Vived", emoji: "🏀", coins: 25, rarity: 'common' },
-    { id: 5, name: "Sav", emoji: "😺", coins: 40, rarity: 'common' },
-    { id: 6, name: "Admin Tool", emoji: "🛠️", coins: 250, rarity: 'legendary' },
-    { id: 7, name: "Rocket", emoji: "🚀", coins: 150, rarity: 'legendary' },
-    { id: 8, name: "Confetti", emoji: "🎉", coins: 30, rarity: 'common' },
-    { id: 9, name: "Cupcake", emoji: "🧁", coins: 20, rarity: 'common' },
-    { id: 10, name: "Sushi", emoji: "🍣", coins: 35, rarity: 'common' },
-    { id: 11, name: "Flower Bouquet", emoji: "💐", coins: 60, rarity: 'rare' },
-    { id: 12, name: "Gold Star", emoji: "⭐️", coins: 80, rarity: 'rare' },
-    { id: 13, name: "Magic Wand", emoji: "✨", coins: 120, rarity: 'rare' },
-    { id: 14, name: "Bear", emoji: "🧸", coins: 45, rarity: 'common' },
-    { id: 15, name: "Ice Cream", emoji: "🍨", coins: 15, rarity: 'common' },
-  ], []);
+  const [gifts, setGifts] = useState<GiftItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const shuffle = (arr: any[]) => {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  };
+  useEffect(() => {
+    const fetchGifts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('gift_items')
+          .select('*')
+          .order('value', { ascending: true });
+        
+        if (error) throw error;
+        
+        if (data) {
+          setGifts(data.map(item => ({
+            id: item.id,
+            name: item.name,
+            icon: item.icon,
+            value: item.value,
+            category: item.category || 'Common'
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching gifts:', err);
+        // Fallback or empty
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const displayedGifts = React.useMemo(() => shuffle([...gifts]).slice(0, 12), [gifts]);
+    fetchGifts();
+  }, []);
+
+  const displayedGifts = React.useMemo(() => {
+    // If we have gifts from DB, use them. 
+    // We can shuffle or just show them sorted by value (which is usually better for UX)
+    return gifts; 
+  }, [gifts]);
 
   const [showModal, setShowModal] = React.useState(false);
-  const [selectedGift, setSelectedGift] = React.useState<any | null>(null);
+  const [selectedGift, setSelectedGift] = React.useState<GiftItem | null>(null);
   const [quantity, setQuantity] = React.useState<number>(1);
   const [recipientMode, setRecipientMode] = React.useState<'all' | 'specific'>('all');
   const [selectedRecipient, setSelectedRecipient] = React.useState<string | null>(participants[0]?.name ?? null);
 
-  const openChooser = (gift: any) => {
+  const openChooser = (gift: GiftItem) => {
     setSelectedGift(gift);
     setRecipientMode('all');
     setSelectedRecipient(participants[0]?.name ?? null);
@@ -53,7 +72,12 @@ export default function GiftBox({ onSendGift, participants = [] }: GiftBoxProps)
     if (!selectedGift) return;
     const recipient = recipientMode === 'all' ? null : selectedRecipient;
     // attach quantity to gift object for handler
-    onSendGift?.({ ...selectedGift, quantity }, recipient);
+    onSendGift?.({ 
+      id: selectedGift.id, 
+      name: selectedGift.name, 
+      coins: selectedGift.value, 
+      quantity 
+    } as any, recipient);
     setShowModal(false);
     setSelectedGift(null);
   };
@@ -71,11 +95,11 @@ export default function GiftBox({ onSendGift, participants = [] }: GiftBoxProps)
             onClick={() => openChooser(gift)}
             className="flex flex-col items-center gap-1 p-2 bg-gray-800 hover:bg-gray-700 rounded transition-colors"
           >
-            <div className="text-2xl">{gift.emoji}</div>
+            <div className="text-2xl">{gift.icon}</div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-300">{gift.coins}</span>
-              {gift.rarity && (
-                <span className={`text-[10px] px-1 py-0.5 rounded ml-1 ${gift.rarity === 'legendary' ? 'bg-yellow-600 text-black' : gift.rarity === 'rare' ? 'bg-purple-600 text-white' : gift.rarity === 'troll' ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'}`}>{gift.rarity}</span>
+              <span className="text-xs text-gray-300">{gift.value}</span>
+              {gift.category && (
+                <span className={`text-[10px] px-1 py-0.5 rounded ml-1 ${gift.category === 'legendary' ? 'bg-yellow-600 text-black' : gift.category === 'rare' ? 'bg-purple-600 text-white' : gift.category === 'troll' ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'}`}>{gift.category}</span>
               )}
             </div>
           </button>

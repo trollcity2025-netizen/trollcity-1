@@ -23,6 +23,8 @@ import { RequireLeadOrOwner } from "./components/auth/RequireLeadOrOwner";
 import TrollsNightGuard from "./components/auth/TrollsNightGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
 
+import AppLayout from "./components/layout/AppLayout";
+
 // Static pages (fast load)
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
@@ -40,6 +42,7 @@ const UserInventory = lazy(() => import("./pages/UserInventory"));
 const SellOnTrollCity = lazy(() => import("./pages/SellOnTrollCity"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const TrollCityWall = lazy(() => import("./pages/TrollCityWall"));
+const WallPostPage = lazy(() => import("./pages/WallPostPage"));
 const TrollCourt = lazy(() => import("./pages/TrollCourt"));
 const EmpirePartnerDashboard = lazy(() => import("./pages/EmpirePartnerDashboard"));
 // Gift store pages removed
@@ -422,19 +425,12 @@ function AppContent() {
       />
 
 
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
-        <div className="flex min-h-screen">
-          {/* Desktop Sidebar */}
-          {user && <div className="hidden md:block"><Sidebar /></div>}
+      <AppLayout showSidebar={!!user} showHeader={!!user} showBottomNav={!!user}>
+        {user && <AdminOfficerQuickMenu />}
 
-          <div className="flex flex-col flex-1 min-h-screen w-full md:w-auto">
-            {user && <Header />}
-            {user && <AdminOfficerQuickMenu />}
-
-            <main ref={mainRef} className="flex-1 overflow-y-auto bg-transparent safe-area-bottom">
-              <ErrorBoundary>
-                <Suspense fallback={<LoadingScreen />}>
-                  <Routes>
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes>
                 {/* 🚪 Public Routes */}
                 <Route path="/" element={user ? <Home /> : <LandingPage />} />
                 <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
@@ -481,6 +477,7 @@ function AppContent() {
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/wall" element={<TrollCityWall />} />
+                  <Route path="/wall/:postId" element={<WallPostPage />} />
                   <Route path="/profile/id/:userId" element={<Profile />} />
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="/trollstown" element={<TrollsTownPage />} />
@@ -1023,9 +1020,7 @@ function AppContent() {
                   </Routes>
                 </Suspense>
               </ErrorBoundary>
-            </main>
-        </div>
-      </div>
+      </AppLayout>
 
       {/* Profile setup modal */}
       <ProfileSetupModal
@@ -1047,7 +1042,6 @@ function AppContent() {
           },
         }}
       />
-    </div>
   </>)
 }
 
