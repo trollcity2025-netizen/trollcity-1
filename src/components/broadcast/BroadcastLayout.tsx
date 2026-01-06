@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { useRoomParticipants } from '../../hooks/useRoomParticipants'
 import { Participant, Track } from 'livekit-client'
-import { useTrack, useParticipantContext } from '@livekit/components-react'
 import { User, Minus, Plus } from 'lucide-react'
 
 interface BroadcastLayoutProps {
@@ -20,10 +19,6 @@ interface VideoTileProps {
 
 const VideoTile = ({ participant, isBroadcaster, className }: VideoTileProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { isSpeaking } = useParticipantContext() || {};
-  // Fallback if context not available, but usually we wrap VideoTile in ParticipantContext. 
-  // However, here we are using manual rendering.
-  // We can use the isSpeaking property from participant if we force update.
   
   const [speaking, setSpeaking] = useState(false);
 
