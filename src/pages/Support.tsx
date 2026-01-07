@@ -51,22 +51,23 @@ export default function Support() {
           status: 'open',
           created_at: new Date().toISOString()
         }
-        let ok = false
-        const { error } = await supabase.from('support_tickets').insert([payload])
-        if (!error) ok = true
-        if (!ok) {
+        const { data: ticket, error } = await supabase.from('support_tickets').insert([payload]).select().single()
+        if (!error && ticket) {
           // Notify admins
           await notifyAdmins(
             'New Support Ticket',
             `${profile.username}: ${subject}`,
             'support_ticket',
-            { ticketId: payload.id, userId: profile.id, category: payload.category }
+            { ticketId: ticket.id, userId: profile.id, category: payload.category }
           )
         }
-        toast.success('Support ticket submitted')
-        setSubject('')
-        setMessage('')
-        setCategory('general')
+        
+        if (!error) {
+          toast.success('Support ticket submitted')
+          setSubject('')
+          setMessage('')
+          setCategory('general')
+        }
       }
     } catch (err: any) {
       console.error('Support submission error:', err)

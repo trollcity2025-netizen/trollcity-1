@@ -296,7 +296,7 @@ export default function SendGiftModal({
               onClick={() => handleGiftSend(giftWithType)}
               className={`gift-card p-3 rounded-lg text-sm flex flex-col items-center transition ${
                 canAfford 
-                  ? gift.holidayTheme 
+                  ? (gift as any).holidayTheme 
                     ? 'bg-red-700/30 hover:bg-red-700/40 border-2 border-red-400' 
                     : category.toLowerCase() === 'common'
                     ? 'bg-purple-700/30 hover:bg-purple-700/40'
@@ -313,11 +313,11 @@ export default function SendGiftModal({
                     : 'bg-purple-700/30 hover:bg-purple-700/40'
                   : 'bg-gray-700 opacity-50 cursor-not-allowed'
               } ${canAfford ? category.toLowerCase() : ''}`}
-              title={gift.animationTheme || gift.specialEffect || gift.effect || ''}
+              title={(gift as any).animationTheme || (gift as any).specialEffect || (gift as any).effect || ''}
             >
               <span className="gift-icon text-2xl">{gift.name.split(' ')[0]}</span>
               <span className="gift-name text-xs text-center mt-1">{gift.name.replace(/^[^\s]+\s/, '')}</span>
-              {gift.holidayTheme && (
+              {(gift as any).holidayTheme && (
                 <span className="text-[9px] text-yellow-300 mt-0.5">🎁 Holiday</span>
               )}
               <span className="gift-cost text-xs text-gray-300 mt-1">

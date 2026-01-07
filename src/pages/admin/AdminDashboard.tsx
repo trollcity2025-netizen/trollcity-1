@@ -873,7 +873,7 @@ export default function AdminDashboard() {
   }
 
   const _handleSelectTab = (tabId: string) => {
-    setActiveTab(tabId)
+    setActiveTab(tabId as TabId)
   }
 
   const redirectRoutes = useMemo(
@@ -1160,7 +1160,7 @@ export default function AdminDashboard() {
 
         {/* Additional Tasks Grid */}
         <AdditionalTasksGrid 
-          onSelectTab={setActiveTab} 
+          onSelectTab={_handleSelectTab} 
           counts={{
             empire_apps: stats.pendingApps,
             cashouts: stats.pendingPayouts,

@@ -136,6 +136,33 @@ export default function OfficerManagementTab() {
     }
   }
 
+  const handleToggleLeadOfficer = async () => {
+    if (!selectedUser || !user) return
+
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ is_lead_officer: !selectedUser.is_lead_officer })
+        .eq('id', selectedUser.id)
+
+      if (error) throw error
+      toast.success(`User ${selectedUser.is_lead_officer ? 'demoted from' : 'promoted to'} Lead Officer`)
+
+      // Refresh user data
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('id, username, avatar_url, role, is_officer_active, is_lead_officer, troll_role')
+        .eq('id', selectedUser.id)
+        .single()
+      
+      if (data) setSelectedUser(data)
+      fetchUserDetails(selectedUser.id)
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to update lead officer status')
+    }
+  }
+
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
       <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">

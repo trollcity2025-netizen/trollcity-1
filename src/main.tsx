@@ -41,6 +41,7 @@ if (!rootElement) {
 if (typeof window !== 'undefined') {
   // PWA Service Worker Registration
   // We use vite-plugin-pwa's virtual module to handle registration and updates
+  // @ts-expect-error - Virtual module
   import('virtual:pwa-register').then(({ registerSW }) => {
     const updateSW = registerSW({
       onNeedRefresh() {

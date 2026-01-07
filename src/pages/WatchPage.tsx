@@ -111,6 +111,7 @@ export default function WatchPage() {
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
   const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false);
+  const [giftRecipient, setGiftRecipient] = useState<any>(null);
   const [entranceEffect] = useState<any>(null);
 
   // Load Stream Data
@@ -256,7 +257,7 @@ export default function WatchPage() {
     } catch (e) {
       console.error('Failed to record manual gift event:', e);
     }
-  }, [stream?.id, user?.id]);
+  }, [stream?.id, user?.id, giftRecipient?.id]);
 
   const handleCoinsPurchased = useCallback(() => {
     setIsCoinStoreOpen(false);

@@ -9,6 +9,7 @@ import { translateMessage } from '../../lib/translation'
 interface ChatOverlayProps {
   streamId: string | undefined
   compact?: boolean
+  isBroadcaster?: boolean
 }
 
 interface ChatMessage {
@@ -30,7 +31,7 @@ interface ChatMessage {
   }
 }
 
-export default function ChatOverlay({ streamId }: ChatOverlayProps) {
+export default function ChatOverlay({ streamId, isBroadcaster }: ChatOverlayProps) {
   const { profile } = useAuthStore()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [translatedMessages, setTranslatedMessages] = useState<Record<string, string>>({})

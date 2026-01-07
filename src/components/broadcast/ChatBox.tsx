@@ -358,7 +358,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
                   {msg.sender_profile?.perks?.includes('perk_flex_banner') && '👑 '}
                   <ClickableUsername
                     username={msg.sender_profile?.username || 'Unknown'}
-                    profile={msg.sender_profile}
+                    profile={msg.sender_profile as any}
                     isBroadcaster={isBroadcaster}
                     streamId={streamId}
                     className={getUsernameStyle(msg.sender_profile?.perks, msg.sender_profile?.rgbExpiresAt)}

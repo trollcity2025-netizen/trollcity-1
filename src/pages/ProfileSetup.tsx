@@ -18,7 +18,7 @@ const ProfileSetup = () => {
   }, [user?.id, profile?.username])
 
   const [username, setUsername] = React.useState(profile?.username || suggestedUsername)
-  const [fullName, setFullName] = React.useState(profile?.full_name || '')
+  const [fullName, setFullName] = React.useState((profile as any)?.full_name || '')
   const [bio, setBio] = React.useState(profile?.bio || '')
   const [loading, setLoading] = React.useState(false)
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false)

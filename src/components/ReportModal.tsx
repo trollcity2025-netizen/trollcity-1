@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '../lib/store'
+import { notifyAdmins } from '../lib/notifications'
 import api from '../lib/api'
 import { REPORT_REASONS, type ReportReason } from '../types/moderation'
 

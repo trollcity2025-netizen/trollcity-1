@@ -122,29 +122,6 @@ export default function TrollOfficerLounge() {
     })
   }
 
-  // Fetch streams
-  useEffect(() => {
-    const fetchStreams = async () => {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('streams')
-        .select('*')
-        .eq('is_live', true)
-        .order('current_viewers', { ascending: false })
-
-      if (error) {
-        toast.error('Failed to load active streams')
-      } else {
-        setLiveStreams(data || [])
-      }
-      setLoading(false)
-    }
-
-    fetchStreams()
-    const interval = setInterval(fetchStreams, 10000)
-    return () => clearInterval(interval)
-  }, [])
-
   // Listen for reports
   useEffect(() => {
     const channel = supabase

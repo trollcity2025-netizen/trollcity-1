@@ -23,7 +23,7 @@ export default function BottomNavigation() {
 
   // Define Center Button based on Role
   const getCenterButton = () => {
-    switch (role) {
+    switch (role as string) {
       case 'admin':
         return { label: 'Admin Panel', icon: Shield, action: () => setIsMenuOpen(true) }
       case 'broadcaster':
@@ -40,7 +40,7 @@ export default function BottomNavigation() {
   const centerBtn = getCenterButton()
 
   // Re-ordering to match: Home, Live, CENTER, Inbox, Profile
-  const orderedItems = [
+  const orderedItems: any[] = [
     { icon: Home, label: 'Home', path: '/', active: isActive('/') && location.pathname !== '/live' },
     { icon: Video, label: 'Live', path: '/live', active: isActive('/live') },
     { isCenter: true, ...centerBtn },
@@ -50,7 +50,7 @@ export default function BottomNavigation() {
 
   // Popup Menu Options
   const getMenuOptions = () => {
-    switch (role) {
+    switch (role as string) {
       case 'broadcaster':
         return [
           { label: 'Start Stream', icon: Video, path: '/go-live' },
@@ -90,7 +90,7 @@ export default function BottomNavigation() {
     <>
       <nav className="bg-[#0D0D0D] border-t border-purple-700/30 safe-area-bottom shrink-0 z-50">
         <div className="flex items-center justify-around h-16 px-0">
-          {orderedItems.map((item, idx) => {
+          {orderedItems.map((item: any, idx) => {
             const Icon = item.icon
             
             if (item.isCenter) {

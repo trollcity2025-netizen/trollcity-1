@@ -664,14 +664,25 @@ export default function Profile() {
                    <div className="flex gap-3">
                      <input
                        type="file"
-                       accept="image/*"
+                       accept="image/*,video/*"
                        multiple
-                       onChange={(e) => setImageFiles(e.target.files)}
-                     />
-                     <input
-                       type="file"
-                       accept="video/*"
-                       onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                       onChange={(e) => {
+                         const files = e.target.files;
+                         if (!files || files.length === 0) {
+                           setImageFiles(null);
+                           setVideoFile(null);
+                           return;
+                         }
+                         const allFiles = Array.from(files);
+                         const firstVideo = allFiles.find((f) => f.type.startsWith('video/')) || null;
+                         if (firstVideo) {
+                           setVideoFile(firstVideo);
+                           setImageFiles(null);
+                         } else {
+                           setImageFiles(files);
+                           setVideoFile(null);
+                         }
+                       }}
                      />
                    </div>
                    <div className="flex justify-end">

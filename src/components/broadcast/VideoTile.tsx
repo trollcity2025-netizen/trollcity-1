@@ -69,11 +69,11 @@ export default function VideoTile({
          if (track.kind === Track.Kind.Video) setIsVideoEnabled(false);
     };
 
-    participant.on('speakingChanged', onSpeakingChanged);
-    participant.on('trackMuted', onTrackMuted);
-    participant.on('trackUnmuted', onTrackUnmuted);
-    participant.on('trackSubscribed', onTrackSubscribed);
-    participant.on('trackUnsubscribed', onTrackUnsubscribed);
+    (participant as any).on('speakingChanged', onSpeakingChanged);
+    (participant as any).on('trackMuted', onTrackMuted);
+    (participant as any).on('trackUnmuted', onTrackUnmuted);
+    (participant as any).on('trackSubscribed', onTrackSubscribed);
+    (participant as any).on('trackUnsubscribed', onTrackUnsubscribed);
     
     // Initial state check
     setSpeaking(participant.isSpeaking);
@@ -88,11 +88,11 @@ export default function VideoTile({
     }
 
     return () => {
-        participant.off('speakingChanged', onSpeakingChanged);
-        participant.off('trackMuted', onTrackMuted);
-        participant.off('trackUnmuted', onTrackUnmuted);
-        participant.off('trackSubscribed', onTrackSubscribed);
-        participant.off('trackUnsubscribed', onTrackUnsubscribed);
+        (participant as any).off('speakingChanged', onSpeakingChanged);
+        (participant as any).off('trackMuted', onTrackMuted);
+        (participant as any).off('trackUnmuted', onTrackUnmuted);
+        (participant as any).off('trackSubscribed', onTrackSubscribed);
+        (participant as any).off('trackUnsubscribed', onTrackUnsubscribed);
     };
   }, [participant]);
 
@@ -100,7 +100,7 @@ export default function VideoTile({
       e.stopPropagation();
       if (participant instanceof LocalParticipant) {
           const enabled = await participant.setCameraEnabled(!isVideoEnabled);
-          setIsVideoEnabled(enabled);
+          setIsVideoEnabled(!!enabled);
       }
   };
 
@@ -200,7 +200,8 @@ export default function VideoTile({
       <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2 max-w-[85%]">
         {/* Name Badge */}
         <div className="flex items-center gap-2 bg-[#1a0b2e]/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-purple-500/30 shadow-lg w-fit">
-            <div className={`w-2 h-2 rounded-full ${participant.isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            {/* Connection Indicator */}
+            <div className={`w-2 h-2 rounded-full ${(participant as any).isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
             <span className="text-sm font-bold text-white truncate max-w-[120px]">
                 {participant.name || participant.identity || 'Guest'}
             </span>

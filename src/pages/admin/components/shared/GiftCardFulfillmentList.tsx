@@ -41,7 +41,6 @@ export default function GiftCardFulfillmentList({ viewMode: _viewMode }: GiftCar
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      // @ts-expect-error - Supabase join types can be tricky
       setFulfillments(data || [])
     } catch (error) {
       console.error('Error fetching fulfillments:', error)

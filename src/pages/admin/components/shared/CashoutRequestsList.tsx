@@ -43,7 +43,6 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
       const { data, error } = await query
 
       if (error) throw error
-      // @ts-expect-error - Supabase join types can be tricky
       setRequests(data || [])
     } catch (error) {
       console.error('Error fetching cashouts:', error)
@@ -180,8 +179,7 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
                     <div className="text-xs text-slate-500">{req.user_id.slice(0, 8)}</div>
                   </td>
                   <td className="p-3 font-mono text-yellow-400">
-                    {(req.requested_coins || req.coin_amount || 0).toLocaleString()} coins
-                    <div className="text-xs text-green-500">${(req.usd_value || 0).toFixed(2)}</div>
+                    {(req.coin_amount || 0).toLocaleString()} coins
                   </td>
                   <td className="p-3">
                     <span className="px-2 py-0.5 rounded border border-slate-600 text-xs">
@@ -261,25 +259,18 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
               </button>
             </div>
             
-            <div className="bg-[#0D0D16] p-4 rounded-lg space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">User:</span>
-                <span className="text-white font-medium">{selectedRequest.user_profile?.username}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Amount:</span>
-                <span className="text-yellow-400 font-mono">
-                  {(selectedRequest.requested_coins || selectedRequest.coin_amount || 0).toLocaleString()} coins
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Value:</span>
-                <span className="text-green-400 font-bold">${(selectedRequest.usd_value || 0).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Method:</span>
-                <span className="text-white">{selectedRequest.delivery_method}</span>
-              </div>
+              <div className="bg-[#0D0D16] p-4 rounded-lg space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">User:</span>
+                  <span className="text-white font-medium">{selectedRequest.user_profile?.username}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Amount:</span>
+                  <span className="text-yellow-400 font-mono">
+                  {(selectedRequest.coin_amount || 0).toLocaleString()} coins
+                  </span>
+                </div>
+              {/* USD value and delivery method omitted due to schema differences */}
             </div>
 
             <div className="space-y-2">

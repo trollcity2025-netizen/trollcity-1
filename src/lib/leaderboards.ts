@@ -19,25 +19,31 @@ export async function getLeaderboard(period: 'daily' | 'weekly' | 'monthly', lim
     startDate.setHours(0, 0, 0, 0)
   }
 
-  // Use an RPC if available for performance, otherwise aggregations client-side (slow for large data)
-  // Assuming there is a view or we do a raw query via RPC.
-  // Since user said "build queries directly", but standard Supabase client doesn't support GROUP BY / SUM easily without RPC.
-  // I'll try to use an RPC `get_top_gifters` if it exists, or assume I need to create one.
-  // Since I can't create RPCs easily, I'll write the code assuming an RPC `get_leaderboard` exists or I'll use a raw SQL query if I could (I can't).
-  // Alternative: Fetch all transactions (bad).
-  // Better: The user said "All sqls were made and ran". So likely there IS a way or an RPC.
-  // I will assume an RPC `get_gifter_leaderboard(start_date, end_date, limit)` exists.
-  // If not, I'll provide a fallback that might fail but documents what's needed.
-  
   try {
-    const { data, error } = await supabase.rpc('get_gifter_leaderboard', {
-      p_start_date: startDate.toISOString(),
-      p_end_date: now.toISOString(),
-      p_limit: limit
-    })
+    const { data: transactions, error } = await supabase
+      .from('coin_transactions')
+      .select('user_id, amount, created_at, user_profiles(username, avatar_url)')
+      .in('type', ['gift', 'gift_sent', 'gift_send'])
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', now.toISOString())
 
     if (error) throw error
-    return data
+
+    const leaderboard = new Map<string, any>()
+    transactions?.forEach((tx: any) => {
+      const existing = leaderboard.get(tx.user_id) || {
+        user_id: tx.user_id,
+        username: tx.user_profiles?.username,
+        avatar_url: tx.user_profiles?.avatar_url,
+        total_coins: 0
+      }
+      existing.total_coins += tx.amount
+      leaderboard.set(tx.user_id, existing)
+    })
+
+    return Array.from(leaderboard.values())
+      .sort((a, b) => b.total_coins - a.total_coins)
+      .slice(0, limit)
   } catch (err) {
     console.error(`Error fetching ${period} leaderboard:`, err)
     return []
@@ -61,13 +67,31 @@ export async function runDailyReset() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const { data: topGifters, error } = await supabase.rpc('get_gifter_leaderboard', {
-      p_start_date: yesterday.toISOString(),
-      p_end_date: today.toISOString(),
-      p_limit: 3
-    })
+    // Direct query fallback for reliability
+    const { data: transactions, error } = await supabase
+      .from('coin_transactions')
+      .select('user_id, amount, created_at, user_profiles(username, avatar_url)')
+      .in('type', ['gift', 'gift_sent', 'gift_send'])
+      .gte('created_at', yesterday.toISOString())
+      .lt('created_at', today.toISOString())
 
     if (error) throw error
+
+    const leaderboard = new Map<string, any>()
+    transactions?.forEach((tx: any) => {
+      const existing = leaderboard.get(tx.user_id) || {
+        user_id: tx.user_id,
+        username: tx.user_profiles?.username,
+        avatar_url: tx.user_profiles?.avatar_url,
+        total_coins: 0
+      }
+      existing.total_coins += tx.amount
+      leaderboard.set(tx.user_id, existing)
+    })
+
+    const topGifters = Array.from(leaderboard.values())
+      .sort((a, b) => b.total_coins - a.total_coins)
+      .slice(0, 3)
 
     if (topGifters && topGifters.length > 0) {
       // 2. Apply Boosts
@@ -109,12 +133,30 @@ export async function runWeeklyReset() {
     const lastWeek = new Date()
     lastWeek.setDate(lastWeek.getDate() - 7)
     
-    const { data: topFamilies, error } = await supabase.rpc('get_top_war_families', {
-      p_start_date: lastWeek.toISOString(),
-      p_limit: 3
-    })
+    // Direct query fallback
+    const { data: results, error } = await supabase
+      .from('war_results')
+      .select('family_id, points, families(id, name)')
+      .gte('created_at', lastWeek.toISOString())
 
     if (error) throw error
+
+    const familyPoints = new Map<string, any>()
+    results?.forEach((res: any) => {
+      const fId = res.family_id
+      const fName = res.families?.name
+      const existing = familyPoints.get(fId) || {
+        family_id: fId,
+        family_name: fName,
+        total_points: 0
+      }
+      existing.total_points += res.points
+      familyPoints.set(fId, existing)
+    })
+
+    const topFamilies = Array.from(familyPoints.values())
+      .sort((a, b) => b.total_points - a.total_points)
+      .slice(0, 3)
 
     if (topFamilies && topFamilies.length > 0) {
       const boosts = [
@@ -144,28 +186,50 @@ export async function runWeeklyReset() {
 }
 
 async function applyUserBoost(userId: string, percentage: number, reason: string) {
-  // Insert into user_boosts
-  // Assuming table user_boosts(user_id, boost_percentage, expires_at, reason)
-  const expiresAt = new Date()
-  expiresAt.setHours(expiresAt.getHours() + 24)
+  try {
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + 24)
 
-  await supabase.from('user_boosts').insert({
-    user_id: userId,
-    boost_percentage: percentage,
-    expires_at: expiresAt.toISOString(),
-    reason: reason
-  })
+    const { error } = await supabase.from('user_boosts').insert({
+      user_id: userId,
+      boost_percentage: percentage,
+      expires_at: expiresAt.toISOString(),
+      reason: reason
+    })
+
+    if (error) {
+      // If table doesn't exist, ignore (or log warning)
+      if (error.code === '42P01') { // undefined_table
+        console.warn('Table user_boosts does not exist. Skipping boost application.')
+      } else {
+        throw error
+      }
+    }
+  } catch (err) {
+    console.error('Failed to apply user boost:', err)
+  }
 }
 
 async function applyFamilyBoost(familyId: string, percentage: number) {
-  // Insert into family_boosts
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + 7)
+  try {
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 7)
 
-  await supabase.from('family_boosts').insert({
-    family_id: familyId,
-    boost_percentage: percentage,
-    expires_at: expiresAt.toISOString(),
-    reason: 'Weekly War Winner'
-  })
+    const { error } = await supabase.from('family_boosts').insert({
+      family_id: familyId,
+      boost_percentage: percentage,
+      expires_at: expiresAt.toISOString(),
+      reason: 'Weekly War Winner'
+    })
+
+    if (error) {
+      if (error.code === '42P01') { // undefined_table
+        console.warn('Table family_boosts does not exist. Skipping boost application.')
+      } else {
+        throw error
+      }
+    }
+  } catch (err) {
+    console.error('Failed to apply family boost:', err)
+  }
 }
