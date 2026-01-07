@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { useCoins } from '@/lib/hooks/useCoins';
 import { toast } from 'sonner';
-import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
+import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { coinPackages, formatCoins, formatUSD } from '../lib/coinMath';
 import { addCoins, deductCoins } from '@/lib/coinTransactions';
 import { useLiveContextStore } from '../lib/liveContextStore';
@@ -707,13 +707,26 @@ export default function CoinStore() {
       ) : (
         <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
         <div className="max-w-6xl mx-auto space-y-6">
+          {/* Warning Banner */}
+          <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-xl p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div className="text-yellow-200 text-sm font-medium space-y-1">
+              <p>
+                Start with $0.75 coin purchase before making large transactions to ensure coins are routed correctly back to your account.
+              </p>
+              <p>
+                PayPal is used temporarily. Apple Pay, Cash App, Venmo, and others coming soon.
+              </p>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-white flex items-center gap-3">
               <Coins className="w-8 h-8 text-purple-400" />
               Troll City Coin Store
             </h1>
-            <div className="flex gap-2">
+            <div className="flex gap-2 hidden md:flex">
               <button type="button" className={`px-3 py-2 rounded ${tab==='coins'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('coins')}>Coin Packages</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='effects'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('effects')}>Entrance Effects</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('perks')}>Perks</button>
@@ -722,6 +735,20 @@ export default function CoinStore() {
               {showLiveSnacks && (
                 <button type="button" className={`px-3 py-2 rounded ${tab==='live_snacks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('live_snacks')}>LIVE SNACKS</button>
               )}
+            </div>
+            <div className="md:hidden w-full max-w-[200px]">
+              <select
+                value={tab}
+                onChange={(e) => setTab(e.target.value)}
+                className="w-full bg-zinc-900 text-white border border-purple-500/30 rounded-lg p-2 text-sm focus:outline-none focus:border-purple-500"
+              >
+                <option value="coins">Coin Packages</option>
+                <option value="effects">Entrance Effects</option>
+                <option value="perks">Perks</option>
+                <option value="calls">Call Minutes</option>
+                <option value="insurance">Insurance</option>
+                {showLiveSnacks && <option value="live_snacks">LIVE SNACKS</option>}
+              </select>
             </div>
           </div>
 

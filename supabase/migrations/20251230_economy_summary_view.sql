@@ -22,9 +22,9 @@ WITH
     SELECT 
       COALESCE(SUM(total_usd), 0) AS total_usd
     FROM (
-      SELECT cash_amount AS total_usd FROM payout_requests WHERE status = 'paid' OR status = 'approved'
+      SELECT cash_amount AS total_usd FROM payout_requests WHERE status IN ('paid', 'approved')
       UNION ALL
-      SELECT usd_value AS total_usd FROM cashout_requests WHERE status = 'fulfilled' OR status = 'paid'
+      SELECT (requested_coins * 0.01) AS total_usd FROM cashout_requests WHERE status IN ('fulfilled', 'paid')
     ) AS combined_paid
   ),
   
@@ -35,7 +35,7 @@ WITH
     FROM (
       SELECT cash_amount AS total_usd FROM payout_requests WHERE status = 'pending'
       UNION ALL
-      SELECT usd_value AS total_usd FROM cashout_requests WHERE status = 'pending'
+      SELECT (requested_coins * 0.01) AS total_usd FROM cashout_requests WHERE status = 'pending'
     ) AS combined_pending
   ),
   
@@ -76,6 +76,7 @@ SELECT
   (SELECT total FROM gift_coins_spent) AS total_gift_coins_spent,
   (SELECT total_usd FROM payouts_processed) AS total_payouts_processed_usd,
   (SELECT total_usd FROM pending_payouts) AS total_pending_payouts_usd,
+  (SELECT total_revenue FROM revenue_summary) AS total_revenue_usd,
   (SELECT total_coins FROM creator_earned) AS total_creator_earned_coins,
   (SELECT username FROM top_broadcaster) AS top_earning_broadcaster;
 

@@ -351,7 +351,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
               className="text-xs animate-fadeIn rgb-neon rounded p-2 bg-gray-800/50 group hover:bg-gray-800/70 transition-colors"
             >
               <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {msg.sender_profile?.hasInsurance && (
                     <Shield size={12} className="text-blue-400" fill="currentColor" />
                   )}
@@ -364,6 +364,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
                     className={getUsernameStyle(msg.sender_profile?.perks, msg.sender_profile?.rgbExpiresAt)}
                     onClick={() => onProfileClick?.(msg.sender_profile || { id: msg.user_id, name: 'Unknown', username: 'Unknown' })}
                   />
+                  <UserBadge profile={msg.sender_profile} />
                 </div>
                 <button
                   onClick={() =>

@@ -24,134 +24,6 @@ const ACTIONS = [
   { id: 'escalate', label: '📞 Escalate', color: 'bg-blue-600' }
 ]
 
-const MOCK_SCENARIOS: TrainingScenario[] = [
-  {
-    id: 'mock-1',
-    scenario_type: 'Chat Violation',
-    description: 'User spamming racial slurs in chat',
-    chat_messages: [
-      { username: 'User123', message: 'Hello everyone!', timestamp: new Date().toISOString() },
-      { username: 'TrollUser', message: 'You are all [slur]', timestamp: new Date().toISOString() },
-      { username: 'TrollUser', message: '[slur] [slur]', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'ban',
-    points_awarded: 50,
-    difficulty_level: 1
-  },
-  {
-    id: 'mock-2',
-    scenario_type: 'Scam Attempt',
-    description: 'User posting suspicious links claiming free coins',
-    chat_messages: [
-      { username: 'Scammer99', message: 'Get 1000 free coins here! bit.ly/scam', timestamp: new Date().toISOString() },
-      { username: 'Viewer1', message: 'Is this real?', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'ban',
-    points_awarded: 50,
-    difficulty_level: 2
-  },
-  {
-    id: 'mock-3',
-    scenario_type: 'Harassment',
-    description: 'User targeting another viewer with insults',
-    chat_messages: [
-      { username: 'Bully', message: '@Viewer1 you are so stupid, uninstall life', timestamp: new Date().toISOString() },
-      { username: 'Viewer1', message: 'Please stop', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'mute',
-    points_awarded: 30,
-    difficulty_level: 1
-  },
-  {
-    id: 'mock-4',
-    scenario_type: 'Spam',
-    description: 'User repeating same message rapidly',
-    chat_messages: [
-      { username: 'Spammer', message: 'FOLLOW ME', timestamp: new Date().toISOString() },
-      { username: 'Spammer', message: 'FOLLOW ME', timestamp: new Date().toISOString() },
-      { username: 'Spammer', message: 'FOLLOW ME', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'mute', // or warn
-    points_awarded: 20,
-    difficulty_level: 1
-  },
-  {
-    id: 'mock-5',
-    scenario_type: 'Subtle Harassment',
-    description: 'User making passive-aggressive comments about streamer appearance',
-    chat_messages: [
-      { username: 'Troll42', message: 'You look tired today', timestamp: new Date().toISOString() },
-      { username: 'Troll42', message: 'Maybe you should sleep instead of streaming', timestamp: new Date().toISOString() },
-      { username: 'Troll42', message: 'Just looking out for you lol', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'warn',
-    points_awarded: 35,
-    difficulty_level: 4
-  },
-  {
-    id: 'mock-6',
-    scenario_type: 'Doxxing Attempt',
-    description: 'User sharing what looks like personal address info',
-    chat_messages: [
-      { username: 'Stalker', message: 'Hey I know you live at 123 Maple Dr', timestamp: new Date().toISOString() },
-      { username: 'Stalker', message: 'See you soon', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'ban',
-    points_awarded: 100,
-    difficulty_level: 5
-  },
-  {
-    id: 'mock-7',
-    scenario_type: 'Political Argument',
-    description: 'Users arguing about politics but not breaking rules yet',
-    chat_messages: [
-      { username: 'LeftWing', message: 'Policy X is the best', timestamp: new Date().toISOString() },
-      { username: 'RightWing', message: 'No, Policy Y is better', timestamp: new Date().toISOString() },
-      { username: 'LeftWing', message: 'You clearly do not understand economics', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'ignore',
-    points_awarded: 25,
-    difficulty_level: 4
-  },
-  {
-    id: 'mock-8',
-    scenario_type: 'False Report Bait',
-    description: 'User pretending to be underage to bait a ban',
-    chat_messages: [
-      { username: 'NewUser', message: 'I am 12 years old', timestamp: new Date().toISOString() },
-      { username: 'NewUser', message: 'Is this game fun?', timestamp: new Date().toISOString() },
-      { username: 'NewUser', message: 'Jk I am 25', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'warn',
-    points_awarded: 45,
-    difficulty_level: 3
-  },
-  {
-    id: 'mock-9',
-    scenario_type: 'Solicitation',
-    description: 'User trying to sell services in chat',
-    chat_messages: [
-      { username: 'Artist', message: 'I do commissions! Check my bio', timestamp: new Date().toISOString() },
-      { username: 'Artist', message: 'Cheap prices for emotes', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'warn',
-    points_awarded: 20,
-    difficulty_level: 2
-  },
-  {
-    id: 'mock-10',
-    scenario_type: 'Ban Evasion',
-    description: 'User claiming to be a banned user',
-    chat_messages: [
-      { username: 'User_v2', message: 'They banned my main account lol', timestamp: new Date().toISOString() },
-      { username: 'User_v2', message: 'Can\'t stop me', timestamp: new Date().toISOString() }
-    ],
-    correct_action: 'ban',
-    points_awarded: 60,
-    difficulty_level: 4
-  }
-]
-
 export default function OfficerTrainingSimulator() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
@@ -173,39 +45,29 @@ export default function OfficerTrainingSimulator() {
     setStartTime(Date.now())
 
     try {
-      const { data: session } = await supabase.auth.getSession()
-      const token = session.session?.access_token
-
-      // Fallback for local development or unauthenticated testing
-      if (!token) {
-        console.warn('No auth token available, using mock scenario')
-        setScenario(MOCK_SCENARIOS[Math.floor(Math.random() * MOCK_SCENARIOS.length)])
-        return
-      }
-
-      const edgeFunctionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 
-        'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
-
-      const response = await fetch(`${edgeFunctionsUrl}/get-training-scenario`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      // Try to fetch existing scenarios from DB
+      const { data: scenarios, error } = await supabase
+        .from('training_scenarios')
+        .select('*')
       
-      if (!response.ok) {
-        // Fallback if backend is not deployed/configured yet (CORS error)
-        console.warn('Backend fetch failed (likely CORS/Deployment), using mock scenario')
-        setScenario(MOCK_SCENARIOS[Math.floor(Math.random() * MOCK_SCENARIOS.length)])
-        return
+      if (error) {
+        console.warn('Error fetching scenarios, using fallback:', error)
       }
 
-      const data = await response.json()
-      setScenario(data)
+      let activeList = scenarios || []
+      
+      if (activeList.length === 0) {
+        console.log('No scenarios in DB, using fallback data')
+        activeList = FALLBACK_SCENARIOS
+      }
+
+      // Pick random from existing
+      const activeScenario = activeList[Math.floor(Math.random() * activeList.length)] as TrainingScenario
+      setScenario(activeScenario)
     } catch (error: any) {
       console.error('Error loading scenario:', error)
-      // Fallback on error
-      setScenario(MOCK_SCENARIOS[Math.floor(Math.random() * MOCK_SCENARIOS.length)])
-      toast.error('Using mock scenario due to connection error')
+      toast.error(error.message || 'Failed to load training scenario')
+      setScenario(null)
     } finally {
       setLoading(false)
     }
@@ -217,73 +79,40 @@ export default function OfficerTrainingSimulator() {
     setSubmitting(true)
     const responseTime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0
 
+    // Calculate result locally
+    const isCorrect = selectedAction === scenario.correct_action
+    const pointsEarned = isCorrect ? scenario.points_awarded : 0
+    const resultData = {
+      isCorrect,
+      pointsEarned,
+      correctAction: scenario.correct_action
+    }
+
+    setResult(resultData)
+
     try {
-      const { data: session } = await supabase.auth.getSession()
-      const token = session.session?.access_token
-
-      if (!token) {
-        // Mock submission
-         const isCorrect = selectedAction === scenario.correct_action
-         setResult({
-            isCorrect,
-            pointsEarned: isCorrect ? scenario.points_awarded : 0,
-            correctAction: scenario.correct_action
-         })
-         if (isCorrect) toast.success(`Correct! +${scenario.points_awarded} points`)
-         else toast.error(`Incorrect. Correct action: ${scenario.correct_action}`)
-         setSubmitting(false)
-         return
-      }
-
-      const edgeFunctionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 
-        'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
-
-      const response = await fetch(`${edgeFunctionsUrl}/submit-training-response`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          scenarioId: scenario.id,
-          actionTaken: selectedAction,
-          responseTime
+      // Save to DB
+      const { error } = await supabase
+        .from('officer_training_sessions')
+        .insert({
+          officer_id: user.id,
+          scenario_id: scenario.id,
+          action_taken: selectedAction,
+          is_correct: isCorrect,
+          response_time_seconds: responseTime,
+          points_earned: pointsEarned
         })
-      })
 
-      if (!response.ok) {
-         // Mock submission fallback
-         console.warn('Backend submit failed, using mock check')
-         const isCorrect = selectedAction === scenario.correct_action
-         setResult({
-            isCorrect,
-            pointsEarned: isCorrect ? scenario.points_awarded : 0,
-            correctAction: scenario.correct_action
-         })
-         if (isCorrect) toast.success(`Correct! +${scenario.points_awarded} points`)
-         else toast.error(`Incorrect. Correct action: ${scenario.correct_action}`)
-         return
-      }
+      if (error) throw error
 
-      const data = await response.json()
-      setResult(data)
-
-      if (data.isCorrect) {
-        toast.success(`Correct! +${data.pointsEarned} points`)
+      if (isCorrect) {
+        toast.success(`Correct! +${pointsEarned} points`)
       } else {
-        toast.error(`Incorrect. Correct action: ${data.correctAction}`)
+        toast.error(`Incorrect. Correct action: ${scenario.correct_action}`)
       }
     } catch (error: any) {
       console.error('Error submitting response:', error)
-      // Mock submission fallback
-      const isCorrect = selectedAction === scenario.correct_action
-         setResult({
-            isCorrect,
-            pointsEarned: isCorrect ? scenario.points_awarded : 0,
-            correctAction: scenario.correct_action
-         })
-         if (isCorrect) toast.success(`Correct! +${scenario.points_awarded} points`)
-         else toast.error(`Incorrect. Correct action: ${scenario.correct_action}`)
+      toast.error('Failed to save progress')
     } finally {
       setSubmitting(false)
     }

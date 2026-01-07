@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   DollarSign,
   Users,
@@ -11,7 +12,17 @@ import {
   TrendingUp,
   LogOut,
   Menu,
-  X
+  X,
+  Briefcase,
+  Settings,
+  Shield,
+  Gift,
+  Search,
+  MessageSquare,
+  Database,
+  Calendar,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react'
 
 interface DashboardStats {
@@ -25,12 +36,28 @@ interface DashboardStats {
   newReports: number
 }
 
+interface SubItem {
+  id: string
+  label: string
+  icon?: any
+  type: 'tab' | 'link'
+  value: string
+}
+
+interface Category {
+  id: string
+  label: string
+  icon: any
+  items: SubItem[]
+}
+
 type TabId = 'applications' | 'payouts' | 'reports' | 'earnings'
 
 export default function MobileAdminDashboard() {
-  const { user, profile, logout } = useAuthStore()
+  const { user, profile, logout, isLoading } = useAuthStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabId>('applications')
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [stats, setStats] = useState<DashboardStats>({
     totalLiability: 0,
     pendingPayouts: 0,
@@ -43,6 +70,65 @@ export default function MobileAdminDashboard() {
   })
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Menu Structure
+  const menuCategories: Category[] = [
+    {
+      id: 'finance',
+      label: 'Finance & Economy',
+      icon: DollarSign,
+      items: [
+        { id: 'payouts', label: 'Payout Queue', icon: DollarSign, type: 'tab', value: 'payouts' },
+        { id: 'earnings', label: 'Earnings & Tax', icon: TrendingUp, type: 'tab', value: 'earnings' },
+        { id: 'finance_dash', label: 'Finance Dashboard', type: 'link', value: '/admin/finance' },
+        { id: 'grant_coins', label: 'Grant Coins', type: 'link', value: '/admin/grant-coins' },
+        { id: 'store_pricing', label: 'Store Pricing', type: 'link', value: '/admin/store-pricing' }
+      ]
+    },
+    {
+      id: 'moderation',
+      label: 'Moderation',
+      icon: Shield,
+      items: [
+        { id: 'reports', label: 'Reports Queue', icon: AlertTriangle, type: 'tab', value: 'reports' },
+        { id: 'ban_mgmt', label: 'Ban Management', type: 'link', value: '/admin/ban-management' },
+        { id: 'chat_mod', label: 'Chat Moderation', type: 'link', value: '/admin/chat-moderation' },
+        { id: 'stream_mon', label: 'Stream Monitor', type: 'link', value: '/admin/stream-monitor' }
+      ]
+    },
+    {
+      id: 'users',
+      label: 'Users & HR',
+      icon: Users,
+      items: [
+        { id: 'applications', label: 'Broadcaster Apps', icon: FileText, type: 'tab', value: 'applications' },
+        { id: 'user_search', label: 'User Search', type: 'link', value: '/admin/user-search' },
+        { id: 'hr_dash', label: 'HR Dashboard', type: 'link', value: '/admin/hr' },
+        { id: 'roles', label: 'Role Management', type: 'link', value: '/admin/role-management' }
+      ]
+    },
+    {
+      id: 'system',
+      label: 'System',
+      icon: Settings,
+      items: [
+        { id: 'announcements', label: 'Announcements', type: 'link', value: '/admin/announcements' },
+        { id: 'sys_config', label: 'System Config', type: 'link', value: '/admin/system/config' },
+        { id: 'maintenance', label: 'Maintenance', type: 'link', value: '/admin/reset-maintenance' },
+        { id: 'export', label: 'Export Data', type: 'link', value: '/admin/export-data' }
+      ]
+    }
+  ]
+
+  const handleSubItemClick = (item: SubItem) => {
+    if (item.type === 'tab') {
+      setActiveTab(item.value as TabId)
+      setSidebarOpen(false)
+      setSelectedCategory(null)
+    } else {
+      navigate(item.value)
+    }
+  }
 
   // Currency formatter
   const formatCurrency = (amount: number) => {
@@ -180,6 +266,9 @@ export default function MobileAdminDashboard() {
   }, [loadStats])
 
   useEffect(() => {
+    // Wait for auth to load
+    if (isLoading) return
+
     // Check admin access
     if (!user) {
       navigate('/auth')
@@ -196,7 +285,7 @@ export default function MobileAdminDashboard() {
 
     loadStats()
     setupRealtime()
-  }, [user, profile, navigate, loadStats, setupRealtime])
+  }, [user, profile, navigate, loadStats, setupRealtime, isLoading])
 
   const handleLogout = async () => {
     await logout()
@@ -226,59 +315,91 @@ export default function MobileAdminDashboard() {
         </button>
       </header>
 
-      {/* Sidebar (Mobile Drawer) */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div 
-            className="absolute inset-0 bg-black/80"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-[#0D0D0D] border-r border-purple-500/30 p-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-white">Menu</h2>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="p-2 hover:bg-purple-500/20 rounded-lg"
-              >
-                <X className="w-5 h-5 text-purple-400" />
-              </button>
-            </div>
-            <nav className="space-y-2">
-              {(['applications', 'payouts', 'reports', 'earnings'] as TabId[]).map((tab) => (
+      {/* Navigation Popup */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+            />
+            
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-purple-500/30 rounded-t-3xl p-6 z-[70] safe-area-bottom"
+            >
+              <div className="w-12 h-1 bg-gray-700 rounded-full mx-auto mb-6" />
+              
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  {selectedCategory && (
+                    <button
+                      onClick={() => setSelectedCategory(null)}
+                      className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                    >
+                      <ChevronLeft size={20} className="text-white" />
+                    </button>
+                  )}
+                  <h3 className="text-lg font-bold text-white">
+                    {selectedCategory ? selectedCategory.label : 'Dashboard Menu'}
+                  </h3>
+                </div>
                 <button
-                  key={tab}
-                  onClick={() => {
-                    setActiveTab(tab)
-                    setSidebarOpen(false)
-                  }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                    activeTab === tab
-                      ? 'bg-purple-600 text-white'
-                      : 'text-gray-300 hover:bg-purple-500/20'
-                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  {tab === 'applications' && stats.newApplications > 0 && (
-                    <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {stats.newApplications}
-                    </span>
-                  )}
-                  {tab === 'payouts' && stats.newPayouts > 0 && (
-                    <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {stats.newPayouts}
-                    </span>
-                  )}
-                  {tab === 'reports' && stats.newReports > 0 && (
-                    <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {stats.newReports}
-                    </span>
-                  )}
+                  <X size={20} className="text-gray-400" />
                 </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-      )}
+              </div>
+
+              {!selectedCategory ? (
+                // Main Categories
+                <div className="grid grid-cols-2 gap-3">
+                  {menuCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category)}
+                      className="flex flex-col items-center justify-center p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                    >
+                      <category.icon className="mb-2 w-8 h-8 text-purple-400" />
+                      <span className="text-sm font-medium text-white">{category.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                // Sub Items
+                <div className="space-y-2">
+                  {selectedCategory.items.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSubItemClick(item)}
+                      className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
+                        item.type === 'tab' && activeTab === item.value
+                          ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-900/20'
+                          : 'bg-white/5 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.icon && <item.icon className={`w-5 h-5 ${item.type === 'tab' && activeTab === item.value ? 'text-white' : 'text-purple-400'}`} />}
+                        <span className={`text-sm font-medium ${item.type === 'tab' && activeTab === item.value ? 'text-white' : 'text-gray-300'}`}>
+                          {item.label}
+                        </span>
+                      </div>
+                      <ChevronRight className={`w-4 h-4 ${item.type === 'tab' && activeTab === item.value ? 'text-white/50' : 'text-gray-500'}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Dashboard Cards */}
       <div className="p-4 space-y-3">

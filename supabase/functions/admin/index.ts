@@ -299,7 +299,7 @@ Deno.serve(async (req: Request) => {
         payoutsRes,
         feesRes
       ] = await Promise.all([
-        supabase.from('coin_transactions').select('metadata').eq('type', 'purchase'),
+        supabase.from('coin_transactions').select('metadata, platform_profit').eq('type', 'purchase'),
         supabase.from('earnings_payouts').select('amount'),
         supabase.from('payout_requests').select('processing_fee')
       ]);
@@ -307,9 +307,14 @@ Deno.serve(async (req: Request) => {
       let coinSalesRevenue = 0;
       const coinTx = coinSalesRes.data || [];
       for (const t of coinTx) {
-        const meta = t.metadata || {};
-        const amountPaid = Number(meta.amount_paid || 0);
-        if (!isNaN(amountPaid)) coinSalesRevenue += amountPaid;
+        const profit = Number(t.platform_profit || 0);
+        if (profit > 0) {
+          coinSalesRevenue += profit;
+        } else {
+          const meta = t.metadata || {};
+          const amountPaid = Number(meta.amount_paid || 0);
+          if (!isNaN(amountPaid)) coinSalesRevenue += amountPaid;
+        }
       }
 
       const payouts = payoutsRes.data || [];
@@ -321,10 +326,13 @@ Deno.serve(async (req: Request) => {
       const platformProfit = coinSalesRevenue - totalPayouts;
 
       return new Response(JSON.stringify({
-        coinSalesRevenue,
-        totalPayouts,
-        totalFees,
-        platformProfit
+        success: true,
+        data: {
+          coinSalesRevenue,
+          totalPayouts,
+          totalFees,
+          platformProfit
+        }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

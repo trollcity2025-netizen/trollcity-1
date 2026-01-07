@@ -85,7 +85,9 @@ export default function UserSearchDropdown({ query, onSelect, onClose }: UserSea
           onClick={() => {
             onSelect(user.id, user.username)
             onClose()
-            navigate(`/profile/${user.username}`)
+            if (!disableNavigation) {
+              navigate(`/profile/${user.username}`)
+            }
           }}
           className="p-3 hover:bg-purple-600/20 cursor-pointer flex items-center gap-3 border-b border-[#2C2C2C] last:border-b-0"
         >

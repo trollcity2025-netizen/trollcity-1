@@ -152,13 +152,13 @@ export default function Wallet() {
         <div className="rounded-xl bg-black/60 border border-purple-600 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Coins className="w-5 h-5 text-purple-400" />
-            <div className="text-sm opacity-70">troll_coins</div>
+            <div className="text-sm opacity-70">Available Coins</div>
           </div>
           <div className="text-2xl font-bold text-purple-300">
-            {profile?.troll_coins?.toLocaleString() ?? 0}
+            {Math.max(0, (profile?.troll_coins || 0) - (profile?.reserved_troll_coins || 0)).toLocaleString()}
           </div>
           <div className="text-xs text-gray-400 mt-1">
-            Withdrawable balance
+            {profile?.reserved_troll_coins ? `${profile.reserved_troll_coins.toLocaleString()} reserved` : 'Withdrawable balance'}
           </div>
         </div>
 

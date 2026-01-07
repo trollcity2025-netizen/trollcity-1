@@ -89,6 +89,8 @@ export interface RecordCoinTransactionParams {
   description?: string
   metadata?: CoinTransactionMetadata
   balanceAfter?: number | string | null // If not provided, will be calculated
+  platformProfit?: number // USD profit for platform (revenue)
+  liability?: number // Liability created (coins)
   supabaseClient?: SupabaseClient // Optional supabase client (for backend usage)
   allowServiceRole?: boolean
 }
@@ -112,6 +114,8 @@ export async function recordCoinTransaction(params: RecordCoinTransactionParams)
       description,
       metadata,
       balanceAfter,
+      platformProfit,
+      liability,
       supabaseClient,
       allowServiceRole = false
     } = params
@@ -160,6 +164,8 @@ export async function recordCoinTransaction(params: RecordCoinTransactionParams)
       description: description || null,
       balance_after: finalBalanceAfter,
       metadata: metadataPayload,
+      platform_profit: platformProfit || 0,
+      liability: liability || 0,
       created_at: new Date().toISOString()
     }
 
@@ -217,8 +223,10 @@ export async function deductCoins(params: {
   metadata?: CoinTransactionMetadata
   supabaseClient?: SupabaseClient
   balanceAfter?: number | string | null
+  platformProfit?: number
+  liability?: number
 }) {
-  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient, balanceAfter } = params
+  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient, balanceAfter, platformProfit, liability } = params
 
   const sb = supabaseClient || supabase
   if (!sb) {
@@ -276,6 +284,8 @@ export async function deductCoins(params: {
       description,
       metadata,
       balanceAfter: balanceAfterForRecord,
+      platformProfit,
+      liability,
       supabaseClient: sb
     })
 
@@ -308,8 +318,10 @@ export async function addCoins(params: {
   description?: string
   metadata?: CoinTransactionMetadata
   supabaseClient?: SupabaseClient // Optional supabase client (for backend usage)
+  platformProfit?: number
+  liability?: number
 }) {
-  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient } = params
+  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient, platformProfit, liability } = params
   const finalCoinType = coinType || 'troll_coins'
 
   const sb = supabaseClient || supabase
@@ -356,6 +368,8 @@ export async function addCoins(params: {
       description,
       metadata,
       balanceAfter: newBalance,
+      platformProfit,
+      liability,
       supabaseClient: sb
     })
 

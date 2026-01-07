@@ -18,6 +18,8 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [isProfileLive, setIsProfileLive] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   const [inventory, setInventory] = useState<{perks: any[], effects: any[], insurance: any[], callMinutes: any}>({perks: [], effects: [], insurance: [], callMinutes: null});
   const [earnings, setEarnings] = useState<any[]>([]);
   const [earningsLoading, setEarningsLoading] = useState(false);
@@ -224,6 +226,20 @@ export default function Profile() {
       } else {
         setProfile(data);
         fetchInventory(data.id);
+        
+        // Fetch follower/following counts
+        const { count: followers } = await supabase
+          .from('user_follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', data.id);
+        
+        const { count: following } = await supabase
+          .from('user_follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', data.id);
+          
+        setFollowersCount(followers || 0);
+        setFollowingCount(following || 0);
       }
       setLoading(false);
     };
@@ -294,10 +310,12 @@ export default function Profile() {
     if (isFollowing) {
       await supabase.from('user_follows').delete().match({ follower_id: currentUser.id, following_id: profile.id });
       setIsFollowing(false);
+      setFollowersCount(prev => Math.max(0, prev - 1));
       toast.success(`Unfollowed ${profile.username}`);
     } else {
       await supabase.from('user_follows').insert({ follower_id: currentUser.id, following_id: profile.id });
       setIsFollowing(true);
+      setFollowersCount(prev => prev + 1);
       toast.success(`Followed ${profile.username}`);
     }
   };
@@ -622,16 +640,16 @@ export default function Profile() {
         
         {/* Stats */}
         <div className="flex gap-6 mt-6 border-b border-gray-800 pb-4 text-sm">
-           <div className="flex gap-1">
-             <span className="font-bold text-white">0</span>
+           <div className="flex gap-1 cursor-pointer hover:text-purple-400 transition" onClick={() => navigate('/following')}>
+             <span className="font-bold text-white">{followingCount}</span>
              <span className="text-gray-400">Following</span>
            </div>
-           <div className="flex gap-1">
-             <span className="font-bold text-white">0</span>
+           <div className="flex gap-1 cursor-pointer hover:text-purple-400 transition" onClick={() => navigate('/following')}>
+             <span className="font-bold text-white">{followersCount}</span>
              <span className="text-gray-400">Followers</span>
            </div>
            <div className="flex gap-1">
-             <span className="font-bold text-white">0</span>
+             <span className="font-bold text-white">{posts.length}</span>
              <span className="text-gray-400">Posts</span>
            </div>
         </div>

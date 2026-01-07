@@ -5,6 +5,7 @@ import { supabase, UserRole } from '../lib/supabase'
 import { startCourtSession } from '../lib/courtSessions'
 import { Scale, Gavel, Users, Clock, AlertTriangle, CheckCircle, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
+import UserSearchDropdown from '../components/UserSearchDropdown'
 
 export default function TrollCourt() {
   const { user, profile } = useAuthStore()
@@ -21,6 +22,26 @@ export default function TrollCourt() {
   const [selectedUser, setSelectedUser] = useState<any>(null)
   const [isSearchingUsers, setIsSearchingUsers] = useState(false)
 
+  const [selectedCaseType, setSelectedCaseType] = useState<string>('')
+  
+  const CASE_TYPES = [
+    'Harassment / Threats',
+    'Hate Speech / Discrimination',
+    'Nudity / Sexual Content',
+    'Doxxing / Personal Info',
+    'Scamming / Fraud',
+    'Chargeback / Payment Abuse',
+    'Gift Manipulation / Fake gifting',
+    'Ban Evasion',
+    'Family War Dispute',
+    'Streamer Misconduct',
+    'Officer Misconduct',
+    'Appeal Case',
+    'Copyright / Content Claim',
+    'TrollCourt Civil Case',
+    'TrollCity Policy Violation'
+  ]
+
   const canStartCourt =
     profile?.role === UserRole.ADMIN ||
     profile?.role === UserRole.LEAD_TROLL_OFFICER ||
@@ -33,7 +54,7 @@ export default function TrollCourt() {
     const fetchCases = async () => {
       const { data } = await supabase
         .from('court_cases')
-        .select('*, defendant:defendant_id(username), accuser:accuser_id(username)')
+        .select('*, defendant:defendant_id(username), plaintiff:plaintiff_id(username)')
         .order('created_at', { ascending: false })
         .limit(5)
       
@@ -144,31 +165,60 @@ export default function TrollCourt() {
     setSelectedUser(null)
   }
 
-  const executeStartSession = async () => {
+  const handleSummonOrStart = async () => {
     if (!canStartCourt) return
 
     setIsStartingSession(true)
     try {
-      const courtId = crypto.randomUUID()
-      const { data, error: startError } = await startCourtSession({
-        sessionId: courtId,
-        maxBoxes: 2,
-        roomName: courtId,
-        userId: user.id,
-        defendantId: selectedUser?.id
-      })
+      let activeSessionId = courtSession?.id
 
-      if (startError) throw startError
+      // 1. If no active session, start one
+      if (!activeSessionId) {
+        const newSessionId = crypto.randomUUID()
+        const { data, error: startError } = await startCourtSession({
+          sessionId: newSessionId,
+          maxBoxes: 2,
+          roomName: newSessionId,
+          userId: user.id,
+          defendantId: selectedUser?.id
+        })
 
-      setCourtSession(data)
+        if (startError) throw startError
+        activeSessionId = newSessionId
+        setCourtSession(data)
+      }
+
+      // 2. If a case type and defendant are selected, create the official case
+      if (selectedCaseType && selectedUser && activeSessionId) {
+        try {
+          const { error: caseError } = await supabase.rpc('create_court_case', {
+            p_case_type: selectedCaseType,
+            p_plaintiff_id: user.id,
+            p_defendant_id: selectedUser.id,
+            p_court_session_id: activeSessionId
+          })
+          
+          if (caseError) {
+            console.error('Error creating case record:', caseError)
+            toast.error('Session active, but failed to create case record')
+          } else {
+            toast.success(courtSession ? 'User Summoned to Current Session' : 'Court Session Started & Case Docketed')
+          }
+        } catch (e) {
+          console.error('Exception creating case:', e)
+        }
+      }
+
       setIsCreateModalOpen(false)
-      navigate(`/court/${courtId}`)
+      if (!courtSession) {
+         navigate(`/court/${activeSessionId}`)
+      }
     } catch (startError) {
-      console.error('Error starting court session:', startError)
+      console.error('Error starting/summoning:', startError)
       const message =
         startError?.message ||
-        (typeof startError === 'string' ? startError : 'Failed to start court session')
-      toast.error(`Error starting court session: ${message}`)
+        (typeof startError === 'string' ? startError : 'Failed to action')
+      toast.error(`Error: ${message}`)
     } finally {
       setIsStartingSession(false)
     }
@@ -259,12 +309,21 @@ export default function TrollCourt() {
                   Enter Court Room
                 </button>
                 {canStartCourt && (
-                  <button
-                    onClick={handleEndCourtSession}
-                    className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
-                  >
-                    End Court Session
-                  </button>
+                  <>
+                    <button
+                      onClick={openCreateModal}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Gavel className="w-4 h-4" />
+                      Summon User
+                    </button>
+                    <button
+                      onClick={handleEndCourtSession}
+                      className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
+                    >
+                      End Court Session
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -443,6 +502,25 @@ export default function TrollCourt() {
             </div>
 
             <div className="space-y-4">
+              {/* Case Type Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Case Type (Required for Summoning)
+                </label>
+                <select
+                  value={selectedCaseType}
+                  onChange={(e) => setSelectedCaseType(e.target.value)}
+                  className="w-full bg-[#0E0A1A] border border-purple-500/30 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
+                >
+                  <option value="">-- Select Case Reason --</option>
+                  {CASE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Select Defendant (Optional)
@@ -452,51 +530,29 @@ export default function TrollCourt() {
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setShowDropdown(true)
+                      if (selectedUser) setSelectedUser(null)
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                     placeholder="Search username (min 3 chars)..."
                     className="w-full bg-[#0E0A1A] border border-purple-500/30 rounded-lg pl-10 pr-4 py-2.5 text-white focus:outline-none focus:border-purple-500"
                   />
+                  {showDropdown && (
+                    <UserSearchDropdown
+                      query={searchQuery}
+                      onSelect={(userId, username) => {
+                        setSelectedUser({ id: userId, username })
+                        setSearchQuery(username)
+                        setShowDropdown(false)
+                      }}
+                      onClose={() => setShowDropdown(false)}
+                      disableNavigation
+                    />
+                  )}
                 </div>
-              </div>
-
-              {/* User List */}
-              <div className="h-60 overflow-y-auto bg-[#0E0A1A] border border-purple-500/20 rounded-lg p-2 space-y-1">
-                {isSearchingUsers ? (
-                  <div className="flex items-center justify-center h-full text-gray-500">
-                    <div className="animate-spin w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full mr-2"></div>
-                    Searching...
-                  </div>
-                ) : userList.length > 0 ? (
-                  userList.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => setSelectedUser(u)}
-                      className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors ${
-                        selectedUser?.id === u.id 
-                          ? 'bg-purple-600 text-white' 
-                          : 'hover:bg-purple-900/30 text-gray-300'
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-full bg-purple-900/50 overflow-hidden flex-shrink-0">
-                        {u.avatar_url ? (
-                          <img src={u.avatar_url} alt={u.username} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs font-bold">
-                            {u.username?.substring(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                      <span className="truncate">{u.username}</span>
-                      {selectedUser?.id === u.id && <CheckCircle className="w-4 h-4 ml-auto" />}
-                    </button>
-                  ))
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-                    {searchQuery.length > 0 && searchQuery.length < 3 
-                      ? 'Type at least 3 characters' 
-                      : 'No users found'}
-                  </div>
-                )}
               </div>
 
               {selectedUser && (
@@ -514,11 +570,11 @@ export default function TrollCourt() {
                   Cancel
                 </button>
                 <button
-                  onClick={executeStartSession}
+                  onClick={handleSummonOrStart}
                   disabled={isStartingSession}
                   className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
                 >
-                  {isStartingSession ? 'Starting...' : 'Start Session'}
+                  {isStartingSession ? 'Processing...' : (courtSession ? 'Summon User' : 'Start Session')}
                 </button>
               </div>
             </div>

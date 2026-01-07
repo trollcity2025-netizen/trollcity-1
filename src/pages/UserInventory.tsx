@@ -144,6 +144,83 @@ export default function UserInventory() {
     loadInventory()
   }, [user, navigate, loadInventory])
 
+  const toggleEntranceEffect = async (effectId: string, isActive: boolean) => {
+    try {
+      // If we are deactivating, just set active effect to null
+      const newEffectId = isActive ? null : effectId;
+      
+      const { error } = await supabase.rpc('set_active_entrance_effect', { 
+        p_effect_id: newEffectId,
+        p_item_type: 'effect'
+      });
+
+      if (error) throw error;
+
+      // Update local state
+      setActiveItems(prev => {
+        const newSet = new Set(prev);
+        // Remove all entrance effects from active set (since DB deactivates all)
+        entranceEffects.forEach(e => newSet.delete(e.effect_id));
+        
+        // Also remove role effect if active
+        if (roleEffect) newSet.delete(`role_effect_${roleEffect.id || 'default'}`);
+
+        // Add new one if activating
+        if (newEffectId) {
+          newSet.add(newEffectId);
+        }
+        return newSet;
+      });
+
+      toast.success(isActive ? 'Effect deactivated' : 'Effect activated');
+      loadInventory(); // Reload to be sure
+    } catch (err) {
+      console.error('Error toggling effect:', err);
+      toast.error('Failed to toggle effect');
+    }
+  };
+
+  const toggleRoleEffect = async (isActive: boolean) => {
+      if (!roleEffect) return;
+      const roleEffectId = `role_effect_${roleEffect.id || 'default'}`;
+
+      try {
+          if (isActive) {
+              // Deactivate
+              const { error } = await supabase.rpc('set_active_entrance_effect', { p_effect_id: null });
+              if (error) throw error;
+
+              setActiveItems(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(roleEffectId);
+                  return newSet;
+              });
+              toast.success('Role effect deactivated');
+          } else {
+              // Activate
+              const { error } = await supabase.rpc('set_active_entrance_effect', { 
+                  p_effect_id: roleEffectId,
+                  p_item_type: 'role_effect'
+              });
+              if (error) throw error;
+
+              setActiveItems(prev => {
+                  const newSet = new Set(prev);
+                  // Remove purchased effects from local state
+                  entranceEffects.forEach(e => newSet.delete(e.effect_id));
+                  // Add role effect
+                  newSet.add(roleEffectId);
+                  return newSet;
+              });
+              toast.success('Role effect activated');
+          }
+          loadInventory();
+      } catch (err) {
+          console.error('Error toggling role effect:', err);
+          toast.error('Failed to toggle role effect');
+      }
+  };
+
   const toggleItemActivation = async (itemId: string, itemType: string) => {
     try {
       if (activeItems.has(itemId)) {
@@ -398,17 +475,39 @@ export default function UserInventory() {
                     <div className="p-3 bg-yellow-500/20 rounded-lg">
                       <Sparkles className="w-8 h-8 text-yellow-400" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="text-xl font-bold text-white">{roleEffect.name}</h3>
                         <span className="bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full uppercase">
                           Permanent
                         </span>
+                        {activeItems.has(`role_effect_${roleEffect.id || 'default'}`) && (
+                             <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">ACTIVE</span>
+                        )}
                       </div>
                       <p className="text-gray-300 mb-2">{roleEffect.description}</p>
-                      <p className="text-sm text-yellow-500/80 italic">
-                        * Automatically applied when you enter a stream (Overrides purchased effects)
-                      </p>
+                      <div className="flex items-center gap-4 mt-4">
+                        <button
+                          onClick={() => toggleRoleEffect(activeItems.has(`role_effect_${roleEffect.id || 'default'}`))}
+                          className={`px-6 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${
+                            activeItems.has(`role_effect_${roleEffect.id || 'default'}`)
+                              ? 'bg-red-600 hover:bg-red-700 text-white'
+                              : 'bg-green-600 hover:bg-green-700 text-white'
+                          }`}
+                        >
+                          {activeItems.has(`role_effect_${roleEffect.id || 'default'}`) ? (
+                            <>
+                              <XCircle className="w-4 h-4" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="w-4 h-4" />
+                              Activate
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -448,7 +547,7 @@ export default function UserInventory() {
                           </p>
                         </div>
                         <button
-                          onClick={() => toggleItemActivation(effect.effect_id, 'effect')}
+                          onClick={() => toggleEntranceEffect(effect.effect_id, isActive)}
                           className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                             isActive
                               ? 'bg-red-600 hover:bg-red-700 text-white'

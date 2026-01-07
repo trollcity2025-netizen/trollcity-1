@@ -70,7 +70,11 @@ const Cashouts = () => {
 
   const requestCashout = async (tier: CashoutTier) => {
     if (!profile) return
-    if (availableEarnedCoins < tier.coin_amount) {
+    // Calculate fee coins per provided schedule
+    const feeCoins = tier.cash_amount <= 70 ? 1896 : 3336
+    const totalCoinsNeeded = tier.coin_amount + feeCoins
+
+    if (availableEarnedCoins < totalCoinsNeeded) {
       toast.error('Not enough earned coins for this tier')
       return
     }
@@ -87,7 +91,7 @@ const Cashouts = () => {
         .insert([
           {
             user_id: profile.id,
-            coins_used: tier.coin_amount,
+            coins_used: totalCoinsNeeded,
             cash_amount: tier.cash_amount,
             currency: tier.currency,
             processing_fee: Number(fee.toFixed(2)),
@@ -99,12 +103,23 @@ const Cashouts = () => {
 
       if (insertError) throw insertError
 
+      // Reserve coins including fee coins so availability reflects deduction
+      const { error: reserveErr } = await supabase
+        .from('user_profiles')
+        .update({
+          reserved_troll_coins: (profile.reserved_troll_coins || 0) + totalCoinsNeeded
+        })
+        .eq('id', profile.id)
+      if (reserveErr) {
+        console.warn('Failed to update reserved_troll_coins:', reserveErr.message)
+      }
+
       // Notify admins
       await notifyAdmins(
         'New Payout Request',
-        `${profile.username || 'User'} requested a cashout of $${tier.cash_amount}`,
+        `${profile.username || 'User'} requested a cashout of $${tier.cash_amount} requiring ${totalCoinsNeeded.toLocaleString()} coins (base ${tier.coin_amount.toLocaleString()} + fee ${feeCoins.toLocaleString()})`,
         'payout_request',
-        { userId: profile.id, amount: tier.cash_amount, coins: tier.coin_amount }
+        { userId: profile.id, amount: tier.cash_amount, coins: totalCoinsNeeded, baseCoins: tier.coin_amount, feeCoins }
       )
 
       toast.success('Cashout request submitted')
@@ -153,11 +168,14 @@ const Cashouts = () => {
               <div className="text-sm text-troll-purple-300 mb-4">
                 Processing fee: {(Number(tier.processing_fee_percentage) || 0).toFixed(1)}%
               </div>
+              <div className="text-xs text-troll-purple-300">
+                Fee Coins: {(tier.cash_amount <= 70 ? 1896 : 3336).toLocaleString()} • Total Needed: {(tier.coin_amount + (tier.cash_amount <= 70 ? 1896 : 3336)).toLocaleString()}
+              </div>
               <button
                 onClick={() => requestCashout(tier)}
-                disabled={availableEarnedCoins < tier.coin_amount || requesting === tier.id}
+                disabled={availableEarnedCoins < (tier.coin_amount + (tier.cash_amount <= 70 ? 1896 : 3336)) || requesting === tier.id}
                 className={`w-full px-4 py-2 rounded-lg font-semibold ${
-                  availableEarnedCoins < tier.coin_amount || requesting === tier.id
+                  availableEarnedCoins < (tier.coin_amount + (tier.cash_amount <= 70 ? 1896 : 3336)) || requesting === tier.id
                     ? 'bg-gray-700 text-gray-300 cursor-not-allowed'
                     : 'bg-troll-green text-troll-purple-900 hover:bg-troll-green-dark'
                 }`}

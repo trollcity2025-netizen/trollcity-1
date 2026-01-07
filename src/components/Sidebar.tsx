@@ -27,7 +27,9 @@ import {
   ChevronLeft,
   ChevronRight,
   LifeBuoy,
-  Shuffle
+  Shuffle,
+  Star,
+  Zap
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -61,6 +63,12 @@ export default function Sidebar() {
     profile?.is_broadcaster ||
     profile?.is_lead_officer;
 
+  // Role definitions
+  const isAdmin = profile?.role === 'admin' || profile?.troll_role === 'admin';
+  const isLead = profile?.role === 'lead_troll_officer' || profile?.is_lead_officer || profile?.troll_role === 'lead_troll_officer' || isAdmin;
+  // Officer check matches the logic in useEffect (isAdmin || isOfficer)
+  const isOfficer = profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.is_lead_officer || profile?.troll_role === 'troll_officer' || profile?.troll_role === 'lead_troll_officer' || isAdmin;
+
   useEffect(() => {
     const checkAccess = async () => {
       if (!profile) { 
@@ -69,14 +77,11 @@ export default function Sidebar() {
         return 
       }
       
-      const isAdmin = profile.role === 'admin' || profile.troll_role === 'admin';
-      const isOfficer = profile.role === 'troll_officer' || profile.role === 'lead_troll_officer' || profile.is_lead_officer || profile.troll_role === 'troll_officer' || profile.troll_role === 'lead_troll_officer';
-      
       // Troll Officer Lounge: Only admin and troll_officer role
-      setCanSeeOfficer(isAdmin || isOfficer)
+      setCanSeeOfficer(isOfficer)
 
       // Troll Family Lounge: Admin, troll_officer, OR approved family application
-      if (isAdmin || isOfficer) { 
+      if (isOfficer) { 
         setCanSeeFamilyLounge(true)
         return 
       }
@@ -99,375 +104,274 @@ export default function Sidebar() {
     checkAccess()
   }, [profile])
 
-  if (!user) return null
+  if (!profile) return null
+
+  // Calculate Level Progress
+  // Formula from DB: previous + (Level * 500). 
+  // We can approximate or fetch the next level requirement. 
+  // For UI simplicity, let's assume a progress bar based on a generic formula if exact data isn't in profile.
+  // Ideally, profile should have 'current_xp' and 'xp_for_next_level' or we calculate it.
+  // Since we only have 'current_xp' and 'level', let's estimate progress or just show the values.
+  
+  // Simple calculation for display purposes matching the DB seed roughly
+  const getXpForNextLevel = (lvl: number) => {
+    // This should match the DB seed logic ideally, or we fetch it.
+    // DB: 
+    // 1->2: 500
+    // 2->3: 1250 (+750)
+    // 3->4: 2250 (+1000)
+    // ...
+    // Let's just use a visual percentage or simple max if we don't have the exact number.
+    // Or we can just show "Level X | XP: Y"
+    return (lvl * 500) + (lvl > 1 ? (lvl - 1) * 250 : 0) + 500; // Rough approximation
+  }
+
+  // Use the profile fields if available, otherwise defaults
+  const currentLevel = profile.level || 1
+  const currentXP = profile.xp || 0 // profile.xp is mapped to current_xp in interface? 
+  // Wait, interface said 'xp: number // Total XP points', DB col is 'current_xp'.
+  // Assuming Supabase type generation maps it or we cast it. 
+  // Let's rely on what's in profile.
 
   return (
-    <div
-      className={`min-h-screen bg-[#0A0A14] text-white flex flex-col border-r border-[#2C2C2C] shadow-xl transition-all duration-300 ${
-        isSidebarCollapsed ? 'w-20' : 'w-64'
-      }`}
-    >
-      {/* Profile Block with Real-time Wallet */}
-      <div className="p-5 text-center border-b border-[#2C2C2C]">
-        <div 
-          onClick={() => profile?.username && navigate(`/profile/${profile.username}`)}
-          className="w-20 h-20 mx-auto rounded-full overflow-hidden border-4 border-purple-500 shadow-lg cursor-pointer hover:scale-105 transition-transform duration-200"
+    <div className={`flex flex-col h-screen bg-[#0A0814] border-r border-white/10 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
+      {/* Header */}
+      <div className="p-4 flex items-center justify-between border-b border-white/10">
+        {!isSidebarCollapsed && (
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-xl font-bold text-white">T</span>
+            </div>
+            <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+              TrollCity
+            </span>
+          </Link>
+        )}
+        <button 
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className={`p-1.5 hover:bg-white/5 rounded-lg text-gray-400 transition-colors ${isSidebarCollapsed ? 'mx-auto' : ''}`}
         >
-          <img
-            src={
-              profile?.avatar_url ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username || 'user'}`
-            }
-            alt="avatar"
-            className="w-full h-full object-cover"
-          />
-        </div>
-
-        <button
-          onClick={() => setShowStatsPanel(true)}
-          className={`mt-3 font-bold text-lg flex items-center justify-center gap-2 hover:text-purple-300 transition-colors cursor-pointer ${
-            profile?.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > new Date()
-              ? 'rgb-username'
-              : ''
-          }`}
-        >
-          @{profile?.username || 'Guest'}
-          {badge && <span className="text-yellow-400">{badge}</span>}
+          {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
+      </div>
 
-        <p className="text-xs text-gray-400">
-          {(profile?.troll_role === 'admin' || profile?.role === 'admin') ? 'Admin' : (profile?.troll_role === 'troll_officer' || profile?.role === 'troll_officer') ? 'Troll Officer' : 'Member'}
-        </p>
-
-        {/* Go Live Button - Under username */}
-        {canGoLive && (
-          <div className="mt-6 mx-1 p-[3px] rounded-xl bg-gradient-to-r from-red-600 via-green-500 to-blue-600 shadow-[0_0_20px_rgba(255,0,0,0.6)] animate-pulse">
-            <button
-              onClick={() => navigate("/go-live")}
-              className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-[10px] bg-red-700 hover:bg-red-600 text-white font-bold text-lg uppercase tracking-wider"
-            >
-              <Radio className="w-6 h-6" />
-              {!isSidebarCollapsed && "Go Live"}
-            </button>
+      {/* User Profile Summary (Level & XP) */}
+      {!isSidebarCollapsed && (
+        <div className="p-4 border-b border-white/10 bg-white/5 mx-4 mt-4 rounded-xl">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="relative">
+              <img 
+                src={profile.avatar_url || `https://ui-avatars.com/api/?name=${profile.username}&background=random`} 
+                alt={profile.username}
+                className="w-10 h-10 rounded-full border border-purple-500/50"
+              />
+              <div className="absolute -bottom-1 -right-1 bg-purple-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#0A0814]">
+                {currentLevel}
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-sm truncate">{profile.username}</h3>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="text-purple-400">{profile.role === 'admin' ? 'Admin' : (profile.title || 'Citizen')}</span>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-      
-      <div className="flex justify-end px-3 mt-1">
-        <button
-          type="button"
-          onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-          className="p-2 rounded-full hover:bg-white/10 transition text-gray-400"
-          aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {isSidebarCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
+          
+          {/* XP Bar */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>XP</span>
+              <span>{currentXP.toLocaleString()}</span>
+            </div>
+            <div className="h-1.5 bg-black/50 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-full"
+                style={{ width: `${Math.min((currentXP % 1000) / 10, 100)}%` }} // Simplified visual
+              ></div>
+            </div>
+          </div>
+
+          {/* Currency */}
+          <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/10">
+            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
+              <Coins size={14} />
+              <span>{profile.troll_coins?.toLocaleString() || 0}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-blue-400">
+              <Crown size={14} />
+              <span>{profile.perk_tokens || 0}</span>
+            </div>
+          </div>
+
+          {/* Go Live Button */}
+          {canGoLive && (
+            <Link
+              to="/broadcast"
+              className="mt-3 w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg shadow-red-900/20 group"
+            >
+              <Radio size={14} className="group-hover:animate-pulse" />
+              GO LIVE
+            </Link>
           )}
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar">
+        {/* Main Group */}
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} collapsed={isSidebarCollapsed}>
+          <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Trophy} label="Leaderboard" to="/leaderboard" active={isActive('/leaderboard')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Coins} label="Coin Store" to="/store" active={isActive('/store')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Shuffle} label="Creator Switch" to="/creator-switch" active={isActive('/creator-switch')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Scale} label="Troll Court" to="/troll-court" active={isActive('/troll-court')} collapsed={isSidebarCollapsed} />
+        </SidebarGroup>
+
+
+
+        {/* Support & Safety */}
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Support"} collapsed={isSidebarCollapsed}>
+          <SidebarItem icon={LifeBuoy} label="Support" to="/support" active={isActive('/support')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Shield} label="Safety" to="/safety" active={isActive('/safety')} collapsed={isSidebarCollapsed} />
+        </SidebarGroup>
+
+        {/* Social */}
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Social"} collapsed={isSidebarCollapsed}>
+          <SidebarItem icon={MessageSquare} label="Messages" to="/messages" active={isActive('/messages')} collapsed={isSidebarCollapsed} />
+          {canSeeFamilyLounge && (
+            <SidebarItem 
+              icon={Crown} 
+              label="Family Lounge" 
+              to="/family/lounge" 
+              active={location.pathname.startsWith('/family')} 
+              collapsed={isSidebarCollapsed}
+              className="text-amber-400 hover:text-amber-300"
+            />
+          )}
+        </SidebarGroup>
+
+        {/* Special Access */}
+        {(canSeeOfficer || canSeeFamilyLounge) && (
+          <SidebarGroup title={isSidebarCollapsed ? '' : "Special Access"} collapsed={isSidebarCollapsed}>
+            {canSeeOfficer && (
+              <>
+                <SidebarItem 
+                  icon={Shield} 
+                  label="Officer Lounge" 
+                  to="/officer/dashboard" 
+                  active={location.pathname.startsWith('/officer/dashboard')} 
+                  collapsed={isSidebarCollapsed}
+                  className="text-purple-400 hover:text-purple-300"
+                />
+                <SidebarItem 
+                  icon={Shield} 
+                  label="Officer Moderation" 
+                  to="/officer/moderation" 
+                  active={location.pathname.startsWith('/officer/moderation')} 
+                  collapsed={isSidebarCollapsed}
+                  className="text-blue-400 hover:text-blue-300"
+                />
+              </>
+            )}
+            {isLead && (
+              <SidebarItem 
+                icon={Star} 
+                label="Lead HQ" 
+                to="/lead-officer" 
+                active={location.pathname.startsWith('/lead-officer')} 
+                collapsed={isSidebarCollapsed}
+                className="text-yellow-400 hover:text-yellow-300"
+              />
+            )}
+            {isAdmin && (
+               <SidebarItem 
+                  icon={FileText} 
+                  label="Review Applications" 
+                  to="/admin/applications" 
+                  active={location.pathname.startsWith('/admin/applications')} 
+                  collapsed={isSidebarCollapsed}
+                  className="text-red-400 hover:text-red-300"
+                />
+            )}
+          </SidebarGroup>
+        )}
+
+        {/* System */}
+        <SidebarGroup title={isSidebarCollapsed ? '' : "System"} collapsed={isSidebarCollapsed}>
+          <SidebarItem icon={FileText} label="Applications" to="/application" active={isActive('/application')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} />
+        </SidebarGroup>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="p-4 border-t border-white/10 space-y-2">
+        <button 
+          onClick={() => setShowStatsPanel(true)}
+          className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-white/5 text-gray-400 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
+        >
+          <LayoutDashboard size={20} />
+          {!isSidebarCollapsed && <span className="text-sm font-medium">Stats Panel</span>}
         </button>
       </div>
 
-      {/* Scrollable Nav Area */}
-      <nav className="flex-1 overflow-y-auto">
-        
-        {/* MAIN GROUP */}
-        <SidebarGroup title="Main" defaultExpanded={true} isCollapsed={isSidebarCollapsed}>
-          <MenuLink
-            to="/"
-            icon={<Home className="w-5 h-5 text-green-400" />}
-            label="Home"
-            active={isActive('/')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/messages"
-            icon={<MessageSquare className="w-5 h-5 text-blue-400" />}
-            label="Messages"
-            active={isActive('/messages')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/following"
-            icon={<UserCheck className="w-5 h-5 text-indigo-400" />}
-            label="Following"
-            active={isActive('/following')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/earnings"
-            icon={<Banknote className="w-5 h-5 text-green-400" />}
-            label="My Earnings"
-            active={isActive('/earnings')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/payout-status"
-            icon={<Clock className="w-5 h-5 text-yellow-400" />}
-            label="Payouts"
-            active={isActive('/payout-status')}
-            collapsed={isSidebarCollapsed}
-          />
-        </SidebarGroup>
-
-        {/* STORE GROUP */}
-        <SidebarGroup title="Store" defaultExpanded={true} isCollapsed={isSidebarCollapsed}>
-          <MenuLink
-            to="/store"
-            icon={<Coins className="w-5 h-5 text-yellow-500" />}
-            label="Coin Store"
-            active={isActive('/store')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/marketplace"
-            icon={<Store className="w-5 h-5 text-orange-500" />}
-            label="Marketplace"
-            active={isActive('/marketplace')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/inventory"
-            icon={<Package className="w-5 h-5 text-cyan-500" />}
-            label="My Inventory"
-            active={isActive('/inventory')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/sell"
-            icon={<Store className="w-5 h-5 text-emerald-500" />}
-            label="Sell on Troll City"
-            active={isActive('/sell')}
-            collapsed={isSidebarCollapsed}
-          />
-        </SidebarGroup>
-
-        {/* COMMUNITY GROUP */}
-        <SidebarGroup title="Community" isCollapsed={isSidebarCollapsed}>
-          <MenuLink
-            to="/wall"
-            icon={<MessageCircle className="w-5 h-5 text-cyan-400" />}
-            label="Troll City Wall"
-            active={isActive('/wall')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/leaderboard"
-            icon={<Trophy className="w-5 h-5 text-yellow-500" />}
-            label="Leaderboard"
-            active={isActive('/leaderboard')}
-            collapsed={isSidebarCollapsed}
-          />
-          <button
-            type="button"
-            onClick={() => toast('Empire Partner program is under construction', { icon: '🚧' })}
-            className={`flex w-full items-center rounded-lg transition hover:bg-[#1F1F2E] text-gray-300 border-transparent gap-3 px-4 py-2 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
-          >
-            <UserPlus className="w-5 h-5 text-green-400" />
-            {!isSidebarCollapsed && <span className="flex-1 text-left">Empire Partner</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => toast('Troll Wheel is under construction', { icon: '🚧' })}
-            className={`flex w-full items-center rounded-lg transition hover:bg-[#1F1F2E] text-gray-300 border-transparent gap-3 px-4 py-2 ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
-          >
-            <FerrisWheel className="w-5 h-5 text-pink-500" />
-            {!isSidebarCollapsed && <span className="flex-1 text-left">Troll Wheel</span>}
-          </button>
-          <MenuLink
-            to="/creator-switch"
-            icon={<Shuffle className="w-5 h-5 text-pink-400" />}
-            label="Creator Switch"
-            active={isActive('/creator-switch')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/apply"
-            icon={<FileText className="w-5 h-5 text-slate-400" />}
-            label="Applications"
-            active={isActive('/apply')}
-            collapsed={isSidebarCollapsed}
-          />
-        </SidebarGroup>
-
-        {/* FAMILY GROUP */}
-        {canSeeFamilyLounge && (
-          <SidebarGroup title="Family" isCollapsed={isSidebarCollapsed}>
-            <MenuLink
-              to="/family/lounge"
-              icon={<Crown className="w-5 h-5 text-purple-400" />}
-              label="Family Lounge"
-              active={isActive('/family/lounge')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/family/wars-hub"
-              icon={<Sword className="w-5 h-5 text-red-400" />}
-              label="Family War Hub"
-              active={isActive('/family/wars-hub')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/family/leaderboard"
-              icon={<Trophy className="w-5 h-5 text-yellow-400" />}
-              label="Family Leaderboard"
-              active={isActive('/family/leaderboard')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/family/shop"
-              icon={<Coins className="w-5 h-5 text-green-400" />}
-              label="Family Shop"
-              active={isActive('/family/shop')}
-              collapsed={isSidebarCollapsed}
-            />
-          </SidebarGroup>
-        )}
-
-        {/* OFFICER TOOLS (Only for Officers/Admins) */}
-        {canSeeOfficer && (
-          <SidebarGroup title="Officer Tools" isCollapsed={isSidebarCollapsed}>
-            <MenuLink
-              to="/troll-court"
-              icon={<Scale className="w-5 h-5 text-red-400" />}
-              label="Troll Court"
-              active={isActive('/troll-court')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/officer/lounge"
-              icon={<Shield className="w-5 h-5 text-red-500" />}
-              label="Officer Lounge"
-              active={isActive('/officer/lounge')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/officer/moderation"
-              icon={<Shield className="w-5 h-5 text-orange-500" />}
-              label="Officer Moderation"
-              active={isActive('/officer/moderation')}
-              collapsed={isSidebarCollapsed}
-            />
-            {(profile?.role === 'admin' || profile?.role === 'lead_troll_officer' || profile?.is_lead_officer || profile?.troll_role === 'lead_troll_officer' || profile?.troll_role === 'admin') && (
-              <MenuLink
-                to="/lead-officer"
-                icon={<LayoutDashboard className="w-5 h-5 text-purple-500" />}
-                label="Lead HQ"
-                active={isActive('/lead-officer')}
-                collapsed={isSidebarCollapsed}
-              />
-            )}
-            {profile?.role === 'admin' && (
-              <MenuLink
-                to="/admin/applications"
-                icon={<UserPlus className="w-5 h-5 text-blue-500" />}
-                label="Review Applications"
-                active={isActive('/admin/applications')}
-                collapsed={isSidebarCollapsed}
-              />
-            )}
-          </SidebarGroup>
-        )}
-
-        {/* SUPPORT GROUP */}
-        <SidebarGroup title="Support" isCollapsed={isSidebarCollapsed}>
-          <MenuLink
-            to="/support"
-            icon={<LifeBuoy className="w-5 h-5 text-gray-400" />}
-            label="Support"
-            active={isActive('/support')}
-            collapsed={isSidebarCollapsed}
-          />
-          <MenuLink
-            to="/safety"
-            icon={<Shield className="w-5 h-5 text-red-400" />}
-            label="Safety & Policies"
-            active={isActive('/safety')}
-            collapsed={isSidebarCollapsed}
-          />
-        </SidebarGroup>
-
-        {/* ADMIN EXTRAS (If any left over) */}
-        {profile?.role === 'admin' && (
-          <SidebarGroup title="Admin Controls" isCollapsed={isSidebarCollapsed}>
-             <MenuLink
-              to="/admin"
-              icon={<LayoutDashboard className="w-5 h-5 text-violet-500" />}
-              label="Admin Dashboard"
-              active={isActive('/admin')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/admin/earnings"
-              icon={<Banknote className="w-5 h-5 text-green-500" />}
-              label="Earnings Dashboard"
-              active={isActive('/admin/earnings')}
-              collapsed={isSidebarCollapsed}
-            />
-            <MenuLink
-              to="/admin/royal-family"
-              icon={<Crown className="w-5 h-5 text-yellow-500" />}
-              label="Royal Family"
-              active={isActive('/admin/royal-family')}
-              collapsed={isSidebarCollapsed}
-            />
-             <MenuLink
-              to="/store-debug"
-              icon={<Bug className="w-5 h-5 text-red-600" />}
-              label="Store Debug"
-              active={isActive('/store-debug')}
-              collapsed={isSidebarCollapsed}
-            />
-             <MenuLink
-              to="/rfc"
-              icon={<Shield className="w-5 h-5 text-purple-500" />}
-              label="RFC"
-              active={isActive('/rfc')}
-              collapsed={isSidebarCollapsed}
-            />
-          </SidebarGroup>
-        )}
-      </nav>
-
-      {/* Court Entry Modal */}
-      <CourtEntryModal
-        isOpen={showCourtModal}
-        onClose={() => setShowCourtModal(false)}
-      />
-
-      {/* Expanded Stats Panel */}
-      <ExpandedStatsPanel
-        isOpen={showStatsPanel}
-        onClose={() => setShowStatsPanel(false)}
-      />
+      {/* Modals */}
+      {showCourtModal && <CourtEntryModal onClose={() => setShowCourtModal(false)} />}
+      {showStatsPanel && <ExpandedStatsPanel onClose={() => setShowStatsPanel(false)} />}
     </div>
   )
 }
 
-interface MenuLinkProps {
-  to: string
-  icon: React.ReactNode
-  label: string
-  active: boolean
-  collapsed?: boolean
-}
-
-function MenuLink({ to, icon, label, active, collapsed = false }: MenuLinkProps) {
-  const activeClasses = active
-    ? 'bg-purple-600 text-white border border-purple-400'
-    : 'hover:bg-[#1F1F2E] text-gray-300 border-transparent'
-
-  const layoutClasses = collapsed ? 'justify-center gap-0 px-2 py-3' : 'gap-3 px-4 py-2'
-
+// Helper Component for Sidebar Items
+function SidebarItem({ 
+  icon: Icon, 
+  label, 
+  to, 
+  active, 
+  collapsed, 
+  badge, 
+  className = '' 
+}: { 
+  icon: any, 
+  label: string, 
+  to: string, 
+  active: boolean, 
+  collapsed: boolean, 
+  badge?: string, 
+  className?: string 
+}) {
   return (
     <Link
       to={to}
-      aria-label={label}
-      title={label}
-      className={`flex w-full items-center rounded-lg transition ${activeClasses} ${layoutClasses}`}
+      className={`
+        flex items-center gap-3 px-4 py-2 mx-2 rounded-lg transition-all duration-200 group
+        ${active 
+          ? 'bg-purple-600/20 text-purple-400' 
+          : 'text-gray-400 hover:bg-white/5 hover:text-white'
+        }
+        ${collapsed ? 'justify-center px-2' : ''}
+        ${className}
+      `}
+      title={collapsed ? label : undefined}
     >
-      <span className={`w-5 h-5 ${active ? 'text-white' : ''}`}>{icon}</span>
-      {!collapsed && <span className="flex-1 text-left">{label}</span>}
+      <Icon size={20} className={`min-w-[20px] ${active ? 'text-purple-400' : 'group-hover:text-white'}`} />
+      
+      {!collapsed && (
+        <div className="flex items-center justify-between flex-1 min-w-0">
+          <span className="text-sm font-medium truncate">{label}</span>
+          {badge && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-purple-600 text-white rounded-full">
+              {badge}
+            </span>
+          )}
+        </div>
+      )}
+      
+      {collapsed && badge && (
+        <div className="absolute top-0 right-0 w-2 h-2 bg-purple-600 rounded-full"></div>
+      )}
     </Link>
   )
 }

@@ -138,7 +138,7 @@ interface LiveStream {
 }
 
 export default function AdminDashboard() {
-  const { profile, user, setProfile } = useAuthStore()
+  const { profile, user, setProfile, isLoading } = useAuthStore()
   const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'trollcity2025@gmail.com'
   const navigate = useNavigate()
   const [adminCheckLoading, setAdminCheckLoading] = useState(true)
@@ -250,7 +250,7 @@ export default function AdminDashboard() {
     }
 
     checkAdminAccess()
-  }, [user, ADMIN_EMAIL])
+  }, [user, isLoading])
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -275,10 +275,8 @@ export default function AdminDashboard() {
         supabase.from('payout_requests').select('id').eq('status', 'pending'),
         supabase.from('user_profiles').select('id').eq('role', 'troll_officer'),
         supabase.from('stream_reports').select('id').eq('status', 'pending'),
-        supabase
-          .from('user_profiles')
-        .select('troll_coins, sav_bonus_coins'),
-        supabase.from('coin_transactions').select('metadata').eq('type', 'purchase'),
+        supabase.from('user_profiles').select('troll_coins, sav_bonus_coins'),
+        supabase.from('coin_transactions').select('metadata, platform_profit').eq('type', 'purchase'),
         supabase.from('coin_transactions').select('amount, type').eq('type', 'gift'),
         supabase.from('payout_requests').select('cash_amount, processing_fee'),
         supabase.from('user_tax_info').select('id').eq('status', 'pending'),
@@ -312,9 +310,14 @@ export default function AdminDashboard() {
       const coinTx = coinTxRes.data || []
       let coinSalesRevenue = 0
       for (const t of coinTx as any[]) {
-        const meta = t.metadata || {}
-        const amountPaid = Number(meta.amount_paid || 0)
-        if (!isNaN(amountPaid)) coinSalesRevenue += amountPaid
+        const profit = Number(t.platform_profit || 0)
+        if (profit > 0) {
+          coinSalesRevenue += profit
+        } else {
+          const meta = t.metadata || {}
+          const amountPaid = Number(meta.amount_paid || 0)
+          if (!isNaN(amountPaid)) coinSalesRevenue += amountPaid
+        }
       }
 
       const giftTx = giftTxRes.data || []

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Crown, PartyPopper, X, Shield } from 'lucide-react';
@@ -551,6 +551,14 @@ NewUserCard.displayName = 'NewUserCard';
 // 🔑 Step 5: Background refresh pattern with dual-state buffering
 const HomePageContent = () => {
   const { profile } = useAuthStore();
+  
+  // Role logic for Go Live access
+  const canGoLive =
+    profile?.role === "admin" ||
+    profile?.role === "lead_troll_officer" ||
+    profile?.role === "troll_officer" ||
+    profile?.is_broadcaster ||
+    profile?.is_lead_officer;
   const isOfficer =
     profile?.role === 'troll_officer' ||
     profile?.role === 'lead_troll_officer' ||
@@ -1147,6 +1155,19 @@ const HomePageContent = () => {
                 <span className="text-xs font-semibold text-cyan-400 tracking-wide">Auto-updating</span>
               </div>
             </div>
+
+            {/* Mobile Go Live Button */}
+            <div className="md:hidden">
+              {canGoLive && (
+                <Link
+                  to="/go-live"
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-600/30 flex items-center gap-2"
+                >
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  GO LIVE
+                </Link>
+              )}
+            </div>
           </div>
 
           {showCategoryRow && (
@@ -1288,7 +1309,20 @@ const HomePageContent = () => {
           </div>
         </section>
 
-                {/* New Trollerz - dY"` Step 4: Use visibility pattern */}
+        {/* Mobile Go Live Button (Under Live Now) */}
+        <div className="md:hidden mb-8 px-4">
+          {canGoLive && (
+            <Link
+              to="/go-live"
+              className="w-full py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold rounded-xl shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+              GO LIVE NOW
+            </Link>
+          )}
+        </div>
+
+        {/* New Trollerz - dY"` Step 4: Use visibility pattern */}
         <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
           <div className="relative bg-gradient-to-br from-[#1a0f2e]/40 to-[#0d0820]/20 backdrop-blur-xl rounded-3xl p-8 border border-purple-500/20 shadow-lg">
             {isHolidaySeason && <ChristmasOutline rowCount={6} colCount={3} />}

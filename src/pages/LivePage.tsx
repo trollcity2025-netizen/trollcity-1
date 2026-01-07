@@ -758,6 +758,41 @@ export default function LivePage() {
     loadStreamData();
   }, [loadStreamData]);
 
+  // XP Tracking for Watchers (Anti-Farm: 5 XP every 10 mins)
+  const watchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const minutesWatchedRef = useRef(0);
+
+  useEffect(() => {
+    // Only track if user is logged in, stream is live, and NOT the broadcaster
+    if (!user?.id || !stream?.is_live || isBroadcaster) return;
+
+    // Clear existing timer
+    if (watchTimerRef.current) clearInterval(watchTimerRef.current);
+
+    watchTimerRef.current = setInterval(async () => {
+      minutesWatchedRef.current += 1;
+      
+      // Award 5 XP every 10 minutes
+      if (minutesWatchedRef.current % 10 === 0) {
+        try {
+           // Call add_xp with 'watch' source
+           await supabase.rpc('add_xp', { 
+             p_user_id: user.id, 
+             p_amount: 5, 
+             p_source: 'watch' 
+           });
+           console.log('[XP] Awarded 5 watch XP');
+        } catch (e) {
+           console.error('[XP] Failed to award watch XP', e);
+        }
+      }
+    }, 60000); // Check every minute
+
+    return () => {
+      if (watchTimerRef.current) clearInterval(watchTimerRef.current);
+    };
+  }, [user?.id, stream?.is_live, isBroadcaster]);
+
   // Access Control for Officer Streams
   useEffect(() => {
     if (!stream) return;

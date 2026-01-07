@@ -65,6 +65,35 @@ const CashoutPage: React.FC = () => {
     void loadLock()
   }, [])
 
+  const handleCancel = async () => {
+    if (!existingRequest || !user) return;
+    
+    if (!confirm('Are you sure you want to cancel this cashout request? The reserved coins will be returned to your balance immediately.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.rpc('cancel_cashout_request', {
+        p_request_id: existingRequest.id,
+        p_user_id: user.id
+      });
+
+      if (error) throw error;
+
+      toast.success('Cashout request cancelled');
+      setExistingRequest(null);
+      // Refresh profile to update balance is handled by realtime subscription or reload
+      // For now, we force a reload to ensure balance is fresh
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || 'Failed to cancel request');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNextStep = () => {
     setStep(prev => prev + 1);
   };
@@ -175,6 +204,17 @@ const CashoutPage: React.FC = () => {
           <p className="text-gray-400 text-sm mb-6">
             Your request is being processed. You will receive a notification when your Gift Card is ready in your Wallet.
           </p>
+
+          {existingRequest.status === 'pending' && (
+            <button
+              onClick={handleCancel}
+              disabled={loading}
+              className="mb-6 w-full py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900 rounded-lg text-sm font-medium transition-all"
+            >
+              {loading ? 'Cancelling...' : 'Cancel Request & Refund Coins'}
+            </button>
+          )}
+
           <Link to="/wallet/gift-cards" className="text-purple-400 hover:text-purple-300 underline text-sm">
             View My Gift Cards
           </Link>
@@ -208,6 +248,12 @@ const CashoutPage: React.FC = () => {
               <div className="text-4xl font-bold text-green-400 mb-4">
                 {balance.toLocaleString()} <span className="text-lg text-gray-500">coins</span>
               </div>
+              
+              {reserved > 0 && (
+                <div className="text-sm text-yellow-500 mb-4 bg-yellow-900/20 py-1 px-3 rounded-full inline-block border border-yellow-900/50">
+                  {reserved.toLocaleString()} coins reserved in pending payouts
+                </div>
+              )}
             </div>
 
             <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
@@ -425,7 +471,13 @@ const CashoutPage: React.FC = () => {
               <div className="p-4 border-b border-gray-800 bg-purple-900/10">
                 <div className="text-sm text-gray-400">Cashout Amount</div>
                 <div className="text-2xl font-bold text-green-400">${selectedTier.usd.toFixed(2)}</div>
-                <div className="text-xs text-gray-500">{selectedTier.coins.toLocaleString()} coins will be deducted</div>
+                <div className="text-xs text-gray-500">
+                  {(() => {
+                    const feeCoins = selectedTier.usd <= 70 ? 1896 : 3336
+                    const totalCoins = selectedTier.coins + feeCoins
+                    return `${totalCoins.toLocaleString()} coins will be deducted (base ${selectedTier.coins.toLocaleString()} + fee ${feeCoins.toLocaleString()})`
+                  })()}
+                </div>
               </div>
               <div className="p-4">
                 <div className="flex justify-between text-sm mb-2">
@@ -434,7 +486,7 @@ const CashoutPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Fees</span>
-                  <span className="text-green-400">$0.00</span>
+                  <span className="text-green-400">{selectedTier.usd <= 70 ? 'Fee Coins: 1,896' : 'Fee Coins: 3,336'}</span>
                 </div>
               </div>
             </div>

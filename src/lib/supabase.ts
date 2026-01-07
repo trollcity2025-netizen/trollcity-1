@@ -35,6 +35,10 @@ export interface UserProfile {
   tier: UserTier
   xp: number // Total XP points
   level: number // Calculated from XP
+  prestige_level?: number
+  perk_tokens?: number
+  xp_multiplier?: number
+  coin_multiplier?: number
   troll_coins: number
   reserved_troll_coins?: number
   trollmonds?: number

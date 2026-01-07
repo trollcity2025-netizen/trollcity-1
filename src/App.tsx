@@ -39,6 +39,7 @@ const Messages = lazy(() => import("./pages/Messages"));
 // Lazy-loaded pages
 const Following = lazy(() => import("./pages/Following"));
 const CoinStore = lazy(() => import("./pages/CoinStore"));
+const PerksStore = lazy(() => import("./pages/perks/PerksStore"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
 const UserInventory = lazy(() => import("./pages/UserInventory"));
 const SellOnTrollCity = lazy(() => import("./pages/SellOnTrollCity"));
@@ -378,6 +379,21 @@ function AppContent() {
       trackIP()
     }
   }, [user, navigate])
+
+  // 🔹 Check Daily Login for XP
+  useEffect(() => {
+    if (user?.id) {
+      const checkLogin = async () => {
+        try {
+          // This function checks the date, updates streak, and awards XP if valid
+          await supabase.rpc('check_daily_login', { p_user_id: user.id });
+        } catch (e) {
+          console.error('Error checking daily login:', e);
+        }
+      };
+      checkLogin();
+    }
+  }, [user?.id]);
 
   // 🔹 Real-time Profile Updates (Debounced to prevent double renders)
   useDebouncedProfileUpdate(user?.id)

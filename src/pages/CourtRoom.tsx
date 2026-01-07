@@ -9,7 +9,9 @@ import { toast } from "sonner";
 import RequireRole from "../components/RequireRole";
 import CourtAIAssistant from "../components/CourtAIAssistant";
 import MAIAuthorityPanel from "../components/mai/MAIAuthorityPanel";
-import { Scale, Gavel, FileText, Users, CheckCircle, Upload } from "lucide-react";
+import CourtChat from "../components/CourtChat";
+import UserSearchDropdown from "../components/UserSearchDropdown";
+import { Scale, Gavel, FileText, Users, CheckCircle, Upload, Bell } from "lucide-react";
 import { Track } from "livekit-client";
 
 const CourtParticipantLabel = ({ trackRef }: { trackRef: any }) => {
@@ -181,7 +183,13 @@ export default function CourtRoom() {
     title: '',
     defendant: '',
     accuser: '',
-    description: ''
+    description: '',
+    severity: 'Low'
+  });
+  const [judgeControls, setJudgeControls] = useState({
+    autoLockChat: false,
+    requireLeadApproval: false,
+    forceCaseRecord: false
   });
   const [showVerdictModal, setShowVerdictModal] = useState(false);
   const [verdictData, setVerdictData] = useState({
@@ -218,7 +226,34 @@ export default function CourtRoom() {
     newRole: '',
     reason: ''
   });
+  const [showSummonModal, setShowSummonModal] = useState(false);
+  const [summonQuery, setSummonQuery] = useState('');
 
+  const summonUser = async (userId: string, username: string) => {
+    try {
+      // 1. Send notification via RPC
+      const { error } = await supabase.rpc('create_notification', {
+        p_user_id: userId,
+        p_type: 'moderation_action', // closest fit
+        p_title: '📜 Court Summons',
+        p_message: `You have been summoned to the Troll Court by Judge ${profile?.username || 'Unknown'}. Please report immediately!`,
+        p_metadata: {
+            action: 'court_summon',
+            court_id: courtId,
+            summoned_by: user.id
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Summon sent to @${username}`);
+      setShowSummonModal(false);
+      setSummonQuery('');
+    } catch (err) {
+      console.error('Error summoning user:', err);
+      toast.error('Failed to summon user');
+    }
+  };
 
 
   const initCourtroom = useCallback(async () => {
@@ -554,6 +589,12 @@ export default function CourtRoom() {
       toast.error('Only the judge can end the session');
       return;
     }
+
+    // Force Case Record Check
+    if (judgeControls.forceCaseRecord && activeCase && activeCase.status !== 'closed' && activeCase.status !== 'resolved') {
+        toast.error('Case record must be completed (Verdict Issued) before closing session.');
+        return;
+    }
     
     if (!courtId) {
       toast.error('Invalid court session ID');
@@ -618,8 +659,9 @@ export default function CourtRoom() {
       const newCase = {
         title: caseData.title,
         defendant_id: defendantData.id,
-        accuser_id: accuserData.id,
+        plaintiff_id: accuserData.id,
         description: caseData.description,
+        severity: caseData.severity,
         status: 'in_session',
         started_at: new Date().toISOString(),
         evidence: [],
@@ -634,6 +676,19 @@ export default function CourtRoom() {
       const { error } = await supabase
         .from('court_cases')
         .insert(newCase);
+
+      // Apply judge controls based on severity
+      const severity = caseData.severity;
+      const newControls = {
+        autoLockChat: severity === 'High' || severity === 'Critical',
+        requireLeadApproval: severity === 'Critical',
+        forceCaseRecord: severity !== 'Low'
+      };
+      setJudgeControls(newControls);
+
+      if (newControls.autoLockChat) {
+         toast.info('Chat auto-locked for this case due to severity');
+      }
 
       if (error) throw error;
 
@@ -689,6 +744,15 @@ export default function CourtRoom() {
 
   const issueVerdict = async (verdictData) => {
     if (!isJudge || !activeCase) return;
+
+    // Lead Officer Approval Check for Critical Cases
+    if (judgeControls.requireLeadApproval) {
+        const isLeadOrAdmin = profile?.role === 'admin' || profile?.is_admin || profile?.role === 'lead_troll_officer' || profile?.is_lead_officer;
+        if (!isLeadOrAdmin) {
+             toast.error('Critical Severity: Lead Officer approval required for this verdict.');
+             return;
+        }
+    }
 
     try {
       const finalVerdict = {
@@ -1141,6 +1205,17 @@ export default function CourtRoom() {
               {activeCase && (
                 <div className="space-y-2 text-sm">
                   <div><strong>Case:</strong> {activeCase.title}</div>
+                  <div>
+                    <strong>Severity:</strong> 
+                    <span className={`ml-1 font-bold ${
+                      activeCase.severity === 'Critical' ? 'text-red-500' :
+                      activeCase.severity === 'High' ? 'text-orange-500' :
+                      activeCase.severity === 'Medium' ? 'text-yellow-500' :
+                      'text-green-500'
+                    }`}>
+                      {activeCase.severity || 'Low'}
+                    </span>
+                  </div>
                   <div><strong>Defendant:</strong> {activeCase.defendant || defendant || 'Not assigned'}</div>
                   <div><strong>Description:</strong> {activeCase.description}</div>
                 </div>
@@ -1341,6 +1416,13 @@ export default function CourtRoom() {
                     >
                       Manage Role
                     </button>
+                    <button
+                      onClick={() => setShowSummonModal(true)}
+                      className="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded flex items-center gap-1"
+                    >
+                      <Bell className="w-3 h-3" />
+                      Summon
+                    </button>
                   </div>
                 )}
               </div>
@@ -1362,6 +1444,12 @@ export default function CourtRoom() {
                 </div>
               </div>
             </div>
+
+            {/* Court Chat */}
+            <CourtChat 
+                courtId={courtId || 'default'} 
+                isLocked={judgeControls.autoLockChat && activeCase?.status !== 'resolved' && activeCase?.status !== 'closed'} 
+            />
 
             <MAIAuthorityPanel
               mode="court"
@@ -1450,7 +1538,7 @@ export default function CourtRoom() {
                 <button
                   onClick={() => {
                     setShowNewCaseModal(false);
-                    setNewCaseData({ title: '', defendant: '', accuser: '', description: '' });
+                    setNewCaseData({ title: '', defendant: '', accuser: '', description: '', severity: 'Low' });
                   }}
                   className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 rounded font-semibold transition-colors"
                 >
@@ -1892,6 +1980,55 @@ export default function CourtRoom() {
                   className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 rounded font-semibold transition-colors"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Summon Modal */}
+        {showSummonModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-zinc-900 rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-orange-400" />
+                Summon User to Court
+              </h3>
+
+              <div className="space-y-4 relative min-h-[200px]">
+                  <p className="text-sm text-gray-400">
+                    Search for a user to send an immediate court summons notification.
+                  </p>
+                  
+                  <div className="relative">
+                    <input
+                        type="text"
+                        value={summonQuery}
+                        onChange={(e) => setSummonQuery(e.target.value)}
+                        placeholder="Type username..."
+                        className="w-full bg-zinc-800 border border-zinc-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        autoFocus
+                    />
+                    
+                    {summonQuery.length > 0 && (
+                        <UserSearchDropdown 
+                            query={summonQuery}
+                            onSelect={(userId, username) => summonUser(userId, username)}
+                            onClose={() => {}} 
+                        />
+                    )}
+                  </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowSummonModal(false);
+                    setSummonQuery('');
+                  }}
+                  className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 rounded font-semibold transition-colors"
+                >
+                  Close
                 </button>
               </div>
             </div>

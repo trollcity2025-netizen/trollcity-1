@@ -359,14 +359,11 @@ export async function setActiveEntranceEffect(userId: string, effectKey: Entranc
       }
     }
 
-    // Update active effect
-    const { error } = await supabase
-      .from('user_profiles')
-      .update({
-        active_entrance_effect: effectKey,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    // Update active effect using RPC to ensure consistency across all tables
+    const { error } = await supabase.rpc('set_active_entrance_effect', {
+      p_effect_id: effectKey,
+      p_item_type: 'effect'
+    });
 
     if (error) {
       console.error('Error setting active effect:', error);

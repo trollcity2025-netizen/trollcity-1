@@ -193,23 +193,27 @@ export default function Messages() {
   }
 
   return (
-    <div className="absolute inset-0 flex bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] overflow-hidden">
+    <div className="h-[100dvh] relative flex bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] overflow-hidden">
       {/* Column 1: Sidebar with Conversations */}
-      <InboxSidebar
-        activeConversation={activeConversation}
-        onSelectConversation={handleSelectConversation}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onlineUsers={onlineUsers}
-      />
+      <div className={`flex-col border-r border-white/5 bg-[#0b0b12] w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
+        <InboxSidebar
+          activeConversation={activeConversation}
+          onSelectConversation={handleSelectConversation}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onlineUsers={onlineUsers}
+        />
+      </div>
 
       {/* Column 2: Chat Window */}
-      <ChatWindow
-        otherUserId={activeConversation}
-        otherUserUsername={otherUserInfo?.username}
-        otherUserAvatar={otherUserInfo?.avatar_url}
-        isOnline={otherUserInfo?.is_online}
-      />
+      <div className={`flex-1 flex-col min-w-0 bg-[#0d0d1a] ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
+        <ChatWindow
+          otherUserId={activeConversation}
+          otherUserUsername={otherUserInfo?.username}
+          otherUserAvatar={otherUserInfo?.avatar_url}
+          isOnline={otherUserInfo?.is_online}
+        />
+      </div>
 
       <NewMessageModal
         isOpen={showNewMessageModal}

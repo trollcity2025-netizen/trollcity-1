@@ -111,16 +111,15 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
 
   const handleFulfill = async () => {
     if (!selectedRequest || !giftCardCode) return
+    if (!user) return
+
     try {
-      const { error } = await supabase
-        .from('cashout_requests')
-        .update({
-          status: 'fulfilled',
-          gift_card_code: giftCardCode,
-          fulfilled_at: new Date().toISOString(),
-          fulfilled_by: user?.id
-        })
-        .eq('id', selectedRequest.id)
+      const { error } = await supabase.rpc('fulfill_cashout_request', {
+        p_request_id: selectedRequest.id,
+        p_admin_id: user.id,
+        p_notes: 'Fulfilled via admin panel',
+        p_gift_card_code: giftCardCode
+      })
 
       if (error) throw error
       toast.success('Request fulfilled with Gift Card code!')

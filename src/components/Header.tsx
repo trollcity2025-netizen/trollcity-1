@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Bell, LogOut } from 'lucide-react'
+import { Search, Bell, LogOut, Store } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase, searchUsers } from '../lib/supabase'
@@ -284,7 +284,16 @@ const Header = () => {
           )}
         </Link>
         
-        <ProfileDropdown onLogout={handleLogout} />
+        <div className="hidden md:block">
+          <ProfileDropdown onLogout={handleLogout} />
+        </div>
+
+        <Link
+          to="/store"
+          className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 text-white shadow-lg shadow-yellow-500/20 active:scale-95 transition-all duration-300"
+        >
+          <Store className="w-5 h-5" />
+        </Link>
 
         <button
           onClick={handleLogout}
