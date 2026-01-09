@@ -1,11 +1,17 @@
 // src/pages/CoinStoreProd.tsx
 // Production-ready PayPal coin purchase component
 import React, { useState, useEffect } from 'react'
-import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from '@paypal/checkout-js'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { Loader2, AlertCircle, CheckCircle, Coins } from 'lucide-react'
+
+// Declare PayPal globally from script injection
+declare global {
+  interface Window {
+    paypal: any
+  }
+}
 
 interface CoinPackage {
   id: string
@@ -40,19 +46,15 @@ interface PayPalButtonsProps {
 }
 
 const PayPalButtonsWrapper: React.FC<PayPalButtonsProps> = ({ selectedPackage, onApprove }) => {
-  const [{ options }, dispatch] = usePayPalScriptReducer()
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [_isProcessing, setIsProcessing] = useState(false)
   const { user } = useAuthStore()
 
-  if (!selectedPackage || !user) {
-    return <div className="text-gray-400">Please select a package</div>
-  }
+  useEffect(() => {
+    if (!window.paypal || !selectedPackage || !user) return
 
-  return (
-    <div className="mt-4">
-      <PayPalButtons
-        fundingSource="paypal"
-        createOrder={async () => {
+    window.paypal
+      .Buttons({
+        createOrder: async () => {
           try {
             setIsProcessing(true)
 
@@ -85,8 +87,8 @@ const PayPalButtonsWrapper: React.FC<PayPalButtonsProps> = ({ selectedPackage, o
           } finally {
             setIsProcessing(false)
           }
-        }}
-        onApprove={async (data: any) => {
+        },
+        onApprove: async (data: any) => {
           try {
             setIsProcessing(true)
             await onApprove(data)
@@ -96,18 +98,22 @@ const PayPalButtonsWrapper: React.FC<PayPalButtonsProps> = ({ selectedPackage, o
           } finally {
             setIsProcessing(false)
           }
-        }}
-        onError={(error) => {
+        },
+        onError: (error: any) => {
           console.error('PayPal error:', error)
           toast.error('PayPal payment failed')
-        }}
-        style={{
-          layout: 'vertical',
-          color: 'white',
-          shape: 'rect',
-          label: 'checkout',
-        }}
-      />
+        },
+      })
+      .render('#paypal-button-container')
+  }, [selectedPackage, user, onApprove])
+
+  if (!selectedPackage || !user) {
+    return <div className="text-gray-400">Please select a package</div>
+  }
+
+  return (
+    <div className="mt-4">
+      <div id="paypal-button-container"></div>
     </div>
   )
 }
@@ -115,12 +121,31 @@ const PayPalButtonsWrapper: React.FC<PayPalButtonsProps> = ({ selectedPackage, o
 export default function CoinStoreProd() {
   const { user, profile, setProfile } = useAuthStore()
   const [selectedPackage, setSelectedPackage] = useState<CoinPackage | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [_isProcessing, setIsProcessing] = useState(false)
   const [packages, setPackages] = useState<CoinPackage[]>(COIN_PACKAGES)
   const [transactionStatus, setTransactionStatus] = useState<{
     status: 'idle' | 'processing' | 'success' | 'error'
     message?: string
   }>({ status: 'idle' })
+
+  // Inject PayPal script
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.src = `https://www.paypal.com/sdk/js?client-id=${import.meta.env.VITE_PAYPAL_CLIENT_ID}&currency=USD`
+    script.async = true
+    script.onload = () => {
+      console.log('✅ PayPal SDK loaded')
+    }
+    script.onerror = () => {
+      console.error('❌ Failed to load PayPal SDK')
+    }
+    document.head.appendChild(script)
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script)
+      }
+    }
+  }, [])
 
   // Load packages from database
   useEffect(() => {
@@ -193,7 +218,6 @@ export default function CoinStoreProd() {
         setProfile({
           ...profile,
           troll_coins: (profile.troll_coins || 0) + captureData.coinsAdded,
-          paid_coins: (profile.paid_coins || 0) + captureData.coinsAdded,
         })
       }
 
@@ -331,17 +355,10 @@ export default function CoinStoreProd() {
               {selectedPackage.name} • {selectedPackage.coins.toLocaleString()} coins • ${selectedPackage.price_usd.toFixed(2)}
             </p>
 
-            <PayPalScriptProvider
-              options={{
-                clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
-                currency: 'USD',
-              }}
-            >
-              <PayPalButtonsWrapper
-                selectedPackage={selectedPackage}
-                onApprove={handlePayPalApprove}
-              />
-            </PayPalScriptProvider>
+            <PayPalButtonsWrapper
+              selectedPackage={selectedPackage}
+              onApprove={handlePayPalApprove}
+            />
 
             <button
               onClick={() => setSelectedPackage(null)}

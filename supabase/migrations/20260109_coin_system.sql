@@ -3,6 +3,9 @@
 -- Production-ready Supabase schema for PayPal coin purchases
 -- ============================================================================
 
+-- Drop existing table if schema mismatch
+DROP TABLE IF EXISTS coin_packages CASCADE;
+
 -- Create coin_packages table
 CREATE TABLE IF NOT EXISTS coin_packages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -20,24 +23,16 @@ CREATE TABLE IF NOT EXISTS coin_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   package_id UUID REFERENCES coin_packages(id) ON DELETE SET NULL,
-  paypal_order_id TEXT NOT NULL,
+  paypal_order_id TEXT,
   paypal_capture_id TEXT UNIQUE NOT NULL,
   paypal_status TEXT NOT NULL,
   amount_usd NUMERIC(10, 2) NOT NULL,
   coins_granted INTEGER NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   
-  -- Unique constraints prevent replay attacks
-  UNIQUE(paypal_order_id),
-  UNIQUE(paypal_capture_id),
-  
-  -- Prevent duplicate orders per user
-  UNIQUE(user_id, paypal_order_id)
+  -- Unique constraint on capture_id prevents replay attacks
+  UNIQUE(paypal_capture_id)
 );
-
--- Add paid_coins column to profiles if it doesn't exist
-ALTER TABLE user_profiles
-ADD COLUMN IF NOT EXISTS paid_coins INTEGER DEFAULT 0;
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_coin_transactions_user_id ON coin_transactions(user_id);
@@ -53,15 +48,18 @@ CREATE INDEX IF NOT EXISTS idx_coin_packages_active ON coin_packages(is_active);
 ALTER TABLE coin_packages ENABLE ROW LEVEL SECURITY;
 
 -- coin_packages: public read (users see available packages)
+DROP POLICY IF EXISTS "coin_packages_public_read" ON coin_packages;
 CREATE POLICY "coin_packages_public_read" ON coin_packages
   FOR SELECT USING (is_active = TRUE);
 
 -- coin_packages: admin only for modifications
+DROP POLICY IF EXISTS "coin_packages_admin_only" ON coin_packages;
 CREATE POLICY "coin_packages_admin_only" ON coin_packages
   FOR INSERT WITH CHECK (auth.uid() IN (
     SELECT id FROM user_profiles WHERE role = 'admin' OR is_admin = TRUE
   ));
 
+DROP POLICY IF EXISTS "coin_packages_admin_update" ON coin_packages;
 CREATE POLICY "coin_packages_admin_update" ON coin_packages
   FOR UPDATE USING (auth.uid() IN (
     SELECT id FROM user_profiles WHERE role = 'admin' OR is_admin = TRUE
@@ -71,10 +69,12 @@ CREATE POLICY "coin_packages_admin_update" ON coin_packages
 ALTER TABLE coin_transactions ENABLE ROW LEVEL SECURITY;
 
 -- coin_transactions: users read their own transactions only
+DROP POLICY IF EXISTS "coin_transactions_user_read" ON coin_transactions;
 CREATE POLICY "coin_transactions_user_read" ON coin_transactions
   FOR SELECT USING (user_id = auth.uid());
 
 -- coin_transactions: inserts only from service role (via edge function)
+DROP POLICY IF EXISTS "coin_transactions_service_insert" ON coin_transactions;
 CREATE POLICY "coin_transactions_service_insert" ON coin_transactions
   FOR INSERT WITH CHECK (
     -- This will be enforced by the edge function using service role
@@ -101,14 +101,17 @@ ON CONFLICT (paypal_sku) DO NOTHING;
 -- HELPER FUNCTIONS
 -- ============================================================================
 
+-- Drop all versions of the old function
+DROP FUNCTION IF EXISTS credit_coins CASCADE;
+
 -- Function to safely credit coins (used by edge functions)
-CREATE OR REPLACE FUNCTION credit_coins(
+CREATE FUNCTION credit_coins(
   p_user_id UUID,
   p_coins INTEGER,
-  p_paypal_order_id TEXT,
   p_paypal_capture_id TEXT,
-  p_package_id UUID,
-  p_amount_usd NUMERIC
+  p_paypal_order_id TEXT DEFAULT NULL,
+  p_package_id UUID DEFAULT NULL,
+  p_amount_usd NUMERIC DEFAULT NULL
 ) RETURNS TABLE (
   success BOOLEAN,
   new_balance INTEGER,
@@ -150,7 +153,6 @@ BEGIN
     -- Credit coins to user profile
     UPDATE user_profiles
     SET 
-      paid_coins = paid_coins + p_coins,
       troll_coins = troll_coins + p_coins,
       updated_at = now()
     WHERE id = p_user_id;
