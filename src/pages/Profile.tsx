@@ -11,8 +11,16 @@ import { canMessageAdmin } from '@/lib/perkEffects';
 
 export default function Profile() {
   const { username, userId } = useParams();
-  const navigate = useNavigate();
-  const { user: currentUser, refreshProfile } = useAuthStore();
+  let navigate;
+  try {
+    navigate = useNavigate();
+  } catch (e) {
+    // If useNavigate fails, provide a fallback
+    navigate = (path: string) => {
+      window.location.href = path;
+    };
+  }
+  const { user: currentUser, refreshProfile, setProfile: setStoreProfile } = useAuthStore();
   
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);

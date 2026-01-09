@@ -82,7 +82,7 @@ const ProfileSetup = () => {
         }
       }
       const now = new Date().toISOString()
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('user_profiles')
         .update({ 
           username: uname, 
@@ -91,13 +91,11 @@ const ProfileSetup = () => {
           updated_at: now 
         })
         .eq('id', user.id)
-      if (error) throw error
-
-      const { data: updated } = await supabase
-        .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
         .single()
+      
+      if (error) throw error
+      
       if (updated) {
         setProfile(updated as any)
         try {
@@ -106,6 +104,8 @@ const ProfileSetup = () => {
             JSON.stringify({ data: updated, timestamp: Date.now() })
           )
         } catch {}
+      } else {
+        throw new Error('Failed to fetch updated profile data')
       }
       toast.success('Profile saved')
       navigate('/')
@@ -169,19 +169,17 @@ const ProfileSetup = () => {
         .getPublicUrl(path)
       publicUrl = urlData.publicUrl
 
-      const { error: updateErr } = await supabase
+      const { data: updated, error: updateErr } = await supabase
         .from('user_profiles')
         .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
         .eq('id', user.id)
-      if (updateErr) throw updateErr
-
-      const { data: updated } = await supabase
-        .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
         .single()
-
-      if (updated) setProfile(updated as any)
+      
+      if (updateErr) throw updateErr
+      if (!updated) throw new Error('Failed to fetch updated profile')
+      
+      setProfile(updated as any)
       toast.success('Avatar uploaded')
     } catch (err: any) {
       console.error('Avatar upload error:', err)
@@ -316,17 +314,32 @@ const ProfileSetup = () => {
             <button
               type="button"
               onClick={async () => {
-                const { error } = await supabase
-                  .from('user_profiles')
-                  .update({
-                    payout_method: profile?.payout_method,
-                    payout_details: profile?.payout_details,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('id', profile?.id);
+                try {
+                  const { error, data } = await supabase
+                    .from('user_profiles')
+                    .update({
+                      payout_method: profile?.payout_method,
+                      payout_details: profile?.payout_details,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', profile?.id)
+                    .select()
+                    .single()
 
-                if (error) toast.error('Failed to save payout info');
-                else toast.success('Payout information saved');
+                  if (error) {
+                    toast.error('Failed to save payout info')
+                    return
+                  }
+
+                  // Refresh profile in store
+                  if (data) {
+                    setProfile(data as any)
+                  }
+                  toast.success('Payout information saved')
+                } catch (err: any) {
+                  console.error('Payout save error:', err)
+                  toast.error(err?.message || 'Failed to save payout info')
+                }
               }}
               className="w-full py-2 bg-gradient-to-r from-[#7C3AED] to-[#A78BFA] text-white rounded"
             >
@@ -388,7 +401,7 @@ const ProfileSetup = () => {
                           .getPublicUrl(filePath)
 
                         // Update user profile with ID verification info
-                        const { error: profileError } = await supabase
+                        const { data: updated, error: profileError } = await supabase
                           .from('user_profiles')
                           .update({
                             id_document_url: urlData.publicUrl,
@@ -397,19 +410,14 @@ const ProfileSetup = () => {
                             updated_at: new Date().toISOString()
                           })
                           .eq('id', user.id)
-
-                        if (profileError) throw profileError
-
-                        // Update local profile
-                        const { data: updated } = await supabase
-                          .from('user_profiles')
                           .select('*')
-                          .eq('id', user.id)
                           .single()
 
-                        if (updated) {
-                          setProfile(updated as any)
-                          toast.success('ID uploaded successfully! Your account will be verified by an admin within 24 hours.')
+                        if (profileError) throw profileError
+                        if (!updated) throw new Error('Failed to fetch updated profile')
+
+                        setProfile(updated as any)
+                        toast.success('ID uploaded successfully! Your account will be verified by an admin within 24 hours.')
                         }
                       } catch (err: any) {
                         console.error('ID upload error:', err)
