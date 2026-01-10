@@ -176,7 +176,7 @@ export const ROLE_BASED_ENTRANCE_EFFECTS: Record<string, EffectConfig> = {
     name: 'Police Raid',
     description: 'Freeze! Troll Police!',
     animationType: 'officer_police',
-    soundEffect: 'police_siren',
+    soundEffect: 'elite_command',
     durationSeconds: 4,
     priority: 80
   }

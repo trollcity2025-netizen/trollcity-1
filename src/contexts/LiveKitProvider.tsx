@@ -6,6 +6,24 @@ import {
 } from "../lib/LiveKitService";
 import { LiveKitContext, LiveKitContextValue } from "./LiveKitContext";
 
+// Helper function to send admin notifications
+const sendAdminNotification = async (message: string) => {
+  try {
+    const { supabase } = await import('../lib/supabase');
+    // Send to admin announcements or notifications
+    await supabase.functions.invoke('send-announcement', {
+      body: {
+        title: 'Live Stream Error Alert',
+        message: message,
+        type: 'error',
+        targetRoles: ['admin']
+      }
+    });
+  } catch (err) {
+    console.error('Failed to send admin notification:', err);
+  }
+};
+
 export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => {
   const serviceRef = useRef<LiveKitService | null>(null);
 
@@ -217,7 +235,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
             options.onTrackUnsubscribed?.(track, participant);
           },
 
-          onError: (errorMsg) => {
+          onError: async (errorMsg) => {
             // Ignore expected/non-critical errors
             if (
               errorMsg.includes("Client initiated disconnect") ||
@@ -230,15 +248,29 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
 
             // ✅ Don't set error for session-related messages (expected on load)
             const errorLower = errorMsg.toLowerCase();
-            const isSessionError = errorLower.includes('session') || 
-                                 errorLower.includes('sign in') || 
+            const isSessionError = errorLower.includes('session') ||
+                                 errorLower.includes('sign in') ||
                                  errorLower.includes('no active session') ||
                                  errorLower.includes('please sign in again');
-            
+
             if (isSessionError) {
               console.log("[LiveKitProvider] Session error (expected) — not setting error state", errorMsg);
               setIsConnecting(false);
               return; // Don't set error or call onError for session issues
+            }
+
+            // For live streams (broadcasters), don't disconnect on errors - keep stream running
+            const isBroadcaster = options.allowPublish === true;
+            if (isBroadcaster && isConnected) {
+              console.warn("[LiveKit error during live stream]", errorMsg);
+              // Send notification to admins instead of disconnecting
+              try {
+                await sendAdminNotification(`Live stream error for ${user?.email || user?.id}: ${errorMsg}`);
+              } catch (notifyErr) {
+                console.error("Failed to send admin notification:", notifyErr);
+              }
+              // Don't set error state or disconnect - keep stream running
+              return;
             }
 
             console.error("[LiveKit error]", errorMsg);
