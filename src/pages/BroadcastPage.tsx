@@ -102,6 +102,7 @@ export default function BroadcastPage() {
           role: isBroadcaster ? 'host' : 'audience'
         });
         if (isBroadcaster) {
+           // Enable camera and mic for broadcaster using consistent logic
            await liveKit.toggleMicrophone();
            await liveKit.toggleCamera();
         }
@@ -129,24 +130,21 @@ export default function BroadcastPage() {
           // Check if already publishing
           const currentRoom = liveKit.getRoom();
           const isAlreadyPublishing = currentRoom?.localParticipant?.videoTrackPublications.size > 0 ||
-                                     currentRoom?.localParticipant?.audioTrackPublications.size > 0;
+                                    currentRoom?.localParticipant?.audioTrackPublications.size > 0;
           
           if (!isAlreadyPublishing) {
-            // Disconnect and reconnect with publishing permissions
-            await liveKit.disconnect();
-            await liveKit.connect(streamId || '', user, {
-              allowPublish: true,
-              role: 'guest'
-            });
+            // Enable camera and mic for the guest without disconnecting
+            // Use explicit enable calls instead of toggle to avoid turning off existing streams
+            const micEnabled = await liveKit.enableMicrophone();
+            const cameraEnabled = await liveKit.enableCamera();
+            
+            // Set local state to reflect media is on
+            setMicOn(micEnabled);
+            setCameraOn(cameraEnabled);
+            
+            // Debug: Log the media state after enabling
+            console.log('Guest media enabled:', { micEnabled, cameraEnabled });
           }
-          
-          // Enable camera and mic for the guest - same as broadcaster
-          await liveKit.toggleMicrophone();
-          await liveKit.toggleCamera();
-          
-          // Set local state to reflect media is on
-          setMicOn(true);
-          setCameraOn(true);
         } catch (err) {
           console.error('Failed to enable guest media:', err);
           toast.error('Failed to enable camera and mic');
@@ -179,6 +177,98 @@ export default function BroadcastPage() {
     setIsGiftModalOpen(false);
   };
 
+  // Invite Followers Function
+  const handleInviteFollowers = async () => {
+    try {
+      if (!stream) {
+        toast.error('Stream not loaded');
+        return;
+      }
+
+      // Send notifications to broadcaster's followers
+      const { data: followers, error: followersError } = await supabase
+        .from('followers')
+        .select('follower_id')
+        .eq('user_id', stream.broadcaster_id);
+
+      if (followersError) {
+        console.error('Error fetching followers:', followersError);
+        toast.error('Failed to fetch followers');
+        return;
+      }
+
+      if (followers && followers.length > 0) {
+        // Send notification to each follower
+        const followerIds = followers.map(f => f.follower_id);
+        
+        // Insert notifications into the database
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert(followerIds.map(followerId => ({
+            user_id: followerId,
+            type: 'stream_invite',
+            title: 'Live Stream Invitation',
+            message: `${profile?.username || 'A broadcaster'} has invited you to join their live stream!`,
+            metadata: {
+              stream_id: streamId,
+              broadcaster_id: stream.broadcaster_id,
+              broadcaster_name: profile?.username || 'Broadcaster'
+            },
+            is_read: false,
+            created_at: new Date().toISOString()
+          })));
+
+        if (notificationError) {
+          console.error('Error sending notifications:', notificationError);
+          toast.error('Failed to send some invitations');
+        } else {
+          toast.success(`Invitations sent to ${followerIds.length} followers!`);
+        }
+      } else {
+        toast.info('No followers to invite');
+      }
+    } catch (err) {
+      console.error('Error inviting followers:', err);
+      toast.error('Failed to invite followers');
+    }
+  };
+
+  // External Share Link Function
+  const handleShareStream = async () => {
+    try {
+      if (!streamId) {
+        toast.error('Stream ID not available');
+        return;
+      }
+
+      // Generate shareable link
+      const shareLink = `${window.location.origin}/stream/${streamId}`;
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareLink);
+
+      // Show success message
+      toast.success('Stream link copied to clipboard!');
+
+      // Also show a system share dialog if available
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: stream?.title || 'TrollCity Live Stream',
+            text: `Join ${profile?.username || 'this broadcaster'}'s live stream on TrollCity!`,
+            url: shareLink
+          });
+        } catch {
+          // User canceled the share dialog, which is fine
+          console.log('User canceled share dialog');
+        }
+      }
+    } catch (err) {
+      console.error('Error sharing stream:', err);
+      toast.error('Failed to copy stream link');
+    }
+  };
+
   // Entrance Effect (Mock for now, or use real data)
   const [entranceEffect] = useState<any>(null);
 
@@ -209,13 +299,14 @@ export default function BroadcastPage() {
                setSeatCost(joinPrice);
                setSeatCostPopupVisible(true);
              }
-             
+              
              await claimSeat(seatIndex, { joinPrice });
            } catch (err) {
              console.error('Failed to claim seat:', err);
              toast.error('Failed to join seat');
            }
          }}
+         onDisableGuestMedia={liveKit.disableGuestMediaByClick}
         >
           {/* Overlays */}
           <BroadcastOverlays
@@ -230,6 +321,8 @@ export default function BroadcastPage() {
              onOpenChat={() => setShowMobileChat(!showMobileChat)}
              onOpenGifts={() => setIsGiftModalOpen(true)}
              onOpenSettings={() => {}} // Placeholder
+             onInviteFollowers={handleInviteFollowers}
+             onShareStream={handleShareStream}
              totalCoins={stream.total_gifts_coins}
              startTime={stream.created_at}
           />
