@@ -108,7 +108,6 @@ const OfficerScheduling = lazy(() => import("./pages/OfficerScheduling"));
 const Orientation = lazy(() => import("./pages/officer/Orientation"));
 const OrientationQuiz = lazy(() => import("./pages/officer/OrientationQuiz"));
 const OfficerOnboarding = lazy(() => import("./pages/officer/OfficerOnboarding"));
-const OfficerTrainingSimulator = lazy(() => import("./pages/officer/OfficerTrainingSimulator"));
 const OfficerTrainingProgress = lazy(() => import("./pages/officer/OfficerTrainingProgress"));
 const OfficerPayrollDashboard = lazy(() => import("./pages/officer/OfficerPayrollDashboard"));
 const OfficerDashboard = lazy(() => import("./pages/officer/OfficerDashboard"));
@@ -736,14 +735,6 @@ function AppContent() {
                     element={
                       <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]} requireActive={true}>
                         <OfficerOWCDashboard />
-                      </RequireRole>
-                    }
-                  />
-                  <Route
-                    path="/officer/training"
-                    element={
-                      <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]}>
-                        <OfficerTrainingSimulator />
                       </RequireRole>
                     }
                   />
