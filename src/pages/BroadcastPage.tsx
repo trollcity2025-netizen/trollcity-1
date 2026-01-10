@@ -7,6 +7,7 @@ import { useLiveKit } from '../hooks/useLiveKit';
 import { useAuthStore } from '../lib/store';
 import { supabase, UserProfile } from '../lib/supabase';
 import { toast } from 'sonner';
+import { useViewerTracking } from '../hooks/useViewerTracking';
 import ChatBox from '../components/broadcast/ChatBox';
 import GiftBox from '../components/broadcast/GiftBox';
 import GiftModal from '../components/broadcast/GiftModal';
@@ -116,6 +117,9 @@ export default function BroadcastPage() {
       liveKit.disconnect();
     };
   }, [streamId, user, isBroadcaster, liveKit, profile]);
+
+  // Track viewers for this stream
+  useViewerTracking(streamId, user?.id || null);
 
   // Enable camera and mic for guests when they join a seat
   useEffect(() => {
@@ -229,10 +233,12 @@ export default function BroadcastPage() {
            <GiftBox onSendGift={handleGiftSent} />
         </div>
         <div className="flex-1 min-h-0">
-          <ChatBox 
+          <ChatBox
             streamId={streamId || ''}
             onProfileClick={setSelectedProfile}
             onCoinSend={() => setIsGiftModalOpen(true)}
+            room={liveKit.getRoom()}
+            isBroadcaster={isBroadcaster}
           />
         </div>
       </div>
@@ -245,10 +251,12 @@ export default function BroadcastPage() {
               <button onClick={() => setShowMobileChat(false)} className="text-white/50 hover:text-white">Close</button>
            </div>
            <div className="flex-1 min-h-0">
-             <ChatBox 
+             <ChatBox
                streamId={streamId || ''}
                onProfileClick={setSelectedProfile}
                onCoinSend={() => setIsGiftModalOpen(true)}
+               room={liveKit.getRoom()}
+               isBroadcaster={isBroadcaster}
              />
            </div>
         </div>

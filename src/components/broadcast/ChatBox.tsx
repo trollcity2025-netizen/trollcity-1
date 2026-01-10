@@ -46,13 +46,17 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
     if (!room) return;
     
     const onParticipantConnected = (participant: any) => {
+       // Only show join messages for non-local participants (actual viewers joining)
+       if (participant.isLocal) return;
+       
+       const username = participant.name || participant.identity || 'User';
        const newMsg: Message = {
            id: `join-${Date.now()}-${participant.identity}`,
            user_id: 'system',
-           content: 'joined the stream',
+           content: `${username} joined the stream`,
            message_type: 'system-join',
            created_at: new Date().toISOString(),
-           sender_profile: { username: participant.name || participant.identity || 'User', perks: [] }
+           sender_profile: { username, perks: [] }
        };
        setMessages(prev => [...prev, newMsg]);
     };
@@ -333,7 +337,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
           if (msg.message_type === 'system-join') {
              return (
                <div key={msg.id} className="text-xs text-center text-gray-400 my-1 animate-fadeIn">
-                 <span className="font-bold text-gray-300">{msg.sender_profile?.username}</span> joined!
+                 <span className="font-bold text-cyan-300">{msg.sender_profile?.username}</span> joined the stream!
                </div>
              );
           }
