@@ -36,7 +36,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
   const [isMuted, setIsMuted] = useState(false);
   
   // Cache for user profiles to avoid repeated fetches
-  const userCacheRef = useRef<Record<string, { username: string; perks: string[]; hasInsurance?: boolean; rgbExpiresAt?: string; avatar_url?: string }>>({});
+  const userCacheRef = useRef<Record<string, { username: string; perks: string[]; hasInsurance: boolean; rgbExpiresAt?: string; avatar_url?: string }>>({});
   
   const [showCoinInput, setShowCoinInput] = useState<string | null>(null);
   const [coinAmount, setCoinAmount] = useState(10);
@@ -105,10 +105,9 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
         .limit(1);
 
       const userData = {
-        id: userId,
         username: profile?.username || 'Unknown Troll',
         perks: perks?.map(p => p.perk_id) || [],
-        hasInsurance: insurance && insurance.length > 0,
+        hasInsurance: Boolean(insurance && insurance.length > 0),
         rgbExpiresAt: profile?.rgb_username_expires_at,
         avatar_url: profile?.avatar_url
       };
@@ -369,7 +368,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
                     className={getUsernameStyle(msg.sender_profile?.perks, msg.sender_profile?.rgbExpiresAt)}
                     onClick={() => onProfileClick?.(msg.sender_profile || { id: msg.user_id, name: 'Unknown', username: 'Unknown' })}
                   />
-                  <UserBadge profile={msg.sender_profile} />
+                  <UserBadge profile={msg.sender_profile ? { level: 1, ...msg.sender_profile } : undefined} />
                 </div>
                 <button
                   onClick={() =>

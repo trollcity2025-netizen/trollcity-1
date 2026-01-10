@@ -12,6 +12,7 @@ interface BroadcastLayoutProps {
   onSetPrice?: (price: number) => void
   onJoinRequest?: (seatIndex: number) => void
   onLeaveSession?: () => void
+  onDisableGuestMedia?: (participantId: string) => void
   children?: React.ReactNode
 }
 
@@ -24,6 +25,7 @@ export default function BroadcastLayout({
   onSetPrice,
   onJoinRequest,
   onLeaveSession,
+  onDisableGuestMedia,
   children
 }: BroadcastLayoutProps) {
   const participants = useRoomParticipants(room);
@@ -46,6 +48,7 @@ export default function BroadcastLayout({
         joinPrice={joinPrice}
         onLeaveSession={onLeaveSession}
         onJoinRequest={onJoinRequest}
+        onDisableGuestMedia={onDisableGuestMedia}
       />
 
       {/* Overlays / Children (Gifts, etc) */}

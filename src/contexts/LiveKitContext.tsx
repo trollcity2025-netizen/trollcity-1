@@ -16,6 +16,10 @@ export interface LiveKitContextValue {
   disconnect: () => void
   toggleCamera: () => Promise<boolean>
   toggleMicrophone: () => Promise<boolean>
+  enableCamera: () => Promise<boolean>
+  enableMicrophone: () => Promise<boolean>
+  disableGuestMedia: (participantId: string, disableVideo: boolean, disableAudio: boolean) => Promise<boolean>
+  disableGuestMediaByClick: (participantId: string) => Promise<boolean>
   startPublishing: () => Promise<void>
   getRoom: () => any | null
 }

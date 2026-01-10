@@ -13,6 +13,8 @@ interface BroadcastOverlaysProps {
   onOpenChat?: () => void;
   onOpenGifts?: () => void;
   onOpenSettings?: () => void;
+  onInviteFollowers?: () => void;
+  onShareStream?: () => void;
   className?: string;
   totalCoins?: number;
   startTime?: string | null;
@@ -30,6 +32,8 @@ export default function BroadcastOverlays({
   onOpenChat,
   onOpenGifts,
   onOpenSettings,
+  onInviteFollowers,
+  onShareStream,
   className = '',
   totalCoins = 0,
   startTime
@@ -73,9 +77,25 @@ export default function BroadcastOverlays({
             </div>
           </div>
           
-          <button className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/10">
+          <button
+            onClick={onShareStream}
+            className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/10 hover:bg-white/20 transition-colors"
+          >
             <Share2 size={14} />
           </button>
+          {isBroadcaster && onInviteFollowers && (
+            <button
+              onClick={onInviteFollowers}
+              className="w-8 h-8 rounded-full bg-purple-600/80 backdrop-blur-md flex items-center justify-center text-white border border-purple-500/50 hover:bg-purple-600 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 pointer-events-auto">

@@ -13,8 +13,15 @@ export function useRoomParticipants(room: Room | undefined | null) {
     const updateParticipants = () => {
       const remotes = Array.from(room.remoteParticipants.values());
       const local = room.localParticipant;
-      // Filter out participants that haven't fully connected if needed, 
-      // but usually we want all of them.
+      
+      // Debug: Log participant changes for troubleshooting
+      console.log('Updating participants:', {
+        localParticipant: local?.identity,
+        remoteCount: remotes.length,
+        remoteIdentities: remotes.map(r => r.identity)
+      });
+      
+      // Include all participants, ensuring local participant is always included if they exist
       setParticipants(local ? [local, ...remotes] : remotes);
     };
 

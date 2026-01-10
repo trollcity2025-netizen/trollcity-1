@@ -1026,10 +1026,11 @@ export class LiveKitService {
   async toggleCamera(): Promise<boolean> {
     if (!this.room?.localParticipant) return false
     if (!this.canPublish()) return false
-   
+  
     try {
-      const enabled = !this.room.localParticipant.isCameraEnabled
- 
+      const isCurrentlyEnabled = this.room.localParticipant.isCameraEnabled
+      const enabled = !isCurrentlyEnabled
+
       // Use isVideoPublishing() instead of isPublishing() to handle audio-only cases correctly
       if (enabled && !this.isVideoPublishing()) {
         const video = await this.captureVideoTrack()
@@ -1038,15 +1039,16 @@ export class LiveKitService {
           await this.room.localParticipant.publishTrack(video as any)
         }
       }
- 
+
       await this.room.localParticipant.setCameraEnabled(enabled)
- 
+
       if (!enabled && this.localVideoTrack) {
         this.localVideoTrack.stop()
         this.localVideoTrack = null
       }
- 
+
       this.updateLocalParticipantState()
+      this.log(`Camera toggled: ${isCurrentlyEnabled} -> ${enabled}`)
       return enabled
     } catch (error) {
       console.error('Failed to toggle camera:', error)
@@ -1054,13 +1056,46 @@ export class LiveKitService {
     }
   }
 
+  async enableCamera(): Promise<boolean> {
+    if (!this.room?.localParticipant) return false
+    if (!this.canPublish()) return false
+  
+    try {
+      const isCurrentlyEnabled = this.room.localParticipant.isCameraEnabled
+      
+      if (isCurrentlyEnabled) {
+        this.log('Camera already enabled, no change needed')
+        return true
+      }
+
+      // Use isVideoPublishing() instead of isPublishing() to handle audio-only cases correctly
+      if (!this.isVideoPublishing()) {
+        const video = await this.captureVideoTrack()
+        if (video) {
+          this.localVideoTrack = video
+          await this.room.localParticipant.publishTrack(video as any)
+        }
+      }
+
+      await this.room.localParticipant.setCameraEnabled(true)
+
+      this.updateLocalParticipantState()
+      this.log(`Camera enabled: false -> true`)
+      return true
+    } catch (error) {
+      console.error('Failed to enable camera:', error)
+      return false
+    }
+  }
+
   async toggleMicrophone(): Promise<boolean> {
     if (!this.room?.localParticipant) return false
     if (!this.canPublish()) return false
-   
+  
     try {
-      const enabled = !this.room.localParticipant.isMicrophoneEnabled
- 
+      const isCurrentlyEnabled = this.room.localParticipant.isMicrophoneEnabled
+      const enabled = !isCurrentlyEnabled
+
       if (enabled && !this.isPublishing()) {
         const audio = await this.captureAudioTrack()
         if (audio) {
@@ -1068,18 +1103,50 @@ export class LiveKitService {
           await this.room.localParticipant.publishTrack(audio as any)
         }
       }
- 
+
       await this.room.localParticipant.setMicrophoneEnabled(enabled)
- 
+
       if (!enabled && this.localAudioTrack) {
         this.localAudioTrack.stop()
         this.localAudioTrack = null
       }
- 
+
       this.updateLocalParticipantState()
+      this.log(`Microphone toggled: ${isCurrentlyEnabled} -> ${enabled}`)
       return enabled
     } catch (error) {
       console.error('Failed to toggle microphone:', error)
+      return false
+    }
+  }
+
+  async enableMicrophone(): Promise<boolean> {
+    if (!this.room?.localParticipant) return false
+    if (!this.canPublish()) return false
+  
+    try {
+      const isCurrentlyEnabled = this.room.localParticipant.isMicrophoneEnabled
+      
+      if (isCurrentlyEnabled) {
+        this.log('Microphone already enabled, no change needed')
+        return true
+      }
+
+      if (!this.isPublishing()) {
+        const audio = await this.captureAudioTrack()
+        if (audio) {
+          this.localAudioTrack = audio
+          await this.room.localParticipant.publishTrack(audio as any)
+        }
+      }
+
+      await this.room.localParticipant.setMicrophoneEnabled(true)
+
+      this.updateLocalParticipantState()
+      this.log(`Microphone enabled: false -> true`)
+      return true
+    } catch (error) {
+      console.error('Failed to enable microphone:', error)
       return false
     }
   }
@@ -1203,7 +1270,7 @@ export class LiveKitService {
     if (this.room && this.room.state !== 'disconnected') {
       try {
         this.room.disconnect()
-      } catch (e) { 
+      } catch (e) {
         this.log('⚠️ Error disconnecting', e);
       }
     }
@@ -1217,6 +1284,60 @@ export class LiveKitService {
     
     this.cleanup()
     this.config.onDisconnected?.();
+  }
+
+  async disableGuestMedia(participantId: string, disableVideo: boolean, disableAudio: boolean): Promise<boolean> {
+    if (!this.room || !this.canPublish()) {
+      this.log('❌ Cannot disable guest media: not connected or not a broadcaster')
+      return false
+    }
+
+    try {
+      const participant = Array.from(this.room.remoteParticipants.values()).find(p => p.identity === participantId)
+      if (!participant) {
+        this.log('❌ Participant not found for disabling media', { participantId })
+        return false
+      }
+
+      // Disable video if requested
+      if (disableVideo) {
+        const videoPub = participant.getTrackPublication(Track.Source.Camera)
+        if (videoPub) {
+          // Mark as disabled in our participant tracking
+          const existing = this.participants.get(participantId)
+          if (existing) {
+            existing.isCameraEnabled = false
+            this.participants.set(participantId, existing)
+          }
+          this.log('📹 Disabled video for guest', { participantId })
+        }
+      }
+
+      // Disable audio if requested
+      if (disableAudio) {
+        const audioPub = participant.getTrackPublication(Track.Source.Microphone)
+        if (audioPub) {
+          // Mark as disabled in our participant tracking
+          const existing = this.participants.get(participantId)
+          if (existing) {
+            existing.isMicrophoneEnabled = false
+            existing.isMuted = true
+            this.participants.set(participantId, existing)
+          }
+          this.log('🎤 Disabled audio for guest', { participantId })
+        }
+      }
+
+      return true
+    } catch (error: any) {
+      this.log('❌ Failed to disable guest media:', error?.message || error)
+      return false
+    }
+  }
+
+  async disableGuestMediaByClick(participantId: string): Promise<boolean> {
+    // Disable both video and audio for the guest
+    return this.disableGuestMedia(participantId, true, true)
   }
 
   private cleanup(): void {

@@ -11,6 +11,7 @@ interface ResponsiveVideoGridProps {
   onLeaveSession?: () => void;
   joinPrice?: number;
   onJoinRequest?: (seatIndex: number) => void;
+  onDisableGuestMedia?: (participantId: string) => void;
 }
 
 export default function ResponsiveVideoGrid({
@@ -20,7 +21,8 @@ export default function ResponsiveVideoGrid({
   seats,
   onLeaveSession,
   joinPrice = 0,
-  onJoinRequest
+  onJoinRequest,
+  onDisableGuestMedia
 }: ResponsiveVideoGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -69,6 +71,31 @@ export default function ResponsiveVideoGrid({
         if (i === 0 && !p) {
           p = participants.find(p => p.identity === broadcasterId) || null;
         }
+        
+        // Debug: Log participant assignment for troubleshooting
+        if (seat && !p) {
+          console.log(`Seat ${i} assigned to ${seat.user_id} but participant not found in list`, {
+            seatUserId: seat.user_id,
+            availableParticipants: participants.map(p => p.identity)
+          });
+        }
+        
+        // Additional fallback: If seat is assigned but participant not found, check if any participant matches the seat
+        if (seat && !p && seat.user_id) {
+          // Check if the seat user is actually in the participants list with different identity format
+          p = participants.find(participant =>
+            participant.identity === seat.user_id ||
+            participant.name === seat.user_id ||
+            participant.identity === String(seat.user_id)
+          );
+          
+          if (p) {
+            console.log(`Found participant for seat ${i} using extended matching`, {
+              seatUserId: seat.user_id,
+              matchedParticipant: p.identity
+            });
+          }
+        }
 
         if (p) {
           const isLocal = localParticipant && p.identity === localParticipant.identity;
@@ -80,7 +107,9 @@ export default function ResponsiveVideoGrid({
               participant={p}
               isBroadcaster={isBroadcaster}
               isLocal={isLocal}
+              isHost={isBroadcaster} // Broadcaster is the host
               onLeave={isLocal && !isBroadcaster ? onLeaveSession : undefined}
+              onDisableGuestMedia={onDisableGuestMedia}
               price={joinPrice}
               style={{
                 ...style,

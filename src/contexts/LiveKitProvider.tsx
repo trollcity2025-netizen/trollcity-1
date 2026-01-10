@@ -364,6 +364,62 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
     }
   }, [syncLocalParticipant]);
 
+  const enableMicrophone = useCallback(async () => {
+    if (!serviceRef.current || !serviceRef.current.isConnected()) return false;
+    try {
+      const enabled = await serviceRef.current.enableMicrophone();
+      syncLocalParticipant();
+      return enabled;
+    } catch (err: any) {
+      console.error("Enable microphone failed:", err);
+      setError(`Microphone enable failed: ${err.message}`);
+      return false;
+    }
+  }, [syncLocalParticipant]);
+
+  const enableCamera = useCallback(async () => {
+    if (!serviceRef.current || !serviceRef.current.isConnected()) return false;
+    try {
+      const enabled = await serviceRef.current.enableCamera();
+      syncLocalParticipant();
+      return enabled;
+    } catch (err: any) {
+      console.error("Enable camera failed:", err);
+      setError(`Camera enable failed: ${err.message}`);
+      return false;
+    }
+  }, [syncLocalParticipant]);
+
+  const disableGuestMedia = useCallback(async (participantId: string, disableVideo: boolean, disableAudio: boolean) => {
+    if (!serviceRef.current || !serviceRef.current.isConnected()) return false;
+    try {
+      const success = await serviceRef.current.disableGuestMedia(participantId, disableVideo, disableAudio);
+      if (success) {
+        syncLocalParticipant();
+      }
+      return success;
+    } catch (err: any) {
+      console.error("Disable guest media failed:", err);
+      setError(`Failed to disable guest media: ${err.message}`);
+      return false;
+    }
+  }, [syncLocalParticipant]);
+
+  const disableGuestMediaByClick = useCallback(async (participantId: string) => {
+    if (!serviceRef.current || !serviceRef.current.isConnected()) return false;
+    try {
+      const success = await serviceRef.current.disableGuestMediaByClick(participantId);
+      if (success) {
+        syncLocalParticipant();
+      }
+      return success;
+    } catch (err: any) {
+      console.error("Disable guest media by click failed:", err);
+      setError(`Failed to disable guest media: ${err.message}`);
+      return false;
+    }
+  }, [syncLocalParticipant]);
+
   const startPublishing = useCallback(async () => {
     if (!serviceRef.current) throw new Error("LiveKit service not initialized");
     if (!serviceRef.current.isConnected()) throw new Error("Room not connected");
@@ -415,6 +471,10 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
     disconnect,
     toggleCamera,
     toggleMicrophone,
+    enableCamera,
+    enableMicrophone,
+    disableGuestMedia,
+    disableGuestMediaByClick,
     startPublishing,
     getRoom,
   };

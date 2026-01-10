@@ -13,17 +13,21 @@ interface VideoTileProps {
   showControls?: boolean
   fit?: 'cover' | 'contain'
   price?: number
+  isHost?: boolean
+  onDisableGuestMedia?: (participantId: string, disableVideo: boolean, disableAudio: boolean) => void
 }
 
-export default function VideoTile({ 
-  participant, 
-  isBroadcaster, 
-  className = '', 
+export default function VideoTile({
+  participant,
+  isBroadcaster,
+  className = '',
   style,
-  onLeave, 
+  onLeave,
   isLocal,
   fit = 'cover',
-  price
+  price,
+  isHost = false,
+  onDisableGuestMedia
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [speaking, setSpeaking] = useState(false);
@@ -154,11 +158,49 @@ export default function VideoTile({
   const role = metadata.role || 'Guest';
   const roleColor = role === 'Admin' ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-purple-400 border-purple-500/30 bg-purple-500/10';
 
+  const handleBroadcasterClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Prevent any action if this is the broadcaster's own tile
+    if (isBroadcaster) {
+      return;
+    }
+    if (isHost && !isLocal && !isBroadcaster && onDisableGuestMedia) {
+      // Disable guest media when broadcaster clicks on guest box
+      onDisableGuestMedia(participant.identity, true, true);
+    } else if (isLocal) {
+      setShowLocalControls(!showLocalControls);
+    }
+  };
+
+  const handleDisableVideo = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDisableGuestMedia) {
+      onDisableGuestMedia(participant.identity, true, false);
+      setShowLocalControls(false);
+    }
+  };
+
+  const handleDisableAudio = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDisableGuestMedia) {
+      onDisableGuestMedia(participant.identity, false, true);
+      setShowLocalControls(false);
+    }
+  };
+
+  const handleDisableBoth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDisableGuestMedia) {
+      onDisableGuestMedia(participant.identity, true, true);
+      setShowLocalControls(false);
+    }
+  };
+
   return (
     <div className={`rgb-border ${speaking ? 'speaking' : ''} occupied`} style={style}>
-      <div 
+      <div
         className={`tile-inner relative bg-zinc-900 rounded-2xl overflow-hidden transition-all duration-300 group shadow-lg ${className}`}
-        onClick={() => isLocal && setShowLocalControls(!showLocalControls)}
+        onClick={handleBroadcasterClick}
       >
       {/* Video Element */}
       <video 
@@ -256,13 +298,38 @@ export default function VideoTile({
                   </button>
               </div>
               {onLeave && (
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); onLeave(); }}
                     className="px-6 py-2 bg-red-600/20 border border-red-500/50 hover:bg-red-600 hover:text-white text-red-400 rounded-full font-bold text-sm flex items-center gap-2 transition-all"
                   >
                       <X size={16} /> Leave Seat
                   </button>
               )}
+              <p className="text-white/30 text-xs mt-4">Tap anywhere to close</p>
+          </div>
+      )}
+      
+      {/* Broadcaster Controls Overlay (for disabling guest media) */}
+      {isHost && !isLocal && !isBroadcaster && showLocalControls && (
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-6 animate-fadeIn">
+              <h3 className="text-white font-bold text-lg">Control Guest Media</h3>
+              <div className="flex items-center gap-4">
+                  <button onClick={handleDisableVideo} className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white transition-transform hover:scale-110">
+                      <CameraOff size={28} />
+                  </button>
+                  <button onClick={handleDisableAudio} className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white transition-transform hover:scale-110">
+                      <MicOff size={28} />
+                  </button>
+                  <button onClick={handleDisableBoth} className="p-4 rounded-full bg-red-700 hover:bg-red-800 text-white transition-transform hover:scale-110">
+                      <CameraOff size={20} />
+                      <MicOff size={20} />
+                  </button>
+              </div>
+              <div className="flex gap-4 text-sm text-white/80">
+                  <span>Disable Video</span>
+                  <span>Disable Audio</span>
+                  <span>Disable Both</span>
+              </div>
               <p className="text-white/30 text-xs mt-4">Tap anywhere to close</p>
           </div>
       )}
