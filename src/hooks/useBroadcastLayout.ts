@@ -104,12 +104,14 @@ export function useBroadcastLayout(
         const mainWidth = (availWidth * 0.75) - gap/2;
         const sideWidth = (availWidth * 0.25) - gap/2;
         
-        // 0: Main Broadcaster
+        // 0: Main Broadcaster - 70% width as requested
+        const broadcasterWidth = mainWidth * 0.7; // Make broadcaster box 70% of original width
+        const broadcasterLeft = padding + (mainWidth - broadcasterWidth); // Center it
         styles.push({
-            width: `${mainWidth}px`,
+            width: `${broadcasterWidth}px`,
             height: `${topSectionHeight}px`,
             position: 'absolute',
-            left: `${padding}px`,
+            left: `${broadcasterLeft}px`,
             top: `${padding}px`
         });
         

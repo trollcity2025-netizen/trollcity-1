@@ -1026,10 +1026,10 @@ export class LiveKitService {
   async toggleCamera(): Promise<boolean> {
     if (!this.room?.localParticipant) return false
     if (!this.canPublish()) return false
-
+   
     try {
       const enabled = !this.room.localParticipant.isCameraEnabled
-
+ 
       // Use isVideoPublishing() instead of isPublishing() to handle audio-only cases correctly
       if (enabled && !this.isVideoPublishing()) {
         const video = await this.captureVideoTrack()
@@ -1038,17 +1038,18 @@ export class LiveKitService {
           await this.room.localParticipant.publishTrack(video as any)
         }
       }
-
+ 
       await this.room.localParticipant.setCameraEnabled(enabled)
-
+ 
       if (!enabled && this.localVideoTrack) {
         this.localVideoTrack.stop()
         this.localVideoTrack = null
       }
-
+ 
       this.updateLocalParticipantState()
       return enabled
-    } catch {
+    } catch (error) {
+      console.error('Failed to toggle camera:', error)
       return false
     }
   }
@@ -1056,10 +1057,10 @@ export class LiveKitService {
   async toggleMicrophone(): Promise<boolean> {
     if (!this.room?.localParticipant) return false
     if (!this.canPublish()) return false
-
+   
     try {
       const enabled = !this.room.localParticipant.isMicrophoneEnabled
-
+ 
       if (enabled && !this.isPublishing()) {
         const audio = await this.captureAudioTrack()
         if (audio) {
@@ -1067,17 +1068,18 @@ export class LiveKitService {
           await this.room.localParticipant.publishTrack(audio as any)
         }
       }
-
+ 
       await this.room.localParticipant.setMicrophoneEnabled(enabled)
-
+ 
       if (!enabled && this.localAudioTrack) {
         this.localAudioTrack.stop()
         this.localAudioTrack = null
       }
-
+ 
       this.updateLocalParticipantState()
       return enabled
-    } catch {
+    } catch (error) {
+      console.error('Failed to toggle microphone:', error)
       return false
     }
   }
@@ -1221,17 +1223,23 @@ export class LiveKitService {
     if (this.localVideoTrack) {
       try {
         this.localVideoTrack.stop()
-      } catch { }
+        console.log('📹 Video track stopped and hardware light turned off')
+      } catch (error) {
+        console.error('Failed to stop video track:', error)
+      }
       this.localVideoTrack = null
     }
-
+ 
     if (this.localAudioTrack) {
       try {
         this.localAudioTrack.stop()
-      } catch { }
+        console.log('🎤 Audio track stopped')
+      } catch (error) {
+        console.error('Failed to stop audio track:', error)
+      }
       this.localAudioTrack = null
     }
-
+ 
     this.participants.clear()
     this.room = null
     this.isConnecting = false
@@ -1248,14 +1256,24 @@ export class LiveKitService {
     
     // Stop all local tracks explicitly to ensure hardware light turns off
     if (this.room?.localParticipant) {
-       this.room.localParticipant.videoTrackPublications.forEach(pub => {
-         try { pub.track?.stop(); } catch {}
-       });
-       this.room.localParticipant.audioTrackPublications.forEach(pub => {
-         try { pub.track?.stop(); } catch {}
-       });
+      this.room.localParticipant.videoTrackPublications.forEach(pub => {
+        try {
+          pub.track?.stop();
+          console.log('📹 Video publication track stopped')
+        } catch (error) {
+          console.error('Failed to stop video publication track:', error)
+        }
+      });
+      this.room.localParticipant.audioTrackPublications.forEach(pub => {
+        try {
+          pub.track?.stop();
+          console.log('🎤 Audio publication track stopped')
+        } catch (error) {
+          console.error('Failed to stop audio publication track:', error)
+        }
+      });
     }
-
+ 
     this.disconnect()
   }
 }

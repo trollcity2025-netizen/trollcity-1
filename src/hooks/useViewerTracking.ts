@@ -79,45 +79,20 @@ export function useViewerTracking(streamId: string | null, userId: string | null
     const interval = setInterval(trackViewer, 30000)
 
     // Clean up on unmount
-    const cleanup = async () => {
+    const cleanup = () => {
       clearInterval(interval)
 
-      try {
-        // Remove viewer from tracking
-        const { error } = await supabase
-          .from('stream_viewers')
-          .delete()
-          .eq('stream_id', streamId)
-          .eq('user_id', userId)
-
-        if (error) {
-          console.error('Error removing viewer:', error)
-          return
-        }
-
-        // Update stream viewer count
-        const { error: countError, count } = await supabase
-          .from('stream_viewers')
-          .select('*', { count: 'exact', head: true })
-          .eq('stream_id', streamId)
-
-        if (countError) {
-          console.error('Error counting viewers after cleanup:', countError)
-          return
-        }
-
-        const { error: updateStreamError } = await supabase
-          .from('streams')
-          .update({ current_viewers: count || 0 })
-          .eq('id', streamId)
-
-        if (updateStreamError) {
-          console.error('Error updating stream viewer count after cleanup:', updateStreamError)
-        }
-
-      } catch (error) {
-        console.error('Error in viewer cleanup:', error)
-      }
+      // Perform async cleanup without awaiting
+      supabase
+        .from('stream_viewers')
+        .delete()
+        .eq('stream_id', streamId)
+        .eq('user_id', userId)
+        .then((result) => {
+          if (result?.error) {
+            console.error('Error removing viewer:', result.error)
+          }
+        })
     }
 
     return cleanup

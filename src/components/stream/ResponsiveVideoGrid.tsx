@@ -80,7 +80,7 @@ export default function ResponsiveVideoGrid({
               participant={p}
               isBroadcaster={isBroadcaster}
               isLocal={isLocal}
-              onLeave={isLocal ? onLeaveSession : undefined}
+              onLeave={isLocal && !isBroadcaster ? onLeaveSession : undefined}
               price={joinPrice}
               style={{
                 ...style,

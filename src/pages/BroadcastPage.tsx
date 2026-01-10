@@ -119,22 +119,34 @@ export default function BroadcastPage() {
   }, [streamId, user, isBroadcaster, liveKit, profile]);
 
   // Track viewers for this stream
-  useViewerTracking(streamId, user?.id || null);
+  useViewerTracking(streamId || '', user?.id || null);
 
   // Enable camera and mic for guests when they join a seat
   useEffect(() => {
     if (!isBroadcaster && seats.some(seat => seat?.user_id === user?.id)) {
       const enableGuestMedia = async () => {
         try {
-          // Disconnect and reconnect with publishing permissions
-          await liveKit.disconnect();
-          await liveKit.connect(streamId || '', user, {
-            allowPublish: true,
-            role: 'guest'
-          });
-          // Enable camera and mic for the guest
+          // Check if already publishing
+          const currentRoom = liveKit.getRoom();
+          const isAlreadyPublishing = currentRoom?.localParticipant?.videoTrackPublications.size > 0 ||
+                                     currentRoom?.localParticipant?.audioTrackPublications.size > 0;
+          
+          if (!isAlreadyPublishing) {
+            // Disconnect and reconnect with publishing permissions
+            await liveKit.disconnect();
+            await liveKit.connect(streamId || '', user, {
+              allowPublish: true,
+              role: 'guest'
+            });
+          }
+          
+          // Enable camera and mic for the guest - same as broadcaster
           await liveKit.toggleMicrophone();
           await liveKit.toggleCamera();
+          
+          // Set local state to reflect media is on
+          setMicOn(true);
+          setCameraOn(true);
         } catch (err) {
           console.error('Failed to enable guest media:', err);
           toast.error('Failed to enable camera and mic');
