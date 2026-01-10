@@ -308,8 +308,8 @@ export class LiveKitService {
           }
           
           token = tokenResponse.token
-          this.log('✅ LiveKit token received', { 
-            tokenLength: token.length,
+          this.log('✅ LiveKit token received', {
+            tokenLength: token ? token.length : 0,
             tokenType: typeof token,
             tokenIsString: typeof token === 'string'
           })

@@ -318,7 +318,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
         connectLockRef.current = false;
       }
     },
-    [syncLocalParticipant]
+    [syncLocalParticipant, isConnected]
   );
 
   const disconnect = useCallback(() => {
