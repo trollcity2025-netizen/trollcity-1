@@ -346,7 +346,7 @@ export class LiveKitService {
 
       // Debug: log token length and decoded payload for troubleshooting publish permissions
       try {
-        this.log('🔐 LiveKit token length', { length: token.length })
+        this.log('🔐 LiveKit token length', { length: token ? token.length : 0 })
         const parts = token.split('.')
         if (parts.length >= 2) {
           const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1]))))
@@ -375,7 +375,7 @@ export class LiveKitService {
           this.log('🔐 LiveKit token (raw preview)', typeof token === 'string' ? token.substring(0, 60) + '...' : 'N/A')
         }
       } catch (e) {
-        this.log('🔐 Failed to decode LiveKit token payload', { error: e?.message || e })
+        this.log('🔐 Failed to decode LiveKit token payload', { error: (e as any)?.message || String(e) })
       }
 
       // Step 2: Create room with configuration
@@ -1118,6 +1118,46 @@ export class LiveKitService {
 
     this.updateLocalParticipantState()
     this.log('✅ New tracks published successfully')
+  }
+
+  // ✅ NEW: Reconnect method to handle network interruptions gracefully
+  async reconnect(): Promise<boolean> {
+    if (!this.config.roomName || !this.config.identity) {
+      this.log('❌ Cannot reconnect: missing roomName or identity')
+      return false
+    }
+
+    if (this.isConnecting) {
+      this.log('🛡️ Reconnect skipped: already connecting')
+      return false
+    }
+
+    this.log('🔄 Attempting to reconnect to LiveKit room...')
+
+    try {
+      // Disconnect current session if any
+      if (this.room && this.room.state !== 'disconnected') {
+        try {
+          this.log('🔌 Disconnecting current session before reconnect')
+          this.room.disconnect()
+        } catch (disconnectError) {
+          this.log('⚠️ Error during disconnect before reconnect:', disconnectError)
+        }
+      }
+
+      // Attempt to reconnect
+      const success = await this.connect()
+      if (success) {
+        this.log('✅ Reconnect successful')
+        return true
+      } else {
+        this.log('❌ Reconnect failed')
+        return false
+      }
+    } catch (error: any) {
+      this.log('❌ Reconnect error:', error?.message || error)
+      return false
+    }
   }
 
   getRoom(): Room | null {

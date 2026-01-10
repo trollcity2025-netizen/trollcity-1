@@ -99,10 +99,11 @@ const GoLive: React.FC = () => {
       return;
     }
 
-    if (!profile.is_broadcaster) {
-      toast.error('🚫 You must be an approved broadcaster to go live.');
-      return;
-    }
+    // All users are now approved to broadcast - no restrictions
+    // if (!profile.is_broadcaster) {
+    //   toast.error('🚫 You must be an approved broadcaster to go live.');
+    //   return;
+    // }
 
     // Immediate Go Live flow requires camera/mic and LiveKit connection before navigation
 

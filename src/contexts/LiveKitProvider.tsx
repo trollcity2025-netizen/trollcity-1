@@ -273,6 +273,22 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
               return;
             }
 
+            // ✅ NEW: Prevent disruptions for viewers - automatically reconnect
+            if (!isBroadcaster && isConnected && !disconnectingRef.current) {
+              console.warn("[LiveKit viewer error - attempting reconnect]", errorMsg);
+              try {
+                // Attempt to reconnect silently
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before reconnect
+                if (!disconnectingRef.current) {
+                  await serviceRef.current?.reconnect();
+                  console.log("[LiveKit viewer reconnected successfully]");
+                  return; // Success - don't show error to user
+                }
+              } catch (reconnectError) {
+                console.error("[LiveKit reconnect failed]", reconnectError);
+              }
+            }
+
             console.error("[LiveKit error]", errorMsg);
             setError(errorMsg);
             setIsConnecting(false);

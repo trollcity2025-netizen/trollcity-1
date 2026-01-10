@@ -1,11 +1,11 @@
-import React, { 
-  useEffect, 
-  useState 
+import React, {
+  useEffect,
+  useState
 } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLiveKit } from '../hooks/useLiveKit';
 import { useAuthStore } from '../lib/store';
-import { supabase } from '../lib/supabase';
+import { supabase, UserProfile } from '../lib/supabase';
 import { toast } from 'sonner';
 import ChatBox from '../components/broadcast/ChatBox';
 import GiftBox from '../components/broadcast/GiftBox';
@@ -18,6 +18,7 @@ import EntranceEffect from '../components/broadcast/EntranceEffect';
 import BroadcastLayout from '../components/broadcast/BroadcastLayout';
 import BroadcastOverlays from '../components/stream/BroadcastOverlays';
 import { useSeatRoster } from '../hooks/useSeatRoster';
+import SeatCostPopup from '../components/broadcast/SeatCostPopup';
 
 // Constants
 const STREAM_POLL_INTERVAL = 2000;
@@ -47,6 +48,9 @@ export default function BroadcastPage() {
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
   const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [seatCostPopupVisible, setSeatCostPopupVisible] = useState(false);
+  const [seatCost, setSeatCost] = useState<number>(0);
+  const [joinPrice, setJoinPrice] = useState<number>(0);
   
   // LiveKit
   const liveKit = useLiveKit();
@@ -92,7 +96,7 @@ export default function BroadcastPage() {
     
     const initSession = async () => {
       try {
-        await liveKit.connect(streamId, user, { 
+        await liveKit.connect(streamId, user, {
           allowPublish: isBroadcaster,
           role: isBroadcaster ? 'host' : 'audience'
         });
@@ -112,6 +116,30 @@ export default function BroadcastPage() {
       liveKit.disconnect();
     };
   }, [streamId, user, isBroadcaster, liveKit, profile]);
+
+  // Enable camera and mic for guests when they join a seat
+  useEffect(() => {
+    if (!isBroadcaster && seats.some(seat => seat?.user_id === user?.id)) {
+      const enableGuestMedia = async () => {
+        try {
+          // Disconnect and reconnect with publishing permissions
+          await liveKit.disconnect();
+          await liveKit.connect(streamId || '', user, {
+            allowPublish: true,
+            role: 'guest'
+          });
+          // Enable camera and mic for the guest
+          await liveKit.toggleMicrophone();
+          await liveKit.toggleCamera();
+        } catch (err) {
+          console.error('Failed to enable guest media:', err);
+          toast.error('Failed to enable camera and mic');
+        }
+      };
+      
+      enableGuestMedia();
+    }
+  }, [isBroadcaster, seats, user, streamId, liveKit]);
 
   // Handlers
   const toggleMic = async () => {
@@ -151,15 +179,27 @@ export default function BroadcastPage() {
           broadcasterId={stream.broadcaster_id}
           isHost={isBroadcaster}
           seats={seats}
-          onSetPrice={() => {}} // Placeholder
-          onJoinRequest={async (seatIndex: number) => {
-            try {
-              await claimSeat(seatIndex);
-            } catch (err) {
-              console.error('Failed to claim seat:', err);
-              toast.error('Failed to join seat');
-            }
+          joinPrice={joinPrice}
+          onSetPrice={(newPrice) => {
+            // Update the join price state
+            setJoinPrice(newPrice);
+            // This would be used to update the price in the database
+            console.log('Join price updated:', newPrice);
           }}
+          onJoinRequest={async (seatIndex: number) => {
+           try {
+             // Show seat cost popup if there's a price set
+             if (joinPrice > 0) {
+               setSeatCost(joinPrice);
+               setSeatCostPopupVisible(true);
+             }
+             
+             await claimSeat(seatIndex, { joinPrice });
+           } catch (err) {
+             console.error('Failed to claim seat:', err);
+             toast.error('Failed to join seat');
+           }
+         }}
         >
           {/* Overlays */}
           <BroadcastOverlays
@@ -229,12 +269,21 @@ export default function BroadcastPage() {
           profile={selectedProfile} 
           onClose={() => setSelectedProfile(null)} 
           onSendCoins={() => {}} 
-          onGift={(p) => { setGiftRecipient(p); setIsGiftModalOpen(true); }} 
+          onGift={(p: UserProfile) => { setGiftRecipient(p); setIsGiftModalOpen(true); }}
           currentUser={user} 
         />
       )}
       
       {isCoinStoreOpen && <CoinStoreModal onClose={() => setIsCoinStoreOpen(false)} onPurchase={() => {}} />}
+      
+      {/* Seat Cost Popup - shows when joining a seat with a price */}
+      {seatCostPopupVisible && (
+        <SeatCostPopup
+          cost={seatCost}
+          onClose={() => setSeatCostPopupVisible(false)}
+          duration={10000}
+        />
+      )}
     </div>
   );
 }

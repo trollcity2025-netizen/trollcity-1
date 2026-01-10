@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Participant, LocalParticipant } from 'livekit-client';
 import { useBroadcastLayout } from '../../hooks/useBroadcastLayout';
 import VideoTile from '../broadcast/VideoTile';

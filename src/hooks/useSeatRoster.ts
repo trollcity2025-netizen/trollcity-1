@@ -198,6 +198,7 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
         avatarUrl?: string | null
         role?: string
         metadata?: Record<string, any>
+        joinPrice?: number
       }
     ) => {
       const safeIndex = normalizeSeatIndex(seatIndex)
@@ -218,6 +219,32 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
         const role = payload?.role ?? profile?.role ?? 'troll_officer'
         const avatar_url = payload?.avatarUrl ?? profile?.avatar_url ?? null
         const metadata = payload?.metadata ?? {}
+        const joinPrice = payload?.joinPrice ?? 0
+
+        // Handle coin deduction if there's a join price
+        if (joinPrice > 0 && userId) {
+          try {
+            const { deductCoins } = await import('../lib/coinTransactions')
+            const deductionResult = await deductCoins({
+              userId: userId,
+              amount: joinPrice,
+              type: 'perk_purchase',
+              description: `Joined seat ${safeIndex + 1} in broadcast`,
+              metadata: {
+                seatIndex: safeIndex + 1,
+                room: roomName,
+                ...metadata
+              }
+            })
+
+            if (!deductionResult.success) {
+              throw new Error(deductionResult.error || 'Failed to deduct coins for seat join')
+            }
+          } catch (coinError) {
+            console.error('Failed to deduct coins for seat join:', coinError)
+            throw new Error(`Failed to deduct coins: ${coinError instanceof Error ? coinError.message : 'Unknown error'}`)
+          }
+        }
 
         const { data, error: invokeError } = await supabase.functions.invoke('broadcast-seats', {
           body: {
