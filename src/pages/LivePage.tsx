@@ -20,8 +20,7 @@ import {
   Mic,
   MicOff,
   Camera,
-  CameraOff,
-  Square
+  CameraOff
 } from 'lucide-react';
 
 // Lazy load components to avoid circular dependencies
@@ -65,7 +64,7 @@ const useIsBroadcaster = (profile: any, stream: StreamRow | null) => {
   }, [profile?.id, stream?.broadcaster_id]);
 };
 
-function BroadcasterTimer({ startTime }: { startTime: string }) {
+function BroadcasterTimer({ startTime, onClick }: { startTime: string; onClick?: () => void }) {
   const [elapsed, setElapsed] = useState('00:00:00');
 
   useEffect(() => {
@@ -93,15 +92,22 @@ function BroadcasterTimer({ startTime }: { startTime: string }) {
   }, [startTime]);
 
   return (
-    <div className="bg-red-600/90 text-white px-3 py-1 rounded-full text-xs font-bold font-mono animate-pulse flex items-center gap-2 shadow-[0_0_10px_rgba(220,38,38,0.5)] border border-red-400/30">
+    <button
+      type="button"
+      onClick={onClick}
+      className="bg-red-600/90 text-white px-3 py-1 rounded-full text-xs font-bold font-mono animate-pulse flex items-center gap-2 shadow-[0_0_10px_rgba(220,38,38,0.5)] border border-red-400/30"
+    >
       <div className="w-2 h-2 rounded-full bg-white animate-ping" />
       LIVE {elapsed}
-    </div>
+    </button>
   );
 }
 
 function BroadcasterControlPanel({ streamId, onAlertOfficers }: { streamId: string; onAlertOfficers: (targetUserId?: string) => Promise<void> }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
   const [participants, setParticipants] = useState<Array<{ user_id: string; username: string; avatar_url?: string; is_moderator?: boolean; can_chat?: boolean; chat_mute_until?: string; is_active?: boolean }>>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1074,7 +1080,7 @@ export default function LivePage() {
             </div>
             {stream.is_live && (
               isBroadcaster && stream.start_time ? (
-                <BroadcasterTimer startTime={stream.start_time} />
+                <BroadcasterTimer startTime={stream.start_time} onClick={endStream} />
               ) : (
                 <div className="px-3 py-1 bg-red-600 rounded-full text-xs font-bold animate-pulse">LIVE</div>
               )
@@ -1088,30 +1094,15 @@ export default function LivePage() {
                 <button onClick={toggleCamera} className={`p-2 rounded-lg border ${cameraOn ? 'bg-purple-600 border-purple-400' : 'bg-red-900/50 border-red-500'}`}>
                   {cameraOn ? <Camera size={18} /> : <CameraOff size={18} />}
                 </button>
-                <button onClick={endStream} className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm font-bold flex items-center gap-2">
-                  <Square size={16} fill="currentColor" /> End
-                </button>
               </>
             )}
          </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-2 lg:p-4 pt-0 overflow-hidden">
-        {/* Broadcaster End Button (fixed, touch-friendly) */}
-        {isBroadcaster && (
-          <button
-            onClick={endStream}
-            aria-label="End Broadcast"
-            className="fixed top-4 right-4 z-50 bg-red-700 hover:bg-red-600 text-white rounded-lg shadow-lg flex items-center justify-center"
-            style={{ width: 48, height: 48, minWidth: 44, minHeight: 44 }}
-          >
-            <Square size={18} />
-          </button>
-        )}
-
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-2 lg:p-4 pt-0 overflow-y-auto lg:overflow-hidden">
         {/* Broadcast Layout (Streamer + Guests) */}
-        <div className="lg:w-3/4 flex-1 min-h-[45svh] lg:min-h-0 lg:h-full flex flex-col relative z-0">
+        <div className="lg:w-3/4 h-[48svh] lg:h-full lg:flex-1 min-h-0 flex flex-col relative z-0">
             <BroadcastLayout 
               room={liveKit.getRoom()} 
               broadcasterId={stream.broadcaster_id}

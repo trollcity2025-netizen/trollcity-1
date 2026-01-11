@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import LiveAvatar from '../components/LiveAvatar';
-import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff } from 'lucide-react';
+import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { deductCoins } from '@/lib/coinTransactions';
 import { PERK_CONFIG } from '@/lib/perkSystem';
@@ -382,6 +382,18 @@ export default function Profile() {
       toast.error(e?.message || 'Failed to update preferences');
     } finally {
       setSavingPreferences(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success('Logged out');
+      navigate('/auth');
+    } catch (e: any) {
+      console.error('Logout error:', e);
+      toast.error(e?.message || 'Failed to log out');
     }
   };
 
@@ -978,11 +990,29 @@ export default function Profile() {
                          announcementsEnabled ? 'translate-x-6' : 'translate-x-1'
                        }`}
                      />
-                   </button>
-                 </div>
+                 </button>
                </div>
              </div>
-           )}
+             
+             <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
+               <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                   <LogOut className="w-6 h-6 text-red-400" />
+                   <div>
+                     <h4 className="font-medium text-white">Log out</h4>
+                     <p className="text-sm text-gray-400">Sign out of your account on this device</p>
+                   </div>
+                 </div>
+                 <button
+                   onClick={handleLogout}
+                   className="px-4 py-2 bg-red-600/20 border border-red-500/40 text-red-300 rounded-lg hover:bg-red-600/30 transition"
+                 >
+                   Log out
+                 </button>
+               </div>
+             </div>
+           </div>
+          )}
         </div>
       </div>
     </div>
