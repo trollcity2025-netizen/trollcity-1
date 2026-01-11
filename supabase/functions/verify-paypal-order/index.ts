@@ -215,15 +215,26 @@ serve(async (req: Request) => {
     }
 
     // 7. Log Transaction
+    const purchaseUnitForTx = captureData.purchase_units?.[0];
+    const captureForTx = purchaseUnitForTx?.payments?.captures?.[0];
+    
+    let amountVal = captureForTx?.amount?.value;
+    if (!amountVal) {
+        amountVal = purchaseUnitForTx?.amount?.value;
+    }
+    const amountUSD = parseFloat(amountVal || "0");
+
     const { error: logError } = await supabase.from("coin_transactions").insert({
         user_id: user_id,
-        transaction_type: "store_purchase",
+        type: "purchase",
         amount: coinsToAdd,
+        platform_profit: amountUSD,
         description: `PayPal Purchase: ${customData.type || 'coins'}`,
         metadata: {
             paypal_order_id: orderID,
+            amount_paid: amountUSD,
             package_id: customData.packageId,
-            paypal_capture_id: captureData.purchase_units?.[0]?.payments?.captures?.[0]?.id,
+            paypal_capture_id: captureForTx?.id,
             raw_custom_id: customData
         }
     });
