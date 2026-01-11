@@ -14,7 +14,7 @@ export type NotificationType =
   | 'troll_drop';
 
 export async function sendNotification(
-  userId: string,
+  userId: string | null,
   type: NotificationType,
   title: string,
   message: string,
@@ -22,7 +22,7 @@ export async function sendNotification(
 ) {
   const { error } = await supabase.from("notifications").insert([
     {
-      user_id: userId,
+      user_id: userId ?? null,
       type,
       title,
       message,
