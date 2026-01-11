@@ -61,6 +61,7 @@ export default function BroadcastPage() {
 
   // Derived
   const isBroadcaster = user?.id === stream?.broadcaster_id;
+  const isGuestSeat = !isBroadcaster && seats.some(seat => seat?.user_id === user?.id);
   
   // Load stream
   useEffect(() => {
@@ -101,8 +102,8 @@ export default function BroadcastPage() {
     const initSession = async () => {
       try {
         await liveKit.connect(streamId, user, {
-          allowPublish: isBroadcaster,
-          role: isBroadcaster ? 'host' : 'audience'
+          allowPublish: isBroadcaster || isGuestSeat,
+          role: isBroadcaster ? 'host' : (isGuestSeat ? 'guest' : 'audience')
         });
         if (isBroadcaster) {
            // Enable camera and mic for broadcaster using consistent logic
@@ -120,7 +121,7 @@ export default function BroadcastPage() {
     return () => {
       liveKit.disconnect();
     };
-  }, [streamId, user, isBroadcaster, liveKit, profile]);
+  }, [streamId, user, isBroadcaster, isGuestSeat, liveKit, profile]);
 
   // Track viewers for this stream
   useViewerTracking(streamId || '', user?.id || null);

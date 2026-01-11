@@ -1,6 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React from 'react';
 import { Participant, LocalParticipant } from 'livekit-client';
-import { useBroadcastLayout } from '../../hooks/useBroadcastLayout';
 import VideoTile from '../broadcast/VideoTile';
 
 interface ResponsiveVideoGridProps {
@@ -24,46 +23,11 @@ export default function ResponsiveVideoGrid({
   onJoinRequest,
   onDisableGuestMedia
 }: ResponsiveVideoGridProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [isLandscape, setIsLandscape] = useState(true);
-
-  // Monitor container size
-  useEffect(() => {
-    if (!containerRef.current) return;
-    
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setDimensions({ width, height });
-        setIsLandscape(width > height);
-      }
-    });
-    
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   const TOTAL_SLOTS = 6;
-  
-  const { tileStyles } = useBroadcastLayout(
-    participants,
-    dimensions.width,
-    dimensions.height,
-    isLandscape,
-    TOTAL_SLOTS
-  );
 
   return (
-    <div 
-      ref={containerRef} 
-      className="relative w-full h-full overflow-hidden bg-black/50"
-    >
-      {/* Render Slots */}
+    <div className="seats-grid w-full h-full bg-black/50">
       {Array.from({ length: TOTAL_SLOTS }).map((_, i) => {
-        const style = tileStyles[i];
-        if (!style) return null;
-
         const seat = seats && seats[i];
         let p = seat ? participants.find(p => p.identity === seat.user_id) : null;
 
@@ -102,32 +66,26 @@ export default function ResponsiveVideoGrid({
           const isBroadcaster = p.identity === broadcasterId;
 
           return (
-            <VideoTile
-              key={p.identity}
-              participant={p}
-              isBroadcaster={isBroadcaster}
-              isLocal={isLocal}
-              isHost={isBroadcaster} // Broadcaster is the host
-              onLeave={isLocal && !isBroadcaster ? onLeaveSession : undefined}
-              onDisableGuestMedia={onDisableGuestMedia}
-              price={joinPrice}
-              style={{
-                ...style,
-                position: 'absolute',
-                transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
-              } as React.CSSProperties}
-            />
+            <div key={p.identity} className="seat">
+              <VideoTile
+                participant={p}
+                isBroadcaster={isBroadcaster}
+                isLocal={isLocal}
+                isHost={isBroadcaster} // Broadcaster is the host
+                onLeave={isLocal && !isBroadcaster ? onLeaveSession : undefined}
+                onDisableGuestMedia={onDisableGuestMedia}
+                price={joinPrice}
+                className="w-full h-full"
+                style={{ width: '100%', height: '100%' }}
+              />
+            </div>
           );
         } else if (seat) {
           // Seat assigned but participant not connected
           return (
             <div
               key={`waiting-${i}`}
-              className="absolute bg-zinc-900/50 rounded-2xl border border-white/5 flex items-center justify-center backdrop-blur-sm"
-              style={{
-                ...style,
-                transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
-              } as React.CSSProperties}
+              className="seat bg-zinc-900/50 border border-white/5 flex items-center justify-center backdrop-blur-sm"
             >
               <div className="text-white/20 font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2">
                   <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
@@ -145,11 +103,7 @@ export default function ResponsiveVideoGrid({
           return (
             <div
               key={`empty-${i}`}
-              className={`absolute bg-zinc-900/50 rounded-2xl border border-white/5 flex items-center justify-center backdrop-blur-sm ${canJoin ? 'cursor-pointer hover:bg-zinc-800/50 hover:border-white/10 transition-colors' : ''}`}
-              style={{
-                ...style,
-                transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)'
-              } as React.CSSProperties}
+              className={`seat bg-zinc-900/50 border border-white/5 flex items-center justify-center backdrop-blur-sm ${canJoin ? 'cursor-pointer hover:bg-zinc-800/50 hover:border-white/10 transition-colors' : ''}`}
               onClick={canJoin ? () => onJoinRequest?.(i) : undefined}
             >
               <div className="text-white/20 font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2">

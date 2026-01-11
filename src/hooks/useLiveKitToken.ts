@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../lib/store';
 
 interface UseLiveKitTokenProps {
   streamId: string | undefined;
@@ -49,7 +50,14 @@ export function useLiveKitToken({
 
         console.log('[useLiveKitToken] Fetching token...', { roomName, isHost, userId });
 
-        const { data: { session } } = await supabase.auth.getSession(); 
+        const storeSession = useAuthStore.getState().session as any;
+        const expiresAt = storeSession?.expires_at;
+        const now = Math.floor(Date.now() / 1000);
+        const hasValidStoreSession = !!storeSession?.access_token && (!expiresAt || expiresAt > now + 30);
+        const session = hasValidStoreSession
+          ? storeSession
+          : (await supabase.auth.getSession()).data.session;
+
         console.log("SESSION TOKEN EXISTS?", !!session?.access_token); 
         console.log("TOKEN START:", session?.access_token?.slice(0, 20));
 

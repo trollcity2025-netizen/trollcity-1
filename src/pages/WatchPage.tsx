@@ -220,6 +220,10 @@ export default function WatchPage() {
       setSelectedProfile(null);
   }, []);
 
+  const isUuid = (value?: string | number) =>
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
   const handleGiftSent = useCallback(async (amountOrGift: any) => {
     let totalCoins = 0;
     let quantity = 1;
@@ -251,7 +255,7 @@ export default function WatchPage() {
         coins_spent: totalCoins,
         gift_type: 'paid',
         message: giftName,
-        gift_id: giftId,
+        gift_id: isUuid(giftId) ? giftId : null,
         quantity: quantity,
       });
     } catch (e) {

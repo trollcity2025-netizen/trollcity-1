@@ -431,7 +431,7 @@ export default function LivePage() {
     error: tokenError
   } = useLiveKitToken({
     streamId,
-    isHost: isBroadcaster,
+    isHost: isBroadcaster || canPublish,
     userId: user?.id,
     roomName: roomName,
   });
@@ -468,6 +468,7 @@ export default function LivePage() {
 
   const {
     isConnected,
+    resetJoinGuard,
   } = useLiveKitSession({
     roomName: tokenRoomName || (sessionReady ? roomName : ''),
     user: sessionReady && user
@@ -485,6 +486,7 @@ export default function LivePage() {
   // Join Request Logic
   // const [joinPrice, setJoinPrice] = useState(0); // Moved up
   // const [canPublish, setCanPublish] = useState(false); // Moved up
+  const publishUpgradeRef = useRef(false);
 
   const handleLeaveSession = useCallback(async () => {
     setCanPublish(false);
@@ -517,15 +519,16 @@ export default function LivePage() {
   const handleJoinRequest = async () => {
     if (canPublish) {
         toast.info("Resuming guest session...");
-        // Ensure media is active if they are clicking join again
-        setTimeout(() => {
-            liveKit.toggleCamera().then((ok) => {
-                 if (ok) setCameraOn(true);
-            });
-            liveKit.toggleMicrophone().then((ok) => {
-                 if (ok) setMicOn(true);
-            });
-        }, 100);
+        if (!cameraOn) {
+          liveKit.toggleCamera().then((ok) => {
+            if (ok) setCameraOn(true);
+          });
+        }
+        if (!micOn) {
+          liveKit.toggleMicrophone().then((ok) => {
+            if (ok) setMicOn(true);
+          });
+        }
         return;
     }
     
@@ -563,16 +566,21 @@ export default function LivePage() {
     }
     
     setCanPublish(true);
-    // Allow React state to update before triggering publish
-    setTimeout(() => {
-        liveKit.toggleCamera().then((ok) => {
-             if (ok) setCameraOn(true);
-        });
-        liveKit.toggleMicrophone().then((ok) => {
-             if (ok) setMicOn(true);
-        });
-    }, 500);
+    setCameraOn(true);
+    setMicOn(true);
   };
+
+  useEffect(() => {
+    if (!canPublish) {
+      publishUpgradeRef.current = false;
+      return;
+    }
+    if (isBroadcaster || !tokenReady || !serverUrl || !isConnected) return;
+    if (publishUpgradeRef.current) return;
+    publishUpgradeRef.current = true;
+    resetJoinGuard();
+    liveKit.disconnect();
+  }, [canPublish, isBroadcaster, tokenReady, serverUrl, isConnected, resetJoinGuard, liveKit]);
 
 
   // Officer tracking for broadcasters
@@ -901,6 +909,10 @@ export default function LivePage() {
     }
   }, [lastGift, stream]);
 
+  const isUuid = (value?: string | number) =>
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
   const handleGiftSent = useCallback(async (amountOrGift: any) => {
     let totalCoins = 0;
     let quantity = 1;
@@ -930,7 +942,7 @@ export default function LivePage() {
         coins_spent: totalCoins,
         gift_type: 'paid',
         message: giftName,
-        gift_id: giftId,
+        gift_id: isUuid(giftId) ? giftId : null,
         quantity: quantity,
       });
 

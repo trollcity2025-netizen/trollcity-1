@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-// @ts-ignore - lucide-react types issue
 import { Crown, PartyPopper, X, Shield } from 'lucide-react';
 import { APP_DATA_REFETCH_EVENT_NAME as REFRESH_EVENT } from '../lib/appEvents';
 import { isBirthdayToday } from '../lib/birthdayUtils';
