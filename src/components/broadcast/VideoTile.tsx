@@ -53,19 +53,43 @@ export default function VideoTile({
   }, [participant.identity]);
 
   useEffect(() => {
+    const attachVideo = () => {
+        const vidPub = participant.getTrackPublication(Track.Source.Camera);
+        // For LocalParticipant, isSubscribed might be false/undefined but track is present
+        const isLocalParticipant = participant instanceof LocalParticipant;
+        const canAttach = vidPub && (vidPub.isSubscribed || isLocalParticipant) && vidPub.videoTrack;
+        
+        if (canAttach && videoRef.current) {
+            console.log(`[VideoTile] Attaching video track for ${participant.identity} (Local: ${isLocalParticipant})`);
+            vidPub.videoTrack!.attach(videoRef.current);
+            if (isLocalParticipant) {
+                videoRef.current.muted = true;
+                videoRef.current.volume = 0;
+            }
+            videoRef.current.playsInline = true;
+            videoRef.current.play().catch(e => console.error("Video play failed", e));
+            setIsVideoEnabled(!vidPub.isMuted);
+        } else {
+             // If we can't attach yet, maybe it's because track isn't subscribed/published
+             console.log(`[VideoTile] Cannot attach video for ${participant.identity}. Pub: ${!!vidPub}, Track: ${!!vidPub?.videoTrack}`);
+        }
+    };
+
     const onSpeakingChanged = () => setSpeaking(participant.isSpeaking);
     const onTrackMuted = (pub: any) => {
         if (pub.kind === Track.Kind.Video) setIsVideoEnabled(false);
         if (pub.kind === Track.Kind.Audio) setIsAudioEnabled(false);
     };
     const onTrackUnmuted = (pub: any) => {
-        if (pub.kind === Track.Kind.Video) setIsVideoEnabled(true);
+        if (pub.kind === Track.Kind.Video) {
+            setIsVideoEnabled(true);
+            attachVideo(); // Re-attach just in case
+        }
         if (pub.kind === Track.Kind.Audio) setIsAudioEnabled(true);
     };
     const onTrackSubscribed = (track: Track) => {
         if (track.kind === Track.Kind.Video) {
-            track.attach(videoRef.current!);
-            setIsVideoEnabled(true);
+            attachVideo();
         }
         if (track.kind === Track.Kind.Audio) {
             setIsAudioEnabled(true);
@@ -75,19 +99,23 @@ export default function VideoTile({
          if (track.kind === Track.Kind.Video) setIsVideoEnabled(false);
     };
 
+    const onTrackPublished = (pub: any) => {
+        if (pub.kind === Track.Kind.Video) {
+             // Small delay to ensure track is fully ready
+             setTimeout(attachVideo, 100);
+        }
+    };
+
     (participant as any).on('speakingChanged', onSpeakingChanged);
     (participant as any).on('trackMuted', onTrackMuted);
     (participant as any).on('trackUnmuted', onTrackUnmuted);
     (participant as any).on('trackSubscribed', onTrackSubscribed);
     (participant as any).on('trackUnsubscribed', onTrackUnsubscribed);
+    (participant as any).on('trackPublished', onTrackPublished);
     
     // Initial state check
     setSpeaking(participant.isSpeaking);
-    const vidPub = participant.getTrackPublication(Track.Source.Camera);
-    if (vidPub && vidPub.isSubscribed && vidPub.videoTrack) {
-        vidPub.videoTrack.attach(videoRef.current!);
-        setIsVideoEnabled(!vidPub.isMuted);
-    }
+    attachVideo();
     const audPub = participant.getTrackPublication(Track.Source.Microphone);
     if (audPub) {
         setIsAudioEnabled(!audPub.isMuted);
@@ -99,6 +127,7 @@ export default function VideoTile({
         (participant as any).off('trackUnmuted', onTrackUnmuted);
         (participant as any).off('trackSubscribed', onTrackSubscribed);
         (participant as any).off('trackUnsubscribed', onTrackUnsubscribed);
+        (participant as any).off('trackPublished', onTrackPublished);
     };
   }, [participant]);
 
@@ -206,6 +235,9 @@ export default function VideoTile({
       <video 
         ref={videoRef} 
         className="w-full h-full transition-all duration-300"
+        muted={isLocal}
+        playsInline
+        autoPlay
         style={{ 
           objectFit,
           transform: isLocal ? 'scaleX(-1)' : 'none' 

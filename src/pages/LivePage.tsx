@@ -475,7 +475,7 @@ export default function LivePage() {
       : null,
     role: isBroadcaster ? 'broadcaster' : 'viewer',
     allowPublish: (isBroadcaster || canPublish) && sessionReady,
-    autoPublish: isBroadcaster, // Only broadcaster auto-publishes. Viewers must request.
+    autoPublish: isBroadcaster || canPublish, // Enable autoPublish for guests too when allowed
     token: token || undefined,
     serverUrl: serverUrl || undefined,
     connect: canConnect,

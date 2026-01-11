@@ -65,6 +65,31 @@ Deno.serve(async (req: Request) => {
       } else {
         console.log('Stream marked as ended:', room.name);
       }
+    } else if (event === 'egress_ended') {
+      // Handle recording finished
+      const egress = body.egress;
+      const file = egress?.file || egress?.file_results?.[0]; // Handle different egress versions
+      const recordingUrl = file?.location || file?.filename;
+      const roomName = egress?.room_name;
+
+      console.log('Egress ended for room:', roomName, 'URL:', recordingUrl);
+
+      if (roomName && recordingUrl) {
+         const { error } = await supabase
+            .from('streams')
+            .update({
+               recording_url: recordingUrl,
+               is_live: false, // Ensure it's marked as ended
+               status: 'ended'
+            })
+            .eq('id', roomName); // Assuming roomName maps to stream ID
+
+         if (error) {
+            console.error('Error updating recording_url:', error);
+         } else {
+            console.log('Recording URL updated for stream:', roomName);
+         }
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

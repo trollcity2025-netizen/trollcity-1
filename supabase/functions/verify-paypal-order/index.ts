@@ -1,66 +1,87 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const allowedOrigins = new Set([
+  "https://maitrollcity.com",
+  "https://www.maitrollcity.com",
+  "http://localhost:3000",
+  "http://localhost:5173"
+]);
+
+function corsHeaders(origin: string | null) {
+  const allowOrigin = allowedOrigins.has(origin ?? "")
+    ? origin!
+    : "https://maitrollcity.com";
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
 }
 
-const PAYPAL_CLIENT_ID = Deno.env.get("PAYPAL_CLIENT_ID");
-const PAYPAL_CLIENT_SECRET = Deno.env.get("PAYPAL_CLIENT_SECRET");
-const PAYPAL_MODE = Deno.env.get("PAYPAL_MODE") ?? "live";
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-const PAYPAL_BASE =
-  PAYPAL_MODE === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
+const PAYPAL_BASE = Deno.env.get("PAYPAL_MODE") === "sandbox" 
+  ? "https://api-m.sandbox.paypal.com" 
+  : "https://api-m.paypal.com";
 
 async function getAccessToken() {
-  const creds = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`);
-  const res = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${creds}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: "grant_type=client_credentials"
-  });
-  if (!res.ok) {
-    console.error("PayPal token error", await res.text());
-    throw new Error("Failed to get PayPal token");
+  const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
+  const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
+  
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing PayPal credentials");
   }
-  const data = await res.json();
-  return data.access_token as string;
+
+  const auth = btoa(`${clientId}:${clientSecret}`);
+  const response = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+    method: "POST",
+    body: "grant_type=client_credentials",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to get PayPal access token: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
 }
 
 serve(async (req: Request) => {
+  const origin = req.headers.get("origin");
+  const headers = corsHeaders(origin);
+
+  // 1. Handle OPTIONS preflight immediately
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { status: 204, headers });
   }
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...headers, "Content-Type": "application/json" }
     });
   }
 
   try {
-    const { orderID, user_id } = await req.json();
+    const body = await req.json();
+    const { orderID, user_id } = body;
 
     if (!orderID || !user_id) {
       return new Response(JSON.stringify({ error: "Missing orderID or user_id" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        headers: { ...headers, "Content-Type": "application/json" }
       });
     }
 
-    // 1. Get PayPal Access Token
+    // 2. Get PayPal Access Token
     const accessToken = await getAccessToken();
 
-    // 2. Capture the Order
+    // 3. Capture the Order
     console.log(`Capturing order ${orderID}...`);
     const captureRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${orderID}/capture`, {
       method: "POST",
@@ -76,10 +97,9 @@ serve(async (req: Request) => {
     } else {
         const errorText = await captureRes.text();
         console.error("PayPal capture error:", errorText);
-        // If it's already captured, we might still want to proceed if we can verify details, 
-        // but usually we should fail or check status.
-        // Let's try to get details if capture failed (maybe it was already captured?)
-        if (captureRes.status === 422) { // UNPROCESSABLE_ENTITY (e.g. ORDER_ALREADY_CAPTURED)
+        
+        // Check if already captured
+        if (captureRes.status === 422) { // UNPROCESSABLE_ENTITY
              console.log("Order might be already captured, fetching details...");
              const detailsRes = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${orderID}`, {
                 method: "GET",
@@ -101,11 +121,11 @@ serve(async (req: Request) => {
     if (captureData.status !== "COMPLETED") {
         return new Response(JSON.stringify({ error: "Order not completed", status: captureData.status }), {
             status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
+            headers: { ...headers, "Content-Type": "application/json" }
         });
     }
 
-    // 3. Verify Custom ID
+    // 4. Verify Custom ID
     const purchaseUnit = captureData.purchase_units?.[0];
     const customIdRaw = purchaseUnit?.custom_id;
     
@@ -118,15 +138,13 @@ serve(async (req: Request) => {
         customData = JSON.parse(customIdRaw);
     } catch (e) {
         console.error("Failed to parse custom_id:", customIdRaw);
-        // Fallback for old format if any: uid:123|...
-        // But we are focusing on the new JSON format from paypal-create-order
         throw new Error("Invalid custom_id format");
     }
 
     if (customData.userId !== user_id) {
         return new Response(JSON.stringify({ error: "User ID mismatch" }), {
             status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
+            headers: { ...headers, "Content-Type": "application/json" }
         });
     }
 
@@ -135,10 +153,17 @@ serve(async (req: Request) => {
         throw new Error("Invalid coin amount in custom_id");
     }
 
-    // 4. Initialize Supabase Admin Client
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    // 5. Initialize Supabase Admin Client
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error("Missing Supabase configuration");
+    }
 
-    // 5. Add Coins (Idempotency check could be here, but we rely on PayPal orderID uniqueness if we log it)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 6. Add Coins
     // Check if we already processed this orderID
     const { data: existingTx } = await supabase
         .from("coin_transactions")
@@ -150,7 +175,7 @@ serve(async (req: Request) => {
         console.log(`Order ${orderID} already processed.`);
         return new Response(JSON.stringify({ success: true, message: "Already processed", coins_added: coinsToAdd }), {
             status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
+            headers: { ...headers, "Content-Type": "application/json" }
         });
     }
 
@@ -165,12 +190,11 @@ serve(async (req: Request) => {
         throw new Error("Failed to add coins to user account");
     }
 
-    // 6. Log Transaction
+    // 7. Log Transaction
     const { error: logError } = await supabase.from("coin_transactions").insert({
         user_id: user_id,
-        type: "store_purchase",
+        transaction_type: "store_purchase",
         amount: coinsToAdd,
-        coin_type: "troll_coins", // or 'paid' depending on schema, user seems to use 'troll_coins' recently
         description: `PayPal Purchase: ${customData.type || 'coins'}`,
         metadata: {
             paypal_order_id: orderID,
@@ -182,19 +206,18 @@ serve(async (req: Request) => {
 
     if (logError) {
         console.error("Failed to log transaction:", logError);
-        // We don't fail the request since coins were added, but we log the error
     }
 
     return new Response(JSON.stringify({ success: true, coins_added: coinsToAdd }), {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        headers: { ...headers, "Content-Type": "application/json" }
     });
 
   } catch (err: any) {
     console.error("Verify Error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 400, // Or 500 depending on error, but 400 is safer for client facing
+        headers: { ...headers, "Content-Type": "application/json" }
     });
   }
 });
