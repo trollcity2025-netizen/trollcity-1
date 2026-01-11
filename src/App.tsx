@@ -928,14 +928,7 @@ function AppContent() {
                       }
                     />
                     
-                    <Route
-                      path="/secretary"
-                      element={
-                        <RequireRole roles={[UserRole.HR_ADMIN, UserRole.ADMIN]}>
-                          <SecretaryConsole />
-                        </RequireRole>
-                      }
-                    />
+
                     
                     {/* Executive Office Routes */}
                     <Route

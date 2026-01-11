@@ -36,6 +36,7 @@ export default function Sidebar() {
 
   const [canSeeOfficer, setCanSeeOfficer] = useState(false)
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
+  const [canSeeSecretary, setCanSeeSecretary] = useState(false)
   const [showCourtModal, setShowCourtModal] = useState(false)
   const [showStatsPanel, setShowStatsPanel] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -84,6 +85,23 @@ export default function Sidebar() {
         setCanSeeFamilyLounge(!!familyApp)
       } catch {
         setCanSeeFamilyLounge(false)
+      }
+
+      // Check Secretary Access
+      try {
+        if (isAdmin) {
+          setCanSeeSecretary(true)
+        } else {
+          const { data: secData } = await supabase
+            .from('secretary_assignments')
+            .select('id')
+            .eq('secretary_id', profile.id)
+            .maybeSingle()
+          
+          setCanSeeSecretary(!!secData)
+        }
+      } catch {
+        setCanSeeSecretary(false)
       }
     }
     checkAccess()
@@ -193,7 +211,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar">
         {/* Main Group */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} collapsed={isSidebarCollapsed}>
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} />
@@ -207,13 +225,13 @@ export default function Sidebar() {
 
 
         {/* Support & Safety */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "Support"} collapsed={isSidebarCollapsed}>
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Support"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={LifeBuoy} label="Support" to="/support" active={isActive('/support')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Shield} label="Safety" to="/safety" active={isActive('/safety')} collapsed={isSidebarCollapsed} />
         </SidebarGroup>
 
         {/* Social */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "Social"} collapsed={isSidebarCollapsed}>
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Social"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={MessageSquare} label="Messages" to="/messages" active={isActive('/messages')} collapsed={isSidebarCollapsed} />
           {canSeeFamilyLounge && (
             <SidebarItem 
@@ -228,8 +246,8 @@ export default function Sidebar() {
         </SidebarGroup>
 
         {/* Special Access */}
-        {(canSeeOfficer || canSeeFamilyLounge) && (
-          <SidebarGroup title={isSidebarCollapsed ? '' : "Special Access"} collapsed={isSidebarCollapsed}>
+        {(canSeeOfficer || canSeeFamilyLounge || canSeeSecretary) && (
+          <SidebarGroup title={isSidebarCollapsed ? '' : "Special Access"} isCollapsed={isSidebarCollapsed}>
             {canSeeOfficer && (
               <>
                 <SidebarItem 
@@ -260,6 +278,16 @@ export default function Sidebar() {
                 className="text-yellow-400 hover:text-yellow-300"
               />
             )}
+            {canSeeSecretary && (
+               <SidebarItem 
+                  icon={LayoutDashboard} 
+                  label="Secretary Console" 
+                  to="/secretary" 
+                  active={location.pathname.startsWith('/secretary')} 
+                  collapsed={isSidebarCollapsed}
+                  className="text-pink-400 hover:text-pink-300"
+                />
+            )}
             {isAdmin && (
                <SidebarItem 
                   icon={FileText} 
@@ -274,7 +302,7 @@ export default function Sidebar() {
         )}
 
         {/* System */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "System"} collapsed={isSidebarCollapsed}>
+        <SidebarGroup title={isSidebarCollapsed ? '' : "System"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={FileText} label="Applications" to="/application" active={isActive('/application')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} />
         </SidebarGroup>
@@ -292,8 +320,8 @@ export default function Sidebar() {
       </div>
 
       {/* Modals */}
-      {showCourtModal && <CourtEntryModal onClose={() => setShowCourtModal(false)} />}
-      {showStatsPanel && <ExpandedStatsPanel onClose={() => setShowStatsPanel(false)} />}
+      {showCourtModal && <CourtEntryModal isOpen={true} onClose={() => setShowCourtModal(false)} />}
+      {showStatsPanel && <ExpandedStatsPanel isOpen={true} onClose={() => setShowStatsPanel(false)} />}
     </div>
   )
 }

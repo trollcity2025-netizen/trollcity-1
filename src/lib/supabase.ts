@@ -52,6 +52,7 @@ export interface UserProfile {
   ban_expires_at?: string | null
   terms_accepted?: boolean
   badge?: string | null
+  title?: string | null
   has_insurance?: boolean
   multiplier_active?: boolean
   multiplier_value?: number
