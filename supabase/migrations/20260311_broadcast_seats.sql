@@ -98,12 +98,12 @@ BEGIN
   END IF;
 
   -- Seat is available, claim it
-  INSERT INTO public.broadcast_seats (
+  INSERT INTO public.broadcast_seats AS bs (
     room, seat_index, user_id, username, avatar_url, role, metadata
   ) VALUES (
     p_room, p_seat_index, p_user_id, p_username, p_avatar_url, p_role, COALESCE(p_metadata, '{}'::JSONB)
   )
-  RETURNING room, seat_index, user_id, username, avatar_url, role, metadata, assigned_at
+  RETURNING bs.room, bs.seat_index, bs.user_id, bs.username, bs.avatar_url, bs.role, bs.metadata, bs.assigned_at
   INTO room, seat_index, user_id, username, avatar_url, role, metadata, assigned_at;
 
   created := TRUE;
@@ -145,9 +145,9 @@ BEGIN
     RETURN;
   END IF;
 
-  DELETE FROM public.broadcast_seats bs
+  DELETE FROM public.broadcast_seats AS bs
   WHERE bs.room = p_room AND bs.seat_index = p_seat_index
-  RETURNING room, seat_index, user_id, username, avatar_url, role, metadata, assigned_at
+  RETURNING bs.room, bs.seat_index, bs.user_id, bs.username, bs.avatar_url, bs.role, bs.metadata, bs.assigned_at
   INTO room, seat_index, user_id, username, avatar_url, role, metadata, assigned_at;
 
   RETURN NEXT;
