@@ -18,6 +18,14 @@ interface WorkSession {
   streams?: { title: string | null }
 }
 
+interface ShiftSlot {
+  id: string
+  shift_date: string
+  shift_start_time: string
+  shift_end_time: string
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled'
+}
+
 interface ActiveAssignment {
   id: string
   stream_id: string
@@ -31,6 +39,8 @@ export default function OfficerDashboard() {
   const navigate = useNavigate()
   const [activeAssignment, setActiveAssignment] = useState<ActiveAssignment | null>(null)
   const [workSessions, setWorkSessions] = useState<WorkSession[]>([])
+  const [shiftSlots, setShiftSlots] = useState<ShiftSlot[]>([])
+  const [shiftActionLoading, setShiftActionLoading] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [togglingGhost, setTogglingGhost] = useState(false)
 
@@ -68,6 +78,14 @@ export default function OfficerDashboard() {
         .limit(30)
 
       setWorkSessions((sessions as any) || [])
+
+      const { data: slots } = await supabase
+        .from('officer_shift_slots')
+        .select('*')
+        .eq('officer_id', user.id)
+        .order('shift_date', { ascending: false })
+
+      setShiftSlots((slots as ShiftSlot[]) || [])
     } catch (error: any) {
       console.error('Error loading data:', error)
     } finally {
@@ -80,6 +98,38 @@ export default function OfficerDashboard() {
       loadData()
     }
   }, [user, loadData])
+
+  const performShiftRpc = useCallback(
+    async (slotId: string, rpcName: 'clock_in_from_slot' | 'clock_out_and_complete_slot', successMessage: string) => {
+      setShiftActionLoading((prev) => ({ ...prev, [slotId]: true }))
+      try {
+        const { error } = await supabase.rpc(rpcName, { p_slot_id: slotId })
+        if (error) throw error
+        toast.success(successMessage)
+        await loadData()
+      } catch (error: any) {
+        console.error('Shift action failed:', error)
+        toast.error(error?.message || 'Shift action failed')
+      } finally {
+        setShiftActionLoading((prev) => {
+          const next = { ...prev }
+          delete next[slotId]
+          return next
+        })
+      }
+    },
+    [loadData]
+  )
+
+  const handleClockIn = useCallback(
+    (slotId: string) => performShiftRpc(slotId, 'clock_in_from_slot', 'Clocked in to shift'),
+    [performShiftRpc]
+  )
+
+  const handleClockOut = useCallback(
+    (slotId: string) => performShiftRpc(slotId, 'clock_out_and_complete_slot', 'Clocked out of shift'),
+    [performShiftRpc]
+  )
 
   const toggleGhostMode = async () => {
     if (!user || !profile) return
@@ -202,7 +252,7 @@ export default function OfficerDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid md:grid-cols-4 gap-4 mb-6">
+    <div className="grid md:grid-cols-4 gap-4 mb-6">
         <div className="bg-black/60 border border-purple-600 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-5 h-5 text-purple-400" />
@@ -233,8 +283,81 @@ export default function OfficerDashboard() {
           </div>
           <div className="text-2xl font-bold text-yellow-400">{OFFICER_BASE_HOURLY_COINS.toLocaleString()}</div>
           <div className="text-xs opacity-70">coins/hour</div>
-        </div>
       </div>
+    </div>
+
+    {/* Shift Signups */}
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xl font-semibold">Scheduled Shifts</h2>
+        <p className="text-sm opacity-70">{shiftSlots.length} slots</p>
+      </div>
+      <div className="bg-black/60 border border-purple-600 rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-700">
+              <th className="p-3 text-left text-gray-400">Date</th>
+              <th className="p-3 text-left text-gray-400">Time</th>
+              <th className="p-3 text-left text-gray-400">Status</th>
+              <th className="p-3 text-left text-gray-400">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shiftSlots.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-6 text-center text-gray-400">
+                  No scheduled shifts available
+                </td>
+              </tr>
+            ) : (
+              shiftSlots.map((slot) => {
+                const start = new Date(`${slot.shift_date}T${slot.shift_start_time}`)
+                const end = new Date(`${slot.shift_date}T${slot.shift_end_time}`)
+                const canClockIn = slot.status === 'scheduled'
+                const canClockOut = slot.status === 'active'
+                return (
+                  <tr key={slot.id} className="border-b border-gray-800 hover:bg-gray-900/30">
+                    <td className="p-3">{start.toLocaleDateString()}</td>
+                    <td className="p-3 text-sm">
+                      {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="p-3 text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold uppercase ${
+                        slot.status === 'active'
+                          ? 'bg-green-500/20 text-green-300'
+                          : slot.status === 'scheduled'
+                            ? 'bg-blue-500/10 text-blue-300'
+                            : 'bg-gray-700/60 text-gray-300'
+                      }`}>
+                        {slot.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-sm">
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => handleClockIn(slot.id)}
+                          disabled={!canClockIn || shiftActionLoading[slot.id]}
+                          className="px-3 py-1 rounded-full border border-blue-500 text-blue-300 text-xs font-bold hover:bg-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {shiftActionLoading[slot.id] && slot.status === 'scheduled' ? 'Clocking in…' : 'Clock In'}
+                        </button>
+                        <button
+                          onClick={() => handleClockOut(slot.id)}
+                          disabled={!canClockOut || shiftActionLoading[slot.id]}
+                          className="px-3 py-1 rounded-full border border-red-500 text-red-300 text-xs font-bold hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {shiftActionLoading[slot.id] && slot.status === 'active' ? 'Clocking out…' : 'Clock Out'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
       {/* Work Sessions */}
       <div className="mb-6">
