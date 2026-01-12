@@ -9,7 +9,7 @@ interface PurchaseGateState {
   hide: () => void
 }
 
-const usePurchaseGateStore = create<PurchaseGateState>((set) => ({
+export const usePurchaseGateStore = create<PurchaseGateState>((set) => ({
   isOpen: false,
   reason: undefined,
   show: (reason?: string) => set({ isOpen: true, reason }),
@@ -34,5 +34,3 @@ export function isPurchaseRequiredError(error: any) {
   if (!message) return false
   return message.toString().includes(PURCHASE_REQUIRED_MESSAGE)
 }
-
-export default usePurchaseGateStore
