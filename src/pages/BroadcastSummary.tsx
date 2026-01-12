@@ -62,6 +62,8 @@ export default function BroadcastSummary() {
     }
   }, [streamId, streamData]);
 
+  const [downloadLoading, setDownloadLoading] = useState(false);
+
   const data = streamData || {
     title: "My Stream",
     category: "Just Chatting",
@@ -76,11 +78,38 @@ export default function BroadcastSummary() {
     level: 5,
   };
 
-  const handleDownload = () => {
-    if (data.recording_url) {
-      window.open(data.recording_url, '_blank');
-    } else {
+  const handleDownload = async () => {
+    if (!data.recording_url) {
       toast.info("Recording is still processing. Please check back later.");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const response = await fetch(data.recording_url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch recording: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const fallbackName = "trollcity-recording";
+      const rawName = data.title ? data.title.replace(/[^\w\d_-]/g, "-") : fallbackName;
+      const extensionMatch = data.recording_url.split(/[#?]/)[0].split(".").pop();
+      const filename = `${rawName}.${extensionMatch ?? "mp4"}`;
+
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading recording:", error);
+      toast.error("Unable to download the recording right now. Please try again later.");
+    } finally {
+      setDownloadLoading(false);
     }
   };
 
@@ -239,10 +268,11 @@ export default function BroadcastSummary() {
           </button>
           <button
             onClick={handleDownload}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold transition flex items-center gap-2"
+            disabled={downloadLoading}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg font-bold transition flex items-center gap-2"
           >
             <Download size={20} />
-            Download
+            {downloadLoading ? "Saving..." : "Download"}
           </button>
           <button
             onClick={() => navigate("/")}
