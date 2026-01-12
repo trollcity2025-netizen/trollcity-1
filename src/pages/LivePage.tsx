@@ -411,6 +411,7 @@ export default function LivePage() {
     }
   }, [stream]);
   
+  const seatRoomName = stream?.room_name || stream?.agora_channel || streamId || 'officer-stream';
   const isBroadcaster = useIsBroadcaster(profile, stream);
   const { seats, claimSeat, releaseSeat } = useSeatRoster(seatRoomName);
   const isGuestSeat = !isBroadcaster && seats.some(seat => seat?.user_id === user?.id);
@@ -510,12 +511,6 @@ export default function LivePage() {
   const hasValidStreamId = !!streamId && typeof streamId === 'string' && streamId.trim() !== '';
   const sessionReady = !!user && !!profile && hasValidStreamId && !!roomName;
 
-  const seatRoomName = useMemo(() => {
-    return stream?.room_name || stream?.agora_channel || streamId || 'officer-stream';
-  }, [stream?.room_name, stream?.agora_channel, streamId]);
-  useEffect(() => {
-    setSeatActionTarget(null);
-  }, [streamId]);
 
   const officerRoleNames = ['admin', 'lead_troll_officer', 'troll_officer'];
   const isOfficerUser = Boolean(
@@ -532,6 +527,10 @@ export default function LivePage() {
     role?: string
     seatIndex: number
   } | null>(null);
+
+  useEffect(() => {
+    setSeatActionTarget(null);
+  }, [streamId]);
 
   const livekitIdentity = useMemo(() => {
     const id = stableIdentity;
