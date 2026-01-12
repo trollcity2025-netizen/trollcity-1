@@ -31,6 +31,7 @@ const GoLive: React.FC = () => {
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [themesLoading, setThemesLoading] = useState(false);
   const [themePurchaseId, setThemePurchaseId] = useState<string | null>(null);
+  const [streamerEntitlements, setStreamerEntitlements] = useState<any>(null);
 
   // Note: Camera/mic permissions will be requested when joining seats in broadcast
   // No camera preview needed in setup
@@ -116,9 +117,16 @@ const GoLive: React.FC = () => {
           .eq('user_id', user.id)
           .maybeSingle();
 
+        const { data: entitlements } = await supabase
+          .from('user_streamer_entitlements')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
         setThemes(catalog || []);
         setOwnedThemeIds(new Set((owned || []).map((row: any) => row.theme_id)));
         setActiveThemeId(state?.active_theme_id || null);
+        setStreamerEntitlements(entitlements || null);
       } catch (err) {
         console.error('Failed to load broadcast themes', err);
       } finally {
@@ -131,18 +139,82 @@ const GoLive: React.FC = () => {
 
   const buildThemeStyle = (theme?: any) => {
     if (!theme) return {};
+    const imageUrl = theme.image_url || theme.background_asset_url || theme.preview_url;
     if (theme.background_css) {
       return { background: theme.background_css };
     }
-    if (theme.background_asset_url) {
+    if (imageUrl) {
       return {
-        backgroundImage: `url(${theme.background_asset_url})`,
+        backgroundImage: `url(${imageUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat'
       };
     }
     return {};
+  };
+
+  const formatCountdown = (targetDate?: string | null) => {
+    if (!targetDate) return null;
+    const diff = new Date(targetDate).getTime() - Date.now();
+    if (diff <= 0) return '0h';
+    const totalMinutes = Math.floor(diff / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+  };
+
+  const getEligibility = (theme: any) => {
+    const now = Date.now();
+    const startsAt = theme?.starts_at ? new Date(theme.starts_at).getTime() : null;
+    const endsAt = theme?.ends_at ? new Date(theme.ends_at).getTime() : null;
+    const limitedActive = !theme?.is_limited || ((startsAt ? now >= startsAt : true) && (endsAt ? now <= endsAt : true));
+    const seasonalState = theme?.is_limited
+      ? startsAt && now < startsAt
+        ? `Starts in ${formatCountdown(theme.starts_at)}`
+        : endsAt && now > endsAt
+          ? 'Season ended'
+          : endsAt
+            ? `Ends in ${formatCountdown(theme.ends_at)}`
+            : null
+      : null;
+
+    const entitlements = streamerEntitlements || {};
+    const streamLevel = entitlements.streamer_level ?? profile?.level ?? 0;
+    const followersCount = entitlements.followers_count ?? 0;
+    const hoursStreamed = entitlements.total_hours_streamed ?? 0;
+    const minLevel = theme?.min_stream_level ?? null;
+    const minFollowers = theme?.min_followers ?? null;
+    const minHours = theme?.min_total_hours_streamed ?? null;
+    const requiresStreamer = Boolean(theme?.is_streamer_exclusive || minLevel || minFollowers || minHours);
+    const meetsStreamer =
+      (!minLevel || streamLevel >= minLevel) &&
+      (!minFollowers || followersCount >= minFollowers) &&
+      (!minHours || hoursStreamed >= minHours);
+
+    return {
+      limitedActive,
+      seasonalState,
+      requiresStreamer,
+      meetsStreamer,
+      isEligible: limitedActive && (!requiresStreamer || meetsStreamer),
+      minLevel,
+      minFollowers,
+      minHours,
+    };
+  };
+
+  const getRarityFrame = (rarity?: string) => {
+    switch (String(rarity || '').toLowerCase()) {
+      case 'rare':
+        return 'border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.25)]';
+      case 'epic':
+        return 'border-pink-500/40 shadow-[0_0_24px_rgba(236,72,153,0.3)]';
+      case 'legendary':
+        return 'border-yellow-400/50 shadow-[0_0_28px_rgba(250,204,21,0.35)]';
+      default:
+        return 'border-white/10';
+    }
   };
 
   const handleSelectTheme = async (themeId: string | null) => {
@@ -670,8 +742,13 @@ const GoLive: React.FC = () => {
                 {!themesLoading && themes.map((theme) => {
                   const owned = ownedThemeIds.has(theme.id);
                   const isActive = activeThemeId === theme.id;
+                  const eligibility = getEligibility(theme);
+                  const rarityFrame = getRarityFrame(theme.rarity);
+                  const isAnimated = theme.asset_type === 'video';
+                  const isLimited = Boolean(theme.is_limited);
+                  const isExclusive = Boolean(theme.is_streamer_exclusive || theme.min_stream_level || theme.min_followers || theme.min_total_hours_streamed);
                   return (
-                    <div key={theme.id} className="rounded-xl border border-purple-700/20 bg-[#120f1f] p-3 space-y-2">
+                    <div key={theme.id} className={`rounded-xl border ${rarityFrame} bg-[#120f1f] p-3 space-y-2`}>
                       <div className="h-20 rounded-lg border border-white/10 overflow-hidden" style={buildThemeStyle(theme)} />
                       <div className="flex items-center justify-between">
                         <div>
@@ -680,6 +757,27 @@ const GoLive: React.FC = () => {
                         </div>
                         <div className="text-xs text-yellow-300">{theme.price_coins.toLocaleString()} coins</div>
                       </div>
+                      <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] text-gray-400">
+                        {isAnimated && <span className="text-cyan-200">Animated</span>}
+                        {isLimited && <span className="text-pink-200">Limited</span>}
+                        {isExclusive && <span className="text-amber-200">Exclusive</span>}
+                      </div>
+                      {!eligibility.isEligible && (
+                        <div className="text-[11px] text-red-200 space-y-1">
+                          <div>{eligibility.seasonalState || 'Locked'}</div>
+                          {eligibility.requiresStreamer && !eligibility.meetsStreamer && (
+                            <div className="text-[10px] text-white/60">
+                              Needs
+                              {eligibility.minLevel ? ` Lv ${eligibility.minLevel}` : ''}
+                              {eligibility.minFollowers ? ` • ${eligibility.minFollowers}+ followers` : ''}
+                              {eligibility.minHours ? ` • ${eligibility.minHours}+ hrs` : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {eligibility.isEligible && eligibility.seasonalState && (
+                        <div className="text-[11px] text-yellow-200">{eligibility.seasonalState}</div>
+                      )}
                       <div className="flex items-center gap-2">
                         {owned ? (
                           <>
@@ -696,10 +794,16 @@ const GoLive: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleBuyTheme(theme.id)}
-                            disabled={themePurchaseId === theme.id}
+                            disabled={!eligibility.isEligible || themePurchaseId === theme.id}
                             className="flex-1 text-xs px-3 py-2 rounded border border-pink-500/40 text-pink-200 hover:text-white"
                           >
-                            {themePurchaseId === theme.id ? 'Purchasing...' : 'Buy Theme'}
+                            {themePurchaseId === theme.id
+                              ? 'Purchasing...'
+                              : Number(theme.price_coins || 0) === 0
+                                ? 'Claim Free'
+                                : eligibility.isEligible
+                                  ? 'Buy Theme'
+                                  : 'Locked'}
                           </button>
                         )}
                       </div>

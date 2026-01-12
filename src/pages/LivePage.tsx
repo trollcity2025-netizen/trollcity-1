@@ -380,6 +380,8 @@ export default function LivePage() {
     return window.innerWidth >= 1024;
   });
   const [broadcastThemeStyle, setBroadcastThemeStyle] = useState<React.CSSProperties | undefined>(undefined);
+  const [broadcastTheme, setBroadcastTheme] = useState<any>(null);
+  const [reactiveEvent, setReactiveEvent] = useState<{ key: number; style: string; intensity: number } | null>(null);
 
   const stableIdentity = useMemo(() => {
     const id = user?.id || profile?.id;
@@ -426,18 +428,20 @@ export default function LivePage() {
 
       const { data: theme } = await supabase
         .from('broadcast_background_themes')
-        .select('background_css, background_asset_url')
+        .select('id, asset_type, video_webm_url, video_mp4_url, image_url, background_css, background_asset_url, reactive_enabled, reactive_style, reactive_intensity')
         .eq('id', state.active_theme_id)
         .maybeSingle();
 
       if (!isActive) return;
       if (!theme) {
         setBroadcastThemeStyle(undefined);
+        setBroadcastTheme(null);
         return;
       }
 
       if (theme.background_css) {
         setBroadcastThemeStyle({ background: theme.background_css });
+        setBroadcastTheme(theme);
         return;
       }
       if (theme.background_asset_url) {
@@ -447,9 +451,21 @@ export default function LivePage() {
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat'
         });
+        setBroadcastTheme(theme);
+        return;
+      }
+      if (theme.image_url) {
+        setBroadcastThemeStyle({
+          backgroundImage: `url(${theme.image_url})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        });
+        setBroadcastTheme(theme);
         return;
       }
       setBroadcastThemeStyle(undefined);
+      setBroadcastTheme(theme);
     };
 
     loadTheme();
@@ -1034,6 +1050,20 @@ export default function LivePage() {
       if (error) {
         throw error;
       }
+      if (stream?.id && stream?.broadcaster_id) {
+        const eventType = totalCoins >= 1000 ? 'super_gift' : 'gift';
+        await supabase.from('broadcast_theme_events').insert({
+          room_id: stream.id,
+          broadcaster_id: stream.broadcaster_id,
+          theme_id: broadcastTheme?.id || null,
+          event_type: eventType,
+          payload: {
+            gift_slug: giftSlug || toGiftSlug(giftName),
+            coins: totalCoins,
+            sender_id: user?.id
+          }
+        });
+      }
 
       // Lucky Gift Logic (5% chance)
       if (Math.random() < 0.05 && user?.id) {
@@ -1067,7 +1097,36 @@ export default function LivePage() {
     } catch (e) {
       console.error('Failed to record manual gift event:', e);
     }
-  }, [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id]);
+  }, [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id]);
+
+  useEffect(() => {
+    if (!streamId) return;
+    const channel = supabase
+      .channel(`broadcast-theme-events-${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'broadcast_theme_events',
+          filter: `room_id=eq.${streamId}`,
+        },
+        (payload) => {
+          if (!broadcastTheme?.reactive_enabled) return;
+          const eventType = payload.new?.event_type || 'gift';
+          const baseIntensity = Number(broadcastTheme?.reactive_intensity || 2);
+          const intensityBoost = eventType === 'super_gift' ? 2 : eventType === 'gift' ? 1 : 0;
+          const intensity = Math.max(1, Math.min(5, baseIntensity + intensityBoost));
+          const style = String(broadcastTheme?.reactive_style || 'pulse');
+          setReactiveEvent({ key: Date.now(), style, intensity });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, broadcastTheme?.reactive_enabled, broadcastTheme?.reactive_intensity, broadcastTheme?.reactive_style]);
 
   const handleCoinsPurchased = useCallback((_amount: number) => {
     setIsCoinStoreOpen(false);
@@ -1171,6 +1230,8 @@ export default function LivePage() {
               joinPrice={joinPrice}
               lastGift={lastGift}
               backgroundStyle={broadcastThemeStyle}
+              backgroundTheme={broadcastTheme}
+              reactiveEvent={reactiveEvent}
               onSetPrice={handleSetPrice}
               onJoinRequest={handleJoinRequest}
               onLeaveSession={handleLeaveSession}

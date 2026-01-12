@@ -77,6 +77,7 @@ export default function CoinStore() {
   const [ownedThemeIds, setOwnedThemeIds] = useState(new Set());
   const [themesNote, setThemesNote] = useState(null);
   const [themePurchasing, setThemePurchasing] = useState(null);
+  const [streamerEntitlements, setStreamerEntitlements] = useState(null);
   const [effectsNote, setEffectsNote] = useState(null);
   const [perksNote, setPerksNote] = useState(null);
   const [insuranceNote, setInsuranceNote] = useState(null);
@@ -92,18 +93,83 @@ export default function CoinStore() {
 
   const getThemeStyle = (theme) => {
     if (!theme) return undefined;
-    if (theme.background_css) {
-      return { background: theme.background_css };
-    }
-    if (theme.background_asset_url) {
+    const imageUrl = theme.image_url || theme.preview_url || theme.background_asset_url;
+    if (imageUrl) {
       return {
-        backgroundImage: `url(${theme.background_asset_url})`,
+        backgroundImage: `url(${imageUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
       };
     }
+    if (theme.background_css) {
+      return { background: theme.background_css };
+    }
     return undefined;
+  };
+
+  const formatCountdown = (targetDate) => {
+    if (!targetDate) return null;
+    const diff = new Date(targetDate).getTime() - Date.now();
+    if (diff <= 0) return '0h';
+    const totalMinutes = Math.floor(diff / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+  };
+
+  const getEligibility = (theme) => {
+    const now = Date.now();
+    const startsAt = theme?.starts_at ? new Date(theme.starts_at).getTime() : null;
+    const endsAt = theme?.ends_at ? new Date(theme.ends_at).getTime() : null;
+    const limitedActive = !theme?.is_limited || ((startsAt ? now >= startsAt : true) && (endsAt ? now <= endsAt : true));
+    const seasonalState = theme?.is_limited
+      ? startsAt && now < startsAt
+        ? `Starts in ${formatCountdown(theme.starts_at)}`
+        : endsAt && now > endsAt
+          ? 'Season ended'
+          : endsAt
+            ? `Ends in ${formatCountdown(theme.ends_at)}`
+            : null
+      : null;
+
+    const entitlements = streamerEntitlements || {};
+    const streamLevel = entitlements.streamer_level ?? profile?.level ?? 0;
+    const followersCount = entitlements.followers_count ?? 0;
+    const hoursStreamed = entitlements.total_hours_streamed ?? 0;
+    const minLevel = theme?.min_stream_level ?? null;
+    const minFollowers = theme?.min_followers ?? null;
+    const minHours = theme?.min_total_hours_streamed ?? null;
+
+    const requiresStreamer = Boolean(theme?.is_streamer_exclusive || minLevel || minFollowers || minHours);
+    const meetsStreamer =
+      (!minLevel || streamLevel >= minLevel) &&
+      (!minFollowers || followersCount >= minFollowers) &&
+      (!minHours || hoursStreamed >= minHours);
+
+    return {
+      limitedActive,
+      seasonalState,
+      requiresStreamer,
+      meetsStreamer,
+      isEligible: limitedActive && (!requiresStreamer || meetsStreamer),
+      minLevel,
+      minFollowers,
+      minHours,
+    };
+  };
+
+  const getRarityFrame = (rarity) => {
+    switch (String(rarity || '').toLowerCase()) {
+      case 'rare':
+        return 'border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.25)]';
+      case 'epic':
+        return 'border-pink-500/40 shadow-[0_0_24px_rgba(236,72,153,0.3)]';
+      case 'legendary':
+        return 'border-yellow-400/50 shadow-[0_0_28px_rgba(250,204,21,0.35)]';
+      default:
+        return 'border-white/10';
+    }
   };
 
   const showLiveSnacks = Boolean(activeStreamId && liveStreamIsLive);
@@ -172,14 +238,17 @@ export default function CoinStore() {
 
       await refreshCoins();
 
-      const [effRes, perkRes, planRes, themeRes, themeOwnedRes] = await Promise.all([
+      const [effRes, perkRes, planRes, themeRes, themeOwnedRes, entitlementsRes] = await Promise.all([
         supabase.from('entrance_effects').select('*').order('created_at', { ascending: false }),
         supabase.from('perks').select('*').order('created_at', { ascending: false }),
         supabase.from('insurance_options').select('*').order('created_at', { ascending: false }),
         supabase.from('broadcast_background_themes').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
         user?.id
           ? supabase.from('user_broadcast_theme_purchases').select('theme_id').eq('user_id', user.id)
-          : Promise.resolve({ data: [] })
+          : Promise.resolve({ data: [] }),
+        user?.id
+          ? supabase.from('user_streamer_entitlements').select('*').eq('user_id', user.id).maybeSingle()
+          : Promise.resolve({ data: null })
       ]);
       const applyCatalogData = (result, fallback = [], setter, noteSetter, label) => {
         if (result.error) {
@@ -239,6 +308,7 @@ export default function CoinStore() {
       );
 
       setOwnedThemeIds(new Set((themeOwnedRes?.data || []).map((row) => row.theme_id)));
+      setStreamerEntitlements(entitlementsRes?.data || null);
 
       console.log('Effects, perks, plans, themes loaded:', { effects: loadedEffects.length, perks: loadedPerks.length, plans: loadedPlans.length, themes: loadedThemes.length });
 
@@ -576,6 +646,12 @@ export default function CoinStore() {
 
     if (ownedThemeIds.has(theme.id)) {
       toast.info('You already own this theme');
+      return;
+    }
+
+    const eligibility = getEligibility(theme);
+    if (!eligibility.isEligible) {
+      toast.error('This theme is locked.');
       return;
     }
 
@@ -1104,10 +1180,16 @@ export default function CoinStore() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {broadcastThemes.map((theme) => {
                     const owned = ownedThemeIds.has(theme.id);
+                    const eligibility = getEligibility(theme);
+                    const rarityFrame = getRarityFrame(theme.rarity);
+                    const isAnimated = theme.asset_type === 'video';
+                    const isLimited = Boolean(theme.is_limited);
+                    const isExclusive = Boolean(theme.is_streamer_exclusive || theme.min_stream_level || theme.min_followers || theme.min_total_hours_streamed);
+                    const purchaseDisabled = !eligibility.isEligible || owned || themePurchasing === theme.id;
                     return (
-                      <div key={theme.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20 hover:border-purple-500/40 transition-all">
+                      <div key={theme.id} className={`bg-zinc-900 rounded-xl p-4 border ${rarityFrame} hover:border-purple-500/40 transition-all`}>
                         <div
-                          className="h-28 rounded-lg border border-white/10 mb-3"
+                          className="h-28 rounded-lg border border-white/10 mb-3 overflow-hidden"
                           style={getThemeStyle(theme)}
                         />
                         <div className="flex items-center justify-between mb-2">
@@ -1122,14 +1204,43 @@ export default function CoinStore() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-400 mb-3">{theme.rarity || 'standard'}</div>
+                        <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-3">
+                          <span>{(theme.rarity || 'common').toUpperCase()}</span>
+                          {isAnimated && <span className="text-cyan-200">Animated</span>}
+                          {isLimited && <span className="text-pink-200">Limited</span>}
+                          {isExclusive && <span className="text-amber-200">Exclusive</span>}
+                        </div>
+                        {!eligibility.isEligible && (
+                          <div className="text-xs text-red-200 mb-3 space-y-1">
+                            <div>{eligibility.seasonalState || 'Locked'}</div>
+                            {eligibility.requiresStreamer && !eligibility.meetsStreamer && (
+                              <div className="text-[11px] text-white/60">
+                                Needs
+                                {eligibility.minLevel ? ` Lv ${eligibility.minLevel}` : ''}
+                                {eligibility.minFollowers ? ` • ${eligibility.minFollowers}+ followers` : ''}
+                                {eligibility.minHours ? ` • ${eligibility.minHours}+ hrs` : ''}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {eligibility.isEligible && eligibility.seasonalState && (
+                          <div className="text-xs text-yellow-200 mb-3">{eligibility.seasonalState}</div>
+                        )}
                         <button
                           type="button"
-                          disabled={owned || themePurchasing === theme.id}
+                          disabled={purchaseDisabled}
                           onClick={() => buyBroadcastTheme(theme)}
                           className="w-full py-2 rounded-lg text-sm font-semibold border border-pink-500/50 text-pink-100 hover:text-white hover:border-pink-400 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {owned ? 'Owned' : themePurchasing === theme.id ? 'Purchasing...' : 'Buy Theme'}
+                          {owned
+                            ? 'Owned'
+                            : themePurchasing === theme.id
+                              ? 'Purchasing...'
+                              : Number(theme.price_coins || 0) === 0
+                                ? 'Claim Free'
+                                : eligibility.isEligible
+                                  ? 'Buy Theme'
+                                  : 'Locked'}
                         </button>
                       </div>
                     );

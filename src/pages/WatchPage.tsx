@@ -56,6 +56,9 @@ export default function WatchPage() {
   
   const [stream, setStream] = useState<StreamRow | null>(null);
   const [, setIsLoadingStream] = useState(true);
+  const [broadcastTheme, setBroadcastTheme] = useState<any>(null);
+  const [broadcastThemeStyle, setBroadcastThemeStyle] = useState<React.CSSProperties | undefined>(undefined);
+  const [reactiveEvent, setReactiveEvent] = useState<{ key: number; style: string; intensity: number } | null>(null);
 
   const liveKit = useLiveKit();
   const roomName = useMemo(() => String(streamId || ''), [streamId]);
@@ -157,6 +160,108 @@ export default function WatchPage() {
   useEffect(() => {
     loadStreamData();
   }, [loadStreamData]);
+
+  useEffect(() => {
+    const broadcasterId = stream?.broadcaster_id;
+    if (!broadcasterId) return;
+    let isActive = true;
+
+    const loadTheme = async () => {
+      const { data: state } = await supabase
+        .from('user_broadcast_theme_state')
+        .select('active_theme_id')
+        .eq('user_id', broadcasterId)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (!state?.active_theme_id) {
+        setBroadcastThemeStyle(undefined);
+        setBroadcastTheme(null);
+        return;
+      }
+
+      const { data: theme } = await supabase
+        .from('broadcast_background_themes')
+        .select('id, asset_type, video_webm_url, video_mp4_url, image_url, background_css, background_asset_url, reactive_enabled, reactive_style, reactive_intensity')
+        .eq('id', state.active_theme_id)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (!theme) {
+        setBroadcastThemeStyle(undefined);
+        setBroadcastTheme(null);
+        return;
+      }
+
+      if (theme.background_css) {
+        setBroadcastThemeStyle({ background: theme.background_css });
+        setBroadcastTheme(theme);
+        return;
+      }
+      if (theme.background_asset_url) {
+        setBroadcastThemeStyle({
+          backgroundImage: `url(${theme.background_asset_url})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        });
+        setBroadcastTheme(theme);
+        return;
+      }
+      if (theme.image_url) {
+        setBroadcastThemeStyle({
+          backgroundImage: `url(${theme.image_url})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        });
+        setBroadcastTheme(theme);
+        return;
+      }
+      setBroadcastThemeStyle(undefined);
+      setBroadcastTheme(theme);
+    };
+
+    loadTheme();
+    return () => {
+      isActive = false;
+    };
+  }, [stream?.broadcaster_id]);
+
+  useEffect(() => {
+    if (!streamId) return;
+    const channel = supabase
+      .channel(`broadcast-theme-events-watch-${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'broadcast_theme_events',
+          filter: `room_id=eq.${streamId}`,
+        },
+        (payload) => {
+          if (!broadcastTheme?.reactive_enabled) return;
+          const eventType = payload.new?.event_type || 'gift';
+          const baseIntensity = Number(broadcastTheme?.reactive_intensity || 2);
+          const intensityBoost = eventType === 'super_gift' ? 2 : eventType === 'gift' ? 1 : 0;
+          const intensity = Math.max(1, Math.min(5, baseIntensity + intensityBoost));
+          const style = String(broadcastTheme?.reactive_style || 'pulse');
+          setReactiveEvent({ key: Date.now(), style, intensity });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, broadcastTheme?.reactive_enabled, broadcastTheme?.reactive_intensity, broadcastTheme?.reactive_style]);
+
+  useEffect(() => {
+    if (!reactiveEvent?.key) return;
+    const timer = window.setTimeout(() => setReactiveEvent(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [reactiveEvent?.key]);
 
   // Stream polling
   useEffect(() => {
@@ -270,10 +375,24 @@ export default function WatchPage() {
       if (error) {
         throw error;
       }
+      if (stream?.id && stream?.broadcaster_id) {
+        const eventType = totalCoins >= 1000 ? 'super_gift' : 'gift';
+        await supabase.from('broadcast_theme_events').insert({
+          room_id: stream.id,
+          broadcaster_id: stream.broadcaster_id,
+          theme_id: broadcastTheme?.id || null,
+          event_type: eventType,
+          payload: {
+            gift_slug: giftSlug || toGiftSlug(giftName),
+            coins: totalCoins,
+            sender_id: user?.id
+          }
+        });
+      }
     } catch (e) {
       console.error('Failed to record manual gift event:', e);
     }
-  }, [stream?.id, user?.id, giftRecipient?.id]);
+  }, [stream?.id, user?.id, giftRecipient?.id, broadcastTheme?.id]);
 
   const handleCoinsPurchased = useCallback(() => {
     setIsCoinStoreOpen(false);
@@ -325,6 +444,24 @@ export default function WatchPage() {
             <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-6">
                {/* Main Video Area */}
                <div className="lg:col-span-3 relative rounded-2xl overflow-hidden bg-black border border-white/10 shadow-inner">
+                  {broadcastTheme?.asset_type === 'video' && (broadcastTheme?.video_webm_url || broadcastTheme?.video_mp4_url) ? (
+                    <video className="absolute inset-0 w-full h-full object-cover" muted loop autoPlay playsInline>
+                      {broadcastTheme?.video_webm_url && (
+                        <source src={broadcastTheme.video_webm_url} type="video/webm" />
+                      )}
+                      {broadcastTheme?.video_mp4_url && (
+                        <source src={broadcastTheme.video_mp4_url} type="video/mp4" />
+                      )}
+                    </video>
+                  ) : (
+                    <div className="absolute inset-0" style={broadcastThemeStyle} />
+                  )}
+                  <div className="absolute inset-0 bg-black/35" />
+                  <div
+                    className={`absolute inset-0 pointer-events-none ${
+                      reactiveEvent ? `theme-reactive-${reactiveEvent.style} theme-reactive-intensity-${reactiveEvent.intensity}` : ''
+                    }`}
+                  />
                   <VideoFeed room={liveKit.getRoom()} isHost={false} />
           {lastGift && <GiftEventOverlay gift={lastGift} onProfileClick={setSelectedProfile} />}
         </div>
