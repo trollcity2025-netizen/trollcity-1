@@ -984,16 +984,17 @@ export default function LivePage() {
 
   // Update coin count instantly when a gift is received
   useEffect(() => {
-    if (lastGift && stream) {
-      const amount = Number(lastGift.coinCost || 0);
-      if (amount > 0) {
-         setStream(prev => prev ? { 
-           ...prev, 
-           total_gifts_coins: (prev.total_gifts_coins || 0) + amount 
-         } : prev);
-      }
-    }
-  }, [lastGift, stream]);
+    if (!lastGift) return;
+    const amount = Number(lastGift.coinCost || 0);
+    if (amount <= 0) return;
+
+    setStream(prev => {
+      if (!prev) return prev;
+      const updatedCoins = (prev.total_gifts_coins || 0) + amount;
+      if (updatedCoins === prev.total_gifts_coins) return prev;
+      return { ...prev, total_gifts_coins: updatedCoins };
+    });
+  }, [lastGift]);
 
   const toGiftSlug = (value?: string) => {
     if (!value) return 'gift';
