@@ -117,12 +117,6 @@ export default function BroadcastLayout({
       isActive = false;
     };
   }, [lastGift]);
-  
-  if (!room) return null;
-
-  const themeAssetType = backgroundTheme?.asset_type || (backgroundTheme?.background_css ? 'css' : 'image');
-  const imageUrl = backgroundTheme?.image_url || backgroundTheme?.background_asset_url || null;
-  const hasVideo = themeAssetType === 'video' && (backgroundTheme?.video_webm_url || backgroundTheme?.video_mp4_url);
 
   useEffect(() => {
     if (!reactiveEvent?.key) return;
@@ -133,6 +127,12 @@ export default function BroadcastLayout({
     const timer = window.setTimeout(() => setReactiveClass(''), 900);
     return () => window.clearTimeout(timer);
   }, [reactiveEvent?.key]);
+
+  if (!room) return null;
+
+  const themeAssetType = backgroundTheme?.asset_type || (backgroundTheme?.background_css ? 'css' : 'image');
+  const imageUrl = backgroundTheme?.image_url || backgroundTheme?.background_asset_url || null;
+  const hasVideo = themeAssetType === 'video' && (backgroundTheme?.video_webm_url || backgroundTheme?.video_mp4_url);
 
   return (
     <div className="relative w-full h-full min-h-0 bg-black overflow-hidden">
