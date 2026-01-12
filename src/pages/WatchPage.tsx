@@ -220,37 +220,20 @@ export default function WatchPage() {
       setSelectedProfile(null);
   }, []);
 
-  const isUuid = (value?: string | number) =>
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-
-  const resolveGiftId = async (giftId?: string | number, giftName?: string) => {
-    if (isUuid(giftId)) return giftId as string;
-    const rawId = giftId ? String(giftId) : '';
-    if (rawId) {
-      const { data } = await supabase
-        .from('gift_items')
-        .select('id')
-        .eq('id', rawId)
-        .maybeSingle();
-      if (data?.id) return data.id as string;
-    }
-    if (giftName) {
-      const { data } = await supabase
-        .from('gift_items')
-        .select('id')
-        .ilike('name', giftName)
-        .maybeSingle();
-      if (data?.id) return data.id as string;
-    }
-    return null;
+  const toGiftSlug = (value?: string) => {
+    if (!value) return 'gift';
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'gift';
   };
 
   const handleGiftSent = useCallback(async (amountOrGift: any) => {
     let totalCoins = 0;
     let quantity = 1;
     let giftName = 'Manual Gift';
-    let giftId: number | string | undefined;
+    let giftSlug: string | undefined;
 
     if (typeof amountOrGift === 'number') {
       totalCoins = amountOrGift;
@@ -260,7 +243,7 @@ export default function WatchPage() {
       const per = Number(g.coins) || 0;
       totalCoins = per * quantity;
       giftName = g.name || giftName;
-      giftId = g.id;
+      giftSlug = g.slug || toGiftSlug(g.name || giftName);
     }
 
     // setCoinCount(prev => prev + totalCoins);
@@ -274,11 +257,6 @@ export default function WatchPage() {
         toast.error('Unable to send gift right now.');
         return;
       }
-      const resolvedGiftId = await resolveGiftId(giftId, giftName);
-      if (!resolvedGiftId) {
-        toast.error('Gift item unavailable. Refresh and try again.');
-        return;
-      }
       const { error } = await supabase.from('gifts').insert({
         stream_id: stream?.id,
         sender_id: user?.id,
@@ -286,7 +264,7 @@ export default function WatchPage() {
         coins_spent: totalCoins,
         gift_type: 'paid',
         message: giftName,
-        gift_id: resolvedGiftId,
+        gift_slug: giftSlug || toGiftSlug(giftName),
         quantity: quantity,
       });
       if (error) {
@@ -295,7 +273,7 @@ export default function WatchPage() {
     } catch (e) {
       console.error('Failed to record manual gift event:', e);
     }
-  }, [stream?.id, user?.id, giftRecipient?.id, resolveGiftId]);
+  }, [stream?.id, user?.id, giftRecipient?.id]);
 
   const handleCoinsPurchased = useCallback(() => {
     setIsCoinStoreOpen(false);

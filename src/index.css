@@ -21,33 +21,37 @@
   /* Original TrollCity Design Colors */
   --troll-dark-bg: #0D0D0D;
   --troll-dark-card: #121212;
-  --troll-gold: #FFC93C;
-  --troll-cyan: #00D4FF;
+  --troll-gold: #ff48d1;
+  --troll-cyan: #23d7ff;
   --troll-white: #E2E2E2;
-  --troll-purple-950: #0a041a;
-  --troll-purple-900: #1a0f3a;
-  --troll-purple-800: #2d1b5c;
-  --troll-purple-700: #3d247a;
-  --troll-purple-600: #4c2e96;
-  --troll-purple-300: #a78bfa;
-  --troll-green-neon: #00ff88;
-  --troll-green-glow: #00cc6a;
-  --troll-pink-neon: #ff0080;
-  --troll-pink-glow: #cc0066;
-  --troll-blue-neon: #0080ff;
-  --troll-cyan-neon: #00ffff;
-  --troll-orange-neon: #ff8000;
-  --troll-red-neon: #ff0040;
-  --troll-yellow-neon: #ffd700;
-  --troll-gold-neon: #FFC93C;
+  --troll-purple-950: #070517;
+  --troll-purple-900: #0b0a2a;
+  --troll-purple-800: #12143a;
+  --troll-purple-700: #1a1f52;
+  --troll-purple-600: #262b78;
+  --troll-purple-300: #7cc9ff;
+  --troll-green-neon: #25d4ff;
+  --troll-green-glow: #1499ff;
+  --troll-pink-neon: #ff3ac8;
+  --troll-pink-glow: #d61aa6;
+  --troll-blue-neon: #2aa8ff;
+  --troll-cyan-neon: #38f2ff;
+  --troll-orange-neon: #ff5bd1;
+  --troll-red-neon: #ff2f98;
+  --troll-yellow-neon: #ff7ad9;
+  --troll-gold-neon: #ff48d1;
   --troll-white-neon: #E2E2E2;
 
   --troll-bg-gradient: linear-gradient(
     135deg,
-    var(--troll-purple-950) 0%,
-    #000000 50%,
-    var(--troll-purple-900) 100%
+    #050611 0%,
+    #0a0d2b 45%,
+    #1d0a2c 100%
   );
+
+  --seat-username-size: 12px;
+  --seat-coin-size: 11px;
+  --seat-chip-padding: 2px 6px;
 }
 
 /* LiveKit force-fill styles to ensure participant tiles and video elements stretch */
@@ -3184,6 +3188,7 @@ html, body, #root {
   width: 100%;
   min-height: 0;
   overflow-y: auto;
+  grid-auto-rows: 1fr;
 }
 
 /* Desktop: 2 columns of seats in the sidebar */

@@ -13,6 +13,7 @@ export interface GiftItem {
   coinCost: number
   type: 'paid' | 'free'
   category?: string
+  slug?: string
 }
 
 export function useGiftSystem(
@@ -23,6 +24,17 @@ export function useGiftSystem(
 ) {
   const { user, profile } = useAuthStore()
   const [isSending, setIsSending] = useState(false)
+  const isUuid = (value?: string | null) =>
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  const toGiftSlug = (value?: string) => {
+    if (!value) return 'gift'
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'gift'
+  }
 
   const sendGift = async (gift: GiftItem): Promise<boolean | { success: boolean; bonus?: any }> => {
     if (!user || !profile) { 
@@ -69,6 +81,14 @@ export function useGiftSystem(
       // If streamId is provided, also insert gift record with stream/battle context
       // (spend_coins RPC already creates a gift record, but we may need stream_id/battle_id)
       if (streamId && streamId !== 'profile-gift' && streamId !== 'null') {
+        const giftId = (spendResult as any)?.gift_id
+        const giftSlug =
+          gift.slug ||
+          (typeof gift.id === 'string' && !isUuid(gift.id) ? gift.id : null) ||
+          toGiftSlug(gift.name)
+        if (!isUuid(giftId)) {
+          console.warn('Skipping gift context update; invalid gift_id from RPC', giftId)
+        } else {
         // Update the gift record with stream/battle context if needed
         // The RPC creates the gift, but we can enhance it with stream context
         const { error: giftUpdateError } = await supabase
@@ -76,13 +96,15 @@ export function useGiftSystem(
           .update({
             stream_id: streamId,
             battle_id: activeBattleId || null,
+            gift_slug: giftSlug,
           })
-          .eq('id', (spendResult as any)?.gift_id)
+          .eq('id', giftId)
           .limit(1)
 
         // If update fails, it's not critical - the gift was already sent
         if (giftUpdateError) {
           console.warn('Could not update gift with stream context:', giftUpdateError)
+        }
         }
       }
 

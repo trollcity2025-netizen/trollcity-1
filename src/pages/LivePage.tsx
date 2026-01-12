@@ -37,6 +37,7 @@ const GlobalGiftBanner = React.lazy(() => import('../components/GlobalGiftBanner
 
 import { useGiftEvents } from '../lib/hooks/useGiftEvents';
 import { useOfficerBroadcastTracking } from '../hooks/useOfficerBroadcastTracking';
+import { useSeatRoster } from '../hooks/useSeatRoster';
 import { attachLiveKitDebug } from '../lib/livekit-debug';
 
 // Constants
@@ -372,9 +373,13 @@ export default function LivePage() {
   const { user, profile } = useAuthStore();
 
   const [joinPrice, setJoinPrice] = useState(0);
-  const [canPublish, setCanPublish] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
+  const [showLivePanels, setShowLivePanels] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
+  const [broadcastThemeStyle, setBroadcastThemeStyle] = useState<React.CSSProperties | undefined>(undefined);
 
   const stableIdentity = useMemo(() => {
     const id = user?.id || profile?.id;
@@ -397,6 +402,61 @@ export default function LivePage() {
   }, [stream]);
   
   const isBroadcaster = useIsBroadcaster(profile, stream);
+  const { seats, claimSeat, releaseSeat } = useSeatRoster(streamId || '');
+  const isGuestSeat = !isBroadcaster && seats.some(seat => seat?.user_id === user?.id);
+  const canPublish = isBroadcaster || isGuestSeat;
+
+  useEffect(() => {
+    const broadcasterId = stream?.broadcaster_id;
+    if (!broadcasterId) return;
+    let isActive = true;
+
+    const loadTheme = async () => {
+      const { data: state } = await supabase
+        .from('user_broadcast_theme_state')
+        .select('active_theme_id')
+        .eq('user_id', broadcasterId)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (!state?.active_theme_id) {
+        setBroadcastThemeStyle(undefined);
+        return;
+      }
+
+      const { data: theme } = await supabase
+        .from('broadcast_background_themes')
+        .select('background_css, background_asset_url')
+        .eq('id', state.active_theme_id)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (!theme) {
+        setBroadcastThemeStyle(undefined);
+        return;
+      }
+
+      if (theme.background_css) {
+        setBroadcastThemeStyle({ background: theme.background_css });
+        return;
+      }
+      if (theme.background_asset_url) {
+        setBroadcastThemeStyle({
+          backgroundImage: `url(${theme.background_asset_url})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        });
+        return;
+      }
+      setBroadcastThemeStyle(undefined);
+    };
+
+    loadTheme();
+    return () => {
+      isActive = false;
+    };
+  }, [stream?.broadcaster_id]);
 
   // Sync UI state with broadcaster role (auto-publish)
   useEffect(() => {
@@ -437,7 +497,7 @@ export default function LivePage() {
     error: tokenError
   } = useLiveKitToken({
     streamId,
-    isHost: isBroadcaster || canPublish,
+    isHost: canPublish,
     userId: user?.id,
     roomName: roomName,
   });
@@ -478,24 +538,24 @@ export default function LivePage() {
   } = useLiveKitSession({
     roomName: tokenRoomName || (sessionReady ? roomName : ''),
     user: sessionReady && user
-      ? { ...user, identity: tokenIdentity || livekitIdentity, role: isBroadcaster ? 'broadcaster' : 'viewer' }
+      ? { ...user, identity: tokenIdentity || livekitIdentity, role: isBroadcaster ? 'broadcaster' : (canPublish ? 'guest' : 'viewer') }
       : null,
-    role: isBroadcaster ? 'broadcaster' : 'viewer',
-    allowPublish: (isBroadcaster || canPublish) && sessionReady,
-    autoPublish: isBroadcaster || canPublish, // Enable autoPublish for guests too when allowed
+    role: isBroadcaster ? 'broadcaster' : (canPublish ? 'guest' : 'viewer'),
+    allowPublish: canPublish && sessionReady,
+    autoPublish: canPublish, // Enable autoPublish for guests too when allowed
     token: token || undefined,
     serverUrl: serverUrl || undefined,
     connect: canConnect,
     identity: tokenIdentity || livekitIdentity
   });
 
-  // Join Request Logic
-  // const [joinPrice, setJoinPrice] = useState(0); // Moved up
-  // const [canPublish, setCanPublish] = useState(false); // Moved up
   const publishUpgradeRef = useRef(false);
 
   const handleLeaveSession = useCallback(async () => {
-    setCanPublish(false);
+    const seatIndex = seats.findIndex(seat => seat?.user_id === user?.id);
+    if (seatIndex >= 0) {
+      await releaseSeat(seatIndex);
+    }
     
     // Disable media
     if (cameraOn) {
@@ -508,7 +568,7 @@ export default function LivePage() {
     }
     
     toast.info("You have left the guest box");
-  }, [liveKit, cameraOn, micOn]);
+  }, [liveKit, cameraOn, micOn, releaseSeat, seats, user?.id]);
 
   const handleSetPrice = async (price: number) => {
     setJoinPrice(price);
@@ -522,9 +582,8 @@ export default function LivePage() {
     toast.success(`Join price set to ${price} coins`);
   };
 
-  const handleJoinRequest = async () => {
+  const handleJoinRequest = async (seatIndex: number) => {
     if (canPublish) {
-        toast.info("Resuming guest session...");
         if (!cameraOn) {
           liveKit.toggleCamera().then((ok) => {
             if (ok) setCameraOn(true);
@@ -537,44 +596,55 @@ export default function LivePage() {
         }
         return;
     }
-    
+
+    if (!user?.id || !stream?.broadcaster_id || !streamId) {
+      toast.error('Unable to join right now.');
+      return;
+    }
+
+    let joinPriceForClaim = joinPrice;
     if (joinPrice > 0) {
       const confirmed = confirm(`Join the stream for ${joinPrice} coins?`);
       if (!confirmed) return;
-      
-      try {
-          // 1. Check balance
-          const { data: p } = await supabase.from('user_profiles').select('troll_coins').eq('id', user?.id).maybeSingle();
-          if ((p?.troll_coins || 0) < joinPrice) {
-              toast.error("Not enough coins!");
-              return;
-          }
-          
-          // 2. Send coins logic (using gifts table to trigger balance updates)
-          const { error } = await supabase.from('gifts').insert({
-              stream_id: streamId,
-              sender_id: user?.id,
-              receiver_id: stream?.broadcaster_id,
-              coins_spent: joinPrice,
-              gift_type: 'paid',
-              message: 'Join Fee',
-              gift_id: crypto.randomUUID(),
-              quantity: 1
-          });
 
-          if (error) throw error;
-          
-          toast.success("Paid join fee!");
-      } catch (e) {
-          console.error(e);
-          toast.error("Transaction failed");
-          return;
+      try {
+        const { data: spendResult, error: spendError } = await supabase.rpc('spend_coins', {
+          p_sender_id: user?.id,
+          p_receiver_id: stream?.broadcaster_id,
+          p_coin_amount: joinPrice,
+          p_source: 'seat_join',
+          p_item: 'Join Fee',
+        });
+
+        if (spendError) throw spendError;
+        const giftId = (spendResult as any)?.gift_id;
+        if (giftId) {
+          await supabase
+            .from('gifts')
+            .update({
+              stream_id: streamId,
+              gift_slug: 'join_fee',
+              message: 'Join Fee',
+            })
+            .eq('id', giftId)
+            .limit(1);
+        }
+
+        joinPriceForClaim = 0;
+        toast.success('Paid join fee!');
+      } catch (err) {
+        console.error('Join fee failed:', err);
+        toast.error('Transaction failed');
+        return;
       }
     }
-    
-    setCanPublish(true);
-    setCameraOn(true);
-    setMicOn(true);
+
+    try {
+      await claimSeat(seatIndex, { joinPrice: joinPriceForClaim });
+    } catch (err) {
+      console.error('Failed to claim seat:', err);
+      toast.error('Failed to join seat');
+    }
   };
 
   useEffect(() => {
@@ -916,37 +986,20 @@ export default function LivePage() {
     }
   }, [lastGift, stream]);
 
-  const isUuid = (value?: string | number) =>
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-
-  const resolveGiftId = async (giftId?: string | number, giftName?: string) => {
-    if (isUuid(giftId)) return giftId as string;
-    const rawId = giftId ? String(giftId) : '';
-    if (rawId) {
-      const { data } = await supabase
-        .from('gift_items')
-        .select('id')
-        .eq('id', rawId)
-        .maybeSingle();
-      if (data?.id) return data.id as string;
-    }
-    if (giftName) {
-      const { data } = await supabase
-        .from('gift_items')
-        .select('id')
-        .ilike('name', giftName)
-        .maybeSingle();
-      if (data?.id) return data.id as string;
-    }
-    return null;
+  const toGiftSlug = (value?: string) => {
+    if (!value) return 'gift';
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'gift';
   };
 
   const handleGiftSent = useCallback(async (amountOrGift: any) => {
     let totalCoins = 0;
     let quantity = 1;
     let giftName = 'Manual Gift';
-    let giftId: number | string | undefined;
+    let giftSlug: string | undefined;
 
     if (typeof amountOrGift === 'number') {
       totalCoins = amountOrGift;
@@ -956,7 +1009,7 @@ export default function LivePage() {
       const per = Number(g.coins) || 0;
       totalCoins = per * quantity;
       giftName = g.name || giftName;
-      giftId = g.id;
+      giftSlug = g.slug || toGiftSlug(g.name || giftName);
     }
 
     setIsGiftModalOpen(false);
@@ -968,11 +1021,6 @@ export default function LivePage() {
         toast.error('Unable to send gift right now.');
         return;
       }
-      const resolvedGiftId = await resolveGiftId(giftId, giftName);
-      if (!resolvedGiftId) {
-        toast.error('Gift item unavailable. Refresh and try again.');
-        return;
-      }
       const { error } = await supabase.from('gifts').insert({
         stream_id: stream?.id,
         sender_id: user?.id,
@@ -980,7 +1028,7 @@ export default function LivePage() {
         coins_spent: totalCoins,
         gift_type: 'paid',
         message: giftName,
-        gift_id: resolvedGiftId,
+        gift_slug: giftSlug || toGiftSlug(giftName),
         quantity: quantity,
       });
       if (error) {
@@ -1019,7 +1067,7 @@ export default function LivePage() {
     } catch (e) {
       console.error('Failed to record manual gift event:', e);
     }
-  }, [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, resolveGiftId]);
+  }, [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id]);
 
   const handleCoinsPurchased = useCallback((_amount: number) => {
     setIsCoinStoreOpen(false);
@@ -1102,23 +1150,46 @@ export default function LivePage() {
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-2 lg:p-4 pt-0 overflow-y-auto lg:overflow-hidden">
         {/* Broadcast Layout (Streamer + Guests) */}
-        <div className="lg:w-3/4 h-[48svh] lg:h-full lg:flex-1 min-h-0 flex flex-col relative z-0">
+        <div
+          className="lg:w-3/4 h-[48svh] lg:h-full lg:flex-1 min-h-0 flex flex-col relative z-0"
+          onClick={() => {
+            if (!showLivePanels) setShowLivePanels(true);
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              if (!showLivePanels) setShowLivePanels(true);
+            }
+          }}
+        >
             <BroadcastLayout 
               room={liveKit.getRoom()} 
               broadcasterId={stream.broadcaster_id}
               isHost={isBroadcaster}
+              seats={seats}
               joinPrice={joinPrice}
               lastGift={lastGift}
+              backgroundStyle={broadcastThemeStyle}
               onSetPrice={handleSetPrice}
               onJoinRequest={handleJoinRequest}
               onLeaveSession={handleLeaveSession}
+              onDisableGuestMedia={liveKit.disableGuestMediaByClick}
             >
                <GiftEventOverlay gift={lastGift} onProfileClick={(p) => setSelectedProfile(p)} />
             </BroadcastLayout>
+            {!showLivePanels && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="bg-black/50 backdrop-blur px-4 py-2 rounded-full text-xs uppercase tracking-[0.3em] text-white/70 border border-white/10">
+                  Tap to show chat
+                </div>
+              </div>
+            )}
          </div>
 
          {/* Mobile Tab Bar */}
-         <div className="flex lg:hidden bg-white/5 rounded-lg p-1 shrink-0 gap-2">
+         {showLivePanels && (
+         <div className="flex lg:hidden bg-[#0b091f]/90 backdrop-blur rounded-lg p-1 shrink-0 gap-2 sticky bottom-0 z-20 border border-white/10">
             <button 
               onClick={() => setActiveMobileTab('chat')}
               className={`flex-1 py-2 rounded-md font-bold text-sm transition-all ${activeMobileTab === 'chat' ? 'bg-purple-600 text-white shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
@@ -1132,8 +1203,10 @@ export default function LivePage() {
               Gifts
             </button>
          </div>
+         )}
 
          {/* Right Panel (Chat/Gifts) */}
+         {showLivePanels && (
          <div className="lg:w-1/4 flex-1 lg:h-full min-h-0 flex flex-col gap-4 overflow-hidden relative z-0 pb-[calc(4rem+env(safe-area-inset-bottom))]">
             {isBroadcaster && (
               <BroadcasterControlPanel
@@ -1166,14 +1239,14 @@ export default function LivePage() {
             )}
             {/* GiftBox - Hidden on mobile if chat tab active; make scrollable and height-safe */}
             <div className={`${activeMobileTab === 'gifts' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-h-0 overflow-hidden`}>
-              <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-[env(safe-area-inset-bottom)]">
                 <GiftBox onSendGift={handleGiftSent} participants={[]} />
               </div>
             </div>
             
             {/* ChatBox - Hidden on mobile if gifts tab active; ensure input is pinned and chat scrolls */}
             <div className={`${activeMobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-h-0`}>
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
                 <ChatBox 
                   streamId={streamId || ''} 
                   onProfileClick={setSelectedProfile}
@@ -1184,6 +1257,7 @@ export default function LivePage() {
               </div>
             </div>
          </div>
+         )}
       </div>
 
       {/* Modals */}

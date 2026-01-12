@@ -16,6 +16,14 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
   const [gifts, setGifts] = useState(fallbackGifts);
   const [selectedGift, setSelectedGift] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const toGiftSlug = (value) => {
+    if (!value) return 'gift';
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'gift';
+  };
 
   useEffect(() => {
     const loadGifts = async () => {
@@ -40,7 +48,7 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
 
   const handleSendGift = () => {
     if (!selectedGift) return;
-    const giftPayload = { ...selectedGift, quantity };
+    const giftPayload = { ...selectedGift, slug: toGiftSlug(selectedGift?.name), quantity };
     if (typeof onSendGift === 'function') onSendGift(giftPayload);
     setQuantity(1);
     if (typeof onClose === 'function') onClose();

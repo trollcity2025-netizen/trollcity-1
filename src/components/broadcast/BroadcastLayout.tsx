@@ -11,6 +11,7 @@ interface BroadcastLayoutProps {
   joinPrice?: number
   seats?: any[]
   lastGift?: any
+  backgroundStyle?: React.CSSProperties
   onSetPrice?: (price: number) => void
   onJoinRequest?: (seatIndex: number) => void
   onLeaveSession?: () => void
@@ -25,6 +26,7 @@ export default function BroadcastLayout({
   joinPrice = 0,
   seats,
   lastGift,
+  backgroundStyle,
   onSetPrice,
   onJoinRequest,
   onLeaveSession,
@@ -99,7 +101,10 @@ export default function BroadcastLayout({
   if (!room) return null;
 
   return (
-    <div className="relative w-full h-full min-h-0 bg-black overflow-hidden">
+    <div
+      className="relative w-full h-full min-h-0 bg-black overflow-hidden"
+      style={backgroundStyle}
+    >
       {/* Responsive Grid System */}
       <ResponsiveVideoGrid
         participants={participants}

@@ -14,6 +14,7 @@ interface VideoTileProps {
   fit?: 'cover' | 'contain'
   price?: number
   coinBalance?: number
+  compact?: boolean
   isHost?: boolean
   onDisableGuestMedia?: (participantId: string, disableVideo: boolean, disableAudio: boolean) => void
 }
@@ -28,6 +29,7 @@ export default function VideoTile({
   fit = 'cover',
   price,
   coinBalance,
+  compact = false,
   isHost = false,
   onDisableGuestMedia
 }: VideoTileProps) {
@@ -188,6 +190,8 @@ export default function VideoTile({
   const level = metadata.level || 1;
   const role = metadata.role || 'Guest';
   const roleColor = role === 'Admin' ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-purple-400 border-purple-500/30 bg-purple-500/10';
+  const seatUsernameStyle: React.CSSProperties = { fontSize: 'var(--seat-username-size)' };
+  const seatCoinStyle: React.CSSProperties = { fontSize: 'var(--seat-coin-size)', padding: 'var(--seat-chip-padding)' };
 
   const handleBroadcasterClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -198,7 +202,7 @@ export default function VideoTile({
     if (isHost && !isLocal && !isBroadcaster && onDisableGuestMedia) {
       // Disable guest media when broadcaster clicks on guest box
       onDisableGuestMedia(participant.identity, true, true);
-    } else if (isLocal) {
+    } else if (isLocal && !isHost) {
       setShowLocalControls(!showLocalControls);
     }
   };
@@ -269,39 +273,58 @@ export default function VideoTile({
 
       {/* Broadcaster Crown */}
       {isBroadcaster && (
-         <div className="absolute top-4 left-4 z-10 drop-shadow-lg filter">
+         <div className="absolute top-3 left-3 z-10 drop-shadow-lg filter">
              <div className="relative">
-                <Crown size={24} className="text-yellow-400 fill-yellow-400 animate-pulse" />
+                <Crown size={compact ? 16 : 24} className="text-yellow-400 fill-yellow-400 animate-pulse" />
                 <div className="absolute inset-0 bg-yellow-400/50 blur-lg rounded-full" />
              </div>
          </div>
       )}
 
       {/* User Info Badge (Bottom Left) */}
-      <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2 max-w-[85%]">
-        {/* Name Badge */}
-        <div className="flex items-center gap-2 bg-[#1a0b2e]/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-purple-500/30 shadow-lg w-fit">
-            {/* Connection Indicator */}
-            <div className={`w-2 h-2 rounded-full ${(participant as any).isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span className="text-sm font-bold text-white truncate max-w-[120px]">
-                {participant.name || participant.identity || 'Guest'}
+      {compact ? (
+        <div className="absolute bottom-2 left-2 right-2 z-10">
+          <div className="flex items-center justify-between gap-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 w-full">
+            <span className="text-white/90 font-semibold truncate" style={seatUsernameStyle}>
+              {participant.name || participant.identity || 'Guest'}
             </span>
-            {!isAudioEnabled && <MicOff size={12} className="text-red-400" />}
+            {typeof coinBalance === 'number' && (
+              <span
+                className="text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 rounded-full flex items-center gap-1"
+                style={seatCoinStyle}
+              >
+                <Coins className="w-3 h-3" />
+                {coinBalance.toLocaleString()}
+              </span>
+            )}
+          </div>
         </div>
-        
-        {/* Role/Level Badge */}
-        <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded border border-white/10">
-                <span className="text-[10px] font-bold text-yellow-500">LV {level}</span>
-            </div>
-            <div className={`flex items-center gap-1 px-2 py-0.5 rounded border ${roleColor}`}>
-                <span className="text-[10px] font-medium uppercase tracking-wider">{role}</span>
-            </div>
+      ) : (
+        <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2 max-w-[85%]">
+          {/* Name Badge */}
+          <div className="flex items-center gap-2 bg-[#1a0b2e]/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-purple-500/30 shadow-lg w-fit">
+              {/* Connection Indicator */}
+              <div className={`w-2 h-2 rounded-full ${(participant as any).isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-sm font-bold text-white truncate max-w-[120px]">
+                  {participant.name || participant.identity || 'Guest'}
+              </span>
+              {!isAudioEnabled && <MicOff size={12} className="text-red-400" />}
+          </div>
+          
+          {/* Role/Level Badge */}
+          <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded border border-white/10">
+                  <span className="text-[10px] font-bold text-yellow-500">LV {level}</span>
+              </div>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded border ${roleColor}`}>
+                  <span className="text-[10px] font-medium uppercase tracking-wider">{role}</span>
+              </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Balance / Price Badges (Bottom Right) */}
-      {(typeof coinBalance === 'number' || (typeof price === 'number' && price > 0)) && (
+      {!compact && (typeof coinBalance === 'number' || (typeof price === 'number' && price > 0)) && (
         <div className="absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
           {typeof coinBalance === 'number' && (
             <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 text-yellow-300 text-sm flex items-center gap-1">

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { CheckCircle, XCircle, FileText } from 'lucide-react'
 
 export default function TermsAgreement() {
-  const { profile, session, refreshProfile } = useAuthStore()
+  const { profile, session, refreshProfile, setProfile } = useAuthStore()
   const navigate = useNavigate()
   const [agreed, setAgreed] = useState(false)
   const [privacyAgreed, setPrivacyAgreed] = useState(false)
@@ -65,11 +65,6 @@ export default function TermsAgreement() {
       toast.error('You need to be logged in to accept the terms.')
       return
     }
-    if (!profile) {
-      toast.error('Profile not loaded yet. Please wait a moment.')
-      return
-    }
-
     setSubmitting(true)
     try {
       const functionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
@@ -99,16 +94,39 @@ export default function TermsAgreement() {
         await refreshProfile()
       }
 
+      let updatedProfile = profile
+      try {
+        const sessionUserId =
+          session?.user?.id ||
+          (await supabase.auth.getSession()).data.session?.user?.id
+        if (!sessionUserId) {
+          throw new Error('Missing session user id')
+        }
+        const { data: refreshed } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', sessionUserId)
+          .maybeSingle()
+        if (refreshed) {
+          updatedProfile = refreshed as any
+          if (setProfile) setProfile(refreshed as any)
+        }
+      } catch (profileErr) {
+        console.warn('[Terms] profile refresh failed:', profileErr)
+      }
+
       toast.success('Welcome to Troll City!')
       // If this user is an admin, send them to the admin dashboard after accepting
       try {
-        if (profile?.role === 'admin') {
+        if (updatedProfile?.role === 'admin') {
           navigate('/admin')
+        } else if (!updatedProfile?.username) {
+          navigate('/profile/setup')
         } else {
-          navigate('/home')
+          navigate('/')
         }
       } catch {
-        navigate('/home')
+        navigate('/')
       }
     } catch (err: any) {
       console.error('[Terms] Agreement error:', err)

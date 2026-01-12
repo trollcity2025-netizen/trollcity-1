@@ -26,6 +26,11 @@ const GoLive: React.FC = () => {
   const [broadcasterName, setBroadcasterName] = useState<string>('');
   const [category, setCategory] = useState<string>('Chat');
   const [isPrivateStream, setIsPrivateStream] = useState<boolean>(false);
+  const [themes, setThemes] = useState<any[]>([]);
+  const [ownedThemeIds, setOwnedThemeIds] = useState<Set<string>>(new Set());
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
+  const [themesLoading, setThemesLoading] = useState(false);
+  const [themePurchaseId, setThemePurchaseId] = useState<string | null>(null);
 
   // Note: Camera/mic permissions will be requested when joining seats in broadcast
   // No camera preview needed in setup
@@ -87,6 +92,100 @@ const GoLive: React.FC = () => {
     const p = useAuthStore.getState().profile;
     if (p?.username) setBroadcasterName(p.username);
   }, []);
+
+  useEffect(() => {
+    const loadThemes = async () => {
+      const { user } = useAuthStore.getState();
+      if (!user?.id) return;
+      setThemesLoading(true);
+      try {
+        const { data: catalog } = await supabase
+          .from('broadcast_background_themes')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true });
+
+        const { data: owned } = await supabase
+          .from('user_broadcast_theme_purchases')
+          .select('theme_id')
+          .eq('user_id', user.id);
+
+        const { data: state } = await supabase
+          .from('user_broadcast_theme_state')
+          .select('active_theme_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        setThemes(catalog || []);
+        setOwnedThemeIds(new Set((owned || []).map((row: any) => row.theme_id)));
+        setActiveThemeId(state?.active_theme_id || null);
+      } catch (err) {
+        console.error('Failed to load broadcast themes', err);
+      } finally {
+        setThemesLoading(false);
+      }
+    };
+
+    loadThemes();
+  }, []);
+
+  const buildThemeStyle = (theme?: any) => {
+    if (!theme) return {};
+    if (theme.background_css) {
+      return { background: theme.background_css };
+    }
+    if (theme.background_asset_url) {
+      return {
+        backgroundImage: `url(${theme.background_asset_url})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      };
+    }
+    return {};
+  };
+
+  const handleSelectTheme = async (themeId: string | null) => {
+    const { user } = useAuthStore.getState();
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase.rpc('set_active_broadcast_theme', {
+        p_user_id: user.id,
+        p_theme_id: themeId
+      });
+      if (error || data?.success === false) {
+        throw new Error(data?.error || error?.message || 'Failed to set theme');
+      }
+      setActiveThemeId(themeId);
+    } catch (err: any) {
+      console.error('Theme selection failed', err);
+      toast.error(err?.message || 'Failed to set theme');
+    }
+  };
+
+  const handleBuyTheme = async (themeId: string) => {
+    const { user } = useAuthStore.getState();
+    if (!user?.id) return;
+    setThemePurchaseId(themeId);
+    try {
+      const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
+        p_user_id: user.id,
+        p_theme_id: themeId,
+        p_set_active: true
+      });
+      if (error || data?.success === false) {
+        throw new Error(data?.error || error?.message || 'Purchase failed');
+      }
+      setOwnedThemeIds((prev) => new Set([...Array.from(prev), themeId]));
+      setActiveThemeId(themeId);
+      toast.success('Theme purchased and applied');
+    } catch (err: any) {
+      console.error('Theme purchase failed', err);
+      toast.error(err?.message || 'Unable to purchase theme');
+    } finally {
+      setThemePurchaseId(null);
+    }
+  };
 
   // -------------------------------
   // START STREAM
@@ -537,6 +636,77 @@ const GoLive: React.FC = () => {
                   }}
                 />
               </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-gray-300">Broadcast Background</label>
+            <div className="mt-2 space-y-4">
+              <div className="rounded-xl border border-purple-700/30 bg-[#0b091f] p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Preview</div>
+                    <div className="text-xs text-gray-400">Applies to your broadcast stage only.</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTheme(null)}
+                    className={`text-xs px-3 py-1 rounded border ${!activeThemeId ? 'border-cyan-400/70 text-cyan-200' : 'border-white/10 text-white/60'}`}
+                  >
+                    Default
+                  </button>
+                </div>
+                <div
+                  className="mt-3 h-28 rounded-lg border border-white/10"
+                  style={buildThemeStyle(themes.find(t => t.id === activeThemeId))}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {themesLoading && <div className="text-xs text-gray-400">Loading themes...</div>}
+                {!themesLoading && themes.length === 0 && (
+                  <div className="text-xs text-gray-500">No themes available yet.</div>
+                )}
+                {!themesLoading && themes.map((theme) => {
+                  const owned = ownedThemeIds.has(theme.id);
+                  const isActive = activeThemeId === theme.id;
+                  return (
+                    <div key={theme.id} className="rounded-xl border border-purple-700/20 bg-[#120f1f] p-3 space-y-2">
+                      <div className="h-20 rounded-lg border border-white/10 overflow-hidden" style={buildThemeStyle(theme)} />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-white">{theme.name}</div>
+                          <div className="text-[10px] text-gray-400">{theme.rarity || 'standard'}</div>
+                        </div>
+                        <div className="text-xs text-yellow-300">{theme.price_coins.toLocaleString()} coins</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {owned ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectTheme(theme.id)}
+                              className={`flex-1 text-xs px-3 py-2 rounded border ${isActive ? 'border-cyan-400/80 text-cyan-200' : 'border-white/10 text-white/70 hover:text-white'}`}
+                            >
+                              {isActive ? 'Active' : 'Use Theme'}
+                            </button>
+                            <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-200">Owned</span>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleBuyTheme(theme.id)}
+                            disabled={themePurchaseId === theme.id}
+                            className="flex-1 text-xs px-3 py-2 rounded border border-pink-500/40 text-pink-200 hover:text-white"
+                          >
+                            {themePurchaseId === theme.id ? 'Purchasing...' : 'Buy Theme'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

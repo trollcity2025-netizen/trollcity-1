@@ -11,13 +11,21 @@ interface GiftItem {
 }
 
 interface GiftBoxProps {
-  onSendGift?: (gift: { id: string; coins: number; name: string }, recipient?: string | null) => void;
+  onSendGift?: (gift: { id: string; coins: number; name: string; slug?: string; quantity?: number }, recipient?: string | null) => void;
   participants?: Array<{ name: string }>;
 }
 
 export default function GiftBox({ onSendGift, participants = [] }: GiftBoxProps) {
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  const toGiftSlug = (value?: string) => {
+    if (!value) return 'gift';
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'gift';
+  };
 
   useEffect(() => {
     const fetchGifts = async () => {
@@ -148,6 +156,7 @@ export default function GiftBox({ onSendGift, participants = [] }: GiftBoxProps)
       id: selectedGift.id, 
       name: selectedGift.name, 
       coins: selectedGift.value, 
+      slug: toGiftSlug(selectedGift.name),
       quantity 
     } as any, recipient);
     setShowModal(false);

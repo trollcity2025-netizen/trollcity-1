@@ -73,6 +73,10 @@ export default function CoinStore() {
   const [effects, setEffects] = useState([]);
   const [perks, setPerks] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [broadcastThemes, setBroadcastThemes] = useState([]);
+  const [ownedThemeIds, setOwnedThemeIds] = useState(new Set());
+  const [themesNote, setThemesNote] = useState(null);
+  const [themePurchasing, setThemePurchasing] = useState(null);
   const [effectsNote, setEffectsNote] = useState(null);
   const [perksNote, setPerksNote] = useState(null);
   const [insuranceNote, setInsuranceNote] = useState(null);
@@ -85,6 +89,22 @@ export default function CoinStore() {
     if (typeof window === 'undefined') return false;
     return Boolean(sessionStorage.getItem('tc-store-show-complete'));
   });
+
+  const getThemeStyle = (theme) => {
+    if (!theme) return undefined;
+    if (theme.background_css) {
+      return { background: theme.background_css };
+    }
+    if (theme.background_asset_url) {
+      return {
+        backgroundImage: `url(${theme.background_asset_url})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      };
+    }
+    return undefined;
+  };
 
   const showLiveSnacks = Boolean(activeStreamId && liveStreamIsLive);
   const callPackages = {
@@ -152,10 +172,14 @@ export default function CoinStore() {
 
       await refreshCoins();
 
-      const [effRes, perkRes, planRes] = await Promise.all([
+      const [effRes, perkRes, planRes, themeRes, themeOwnedRes] = await Promise.all([
         supabase.from('entrance_effects').select('*').order('created_at', { ascending: false }),
         supabase.from('perks').select('*').order('created_at', { ascending: false }),
-        supabase.from('insurance_options').select('*').order('created_at', { ascending: false })
+        supabase.from('insurance_options').select('*').order('created_at', { ascending: false }),
+        supabase.from('broadcast_background_themes').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
+        user?.id
+          ? supabase.from('user_broadcast_theme_purchases').select('theme_id').eq('user_id', user.id)
+          : Promise.resolve({ data: [] })
       ]);
       const applyCatalogData = (result, fallback = [], setter, noteSetter, label) => {
         if (result.error) {
@@ -206,7 +230,17 @@ export default function CoinStore() {
         'insurance plans',
       );
 
-      console.log('Effects, perks, plans loaded:', { effects: loadedEffects.length, perks: loadedPerks.length, plans: loadedPlans.length });
+      const loadedThemes = applyCatalogData(
+        themeRes,
+        [],
+        setBroadcastThemes,
+        setThemesNote,
+        'broadcast themes',
+      );
+
+      setOwnedThemeIds(new Set((themeOwnedRes?.data || []).map((row) => row.theme_id)));
+
+      console.log('Effects, perks, plans, themes loaded:', { effects: loadedEffects.length, perks: loadedPerks.length, plans: loadedPlans.length, themes: loadedThemes.length });
 
     } catch (err) {
       console.error('? Error loading wallet data:', err);
@@ -471,8 +505,49 @@ export default function CoinStore() {
       if (price <= 0) {
         toast.error('Invalid insurance price')
         return
+  }
+
+  const buyBroadcastTheme = async (theme) => {
+    const canProceed = await checkOnboarding();
+    if (!canProceed) return;
+    if (!user?.id) {
+      toast.error('Please log in to purchase a theme');
+      return;
+    }
+
+    if (!theme?.id) {
+      toast.error('Invalid theme');
+      return;
+    }
+
+    if (ownedThemeIds.has(theme.id)) {
+      toast.info('You already own this theme');
+      return;
+    }
+
+    setThemePurchasing(theme.id);
+    try {
+      const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
+        p_user_id: user.id,
+        p_theme_id: theme.id,
+        p_set_active: false,
+      });
+      if (error || data?.success === false) {
+        throw new Error(data?.error || error?.message || 'Theme purchase failed');
       }
-      
+
+      setOwnedThemeIds((prev) => new Set([...Array.from(prev), theme.id]));
+      await refreshCoins();
+      toast.success('Theme purchased');
+      showPurchaseCompleteOverlay();
+    } catch (err) {
+      console.error('Theme purchase error:', err);
+      toast.error(err?.message || 'Failed to purchase theme');
+    } finally {
+      setThemePurchasing(null);
+    }
+  };
+
       if (troll_coins < price) {
         toast.error(`Not enough Troll Coins. Need ${price}, have ${troll_coins}`)
         return
@@ -732,6 +807,7 @@ export default function CoinStore() {
               <button type="button" className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('perks')}>Perks</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='calls'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('calls')}>Call Minutes</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='insurance'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('insurance')}>Insurance</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='broadcast_themes'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('broadcast_themes')}>Broadcast Themes</button>
               {showLiveSnacks && (
                 <button type="button" className={`px-3 py-2 rounded ${tab==='live_snacks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('live_snacks')}>LIVE SNACKS</button>
               )}
@@ -747,6 +823,7 @@ export default function CoinStore() {
                 <option value="perks">Perks</option>
                 <option value="calls">Call Minutes</option>
                 <option value="insurance">Insurance</option>
+                <option value="broadcast_themes">Broadcast Themes</option>
                 {showLiveSnacks && <option value="live_snacks">LIVE SNACKS</option>}
               </select>
             </div>
@@ -1006,6 +1083,57 @@ export default function CoinStore() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </>
+            )}
+
+            {tab === 'broadcast_themes' && (
+              <>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-purple-400" />
+                  Broadcast Themes
+                </h2>
+                {themesNote && (
+                  <div className="mb-4 text-xs text-yellow-200 bg-yellow-500/10 border border-yellow-500/40 rounded-lg p-3">
+                    {themesNote}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {broadcastThemes.map((theme) => {
+                    const owned = ownedThemeIds.has(theme.id);
+                    return (
+                      <div key={theme.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20 hover:border-purple-500/40 transition-all">
+                        <div
+                          className="h-28 rounded-lg border border-white/10 mb-3"
+                          style={getThemeStyle(theme)}
+                        />
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-lg font-bold text-purple-200">{theme.name}</span>
+                          {owned ? (
+                            <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-500/30">
+                              Owned
+                            </span>
+                          ) : (
+                            <span className="text-xs text-yellow-300 font-semibold">
+                              {Number(theme.price_coins || 0).toLocaleString()} coins
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 mb-3">{theme.rarity || 'standard'}</div>
+                        <button
+                          type="button"
+                          disabled={owned || themePurchasing === theme.id}
+                          onClick={() => buyBroadcastTheme(theme)}
+                          className="w-full py-2 rounded-lg text-sm font-semibold border border-pink-500/50 text-pink-100 hover:text-white hover:border-pink-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {owned ? 'Owned' : themePurchasing === theme.id ? 'Purchasing...' : 'Buy Theme'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {broadcastThemes.length === 0 && !themesNote && (
+                    <div className="text-sm text-gray-400">No broadcast themes available yet.</div>
+                  )}
                 </div>
               </>
             )}

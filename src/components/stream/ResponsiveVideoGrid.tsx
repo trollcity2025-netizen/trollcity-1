@@ -78,6 +78,7 @@ export default function ResponsiveVideoGrid({
                 onDisableGuestMedia={onDisableGuestMedia}
                 price={joinPrice}
                 coinBalance={p.identity ? coinBalances?.[p.identity] : undefined}
+                compact
                 className="w-full h-full"
                 style={{ width: '100%', height: '100%' }}
               />
@@ -90,11 +91,11 @@ export default function ResponsiveVideoGrid({
               key={`waiting-${i}`}
               className="seat bg-zinc-900/50 border border-white/5 flex items-center justify-center backdrop-blur-sm"
             >
-              <div className="text-white/20 font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                     <span className="text-lg">⏳</span>
+              <div className="text-white/20 uppercase tracking-widest text-[10px] flex flex-col items-center gap-2">
+                  <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center">
+                     <span className="text-base">⏳</span>
                   </div>
-                  Waiting for {seat.username}
+                  <span className="truncate max-w-[90%]">Waiting for {seat.username}</span>
                 </div>
             </div>
           );
@@ -107,11 +108,18 @@ export default function ResponsiveVideoGrid({
             <div
               key={`empty-${i}`}
               className={`seat bg-zinc-900/50 border border-white/5 flex items-center justify-center backdrop-blur-sm ${canJoin ? 'cursor-pointer hover:bg-zinc-800/50 hover:border-white/10 transition-colors' : ''}`}
-              onClick={canJoin ? () => onJoinRequest?.(i) : undefined}
+              onClick={
+                canJoin
+                  ? (event) => {
+                      event.stopPropagation();
+                      onJoinRequest?.(i);
+                    }
+                  : undefined
+              }
             >
-              <div className="text-white/20 font-bold uppercase tracking-widest text-xs flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                     <span className="text-lg">+</span>
+              <div className="text-white/20 uppercase tracking-widest text-[10px] flex flex-col items-center gap-2">
+                  <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center">
+                     <span className="text-base">+</span>
                   </div>
                   {i === 0 ? 'Broadcaster' : `Seat ${i + 1}`}
                 </div>
