@@ -55,6 +55,7 @@ interface StreamRow {
   room_name?: string;
   agora_channel?: string;
   category?: string;
+  is_private?: boolean;
 }
 
 interface GiftBalanceDelta {
@@ -391,7 +392,12 @@ export default function LivePage() {
   }, [user?.id, profile?.id]);
   
   const [stream, setStream] = useState<StreamRow | null>(null);
+  const [viewerCount, setViewerCount] = useState(0);
   const [isLoadingStream, setIsLoadingStream] = useState(true);
+  const [privateAccessGranted, setPrivateAccessGranted] = useState(false);
+  const [privatePasswordInput, setPrivatePasswordInput] = useState('');
+  const [privateAuthError, setPrivateAuthError] = useState('');
+  const privateAccessStorageKey = streamId ? `private-stream-access:${streamId}` : null;
 
   // Save stream to session storage for persistence
   useEffect(() => {
@@ -530,7 +536,10 @@ export default function LivePage() {
     }
   }, [tokenError]);
 
-  const canConnect = tokenReady && !!token && !!serverUrl && !!user?.id && !!roomName;
+  const needsPrivateGate = Boolean(stream?.is_private && stream?.broadcaster_id && stream?.broadcaster_id !== user?.id);
+  const streamLoaded = Boolean(stream?.id);
+  const canAccessPrivate = !needsPrivateGate || privateAccessGranted;
+  const canConnect = tokenReady && !!token && !!serverUrl && !!user?.id && !!roomName && streamLoaded && canAccessPrivate;
 
   // Logging for verification
   useEffect(() => {
@@ -869,6 +878,7 @@ export default function LivePage() {
     const streamDataFromState = location.state?.streamData;
     if (streamDataFromState && streamDataFromState.id === streamId) {
       setStream(streamDataFromState as StreamRow);
+      setViewerCount((streamDataFromState as StreamRow).current_viewers ?? 0);
       setIsLoadingStream(false);
       return;
     }
@@ -878,8 +888,9 @@ export default function LivePage() {
       const storedStream = sessionStorage.getItem("activeStream");
       if (storedStream) {
         const parsedStream = JSON.parse(storedStream);
-        if (parsedStream.id === streamId) {
+          if (parsedStream.id === streamId) {
           setStream(parsedStream);
+          setViewerCount(parsedStream.current_viewers ?? 0);
           setIsLoadingStream(false);
           return;
         }
@@ -894,7 +905,7 @@ export default function LivePage() {
         // Fetch by Stream ID ONLY
         const { data: streamRow, error } = await supabase
           .from("streams")
-          .select("id, broadcaster_id, title, category, status, start_time, end_time, current_viewers, total_gifts_coins, total_unique_gifters, is_live, thumbnail_url, room_name, created_at, updated_at")
+        .select("id, broadcaster_id, title, category, status, start_time, end_time, current_viewers, total_gifts_coins, total_unique_gifters, is_live, is_private, thumbnail_url, room_name, created_at, updated_at")
           .eq("id", streamId)
           .maybeSingle();
 
@@ -903,7 +914,7 @@ export default function LivePage() {
             setIsLoadingStream(false);
             return;
         }
-
+        setViewerCount(streamRow.current_viewers ?? 0);
         setStream(streamRow as StreamRow);
     } catch (err) {
         console.error("Failed to load stream:", err);
@@ -916,6 +927,69 @@ export default function LivePage() {
   useEffect(() => {
     loadStreamData();
   }, [loadStreamData]);
+
+  useEffect(() => {
+    if (!streamId || !stream) {
+      setPrivateAccessGranted(false);
+      setPrivatePasswordInput('');
+      setPrivateAuthError('');
+      return;
+    }
+
+    if (!privateAccessStorageKey) {
+      setPrivateAccessGranted(true);
+      return;
+    }
+
+    if (stream.is_private && stream.broadcaster_id !== user?.id) {
+      const stored = localStorage.getItem(privateAccessStorageKey);
+      setPrivateAccessGranted(Boolean(stored));
+    } else {
+      setPrivateAccessGranted(true);
+      if (privateAccessStorageKey) {
+        localStorage.removeItem(privateAccessStorageKey);
+      }
+    }
+  }, [streamId, stream?.is_private, stream?.broadcaster_id, user?.id, privateAccessStorageKey, stream]);
+
+  const handlePrivatePasswordSubmit = async () => {
+    setPrivateAuthError('');
+    if (!streamId) {
+      setPrivateAuthError('Stream unavailable');
+      return;
+    }
+    if (!user) {
+      setPrivateAuthError('Please sign in to enter the password');
+      return;
+    }
+    if (!privatePasswordInput.trim()) {
+      setPrivateAuthError('Enter the stream password');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('verify_stream_password', {
+        p_stream_id: streamId,
+        p_password: privatePasswordInput.trim(),
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        setPrivateAccessGranted(true);
+        if (privateAccessStorageKey) {
+          localStorage.setItem(privateAccessStorageKey, '1');
+        }
+        setPrivateAuthError('');
+        toast.success('Private access granted');
+      } else {
+        setPrivateAuthError('Incorrect password');
+      }
+    } catch (err: any) {
+      console.error('Private password verification failed:', err);
+      setPrivateAuthError('Unable to verify password right now');
+    }
+  };
 
   // XP Tracking for Watchers (Anti-Farm: 5 XP every 10 mins)
   const watchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1044,6 +1118,7 @@ export default function LivePage() {
         .eq('stream_id', streamId)
         .eq('is_active', true);
       if (!error && typeof count === 'number') {
+        setViewerCount(count);
         setStream((prev) => (prev ? { ...prev, current_viewers: count } : prev));
       }
     } catch (err) {
@@ -1234,6 +1309,37 @@ export default function LivePage() {
   return (
     <div className="h-full w-full flex flex-col bg-[#05010a] text-white overflow-hidden">
       <GlobalGiftBanner />
+      {needsPrivateGate && !privateAccessGranted && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/90 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0a16] p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-2">Private stream</h3>
+            <p className="text-sm text-gray-300 mb-4">
+              This broadcast requires a password provided by the broadcaster. Enter it below to join.
+            </p>
+            <input
+              type="password"
+              value={privatePasswordInput}
+              onChange={(e) => setPrivatePasswordInput(e.target.value)}
+              placeholder="Enter stream password"
+              className="w-full bg-[#05060f] border border-purple-500/40 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-300 focus:outline-none mb-2"
+            />
+            {privateAuthError && (
+              <p className="text-xs text-red-400 mb-2">{privateAuthError}</p>
+            )}
+            <button
+              className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 font-semibold text-sm"
+              onClick={handlePrivatePasswordSubmit}
+            >
+              Submit password
+            </button>
+            {!user && (
+              <p className="mt-3 text-xs text-gray-400">
+                You must be signed in to enter the password.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
       {/* Entrance effect for all users */}
       {entranceEffect && (
         <div key={entranceEffectKey} className="fixed inset-0 z-[100] pointer-events-none">
@@ -1260,7 +1366,7 @@ export default function LivePage() {
               <Heart size={16} className="text-purple-400" /> <span className="font-bold">{stream?.total_likes || 0}</span>
             </div>
             <div className="px-3 py-2 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
-              <Users size={16} className="text-green-400" /> <span className="font-bold">{(stream.current_viewers || 0).toLocaleString()}</span>
+              <Users size={16} className="text-green-400" /> <span className="font-bold">{viewerCount.toLocaleString()}</span>
             </div>
             {isBroadcaster && (
               <button
