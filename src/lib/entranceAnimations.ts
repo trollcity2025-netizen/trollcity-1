@@ -23,7 +23,7 @@ export async function playEntranceAnimation(userId: string, effectKey: string, t
   console.log(`🎬 Playing entrance animation: ${effectConfig.name} for user ${userId}`);
 
   // Play sound effect
-  playSoundEffect(effectConfig.soundEffect);
+  void playSoundEffect(effectConfig.soundEffect);
 
   // Play animation based on type
   const animationType = effectConfig.animationType;
@@ -59,6 +59,9 @@ export async function playEntranceAnimation(userId: string, effectKey: string, t
     case 'admin_divine':
       await showAdminDivineAnimation(targetElement);
       break;
+    case 'admin_best':
+      await showAdminDivineAnimation(targetElement);
+      break;
     case 'lead_officer_elite':
       await showLeadOfficerEliteAnimation(targetElement);
       break;
@@ -73,19 +76,29 @@ export async function playEntranceAnimation(userId: string, effectKey: string, t
 /**
  * Play sound effect for entrance
  */
-function playSoundEffect(soundKey: string) {
+async function playSoundEffect(soundKey: string) {
+  const soundUrl = `/sounds/entrance/${soundKey}.mp3`;
   try {
-    // Create audio element with the sound
-    const audio = new Audio(`/sounds/entrance/${soundKey}.mp3`);
-    audio.volume = 0.6;
+    const response = await fetch(soundUrl);
+    if (!response.ok) {
+      console.log(`Sound file not found (${response.status}): ${soundUrl}`);
+      return;
+    }
 
-    // Add error handling
-    audio.addEventListener('error', () => {
-      console.log(`Sound file not found: ${soundKey}.mp3`);
-    });
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) {
+      console.log(`Sound file empty: ${soundKey}.mp3`);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const audio = new Audio(objectUrl);
+    audio.volume = 0.6;
+    audio.addEventListener('ended', () => URL.revokeObjectURL(objectUrl));
 
     audio.play().catch(err => {
       console.log('Audio play failed (likely user interaction required):', err);
+      URL.revokeObjectURL(objectUrl);
     });
   } catch (err) {
     console.log('Sound effect failed:', err);
