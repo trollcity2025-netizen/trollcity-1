@@ -107,6 +107,11 @@ export class LiveKitService {
     return this.config.allowPublish === true
   }
 
+  private getTokenCacheKey(): string {
+    const mode = this.config.allowPublish === true ? 'publisher' : 'viewer'
+    return `${this.config.roomName}:${this.config.identity}:${mode}`
+  }
+
   /* =========================
      Methods to Publish Tracks (Fix C)
   ========================= */
@@ -743,7 +748,7 @@ export class LiveKitService {
     if (!this.config.identity) throw new Error('Identity is required for LiveKit token')
 
     // ✅ Gold Standard: Check cache first
-    const cacheKey = `${this.config.roomName}:${this.config.identity}`;
+    const cacheKey = this.getTokenCacheKey();
     const cached = tokenCache.get(cacheKey);
     if (cached) {
       const now = Math.floor(Date.now() / 1000);
