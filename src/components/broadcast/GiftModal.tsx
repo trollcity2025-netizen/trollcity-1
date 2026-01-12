@@ -1,6 +1,7 @@
 import { X, Coins, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { getGiftEmoji } from "../../lib/giftIcons";
 
 const fallbackGifts = [
   { id: 0, name: "Troll", emoji: "🧟", coins: 1, rarity: 'troll', color: 'from-green-500 to-emerald-700' },
@@ -37,7 +38,7 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
       setGifts(data.map((gift) => ({
         id: gift.id,
         name: gift.name,
-        emoji: gift.icon,
+        emoji: getGiftEmoji(gift.icon, gift.name),
         coins: gift.value,
         rarity: (gift.category || 'common').toLowerCase(),
         color: 'from-purple-500 to-violet-700'

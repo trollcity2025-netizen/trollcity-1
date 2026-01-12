@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Gift, Users, Crown } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { getGiftEmoji } from "../../lib/giftIcons";
 
 export interface GiftItem {
   id: string;
@@ -121,7 +122,7 @@ export default function GiftBox({ onSendGift }: GiftBoxProps) {
               onClick={() => handleGiftClick(gift)}
               className="flex flex-col items-center gap-1 p-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 hover:border-white/20 transition-colors"
             >
-              <span className="text-2xl">{gift.icon}</span>
+          <span className="text-2xl">{getGiftEmoji(gift.icon, gift.name)}</span>
               <span className="text-[10px] text-white/70 text-center break-words">
                 {gift.name}
               </span>
