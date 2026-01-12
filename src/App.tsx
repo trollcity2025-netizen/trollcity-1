@@ -33,6 +33,8 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import TermsAgreement from "./pages/TermsAgreement";
+import LivePage from "./pages/LivePage";
+import LivePage from "./pages/LivePage";
 
 // Sidebar pages (instant load)
 const Messages = lazy(() => import("./pages/Messages"));
@@ -93,7 +95,7 @@ const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
 
 const GoLive = lazy(() => import("./pages/GoLive"));
 const JoinPage = lazy(() => import("./pages/Join"));
-const LivePage = lazy(() => import("./pages/LivePage"));
+const LazyLivePage = lazy(() => Promise.resolve({ default: LivePage }));
 const BroadcastSummary = lazy(() => import("./pages/BroadcastSummary"));
 const KickFee = lazy(() => import("./pages/KickFee"));
 const BanFee = lazy(() => import("./pages/BanFee"));
@@ -572,7 +574,7 @@ function AppContent() {
                   
                   {/* 🎥 Streaming */}
                   <Route path="/go-live" element={<GoLive />} />
-                  <Route path="/live/:streamId" element={<LivePage />} />
+                  <Route path="/live/:streamId" element={<LazyLivePage />} />
                   <Route path="/broadcast/:streamId" element={<Navigate to={`/live/${location.pathname.split('/').pop()}`} replace />} />
                   <Route path="/watch/:streamId" element={<Navigate to={`/live/${location.pathname.split('/').pop()}`} replace />} />
                   <Route path="/join" element={<JoinPage />} />
