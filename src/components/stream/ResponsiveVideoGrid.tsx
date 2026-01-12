@@ -25,7 +25,8 @@ export default function ResponsiveVideoGrid({
   joinPrice = 0,
   onJoinRequest,
   onDisableGuestMedia,
-  coinBalances
+  coinBalances,
+  onSeatAction
 }: ResponsiveVideoGridProps) {
   const TOTAL_SLOTS = 6;
 
