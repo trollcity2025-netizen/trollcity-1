@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useInRouterContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import LiveAvatar from '../components/LiveAvatar';
-import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut } from 'lucide-react';
+import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { deductCoins } from '@/lib/coinTransactions';
 import { PERK_CONFIG } from '@/lib/perkSystem';
@@ -32,6 +32,8 @@ function ProfileInner() {
   const [creatingPost, setCreatingPost] = useState(false);
   const [announcementsEnabled, setAnnouncementsEnabled] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
+  const tabDropdownRef = useRef<HTMLDivElement | null>(null);
   
 
   const fetchInventory = async (uid: string) => {
@@ -357,6 +359,14 @@ function ProfileInner() {
 
   const isOwnProfile = currentUser?.id === profile?.id;
   const canSeeFullProfile = viewerRole === 'admin' || viewerRole === 'lead_troll_officer' || viewerRole === 'secretary' || isOwnProfile;
+  const tabOptions = [
+    { key: 'posts', label: 'Posts', show: true },
+    { key: 'inventory', label: 'Inventory & Perks', show: canSeeFullProfile },
+    { key: 'earnings', label: 'Earnings', show: canSeeFullProfile },
+    { key: 'purchases', label: 'Purchase History', show: canSeeFullProfile },
+    { key: 'settings', label: 'Settings', show: isOwnProfile },
+  ];
+  const activeTabLabel = tabOptions.find((option) => option.key === activeTab)?.label || 'Posts';
 
   // Load announcement preferences
   useEffect(() => {
@@ -384,6 +394,21 @@ function ProfileInner() {
       setSavingPreferences(false);
     }
   };
+
+  const handleTabSelect = (tabKey: string) => {
+    setActiveTab(tabKey);
+    setIsTabDropdownOpen(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tabDropdownRef.current && !tabDropdownRef.current.contains(event.target as Node)) {
+        setIsTabDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -694,18 +719,29 @@ function ProfileInner() {
         </div>
         
         {/* Tabs */}
-        <div className="flex border-b border-gray-800 mt-6 overflow-x-auto">
-           <button onClick={() => setActiveTab('posts')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'posts' ? 'border-purple-500 text-purple-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>Posts</button>
-           {canSeeFullProfile && (
-             <>
-               <button onClick={() => setActiveTab('inventory')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'inventory' ? 'border-purple-500 text-purple-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>Inventory & Perks</button>
-               <button onClick={() => setActiveTab('earnings')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'earnings' ? 'border-purple-500 text-purple-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>Earnings</button>
-               <button onClick={() => setActiveTab('purchases')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'purchases' ? 'border-purple-500 text-purple-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>Purchase History</button>
-               {isOwnProfile && (
-                 <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'border-purple-500 text-purple-500' : 'border-transparent text-gray-400 hover:text-gray-300'}`}>Settings</button>
-               )}
-             </>
-           )}
+        <div className="relative mt-6" ref={tabDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setIsTabDropdownOpen((prev) => !prev)}
+            className="w-full max-w-xs flex items-center justify-between px-4 py-2 bg-[#0f0f15] border border-gray-800 rounded-2xl text-sm font-medium text-white hover:border-purple-500 transition-colors"
+          >
+            <span>{activeTabLabel}</span>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${isTabDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isTabDropdownOpen && (
+            <div className="absolute left-0 right-0 mt-2 max-w-xs bg-[#05050a] border border-gray-800 rounded-2xl shadow-lg z-20 overflow-hidden">
+              {tabOptions.filter((option) => option.show).map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => handleTabSelect(option.key)}
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${activeTab === option.key ? 'text-purple-400 font-semibold bg-white/5' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
