@@ -893,6 +893,18 @@ export default function AdminDashboard() {
     setActiveTab(tabId as TabId)
   }
 
+  const handleNavigateToEconomy = () => navigate('/admin/economy')
+  const handleNavigateToTaxReviews = () => navigate('/admin/tax-reviews')
+  const handleOpenTestDiagnostics = () => navigate('/admin/test-diagnostics')
+  const handleOpenControlPanel = () => navigate('/admin/control-panel')
+  const handleOpenGrantCoins = () => navigate('/admin/grant-coins')
+  const handleOpenFinanceDashboard = () => navigate('/admin/finance')
+  const handleOpenCreateSchedule = () => navigate('/admin/create-schedule')
+  const handleOpenOfficerShifts = () => navigate('/admin/officer-shifts')
+  const handleOpenResetPanel = () => navigate('/admin/reset-maintenance')
+  const handleOpenEmpireApplications = () => navigate('/admin/empire-applications')
+  const handleOpenReferralBonuses = () => navigate('/admin/referral-bonuses')
+
   const redirectRoutes = useMemo(
     () =>
       ({
@@ -1179,6 +1191,17 @@ export default function AdminDashboard() {
 
         {/* Additional Tasks Grid */}
         <AdditionalTasksGrid 
+          onNavigateToEconomy={handleNavigateToEconomy}
+          onNavigateToTaxReviews={handleNavigateToTaxReviews}
+          onOpenTestDiagnostics={handleOpenTestDiagnostics}
+          onOpenControlPanel={handleOpenControlPanel}
+          onOpenGrantCoins={handleOpenGrantCoins}
+          onOpenFinanceDashboard={handleOpenFinanceDashboard}
+          onOpenCreateSchedule={handleOpenCreateSchedule}
+          onOpenOfficerShifts={handleOpenOfficerShifts}
+          onOpenResetPanel={handleOpenResetPanel}
+          onOpenEmpireApplications={handleOpenEmpireApplications}
+          onOpenReferralBonuses={handleOpenReferralBonuses}
           onSelectTab={_handleSelectTab} 
           counts={{
             empire_apps: stats.pendingApps,

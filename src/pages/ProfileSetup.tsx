@@ -102,7 +102,7 @@ const ProfileSetup = () => {
           localStorage.setItem(
             `tc-profile-${user.id}`,
             JSON.stringify({ data: updated, timestamp: Date.now() })
-          )
+                        )
         } catch {}
       } else {
         const { data: fallback } = await supabase
@@ -363,6 +363,24 @@ const ProfileSetup = () => {
                           if (fallback) {
                             setProfile(fallback as any)
                           }
+                        }
+                        try {
+                          const { error: appError } = await supabase.from('applications').insert({
+                            user_id: user.id,
+                            type: 'id_verification',
+                            status: 'pending',
+                            reason: 'ID verification submitted',
+                            data: {
+                              id_document_url: urlData.publicUrl,
+                              selfie_url: selfieUrl.publicUrl,
+                              verification_status: 'pending'
+                            }
+                          })
+                          if (appError) {
+                            console.warn('Failed to insert id_verification application:', appError)
+                          }
+                        } catch (appErr) {
+                          console.warn('Failed to insert id_verification application:', appErr)
                         }
                         toast.success('ID uploaded successfully! Your account will be verified by an admin within 24 hours.')
                       } catch (err: any) {

@@ -660,27 +660,7 @@ const GoLive: React.FC = () => {
           <div>
             <label className="text-gray-300">Broadcast Background</label>
             <div className="mt-2 space-y-4">
-              <div className="rounded-xl border border-purple-700/30 bg-[#0b091f] p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-white">Preview</div>
-                    <div className="text-xs text-gray-400">Applies to your broadcast stage only.</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectTheme(null)}
-                    className={`text-xs px-3 py-1 rounded border ${!activeThemeId ? 'border-cyan-400/70 text-cyan-200' : 'border-white/10 text-white/60'}`}
-                  >
-                    Default
-                  </button>
-                </div>
-                <div
-                  className="mt-3 h-28 rounded-lg border border-white/10"
-                  style={buildThemeStyle(themes.find(t => t.id === (selectedThemeId || activeThemeId)))}
-                />
-              </div>
-
-              <div className="rounded-xl border border-purple-700/30 bg-[#0b091f] p-4 space-y-3">
+            <div className="rounded-xl border border-purple-700/30 bg-[#0b091f] p-4 space-y-3">
                 <div className="text-sm font-semibold text-white">Select a theme</div>
                 <select
                   value={selectedThemeId || ''}

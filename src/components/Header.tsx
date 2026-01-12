@@ -223,7 +223,7 @@ const Header = () => {
 
   return (
     <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-8 backdrop-blur-lg relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5"></div>
+      <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5 pointer-events-none"></div>
       <div className="relative z-10 flex items-center space-x-6 flex-1">
         <div className="relative flex-1 max-w-lg">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-400 z-10" />
@@ -243,16 +243,16 @@ const Header = () => {
           />
           {showUserDropdown && searchResults.length > 0 && (
             <div className="absolute top-full mt-2 w-full bg-[#1A1A1A] border border-purple-600 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
-              {searchResults.map((user) => (
-                <div
-                  key={user.id}
-                  onClick={() => {
-                    navigate(`/profile/id/${user.id}`)
-                    setSearchQuery('')
-                    setShowUserDropdown(false)
-                  }}
-                  className="p-3 hover:bg-purple-600/20 cursor-pointer flex items-center gap-3 border-b border-[#2C2C2C] last:border-b-0"
-                >
+                  {searchResults.map((user) => (
+                    <div
+                      key={user.id}
+                      onClick={() => {
+                        navigate(`/profile/${user.username}`)
+                        setSearchQuery('')
+                        setShowUserDropdown(false)
+                      }}
+                      className="p-3 hover:bg-purple-600/20 cursor-pointer flex items-center gap-3 border-b border-[#2C2C2C] last:border-b-0"
+                    >
                   <img
                     src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
                     alt={user.username}
