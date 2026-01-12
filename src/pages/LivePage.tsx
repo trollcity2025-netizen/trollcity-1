@@ -373,10 +373,7 @@ export default function LivePage() {
   const [joinPrice, setJoinPrice] = useState(0);
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
-  const [showLivePanels, setShowLivePanels] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.innerWidth >= 1024;
-  });
+  const [showLivePanels, setShowLivePanels] = useState(true);
   const [broadcastThemeStyle, setBroadcastThemeStyle] = useState<React.CSSProperties | undefined>(undefined);
   const [broadcastTheme, setBroadcastTheme] = useState<any>(null);
   const [reactiveEvent, setReactiveEvent] = useState<{ key: number; style: string; intensity: number } | null>(null);
@@ -479,6 +476,20 @@ export default function LivePage() {
       setMicOn(true);
     }
   }, [isBroadcaster]);
+
+  useEffect(() => {
+    if (!isBroadcaster || !isConnected) return;
+    if (!micOn) {
+      void liveKit.enableMicrophone().then((ok) => {
+        setMicOn(Boolean(ok));
+      });
+    }
+    if (!cameraOn) {
+      void liveKit.enableCamera().then((ok) => {
+        setCameraOn(Boolean(ok));
+      });
+    }
+  }, [isBroadcaster, isConnected, cameraOn, micOn, liveKit]);
 
 
   const liveKit = useLiveKit();
@@ -655,9 +666,9 @@ export default function LivePage() {
 
     try {
       await claimSeat(seatIndex, { joinPrice: joinPriceForClaim });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to claim seat:', err);
-      toast.error('Failed to join seat');
+      toast.error(err?.message || 'Failed to join seat');
     }
   };
 
@@ -1236,13 +1247,6 @@ export default function LivePage() {
             >
                <GiftEventOverlay gift={lastGift} onProfileClick={(p) => setSelectedProfile(p)} />
             </BroadcastLayout>
-            {!showLivePanels && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-black/50 backdrop-blur px-4 py-2 rounded-full text-xs uppercase tracking-[0.3em] text-white/70 border border-white/10">
-                  Tap to show chat
-                </div>
-              </div>
-            )}
          </div>
 
          {/* Mobile Tab Bar */}
