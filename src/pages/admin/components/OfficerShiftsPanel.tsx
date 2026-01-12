@@ -21,11 +21,25 @@ interface ShiftLog {
   }
 }
 
+interface ScheduledSlot {
+  id: string
+  officer_id: string
+  shift_date: string
+  shift_start_time: string
+  shift_end_time: string
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled'
+  officer?: {
+    username: string
+  }
+}
+
 export default function OfficerShiftsPanel() {
   const [shifts, setShifts] = useState<ShiftLog[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all')
   const [now, setNow] = useState(Date.now())
+  const [slots, setSlots] = useState<ScheduledSlot[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(true)
 
   const loadShifts = useCallback(async () => {
     setLoading(true)
@@ -79,8 +93,32 @@ export default function OfficerShiftsPanel() {
     }
   }, [filter])
 
+  const loadSlots = useCallback(async () => {
+    setSlotsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('officer_shift_slots')
+        .select(`
+          *,
+          officer:user_profiles!officer_shift_slots_officer_id_fkey(id, username)
+        `)
+        .order('shift_date', { ascending: true })
+        .order('shift_start_time', { ascending: true })
+
+      if (error) throw error
+
+      setSlots((data as ScheduledSlot[]) || [])
+    } catch (err: any) {
+      console.error('Error loading scheduled slots:', err)
+      toast.error('Failed to load scheduled shifts')
+    } finally {
+      setSlotsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     loadShifts()
+    loadSlots()
 
     // Subscribe to real-time updates
     const channel = supabase
@@ -102,6 +140,27 @@ export default function OfficerShiftsPanel() {
       supabase.removeChannel(channel)
     }
   }, [filter, loadShifts])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('officer_shift_slots_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'officer_shift_slots'
+        },
+        () => {
+          loadSlots()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [loadSlots])
 
   // Real-time ticking for active shifts
   useEffect(() => {
@@ -136,8 +195,27 @@ export default function OfficerShiftsPanel() {
     return `${hours}h ${minutes}m`
   }
 
+  const formatSlotDate = (slot: ScheduledSlot) =>
+    new Date(`${slot.shift_date}T${slot.shift_start_time}`).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+
+  const formatSlotRange = (slot: ScheduledSlot) =>
+    `${slot.shift_start_time} – ${slot.shift_end_time}`
+
+  const slotStatusCounts = slots.reduce<Record<string, number>>((acc, slot) => {
+    acc[slot.status] = (acc[slot.status] || 0) + 1
+    return acc
+  }, {})
+
   const activeShifts = shifts.filter(s => !s.clock_out)
   const completedShifts = shifts.filter(s => s.clock_out)
+  const upcomingSlots = slots.filter(slot => {
+    const end = new Date(`${slot.shift_date}T${slot.shift_end_time}`).getTime()
+    return end >= Date.now()
+  })
 
   return (
     <div className="space-y-4">
@@ -181,6 +259,82 @@ export default function OfficerShiftsPanel() {
           <div className="text-sm text-gray-400 mb-1">Completed</div>
           <div className="text-2xl font-bold text-blue-400">{completedShifts.length}</div>
         </div>
+      </div>
+
+      <div className="bg-[#1A1A1A] border border-[#2C2C2C] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-sm text-gray-400">Scheduled Slots</p>
+            <p className="text-lg font-bold text-white">{slots.length} assigned shifts</p>
+          </div>
+          {slotsLoading && (
+            <span className="text-xs uppercase tracking-[0.3em] text-yellow-400">Syncing…</span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
+          {['scheduled', 'active', 'completed', 'cancelled'].map((status) => (
+            <div
+              key={status}
+              className="bg-white/5 border border-white/5 rounded-xl p-3 flex flex-col items-start gap-1"
+            >
+              <span className="text-[10px] uppercase text-gray-400 tracking-[0.3em]">{status}</span>
+              <span className="text-lg font-semibold text-white">
+                {slotStatusCounts[status] || 0}
+              </span>
+            </div>
+          ))}
+        </div>
+        {slotsLoading && slots.length === 0 ? (
+          <div className="p-4 text-gray-400 text-sm">Loading scheduled shifts...</div>
+        ) : upcomingSlots.length === 0 ? (
+          <div className="p-4 text-gray-400 text-sm">No upcoming shifts scheduled.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[#0D0D0D] border border-[#2C2C2C]">
+                <tr>
+                  <th className="p-3 text-left text-xs text-gray-400 uppercase tracking-[0.3em]">Officer</th>
+                  <th className="p-3 text-left text-xs text-gray-400 uppercase tracking-[0.3em]">Date</th>
+                  <th className="p-3 text-left text-xs text-gray-400 uppercase tracking-[0.3em]">Time</th>
+                  <th className="p-3 text-left text-xs text-gray-400 uppercase tracking-[0.3em]">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upcomingSlots.map((slot) => (
+                  <tr
+                    key={slot.id}
+                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                  >
+                    <td className="p-3 text-white">
+                      {slot.officer ? (
+                        <ClickableUsername userId={slot.officer_id} username={slot.officer.username} />
+                      ) : (
+                        <span className="text-gray-400">Unknown</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-300">{formatSlotDate(slot)}</td>
+                    <td className="p-3 text-gray-300">{formatSlotRange(slot)}</td>
+                    <td className="p-3">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-[0.3em] ${
+                          slot.status === 'active'
+                            ? 'bg-green-500/20 text-green-200'
+                            : slot.status === 'completed'
+                              ? 'bg-blue-500/20 text-blue-200'
+                              : slot.status === 'cancelled'
+                                ? 'bg-red-500/20 text-red-200'
+                                : 'bg-yellow-500/20 text-yellow-200'
+                        }`}
+                      >
+                        {slot.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Shifts Table */}

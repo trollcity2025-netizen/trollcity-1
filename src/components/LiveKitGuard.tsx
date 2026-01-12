@@ -8,6 +8,8 @@ interface LiveKitGuardProps {
   requireConnection?: boolean
 }
 
+const LIVEKIT_GUARD_ERROR = 'LiveKit connection not available. Please refresh the page.'
+
 /**
  * Component that guards access to LiveKit-dependent features
  * Only renders children when LiveKit context is available
@@ -18,14 +20,21 @@ export function LiveKitGuard({
   requireConnection: _requireConnection = false 
 }: LiveKitGuardProps) {
   const isAvailable = useLiveKitAvailable()
-  const { setError } = useGlobalApp()
+  const { setError, clearError, error } = useGlobalApp()
   
   React.useEffect(() => {
     if (!isAvailable) {
       console.warn('[LiveKitGuard] LiveKit context not available')
-      setError('LiveKit connection not available. Please refresh the page.')
+      if (error !== LIVEKIT_GUARD_ERROR) {
+        setError(LIVEKIT_GUARD_ERROR)
+      }
+      return
     }
-  }, [isAvailable, setError])
+
+    if (error === LIVEKIT_GUARD_ERROR) {
+      clearError()
+    }
+  }, [isAvailable, error, setError, clearError])
   
   if (!isAvailable) {
     return <>{fallback}</>

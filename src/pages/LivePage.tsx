@@ -376,7 +376,7 @@ export default function LivePage() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const { user, profile } = useAuthStore();
+  const { user, profile, refreshProfile } = useAuthStore();
 
   const [joinPrice, setJoinPrice] = useState(0);
   const [cameraOn, setCameraOn] = useState(false);
@@ -1184,13 +1184,14 @@ export default function LivePage() {
     if (!streamId) return;
     try {
       const { count, error } = await supabase
-        .from('streams_participants')
+        .from('stream_viewers')
         .select('id', { count: 'exact', head: true })
-        .eq('stream_id', streamId)
-        .eq('is_active', true);
-      if (!error && typeof count === 'number') {
-        setViewerCount(count);
-        setStream((prev) => (prev ? { ...prev, current_viewers: count } : prev));
+        .eq('stream_id', streamId);
+
+      if (!error) {
+        const total = typeof count === 'number' ? count : 0;
+        setViewerCount(total);
+        setStream((prev) => (prev ? { ...prev, current_viewers: total } : prev));
       }
     } catch (err) {
       console.error('Failed to refresh viewer count:', err);
@@ -1201,13 +1202,13 @@ export default function LivePage() {
     if (!streamId) return;
     updateViewerCount();
     const channel = supabase
-      .channel(`stream-watchers-${streamId}`)
+      .channel(`stream-viewers-${streamId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'streams_participants',
+          table: 'stream_viewers',
           filter: `stream_id=eq.${streamId}`,
         },
         () => {
@@ -1287,6 +1288,12 @@ export default function LivePage() {
           key: Date.now(),
         });
 
+        if (typeof refreshProfile === 'function') {
+          refreshProfile().catch((err) => {
+            console.warn('Failed to refresh profile after sending gift:', err);
+          });
+        }
+
         setStream((prev) =>
           prev
             ? {
@@ -1321,7 +1328,7 @@ export default function LivePage() {
         toast.error("Failed to send gift. Please try again.");
       }
     },
-    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id, lastThemeId]
+    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id, lastThemeId, refreshProfile]
   );
   useEffect(() => {
     if (!streamId) return;
