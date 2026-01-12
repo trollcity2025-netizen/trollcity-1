@@ -40,7 +40,7 @@ const GIFTS = [
 ]
 
 export default function TrollCityWall() {
-  const { user } = useAuthStore()
+  const { user, profile } = useAuthStore()
   const _navigate = useNavigate()
   const [posts, setPosts] = useState<WallPost[]>([])
   const [loading, setLoading] = useState(true)
