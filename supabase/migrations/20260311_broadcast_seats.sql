@@ -57,7 +57,7 @@ BEGIN
   -- Check if user already has a seat in this room
   SELECT * INTO user_existing_seat
   FROM public.broadcast_seats
-  WHERE room = p_room AND user_id = p_user_id
+  WHERE public.broadcast_seats.room = p_room AND user_id = p_user_id
   FOR UPDATE;
 
   IF FOUND THEN
@@ -79,7 +79,7 @@ BEGIN
   -- Check if the specific seat is already taken
   SELECT * INTO existing_seat
   FROM public.broadcast_seats
-  WHERE room = p_room AND seat_index = p_seat_index
+  WHERE public.broadcast_seats.room = p_room AND seat_index = p_seat_index
   FOR UPDATE;
 
   IF FOUND THEN
@@ -134,7 +134,7 @@ DECLARE
 BEGIN
   SELECT * INTO existing
   FROM public.broadcast_seats
-  WHERE room = p_room AND seat_index = p_seat_index
+  WHERE public.broadcast_seats.room = p_room AND seat_index = p_seat_index
   FOR UPDATE;
 
   IF NOT FOUND THEN
@@ -146,7 +146,7 @@ BEGIN
   END IF;
 
   DELETE FROM public.broadcast_seats
-  WHERE room = p_room AND seat_index = p_seat_index
+  WHERE public.broadcast_seats.room = p_room AND seat_index = p_seat_index
   RETURNING room, seat_index, user_id, username, avatar_url, role, metadata, assigned_at
   INTO room, seat_index, user_id, username, avatar_url, role, metadata, assigned_at;
 

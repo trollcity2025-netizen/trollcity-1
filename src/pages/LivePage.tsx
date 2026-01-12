@@ -12,7 +12,6 @@ import { useLiveKitToken } from '../hooks/useLiveKitToken';
 import { useStreamEndListener } from '../hooks/useStreamEndListener';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
-import { addCoins } from '../lib/coinTransactions';
 import { toast } from 'sonner';
 import {
   Users,
@@ -23,7 +22,7 @@ import {
   CameraOff
 } from 'lucide-react';
 import ChatBox from '../components/broadcast/ChatBox';
-import GiftBox from '../components/broadcast/GiftBox';
+import GiftBox, { GiftItem, RecipientMode } from '../components/broadcast/GiftBox';
 import TrollLikeButton from '../components/broadcast/TrollLikeButton';
 import GiftModal from '../components/broadcast/GiftModal';
 import ProfileModal from '../components/broadcast/ProfileModal';
@@ -55,6 +54,12 @@ interface StreamRow {
   room_name?: string;
   agora_channel?: string;
   category?: string;
+}
+
+interface GiftBalanceDelta {
+  userId: string;
+  delta: number;
+  key: number;
 }
 
 const useIsBroadcaster = (profile: any, stream: StreamRow | null) => {
@@ -730,6 +735,7 @@ export default function LivePage() {
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
   const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false);
   const [entranceEffect, setEntranceEffect] = useState<any>(null);
+  const [giftBalanceDelta, setGiftBalanceDelta] = useState<GiftBalanceDelta | null>(null);
   
   // Entrance effect logic
   useEffect(() => {
@@ -1005,94 +1011,71 @@ export default function LivePage() {
       .replace(/^_+|_+$/g, '') || 'gift';
   };
 
-  const handleGiftSent = useCallback(async (amountOrGift: any) => {
-    let totalCoins = 0;
-    let quantity = 1;
-    let giftName = 'Manual Gift';
-    let giftSlug: string | undefined;
+  const handleGiftSent = useCallback(
+    async (gift: GiftItem, targetMode: RecipientMode) => {
+      const totalCoins = gift.value || 0;
+      if (totalCoins <= 0) return;
 
-    if (typeof amountOrGift === 'number') {
-      totalCoins = amountOrGift;
-    } else if (amountOrGift && typeof amountOrGift === 'object') {
-      const g = amountOrGift;
-      quantity = Math.max(1, Number(g.quantity) || 1);
-      const per = Number(g.coins) || 0;
-      totalCoins = per * quantity;
-      giftName = g.name || giftName;
-      giftSlug = g.slug || toGiftSlug(g.name || giftName);
-    }
+      const receiverId =
+        targetMode === "broadcaster"
+          ? stream?.broadcaster_id
+          : giftReceiver?.id || stream?.broadcaster_id;
+      setGiftReceiver(null);
 
-    setIsGiftModalOpen(false);
-    const targetReceiverId = giftReceiver?.id || stream?.broadcaster_id;
-    setGiftReceiver(null);
-
-    try {
-      if (!user?.id || !stream?.id || !targetReceiverId) {
-        toast.error('Unable to send gift right now.');
+      if (!user?.id || !stream?.id || !receiverId) {
+        toast.error("Unable to send gift right now.");
         return;
       }
-      const { error } = await supabase.from('gifts').insert({
-        stream_id: stream?.id,
-        sender_id: user?.id,
-        receiver_id: targetReceiverId,
-        coins_spent: totalCoins,
-        gift_type: 'paid',
-        message: giftName,
-        gift_slug: giftSlug || toGiftSlug(giftName),
-        quantity: quantity,
-      });
-      if (error) {
-        throw error;
-      }
-      if (stream?.id && stream?.broadcaster_id) {
-        const eventType = totalCoins >= 1000 ? 'super_gift' : 'gift';
-        await supabase.from('broadcast_theme_events').insert({
-          room_id: stream.id,
-          broadcaster_id: stream.broadcaster_id,
-          theme_id: broadcastTheme?.id || null,
-          event_type: eventType,
-          payload: {
-            gift_slug: giftSlug || toGiftSlug(giftName),
-            coins: totalCoins,
-            sender_id: user?.id
-          }
+
+      try {
+        const { error: spendError } = await supabase.rpc("spend_coins", {
+          p_sender_id: user.id,
+          p_receiver_id: receiverId,
+          p_coin_amount: totalCoins,
+          p_source: "gift",
+          p_item: gift?.name || "Gift",
         });
-      }
 
-      // Lucky Gift Logic (5% chance)
-      if (Math.random() < 0.05 && user?.id) {
-          const multiplier = Math.floor(Math.random() * 1000) + 1; // 1x to 1000x
-          const winAmount = totalCoins * multiplier;
-          
-          if (winAmount > 0) {
-              try {
-                  await addCoins({
-                      userId: user.id,
-                      amount: winAmount,
-                      type: 'lucky_gift_win',
-                      description: `LUCKY GIFT WIN! (${multiplier}x Multiplier)`,
-                      supabaseClient: supabase
-                  });
-                  toast.success(`🎰 LUCKY GIFT! You won ${winAmount} coins! (${multiplier}x)`);
-                  
-                  // Announce in chat
-                  await supabase.from('messages').insert({
-                      stream_id: stream?.id,
-                      user_id: user.id, 
-                      message_type: 'system',
-                      content: `🎰 LUCKY GIFT! I just won ${winAmount} coins back from a lucky gift! (${multiplier}x)`
-                  });
-              } catch (err) {
-                  console.error("Failed to process lucky gift", err);
+        if (spendError) {
+          throw spendError;
+        }
+
+        setGiftBalanceDelta({
+          userId: receiverId,
+          delta: totalCoins,
+          key: Date.now(),
+        });
+
+        setStream((prev) =>
+          prev
+            ? {
+                ...prev,
+                total_gifts_coins: (prev.total_gifts_coins || 0) + totalCoins,
               }
-          }
+            : prev
+        );
+
+        if (stream?.id && stream?.broadcaster_id) {
+          const eventType = totalCoins >= 1000 ? "super_gift" : "gift";
+          await supabase.from("broadcast_theme_events").insert({
+            room_id: stream.id,
+            broadcaster_id: stream.broadcaster_id,
+            theme_id: broadcastTheme?.id || null,
+            event_type: eventType,
+            payload: {
+              gift_slug: toGiftSlug(gift.name),
+              coins: totalCoins,
+              sender_id: user.id,
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Failed to send gift:", err);
+        toast.error("Failed to send gift. Please try again.");
       }
-
-    } catch (e) {
-      console.error('Failed to record manual gift event:', e);
-    }
-  }, [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id]);
-
+    },
+    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id]
+  );
   useEffect(() => {
     if (!streamId) return;
     const channel = supabase
@@ -1229,6 +1212,7 @@ export default function LivePage() {
               onJoinRequest={handleJoinRequest}
               onLeaveSession={handleLeaveSession}
               onDisableGuestMedia={liveKit.disableGuestMediaByClick}
+              giftBalanceDelta={giftBalanceDelta}
             >
                <GiftEventOverlay gift={lastGift} onProfileClick={(p) => setSelectedProfile(p)} />
             </BroadcastLayout>

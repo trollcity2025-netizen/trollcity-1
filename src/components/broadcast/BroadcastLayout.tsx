@@ -33,10 +33,12 @@ interface BroadcastLayoutProps {
   onJoinRequest?: (seatIndex: number) => void
   onLeaveSession?: () => void
   onDisableGuestMedia?: (participantId: string) => void
+  giftBalanceDelta?: { userId: string; delta: number; key: number } | null
   children?: React.ReactNode
 }
 
 export default function BroadcastLayout({
+  giftBalanceDelta,
   room,
   broadcasterId,
   isHost,
@@ -127,6 +129,17 @@ export default function BroadcastLayout({
     const timer = window.setTimeout(() => setReactiveClass(''), 900);
     return () => window.clearTimeout(timer);
   }, [reactiveEvent?.key]);
+
+  useEffect(() => {
+    if (!giftBalanceDelta?.userId || giftBalanceDelta.delta === 0) return;
+    setCoinBalances((prev) => {
+      const current = prev[giftBalanceDelta.userId] || 0;
+      return {
+        ...prev,
+        [giftBalanceDelta.userId]: current + giftBalanceDelta.delta,
+      };
+    });
+  }, [giftBalanceDelta?.key, giftBalanceDelta?.userId, giftBalanceDelta?.delta]);
 
   if (!room) return null;
 
