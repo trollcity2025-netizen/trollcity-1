@@ -22,6 +22,7 @@ export interface LiveKitContextValue {
   disableGuestMediaByClick: (participantId: string) => Promise<boolean>
   startPublishing: () => Promise<void>
   getRoom: () => any | null
+  markClientDisconnectIntent: () => void
 }
 
 // Context holds the LiveKitService plus state helpers

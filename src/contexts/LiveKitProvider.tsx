@@ -35,6 +35,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
 
   // Track disconnect calls to prevent double cleanup
   const disconnectingRef = useRef(false);
+  const suppressNextDisconnectErrorRef = useRef(false);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -289,6 +290,12 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
               }
             }
 
+            const normalizedMsg = errorMsg.toLowerCase();
+            if (suppressNextDisconnectErrorRef.current && normalizedMsg.includes("disconnect")) {
+              console.log("[LiveKitProvider] Suppressed intentional disconnect error", errorMsg);
+              suppressNextDisconnectErrorRef.current = false;
+              return;
+            }
             console.error("[LiveKit error]", errorMsg);
             setError(errorMsg);
             setIsConnecting(false);
@@ -336,6 +343,10 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
       lastInitRef.current = null;
       disconnectingRef.current = false;
     }
+  }, []);
+
+  const markClientDisconnectIntent = useCallback(() => {
+    suppressNextDisconnectErrorRef.current = true;
   }, []);
 
   const toggleCamera = useCallback(async () => {
@@ -477,6 +488,7 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
     disableGuestMediaByClick,
     startPublishing,
     getRoom,
+    markClientDisconnectIntent,
   };
 
   return <LiveKitContext.Provider value={value}>{children}</LiveKitContext.Provider>;

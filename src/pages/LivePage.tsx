@@ -821,6 +821,7 @@ export default function LivePage() {
         await supabase.from('streams').update({ status: 'ended', is_live: false }).eq('id', streamId);
       }
     } catch {}
+    liveKit.markClientDisconnectIntent();
     liveKit.disconnect();
     navigate('/stream-ended');
   }, [streamId, liveKit, navigate]);
