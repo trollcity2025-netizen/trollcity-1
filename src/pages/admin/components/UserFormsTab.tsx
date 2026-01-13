@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { FileText, AlertCircle, Bell, Check, Search, Clock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,11 +20,7 @@ export default function UserFormsTab() {
   const [filter, setFilter] = useState<'all' | 'incomplete'>('incomplete');
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Fetch profiles first
@@ -85,7 +81,31 @@ export default function UserFormsTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('user-forms-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_profiles' },
+        () => fetchUsers()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_tax_info' },
+        () => fetchUsers()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchUsers]);
 
   const handlePromptUser = async (userId: string, missingForms: string[]) => {
     try {

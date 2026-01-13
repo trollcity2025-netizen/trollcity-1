@@ -65,6 +65,9 @@ interface ActiveViewer {
   avatarUrl?: string | null;
   role?: string | null;
   isBroadcaster?: boolean;
+  fullName?: string | null;
+  onboardingCompleted?: boolean;
+  w9Status?: string;
 }
 
 interface GiftBalanceDelta {
@@ -406,6 +409,22 @@ export default function LivePage() {
   const [isViewerDropdownOpen, setIsViewerDropdownOpen] = useState(false);
   const viewerDropdownRef = useRef<HTMLDivElement | null>(null);
   const viewerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notifiedMissingFormsRef = useRef<Set<string>>(new Set());
+  const notifyMissingForms = useCallback(async (userId: string, missing: string[]) => {
+    if (!missing.length) return;
+    try {
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        type: 'system_alert',
+        title: 'Complete your User Forms & Compliance',
+        message: `Please finish the following sections: ${missing.join(', ')}. Visit your Profile Settings to complete them.`,
+        is_read: false,
+      });
+      notifiedMissingFormsRef.current.add(userId);
+    } catch (err) {
+      console.error('Failed to notify user about compliance:', err);
+    }
+  }, []);
   const [isLoadingStream, setIsLoadingStream] = useState(true);
   const [privateAccessGranted, setPrivateAccessGranted] = useState(false);
   const [privatePasswordInput, setPrivatePasswordInput] = useState('');
@@ -1232,21 +1251,39 @@ export default function LivePage() {
       let mappedViewers = fallbackViewers;
 
       if (viewerIds.length > 0) {
-        const { data: profileRows, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('id, username, avatar_url, role, troll_role, is_broadcaster')
-          .in('id', viewerIds);
+        const [profileResult, taxResult] = await Promise.all([
+          supabase
+            .from('user_profiles')
+            .select('id, username, avatar_url, role, troll_role, is_broadcaster, full_name, onboarding_completed')
+            .in('id', viewerIds),
+          supabase
+            .from('user_tax_info')
+            .select('user_id, w9_status')
+            .in('user_id', viewerIds)
+        ]);
+
+        const profileRows = profileResult.data;
+        const profileError = profileResult.error;
+        const taxRows = taxResult.data || [];
 
         if (!profileError && Array.isArray(profileRows) && profileRows.length > 0) {
           const profileMap = new Map(profileRows.map((p: any) => [p.id, p]));
+          const taxMap = new Map(taxRows.map((t: any) => [t.user_id, t]));
+
           mappedViewers = viewerIds.map((id: string) => {
             const profile = profileMap.get(id);
+            const taxInfo = taxMap.get(id);
+            const w9Status = taxInfo?.w9_status || 'pending';
+
             return {
               userId: id,
               username: profile?.username || `Viewer ${id.substring(0, 6)}`,
               avatarUrl: profile?.avatar_url,
               role: profile?.role || profile?.troll_role || null,
               isBroadcaster: Boolean(profile?.is_broadcaster),
+              fullName: profile?.full_name || null,
+              onboardingCompleted: Boolean(profile?.onboarding_completed),
+              w9Status,
             };
           });
         }
@@ -1282,6 +1319,31 @@ export default function LivePage() {
       supabase.removeChannel(channel);
     };
   }, [streamId, refreshViewerSnapshot]);
+
+  useEffect(() => {
+    activeViewers.forEach((viewer) => {
+      if (!viewer.userId) return;
+      if (viewer.isBroadcaster) {
+        notifiedMissingFormsRef.current.delete(viewer.userId);
+        return;
+      }
+
+      const missing: string[] = [];
+      if (!viewer.fullName) missing.push('Profile Info');
+      if (!viewer.onboardingCompleted) missing.push('Onboarding');
+      if (!['submitted', 'verified'].includes(viewer.w9Status || 'pending')) {
+        missing.push('Tax / W9');
+      }
+
+      if (missing.length === 0) {
+        notifiedMissingFormsRef.current.delete(viewer.userId);
+        return;
+      }
+
+      if (notifiedMissingFormsRef.current.has(viewer.userId)) return;
+      void notifyMissingForms(viewer.userId, missing);
+    });
+  }, [activeViewers, notifyMissingForms]);
 
   // Gift subscription
   const lastGift = useGiftEvents(streamId);
