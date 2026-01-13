@@ -413,12 +413,11 @@ export default function LivePage() {
   const notifyMissingForms = useCallback(async (userId: string, missing: string[]) => {
     if (!missing.length) return;
     try {
-      await supabase.from('notifications').insert({
-        user_id: userId,
-        type: 'system_alert',
-        title: 'Complete your User Forms & Compliance',
-        message: `Please finish the following sections: ${missing.join(', ')}. Visit your Profile Settings to complete them.`,
-        is_read: false,
+      await supabase.rpc('notify_user_rpc', {
+        p_target_user_id: userId,
+        p_type: 'system_alert',
+        p_title: 'Complete your User Forms & Compliance',
+        p_message: `Please finish the following sections: ${missing.join(', ')}. Visit your Profile Settings to complete them.`,
       });
       notifiedMissingFormsRef.current.add(userId);
     } catch (err) {

@@ -111,17 +111,14 @@ export default function UserFormsTab() {
     try {
       // Logic to send a notification
       // This could insert into a 'notifications' table
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          type: 'system_alert',
-          title: 'Action Required: Complete Your Profile',
-          message: `Please complete the following forms: ${missingForms.join(', ')}. Go to your profile settings to update.`,
-          is_read: false
-        });
+    const { error } = await supabase.rpc('notify_user_rpc', {
+      p_target_user_id: userId,
+      p_type: 'system_alert',
+      p_title: 'Action Required: Complete Your Profile',
+      p_message: `Please complete the following forms: ${missingForms.join(', ')}. Go to your profile settings to update.`,
+    });
 
-      if (error) throw error;
+    if (error) throw error;
       toast.success('Notification sent to user');
     } catch (err) {
       console.error('Error sending prompt:', err);
