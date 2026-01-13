@@ -46,14 +46,31 @@ if (typeof window !== 'undefined') {
   import('virtual:pwa-register').then(({ registerSW }) => {
     const updateSW = registerSW({
       onNeedRefresh() {
-        if (confirm('New content available. Reload?')) {
-          updateSW(true)
-        }
+        console.log('[SW] update ready, forcing reload')
+        updateSW(true)
       },
       onOfflineReady() {
         console.log('App ready to work offline')
       },
     })
+
+    const checkForUpdate = () => {
+      if (typeof updateSW === 'function') {
+        void updateSW()
+      }
+    }
+
+    const runPeriodicUpdateCheck = () => {
+      if (typeof window === 'undefined') return
+
+      checkForUpdate()
+      const interval = window.setInterval(checkForUpdate, 1000 * 60 * 30)
+      window.addEventListener('beforeunload', () => {
+        window.clearInterval(interval)
+      })
+    }
+
+    runPeriodicUpdateCheck()
 
     const urlBase64ToUint8Array = (base64String: string) => {
       const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
