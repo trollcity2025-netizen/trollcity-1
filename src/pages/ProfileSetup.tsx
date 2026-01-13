@@ -213,7 +213,7 @@ const ProfileSetup = () => {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
-    const uploadBuckets = ['troll-city-assets', 'avatars', 'public']
+    const uploadBuckets = ['covers', 'troll-city-assets', 'avatars', 'public']
     const uploadPath = `covers/${user.id}-${Date.now()}${file.name.substring(file.name.lastIndexOf('.'))}`
 
     const tryUpload = async () => {
