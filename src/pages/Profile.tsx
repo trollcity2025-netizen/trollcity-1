@@ -126,13 +126,14 @@ function ProfileInner() {
   };
 
   useEffect(() => {
+    if (!isOwnProfile) return;
     if (activeTab === 'earnings' && profile?.id) {
       fetchEarnings(profile.id);
     }
     if (activeTab === 'purchases' && profile?.id) {
       fetchPurchases(profile.id);
     }
-  }, [activeTab, profile?.id]);
+  }, [activeTab, profile?.id, isOwnProfile]);
 
   const handleRepurchasePerk = async (perk: any) => {
     if (!currentUser || currentUser.id !== profile.id) return;
@@ -230,7 +231,13 @@ function ProfileInner() {
         console.error('Profile not found', error);
       } else {
         setProfile(data);
-        fetchInventory(data.id);
+        if (currentUser?.id === data.id) {
+          fetchInventory(data.id);
+        } else {
+          setInventory({ perks: [], effects: [], insurance: [], callMinutes: null });
+          setEarnings([]);
+          setPurchases([]);
+        }
         
         // Fetch follower/following counts
         const { count: followers } = await supabase
@@ -358,7 +365,7 @@ function ProfileInner() {
   // Defer early returns to after hooks to satisfy lint rules
 
   const isOwnProfile = currentUser?.id === profile?.id;
-  const canSeeFullProfile = viewerRole === 'admin' || viewerRole === 'lead_troll_officer' || viewerRole === 'secretary' || isOwnProfile;
+  const canSeeFullProfile = isOwnProfile;
   const tabOptions = [
     { key: 'posts', label: 'Posts', show: true },
     { key: 'inventory', label: 'Inventory & Perks', show: canSeeFullProfile },
