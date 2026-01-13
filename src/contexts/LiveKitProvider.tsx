@@ -27,7 +27,7 @@ const sendAdminNotification = async (message: string) => {
 };
 
 export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => {
-  const serviceRef = useRef<LiveKitService | null>(null);
+  const serviceRef = React.useRef<LiveKitService | null>(null);
 
   // Prevent StrictMode or re-render double connect
   const connectLockRef = useRef(false);
