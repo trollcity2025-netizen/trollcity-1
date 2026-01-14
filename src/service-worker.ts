@@ -1,3 +1,9 @@
+import { precacheAndRoute } from 'workbox-precaching';
+
+declare const self: any;
+
+precacheAndRoute(self.__WB_MANIFEST || []);
+
 const CACHE_NAME = 'trollcity-cache-v1';
 const OFFLINE_URL = '/offline.html';
 

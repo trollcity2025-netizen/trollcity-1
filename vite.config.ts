@@ -41,8 +41,10 @@ export default defineConfig({
       // implements push, offline fallback and safe navigation handling.
       injectRegister: 'auto',
       strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'service-worker.ts',
       injectManifest: {
-        swSrc: 'src/service-worker.ts',
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
       },
       workbox: {
         cleanupOutdatedCaches: true,
