@@ -41,32 +41,6 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
   const [showCoinInput, setShowCoinInput] = useState<string | null>(null);
   const [coinAmount, setCoinAmount] = useState(10);
 
-  // Handle User Joined Events
-  useEffect(() => {
-    if (!room) return;
-    
-    const onParticipantConnected = (participant: any) => {
-       // Only show join messages for non-local participants (actual viewers joining)
-       if (participant.isLocal) return;
-        
-       const username = participant.name || participant.identity || 'User';
-       const newMsg: Message = {
-           id: `join-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-           user_id: 'system',
-           content: `${username} joined the stream`,
-           message_type: 'system-join',
-           created_at: new Date().toISOString(),
-           sender_profile: { username, perks: [] }
-       };
-       setMessages(prev => [...prev, newMsg]);
-    };
-    
-    room.on('participantConnected', onParticipantConnected);
-    return () => {
-        room.off('participantConnected', onParticipantConnected);
-    };
-  }, [room]);
-
   // Auto-vanish messages after 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
@@ -120,10 +94,10 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
     }
   }, []);
 
+  // Listen for new messages
   useEffect(() => {
     if (!streamId) return;
 
-    // Fetch initial messages
     const fetchMessages = async () => {
       const { data } = await supabase
         .from('messages')

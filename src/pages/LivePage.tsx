@@ -941,25 +941,44 @@ export default function LivePage() {
   const [quickGiftsLoading, setQuickGiftsLoading] = useState(false);
   const [quickGiftsError, setQuickGiftsError] = useState<string | null>(null);
   
+  const entranceSentRef = useRef(false);
+
+  // Reset entrance sent status when changing streams
+  useEffect(() => {
+    entranceSentRef.current = false;
+  }, [streamId]);
+
   // Entrance effect logic
   useEffect(() => {
     const triggerEntrance = async () => {
+      if (entranceSentRef.current) return;
       if (!user || !streamId || isBroadcaster || profile?.is_ghost_mode) return;
 
-      const { effectKey, config } = await getUserEntranceEffect(user.id);
-      if (!effectKey) return;
+      entranceSentRef.current = true;
 
-      await supabase.from('messages').insert({
-        stream_id: streamId,
-        user_id: user.id,
-        message_type: 'entrance',
-        content: JSON.stringify({
-          username: profile?.username || user.email,
-          role: profile?.role || 'user',
-          effectKey,
-          effect: config
-        })
-      });
+      const { effectKey, config } = await getUserEntranceEffect(user.id);
+
+      if (effectKey) {
+        await supabase.from('messages').insert({
+          stream_id: streamId,
+          user_id: user.id,
+          message_type: 'entrance',
+          content: JSON.stringify({
+            username: profile?.username || user.email,
+            role: profile?.role || 'user',
+            effectKey,
+            effect: config
+          })
+        });
+      } else {
+        // Send standard join message if no effect
+        await supabase.from('messages').insert({
+          stream_id: streamId,
+          user_id: user.id,
+          message_type: 'system-join',
+          content: 'joined the stream'
+        });
+      }
     };
 
     if (isConnected) {
