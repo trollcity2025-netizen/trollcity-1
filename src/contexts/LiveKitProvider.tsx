@@ -494,8 +494,29 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
     };
   }, []);
 
-  const value: LiveKitContextValue = {
-    service: serviceRef.current as any,
+  // Keep provider value stable unless its meaningful pieces change
+  const value = useMemo<LiveKitContextValue>(() => {
+    return {
+      service: serviceRef.current as any,
+      isConnected,
+      isConnecting,
+      participants,
+      localParticipant,
+      error,
+      connect,
+      disconnect,
+      toggleCamera,
+      toggleMicrophone,
+      enableCamera,
+      enableMicrophone,
+      disableGuestMedia,
+      disableGuestMediaByClick,
+      startPublishing,
+      getRoom,
+      markClientDisconnectIntent,
+    };
+    // Note: participants is a Map and will change identity when updated intentionally
+  }, [
     isConnected,
     isConnecting,
     participants,
@@ -512,7 +533,19 @@ export const LiveKitProvider = ({ children }: { children: React.ReactNode }) => 
     startPublishing,
     getRoom,
     markClientDisconnectIntent,
-  };
+  ]);
+
+  // Dev: lightweight render counter for this provider
+  if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    const key = '__tc_livekit_provider_renders';
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    window[key] = (window[key] || 0) + 1;
+    if ((window as any)[key] % 20 === 0) {
+      // log periodically to avoid spamming console
+      console.debug('[LiveKitProvider] render count', (window as any)[key]);
+    }
+  }
 
   return <LiveKitContext.Provider value={value}>{children}</LiveKitContext.Provider>;
 };

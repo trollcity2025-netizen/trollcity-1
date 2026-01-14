@@ -100,9 +100,20 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
           .select('is_active,call_sound_catalog(asset_url,sound_type)')
           .eq('user_id', user.id)
           .eq('is_active', true);
-        const active = (data || []).find((row: any) => row.call_sound_catalog?.sound_type === 'dialtone');
-        if (active?.call_sound_catalog?.asset_url) {
-          setDialToneSrc(active.call_sound_catalog.asset_url);
+        const rows = (data || []) as any[];
+        const active = rows.find((row) => {
+          const catalog = Array.isArray(row.call_sound_catalog)
+            ? row.call_sound_catalog[0]
+            : row.call_sound_catalog;
+          return catalog?.sound_type === 'dialtone';
+        });
+        const soundCatalog = active
+          ? Array.isArray(active.call_sound_catalog)
+            ? active.call_sound_catalog[0]
+            : active.call_sound_catalog
+          : null;
+        if (soundCatalog?.asset_url) {
+          setDialToneSrc(soundCatalog.asset_url);
         }
       } catch (error) {
         // ignore
@@ -257,6 +268,10 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
 
     connectCall();
 
+    const currentOsc = dialOscRef.current;
+    const currentCtx = dialCtxRef.current;
+    const currentAudio = dialAudioRef.current;
+
     return () => {
       if (newRoom) {
         newRoom.disconnect();
@@ -267,33 +282,36 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
       if (minuteDeductionIntervalRef.current) {
         clearInterval(minuteDeductionIntervalRef.current);
       }
-      if (dialOscRef.current) {
+      // Clean up dial tone
+      if (currentOsc) {
         try {
-          dialOscRef.current.stop();
-          dialOscRef.current.disconnect();
+          currentOsc.stop();
+          currentOsc.disconnect();
         } catch (error) {
           void error;
         }
         dialOscRef.current = null;
       }
-      if (dialAudioRef.current) {
+
+      if (currentAudio) {
         try {
-          dialAudioRef.current.pause();
-          dialAudioRef.current.currentTime = 0;
+          currentAudio.pause();
+          currentAudio.currentTime = 0;
         } catch (error) {
           void error;
         }
       }
-      if (dialCtxRef.current) {
+
+      if (currentCtx) {
         try {
-          dialCtxRef.current.close();
+          currentCtx.close();
         } catch (error) {
           void error;
         }
         dialCtxRef.current = null;
       }
     };
-  }, [roomId, user, livekitUrl, token, callType, isVideoOff, navigate, endCall, dialToneSrc]);
+  }, [roomId, user, livekitUrl, token, callType, isVideoOff, navigate, endCall]);
 
   // Get LiveKit token
   useEffect(() => {

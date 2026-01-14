@@ -53,20 +53,18 @@ const Auth = () => {
         if (data.user && data.session) {
           console.log('Email login successful:', data.user.email)
           
-          // Check for concurrent login before proceeding
-        const sessionId = data.session?.id
-        if (sessionId) {
-          const hasConcurrentLogin = await checkConcurrentLogin(data.user.id, sessionId)
-          if (hasConcurrentLogin) {
-            // Block login attempt - user is already logged in on another device
-            await supabase.auth.signOut()
-            throw new Error(
-              'Login blocked: Your account is already logged in on another device. Please log out from other devices first.'
-            )
+          const sessionId = data.session.access_token
+          if (sessionId) {
+            const hasConcurrentLogin = await checkConcurrentLogin(data.user.id, sessionId)
+            if (hasConcurrentLogin) {
+              await supabase.auth.signOut()
+              throw new Error(
+                'Login blocked: Your account is already logged in on another device. Please log out from other devices first.'
+              )
+            }
+          } else {
+            console.warn('[Auth] Session missing access_token, skipping concurrent login check')
           }
-        } else {
-          console.warn('[Auth] Session missing id, skipping concurrent login check')
-        }
           
           // Register this session
           try {
@@ -76,18 +74,18 @@ const Auth = () => {
               screen: { width: window.screen.width, height: window.screen.height }
             }
             
-          if (sessionId) {
-            await supabase
-              .rpc('register_session', {
-                p_user_id: data.user.id,
-                p_session_id: sessionId,
-                p_device_info: JSON.stringify(deviceInfo), // Convert to JSON string
-                p_ip_address: null, // Would need backend to get real IP
-                p_user_agent: navigator.userAgent
-              })
-          } else {
-            console.warn('[Auth] Skipping register_session because session id is missing')
-          }
+            if (sessionId) {
+              await supabase
+                .rpc('register_session', {
+                  p_user_id: data.user.id,
+                  p_session_id: sessionId,
+                  p_device_info: JSON.stringify(deviceInfo),
+                  p_ip_address: null,
+                  p_user_agent: navigator.userAgent
+                })
+            } else {
+              console.warn('[Auth] Skipping register_session because session access_token is missing')
+            }
           } catch (sessionError) {
             console.error('Error registering session:', sessionError)
             // Continue with login even if session registration fails
@@ -180,7 +178,7 @@ const Auth = () => {
                   const { data: current } = await supabase
                     .from('user_profiles')
                     .select('ip_address_history')
-                    .eq('id', session.user.id)
+                  .eq('id', data.user.id)
                     .single()
                   const history = current?.ip_address_history || []
                   const entry = { ip: userIP, timestamp: new Date().toISOString() }
@@ -188,7 +186,7 @@ const Auth = () => {
                   await supabase
                     .from('user_profiles')
                     .update({ last_known_ip: userIP, ip_address_history: updated })
-                    .eq('id', session.user.id)
+                    .eq('id', data.user.id)
                 } catch {}
                 navigate('/')
               } else {

@@ -269,7 +269,7 @@ function ProfileInner() {
     };
 
     fetchProfile();
-  }, [username, userId]);
+  }, [username, userId, currentUser?.id]);
 
   // Live status check
   useEffect(() => {

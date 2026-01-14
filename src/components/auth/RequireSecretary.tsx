@@ -4,7 +4,7 @@ import { useAuthStore } from '../../lib/store'
 import { supabase } from '../../lib/supabase'
 
 export default function RequireSecretary({ children }: { children: React.ReactNode }) {
-  const { profile, user } = useAuthStore()
+  const { profile } = useAuthStore()
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
 
   useEffect(() => {

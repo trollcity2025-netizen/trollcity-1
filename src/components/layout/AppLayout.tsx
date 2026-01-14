@@ -65,7 +65,7 @@ export default function AppLayout({
   }, []);
 
   return (
-    <div className="h-screen w-screen overflow-hidden text-white flex" style={{ background: 'var(--troll-bg-gradient)' }}>
+    <div className="h-screen w-screen overflow-hidden text-white flex">
       <PurchaseRequiredModal />
       <PWAInstallPrompt />
       {/* Desktop Sidebar - Hidden on Mobile */}

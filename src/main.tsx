@@ -10,9 +10,10 @@ import { GlobalAppProvider } from './contexts/GlobalAppContext'
 import { supabase } from './lib/supabase'
 
 // App version for cache busting
+const env = import.meta.env
 const APP_VERSION =
-  (import.meta.env.VITE_APP_VERSION as string | undefined) ||
-  (import.meta.env.VITE_PUBLIC_APP_VERSION as string | undefined) ||
+  (env.VITE_APP_VERSION as string | undefined) ||
+  (env.VITE_PUBLIC_APP_VERSION as string | undefined) ||
   '1.0.0'
 
 // App version guard - clear storage on deploy
@@ -28,10 +29,8 @@ try {
   console.warn('Unable to evaluate app version guard', error)
 }
 
-// Debug helper to access environment variables in browser console
-// Usage: window.__ENV.VITE_LIVEKIT_URL
 if (typeof window !== 'undefined') {
-  (window as any).__ENV = import.meta.env
+  (window as any).__ENV = env
 }
 
 const rootElement = document.getElementById('root')
@@ -40,15 +39,37 @@ if (!rootElement) {
   throw new Error('Root element (#root) not found')
 }
 
-if (typeof window !== 'undefined') {
-  // PWA Service Worker Registration
+if (typeof window !== 'undefined' && !env.PROD) {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((r) => {
+        r.unregister().then((ok) => console.log('[SW] unregistered:', ok, r.scope)).catch(() => {});
+      });
+    }).catch(() => {});
+  }
+  if ('caches' in window) {
+    caches.keys().then((keys) => {
+      keys.forEach((k) => {
+        if (k.toLowerCase().includes('workbox') || k.toLowerCase().includes('vite') || k.toLowerCase().includes('pwa')) {
+          caches.delete(k).then((deleted) => console.log('[SW] deleted cache:', k, deleted)).catch(() => {});
+        }
+      });
+    }).catch(() => {});
+  }
+}
+
+if (typeof window !== 'undefined' && env.PROD) {
+  // PWA Service Worker Registration (only in production)
   // We use vite-plugin-pwa's virtual module to handle registration and updates
+  // Skip SW registration during development to avoid Workbox CDN import issues
   // @ts-expect-error - Virtual module
   import('virtual:pwa-register').then(({ registerSW }) => {
     const updateSW = registerSW({
       onNeedRefresh() {
-        console.log('[SW] update ready, forcing reload')
-        updateSW(true)
+        console.log('[SW] update ready, dispatching in-app update event')
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('pwa-update-available'))
+        }
       },
       onOfflineReady() {
         console.log('App ready to work offline')
@@ -94,13 +115,19 @@ if (typeof window !== 'undefined') {
           return
         }
 
-        const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
+        const publicKey = env.VITE_VAPID_PUBLIC_KEY as string | undefined
         if (!publicKey) {
           console.warn('Missing VITE_VAPID_PUBLIC_KEY; push subscription skipped')
           return
         }
 
-        const registration = await navigator.serviceWorker.ready
+        let registration: ServiceWorkerRegistration | undefined
+        try {
+          registration = await navigator.serviceWorker.ready
+        } catch (swErr) {
+          console.warn('No active service worker (push skip)', swErr)
+          return
+        }
         const existing = await registration.pushManager.getSubscription()
         const subscription =
           existing ||

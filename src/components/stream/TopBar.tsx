@@ -20,9 +20,12 @@ export default function TopBar({ room, streamerId, streamId, popularity = 0, tro
 
   return (
     <>
-      <div className="absolute top-4 left-4 flex flex-col gap-2 z-30">
+      <div
+        className="absolute top-4 left-4 flex flex-col gap-2 z-30"
+        style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none', filter: 'none' }}
+      >
         {/* Main badge row */}
-        <div className="flex items-center space-x-4 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full border border-purple-500">
+        <div className="flex items-center space-x-4 px-4 py-2 bg-black/80 rounded-full border border-purple-500">
         {/* LIVE Badge */}
         <span className="px-3 py-1 rounded-full bg-red-600 text-white font-bold shadow-lg animate-pulse">
           LIVE
@@ -39,7 +42,7 @@ export default function TopBar({ room, streamerId, streamId, popularity = 0, tro
       </div>
 
       {/* Popularity Level - Under LIVE badge */}
-      <div className="px-4 py-2 bg-black/40 backdrop-blur-md rounded-full border border-purple-500/50">
+      <div className="px-4 py-2 bg-black/80 rounded-full border border-purple-500/50">
         <span className="text-purple-300 font-semibold text-sm">
           Popularity: <span className="text-pink-400 font-bold">{popularity.toLocaleString()}</span> / 1,000,000
         </span>
@@ -47,7 +50,7 @@ export default function TopBar({ room, streamerId, streamId, popularity = 0, tro
 
       {/* Live Troll Frequency Setting - Demonstrates realtime updates */}
       {trollFrequency !== undefined && (
-        <div className="px-4 py-2 bg-green-900/40 backdrop-blur-md rounded-full border border-green-500/50 animate-pulse">
+        <div className="px-4 py-2 bg-green-900/80 rounded-full border border-green-500/50 animate-pulse">
           <span className="text-green-300 font-semibold text-sm">
             🧌 Troll Frequency: <span className="text-green-400 font-bold">{trollFrequency}</span>
             <span className="text-green-500/70 text-xs ml-2">(Live)</span>
@@ -73,7 +76,7 @@ export default function TopBar({ room, streamerId, streamId, popularity = 0, tro
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
-            className="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 backdrop-blur-md rounded-full border border-red-500/50 flex items-center gap-2 text-sm font-semibold transition-colors"
+            className="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 rounded-full border border-red-500/50 flex items-center gap-2 text-sm font-semibold transition-colors"
           >
             <AlertTriangle className="w-4 h-4" />
             Report Stream

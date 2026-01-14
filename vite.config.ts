@@ -23,7 +23,7 @@ export default defineConfig({
       manifest: {
         name: "Troll City",
         short_name: "TrollCity",
-        start_url: "/",
+        start_url: "/mobile",
         scope: "/",
         display: "standalone",
         background_color: "#05010a",
@@ -36,11 +36,18 @@ export default defineConfig({
           { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
         ]
       },
+      // Use injectManifest so we ship a local, audited service worker rather
+      // than relying on CDN importScripts. The custom sw at `src/service-worker.ts`
+      // implements push, offline fallback and safe navigation handling.
+      injectRegister: 'auto',
+      strategies: 'injectManifest',
+      injectManifest: {
+        swSrc: 'src/service-worker.ts',
+      },
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        importScripts: ['push-sw.js'],
       },
     }),
   ],

@@ -46,9 +46,20 @@ export default function IncomingCallPopup({
           .select('is_active,call_sound_catalog(asset_url,sound_type)')
           .eq('user_id', user.id)
           .eq('is_active', true);
-        const active = (data || []).find((row: any) => row.call_sound_catalog?.sound_type === 'ringtone');
-        if (active?.call_sound_catalog?.asset_url) {
-          setRingtoneSrc(active.call_sound_catalog.asset_url);
+        const rows = (data || []) as any[];
+        const active = rows.find((row) => {
+          const catalog = Array.isArray(row.call_sound_catalog)
+            ? row.call_sound_catalog[0]
+            : row.call_sound_catalog;
+          return catalog?.sound_type === 'ringtone';
+        });
+        const soundCatalog = active
+          ? Array.isArray(active.call_sound_catalog)
+            ? active.call_sound_catalog[0]
+            : active.call_sound_catalog
+          : null;
+        if (soundCatalog?.asset_url) {
+          setRingtoneSrc(soundCatalog.asset_url);
         }
       } catch {
         // ignore

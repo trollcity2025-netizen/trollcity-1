@@ -201,6 +201,37 @@ export interface Message {
   created_at: string
 }
 
+export interface Conversation {
+  id: string
+  created_at: string
+  created_by: string
+}
+
+export interface ConversationMember {
+  conversation_id: string
+  user_id: string
+  role?: string | null
+  joined_at: string
+}
+
+export interface ConversationMessage {
+  id: string
+  conversation_id: string
+  sender_id: string
+  body: string
+  created_at: string
+}
+
+export interface MessageReceipt {
+  id: string
+  message_id: string
+  user_id: string
+  status?: string | null
+  delivered_at?: string | null
+  read_at?: string | null
+  created_at: string
+}
+
 export interface CoinTransaction {
   id: string
   user_id: string
@@ -722,4 +753,174 @@ export async function autoUnlockPayouts(): Promise<SystemSettings | null> {
     })
   }
   return (data as any) || null
+}
+
+export async function listUserConversations(): Promise<Conversation[]> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    throw userError
+  }
+  const userId = userData.user?.id
+  if (!userId) {
+    throw new Error('Not authenticated')
+  }
+
+  const { data, error } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, conversations(* )')
+    .eq('user_id', userId)
+    .order('joined_at', { ascending: false })
+
+  if (error) {
+    throw error
+  }
+
+  const conversations: Conversation[] = []
+  for (const row of data || []) {
+    const conv = (row as any).conversations
+    if (conv) {
+      conversations.push({
+        id: conv.id,
+        created_at: conv.created_at,
+        created_by: conv.created_by,
+      })
+    }
+  }
+
+  return conversations
+}
+
+export async function createConversation(memberUserIds: string[]): Promise<Conversation> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    throw userError
+  }
+  const currentUserId = userData.user?.id
+  if (!currentUserId) {
+    throw new Error('Not authenticated')
+  }
+
+  const uniqueMemberIds = Array.from(new Set([...memberUserIds, currentUserId]))
+
+  const { data: conversationData, error: conversationError } = await supabase
+    .from('conversations')
+    .insert({
+      created_by: currentUserId,
+    })
+    .select()
+    .single()
+
+  if (conversationError) {
+    throw conversationError
+  }
+
+  const conversationId = conversationData.id as string
+
+  const membersPayload = uniqueMemberIds.map((userId) => ({
+    conversation_id: conversationId,
+    user_id: userId,
+    role: userId === currentUserId ? 'owner' : 'member',
+  }))
+
+  const { error: membersError } = await supabase
+    .from('conversation_members')
+    .insert(membersPayload)
+
+  if (membersError) {
+    throw membersError
+  }
+
+  return {
+    id: conversationData.id,
+    created_at: conversationData.created_at,
+    created_by: conversationData.created_by,
+  }
+}
+
+export async function sendConversationMessage(conversationId: string, body: string): Promise<ConversationMessage> {
+  const trimmed = body.trim()
+  if (!trimmed) {
+    throw new Error('Message body is empty')
+  }
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    throw userError
+  }
+  const senderId = userData.user?.id
+  if (!senderId) {
+    throw new Error('Not authenticated')
+  }
+
+  const { data, error } = await supabase
+    .from('conversation_messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: senderId,
+      body: trimmed,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw error
+  }
+
+  return {
+    id: data.id,
+    conversation_id: data.conversation_id,
+    sender_id: data.sender_id,
+    body: data.body,
+    created_at: data.created_at,
+  }
+}
+
+export async function getConversationMessages(
+  conversationId: string,
+  options?: { limit?: number; before?: string }
+): Promise<ConversationMessage[]> {
+  const limit = options?.limit ?? 50
+
+  let query = supabase
+    .from('conversation_messages')
+    .select('id, conversation_id, sender_id, body, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (options?.before) {
+    query = query.lt('created_at', options.before)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw error
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    conversation_id: row.conversation_id,
+    sender_id: row.sender_id,
+    body: row.body,
+    created_at: row.created_at,
+  }))
+}
+
+export async function markConversationRead(conversationId: string) {
+  const { error } = await supabase.rpc('mark_conversation_read', {
+    conversation_id: conversationId,
+  })
+  if (error) {
+    throw error
+  }
+}
+
+export async function markMessageRead(messageId: string) {
+  const { error } = await supabase.rpc('mark_message_read', {
+    message_id: messageId,
+  })
+  if (error) {
+    throw error
+  }
 }

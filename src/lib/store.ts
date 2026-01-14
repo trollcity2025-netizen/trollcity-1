@@ -40,7 +40,9 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // ignore and continue
         }
-        console.log('Auth updated', { user: !!user })
+        if ((import.meta as any).env?.DEV) {
+          console.log('Auth updated', { user: !!user })
+        }
         set({ user, session, isLoading: false, isAdmin: user ? null : null })
       },
 
@@ -112,7 +114,9 @@ export const useAuthStore = create<AuthState>()(
           // Silent fail if validation not available
         }
 
-        console.log('Profile updated:', profile?.username, profile?.role)
+        if ((import.meta as any).env?.DEV) {
+          console.log('Profile updated:', profile?.username, profile?.role)
+        }
         set({ profile, isAdmin: hasAdminFlag })
       },
 
@@ -128,18 +132,25 @@ export const useAuthStore = create<AuthState>()(
         try {
           await ensureSupabaseSession(supabase)
 
-          // Add timeout to prevent infinite waiting
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Profile load timeout')), 5000)
-          )
-
           const dataPromise = supabase
             .from('user_profiles')
             .select('*')
             .eq('id', u.id)
             .maybeSingle()
+          const timeoutMs = 5000
+          const result = await Promise.race([
+            dataPromise.then(res => ({ ...res, timedOut: false })),
+            new Promise<{ data: any; error: any; timedOut: boolean }>((resolve) =>
+              setTimeout(() => resolve({ data: null, error: null, timedOut: true }), timeoutMs)
+            )
+          ])
 
-          const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
+          const { data, error, timedOut } = result as { data: any; error: any; timedOut: boolean }
+
+          if (timedOut) {
+            console.warn('refreshProfile timed out after', timeoutMs, 'ms')
+            return
+          }
 
           if (error) {
             console.error('refreshProfile error:', error)

@@ -46,88 +46,86 @@ export default function InboxSidebar({
   // Load unread counts
   const loadUnread = useCallback(async () => {
     if (!profile?.id) return
-
-    try {
-      const { data } = await supabase
-        .from('messages')
-        .select('id,sender_id,receiver_id,read_at')
-        .eq('receiver_id', profile.id)
-        .is('read_at', null)
-        .eq('message_type', 'dm')
-
-      const counts: Record<string, number> = {}
-      data?.forEach((m) => {
-        if (m.sender_id) {
-          counts[m.sender_id] = (counts[m.sender_id] || 0) + 1
-        }
-      })
-
-      setUnreadCounts(counts)
-    } catch (error) {
-      console.error('Error loading unread counts:', error)
-    }
+    setUnreadCounts({})
   }, [profile?.id])
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (options?: { background?: boolean }) => {
+    const background = options?.background ?? false
     if (!profile?.id) return
 
     try {
-      setLoading(true)
+      if (!background) {
+        setLoading(true)
+      }
 
       if (activeTab === 'inbox') {
-        // Load DM conversations
-        const { data: messagesData, error } = await supabase
-          .from('messages')
-        .select('id,sender_id,receiver_id,content,created_at,seen')
-        .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
-        .eq('message_type', 'dm')
-        .order('created_at', { ascending: false })
-        .limit(500)
+        // Load conversations using new schema
+        const { data: myMemberships, error: membershipError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', profile.id)
 
-        if (error) throw error
+        if (membershipError) throw membershipError
 
-        // Group by conversation partner
-        const conversationMap = new Map<string, Conversation>()
+        const conversationIds = myMemberships?.map((m) => m.conversation_id) || []
 
-        messagesData?.forEach((msg) => {
-          const otherUserId = msg.sender_id === profile.id ? msg.receiver_id : msg.sender_id
-          if (!otherUserId) return
-
-          const existing = conversationMap.get(otherUserId)
-          const isUnread = msg.receiver_id === profile.id && (msg.seen === false || msg.seen === null)
-
-          if (!existing || new Date(msg.created_at) > new Date(existing.last_timestamp)) {
-            conversationMap.set(otherUserId, {
-              other_user_id: otherUserId,
-              other_username: '', // Will fetch below
-              other_avatar_url: null,
-              last_message: msg.content || '',
-              last_timestamp: msg.created_at,
-              unread_count: (existing?.unread_count || 0) + (isUnread ? 1 : 0)
-            })
-          } else if (isUnread) {
-            existing.unread_count = (existing.unread_count || 0) + 1
-          }
-        })
-
-        // Fetch user details for all conversation partners
-        const userIds = Array.from(conversationMap.keys())
-        if (userIds.length > 0) {
-          const { data: usersData } = await supabase
-            .from('user_profiles')
-            .select('id,username,avatar_url')
-            .in('id', userIds)
-
-          usersData?.forEach((user) => {
-            const conv = conversationMap.get(user.id)
-            if (conv) {
-              conv.other_username = user.username
-              conv.other_avatar_url = user.avatar_url
-            }
-          })
+        if (conversationIds.length === 0) {
+          setConversations([])
+          if (!background) setLoading(false)
+          return
         }
 
-        setConversations(Array.from(conversationMap.values()).sort((a, b) => 
+        // Get partners
+        const { data: partners, error: partnersError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id, user_id, user_profiles(username, avatar_url, rgb_username_expires_at)')
+          .in('conversation_id', conversationIds)
+          .neq('user_id', profile.id)
+
+        if (partnersError) throw partnersError
+
+        // Get latest messages (fetching one by one for now to ensure accuracy)
+        // In a production app with many conversations, this should be optimized with a view or RPC
+        const messagesPromises = conversationIds.map((cid) =>
+          supabase
+            .from('conversation_messages')
+            .select('conversation_id, body, created_at, sender_id')
+            .eq('conversation_id', cid)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+        )
+
+        const messagesResults = await Promise.all(messagesPromises)
+        const validMessages = messagesResults
+          .map((res) => res.data)
+          .filter((msg): msg is { conversation_id: string; body: string; created_at: string; sender_id: string } => !!msg)
+
+        const newConversations: Conversation[] = []
+
+        for (const cid of conversationIds) {
+          const partner = partners?.find((p) => p.conversation_id === cid)
+          const lastMsg = validMessages.find((m) => m.conversation_id === cid)
+
+          if (partner && lastMsg) {
+            const profileData = partner.user_profiles as any
+            // Calculate unread: simplistic check for now. 
+            // If last message is NOT from me, assume it might be unread if we don't track read status accurately here yet.
+            // For now, we'll set unread_count to 0 or 1 based on local state if we want, but let's stick to 0 until we have read receipts fully integrated.
+            
+            newConversations.push({
+              other_user_id: partner.user_id,
+              other_username: profileData?.username || 'Unknown',
+              other_avatar_url: profileData?.avatar_url || null,
+              last_message: lastMsg.body,
+              last_timestamp: lastMsg.created_at,
+              unread_count: 0, // To be implemented with message_receipts
+              rgb_username_expires_at: profileData?.rgb_username_expires_at
+            })
+          }
+        }
+
+        setConversations(newConversations.sort((a, b) => 
           new Date(b.last_timestamp).getTime() - new Date(a.last_timestamp).getTime()
         ))
       } else {
@@ -137,7 +135,9 @@ export default function InboxSidebar({
     } catch (error) {
       console.error('Error loading conversations:', error)
     } finally {
-      setLoading(false)
+      if (!background) {
+        setLoading(false)
+      }
     }
   }, [profile?.id, activeTab])
 
@@ -146,30 +146,25 @@ export default function InboxSidebar({
     loadConversations()
     loadUnread()
 
-    // Real-time subscription
+    // Real-time subscription for new conversation messages
     const channel = supabase
       .channel('inbox_updates')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
-          table: 'messages'
+          table: 'conversation_messages'
         },
-        () => {
-          loadConversations()
-          loadUnread()
-        }
-      )
-      .subscribe()
-
-    // New messages channel for unread counts
-    const newMessagesChannel = supabase
-      .channel(`new-messages:${profile.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', table: 'messages', schema: 'public' },
-        () => {
+        (payload) => {
+          // Check if this message belongs to one of our conversations
+          // Since we can't filter by multiple conversation_ids easily in one channel without knowing them all upfront,
+          // we'll reload if we see any message. Optimally we'd filter.
+          // But wait, we only care about messages where we are a member.
+          // The payload has conversation_id. We can't know if we are a member easily without state.
+          // Just reload for now.
+          const _ = payload
+          loadConversations({ background: true })
           loadUnread()
         }
       )
@@ -177,7 +172,19 @@ export default function InboxSidebar({
 
     return () => {
       supabase.removeChannel(channel)
-      supabase.removeChannel(newMessagesChannel)
+    }
+  }, [profile?.id, activeTab, loadConversations, loadUnread])
+
+  useEffect(() => {
+    if (!profile?.id) return
+
+    const interval = setInterval(() => {
+      loadConversations({ background: true })
+      loadUnread()
+    }, 2000)
+
+    return () => {
+      clearInterval(interval)
     }
   }, [profile?.id, activeTab, loadConversations, loadUnread])
 

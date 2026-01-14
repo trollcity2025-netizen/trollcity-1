@@ -49,7 +49,7 @@ const OfficerLoungeStream: React.FC = () => {
   const [claimingSeat, setClaimingSeat] = useState<number | null>(null)
   const [permissionErrorSeat, setPermissionErrorSeat] = useState<number | null>(null)
   const [targetSeatIndex, setTargetSeatIndex] = useState<number | null>(null)
-  const [entranceEffectSeat, setEntranceEffectSeat] = useState<number | null>(null)
+  const [, setEntranceEffectSeat] = useState<number | null>(null)
   const entranceEffectTimer = useRef<number | null>(null)
 
   const isAdmin = useMemo(
@@ -267,12 +267,7 @@ const OfficerLoungeStream: React.FC = () => {
                 onTargetSeat={(idx) => setTargetSeatIndex(idx)}
                 targetedSeatIndex={targetSeatIndex}
               />
-              {entranceEffectSeat !== null && (
-                <EntranceEffectScreenOverlay
-                  seat={seats[entranceEffectSeat]}
-                  seatIndex={entranceEffectSeat}
-                />
-              )}
+              {/* Entrance effect is now rendered per-seat inside each SeatTile when targeted */}
             </div>
           </section>
         </main>
@@ -433,6 +428,9 @@ const SeatTile: React.FC<SeatTileProps> = ({
             <audio ref={audioRef} autoPlay />
           </div>
 
+          {/* Per-seat entrance effect (only visible when this seat is targeted) */}
+          {isTargeted && <EntranceEffectScreenOverlay seat={assignment} seatIndex={index} />}
+
           <div className="relative z-10 flex flex-col gap-2 p-4">
             <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.4em] text-white">
               {avatarLabel ? (
@@ -574,7 +572,7 @@ const EntranceEffectScreenOverlay: React.FC<{
   const displayName = seat?.username || `Seat ${seatIndex + 1}`
 
   return (
-    <div className="pointer-events-none absolute inset-4 z-20 flex flex-col items-center justify-center gap-3 rounded-[28px] bg-gradient-to-br from-white/20 via-transparent to-black/60 text-center text-white shadow-[0_0_60px_rgba(156,89,255,0.5)]">
+    <div className="pointer-events-none absolute inset-4 z-0 flex flex-col items-center justify-center gap-3 rounded-[18px] bg-transparent text-center text-white">
       <div className="text-[10px] uppercase tracking-[0.6em] text-purple-200">Entrance Effects</div>
       <h3 className="text-3xl font-bold uppercase tracking-[0.3em]">{displayName}</h3>
       <div className="text-sm uppercase tracking-[0.4em] text-pink-300">Activated</div>

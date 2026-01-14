@@ -18,7 +18,7 @@ export default function GuestSlot({ participant, index, onRemove, onInvite, isHo
 
   return (
     <motion.div
-      className="relative w-full h-[180px] rounded-xl overflow-hidden border-2 border-purple-500/50 shadow-[0_0_20px_rgba(177,48,255,0.4)] bg-black/30 backdrop-blur-sm"
+      className="relative w-full h-[180px] rounded-xl overflow-hidden border-2 border-purple-500/50 shadow-[0_0_20px_rgba(177,48,255,0.4)] bg-black/30"
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
@@ -35,7 +35,7 @@ export default function GuestSlot({ participant, index, onRemove, onInvite, isHo
           {onRemove && (
             <motion.button
               onClick={onRemove}
-              className="absolute top-2 right-2 p-1.5 bg-red-600/80 hover:bg-red-600 rounded-full backdrop-blur-md z-10"
+              className="absolute top-2 right-2 p-1.5 bg-red-600/80 hover:bg-red-600 rounded-full z-10"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >

@@ -90,8 +90,8 @@ export default function DistrictNavigation() {
       ],
       admin_tower: [
         { feature_name: 'Admin Dashboard', route_path: '/admin', required_role: 'admin' },
-        { feature_name: 'Admin HQ', route_path: '/admin/hq', required_role: 'admin' },
-        { feature_name: 'City Control Center', route_path: '/admin/control-center', required_role: 'admin' },
+        { feature_name: 'Admin HQ', route_path: '/admin/control-panel', required_role: 'admin' },
+        { feature_name: 'City Control Center', route_path: '/admin/system/health', required_role: 'admin' },
         { feature_name: 'Marketplace Admin', route_path: '/admin/marketplace', required_role: 'admin' },
         { feature_name: 'Applications Admin', route_path: '/admin/applications', required_role: 'admin' }
       ]

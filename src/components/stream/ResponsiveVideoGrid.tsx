@@ -92,7 +92,7 @@ export default function ResponsiveVideoGrid({
                     event.stopPropagation();
                     onSeatAction({ seatIndex: i, seat, participant: p });
                   }}
-                  className="absolute top-2 right-2 z-20 rounded-full bg-black/60 hover:bg-black/80 text-white p-1 backdrop-blur shadow-lg border border-white/20 transition"
+                  className="absolute top-2 right-2 z-20 rounded-full bg-black/60 hover:bg-black/80 text-white p-1 shadow-lg border border-white/20 transition"
                   aria-label="Seat options"
                 >
                   <MoreHorizontal size={16} />

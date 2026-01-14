@@ -119,23 +119,6 @@ const GoLive: React.FC = () => {
     }
   }, [isPrivateStream]);
 
-  const buildThemeStyle = (theme?: any) => {
-    if (!theme) return {};
-    const imageUrl = theme.image_url || theme.background_asset_url || theme.preview_url;
-    if (theme.background_css) {
-      return { background: theme.background_css };
-    }
-    if (imageUrl) {
-      return {
-        backgroundImage: `url(${imageUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      };
-    }
-    return {};
-  };
-
   const formatCountdown = (targetDate?: string | null) => {
     if (!targetDate) return null;
     const diff = new Date(targetDate).getTime() - Date.now();

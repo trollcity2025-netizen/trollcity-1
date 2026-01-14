@@ -61,9 +61,9 @@ export default function BroadcastOverlays({
   return (
     <div className={`absolute inset-0 pointer-events-none z-20 flex flex-col justify-between safe-area-inset ${className}`}>
       {/* Top Overlay */}
-      <div className="flex items-start justify-between p-4 bg-gradient-to-b from-black/60 to-transparent pt-[env(safe-area-inset-top)]">
+      <div className="flex items-start justify-between p-4 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 pointer-events-auto">
-          <div className="bg-black/40 backdrop-blur-md rounded-full px-1 py-1 pr-4 flex items-center gap-3 border border-white/10">
+          <div className="bg-black/80 rounded-full px-1 py-1 pr-4 flex items-center gap-3 border border-white/10">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center border border-white/20">
               <span className="font-bold text-xs">TC</span>
             </div>
@@ -79,14 +79,14 @@ export default function BroadcastOverlays({
           
           <button
             onClick={onShareStream}
-            className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/10 hover:bg-white/20 transition-colors"
+            className="w-8 h-8 rounded-full bg-black/80 flex items-center justify-center text-white border border-white/10 hover:bg-white/20 transition-colors"
           >
             <Share2 size={14} />
           </button>
           {isBroadcaster && onInviteFollowers && (
             <button
               onClick={onInviteFollowers}
-              className="w-8 h-8 rounded-full bg-purple-600/80 backdrop-blur-md flex items-center justify-center text-white border border-purple-500/50 hover:bg-purple-600 transition-colors"
+              className="w-8 h-8 rounded-full bg-purple-600/90 flex items-center justify-center text-white border border-purple-500/50 hover:bg-purple-600 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -102,7 +102,7 @@ export default function BroadcastOverlays({
            {/* Additional Top Right Controls */}
            <button 
              onClick={onOpenSettings}
-             className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/10"
+             className="w-8 h-8 rounded-full bg-black/80 flex items-center justify-center text-white border border-white/10"
            >
              <MoreVertical size={14} />
            </button>
@@ -115,10 +115,10 @@ export default function BroadcastOverlays({
       </div>
 
       {/* Bottom Overlay */}
-      <div className="flex flex-col gap-2 p-4 bg-gradient-to-t from-black/80 to-transparent pb-[env(safe-area-inset-bottom)]">
+        <div className="flex flex-col gap-2 p-4 pb-[env(safe-area-inset-bottom)]">
         {/* Quick Chat / Messages Area (Placeholder) */}
         <div className="flex-1 min-h-[100px] flex flex-col justify-end items-start mb-2 pointer-events-none">
-           <div className="bg-black/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs text-white/70 mb-1 border border-white/5">
+           <div className="bg-black/70 px-3 py-1 rounded-full text-xs text-white/70 mb-1 border border-white/10">
               Welcome to the stream!
            </div>
         </div>
@@ -128,7 +128,7 @@ export default function BroadcastOverlays({
           <div className="flex items-center gap-3">
              <button 
                onClick={onOpenChat}
-               className="bg-black/40 backdrop-blur-md px-4 py-2.5 rounded-full text-white/70 text-sm flex items-center gap-2 border border-white/10 hover:bg-black/60 transition-colors"
+               className="bg-black/80 px-4 py-2.5 rounded-full text-white/70 text-sm flex items-center gap-2 border border-white/10 hover:bg-black/60 transition-colors"
              >
                <MessageCircle size={16} />
                <span className="hidden sm:inline">Say something...</span>
@@ -140,13 +140,13 @@ export default function BroadcastOverlays({
               <>
                 <button 
                   onClick={onToggleMic}
-                  className={`p-2.5 rounded-full backdrop-blur-md border transition-all ${micOn ? 'bg-white/10 border-white/10 text-white' : 'bg-red-500/80 border-red-500 text-white'}`}
+                  className={`p-2.5 rounded-full border transition-all ${micOn ? 'bg-white/10 border-white/10 text-white' : 'bg-red-500/80 border-red-500 text-white'}`}
                 >
                   {micOn ? <Mic size={20} /> : <MicOff size={20} />}
                 </button>
                 <button 
                   onClick={onToggleCamera}
-                  className={`p-2.5 rounded-full backdrop-blur-md border transition-all ${cameraOn ? 'bg-white/10 border-white/10 text-white' : 'bg-red-500/80 border-red-500 text-white'}`}
+                  className={`p-2.5 rounded-full border transition-all ${cameraOn ? 'bg-white/10 border-white/10 text-white' : 'bg-red-500/80 border-red-500 text-white'}`}
                 >
                   {cameraOn ? <Camera size={20} /> : <CameraOff size={20} />}
                 </button>
@@ -160,12 +160,12 @@ export default function BroadcastOverlays({
               <Gift size={20} />
             </button>
 
-            <button className="p-2.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-colors">
+            <button className="p-2.5 rounded-full bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-colors">
               <Heart size={20} />
             </button>
 
             {/* Coin Counter */}
-            <div className="bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+            <div className="bg-black/80 px-4 py-2.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
                <div className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold text-[10px]">C</div>
                <span className="text-yellow-400 font-bold text-sm">{totalCoins.toLocaleString()}</span>
             </div>

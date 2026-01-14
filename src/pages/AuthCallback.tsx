@@ -45,7 +45,7 @@ const AuthCallback = () => {
             const u = data.session.user
             console.log('User authenticated:', u.email)
             
-            const sessionId = data.session?.id
+            const sessionId = data.session.access_token
             if (sessionId) {
               const hasConcurrentLogin = await checkConcurrentLogin(u.id, sessionId)
               if (hasConcurrentLogin) {
@@ -73,12 +73,12 @@ const AuthCallback = () => {
                   .rpc('register_session', {
                     p_user_id: u.id,
                     p_session_id: sessionId,
-                    p_device_info: JSON.stringify(deviceInfo), // Convert to JSON string
-                    p_ip_address: null, // Would need backend to get real IP
+                    p_device_info: JSON.stringify(deviceInfo),
+                    p_ip_address: null,
                     p_user_agent: navigator.userAgent
                   })
               } else {
-                console.warn('[AuthCallback] Skipping register_session because session id is missing')
+                console.warn('[AuthCallback] Skipping register_session because session access_token is missing')
               }
             } catch (sessionError) {
               console.error('Error registering session:', sessionError)

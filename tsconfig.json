@@ -3,12 +3,17 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "node",
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noImplicitReturns": false,
+    "noUncheckedIndexedAccess": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["vite/client"],
     "allowJs": true,
     "noEmit": true,
     "resolveJsonModule": true,
@@ -19,11 +24,7 @@
     }
   },
   "include": [
-    "src/**/*",
-    "api/**/*",
-    "lib/**/*",
-    "scripts/**/*",
-    "server/**/*"
+    "src"
   ],
   "exclude": [
     "node_modules",

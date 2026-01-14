@@ -236,24 +236,24 @@ export function useCoins() {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          const updatedProfile = payload.new as any
+          const newProfileData = payload.new as any
           const currentProfile = useAuthStore.getState().profile
           if (currentProfile) {
             const candidate =
-              typeof updatedProfile.troll_coins === 'number'
-                ? updatedProfile.troll_coins
+              typeof newProfileData.troll_coins === 'number'
+                ? newProfileData.troll_coins
                 : currentProfile.troll_coins
             const shouldKeepOptimistic =
               optimisticUntil &&
               Date.now() < optimisticUntil &&
               (optimisticTroll ?? balances.troll_coins) > candidate
             const nextEarned =
-              typeof updatedProfile.total_earned_coins === 'number'
-                ? updatedProfile.total_earned_coins
+              typeof newProfileData.total_earned_coins === 'number'
+                ? newProfileData.total_earned_coins
                 : currentProfile.total_earned_coins
             const nextSpent =
-              typeof updatedProfile.total_spent_coins === 'number'
-                ? updatedProfile.total_spent_coins
+              typeof newProfileData.total_spent_coins === 'number'
+                ? newProfileData.total_spent_coins
                 : currentProfile.total_spent_coins
             const updatedProfile: UserProfile = {
               ...currentProfile,

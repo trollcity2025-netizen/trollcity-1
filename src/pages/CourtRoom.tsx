@@ -1530,7 +1530,7 @@ export default function CourtRoom() {
                   onClick={() => {
                     startNewCase(newCaseData);
                     setShowNewCaseModal(false);
-                    setNewCaseData({ title: '', defendant: '', accuser: '', description: '' });
+                    setNewCaseData({ title: '', defendant: '', accuser: '', description: '', severity: 'Low' });
                   }}
                   className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 rounded font-semibold transition-colors"
                 >

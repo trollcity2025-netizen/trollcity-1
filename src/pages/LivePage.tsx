@@ -42,6 +42,17 @@ import UserActionsMenu from '../components/broadcast/UserActionsMenu';
 // Constants
 const STREAM_POLL_INTERVAL = 2000;
 
+const DEFAULT_GIFTS: GiftItem[] = [
+  { id: "troll_clap", name: "Troll Clap", icon: "👏", value: 5, category: "Basic" },
+  { id: "glow_heart", name: "Glow Heart", icon: "💗", value: 10, category: "Basic" },
+  { id: "laughing_mask", name: "Laughing Mask", icon: "😹", value: 30, category: "Basic" },
+  { id: "troll_mic_drop", name: "Troll Mic Drop", icon: "🎤", value: 100, category: "Rare" },
+  { id: "troll_confetti", name: "Troll Confetti", icon: "🎉", value: 850, category: "Rare" },
+  { id: "crown_blast", name: "Crown Blast", icon: "👑", value: 1200, category: "Epic" },
+  { id: "diamond_storm", name: "Diamond Storm", icon: "💎", value: 7000, category: "Epic" },
+  { id: "the_big_crown", name: "The Big Crown", icon: "🌟", value: 15000, category: "Legendary" },
+];
+
 // Types
 interface StreamRow {
   id: string;
@@ -396,6 +407,7 @@ export default function LivePage() {
   const [broadcastThemeStyle, setBroadcastThemeStyle] = useState<React.CSSProperties | undefined>(undefined);
   const [broadcastTheme, setBroadcastTheme] = useState<any>(null);
   const [reactiveEvent, setReactiveEvent] = useState<{ key: number; style: string; intensity: number } | null>(null);
+  const [reactiveClass, setReactiveClass] = useState('');
 
   const stableIdentity = useMemo(() => {
     const id = user?.id || profile?.id;
@@ -509,7 +521,9 @@ export default function LivePage() {
       }
 
       if (theme.background_css) {
-        setBroadcastThemeStyle({ background: theme.background_css });
+        // Strip trailing semicolons to avoid React warnings
+        const cleanBackground = theme.background_css.trim().replace(/;+$/, '');
+        setBroadcastThemeStyle({ background: cleanBackground });
         setBroadcastTheme(theme);
         setLastThemeId(theme.id || null);
         return;
@@ -546,6 +560,16 @@ export default function LivePage() {
       isActive = false;
     };
   }, [stream?.broadcaster_id]);
+
+  useEffect(() => {
+    if (!reactiveEvent?.key) return;
+    const style = reactiveEvent.style || 'pulse';
+    const intensity = Math.max(1, Math.min(5, reactiveEvent.intensity || 2));
+    const nextClass = `theme-reactive-${style} theme-reactive-intensity-${intensity}`;
+    setReactiveClass(nextClass);
+    const timer = window.setTimeout(() => setReactiveClass(''), 900);
+    return () => window.clearTimeout(timer);
+  }, [reactiveEvent?.key, reactiveEvent?.style, reactiveEvent?.intensity]);
 
   // Sync UI state with broadcaster role (auto-publish)
   useEffect(() => {
@@ -620,9 +644,12 @@ export default function LivePage() {
   const canAccessPrivate = !needsPrivateGate || privateAccessGranted;
   const canConnect = tokenReady && !!token && !!serverUrl && !!user?.id && !!roomName && streamLoaded && canAccessPrivate;
 
-  // Logging for verification
+  const joinLogRef = useRef(false);
+
+  // Logging for verification (only once when we can first connect)
   useEffect(() => {
-    if (canConnect) {
+    if (canConnect && !joinLogRef.current) {
+      joinLogRef.current = true;
       console.log('[LivePage] Joining session:', {
         streamId,
         broadcaster_id: stream?.broadcaster_id,
@@ -634,13 +661,6 @@ export default function LivePage() {
       });
     }
   }, [canConnect, streamId, stream?.broadcaster_id, isBroadcaster, roomName, tokenRoomName, user?.id, livekitIdentity, tokenIdentity, token]);
-
-  console.log("[LivePage] LiveKit requirements:", { 
-    token: token?.slice(0, 15), 
-    serverUrl, 
-    identity: tokenIdentity || livekitIdentity, 
-    roomName: tokenRoomName || roomName 
-  });
 
   const {
     isConnected,
@@ -798,7 +818,7 @@ export default function LivePage() {
     setSeatActionTarget(null);
   };
 
-  const handleSeatGift = (amount: number) => {
+  const handleSeatGift = () => {
     if (!seatActionTarget) return;
     setGiftReceiver({ id: seatActionTarget.userId, username: seatActionTarget.username || '' });
     setIsGiftModalOpen(true);
@@ -917,6 +937,9 @@ export default function LivePage() {
   const [entranceEffectKey, setEntranceEffectKey] = useState(0);
   const [lastThemeId, setLastThemeId] = useState<string | null>(null);
   const entranceTimeoutRef = useRef<number | null>(null);
+  const [quickGifts, setQuickGifts] = useState<GiftItem[]>([]);
+  const [quickGiftsLoading, setQuickGiftsLoading] = useState(false);
+  const [quickGiftsError, setQuickGiftsError] = useState<string | null>(null);
   
   // Entrance effect logic
   useEffect(() => {
@@ -963,6 +986,16 @@ export default function LivePage() {
           if (msg.message_type === 'entrance') {
             try {
               const data = JSON.parse(msg.content);
+              // Determine originating user id for this entrance event
+              const payloadUserId =
+                data.user_id || data.sender_id || msg.user_id || msg.sender_id;
+
+              // If this client is the broadcaster and the entrance belongs to the broadcaster,
+              // ignore it so broadcasters don't see an entrance when they start their own live.
+              if (payloadUserId && stream?.broadcaster_id && isBroadcaster && payloadUserId === String(stream.broadcaster_id)) {
+                return;
+              }
+
               setEntranceEffect(data);
               setEntranceEffectKey((prev) => prev + 1);
 
@@ -974,9 +1007,8 @@ export default function LivePage() {
                 entranceTimeoutRef.current = null;
               }, 5000);
 
-              const payloadUserId =
-                data.user_id || data.sender_id || msg.user_id || msg.sender_id;
               if (payloadUserId) {
+                // Trigger client-side entrance animation for the specified user (unless filtered above)
                 void triggerUserEntranceEffect(payloadUserId);
               }
             } catch (e) {
@@ -997,7 +1029,7 @@ export default function LivePage() {
       }
       supabase.removeChannel(channel);
     };
-  }, [streamId]);
+  }, [streamId, stream?.broadcaster_id, isBroadcaster]);
 
 
   // Load Stream Data
@@ -1500,6 +1532,47 @@ export default function LivePage() {
     };
   }, [streamId, broadcastTheme?.reactive_enabled, broadcastTheme?.reactive_intensity, broadcastTheme?.reactive_style]);
 
+  useEffect(() => {
+    let active = true;
+    const fetchQuickGifts = async () => {
+      try {
+        setQuickGiftsLoading(true);
+        setQuickGiftsError(null);
+        const { data, error } = await supabase
+          .from("gift_items")
+          .select("id,name,icon,value,category")
+          .order("value", { ascending: true });
+        if (!active) return;
+        if (error) throw error;
+        const payload: GiftItem[] = (data || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          icon: item.icon,
+          value: item.value,
+          category: item.category || "Common",
+        }));
+        if (payload.length === 0) {
+          setQuickGifts(DEFAULT_GIFTS);
+        } else {
+          setQuickGifts(payload);
+        }
+      } catch (err) {
+        if (!active) return;
+        console.error("[LivePage] Failed to load quick gifts:", err);
+        setQuickGiftsError("Unable to load gifts. Showing default Quick Gifts.");
+        setQuickGifts(DEFAULT_GIFTS);
+      } finally {
+        if (active) {
+          setQuickGiftsLoading(false);
+        }
+      }
+    };
+    fetchQuickGifts();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleCoinsPurchased = useCallback((_amount: number) => {
     setIsCoinStoreOpen(false);
   }, []);
@@ -1514,20 +1587,63 @@ export default function LivePage() {
   }, []);
 
   // Layout
+  const themeAssetType =
+    broadcastTheme?.asset_type ||
+    (broadcastTheme?.background_css ? 'css' : broadcastTheme?.image_url || broadcastTheme?.background_asset_url ? 'image' : null);
+  const imageUrl = broadcastTheme?.image_url || broadcastTheme?.background_asset_url || null;
+  const hasVideoBackground =
+    themeAssetType === 'video' && (broadcastTheme?.video_webm_url || broadcastTheme?.video_mp4_url);
+
   if (isLoadingStream || !stream || !profile) {
     return (
-        <div className="min-h-screen bg-[#03010c] via-[#05031a] to-[#110117] text-white flex items-center justify-center">
-            <div className="text-center space-y-4">
-            <div className="w-16 h-16 rounded-full border-2 border-purple-500/60 animate-pulse" />
-            <p className="text-sm text-gray-300">Loading broadcast...</p>
-            </div>
+      <div className="min-h-screen bg-[#03010c] via-[#05031a] to-[#110117] text-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 rounded-full border-2 border-purple-500/60 animate-pulse" />
+          <p className="text-sm text-gray-300">Loading broadcast...</p>
         </div>
+      </div>
     );
   }
 
   return (
-    <div className="h-full w-full flex flex-col bg-[#05010a] text-white overflow-hidden">
-      <GlobalGiftBanner />
+    <div className="h-full w-full flex flex-col text-white overflow-hidden relative">
+      {hasVideoBackground ? (
+        <video
+          className="fixed inset-0 w-full h-full object-cover -z-20"
+          muted
+          loop
+          autoPlay
+          playsInline
+        >
+          {broadcastTheme?.video_webm_url && (
+            <source src={broadcastTheme.video_webm_url} type="video/webm" />
+          )}
+          {broadcastTheme?.video_mp4_url && (
+            <source src={broadcastTheme.video_mp4_url} type="video/mp4" />
+          )}
+        </video>
+      ) : (
+        <div
+          className="fixed inset-0 -z-20"
+          style={{
+            backgroundColor: '#05010a',
+            ...(broadcastThemeStyle || {}),
+            ...(themeAssetType === 'image' && imageUrl
+              ? {
+                  backgroundImage: `url(${imageUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat',
+                }
+              : {}),
+          }}
+        />
+      )}
+      <div className="fixed inset-0 bg-black/30 -z-10" />
+      <div className={`fixed inset-0 pointer-events-none ${reactiveClass} -z-0`} />
+
+      <div className="relative z-10 h-full w-full flex flex-col">
+        <GlobalGiftBanner />
       {needsPrivateGate && !privateAccessGranted && (
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/90 px-4">
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0a16] p-6 shadow-xl">
@@ -1597,7 +1713,7 @@ export default function LivePage() {
               {isViewerDropdownOpen && (
                 <div
                   ref={viewerDropdownRef}
-                  className="absolute right-0 mt-2 w-64 max-h-72 overflow-hidden rounded-2xl border border-white/10 bg-black/90 shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl z-20"
+                  className="absolute right-0 mt-2 w-64 max-h-72 overflow-hidden rounded-2xl border border-white/10 bg-black/95 shadow-[0_20px_50px_rgba(0,0,0,0.6)] z-20"
                 >
                   <div className="px-4 py-2 text-[10px] uppercase tracking-[0.3em] text-white/50">
                     Active viewers
@@ -1686,8 +1802,6 @@ export default function LivePage() {
               joinPrice={joinPrice}
               lastGift={lastGift}
               backgroundStyle={broadcastThemeStyle}
-              backgroundTheme={broadcastTheme}
-              reactiveEvent={reactiveEvent}
               onSetPrice={handleSetPrice}
               onJoinRequest={handleJoinRequest}
               onLeaveSession={handleLeaveSession}
@@ -1700,8 +1814,8 @@ export default function LivePage() {
          </div>
 
          {/* Mobile Tab Bar */}
-         {showLivePanels && (
-         <div className="flex lg:hidden bg-[#0b091f]/90 backdrop-blur rounded-lg p-1 shrink-0 gap-2 sticky bottom-0 z-20 border border-white/10">
+        {showLivePanels && (
+         <div className="flex lg:hidden bg-[#0b091f]/95 rounded-lg p-1 shrink-0 gap-2 sticky bottom-0 z-20 border border-white/10">
             <button 
               onClick={() => setActiveMobileTab('chat')}
               className={`flex-1 py-2 rounded-md font-bold text-sm transition-all ${activeMobileTab === 'chat' ? 'bg-purple-600 text-white shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
@@ -1733,7 +1847,12 @@ export default function LivePage() {
             {/* GiftBox - Hidden on mobile if chat tab active; make scrollable and height-safe */}
             <div className={`${activeMobileTab === 'gifts' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-h-0 overflow-hidden`}>
               <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-[env(safe-area-inset-bottom)]">
-                <GiftBox onSendGift={handleGiftSent} />
+                <GiftBox
+                  onSendGift={handleGiftSent}
+                  gifts={quickGifts}
+                  loading={quickGiftsLoading}
+                  loadError={quickGiftsError}
+                />
               </div>
             </div>
             
@@ -1831,6 +1950,7 @@ export default function LivePage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

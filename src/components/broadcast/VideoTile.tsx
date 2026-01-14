@@ -67,18 +67,19 @@ export default function VideoTile({
         const canAttach = vidPub && (vidPub.isSubscribed || isLocalParticipant) && vidPub.videoTrack;
         
         if (canAttach && videoRef.current) {
-            console.log(`[VideoTile] Attaching video track for ${participant.identity} (Local: ${isLocalParticipant})`);
-            vidPub.videoTrack!.attach(videoRef.current);
-            if (isLocalParticipant) {
-                videoRef.current.muted = true;
-                videoRef.current.volume = 0;
-            }
-            videoRef.current.playsInline = true;
-            videoRef.current.play().catch(e => console.error("Video play failed", e));
-            setIsVideoEnabled(!vidPub.isMuted);
+          console.log(`[VideoTile] Attaching video track for ${participant.identity} (Local: ${isLocalParticipant})`);
+          vidPub.videoTrack!.attach(videoRef.current);
+          if (isLocalParticipant) {
+            videoRef.current.muted = true;
+            videoRef.current.volume = 0;
+          }
+          videoRef.current.playsInline = true;
+          videoRef.current.play().catch(e => console.error("Video play failed", e));
+          // Show video as soon as a track is attached (don't hide video just because it's muted)
+          setIsVideoEnabled(Boolean(vidPub.videoTrack));
         } else {
-             // If we can't attach yet, maybe it's because track isn't subscribed/published
-             console.log(`[VideoTile] Cannot attach video for ${participant.identity}. Pub: ${!!vidPub}, Track: ${!!vidPub?.videoTrack}`);
+           // If we can't attach yet, maybe it's because track isn't subscribed/published
+           console.log(`[VideoTile] Cannot attach video for ${participant.identity}. Pub: ${!!vidPub}, Track: ${!!vidPub?.videoTrack}`);
         }
     };
     const attachAudio = () => {
@@ -98,11 +99,23 @@ export default function VideoTile({
             audioTrack.detach(audioRef.current);
         }
     };
+    const detachVideo = () => {
+      const vidPub = participant.getTrackPublication(Track.Source.Camera);
+      const videoTrack = vidPub?.videoTrack;
+      if (videoTrack && videoRef.current) {
+        try {
+          videoTrack.detach(videoRef.current);
+        } catch {
+          // ignore
+        }
+      }
+    };
 
     const onSpeakingChanged = () => setSpeaking(participant.isSpeaking);
     const onTrackMuted = (pub: any) => {
-        if (pub.kind === Track.Kind.Video) setIsVideoEnabled(false);
-        if (pub.kind === Track.Kind.Audio) setIsAudioEnabled(false);
+      // When a video track is muted we should not hide the video element
+      // Keep the attached video visible; only hide when unsubscribed/removed
+      if (pub.kind === Track.Kind.Audio) setIsAudioEnabled(false);
     };
     const onTrackUnmuted = (pub: any) => {
         if (pub.kind === Track.Kind.Video) {
@@ -120,10 +133,13 @@ export default function VideoTile({
             setIsAudioEnabled(true);
         }
     };
-    const onTrackUnsubscribed = (track: Track) => {
-         if (track.kind === Track.Kind.Video) setIsVideoEnabled(false);
-         if (track.kind === Track.Kind.Audio) detachAudio();
-    };
+        const onTrackUnsubscribed = (track: Track) => {
+          if (track.kind === Track.Kind.Video) {
+           setIsVideoEnabled(false);
+           detachVideo();
+          }
+          if (track.kind === Track.Kind.Audio) detachAudio();
+        };
 
     const onTrackPublished = (pub: any) => {
         if (pub.kind === Track.Kind.Video) {
@@ -155,7 +171,8 @@ export default function VideoTile({
         (participant as any).off('trackSubscribed', onTrackSubscribed);
         (participant as any).off('trackUnsubscribed', onTrackUnsubscribed);
         (participant as any).off('trackPublished', onTrackPublished);
-        detachAudio();
+      detachAudio();
+      detachVideo();
     };
   }, [participant, isLocal]);
 
@@ -264,26 +281,29 @@ export default function VideoTile({
   return (
     <div className={`rgb-border ${speaking ? 'speaking' : ''} occupied`} style={style}>
       <div
-        className={`tile-inner relative bg-zinc-900 rounded-2xl overflow-hidden transition-all duration-300 group shadow-lg ${className}`}
+        className={`tile-inner relative rounded-2xl overflow-hidden transition-all duration-300 group shadow-lg ${className}`}
         onClick={handleBroadcasterClick}
       >
       {/* Video Element */}
       <video
         ref={videoRef}
-        className="w-full h-full transition-all duration-300"
-        muted={isLocal}
+        className="w-full h-full transition-all duration-300 seatTile-video"
+        muted={!!isLocal}
         playsInline
         autoPlay
         style={{
           objectFit,
-          transform: videoTransform
+          transform: videoTransform,
+          filter: 'none',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none'
         }}
       />
-      <audio ref={audioRef} autoPlay playsInline muted={isLocal} className="hidden" />
+      <audio ref={audioRef} autoPlay playsInline muted={!!isLocal} className="hidden" />
       
       {/* Fallback Profile Picture */}
-      {!isVideoEnabled && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#1a1625] to-[#0b091f]">
+        {!isVideoEnabled && (
+          <div className={`absolute inset-0 flex flex-col items-center justify-center ${compact ? 'bg-transparent' : 'bg-transparent'}`}>
               <div className={`relative ${speaking ? 'animate-pulse' : ''}`}>
                   {avatarUrl ? (
                       <img src={avatarUrl} alt={participant.identity} className="w-24 h-24 rounded-full border-4 border-purple-500/30 shadow-xl" />
@@ -315,7 +335,7 @@ export default function VideoTile({
       {/* User Info Badge (Bottom Left) */}
       {compact ? (
         <div className="absolute bottom-2 left-2 right-2 z-10">
-          <div className="flex items-center justify-between gap-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 w-full">
+          <div className="flex items-center justify-between gap-2 bg-black/60 px-2 py-1 rounded-full border border-white/10 w-full">
             <span className="text-white/90 font-semibold truncate" style={seatUsernameStyle}>
               {participant.name || participant.identity || 'Guest'}
             </span>
@@ -333,7 +353,7 @@ export default function VideoTile({
       ) : (
         <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2 max-w-[85%]">
           {/* Name Badge */}
-          <div className="flex items-center gap-2 bg-[#1a0b2e]/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-purple-500/30 shadow-lg w-fit">
+          <div className={`flex items-center gap-2 ${compact ? 'bg-transparent' : 'bg-[#1a0b2e]/90'} px-3 py-1.5 rounded-full border border-purple-500/30 shadow-lg w-fit`}>
               {/* Connection Indicator */}
               <div className={`w-2 h-2 rounded-full ${(participant as any).isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
               <span className="text-sm font-bold text-white truncate max-w-[120px]">
@@ -344,7 +364,7 @@ export default function VideoTile({
           
           {/* Role/Level Badge */}
           <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded border border-white/10">
+              <div className="flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded border border-white/10">
                   <span className="text-[10px] font-bold text-yellow-500">LV {level}</span>
               </div>
               <div className={`flex items-center gap-1 px-2 py-0.5 rounded border ${roleColor}`}>
@@ -356,15 +376,15 @@ export default function VideoTile({
 
       {/* Balance / Price Badges (Bottom Right) */}
       {!compact && (typeof coinBalance === 'number' || (typeof price === 'number' && price > 0)) && (
-        <div className="absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
+          <div className="absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
           {typeof coinBalance === 'number' && (
-            <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 text-yellow-300 text-sm flex items-center gap-1">
+            <div className="bg-black/60 px-3 py-1.5 rounded-full border border-yellow-500/30 text-yellow-300 text-sm flex items-center gap-1">
               <Coins className="w-4 h-4" />
               <span>{coinBalance.toLocaleString()}</span>
             </div>
           )}
           {typeof price === 'number' && price > 0 && (
-            <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 text-yellow-300 text-sm flex items-center gap-1">
+            <div className="bg-black/60 px-3 py-1.5 rounded-full border border-yellow-500/30 text-yellow-300 text-sm flex items-center gap-1">
               <Coins className="w-4 h-4" />
               <span>{price.toLocaleString()} coins</span>
             </div>
@@ -375,15 +395,15 @@ export default function VideoTile({
       {/* View Fit Toggle (Hover only) */}
       <button 
         onClick={toggleFit}
-        className="absolute top-3 right-3 p-2 bg-black/40 backdrop-blur-md rounded-full text-white/70 hover:text-white hover:bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+        className="absolute top-3 right-3 p-2 bg-black/40 rounded-full text-white/70 hover:text-white hover:bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity z-20"
         title="Toggle Fit"
       >
         {objectFit === 'cover' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
       </button>
 
       {/* Local Controls Overlay */}
-      {isLocal && showLocalControls && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-6 animate-fadeIn">
+        {isLocal && showLocalControls && (
+          <div className="absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center gap-6 animate-fadeIn">
               <div className="flex items-center gap-6">
                   <button onClick={toggleMic} className={`p-4 rounded-full transition-transform hover:scale-110 ${isAudioEnabled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'}`}>
                       {isAudioEnabled ? <Mic size={28} /> : <MicOff size={28} />}
@@ -408,8 +428,8 @@ export default function VideoTile({
       )}
       
       {/* Broadcaster Controls Overlay (for disabling guest media) */}
-      {isHost && !isLocal && !isBroadcaster && showLocalControls && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-6 animate-fadeIn">
+        {isHost && !isLocal && !isBroadcaster && showLocalControls && (
+          <div className="absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center gap-6 animate-fadeIn">
               <h3 className="text-white font-bold text-lg">Control Guest Media</h3>
               <div className="flex items-center gap-4">
                   <button onClick={handleDisableVideo} className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white transition-transform hover:scale-110">

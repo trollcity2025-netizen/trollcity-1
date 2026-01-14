@@ -34,7 +34,7 @@ serve(async (req: Request) => {
     'http://localhost:5173'
   ];
   
-  let headers = { ...corsHeaders };
+  const headers = { ...corsHeaders };
   if (origin && allowedOrigins.includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
   }

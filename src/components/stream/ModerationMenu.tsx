@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { supabase, isAdminEmail } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import IPBanModal from '../officer/IPBanModal'
 import { updateOfficerActivity } from '../../lib/officerActivity'
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { 
@@ -66,9 +67,17 @@ const TRANSACTION_COLORS: Record<string, string> = {
 
 export default function TransactionHistory() {
   const user = useAuthStore((s) => s.user)
+  const profile = useAuthStore((s) => s.profile)
+  const [searchParams] = useSearchParams()
   const [transactions, setTransactions] = useState<CoinTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [targetUserUsername, setTargetUserUsername] = useState<string>('')
+  
+  const isAdmin = profile?.role === 'admin' || profile?.is_admin
+  const queryUserId = searchParams.get('userId')
+  const targetUserId = (isAdmin && queryUserId) ? queryUserId : user?.id
+
   const [stats, setStats] = useState({
     totalSpent: 0,
     totalEarned: 0,
@@ -76,8 +85,24 @@ export default function TransactionHistory() {
     totalFree: 0
   })
 
+  useEffect(() => {
+    if (isAdmin && queryUserId && queryUserId !== user?.id) {
+      // Fetch target user's username for display
+      supabase
+        .from('user_profiles')
+        .select('username')
+        .eq('id', queryUserId)
+        .single()
+        .then(({ data }) => {
+          if (data) setTargetUserUsername(data.username)
+        })
+    } else {
+      setTargetUserUsername('')
+    }
+  }, [isAdmin, queryUserId, user?.id])
+
   const loadTransactions = useCallback(async () => {
-    if (!user?.id) return
+    if (!targetUserId) return
     
     try {
       setLoading(true)
@@ -85,7 +110,7 @@ export default function TransactionHistory() {
       let query = supabase
         .from('coin_transactions')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
         .limit(100)
 
@@ -125,12 +150,12 @@ export default function TransactionHistory() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, filter])
+  }, [targetUserId, filter])
 
   useEffect(() => {
-    if (!user?.id) return
+    if (!targetUserId) return
     loadTransactions()
-  }, [loadTransactions, user?.id])
+  }, [loadTransactions, targetUserId])
 
   function formatDate(dateStr: string) {
     const date = new Date(dateStr)
@@ -180,7 +205,11 @@ export default function TransactionHistory() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Transaction History</h1>
-          <p className="text-gray-400">Your complete coin activity log</p>
+          <p className="text-gray-400">
+            {targetUserUsername 
+              ? `Viewing history for ${targetUserUsername}` 
+              : 'Your complete coin activity log'}
+          </p>
         </div>
 
         {/* Stats Cards */}

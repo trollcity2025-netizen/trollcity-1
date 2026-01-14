@@ -8,34 +8,11 @@ import { isBirthdayToday } from '../lib/birthdayUtils';
 import { useAuthStore } from '../lib/store';
 import { areUsersLive } from '../lib/liveUtils';
 import { useLiveStreams, useNewUsers } from '../hooks/useQueries';
-import { useQueryClient } from '@tanstack/react-query';
 import BanPage from '../components/BanPage';
 import KickPage from '../components/KickPage';
 import EmptyStateLiveNow from '../components/ui/EmptyStateLiveNow';
 import TrollPassBanner from '../components/ui/TrollPassBanner';
 import { StreamSkeleton, UserCardSkeleton } from '../components/ui/Skeleton';
-
-type HomeStream = {
-  id: string;
-  title?: string | null;
-  category?: string | null;
-  current_viewers?: number | null;
-  is_live?: boolean | null;
-  livekit_url?: string | null;
-  start_time?: string | null;
-  broadcaster_id?: string | null;
-  thumbnail_url?: string | null;
-  user_profiles?: {
-    username?: string | null;
-    avatar_url?: string | null;
-    date_of_birth?: string | null;
-  } | null;
-  stream_momentum?: {
-    momentum?: number | null;
-    last_gift_at?: string | null;
-    last_decay_at?: string | null;
-  } | null;
-};
 
 type HomeUser = {
   id: string;
@@ -747,14 +724,27 @@ useEffect(() => {
   useEffect(() => {
     const checkLiveUsers = async () => {
       if (newUsers.length === 0) {
-        setLiveUsers(new Map());
+        // avoid updating state unnecessarily
+        setLiveUsers(prev => {
+          if (prev.size === 0) return prev;
+          return new Map();
+        });
         return;
       }
 
       try {
         const userIds = newUsers.map(user => user.id);
         const liveStatusMap = await areUsersLive(userIds);
-        setLiveUsers(liveStatusMap);
+        // Only update state if the map contents actually changed to avoid render loops
+        setLiveUsers((prev) => {
+          const prevKeys = Array.from(prev.keys());
+          const newKeys = Array.from(liveStatusMap.keys());
+          if (prevKeys.length !== newKeys.length) return liveStatusMap;
+          for (const k of newKeys) {
+            if (prev.get(k) !== liveStatusMap.get(k)) return liveStatusMap;
+          }
+          return prev;
+        });
       } catch (error) {
         console.error('Failed to check live users:', error);
         setLiveUsers(new Map());
@@ -1094,7 +1084,7 @@ useEffect(() => {
             </div>
             <div className="new-trollerz-scroll" style={{ maxHeight: '480px', overflowY: 'auto' }}>
               {loadingUsers ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-5 md:grid-cols-5 lg:grid-cols-5 gap-4">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <UserCardSkeleton key={i} />
                   ))}
@@ -1102,7 +1092,7 @@ useEffect(() => {
               ) : newUsers.length === 0 ? (
                 <div className="col-span-full p-6 text-center text-gray-400">No new users yet</div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-5 md:grid-cols-5 lg:grid-cols-5 gap-4">
                   {newUsers.map((user) => (
                     <NewUserCard
                       key={user.id}

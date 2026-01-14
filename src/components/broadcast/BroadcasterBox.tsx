@@ -20,7 +20,7 @@ export default function BroadcasterBox({ broadcasterName, thumbnail }: Broadcast
         )}
 
         {/* Broadcaster Label */}
-        <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-green-500/50">
+        <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-green-500/50">
           <Radio className="w-4 h-4 text-green-400 animate-pulse" />
           <span className="text-sm font-bold text-white">{broadcasterName}</span>
         </div>

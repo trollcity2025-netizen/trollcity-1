@@ -26,7 +26,7 @@ export default function StreamControls({
 }: StreamControlsProps) {
   return (
     <motion.div
-      className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-xl rounded-full px-6 py-3 border-2 border-purple-500/50 shadow-[0_0_30px_rgba(177,48,255,0.4)] z-30"
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/80 rounded-full px-6 py-3 border-2 border-purple-500/50 shadow-[0_0_30px_rgba(177,48,255,0.4)] z-30"
       initial={{ y: 100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 200, damping: 20 }}

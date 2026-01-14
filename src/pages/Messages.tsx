@@ -8,7 +8,7 @@ import IncomingCallPopup from '../components/IncomingCallPopup'
 import { supabase } from '../lib/supabase'
 
 export default function Messages() {
-  const { profile, user } = useAuthStore()
+  const { user } = useAuthStore()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
@@ -184,35 +184,29 @@ export default function Messages() {
     setShowNewMessageModal(false)
   }
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-[#04000d] flex items-center justify-center">
-        <p className="text-gray-400">Please log in to view messages</p>
-      </div>
-    )
-  }
-
   return (
-    <div className="h-[100dvh] relative flex bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] overflow-hidden">
-      {/* Column 1: Sidebar with Conversations */}
-      <div className={`flex-col border-r border-white/5 bg-[#0b0b12] w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
-        <InboxSidebar
-          activeConversation={activeConversation}
-          onSelectConversation={handleSelectConversation}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onlineUsers={onlineUsers}
-        />
-      </div>
+    <div className="w-full min-h-full bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] flex justify-center items-stretch py-4 md:py-8">
+      <div className="relative flex w-full max-w-6xl bg-[#0b0b12] rounded-3xl border border-white/10 overflow-hidden">
+        {/* Column 1: Sidebar with Conversations */}
+        <div className={`flex-col border-r border-white/5 bg-[#0b0b12] w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
+          <InboxSidebar
+            activeConversation={activeConversation}
+            onSelectConversation={handleSelectConversation}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            onlineUsers={onlineUsers}
+          />
+        </div>
 
-      {/* Column 2: Chat Window */}
-      <div className={`flex-1 flex-col min-w-0 bg-[#0d0d1a] ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
-        <ChatWindow
-          otherUserId={activeConversation}
-          otherUserUsername={otherUserInfo?.username}
-          otherUserAvatar={otherUserInfo?.avatar_url}
-          isOnline={otherUserInfo?.is_online}
-        />
+        {/* Column 2: Chat Window */}
+        <div className={`flex-1 flex-col min-w-0 bg-[#0d0d1a] ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
+          <ChatWindow
+            otherUserId={activeConversation}
+            otherUserUsername={otherUserInfo?.username}
+            otherUserAvatar={otherUserInfo?.avatar_url}
+            isOnline={otherUserInfo?.is_online}
+          />
+        </div>
       </div>
 
       <NewMessageModal
@@ -221,7 +215,6 @@ export default function Messages() {
         onSelectUser={handleNewMessage}
       />
 
-      {/* Incoming Call Popup */}
       {incomingCall && (
         <IncomingCallPopup
           isOpen={!!incomingCall}

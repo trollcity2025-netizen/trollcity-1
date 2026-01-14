@@ -71,8 +71,10 @@ export function CreatorApplication() {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+    const { name, value, type } = target as HTMLInputElement;
+    const checked = (target as HTMLInputElement).checked;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -103,7 +105,7 @@ export function CreatorApplication() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!validateForm()) return;
@@ -189,11 +191,12 @@ export function CreatorApplication() {
               </div>
             )}
             {applicationStatus.status === 'denied' && (
-              <Button 
-                onClick={() => setApplicationStatus(null)}
-                variant="outline"
-                className="border-slate-600 text-slate-300"
-              >
+                <Button
+                  onClick={() => setApplicationStatus(null)}
+                  variant="outline"
+                  className="border-slate-600 text-slate-300"
+                  disabled={false}
+                >
                 Submit New Application
               </Button>
             )}
@@ -202,6 +205,7 @@ export function CreatorApplication() {
                 <Button
                   onClick={() => navigate('/profile')}
                   className="bg-purple-600 hover:bg-purple-700 w-full"
+                  disabled={false}
                 >
                   Go to Creator Dashboard
                 </Button>
@@ -226,10 +230,11 @@ export function CreatorApplication() {
             <p className="text-slate-300 mb-4">
               Your creator application is under review. You'll be notified once it's processed.
             </p>
-            <Button 
+            <Button
               onClick={() => navigate('/creator-application/status')}
               variant="outline"
               className="border-slate-600 text-slate-300"
+              disabled={false}
             >
               View Application Status
             </Button>
@@ -354,12 +359,14 @@ export function CreatorApplication() {
                   variant="outline"
                   onClick={() => navigate('/dashboard')}
                   className="flex-1 border-slate-600 text-slate-300"
+                  disabled={false}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={submitting}
+                  onClick={() => {}}
                   className="flex-1 bg-purple-600 hover:bg-purple-700"
                 >
                   {submitting ? (

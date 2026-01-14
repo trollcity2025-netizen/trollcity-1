@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { MoreVertical, Phone, Video } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../../lib/supabase'
+import { supabase, createConversation, getConversationMessages, markConversationRead } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import ClickableUsername from '../../../components/ClickableUsername'
 import { toast } from 'sonner'
@@ -9,11 +9,10 @@ import MessageInput from './MessageInput'
 
 interface Message {
   id: string
+  conversation_id: string
   sender_id: string
-  receiver_id: string
   content: string
   created_at: string
-  seen: boolean
   read_at?: string | null
   sender_username?: string
   sender_avatar_url?: string | null
@@ -38,56 +37,77 @@ export default function ChatWindow({
   const { profile, user } = useAuthStore()
   const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [oldestLoadedAt, setOldestLoadedAt] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [isAtBottom, setIsAtBottom] = useState(true)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  const loadMessages = useCallback(async () => {
-    if (!otherUserId || !profile?.id) return
+  const ensureConversationId = useCallback(async () => {
+    if (!profile?.id || !otherUserId) return null
+    if (conversationId) return conversationId
 
     try {
-      setLoading(true)
+      const { data: myMemberships, error: myError } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', profile.id)
 
-      const { data: messagesData, error } = await supabase
-        .from('messages')
-        .select('id, sender_id, receiver_id, content, created_at, seen, read_at, message_type')
-        .or(
-          `and(sender_id.eq.${profile.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${profile.id})`
-        )
-        .eq('message_type', 'dm')
-        .order('created_at', { ascending: false })
-        .limit(50)
+      if (myError) {
+        console.error('Error loading conversation memberships:', myError)
+      } else {
+        const conversationIds = (myMemberships || []).map((m: any) => m.conversation_id)
+        if (conversationIds.length > 0) {
+          const { data: otherMemberships, error: otherError } = await supabase
+            .from('conversation_members')
+            .select('conversation_id')
+            .eq('user_id', otherUserId)
+            .in('conversation_id', conversationIds)
 
-      if (error) {
-        console.error('Error loading messages:', error);
-        throw error;
-      }
-
-      // Mark messages as read when ChatWindow opens
-      const unreadIds = messagesData
-        ?.filter(m => m.receiver_id === profile.id && !m.read_at)
-        .map(m => m.id) || []
-
-      if (unreadIds.length > 0) {
-        try {
-          await supabase
-            .from('messages')
-            .update({ read_at: new Date().toISOString(), seen: true })
-            .in('id', unreadIds)
-        } catch (err) {
-          console.warn('Could not update read status:', err)
+          if (otherError) {
+            console.error('Error loading other member conversations:', otherError)
+          } else if (otherMemberships && otherMemberships.length > 0) {
+            const existingId = (otherMemberships[0] as any).conversation_id as string
+            setConversationId(existingId)
+            return existingId
+          }
         }
       }
 
-      // Fetch sender usernames
-      const senderIds = [...new Set(messagesData?.map(m => m.sender_id).filter(Boolean) || [])]
+      const conversation = await createConversation([otherUserId])
+      setConversationId(conversation.id)
+      return conversation.id
+    } catch (error) {
+      console.error('Error ensuring conversation:', error)
+      return null
+    }
+  }, [profile?.id, otherUserId, conversationId])
+
+  useEffect(() => {
+    if (otherUserId && profile?.id) {
+      ensureConversationId()
+    }
+  }, [otherUserId, profile?.id, ensureConversationId])
+
+  const loadMessages = useCallback(async (options?: { background?: boolean }) => {
+    const background = options?.background ?? false
+    if (!conversationId || !profile?.id) return
+
+    try {
+      if (!background) {
+        setLoading(true)
+      }
+
+      const messagesData = await getConversationMessages(conversationId, { limit: 50 })
+
+      const senderIds = [...new Set(messagesData.map((m) => m.sender_id).filter(Boolean))]
       const senderMap: Record<string, { username: string; avatar_url: string | null; rgb_username_expires_at?: string | null }> = {}
 
       if (senderIds.length > 0) {
@@ -105,42 +125,52 @@ export default function ChatWindow({
         })
       }
 
-      const mappedMessagesDesc = messagesData?.map((msg) => ({
-        ...msg,
+      const mappedMessagesDesc = messagesData.map((msg) => ({
+        id: msg.id,
+        conversation_id: msg.conversation_id,
+        sender_id: msg.sender_id,
+        content: msg.body,
+        created_at: msg.created_at,
         sender_username: senderMap[msg.sender_id]?.username || 'Unknown',
         sender_avatar_url: senderMap[msg.sender_id]?.avatar_url || null,
         sender_rgb_expires_at: senderMap[msg.sender_id]?.rgb_username_expires_at
-      })) || []
+      }))
       const mappedMessages = mappedMessagesDesc.reverse()
       setMessages(mappedMessages)
       setOldestLoadedAt(mappedMessages[0]?.created_at || null)
-      setHasMore((messagesData || []).length === 50)
+      setHasMore(messagesData.length === 50)
+
+      try {
+        await markConversationRead(conversationId)
+      } catch (err) {
+        console.warn('Could not mark conversation read:', err)
+      }
+
+      if (!background || isAtBottom) {
+        setTimeout(() => {
+          scrollToBottom()
+        }, 0)
+      }
     } catch (error) {
       console.error('Error loading messages:', error)
     } finally {
-      setLoading(false)
+      if (!background) {
+        setLoading(false)
+      }
     }
-  }, [otherUserId, profile?.id])
+  }, [conversationId, profile?.id, scrollToBottom, isAtBottom])
 
   const loadOlderMessages = useCallback(async () => {
-    if (!otherUserId || !profile?.id || !oldestLoadedAt || loadingMore || !hasMore) return
+    if (!conversationId || !profile?.id || !oldestLoadedAt || loadingMore || !hasMore) return
     setLoadingMore(true)
     const container = messagesContainerRef.current
     const prevScrollHeight = container?.scrollHeight || 0
     const prevScrollTop = container?.scrollTop || 0
     try {
-      const { data: olderData, error } = await supabase
-        .from('messages')
-        .select('id, sender_id, receiver_id, content, created_at, seen, read_at, message_type')
-        .or(
-          `and(sender_id.eq.${profile.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${profile.id})`
-        )
-        .eq('message_type', 'dm')
-        .lt('created_at', oldestLoadedAt)
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      if (error) throw error
+      const olderData = await getConversationMessages(conversationId!, {
+        limit: 50,
+        before: oldestLoadedAt,
+      })
 
       if (!olderData || olderData.length === 0) {
         setHasMore(false)
@@ -164,7 +194,11 @@ export default function ChatWindow({
       }
 
       const mappedOlderDesc = olderData.map((msg) => ({
-        ...msg,
+        id: msg.id,
+        conversation_id: msg.conversation_id,
+        sender_id: msg.sender_id,
+        content: msg.body,
+        created_at: msg.created_at,
         sender_username: senderMap[msg.sender_id]?.username || 'Unknown',
         sender_avatar_url: senderMap[msg.sender_id]?.avatar_url || null,
         sender_rgb_expires_at: senderMap[msg.sender_id]?.rgb_username_expires_at
@@ -185,7 +219,7 @@ export default function ChatWindow({
     } finally {
       setLoadingMore(false)
     }
-  }, [otherUserId, profile?.id, oldestLoadedAt, hasMore, loadingMore])
+  }, [conversationId, profile?.id, oldestLoadedAt, hasMore, loadingMore])
   const handleStartCall = async (callType: 'audio' | 'video') => {
     if (!otherUserId || !user?.id || !profile?.id) {
       toast.error('Unable to start call');
@@ -239,90 +273,170 @@ export default function ChatWindow({
 
   useEffect(() => {
     if (!otherUserId || !profile?.id) {
+      setConversationId(null)
       setMessages([])
+      return
+    }
+
+    let cancelled = false
+
+    const init = async () => {
+      const id = await ensureConversationId()
+      if (!cancelled && id) {
+        setConversationId(id)
+      }
+    }
+
+    init()
+
+    return () => {
+      cancelled = true
+    }
+  }, [otherUserId, profile?.id, ensureConversationId])
+
+  useEffect(() => {
+    if (!conversationId || !profile?.id) {
       return
     }
 
     loadMessages()
 
-    // Real-time subscription for new messages - use broadcast for instant updates
-    const channelName = `messages:${profile.id}:${otherUserId}`;
+    const channelName = `conversation:${conversationId}`
     const channel = supabase.channel(channelName, {
       config: {
         broadcast: { self: true },
-        presence: { key: profile.id }
-      }
+        presence: { key: profile.id },
+      },
     })
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: 'INSERT',
           schema: 'public',
-          table: 'messages',
-          filter: `message_type=eq.dm`
+          table: 'conversation_messages',
+          filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
-          const updatedMsg = payload.new as any;
-          // Update read status if this message was marked as read
-          if (
-            (updatedMsg.sender_id === otherUserId && updatedMsg.receiver_id === profile.id) ||
-            (updatedMsg.sender_id === profile.id && updatedMsg.receiver_id === otherUserId)
-          ) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m))
-            )
+        async (payload) => {
+          const newMsgRaw = payload.new as any
+          const senderId = newMsgRaw.sender_id as string
+
+          let senderProfile:
+            | {
+                username: string
+                avatar_url: string | null
+                rgb_username_expires_at?: string | null
+              }
+            | null = null
+
+          try {
+            const { data } = await supabase
+              .from('user_profiles')
+              .select('id,username,avatar_url,rgb_username_expires_at')
+              .eq('id', senderId)
+              .single()
+            if (data) {
+              senderProfile = {
+                username: data.username,
+                avatar_url: data.avatar_url,
+                rgb_username_expires_at: (data as any).rgb_username_expires_at,
+              }
+            }
+          } catch (err) {
+            console.warn('Could not load sender profile for new message:', err)
+          }
+
+          const newMsg: Message = {
+            id: newMsgRaw.id,
+            conversation_id: newMsgRaw.conversation_id,
+            sender_id: newMsgRaw.sender_id,
+            content: newMsgRaw.body,
+            created_at: newMsgRaw.created_at,
+            read_at: undefined,
+            sender_username: senderProfile?.username || 'Unknown',
+            sender_avatar_url: senderProfile?.avatar_url || null,
+            sender_rgb_expires_at: senderProfile?.rgb_username_expires_at,
+          }
+
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) {
+              return prev
+            }
+            return [...prev, newMsg]
+          })
+
+          const container = messagesContainerRef.current
+          const nearBottom = container
+            ? container.scrollHeight - (container.scrollTop + container.clientHeight) < 150
+            : true
+
+          if (nearBottom) {
+            setTimeout(() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+            }, 100)
           }
         }
       )
       .on('broadcast', { event: 'new_message' }, (payload) => {
-        console.log('📨 New message received via broadcast:', payload.payload);
-        const newMsg = payload.payload as any;
-        // Only add if it's a new message in this conversation
-        if (
-          (newMsg.sender_id === otherUserId && newMsg.receiver_id === profile.id) ||
-          (newMsg.sender_id === profile.id && newMsg.receiver_id === otherUserId)
-        ) {
-          setMessages((prev) => {
-            // Avoid duplicates
-            if (prev.some((m) => m.id === newMsg.id)) {
-              return prev
-            }
-            console.log('✅ Adding broadcast message to UI:', newMsg.id);
-            return [...prev, newMsg as Message]
-          })
-          
-          // Scroll to bottom
+        const newMsg = payload.payload as any
+        if (newMsg.conversation_id !== conversationId) {
+          return
+        }
+
+        const mapped: Message = {
+          id: newMsg.id,
+          conversation_id: newMsg.conversation_id,
+          sender_id: newMsg.sender_id,
+          content: newMsg.body,
+          created_at: newMsg.created_at,
+          read_at: newMsg.read_at,
+          sender_username: newMsg.sender_username,
+          sender_avatar_url: newMsg.sender_avatar_url,
+          sender_rgb_expires_at: newMsg.sender_rgb_expires_at,
+        }
+
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === mapped.id)) {
+            return prev
+          }
+          return [...prev, mapped]
+        })
+
+        const container = messagesContainerRef.current
+        const nearBottom = container
+          ? container.scrollHeight - (container.scrollTop + container.clientHeight) < 150
+          : true
+
+        if (nearBottom) {
           setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+          }, 100)
         }
       })
       .subscribe((status) => {
-        console.log(`📡 Messages channel status: ${status}`);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to messages channel');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Channel subscription error - will retry');
-          // Retry subscription after a delay
+        console.log(`📡 Conversation channel status: ${status}`)
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setTimeout(() => {
-            channel.subscribe();
-          }, 2000);
-        } else if (status === 'TIMED_OUT') {
-          console.warn('⏱️ Channel subscription timed out - retrying');
-          setTimeout(() => {
-            channel.subscribe();
-          }, 2000);
+            channel.subscribe()
+          }, 2000)
         }
       })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [otherUserId, profile?.id, loadMessages])
+  }, [conversationId, profile?.id, loadMessages])
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
+    if (!conversationId || !profile?.id) return
+
+    const interval = setInterval(() => {
+      loadMessages({ background: true })
+    }, 2000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [conversationId, profile?.id, loadMessages])
 
   const handleMessageSent = () => {
     // Message added via broadcast, no need to reload
@@ -407,6 +521,8 @@ export default function ChatWindow({
         ref={messagesContainerRef}
         onScroll={(e) => {
           const el = e.currentTarget
+          const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight)
+          setIsAtBottom(distanceFromBottom < 150)
           if (el.scrollTop < 80 && hasMore && !loadingMore) {
             loadOlderMessages()
           }
@@ -457,7 +573,9 @@ export default function ChatWindow({
                     <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                   </div>
                   <p className={`text-[10px] text-[#74f7ff] mt-1 px-2 ${isOwn ? 'text-right' : 'text-left'}`}>
-                    {formatTime(msg.created_at)}
+                    {isOwn
+                      ? `${formatTime(msg.created_at)} · ${msg.read_at ? 'Seen' : 'Delivered'}`
+                      : formatTime(msg.created_at)}
                   </p>
                 </div>
               </div>
@@ -466,7 +584,7 @@ export default function ChatWindow({
         )}
         <div ref={messagesEndRef} />
       </div>
-      <MessageInput otherUserId={otherUserId} onMessageSent={handleMessageSent} />
+      <MessageInput otherUserId={otherUserId} conversationId={conversationId} onMessageSent={handleMessageSent} />
     </div>
   )
 }

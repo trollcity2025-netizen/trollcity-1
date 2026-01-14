@@ -142,34 +142,73 @@ export default function SendGiftModal({
     }
   }, [defaultTargetId, participants, streamerId])
 
-  // Fetch gift items from database (holiday + regular)
+  // Fetch gift items from database (holiday + regular) and merge with hardcoded defaults
   useEffect(() => {
     if (!isOpen) return
 
     const fetchGiftItems = async () => {
       setLoadingGifts(true)
       try {
-        // Fetch gifts matching active holiday theme OR regular gifts (holiday_theme IS NULL)
         const query = supabase
           .from('gift_items')
           .select('*')
           .order('value', { ascending: true })
 
+        let data: any[] | null = null
         if (activeHoliday) {
-          // Show holiday gifts + regular gifts
-          const { data, error } = await query.or(`holiday_theme.eq.${activeHoliday.name},holiday_theme.is.null`)
-          if (error) throw error
-          setGiftItems(data || [])
+          const res = await query.or(`holiday_theme.eq.${activeHoliday.name},holiday_theme.is.null`)
+          if (res.error) throw res.error
+          data = res.data
         } else {
-          // Show only regular gifts
-          const { data, error } = await query.is('holiday_theme', null)
-          if (error) throw error
-          setGiftItems(data || [])
+          const res = await query.is('holiday_theme', null)
+          if (res.error) throw res.error
+          data = res.data
         }
+
+        const dbPayload = (data || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          icon: item.icon || '',
+          value: item.value,
+          category: item.category || 'Common',
+          holiday_theme: item.holiday_theme || null,
+          description: item.description || undefined,
+          animation_type: item.animation_type || undefined,
+        }))
+
+        // Build defaults map from hardcoded GIFT_ITEMS
+        const defaultMap: Record<string, any> = {}
+        for (const g of GIFT_ITEMS) {
+          defaultMap[g.id] = {
+            id: g.id,
+            name: g.name,
+            icon: (g as any).icon || '',
+            value: (g as any).coinCost || (g as any).value || 0,
+            category: g.category || 'Common',
+            holiday_theme: null,
+          }
+        }
+
+        // Merge: start with defaults, then override/add DB items
+        const mergedMap: Record<string, any> = { ...defaultMap }
+        for (const d of dbPayload) mergedMap[d.id] = d
+
+        const merged = Object.values(mergedMap).sort((a: any, b: any) => (a.value || 0) - (b.value || 0))
+
+        console.debug('SendGiftModal: merged gifts count', merged.length)
+        setGiftItems(merged)
       } catch (err) {
         console.error('Error fetching gift items:', err)
-        // Fallback to hardcoded gifts if database fails
-        setGiftItems([])
+        // Fallback to hardcoded gifts
+        const fallback = GIFT_ITEMS.map((g) => ({
+          id: g.id,
+          name: g.name,
+          icon: (g as any).icon || '',
+          value: (g as any).coinCost || (g as any).value || 0,
+          category: g.category || 'Common',
+          holiday_theme: null,
+        }))
+        setGiftItems(fallback)
       } finally {
         setLoadingGifts(false)
       }

@@ -33,11 +33,7 @@ export function AssignRecruitPanel() {
   const [assigning, setAssigning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
       
@@ -59,7 +55,14 @@ export function AssignRecruitPanel() {
         .eq('empire_partner_request', true);
 
       if (partnersError) throw partnersError;
-      setPartners((partnersData as EmpirePartner[]) || []);
+      const partnerRows = (partnersData || []) as any[];
+      const mappedPartners: EmpirePartner[] = partnerRows.map((row) => ({
+        user_id: row.user_id,
+        empire_partner_request: row.empire_partner_request,
+        status: row.status,
+        profiles: Array.isArray(row.profiles) ? row.profiles[0] : row.profiles,
+      }));
+      setPartners(mappedPartners);
 
       // Load available recruits (users with approved TrollTract but not assigned to a partner)
       const { data: recruitsData, error: recruitsError } = await supabase
@@ -83,7 +86,11 @@ export function AssignRecruitPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleAssignRecruit = async () => {
     if (!selectedPartner || !selectedRecruit) {

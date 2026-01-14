@@ -25,7 +25,12 @@ export default function EmptyStateLiveNow() {
 
         <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
           <Link to="/following">
-            <Button variant="outline" className="rounded-full px-6 py-2 border-troll-neon-blue/30 text-troll-neon-blue hover:bg-troll-neon-blue/10 hover:text-white hover:border-troll-neon-blue/60 font-bold transition-all duration-300 flex items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={false}
+              onClick={() => {}}
+              className="rounded-full px-6 py-2 border-troll-neon-blue/30 text-troll-neon-blue hover:bg-troll-neon-blue/10 hover:text-white hover:border-troll-neon-blue/60 font-bold transition-all duration-300 flex items-center gap-2"
+            >
               <Compass className="w-4 h-4" />
               Explore Creators
             </Button>

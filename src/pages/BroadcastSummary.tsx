@@ -4,13 +4,39 @@ import { Gift, Heart, Users, AlertCircle, TrendingUp, Download } from "lucide-re
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
 
+interface StreamSummaryState {
+  title: string;
+  category: string;
+  duration: number;
+  totalGifts: number;
+  totalCoins: number;
+  viewerCount: number;
+  newFollowers: string[];
+  reports: string[];
+  violations: number;
+  level: number;
+  recording_url?: string | null;
+  peakViewers?: number | null;
+}
+
+interface StreamRowUpdate {
+  title?: string | null;
+  category?: string | null;
+  total_gifts_coins?: number | null;
+  current_viewers?: number | null;
+  peak_viewers?: number | null;
+  recording_url?: string | null;
+}
+
 
 export default function BroadcastSummary() {
   const navigate = useNavigate();
   const location = useLocation();
   const { streamId } = useParams();
   const [loading, setLoading] = useState(false);
-  const [streamData, setStreamData] = useState<any>(location.state || null);
+  const [streamData, setStreamData] = useState<StreamSummaryState | null>(
+    (location.state as StreamSummaryState | null) || null
+  );
   const [coinRate, setCoinRate] = useState({
     usdPerCoin: 0.00449,
     coinsPerDollar: 222,
@@ -124,7 +150,7 @@ export default function BroadcastSummary() {
           filter: `id=eq.${streamId}`,
         },
         (payload) => {
-          const updated = payload.new;
+          const updated = payload.new as StreamRowUpdate;
           if (!updated) return;
           setStreamData((prev) => {
             if (!prev) return prev;
@@ -157,7 +183,7 @@ export default function BroadcastSummary() {
 
   const [downloadLoading, setDownloadLoading] = useState(false);
 
-  const data = streamData || {
+  const data: StreamSummaryState = streamData || {
     title: "My Stream",
     category: "Just Chatting",
     duration: 3600,
@@ -168,6 +194,7 @@ export default function BroadcastSummary() {
     reports: ["Toxicity"],
     violations: 0,
     level: 5,
+    recording_url: null,
   };
 
   const coinsPerDollar = coinRate.coinsPerDollar || 100;

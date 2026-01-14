@@ -285,7 +285,7 @@ const Header = () => {
         </Link>
         
         <div className="hidden md:block">
-          <ProfileDropdown onLogout={handleLogout} />
+          <ProfileDropdown />
         </div>
 
         <Link

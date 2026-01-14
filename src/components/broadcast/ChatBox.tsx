@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Send, Coins, Shield } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { toast } from "sonner";
@@ -311,7 +311,15 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
       <h3 className="text-sm font-bold mb-3">LIVE CHAT</h3>
 
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-2 mb-3 min-h-0 pr-2">
-        {messages.map((msg) => {
+        {/** Render messages deduplicated by `id` to avoid duplicate React keys */}
+        {useMemo(() => {
+          const map = new Map<string, Message>();
+          for (const m of messages) {
+            if (!m || !m.id) continue;
+            if (!map.has(m.id)) map.set(m.id, m);
+          }
+          return Array.from(map.values());
+        }, [messages]).map((msg) => {
           // Handle entrance messages
           if (msg.message_type === 'entrance') {
             let content;

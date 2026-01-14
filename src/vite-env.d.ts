@@ -10,11 +10,15 @@ interface ImportMetaEnv {
     readonly VITE_SUPABASE_URL: string
     readonly VITE_SUPABASE_ANON_KEY: string
     readonly VITE_LIVEKIT_URL: string
+    readonly VITE_LIVEKIT_CLOUD_URL?: string
     readonly VITE_LIVEKIT_API_KEY: string
     readonly VITE_LIVEKIT_API_SECRET: string
     readonly VITE_LIVEKIT_TOKEN_URL: string
     readonly VITE_EDGE_FUNCTIONS_URL: string
     readonly VITE_SUPABASE_FUNCTIONS_URL: string
+    readonly VITE_APP_VERSION?: string
+    readonly VITE_PUBLIC_APP_VERSION?: string
+    readonly VITE_VAPID_PUBLIC_KEY?: string
     // Add more env variables as needed
 }
 

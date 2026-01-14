@@ -14,9 +14,9 @@ export default function EntranceEffect({ username, role, profile }: EntranceEffe
   const [isVisible, setIsVisible] = useState(true);
 
   const roleConfig = ROLE_BASED_ENTRANCE_EFFECTS[role];
-  const fallbackEmoji = roleConfig?.emoji || "dY`<";
-  const fallbackLabel = roleConfig?.label || "Viewer";
-  const fallbackColor = roleConfig?.color || "#22c55e";
+  const fallbackEmoji = (roleConfig as any)?.emoji || "dY`<";
+  const fallbackLabel = (roleConfig as any)?.label || "Viewer";
+  const fallbackColor = (roleConfig as any)?.color || "#22c55e";
 
   const hasRgb = useMemo(() => {
     return Boolean(

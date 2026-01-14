@@ -504,7 +504,7 @@ export default function WatchPage() {
     };
 
     void sendEntrance();
-  }, [streamId, user?.id, isConnected, profile?.username, profile?.role, profile?.is_ghost_mode]);
+  }, [streamId, user?.id, isConnected, profile?.username, profile?.role, profile?.is_ghost_mode, user?.email]);
 
   const handleGiftFromProfile = useCallback((profile: any) => {
       setGiftRecipient(profile);

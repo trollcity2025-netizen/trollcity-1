@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Gift, Users, Crown } from "lucide-react";
-import { supabase } from "../../lib/supabase";
 import { getGiftEmoji } from "../../lib/giftIcons";
 import { useAuthStore } from "../../lib/store";
 
@@ -16,59 +15,16 @@ export type RecipientMode = "all" | "broadcaster";
 
 interface GiftBoxProps {
   onSendGift?: (gift: GiftItem, recipientMode: RecipientMode) => void;
+  gifts: GiftItem[];
+  loading?: boolean;
+  loadError?: string | null;
 }
 
-const DEFAULT_GIFTS: GiftItem[] = [
-  { id: "troll_clap", name: "Troll Clap", icon: "👏", value: 5, category: "Basic" },
-  { id: "glow_heart", name: "Glow Heart", icon: "💗", value: 10, category: "Basic" },
-  { id: "laughing_mask", name: "Laughing Mask", icon: "😹", value: 30, category: "Basic" },
-  { id: "troll_mic_drop", name: "Troll Mic Drop", icon: "🎤", value: 100, category: "Rare" },
-  { id: "troll_confetti", name: "Troll Confetti", icon: "🎉", value: 850, category: "Rare" },
-  { id: "crown_blast", name: "Crown Blast", icon: "👑", value: 1200, category: "Epic" },
-  { id: "diamond_storm", name: "Diamond Storm", icon: "💎", value: 7000, category: "Epic" },
-  { id: "the_big_crown", name: "The Big Crown", icon: "🌟", value: 15000, category: "Legendary" },
-];
-
-export default function GiftBox({ onSendGift }: GiftBoxProps) {
-  const [gifts, setGifts] = useState<GiftItem[]>(DEFAULT_GIFTS);
+export default function GiftBox({ onSendGift, gifts, loading, loadError }: GiftBoxProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [recipientMode, setRecipientMode] = useState<RecipientMode>("broadcaster");
   const { profile } = useAuthStore();
   const balance = profile?.troll_coins ?? 0;
-
-  useEffect(() => {
-    let active = true;
-    const fetchGifts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("gift_items")
-          .select("id,name,icon,value,category")
-          .order("value", { ascending: true });
-
-        if (error) throw error;
-        if (!active) return;
-
-        const payload = (data || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          icon: item.icon,
-          value: item.value,
-          category: item.category || "Common",
-        }));
-
-        if (payload.length > 0) {
-          setGifts(payload);
-        }
-      } catch (err) {
-        console.error("Error fetching gifts:", err);
-      }
-    };
-
-    fetchGifts();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const handleGiftClick = (gift: GiftItem) => {
     onSendGift?.(gift, recipientMode);
@@ -94,6 +50,12 @@ export default function GiftBox({ onSendGift }: GiftBoxProps) {
           {isExpanded ? "Hide" : "Show"}
         </button>
       </div>
+
+      {loadError && (
+        <div className="text-[10px] text-red-400 mb-2">
+          {loadError}
+        </div>
+      )}
 
       <div className="flex gap-2 mb-3 text-xs font-semibold">
         <button
@@ -121,21 +83,33 @@ export default function GiftBox({ onSendGift }: GiftBoxProps) {
       </div>
 
       {isExpanded && (
-        <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
-          {gifts.map((gift) => (
-            <button
-              key={gift.id}
-              onClick={() => handleGiftClick(gift)}
-              className="flex flex-col items-center gap-1 p-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 hover:border-white/20 transition-colors"
-            >
-          <span className="text-2xl">{getGiftEmoji(gift.icon, gift.name)}</span>
-              <span className="text-[10px] text-white/70 text-center break-words">
-                {gift.name}
-              </span>
-              <span className="text-xs font-bold text-yellow-400">{gift.value} coins</span>
-            </button>
-          ))}
-        </div>
+        <>
+          {loading && gifts.length === 0 ? (
+            <div className="text-[10px] text-white/60">
+              Loading Quick Gifts...
+            </div>
+          ) : gifts.length === 0 ? (
+            <div className="text-[10px] text-white/60">
+              No Quick Gifts available.
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
+              {gifts.map((gift) => (
+                <button
+                  key={gift.id}
+                  onClick={() => handleGiftClick(gift)}
+                  className="flex flex-col items-center gap-1 p-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 hover:border-white/20 transition-colors"
+                >
+                  <span className="text-2xl">{getGiftEmoji(gift.icon, gift.name)}</span>
+                  <span className="text-[10px] text-white/70 text-center break-words">
+                    {gift.name}
+                  </span>
+                  <span className="text-xs font-bold text-yellow-400">{gift.value} coins</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

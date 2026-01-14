@@ -139,7 +139,7 @@ export default function OfficerShiftsPanel() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [filter, loadShifts])
+  }, [filter, loadShifts, loadSlots])
 
   useEffect(() => {
     const channel = supabase

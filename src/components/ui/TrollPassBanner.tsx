@@ -58,7 +58,9 @@ export default function TrollPassBanner() {
         </div>
 
         <Link to="/store">
-          <Button 
+          <Button
+            disabled={false}
+            onClick={() => {}}
             className="rounded-full px-6 py-2 bg-gradient-to-r from-cyan-500 to-pink-500 hover:from-cyan-400 hover:to-pink-400 text-white font-bold border-none shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(236,72,153,0.6)] hover:scale-105 transition-all duration-300 flex items-center gap-2"
           >
             <Sparkles className="w-4 h-4 fill-white" />

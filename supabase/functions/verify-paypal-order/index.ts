@@ -159,10 +159,10 @@ serve(async (req: Request) => {
 
     let customData;
     try {
-        customData = JSON.parse(customIdRaw);
-    } catch (e) {
-        console.error("Failed to parse custom_id:", customIdRaw);
-        throw new Error("Invalid custom_id format");
+      customData = JSON.parse(customIdRaw);
+    } catch {
+      console.error("Failed to parse custom_id:", customIdRaw);
+      throw new Error("Invalid custom_id format");
     }
 
     if (customData.userId !== user_id) {

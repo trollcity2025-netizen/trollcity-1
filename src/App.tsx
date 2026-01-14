@@ -98,6 +98,7 @@ const LazyLivePage = lazy(() => Promise.resolve({ default: LivePage }));
 const BroadcastSummary = lazy(() => import("./pages/BroadcastSummary"));
 const KickFee = lazy(() => import("./pages/KickFee"));
 const BanFee = lazy(() => import("./pages/BanFee"));
+const MobileShell = lazy(() => import("./pages/MobileShell"));
 const TrollCourtSession = lazy(() => import("./pages/TrollCourtSession"));
 const TromodyShow = lazy(() => import("./pages/TromodyShow"));
 const TromodyShowBroadcast = lazy(() => import("./pages/TromodyShowBroadcast"));
@@ -198,6 +199,7 @@ const ResetMaintenance = lazy(() => import("./pages/admin/ResetMaintenance"));
 const AdminHR = lazy(() => import("./pages/admin/AdminHR"));
 const UserFormsTab = lazy(() => import("./pages/admin/components/UserFormsTab"));
 const BucketsDashboard = lazy(() => import("./pages/admin/BucketsDashboard"));
+const GrantCoins = lazy(() => import("./pages/admin/GrantCoins"));
 
 const LoadingScreen = () => (
     <div className="min-h-screen flex items-center justify-center bg-[#0A0814] text-white">
@@ -235,17 +237,30 @@ const LoadingScreen = () => (
   };
 
 function AppContent() {
-  console.log('🚀 App component rendering...');
+  // Lightweight render counter (dev only)
+  if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    const w = window as any;
+    w.__tc_app_renders = (w.__tc_app_renders || 0) + 1;
+    if (w.__tc_app_renders % 50 === 0) {
+      console.debug('[App] render count', w.__tc_app_renders);
+    }
+  }
+
+  // Narrow selectors to avoid returning a fresh object from the selector
   const user = useAuthStore((s) => s.user);
+
+  // Some legacy logic needs the full profile object in several effects
   const profile = useAuthStore((s) => s.profile);
-  const isLoading = useAuthStore((s) => s.isLoading);
-  console.log('📊 App state:', { hasUser: !!user, hasProfile: !!profile, isLoading });
 
   const location = useLocation();
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalLoading] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [waitingServiceWorker, setWaitingServiceWorker] = useState<ServiceWorker | null>(null);
+  const hasSwReloadedRef = useRef(false);
 
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const eligibilityRefresh = useEligibilityStore((s) => s.refresh);
@@ -259,6 +274,51 @@ function AppContent() {
     isReconnecting,
     reconnectMessage,
   } = useGlobalApp();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const standalone =
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      ((window.navigator as any).standalone === true);
+    setIsStandalone(standalone);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator)) return;
+
+    const handleUpdateAvailable = async () => {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const waiting = registration?.waiting;
+        if (waiting) {
+          setWaitingServiceWorker(waiting);
+          setUpdateAvailable(true);
+        }
+      } catch {}
+    };
+
+    const handleControllerChange = () => {
+      if (hasSwReloadedRef.current) return;
+      hasSwReloadedRef.current = true;
+      window.location.reload();
+    };
+
+    window.addEventListener('pwa-update-available', handleUpdateAvailable);
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
+    return () => {
+      window.removeEventListener('pwa-update-available', handleUpdateAvailable);
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user || !isStandalone) return;
+    if (location.pathname === '/' || location.pathname === '/auth') {
+      navigate('/mobile', { replace: true });
+    }
+  }, [user, isStandalone, location.pathname, navigate]);
 
   // Track route changes for session persistence
   useEffect(() => {
@@ -472,9 +532,26 @@ function AppContent() {
     })
   }, [location.pathname])
 
-  console.log('🎨 App returning JSX...');
+  const handleUpdateClick = () => {
+    if (!waitingServiceWorker) return;
+    waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+    setUpdateAvailable(false);
+  };
+
   return (
     <>
+      {updateAvailable && (
+        <div className="fixed bottom-0 inset-x-0 z-[60] flex items-center justify-between bg-purple-900 text-white px-4 py-3">
+          <span className="text-sm">A new version of Troll City is available.</span>
+          <button
+            type="button"
+            onClick={handleUpdateClick}
+            className="ml-4 rounded bg-white text-black text-sm font-semibold px-3 py-1"
+          >
+            Update now
+          </button>
+        </div>
+      )}
       {/* Global Error Banner */}
               <GlobalErrorBanner />
               
@@ -553,6 +630,7 @@ function AppContent() {
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
+                  <Route path="/mobile" element={<MobileShell />} />
                   <Route path="/live" element={<Home />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/call/:roomId/:type/:userId" element={<Call />} />
@@ -1116,6 +1194,14 @@ function AppContent() {
                       element={
                         <RequireRole roles={[UserRole.ADMIN]}>
                           <BucketsDashboard />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/grant-coins"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <GrantCoins />
                         </RequireRole>
                       }
                     />

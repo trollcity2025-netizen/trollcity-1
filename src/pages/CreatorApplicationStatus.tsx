@@ -72,6 +72,7 @@ export function CreatorApplicationStatus() {
             </p>
             <Button 
               onClick={() => navigate('/creator-application')}
+              disabled={false}
               className="bg-purple-600 hover:bg-purple-700"
             >
               Submit Application
@@ -134,6 +135,7 @@ export function CreatorApplicationStatus() {
               variant="outline"
               size="sm"
               onClick={() => navigate('/dashboard')}
+              disabled={false}
               className="border-slate-600 text-slate-300"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -180,6 +182,7 @@ export function CreatorApplicationStatus() {
                 <div className="mt-6">
                   <Button
                     onClick={config.action.onClick}
+                    disabled={false}
                     className={
                       config.action.variant === 'default' 
                         ? 'bg-purple-600 hover:bg-purple-700' 
@@ -303,11 +306,12 @@ export function CreatorApplicationStatus() {
               <p className="text-slate-300 mb-4">
                 If you have questions about your application, please contact our support team.
               </p>
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/support')}
-                className="border-slate-600 text-slate-300"
-              >
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/support')}
+              disabled={false}
+              className="border-slate-600 text-slate-300"
+            >
                 Contact Support
               </Button>
             </div>

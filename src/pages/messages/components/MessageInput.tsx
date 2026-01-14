@@ -1,16 +1,17 @@
 import { useState, KeyboardEvent, useRef } from 'react'
 import { Send, Smile } from 'lucide-react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, sendConversationMessage } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { canMessageAdmin } from '../../../lib/perkEffects'
 import { toast } from 'sonner'
 
 interface MessageInputProps {
   otherUserId: string | null
+  conversationId: string | null
   onMessageSent: () => void
 }
 
-export default function MessageInput({ otherUserId, onMessageSent }: MessageInputProps) {
+export default function MessageInput({ otherUserId, conversationId, onMessageSent }: MessageInputProps) {
   const { profile } = useAuthStore()
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -18,6 +19,10 @@ export default function MessageInput({ otherUserId, onMessageSent }: MessageInpu
 
   const sendMessage = async () => {
     if (!message.trim() || !otherUserId || !profile?.id || sending) return
+    if (!conversationId) {
+      toast.error('Conversation not ready')
+      return
+    }
 
     setSending(true)
 
@@ -56,44 +61,25 @@ export default function MessageInput({ otherUserId, onMessageSent }: MessageInpu
 
       // Send message
       const messageContent = message.trim();
-      const { data: insertedMessage, error } = await supabase
-        .from('messages')
-        .insert({
-          sender_id: profile.id,
-          receiver_id: otherUserId,
-          content: messageContent,
-          message_type: 'dm',
-          seen: false,
-          read_at: null
-        })
-        .select()
-        .single()
+      const sentMessage = await sendConversationMessage(conversationId, messageContent)
 
-      if (error) {
-        console.error('Message insert error:', error);
-        toast.error('Failed to send message: ' + error.message);
-        throw error;
-      }
+      console.log('✅ Message sent successfully:', sentMessage.id);
 
-      // Verify message was inserted
-      if (!insertedMessage) {
-        console.error('Message insert returned no data');
-        toast.error('Message was not sent');
-        throw new Error('Message was not inserted');
-      }
-
-      console.log('✅ Message sent successfully:', insertedMessage.id);
-
-      // Send notification
       try {
-        await supabase.from('notifications').insert([{
-          user_id: otherUserId,
-          type: 'message',
-          content: `New message from ${profile.username}`,
-          created_at: new Date().toISOString()
-        }])
+        await supabase.from('notifications').insert([
+          {
+            user_id: otherUserId,
+            type: 'message',
+            title: 'New message',
+            message: `New message from ${profile.username}`,
+            metadata: {
+              sender_id: profile.id
+            },
+            read: false
+          }
+        ])
       } catch (notifErr) {
-        console.warn('Notification error (non-critical):', notifErr);
+        console.warn('Notification error (non-critical):', notifErr)
       }
 
       // Clear input immediately
@@ -102,18 +88,25 @@ export default function MessageInput({ otherUserId, onMessageSent }: MessageInpu
       // Trigger callback - parent component can handle refresh if needed
       onMessageSent()
       
-      // Broadcast message via channel for instant delivery (fallback if postgres_changes is slow)
+      // Broadcast message via Realtime channel for instant delivery (fallback if postgres_changes is slow)
+      // Note: We're broadcasting the new conversation message structure
       try {
-        const channel = supabase.channel(`messages:${profile.id}:${otherUserId}`);
+        const channel = supabase.channel(`conversation:${conversationId}`, {
+          config: {
+            broadcast: { self: true }
+          }
+        })
+        channel.subscribe()
         await channel.send({
           type: 'broadcast',
           event: 'new_message',
           payload: {
-            ...insertedMessage,
+            ...sentMessage,
             sender_username: profile.username,
             sender_avatar_url: profile.avatar_url
           }
-        });
+        })
+        supabase.removeChannel(channel)
       } catch (broadcastErr) {
         console.warn('Broadcast error (non-critical):', broadcastErr);
       }
@@ -134,10 +127,18 @@ export default function MessageInput({ otherUserId, onMessageSent }: MessageInpu
     }
 
     // Send typing indicator
-    supabase.channel(`typing:${profile.id}:${otherUserId}`).send({
+    const channel = supabase.channel(`typing:${profile.id}:${otherUserId}`, {
+      config: {
+        broadcast: { self: true }
+      }
+    })
+    channel.subscribe()
+    channel.send({
       type: 'broadcast',
       event: 'typing',
       payload: { sender: profile.id }
+    }).finally(() => {
+      supabase.removeChannel(channel)
     })
 
     // Clear typing after 2 seconds of inactivity

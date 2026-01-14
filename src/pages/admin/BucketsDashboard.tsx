@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   RefreshCw,
   ArrowUpRight,
-  ArrowDownRight,
   FileText,
   Clock
 } from 'lucide-react';
@@ -50,7 +49,7 @@ interface PayoutSummary {
 }
 
 export default function BucketsDashboard() {
-  const { profile, user } = useAuthStore();
+  const { user } = useAuthStore();
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSecretary, setIsSecretary] = useState(false);

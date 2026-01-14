@@ -4,13 +4,18 @@ import { supabase } from "../../lib/supabase";
 import { getGiftEmoji } from "../../lib/giftIcons";
 
 const fallbackGifts = [
-  { id: 0, name: "Troll", emoji: "🧟", coins: 1, rarity: 'troll', color: 'from-green-500 to-emerald-700' },
-  { id: 1, name: "Rose", emoji: "🌹", coins: 10, rarity: 'common', color: 'from-red-500 to-rose-700' },
-  { id: 2, name: "Heart", emoji: "💗", coins: 50, rarity: 'common', color: 'from-pink-500 to-fuchsia-700' },
-  { id: 3, name: "Diamond", emoji: "💎", coins: 100, rarity: 'rare', color: 'from-blue-400 to-cyan-600' },
-  { id: 4, name: "Crown", emoji: "👑", coins: 500, rarity: 'legendary', color: 'from-yellow-400 to-amber-600' },
-  { id: 5, name: "Fireworks", emoji: "🎆", coins: 1000, rarity: 'legendary', color: 'from-purple-500 to-violet-700' },
-  { id: 6, name: "Rocket", emoji: "🚀", coins: 5000, rarity: 'legendary', color: 'from-orange-500 to-red-600' },
+  { id: 0, name: "Troll Clap", emoji: "👏", coins: 5, rarity: 'common', color: 'from-green-500 to-emerald-700' },
+  { id: 1, name: "Glow Heart", emoji: "💖", coins: 10, rarity: 'common', color: 'from-pink-500 to-fuchsia-700' },
+  { id: 2, name: "Laughing Mask", emoji: "😹", coins: 30, rarity: 'common', color: 'from-amber-400 to-yellow-600' },
+  { id: 3, name: "Troll Mic Drop", emoji: "🎤", coins: 100, rarity: 'uncommon', color: 'from-slate-500 to-gray-700' },
+  { id: 4, name: "Troll Confetti", emoji: "🎉", coins: 850, rarity: 'rare', color: 'from-indigo-500 to-violet-700' },
+  { id: 5, name: "Crown Blast", emoji: "👑", coins: 1200, rarity: 'epic', color: 'from-yellow-400 to-amber-600' },
+  { id: 6, name: "Diamond Storm", emoji: "💎", coins: 7000, rarity: 'legendary', color: 'from-blue-400 to-cyan-600' },
+  { id: 7, name: "The Big Crown", emoji: "👑✨", coins: 15000, rarity: 'mythic', color: 'from-yellow-300 to-amber-500' },
+  { id: 8, name: "Troll", emoji: "🧟", coins: 1, rarity: 'troll', color: 'from-green-600 to-emerald-800' },
+  { id: 9, name: "Rose", emoji: "🌹", coins: 20, rarity: 'common', color: 'from-red-500 to-rose-700' },
+  { id: 10, name: "Sparkles", emoji: "✨", coins: 75, rarity: 'uncommon', color: 'from-pink-400 to-yellow-400' },
+  { id: 11, name: "Fireworks", emoji: "🎆", coins: 2000, rarity: 'legendary', color: 'from-purple-500 to-violet-700' },
 ];
 
 export default function GiftModal({ onClose, onSendGift, recipientName, profile }) {

@@ -176,22 +176,11 @@ export default function Trollifications() {
       markAsRead(notif.id)
     }
 
-    // Navigate based on notification type
     if (notif.metadata) {
       if (notif.metadata.stream_id) {
         navigate(`/stream/${notif.metadata.stream_id}`)
       } else if (notif.metadata.sender_id) {
-        // Get sender username
-        supabase
-          .from('user_profiles')
-          .select('username')
-          .eq('id', notif.metadata.sender_id)
-          .single()
-          .then(({ data }) => {
-            if (data?.username) {
-              navigate(`/profile/${data.username}`)
-            }
-          })
+        navigate(`/messages?user=${notif.metadata.sender_id}`)
       } else if (notif.metadata.payout_id) {
         navigate('/my-earnings')
       } else if (notif.metadata.battle_id) {

@@ -5,28 +5,34 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FRONTEND_URL = Deno.env.get("FRONTEND_URL") || "https://trollcity.app";
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || `${FRONTEND_URL},http://localhost:5175,http://localhost:5174,http://localhost:5173`).split(',').map(s => s.trim()).filter(Boolean);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-const cors = {
-  "Access-Control-Allow-Origin": FRONTEND_URL,
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+const buildCorsHeaders = (origin: string | null) => {
+  const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : FRONTEND_URL;
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
 };
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    const origin = req.headers.get('origin');
     return new Response("ok", {
       status: 200,
-      headers: cors,
+      headers: buildCorsHeaders(origin),
     });
   }
 
   if (req.method !== "POST") {
+    const origin = req.headers.get('origin');
     return new Response("Method not allowed", { 
       status: 405,
-      headers: { ...cors, "Content-Type": "application/json" }
+      headers: { ...buildCorsHeaders(origin), "Content-Type": "application/json" }
     });
   }
 
@@ -108,15 +114,17 @@ Deno.serve(async (req) => {
       return new Response("Failed to create assignment", { status: 500 });
     }
 
+    const origin = req.headers.get('origin');
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
-      headers: { ...cors, "Content-Type": "application/json" }
+      headers: { ...buildCorsHeaders(origin), "Content-Type": "application/json" }
     });
   } catch (e) {
     console.error("Error in officer-join-stream:", e);
+    const origin = req.headers.get('origin');
     return new Response(JSON.stringify({ error: "Server error" }), { 
       status: 500,
-      headers: { ...cors, "Content-Type": "application/json" }
+      headers: { ...buildCorsHeaders(origin), "Content-Type": "application/json" }
     });
   }
 });

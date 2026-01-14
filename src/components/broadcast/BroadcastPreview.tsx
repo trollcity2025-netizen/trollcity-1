@@ -109,7 +109,7 @@ function BroadcastLayoutPreview() {
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          {['Chat', 'Gifts', 'Settings'].map((tab, index) => (
+          {['Chat', 'Gifts', 'Settings'].map((tab) => (
             <button
               key={tab}
               className={`flex-1 py-2 rounded-full text-[12px] font-semibold uppercase tracking-[0.3em] ${

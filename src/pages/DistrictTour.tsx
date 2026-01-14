@@ -84,8 +84,8 @@ export default function DistrictTour() {
       ],
       admin_tower: [
         { feature_name: 'Admin Dashboard', route_path: '/admin' },
-        { feature_name: 'Admin HQ', route_path: '/admin/hq' },
-        { feature_name: 'City Control Center', route_path: '/admin/control-center' },
+        { feature_name: 'Admin HQ', route_path: '/admin/control-panel' },
+        { feature_name: 'City Control Center', route_path: '/admin/system/health' },
         { feature_name: 'Marketplace Admin', route_path: '/admin/marketplace' },
         { feature_name: 'Applications Admin', route_path: '/admin/applications' }
       ]

@@ -182,9 +182,9 @@ export class LiveKitService {
          if (this.room.state !== 'disconnected') {
             await this.room.disconnect();
          }
-       } catch (e) {
-         this.log('⚠️ Error disconnecting existing room', e);
-       }
+      } catch {
+        this.log('⚠️ Error disconnecting existing room')
+      }
        this.room = null;
     }
 
@@ -594,7 +594,7 @@ export class LiveKitService {
       try {
         const track = await createLocalVideoTrack(constraints as any)
         return track
-      } catch (err) {
+      } catch {
         return null
       }
     }
@@ -1095,7 +1095,7 @@ export class LiveKitService {
     try {
       // Stop existing local track if any
       if (this.localVideoTrack) {
-        try { this.localVideoTrack.stop() } catch (e) {}
+        try { this.localVideoTrack.stop() } catch {}
         this.localVideoTrack = null
       }
 
@@ -1185,7 +1185,7 @@ export class LiveKitService {
 
     try {
       if (this.localAudioTrack) {
-        try { this.localAudioTrack.stop() } catch (e) {}
+        try { this.localAudioTrack.stop() } catch {}
         this.localAudioTrack = null
       }
 

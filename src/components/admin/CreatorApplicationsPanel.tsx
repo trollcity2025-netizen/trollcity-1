@@ -122,6 +122,7 @@ export function CreatorApplicationsPanel() {
                 key={status}
                 variant={filter === status ? 'default' : 'outline'}
                 size="sm"
+                disabled={false}
                 onClick={() => setFilter(status)}
                 className={
                   filter === status 
@@ -132,7 +133,7 @@ export function CreatorApplicationsPanel() {
                 {status.charAt(0).toUpperCase() + status.slice(1)}
                 {status !== 'all' && (
                   <Badge variant="secondary" className="ml-2 text-xs">
-                    {status === 'all' ? applications.length : applications.filter(app => app.status === status).length}
+                    {applications.filter(app => app.status === status).length}
                   </Badge>
                 )}
               </Button>
@@ -212,6 +213,7 @@ export function CreatorApplicationsPanel() {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={false}
                         onClick={() => setSelectedApplication(application)}
                         className="border-slate-600 text-slate-300"
                       >
@@ -237,6 +239,7 @@ export function CreatorApplicationsPanel() {
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={false}
                   onClick={() => {
                     setSelectedApplication(null);
                     setReviewNotes('');

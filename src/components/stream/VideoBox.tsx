@@ -87,7 +87,7 @@ export default function VideoBox({
       />
       
       {/* Label Overlay */}
-      <div className={`absolute bottom-2 left-2 bg-black/60 text-white px-2 py-1 rounded text-sm backdrop-blur-sm ${hasRgbUsername ? 'rgb-username font-bold' : ''}`}>
+      <div className={`absolute bottom-2 left-2 bg-black/60 text-white px-2 py-1 rounded text-sm ${hasRgbUsername ? 'rgb-username font-bold' : ''}`}>
         {displayLabel}
       </div>
 
