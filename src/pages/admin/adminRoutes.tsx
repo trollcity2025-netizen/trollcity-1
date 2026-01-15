@@ -8,6 +8,7 @@ import LiveKitUsageTab from './components/LiveKitUsageTab'
 import UserFormsTab from './components/UserFormsTab'
 import AdminErrors from './AdminErrors'
 import AdminCallsTab from './components/AdminCallsTab'
+import OfficerOperations from './OfficerOperations'
 
 export interface AdminRoute {
   id: string
@@ -62,6 +63,19 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileColor: 'text-green-200',
     tileBgColor: 'bg-emerald-500/10',
     tileBorderColor: 'border-emerald-500/30',
+    category: 'system'
+  },
+  {
+    id: 'officer-operations',
+    title: 'Officer Operations',
+    path: '/admin/officer-operations',
+    component: OfficerOperations,
+    roles: [UserRole.ADMIN],
+    description: 'Manage officer shifts, patrols, and panic alerts',
+    icon: <Shield className="w-5 h-5 text-indigo-200" />,
+    tileColor: 'text-indigo-200',
+    tileBgColor: 'bg-indigo-500/10',
+    tileBorderColor: 'border-indigo-500/30',
     category: 'system'
   },
   {

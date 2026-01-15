@@ -21,7 +21,8 @@ import {
   ChevronRight,
   LifeBuoy,
   Shuffle,
-  Star
+  Star,
+  Building2
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -215,6 +216,7 @@ export default function Sidebar() {
         {/* Main Group */}
         <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} />
@@ -350,6 +352,7 @@ function SidebarItem({
     <Link
       to={to}
       className={`
+        relative z-0 rgb-outline-card bg-[#0A0814]
         flex items-center gap-3 px-4 py-2 mx-2 rounded-lg transition-all duration-200 group
         ${active 
           ? 'bg-purple-600/20 text-purple-400' 

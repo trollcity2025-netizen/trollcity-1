@@ -10,9 +10,12 @@ import RequireRole from "../components/RequireRole";
 import CourtAIAssistant from "../components/CourtAIAssistant";
 import MAIAuthorityPanel from "../components/mai/MAIAuthorityPanel";
 import CourtChat from "../components/CourtChat";
+import CourtAIController from "../components/CourtAIController";
 import UserSearchDropdown from "../components/UserSearchDropdown";
-import { Scale, Gavel, FileText, Users, CheckCircle, Upload, Bell } from "lucide-react";
+import { Scale, Gavel, FileText, Users, CheckCircle, Upload, Bell, Sparkles } from "lucide-react";
 import { Track } from "livekit-client";
+import CourtGeminiModal from "../components/CourtGeminiModal";
+import { generateSummaryFeedback } from "../lib/courtAi";
 
 const CourtParticipantLabel = ({ trackRef }: { trackRef: any }) => {
   const [username, setUsername] = useState<string | null>(null);
@@ -228,6 +231,12 @@ export default function CourtRoom() {
   });
   const [showSummonModal, setShowSummonModal] = useState(false);
   const [summonQuery, setSummonQuery] = useState('');
+  const [summaries, setSummaries] = useState<any[]>([]);
+  const [feedback, setFeedback] = useState<any[]>([]);
+  const [summaryText, setSummaryText] = useState('');
+  const [isSubmittingSummary, setIsSubmittingSummary] = useState(false);
+  const [defenseCounselEnabled, setDefenseCounselEnabled] = useState(false);
+  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
 
   const summonUser = async (userId: string, username: string) => {
     try {
@@ -379,6 +388,75 @@ export default function CourtRoom() {
 
     initCourtroom();
   }, [user, courtId, initCourtroom, navigate]);
+
+  useEffect(() => {
+    if (!activeCase || !activeCase.id) return;
+    const caseId = activeCase.id as string;
+
+    const loadStateAndNotes = async () => {
+      const { data: state } = await supabase
+        .from('court_session_state')
+        .select('*')
+        .eq('case_id', caseId)
+        .maybeSingle();
+
+      if (state && typeof state.defense_counsel_mode === 'boolean') {
+        setDefenseCounselEnabled(state.defense_counsel_mode);
+      }
+
+      const { data: summaryRows } = await supabase
+        .from('court_summaries')
+        .select('*')
+        .eq('case_id', caseId)
+        .order('created_at', { ascending: true });
+
+      setSummaries(summaryRows || []);
+
+      const { data: feedbackRows } = await supabase
+        .from('court_ai_feedback')
+        .select('*')
+        .eq('case_id', caseId)
+        .order('created_at', { ascending: true });
+
+      setFeedback(feedbackRows || []);
+    };
+
+    loadStateAndNotes();
+
+    const channel = supabase
+      .channel(`court_notes_${caseId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'court_summaries',
+          filter: `case_id=eq.${caseId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          setSummaries((prev) => [...prev, row]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'court_ai_feedback',
+          filter: `case_id=eq.${caseId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          setFeedback((prev) => [...prev, row]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCase]);
 
   // Keep box count in sync for all viewers
   useEffect(() => {
@@ -1195,6 +1273,26 @@ export default function CourtRoom() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold">Court Status</h3>
                 <div className="flex items-center gap-2">
+                  {activeCase && (
+                    <button
+                      onClick={() => setIsGeminiModalOpen(true)}
+                      className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded shadow-lg shadow-purple-900/20 transition-all animate-pulse"
+                      title="Open Gemini AI Assistant"
+                    >
+                      <Sparkles size={12} />
+                      AI Assist
+                    </button>
+                  )}
+                  {activeCase && isJudge && (
+                    <button
+                      onClick={() => setIsGeminiModalOpen(true)}
+                      className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded shadow-lg shadow-purple-900/20 transition-all animate-pulse"
+                      title="Open Gemini AI Assistant"
+                    >
+                      <Sparkles size={12} />
+                      AI Assist
+                    </button>
+                  )}
                   {courtPhase === 'waiting' && <span className="px-2 py-1 bg-gray-600 rounded text-xs">Waiting</span>}
                   {courtPhase === 'opening' && <span className="px-2 py-1 bg-blue-600 rounded text-xs">Opening Statements</span>}
                   {courtPhase === 'evidence' && <span className="px-2 py-1 bg-yellow-600 rounded text-xs">Evidence Phase</span>}
@@ -1444,13 +1542,29 @@ export default function CourtRoom() {
                   Only Admin/Lead/Officers can broadcast. Others are audience.
                 </div>
               </div>
-            </div>
+          </div>
 
-            {/* Court Chat */}
-            <CourtChat 
-                courtId={courtId || 'default'} 
-                isLocked={judgeControls.autoLockChat && activeCase?.status !== 'resolved' && activeCase?.status !== 'closed'} 
+          {/* Court Chat */}
+          <CourtChat 
+              courtId={courtId || 'default'} 
+              isLocked={judgeControls.autoLockChat && activeCase?.status !== 'resolved' && activeCase?.status !== 'closed'} 
+          />
+
+          {activeCase && (
+            <CourtAIController
+              caseId={activeCase.id}
+              isJudge={isJudge}
+              evidence={evidence}
+              caseDetails={activeCase}
             />
+          )}
+
+          <CourtGeminiModal
+            isOpen={isGeminiModalOpen}
+            onClose={() => setIsGeminiModalOpen(false)}
+            courtId={activeCase?.id || ''}
+            isAuthorized={isJudge}
+          />
 
             <MAIAuthorityPanel
               mode="court"
@@ -1470,6 +1584,170 @@ export default function CourtRoom() {
             />
           </div>
         </div>
+
+        {activeCase && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-400" />
+                  <h3 className="text-sm font-semibold text-gray-100">Case Summaries</h3>
+                </div>
+                {profile?.id === activeCase?.defendant_id && (
+                  <label className="flex items-center gap-2 text-[11px] text-gray-300">
+                    <input
+                      type="checkbox"
+                      className="rounded border-zinc-600 bg-zinc-900"
+                      checked={defenseCounselEnabled}
+                      onChange={async (e) => {
+                        const enabled = e.target.checked;
+                        setDefenseCounselEnabled(enabled);
+                        if (!activeCase?.id) return;
+                        await supabase
+                          .from('court_session_state')
+                          .upsert({
+                            case_id: activeCase.id,
+                            defense_counsel_mode: enabled,
+                            updated_at: new Date().toISOString(),
+                          }, { onConflict: 'case_id' });
+                      }}
+                    />
+                    <span>Defense Counsel may speak for defendant</span>
+                  </label>
+                )}
+              </div>
+              <div className="text-[11px] text-gray-400 mb-2">
+                This is an in-game roleplay court. Not legal advice.
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {summaries.length === 0 && (
+                  <div className="text-xs text-gray-500">No summaries submitted yet.</div>
+                )}
+                {summaries.map((s) => (
+                  <div
+                    key={s.id}
+                    className="border border-zinc-800 rounded-md px-2 py-1.5 text-xs bg-zinc-950/40"
+                  >
+                    <div className="flex justify-between mb-1">
+                      <span className="font-semibold text-gray-200">{s.role}</span>
+                      <span className="text-[10px] text-gray-500">
+                        {new Date(s.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="text-gray-300 whitespace-pre-wrap">
+                      {s.summary_text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {user && (
+                <form
+                  className="mt-3 space-y-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!activeCase?.id || !summaryText.trim() || isSubmittingSummary) return;
+                    setIsSubmittingSummary(true);
+                    try {
+                      let roleLabel = 'Witness';
+                      if (user.id === activeCase.plaintiff_id) roleLabel = 'Plaintiff';
+                      else if (user.id === activeCase.defendant_id) roleLabel = 'Defendant';
+                      else if (isJudge) roleLabel = 'Judge';
+
+                      const { data, error } = await supabase
+                        .from('court_summaries')
+                        .insert({
+                          case_id: activeCase.id,
+                          user_id: user.id,
+                          role: roleLabel,
+                          summary_text: summaryText.trim(),
+                        })
+                        .select('*')
+                        .single();
+
+                      if (error) throw error;
+
+                      setSummaries((prev) => [...prev, data]);
+                      setSummaryText('');
+
+                      await generateSummaryFeedback(activeCase.id, user.id, 'Prosecutor', data.summary_text);
+                      await generateSummaryFeedback(activeCase.id, user.id, 'Defense', data.summary_text);
+
+                      toast.success('Summary submitted. AI feedback incoming.');
+                    } catch (err) {
+                      console.error('Error submitting summary:', err);
+                      toast.error('Failed to submit summary');
+                    } finally {
+                      setIsSubmittingSummary(false);
+                    }
+                  }}
+                >
+                  <textarea
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 h-16 resize-none"
+                    placeholder="Write your in-game case summary..."
+                    value={summaryText}
+                    onChange={(e) => setSummaryText(e.target.value)}
+                  />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-gray-500">
+                      Feedback is in-game roleplay only; not legal advice.
+                    </span>
+                    <button
+                      type="submit"
+                      disabled={!summaryText.trim() || isSubmittingSummary}
+                      className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 rounded-md text-white disabled:opacity-50"
+                    >
+                      {isSubmittingSummary ? 'Submitting...' : 'Submit Summary'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Scale className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-semibold text-gray-100">AI Feedback</h3>
+              </div>
+              <div className="text-[11px] text-gray-400 mb-2">
+                Prosecutor and Defense feedback are in-character. Not legal advice.
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {feedback.length === 0 && (
+                  <div className="text-xs text-gray-500">No AI feedback yet.</div>
+                )}
+                {feedback.map((f) => (
+                  <div
+                    key={f.id}
+                    className="border border-zinc-800 rounded-md px-2 py-1.5 text-xs bg-zinc-950/40"
+                  >
+                    <div className="flex justify-between mb-1">
+                      <span
+                        className={
+                          f.agent_role === 'Prosecutor'
+                            ? 'font-semibold text-red-400'
+                            : 'font-semibold text-blue-400'
+                        }
+                      >
+                        {f.agent_role} Feedback
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        {new Date(f.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="text-gray-300 whitespace-pre-wrap">
+                      {f.feedback_text}
+                    </div>
+                    {f.json_data?.score != null && (
+                      <div className="text-[10px] text-gray-500 mt-1">
+                        Score: {f.json_data.score}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* New Case Modal */}
         {showNewCaseModal && (

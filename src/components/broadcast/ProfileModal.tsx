@@ -5,7 +5,23 @@ import { supabase } from "../../lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { canMessageAdmin } from "../../lib/perkEffects";
 
-export default function ProfileModal({ profile, onClose, onSendCoins, onGift, currentUser }) {
+interface ProfileModalProps {
+  profile: any;
+  onClose: () => void;
+  onSendCoins: (amount: number) => void;
+  onGift?: (profile: any) => void;
+  currentUser?: any;
+  onMessageUser?: (profile: any) => void;
+}
+
+export default function ProfileModal({
+  profile,
+  onClose,
+  onSendCoins,
+  onGift,
+  currentUser,
+  onMessageUser,
+}: ProfileModalProps) {
   const navigate = useNavigate();
   const [coinAmount, setCoinAmount] = useState(100);
   const [sent, setSent] = useState(false);
@@ -79,7 +95,6 @@ export default function ProfileModal({ profile, onClose, onSendCoins, onGift, cu
   };
 
   const handleMessage = () => {
-      // If profile is admin, check for perk or follow
       const isAdmin = profile.role === 'admin' || profile.is_admin;
       
       if (isAdmin) {
@@ -87,6 +102,11 @@ export default function ProfileModal({ profile, onClose, onSendCoins, onGift, cu
               toast.error("You need the 'Message Admin' perk or be followed by the Admin to message them!");
               return;
           }
+      }
+      
+      if (onMessageUser) {
+        onMessageUser(profile);
+        return;
       }
       
       onClose();

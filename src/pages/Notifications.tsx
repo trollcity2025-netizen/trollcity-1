@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Bell, X, Dot, AlertTriangle, CheckCircle, Video, Gift, User, MessageCircle } from 'lucide-react'
+import { Bell, X, Dot, AlertTriangle, CheckCircle, Video, Gift, User, MessageCircle, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Notification {
   id: string
-  type: 'stream_live' | 'join_approved' | 'moderation_alert' | 'new_follower' | 'gift_received' | 'message' | 'announcement'
+  type:
+    | 'stream_live'
+    | 'join_approved'
+    | 'moderation_alert'
+    | 'new_follower'
+    | 'gift_received'
+    | 'message'
+    | 'announcement'
+    | 'officer_update'
   title: string
   message: string
   created_at: string
@@ -17,6 +26,7 @@ interface Notification {
 
 export default function Notifications() {
   const { profile } = useAuthStore()
+  const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -127,7 +137,26 @@ export default function Notifications() {
       case 'gift_received': return <Gift className="w-5 h-5 text-purple-500" />
       case 'message': return <MessageCircle className="w-5 h-5 text-cyan-500" />
       case 'announcement': return <Bell className="w-5 h-5 text-orange-500" />
+      case 'officer_update': return <Shield className="w-5 h-5 text-red-400" />
       default: return <Bell className="w-5 h-5 text-gray-400" />
+    }
+  }
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.read) {
+      void markAsRead(notification.id)
+    }
+
+    const metadata: any = notification.metadata || {}
+    const link: string | undefined = metadata.link
+
+    if (link) {
+      navigate(link)
+      return
+    }
+
+    if (metadata.stream_id) {
+      navigate(`/live/${metadata.stream_id}`)
     }
   }
 
@@ -212,7 +241,8 @@ export default function Notifications() {
             filteredNotifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C] relative ${
+                onClick={() => handleNotificationClick(notification)}
+                className={`bg-[#1A1A1A] rounded-xl p-4 border border-[#2C2C2C] relative cursor-pointer ${
                   !notification.read ? 'border-purple-500/30' : ''
                 }`}
               >
@@ -222,11 +252,7 @@ export default function Notifications() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 
-                        className={`text-white font-semibold ${!notification.read ? 'cursor-pointer hover:text-purple-400' : ''}`}
-                        onClick={() => !notification.read && markAsRead(notification.id)}
-                        title={!notification.read ? 'Click to mark as read' : ''}
-                      >
+                      <h3 className="text-white font-semibold">
                         {notification.title}
                       </h3>
                       {!notification.read && <Dot className="w-4 h-4 text-purple-500 fill-current" />}
@@ -237,18 +263,24 @@ export default function Notifications() {
                   <div className="flex items-center gap-2">
                     {!notification.read && (
                       <button
-                        onClick={() => markAsRead(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void markAsRead(notification.id)
+                        }}
                         className="text-purple-400 hover:text-purple-300 transition-colors text-xs"
                         title="Mark as read"
                       >
                         Mark read
                       </button>
                     )}
-                    <button
-                      onClick={() => dismissNotification(notification.id)}
-                      className="text-gray-500 hover:text-white transition-colors"
-                      title="Dismiss"
-                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void dismissNotification(notification.id)
+                        }}
+                        className="text-gray-500 hover:text-white transition-colors"
+                        title="Dismiss"
+                      >
                       <X className="w-4 h-4" />
                     </button>
                   </div>

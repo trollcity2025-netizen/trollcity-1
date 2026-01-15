@@ -33,7 +33,6 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import TermsAgreement from "./pages/TermsAgreement";
-import LivePage from "./pages/LivePage";
 
 // Sidebar pages (instant load)
 const Messages = lazy(() => import("./pages/Messages"));
@@ -94,7 +93,7 @@ const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
 
 const GoLive = lazy(() => import("./pages/GoLive"));
 const JoinPage = lazy(() => import("./pages/Join"));
-const LazyLivePage = lazy(() => Promise.resolve({ default: LivePage }));
+const LazyLivePage = lazy(() => import("./pages/LivePage"));
 const BroadcastSummary = lazy(() => import("./pages/BroadcastSummary"));
 const KickFee = lazy(() => import("./pages/KickFee"));
 const BanFee = lazy(() => import("./pages/BanFee"));
@@ -166,6 +165,7 @@ const ExecutiveReports = lazy(() => import("./pages/admin/ExecutiveReports"));
 const CashoutManager = lazy(() => import("./pages/admin/CashoutManager"));
 const CriticalAlertsManager = lazy(() => import("./pages/admin/CriticalAlertsManager"));
 const OfficerManager = lazy(() => import("./pages/admin/OfficerManager"));
+const AdminTrollTownDeeds = lazy(() => import("./pages/admin/AdminTrollTownDeeds"));
 const LeadOfficerReview = lazy(() => import("./pages/lead-officer/Review"));
 const LeadOfficerDashboard = lazy(() => import("./pages/lead-officer/LeadOfficerDashboard").then(module => ({ default: module.LeadOfficerDashboard })));
 const ShopPartnerPage = lazy(() => import("./pages/ShopPartnerPage"));
@@ -200,6 +200,7 @@ const AdminHR = lazy(() => import("./pages/admin/AdminHR"));
 const UserFormsTab = lazy(() => import("./pages/admin/components/UserFormsTab"));
 const BucketsDashboard = lazy(() => import("./pages/admin/BucketsDashboard"));
 const GrantCoins = lazy(() => import("./pages/admin/GrantCoins"));
+const OfficerOperations = lazy(() => import("./pages/admin/OfficerOperations"));
 
 const LoadingScreen = () => (
     <div className="min-h-screen flex items-center justify-center bg-[#0A0814] text-white">
@@ -260,7 +261,6 @@ function AppContent() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [waitingServiceWorker, setWaitingServiceWorker] = useState<ServiceWorker | null>(null);
-  const hasSwReloadedRef = useRef(false);
 
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const eligibilityRefresh = useEligibilityStore((s) => s.refresh);
@@ -298,18 +298,10 @@ function AppContent() {
       } catch {}
     };
 
-    const handleControllerChange = () => {
-      if (hasSwReloadedRef.current) return;
-      hasSwReloadedRef.current = true;
-      window.location.reload();
-    };
-
     window.addEventListener('pwa-update-available', handleUpdateAvailable);
-    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
     return () => {
       window.removeEventListener('pwa-update-available', handleUpdateAvailable);
-      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
     };
   }, []);
 
@@ -846,6 +838,14 @@ function AppContent() {
                     }
                   />
                   <Route
+                    path="/admin/officer-operations"
+                    element={
+                      <RequireRole roles={[UserRole.ADMIN]}>
+                        <OfficerOperations />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
                     path="/store-debug"
                     element={
                       <RequireRole roles={[UserRole.ADMIN]}>
@@ -1041,6 +1041,14 @@ function AppContent() {
                       element={
                         <RequireRole roles={[UserRole.ADMIN]}>
                           <ExecutiveReports />
+                        </RequireRole>
+                      }
+                    />
+                    <Route
+                      path="/admin/troll-town-deeds"
+                      element={
+                        <RequireRole roles={[UserRole.ADMIN]}>
+                          <AdminTrollTownDeeds />
                         </RequireRole>
                       }
                     />

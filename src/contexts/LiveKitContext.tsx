@@ -23,6 +23,7 @@ export interface LiveKitContextValue {
   startPublishing: () => Promise<void>
   getRoom: () => any | null
   markClientDisconnectIntent: () => void
+  toggleScreenShare: () => Promise<boolean>
 }
 
 // Context holds the LiveKitService plus state helpers

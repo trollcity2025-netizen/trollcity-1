@@ -56,6 +56,9 @@ export async function playEntranceAnimation(userId: string, effectKey: string, t
       await showTrollKingAnimation(targetElement);
       break;
     // Role-based animations
+    case 'troll_city_ceo':
+      await showTrollCityCeoAnimation(targetElement);
+      break;
     case 'admin_divine':
       await showAdminDivineAnimation(targetElement);
       break;
@@ -591,6 +594,127 @@ async function showAdminDivineAnimation(targetElement?: HTMLElement) {
   setTimeout(() => {
     [voidBg, lightning1, lightning2, crown, emblem, shockwave].forEach(el => el.remove());
   }, 6000);
+}
+
+
+/**
+ * TROLL CITY CEO ANIMATION - RED & BLACK THEME
+ * "Troll City CEO" text, red/black money rain, aggressive stomp effect
+ */
+async function showTrollCityCeoAnimation(targetElement?: HTMLElement) {
+  const container = targetElement || document.body;
+
+  // Red/Black overlay flash
+  const overlay = document.createElement('div');
+  overlay.className = 'entrance-animation ceo-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle, rgba(220, 38, 38, 0.2) 0%, rgba(0, 0, 0, 0.8) 100%);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+  `;
+  container.appendChild(overlay);
+
+  // CEO Text
+  const text = document.createElement('div');
+  text.className = 'entrance-animation ceo-text';
+  text.innerHTML = 'TROLL CITY<br><span style="color: #ef4444; font-size: 1.5em;">CEO</span>';
+  text.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    font-family: 'Arial Black', sans-serif;
+    font-weight: 900;
+    font-size: 5rem;
+    color: white;
+    text-align: center;
+    line-height: 1;
+    text-shadow: 4px 4px 0px #000, 0 0 20px #dc2626;
+    z-index: 1001;
+    opacity: 0;
+  `;
+  container.appendChild(text);
+
+  // Red & Black Money Rain
+  for (let i = 0; i < 30; i++) {
+    setTimeout(() => {
+      const money = document.createElement('div');
+      money.className = 'entrance-animation ceo-money';
+      money.innerHTML = i % 2 === 0 ? '💸' : '💵';
+      money.style.cssText = `
+        position: fixed;
+        left: ${Math.random() * 100}vw;
+        top: -50px;
+        font-size: ${Math.random() * 2 + 1}rem;
+        filter: hue-rotate(${i % 2 === 0 ? '-50deg' : '0deg'}) grayscale(0.5) contrast(1.5);
+        z-index: 1000;
+      `;
+      container.appendChild(money);
+
+      money.animate([
+        { transform: 'translateY(0) rotate(0deg)', opacity: 1 },
+        { transform: 'translateY(110vh) rotate(720deg)', opacity: 0 }
+      ], {
+        duration: 2000 + Math.random() * 1000,
+        easing: 'ease-in'
+      });
+
+      setTimeout(() => money.remove(), 3000);
+    }, i * 50);
+  }
+
+  // Stomp/Shake effect
+  const shakeContainer = document.body;
+  
+  // Animation Sequence
+  
+  // 1. Flash Overlay
+  overlay.animate([
+    { opacity: 0 },
+    { opacity: 1 },
+    { opacity: 0 }
+  ], { duration: 500, easing: 'ease-out' });
+
+  // 2. Text Slam
+  setTimeout(() => {
+    text.style.opacity = '1';
+    text.animate([
+      { transform: 'translate(-50%, -50%) scale(5)', opacity: 0 },
+      { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }
+    ], { duration: 400, easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' });
+    
+    // Screen Shake on slam
+    shakeContainer.animate([
+      { transform: 'translate(0, 0)' },
+      { transform: 'translate(-10px, -10px)' },
+      { transform: 'translate(10px, 10px)' },
+      { transform: 'translate(-10px, 10px)' },
+      { transform: 'translate(10px, -10px)' },
+      { transform: 'translate(0, 0)' }
+    ], { duration: 300 });
+
+  }, 200);
+
+  // 3. Text fade out
+  setTimeout(() => {
+    text.animate([
+      { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+      { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 0 }
+    ], { duration: 500, easing: 'ease-in' });
+    text.style.opacity = '0';
+  }, 2500);
+
+  // Cleanup
+  setTimeout(() => {
+    overlay.remove();
+    text.remove();
+  }, 3000);
 }
 
 /**

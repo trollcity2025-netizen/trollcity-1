@@ -11,11 +11,11 @@ import { useLiveKitSession } from '../hooks/useLiveKitSession';
 import { useLiveKitToken } from '../hooks/useLiveKitToken';
 import { useStreamEndListener } from '../hooks/useStreamEndListener';
 import { useAuthStore } from '../lib/store';
-import { supabase } from '../lib/supabase';
+import { supabase, createConversation, sendConversationMessage } from '../lib/supabase';
 import { toast } from 'sonner';
+import { Participant } from 'livekit-client';
 import {
   Users,
-  Heart,
   Mic,
   MicOff,
   Camera,
@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import ChatBox from '../components/broadcast/ChatBox';
 import GiftBox, { GiftItem, RecipientMode } from '../components/broadcast/GiftBox';
-import TrollLikeButton from '../components/broadcast/TrollLikeButton';
 import GiftModal from '../components/broadcast/GiftModal';
 import ProfileModal from '../components/broadcast/ProfileModal';
 import CoinStoreModal from '../components/broadcast/CoinStoreModal';
@@ -132,17 +131,58 @@ function BroadcasterTimer({ startTime, onClick }: { startTime: string; onClick?:
   );
 }
 
-function BroadcasterControlPanel({ streamId, onAlertOfficers }: { streamId: string; onAlertOfficers: (targetUserId?: string) => Promise<void> }) {
-  const [open, setOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.innerWidth >= 1024;
-  });
+function BroadcasterControlPanel({
+  streamId,
+  onAlertOfficers,
+  boxCount,
+  onBoxCountChange,
+  joinPrice,
+  onSetPrice,
+}: {
+  streamId: string;
+  onAlertOfficers: (targetUserId?: string) => Promise<void>;
+  boxCount: number;
+  onBoxCountChange: (count: number) => void;
+  joinPrice: number;
+  onSetPrice: (price: number) => void;
+}) {
+  const [open, setOpen] = useState(true);
   const [participants, setParticipants] = useState<Array<{ user_id: string; username: string; avatar_url?: string; is_moderator?: boolean; can_chat?: boolean; chat_mute_until?: string; is_active?: boolean }>>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [muting, setMuting] = useState<string | null>(null);
   const [kicking, setKicking] = useState<string | null>(null);
   const [updatingMod, setUpdatingMod] = useState<string | null>(null);
+  const [draftPrice, setDraftPrice] = useState(() =>
+    joinPrice > 0 ? String(joinPrice) : ''
+  );
+
+  useEffect(() => {
+    setDraftPrice(joinPrice > 0 ? String(joinPrice) : '');
+  }, [joinPrice]);
+
+  const basePrice = joinPrice || 0;
+  const boxPrice = joinPrice || 0;
+  const totalPrice = basePrice + boxCount * boxPrice;
+
+  const handleAddBox = () => {
+    const maxBoxes = 6;
+    onBoxCountChange(Math.min(boxCount + 1, maxBoxes));
+  };
+
+  const handleRemoveBox = () => {
+    onBoxCountChange(boxCount > 0 ? boxCount - 1 : 0);
+  };
+
+  const handleDeleteAllBoxes = () => {
+    if (boxCount === 0) return;
+    onBoxCountChange(0);
+  };
+
+  const handleApplyJoinPrice = () => {
+    const parsed = parseInt(draftPrice || '0') || 0;
+    onSetPrice(Math.max(0, parsed));
+  };
 
   const loadParticipants = useCallback(async () => {
     if (!streamId) return;
@@ -277,7 +317,7 @@ function BroadcasterControlPanel({ streamId, onAlertOfficers }: { streamId: stri
   const filtered = participants.filter(p => p.username.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="bg-white/5 rounded-lg border border-white/10 p-3">
+    <div className="bg-white/5 rounded-lg border border-white/10 p-3 overflow-y-auto max-h-[70vh] min-h-0 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold">Broadcaster Control Panel</h3>
         <button onClick={() => setOpen(v => !v)} className="text-xs text-white/60 hover:text-white">
@@ -286,6 +326,72 @@ function BroadcasterControlPanel({ streamId, onAlertOfficers }: { streamId: stri
       </div>
       {open && (
         <div className="mt-3 space-y-3">
+          <div className="bg-black/40 border border-white/10 rounded-xl px-3 py-3 space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col">
+                <span className="text-[11px] uppercase tracking-[0.2em] text-white/40">
+                  Broadcast Boxes
+                </span>
+                <span className="text-xs text-white/70">
+                  Total Price:{' '}
+                  <span className="font-mono text-sm text-amber-300">
+                    {totalPrice}
+                  </span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDeleteAllBoxes}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-red-500/40 bg-red-500/10 text-[11px] font-semibold text-red-200 hover:bg-red-500/20"
+              >
+                Delete All
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddBox}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200"
+                >
+                  <span className="text-sm font-bold">+</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveBox}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-400/60 text-red-200"
+                >
+                  <span className="text-sm font-bold">−</span>
+                </button>
+                <span className="text-[11px] text-white/60">
+                  Boxes:{' '}
+                  <span className="font-mono text-xs text-white">
+                    {boxCount}
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-white/50 mr-1">
+                  Join Price
+                </span>
+                <input
+                  type="number"
+                  value={draftPrice}
+                  placeholder="Set"
+                  inputMode="numeric"
+                  onChange={(e) =>
+                    setDraftPrice(e.target.value.replace(/[^\d]/g, ''))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleApplyJoinPrice();
+                    }
+                  }}
+                  className="w-16 bg-white/10 border border-white/20 rounded px-2 text-[11px] text-white py-1"
+                />
+              </div>
+            </div>
+          </div>
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-[0.3em] text-white/60">Moderators</span>
@@ -393,6 +499,76 @@ function BroadcasterControlPanel({ streamId, onAlertOfficers }: { streamId: stri
     </div>
   );
 }
+
+function OfficerActionBubble({
+  streamId: _streamId,
+  onAddBox,
+  onEndBroadcast,
+  onMuteAll,
+  onKickAll,
+  onDisableChat,
+  onClose,
+  position,
+  onMouseDown
+}: {
+  streamId: string;
+  onAddBox: () => void;
+  onEndBroadcast: () => void;
+  onMuteAll: () => void;
+  onKickAll: () => void;
+  onDisableChat: () => void;
+  onClose: () => void;
+  position: { x: number; y: number } | null;
+  onMouseDown: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      className="fixed z-[200] w-64 bg-black/90 border border-red-500/50 rounded-xl shadow-[0_0_30px_rgba(220,38,38,0.3)] backdrop-blur-xl overflow-hidden"
+      style={position ? { left: position.x, top: position.y } : { bottom: 100, right: 20 }}
+    >
+      <div
+        className="bg-red-900/20 px-3 py-2 border-b border-red-500/30 flex items-center justify-between cursor-move select-none"
+        onMouseDown={onMouseDown}
+      >
+        <span className="text-xs font-bold text-red-200 uppercase tracking-wider">Officer Tools</span>
+        <button onClick={onClose} className="text-red-200 hover:text-white">×</button>
+      </div>
+      <div className="p-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={onEndBroadcast}
+          className="col-span-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold py-2 rounded shadow-lg flex items-center justify-center gap-2"
+        >
+          <span className="text-lg">⛔</span> END BROADCAST
+        </button>
+        <button
+          onClick={onAddBox}
+          className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded flex flex-col items-center gap-1"
+        >
+          <span className="text-lg">📺</span> Add Box
+        </button>
+        <button
+          onClick={onKickAll}
+          className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded flex flex-col items-center gap-1"
+        >
+          <span className="text-lg">🧹</span> Clear Stage
+        </button>
+         <button
+          onClick={onMuteAll}
+          className="col-span-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded flex flex-col items-center gap-1"
+        >
+          <span className="text-lg">🔇</span> Mute All
+        </button>
+        <button
+          onClick={onDisableChat}
+          className="col-span-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded flex items-center justify-center gap-2"
+        >
+          <span className="text-lg">💬</span> Disable Chat (Global)
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function LivePage() {
   const { streamId } = useParams<{ streamId: string }>();
   const location = useLocation();
@@ -401,8 +577,11 @@ export default function LivePage() {
   const { user, profile, refreshProfile } = useAuthStore();
 
   const [joinPrice, setJoinPrice] = useState(0);
+  const [boxCount, setBoxCount] = useState(0);
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
+  const [screenShareOn, setScreenShareOn] = useState(false);
+  const [hostSeatIndex, setHostSeatIndex] = useState(0);
   const [showLivePanels, setShowLivePanels] = useState(true);
   const [broadcastThemeStyle, setBroadcastThemeStyle] = useState<React.CSSProperties | undefined>(undefined);
   const [broadcastTheme, setBroadcastTheme] = useState<any>(null);
@@ -712,31 +891,74 @@ export default function LivePage() {
     toast.success(`Join price set to ${price} coins`);
   };
 
-  const handleAlertOfficers = useCallback(async (targetUserId?: string) => {
-    if (!streamId) return;
-    try {
-      const { data: officers } = await supabase
-        .from('user_profiles')
-        .select('id, username, role, is_officer')
-        .in('role', ['troll_officer','lead_troll_officer','admin']);
-      const list = (officers || []).map((o) => ({
-        user_id: o.id,
-        type: 'officer_update',
-        title: 'dYs" Stream Moderation Alert',
-        message: `Alert in stream ${streamId}${targetUserId ? ` involving user ${targetUserId}` : ''}`,
-        metadata: { stream_id: streamId, target_user_id: targetUserId }
-      }));
-      if (list.length > 0) {
-        await supabase.from('notifications').insert(list);
-        toast.success('Alert sent to troll officers');
-      } else {
-        toast.info('No officers found to notify');
+  const handleAlertOfficers = useCallback(
+    async (targetUserId?: string) => {
+      if (!streamId) return;
+      try {
+        let targetUsername: string | undefined;
+        if (targetUserId) {
+          const { data: targetProfile } = await supabase
+            .from('user_profiles')
+            .select('username')
+            .eq('id', targetUserId)
+            .single();
+          targetUsername = targetProfile?.username || undefined;
+        }
+
+        const reporterId = profile?.id || user?.id || null;
+        let reporterUsername: string | undefined = profile?.username;
+
+        if (!reporterUsername && reporterId) {
+          const { data: reporterProfile } = await supabase
+            .from('user_profiles')
+            .select('username')
+            .eq('id', reporterId)
+            .single();
+          reporterUsername = reporterProfile?.username || undefined;
+        }
+
+        const { data: officers } = await supabase
+          .from('user_profiles')
+          .select('id, username, role, is_officer')
+          .in('role', ['troll_officer', 'lead_troll_officer', 'admin']);
+
+        const baseMessage = targetUserId
+          ? `Alert in stream ${streamId} involving @${targetUsername || targetUserId}`
+          : `Alert in stream ${streamId}`;
+
+        const messageWithReporter =
+          reporterUsername && reporterId
+            ? `${baseMessage} (reported by @${reporterUsername})`
+            : baseMessage;
+
+        const list = (officers || []).map((o) => ({
+          user_id: o.id,
+          type: 'officer_update' as const,
+          title: 'Stream Moderation Alert',
+          message: messageWithReporter,
+          metadata: {
+            stream_id: streamId,
+            target_user_id: targetUserId,
+            target_username: targetUsername,
+            reporter_id: reporterId,
+            reporter_username: reporterUsername,
+            link: `/live/${streamId}?source=officer_alert`
+          }
+        }));
+
+        if (list.length > 0) {
+          await supabase.from('notifications').insert(list);
+          toast.success('Alert sent to troll officers');
+        } else {
+          toast.info('No officers found to notify');
+        }
+      } catch (err) {
+        console.error('Failed to alert officers', err);
+        toast.error('Failed to alert officers');
       }
-    } catch (err) {
-      console.error('Failed to alert officers', err);
-      toast.error('Failed to alert officers');
-    }
-  }, [streamId]);
+    },
+    [streamId, profile?.id, profile?.username, user?.id]
+  );
 
   const handleJoinRequest = async (seatIndex: number) => {
     if (canPublish) {
@@ -759,7 +981,11 @@ export default function LivePage() {
     }
 
     let joinPriceForClaim = joinPrice;
-    if (joinPrice > 0) {
+    
+    // Officers join for free (skip payment and set price to 0)
+    if (isOfficerUser) {
+      joinPriceForClaim = 0;
+    } else if (joinPrice > 0) {
       const confirmed = confirm(`Join the stream for ${joinPrice} coins?`);
       if (!confirmed) return;
 
@@ -882,8 +1108,94 @@ export default function LivePage() {
 
   const toggleCamera = useCallback(async () => {
     const ok = await liveKit.toggleCamera();
-    setCameraOn(Boolean(ok));
-  }, [liveKit]);
+    const next = Boolean(ok);
+    setCameraOn(next);
+    console.log('[LivePage] Camera toggled', {
+      cameraOn: next,
+      hostSeatIndex,
+    });
+  }, [liveKit, hostSeatIndex]);
+
+  // Officer Tool Handlers
+  const [isOfficerBubbleVisible, setIsOfficerBubbleVisible] = useState(true);
+  const [officerBubblePos, setOfficerBubblePos] = useState<{ x: number; y: number } | null>(null);
+  const officerBubbleDraggingRef = useRef(false);
+  const officerBubbleDragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleOfficerDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (typeof window === 'undefined') return;
+    
+    // Default position (bottom right) if not set
+    const startPos = officerBubblePos || { x: window.innerWidth - 300, y: window.innerHeight - 300 };
+    
+    officerBubbleDraggingRef.current = true;
+    officerBubbleDragOffsetRef.current = {
+      x: e.clientX - startPos.x,
+      y: e.clientY - startPos.y
+    };
+
+    const handleMove = (ev: MouseEvent) => {
+      if (!officerBubbleDraggingRef.current) return;
+      setOfficerBubblePos({
+        x: ev.clientX - officerBubbleDragOffsetRef.current.x,
+        y: ev.clientY - officerBubbleDragOffsetRef.current.y
+      });
+    };
+
+    const handleUp = () => {
+      officerBubbleDraggingRef.current = false;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  }, [officerBubblePos]);
+
+  const handleOfficerDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isOfficerUser) return;
+      if (typeof window === 'undefined') return;
+
+      const margin = 320;
+      const x = Math.min(e.clientX, window.innerWidth - margin);
+      const y = Math.min(e.clientY, window.innerHeight - margin);
+
+      setOfficerBubblePos({ x, y });
+      setIsOfficerBubbleVisible(true);
+    },
+    [isOfficerUser]
+  );
+
+  const handleOfficerEndBroadcast = async () => {
+      if (!confirm('OFFICER ACTION: Force END this broadcast?')) return;
+      try {
+        await supabase.from('streams').update({ status: 'ended', is_live: false, ended_at: new Date().toISOString() }).eq('id', streamId);
+        toast.success('Broadcast ended by Officer');
+      } catch { toast.error('Failed to end broadcast'); }
+  };
+  
+  const handleOfficerMuteAll = async () => {
+      if(!confirm('OFFICER ACTION: Mute all participants?')) return;
+      toast.info('Mute All: Sent request');
+  };
+
+  const handleOfficerDisableChat = async () => {
+       if(!confirm('OFFICER ACTION: Disable chat globally?')) return;
+       toast.info('Disable Chat: Sent request');
+  };
+  
+  const handleOfficerKickAll = () => {
+      if(!confirm('OFFICER ACTION: Clear the stage (remove all boxes)?')) return;
+      setBoxCount(0);
+      toast.success('Stage cleared');
+  };
+  
+  const handleOfficerAddBox = () => {
+      setBoxCount(prev => Math.min(6, prev + 1));
+      toast.success('Added box');
+  };
 
   const toggleMic = useCallback(async () => {
     if (!micOn && micRestrictionInfo.isMuted) {
@@ -893,6 +1205,14 @@ export default function LivePage() {
     const ok = await liveKit.toggleMicrophone();
     setMicOn(Boolean(ok));
   }, [liveKit, micOn, micRestrictionInfo.isMuted, micRestrictionInfo.message]);
+
+  const toggleScreenShare = useCallback(async () => {
+    const ok = await liveKit.toggleScreenShare();
+    setScreenShareOn(Boolean(ok));
+    console.log('[LivePage] Screen share toggled', {
+      screenShareOn: Boolean(ok)
+    });
+  }, [liveKit]);
 
   const endStream = useCallback(async () => {
     if (!confirm("Are you sure you want to end this stream?")) return;
@@ -936,6 +1256,19 @@ export default function LivePage() {
   const [chatOverlayOpen, setChatOverlayOpen] = useState(false);
   const [entranceEffectKey, setEntranceEffectKey] = useState(0);
   const [lastThemeId, setLastThemeId] = useState<string | null>(null);
+  const [messageBubbleTarget, setMessageBubbleTarget] = useState<{
+    id: string;
+    username?: string;
+    avatar_url?: string | null;
+  } | null>(null);
+  const [messageBubbleOpen, setMessageBubbleOpen] = useState(false);
+  const [messageBubbleText, setMessageBubbleText] = useState('');
+  const [messageBubbleSending, setMessageBubbleSending] = useState(false);
+  const [messageBubblePosition, setMessageBubblePosition] = useState<{ x: number; y: number } | null>(null);
+  const messageBubbleDraggingRef = useRef(false);
+  const messageBubbleDragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  
+
   const entranceTimeoutRef = useRef<number | null>(null);
   const [quickGifts, setQuickGifts] = useState<GiftItem[]>([]);
   const [quickGiftsLoading, setQuickGiftsLoading] = useState(false);
@@ -1439,16 +1772,183 @@ export default function LivePage() {
       .replace(/^_+|_+$/g, '') || 'gift';
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (messageBubblePosition) return;
+    const width = window.innerWidth || 0;
+    const height = window.innerHeight || 0;
+    const defaultWidth = 360;
+    const defaultHeight = 220;
+    const margin = 16;
+    const x = Math.max(margin, width - defaultWidth - margin);
+    const y = Math.max(margin, height - defaultHeight - margin);
+    setMessageBubblePosition({ x, y });
+  }, [messageBubblePosition]);
+
+  const ensureConversationForUser = useCallback(
+    async (otherUserId: string): Promise<string | null> => {
+      if (!profile?.id || !otherUserId) return null;
+
+      try {
+        const { data: myMemberships, error: myError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', profile.id);
+
+        let conversationId: string | null = null;
+
+        if (!myError && myMemberships && myMemberships.length > 0) {
+          const conversationIds = (myMemberships as any[]).map((m) => m.conversation_id);
+          const { data: otherMemberships, error: otherError } = await supabase
+            .from('conversation_members')
+            .select('conversation_id')
+            .eq('user_id', otherUserId)
+            .in('conversation_id', conversationIds);
+
+          if (!otherError && otherMemberships && otherMemberships.length > 0) {
+            conversationId = (otherMemberships[0] as any).conversation_id as string;
+          }
+        }
+
+        if (!conversationId) {
+          const conversation = await createConversation([otherUserId]);
+          conversationId = conversation.id;
+        }
+
+        return conversationId;
+      } catch (err) {
+        console.error('Failed to ensure conversation:', err);
+        return null;
+      }
+    },
+    [profile?.id]
+  );
+
+  const openMessageBubble = useCallback(
+    (target: { id: string; username?: string; name?: string; avatar_url?: string | null }) => {
+      if (!target?.id) return;
+      setMessageBubbleTarget({
+        id: target.id,
+        username: target.username || target.name || '',
+        avatar_url: target.avatar_url || null,
+      });
+      setMessageBubbleText('');
+      setMessageBubbleOpen(true);
+    },
+    []
+  );
+
+  const handleMessageBubbleMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!messageBubblePosition) return;
+      if (typeof window === 'undefined') return;
+      event.preventDefault();
+
+      messageBubbleDraggingRef.current = true;
+      messageBubbleDragOffsetRef.current = {
+        x: event.clientX - messageBubblePosition.x,
+        y: event.clientY - messageBubblePosition.y,
+      };
+
+      const handleMove = (e: MouseEvent) => {
+        if (!messageBubbleDraggingRef.current) return;
+        const viewportWidth = window.innerWidth || 0;
+        const viewportHeight = window.innerHeight || 0;
+        const cardWidth = 360;
+        const cardHeight = 220;
+        const margin = 8;
+
+        let nextX = e.clientX - messageBubbleDragOffsetRef.current.x;
+        let nextY = e.clientY - messageBubbleDragOffsetRef.current.y;
+
+        nextX = Math.min(Math.max(margin, nextX), Math.max(margin, viewportWidth - cardWidth - margin));
+        nextY = Math.min(Math.max(margin, nextY), Math.max(margin, viewportHeight - cardHeight - margin));
+
+        setMessageBubblePosition({ x: nextX, y: nextY });
+      };
+
+      const handleUp = () => {
+        messageBubbleDraggingRef.current = false;
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('mouseup', handleUp);
+      };
+
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleUp);
+    },
+    [messageBubblePosition]
+  );
+
+  const handleSendBubbleMessage = useCallback(async () => {
+    if (!messageBubbleTarget || !messageBubbleText.trim() || messageBubbleSending) return;
+    if (!profile?.id) {
+      toast.error('Please sign in to send messages.');
+      return;
+    }
+
+    setMessageBubbleSending(true);
+    try {
+      const conversationId = await ensureConversationForUser(messageBubbleTarget.id);
+      if (!conversationId) {
+        toast.error('Unable to start conversation right now.');
+        setMessageBubbleSending(false);
+        return;
+      }
+
+      const messageBody = messageBubbleText.trim();
+      await sendConversationMessage(conversationId, messageBody);
+
+      try {
+        await supabase.from('notifications').insert([
+          {
+            user_id: messageBubbleTarget.id,
+            type: 'message',
+            title: 'New message',
+            message: `New message from ${profile.username}`,
+            metadata: {
+              sender_id: profile.id,
+            },
+            read: false,
+          },
+        ]);
+      } catch (notifErr) {
+        console.warn('Notification error (bubble message):', notifErr);
+      }
+
+      setMessageBubbleText('');
+      setMessageBubbleOpen(false);
+      toast.success('Message sent');
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setMessageBubbleSending(false);
+    }
+  }, [
+    messageBubbleTarget,
+    messageBubbleText,
+    messageBubbleSending,
+    ensureConversationForUser,
+    profile?.id,
+    profile?.username,
+  ]);
+
+  const handleUserClick = useCallback((participant: Participant) => {
+    setGiftReceiver({
+      id: participant.identity,
+      username: participant.name || participant.identity,
+      name: participant.name,
+    });
+    setIsGiftModalOpen(true);
+  }, []);
+
   const handleGiftSent = useCallback(
-    async (gift: GiftItem, targetMode: RecipientMode) => {
+    async (gift: GiftItem, targetModeOrSendToAll: RecipientMode | boolean) => {
       const totalCoins = gift.value || 0;
       if (totalCoins <= 0) return;
 
-      const receiverId =
-        targetMode === "broadcaster"
-          ? stream?.broadcaster_id
-          : giftReceiver?.id || stream?.broadcaster_id;
-      setGiftReceiver(null);
+      const sendToAll = typeof targetModeOrSendToAll === 'boolean' ? targetModeOrSendToAll : false;
+      const targetMode = typeof targetModeOrSendToAll === 'string' ? targetModeOrSendToAll : 'user';
 
       const senderId = user?.id;
       const streamIdValue = stream?.id;
@@ -1456,71 +1956,104 @@ export default function LivePage() {
       const canonicalGiftName = gift?.name || "Gift";
       const canonicalGiftSlug = toGiftSlug(canonicalGiftName);
 
-      if (!senderId || !streamIdValue || !receiverId) {
+      if (!senderId || !streamIdValue) {
         toast.error("Unable to send gift right now.");
         return;
       }
 
+      const recipients: string[] = [];
+
+      if (sendToAll) {
+         // Send to all active viewers (excluding self)
+         const viewers = activeViewers.filter(v => v.userId !== senderId).map(v => v.userId);
+         const uniqueRecipients = Array.from(new Set(viewers));
+         recipients.push(...uniqueRecipients);
+      } else {
+         const receiverId = targetMode === "broadcaster"
+          ? stream?.broadcaster_id
+          : giftReceiver?.id || stream?.broadcaster_id;
+         
+         if (receiverId) recipients.push(receiverId);
+      }
+
+      if (recipients.length === 0) {
+        toast.error("No recipients found.");
+        return;
+      }
+
+      setGiftReceiver(null);
+
+      let successCount = 0;
+      
       try {
-        const { error: spendError } = await supabase.rpc("spend_coins", {
-          p_sender_id: senderId,
-          p_receiver_id: receiverId,
-          p_coin_amount: totalCoins,
-          p_source: "gift",
-          p_item: canonicalGiftName,
-        });
-
-        if (spendError) {
-          throw spendError;
-        }
-
-        setGiftBalanceDelta({
-          userId: receiverId,
-          delta: totalCoins,
-          key: Date.now(),
-        });
-
-        if (typeof refreshProfile === 'function') {
-          refreshProfile().catch((err) => {
-            console.warn('Failed to refresh profile after sending gift:', err);
+          const promises = recipients.map(async (receiverId) => {
+             const { error } = await supabase.rpc("spend_coins", {
+              p_sender_id: senderId,
+              p_receiver_id: receiverId,
+              p_coin_amount: totalCoins,
+              p_source: "gift",
+              p_item: canonicalGiftName,
+            });
+            if (error) throw error;
+            
+             setGiftBalanceDelta({
+              userId: receiverId,
+              delta: totalCoins,
+              key: Date.now(),
+            });
+            successCount++;
           });
-        }
 
-        setStream((prev) =>
-          prev
-            ? {
-                ...prev,
-                total_gifts_coins: (prev.total_gifts_coins || 0) + totalCoins,
-              }
-            : prev
-        );
+          await Promise.all(promises);
 
-        if (streamIdValue && broadcasterId) {
-          const eventType = totalCoins >= 1000 ? "super_gift" : "gift";
-          const themeIdToUse = lastThemeId || broadcastTheme?.id;
-          if (!themeIdToUse) {
-            console.warn("[LivePage] Skipping broadcast_theme_events insert because no theme is active");
-          } else {
-            await supabase.from("broadcast_theme_events").insert({
-              room_id: streamIdValue,
-              broadcaster_id: broadcasterId,
-              user_id: senderId,
-              theme_id: themeIdToUse,
-              event_type: eventType,
-              payload: {
-                gift_slug: canonicalGiftSlug,
-                coins: totalCoins,
-                sender_id: senderId,
-              },
+          if (typeof refreshProfile === 'function') {
+            refreshProfile().catch((err) => {
+              console.warn('Failed to refresh profile after sending gift:', err);
             });
           }
-        }
+          
+           setStream((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  total_gifts_coins: (prev.total_gifts_coins || 0) + (totalCoins * successCount),
+                }
+              : prev
+          );
+          
+          if (streamIdValue && broadcasterId) {
+              const eventType = totalCoins >= 1000 ? "super_gift" : "gift";
+              const themeIdToUse = lastThemeId || broadcastTheme?.id;
+
+              if (themeIdToUse) {
+                 const themeEvents = recipients.map(rid => ({
+                    room_id: streamIdValue,
+                    broadcaster_id: broadcasterId,
+                    user_id: senderId,
+                    theme_id: themeIdToUse,
+                    event_type: eventType,
+                    payload: {
+                        gift_slug: canonicalGiftSlug,
+                        coins: totalCoins,
+                        sender_id: senderId,
+                        recipient_id: rid
+                    }
+                 }));
+                 
+                 await supabase.from("broadcast_theme_events").insert(themeEvents);
+              }
+          }
+          
+          if (sendToAll) {
+              toast.success(`Sent ${gift.name} to ${successCount} users!`);
+          }
+
       } catch (err) {
         console.error("Failed to send gift:", err);
-        toast.error("Failed to send gift. Please try again.");
+        toast.error("Failed to send some gifts. Please try again.");
       }
     },
-    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id, lastThemeId, refreshProfile]
+    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id, lastThemeId, refreshProfile, activeViewers]
   );
   useEffect(() => {
     if (!streamId) return;
@@ -1700,25 +2233,68 @@ export default function LivePage() {
           <EntranceEffect username={entranceEffect.username} role={entranceEffect.role} profile={entranceEffect.profile} />
         </div>
       )}
+
+      {/* Officer Action Bubble */}
+      {isOfficerUser && isOfficerBubbleVisible && (
+        <OfficerActionBubble
+          streamId={streamId || ''}
+          onAddBox={handleOfficerAddBox}
+          onEndBroadcast={handleOfficerEndBroadcast}
+          onMuteAll={handleOfficerMuteAll}
+          onKickAll={handleOfficerKickAll}
+          onDisableChat={handleOfficerDisableChat}
+          onClose={() => setIsOfficerBubbleVisible(false)}
+          position={officerBubblePos}
+          onMouseDown={handleOfficerDragStart}
+        />
+      )}
       
       {/* Header Area */}
       <div className="shrink-0 p-4 pb-2 flex justify-between items-center z-10">
-         <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-white/50">{isBroadcaster ? 'Broadcast' : 'Watching'}</p>
-            <p className="text-sm text-white/70">{stream.title || 'Live Stream'}</p>
+         <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(147,51,234,0.5)]">
+               <span className="font-bold text-lg text-white">TC</span>
+            </div>
+            <div>
+               <h1 className="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 shadow-purple-500/50 drop-shadow-md">TROLL CITY</h1>
+               <p className="text-xs text-white/50 tracking-widest uppercase">Live Broadcast</p>
+            </div>
          </div>
+         
          <div className="flex items-center gap-4">
-            <TrollLikeButton 
-              streamId={streamId || ''} 
-              currentLikes={stream?.total_likes || 0}
-            />
-            <div className="px-3 py-2 bg-white/5 rounded-lg border border-yellow-500/30 flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold text-[10px]">C</div>
-              <span className="font-bold text-yellow-400">{(stream.total_gifts_coins || 0).toLocaleString()}</span>
+            {stream.is_live && (
+              isBroadcaster && stream.start_time ? (
+                <BroadcasterTimer startTime={stream.start_time} onClick={endStream} />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-600/90 rounded-full border border-red-500/50 shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+                   <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+                   <span className="text-xs font-bold text-white tracking-wider">LIVE</span>
+                </div>
+              )
+            )}
+
+            <div className="px-3 py-2 bg-black/40 backdrop-blur-sm rounded-xl border border-yellow-500/30 flex items-center gap-2 shadow-[0_0_10px_rgba(234,179,8,0.2)]">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center text-black font-bold text-[10px] border border-yellow-300">C</div>
+              <span className="font-bold text-yellow-400 text-sm">{(stream.total_gifts_coins || 0).toLocaleString()}</span>
             </div>
-            <div className="hidden lg:flex px-4 py-2 bg-white/5 rounded-lg border border-white/10 items-center gap-2">
-              <Heart size={16} className="text-purple-400" /> <span className="font-bold">{stream?.total_likes || 0}</span>
-            </div>
+
+            {isBroadcaster && (
+              <button
+                onClick={() => setControlPanelOpen(true)}
+                className="px-4 py-2 rounded-xl border border-purple-500/30 bg-purple-900/20 text-xs font-bold uppercase tracking-wider text-purple-200 hover:bg-purple-800/40 hover:border-purple-400/50 transition-all shadow-[0_0_10px_rgba(147,51,234,0.2)]"
+              >
+                Control Panel
+              </button>
+            )}
+
+            <button
+              className="hidden lg:flex px-4 py-2 rounded-xl border border-blue-500/30 bg-blue-900/20 text-xs font-bold uppercase tracking-wider text-blue-200 hover:bg-blue-800/40 hover:border-blue-400/50 transition-all gap-2 items-center shadow-[0_0_10px_rgba(59,130,246,0.2)]"
+              onClick={() => toast.info("Install App feature coming soon!")}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Install App
+            </button>
+            
             <div className="relative">
               <button
                 ref={viewerButtonRef}
@@ -1768,22 +2344,7 @@ export default function LivePage() {
                 </div>
               )}
             </div>
-            {isBroadcaster && (
-              <button
-                onClick={() => setControlPanelOpen(true)}
-                className="px-3 py-2 rounded-lg border border-white/20 text-xs font-bold uppercase tracking-[0.2em] bg-white/5 text-white hover:bg-white/10 transition"
-              >
-                Control Panel
-              </button>
-            )}
-            {stream.is_live && (
-              isBroadcaster && stream.start_time ? (
-                <BroadcasterTimer startTime={stream.start_time} onClick={endStream} />
-              ) : (
-                <div className="px-3 py-1 bg-red-600 rounded-full text-xs font-bold animate-pulse">LIVE</div>
-              )
-            )}
-            
+
             {isBroadcaster && (
               <>
                 <button onClick={toggleMic} className={`p-2 rounded-lg border ${micOn ? 'bg-purple-600 border-purple-400' : 'bg-red-900/50 border-red-500'}`}>
@@ -1801,10 +2362,11 @@ export default function LivePage() {
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-2 lg:p-4 pt-0 overflow-y-auto lg:overflow-hidden">
         {/* Broadcast Layout (Streamer + Guests) */}
         <div
-          className="lg:w-3/4 h-[48svh] lg:h-full lg:flex-1 min-h-0 flex flex-col relative z-0"
+          className="lg:w-[72%] h-[40svh] md:h-[46svh] lg:h-full min-h-0 flex flex-col relative z-0"
           onClick={() => {
             if (!showLivePanels) setShowLivePanels(true);
           }}
+          onDoubleClick={handleOfficerDoubleClick}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -1817,7 +2379,22 @@ export default function LivePage() {
               room={liveKit.getRoom()} 
               broadcasterId={stream.broadcaster_id}
               isHost={isBroadcaster}
+              boxCount={boxCount}
               seats={seats}
+              onUserClick={handleUserClick}
+              hostSeatIndex={hostSeatIndex}
+              onHostSeatChange={(index) => {
+                setHostSeatIndex((prev) => {
+                  if (prev === index) return prev;
+                  console.log('[LivePage] Host seat index changed', {
+                    from: prev,
+                    to: index,
+                    broadcasterId: stream.broadcaster_id,
+                    cameraOn,
+                  });
+                  return index;
+                });
+              }}
               joinPrice={joinPrice}
               lastGift={lastGift}
               backgroundStyle={broadcastThemeStyle}
@@ -1827,6 +2404,11 @@ export default function LivePage() {
               onDisableGuestMedia={liveKit.disableGuestMediaByClick}
               onSeatAction={handleSeatAction}
               giftBalanceDelta={giftBalanceDelta}
+              // Media Controls
+              onToggleCamera={toggleCamera}
+              onToggleScreenShare={toggleScreenShare}
+              isCameraOn={cameraOn}
+              isScreenShareOn={screenShareOn}
             >
                <GiftEventOverlay gift={lastGift} onProfileClick={(p) => setSelectedProfile(p)} />
             </BroadcastLayout>
@@ -1862,9 +2444,12 @@ export default function LivePage() {
 
          {/* Right Panel (Chat/Gifts) */}
          {showLivePanels && (
-         <div className="lg:w-1/4 flex-1 lg:h-full min-h-0 flex flex-col gap-4 overflow-hidden relative z-0 pb-[calc(4rem+env(safe-area-inset-bottom))]">
-            {/* GiftBox - Hidden on mobile if chat tab active; make scrollable and height-safe */}
-            <div className={`${activeMobileTab === 'gifts' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-h-0 overflow-hidden`}>
+         <div className="lg:w-[28%] flex-1 lg:h-full min-h-0 flex flex-col gap-4 overflow-hidden relative z-0 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+            <div
+              className={`${activeMobileTab === 'gifts' ? 'flex' : 'hidden'} lg:flex flex-col ${
+                activeMobileTab === 'gifts' ? 'flex-[2]' : 'flex-[1]'
+              } min-h-0 overflow-hidden`}
+            >
               <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-[env(safe-area-inset-bottom)]">
                 <GiftBox
                   onSendGift={handleGiftSent}
@@ -1875,8 +2460,11 @@ export default function LivePage() {
               </div>
             </div>
             
-            {/* ChatBox - Hidden on mobile if gifts tab active; ensure input is pinned and chat scrolls */}
-            <div className={`${activeMobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex flex-col flex-1 min-h-0`}>
+            <div
+              className={`${activeMobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex flex-col ${
+                activeMobileTab === 'chat' ? 'flex-[2]' : 'flex-[1]'
+              } min-h-0`}
+            >
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
                 <ChatBox 
                   streamId={streamId || ''} 
@@ -1911,7 +2499,78 @@ export default function LivePage() {
             setIsGiftModalOpen(true);
             setSelectedProfile(null);
           }}
+          onMessageUser={(target: { id: string; username?: string; name?: string; avatar_url?: string | null }) => {
+            openMessageBubble(target);
+            setSelectedProfile(null);
+          }}
         />
+      )}
+      {messageBubbleOpen && messageBubbleTarget && (
+        <div className="fixed inset-0 z-[180] pointer-events-none">
+          <div
+            className="max-w-sm w-full bg-[#05010a]/95 border border-white/10 rounded-2xl shadow-2xl p-4 pointer-events-auto"
+            style={
+              messageBubblePosition
+                ? {
+                    position: 'fixed',
+                    left: messageBubblePosition.x,
+                    top: messageBubblePosition.y,
+                  }
+                : undefined
+            }
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div
+                className="flex items-center gap-2 cursor-move select-none"
+                onMouseDown={handleMessageBubbleMouseDown}
+              >
+                {messageBubbleTarget.avatar_url && (
+                  <div className="h-8 w-8 rounded-full overflow-hidden bg-white/10">
+                    <img
+                      src={messageBubbleTarget.avatar_url}
+                      alt={messageBubbleTarget.username || ''}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="text-sm font-semibold">
+                  Message {messageBubbleTarget.username || 'user'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMessageBubbleOpen(false)}
+                className="text-xs px-2 py-1 rounded-full border border-white/30 text-white/70 hover:bg-white/10"
+              >
+                ×
+              </button>
+            </div>
+            <textarea
+              value={messageBubbleText}
+              onChange={(e) => setMessageBubbleText(e.target.value)}
+              rows={3}
+              className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/40 resize-none"
+              placeholder="Type your message..."
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMessageBubbleOpen(false)}
+                className="px-3 py-1.5 rounded-full text-xs border border-white/20 text-white/70 hover:bg-white/5"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleSendBubbleMessage}
+                disabled={!messageBubbleText.trim() || messageBubbleSending}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-600 hover:bg-purple-500 disabled:bg-purple-900 disabled:text-white/40"
+              >
+                {messageBubbleSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {seatActionTarget && (
         <UserActionsMenu
@@ -1964,6 +2623,10 @@ export default function LivePage() {
               <BroadcasterControlPanel
                 streamId={streamId || ''}
                 onAlertOfficers={handleAlertOfficers}
+                boxCount={boxCount}
+                onBoxCountChange={setBoxCount}
+                joinPrice={joinPrice}
+                onSetPrice={handleSetPrice}
               />
             </div>
           </div>

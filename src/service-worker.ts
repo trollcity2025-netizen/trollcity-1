@@ -129,8 +129,6 @@ self.addEventListener('notificationclick', (event: any) => {
 
 self.addEventListener('message', (event: any) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
-    self.skipWaiting();
+    (self as any).skipWaiting?.();
   }
 });

@@ -24,7 +24,8 @@ import {
   Activity,
   Award,
   Zap,
-  Gift
+  Gift,
+  Home
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { systemManagementRoutes } from '../adminRoutes'
@@ -94,24 +95,32 @@ export default function AdditionalTasksGrid({
   }
 
   const executiveOfficeGroup = {
-    title: 'Executive Office',
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-500/20',
-    borderColor: 'border-amber-500/30',
-    tasks: [
-      {
-        icon: <Shield className="w-5 h-5" />,
-        label: 'Exec Secretaries',
-        description: 'Manage assignments',
-        action: () => navigate('/admin/executive-secretaries'),
-        color: 'text-purple-400',
-        bgColor: 'bg-purple-500/20'
-      },
-      {
-        icon: <Clock className="w-5 h-5" />,
-        label: 'Intake Inbox',
-        description: 'Executive intake',
-        action: () => navigate('/admin/executive-intake'),
+      title: 'Executive Office',
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/20',
+      borderColor: 'border-amber-500/30',
+      tasks: [
+        {
+          icon: <Shield className="w-5 h-5" />,
+          label: 'Exec Secretaries',
+          description: 'Manage assignments',
+          action: () => navigate('/admin/executive-secretaries'),
+          color: 'text-purple-400',
+          bgColor: 'bg-purple-500/20'
+        },
+        {
+          icon: <Home className="w-5 h-5" />,
+          label: 'Troll Town Deeds',
+          description: 'View deed transfers',
+          action: () => navigate('/admin/troll-town-deeds'),
+          color: 'text-emerald-400',
+          bgColor: 'bg-emerald-500/20'
+        },
+        {
+          icon: <Clock className="w-5 h-5" />,
+          label: 'Intake Inbox',
+          description: 'Executive intake',
+          action: () => navigate('/admin/executive-intake'),
         color: 'text-blue-400',
         bgColor: 'bg-blue-500/20',
         count: counts.intake

@@ -24,6 +24,19 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
     const { sessionId, maxBoxes, roomName, userId, defendantId } = params
     const now = new Date().toISOString()
 
+    let safeDefendantId: string | null = null
+    if (defendantId) {
+      const { data: defendantProfile } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('id', defendantId)
+        .maybeSingle()
+
+      if (defendantProfile?.id) {
+        safeDefendantId = defendantProfile.id
+      }
+    }
+
     // Prevent starting a second active/live session
     const { data: existingActive } = await supabase
       .from('court_sessions')
@@ -61,7 +74,7 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
       updated_at: now,
       max_boxes: maxBoxes,
       room_name: roomName,
-      defendant_id: defendantId ?? null
+      defendant_id: safeDefendantId
     }
 
     const updateOrInsert = waitingSession

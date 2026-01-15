@@ -94,22 +94,36 @@ export default function GiftBox({ onSendGift, gifts, loading, loadError }: GiftB
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
-              {gifts.map((gift) => (
-                <button
-                  key={gift.id}
-                  onClick={() => handleGiftClick(gift)}
-                  className="flex flex-col items-center gap-1 p-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 hover:border-white/20 transition-colors"
-                >
-                  <span className="text-2xl">{getGiftEmoji(gift.icon, gift.name)}</span>
-                  <span className="text-[10px] text-white/70 text-center break-words">
-                    {gift.name}
-                  </span>
-                  <span className="text-xs font-bold text-yellow-400">{gift.value} coins</span>
-                </button>
-              ))}
+              {gifts.map((gift) => {
+                const isPremium = gift.category === "Epic" || gift.category === "Legendary";
+                const baseClasses =
+                  "flex flex-col items-center gap-1 p-2 rounded-lg transition-all";
+                const premiumClasses =
+                  "bg-gradient-to-b from-yellow-500/25 via-yellow-500/10 to-transparent border border-yellow-400/70 shadow-[0_0_18px_rgba(250,204,21,0.45)]";
+                const normalClasses =
+                  "bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20";
+
+                return (
+                  <button
+                    key={gift.id}
+                    onClick={() => handleGiftClick(gift)}
+                    className={`${baseClasses} ${isPremium ? premiumClasses : normalClasses}`}
+                  >
+                    <span className="text-2xl">
+                      {getGiftEmoji(gift.icon, gift.name)}
+                    </span>
+                    <span className="text-[10px] text-white/70 text-center break-words">
+                      {gift.name}
+                    </span>
+                    <span className={`text-xs font-bold ${isPremium ? "text-yellow-300" : "text-yellow-400"}`}>
+                      {gift.value} coins
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
-        </>
+      </>
       )}
     </div>
   );

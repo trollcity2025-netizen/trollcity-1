@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRoomParticipants } from '../../hooks/useRoomParticipants'
-import { Room } from 'livekit-client'
+import { Room, Participant } from 'livekit-client'
 import ResponsiveVideoGrid from '../stream/ResponsiveVideoGrid'
 import { supabase } from '../../lib/supabase'
 
@@ -9,9 +9,9 @@ interface BroadcastLayoutProps {
   broadcasterId: string
   isHost: boolean
   joinPrice?: number
+  boxCount?: number
   seats?: any[]
   lastGift?: any
-  onSetPrice?: (price: number) => void
   onJoinRequest?: (seatIndex: number) => void
   onLeaveSession?: () => void
   onDisableGuestMedia?: (participantId: string) => void
@@ -19,6 +19,14 @@ interface BroadcastLayoutProps {
   backgroundStyle?: React.CSSProperties
   children?: React.ReactNode
   onSeatAction?: (params: { seatIndex: number; seat: any; participant?: any }) => void
+  hostSeatIndex?: number
+  onHostSeatChange?: (seatIndex: number) => void
+  onUserClick?: (participant: Participant) => void
+  onToggleCamera?: () => void
+  onToggleScreenShare?: () => void
+  isCameraOn?: boolean
+  isScreenShareOn?: boolean
+  onSetPrice?: (price: number) => void
 }
 
 export default function BroadcastLayout({
@@ -27,18 +35,25 @@ export default function BroadcastLayout({
   broadcasterId,
   isHost,
   joinPrice = 0,
+  boxCount = 0,
   seats,
   lastGift,
-  onSetPrice,
   onJoinRequest,
   onLeaveSession,
   onDisableGuestMedia,
   onSeatAction,
   backgroundStyle,
-  children
+  children,
+  hostSeatIndex,
+  onHostSeatChange,
+  onUserClick,
+  onToggleCamera,
+  onToggleScreenShare,
+  isCameraOn,
+  isScreenShareOn,
+  onSetPrice: _onSetPrice
 }: BroadcastLayoutProps) {
   const participants = useRoomParticipants(room);
-  const [draftPrice, setDraftPrice] = useState<string>('');
   const [coinBalances, setCoinBalances] = useState<Record<string, number>>({});
 
   const participantIds = useMemo(
@@ -49,10 +64,6 @@ export default function BroadcastLayout({
     () => participantIds.slice().sort().join('|'),
     [participantIds]
   );
-
-  useEffect(() => {
-    setDraftPrice(joinPrice > 0 ? String(joinPrice) : '');
-  }, [joinPrice]);
 
   useEffect(() => {
     if (!participantIds.length) return;
@@ -124,39 +135,27 @@ export default function BroadcastLayout({
           localParticipant={room.localParticipant}
           broadcasterId={broadcasterId}
           seats={seats}
+          isHost={isHost}
+          hostSeatIndex={hostSeatIndex}
           joinPrice={joinPrice}
           onLeaveSession={onLeaveSession}
           onJoinRequest={onJoinRequest}
           onDisableGuestMedia={onDisableGuestMedia}
           coinBalances={coinBalances}
+          onHostSeatChange={onHostSeatChange}
           onSeatAction={onSeatAction}
+          boxCount={boxCount}
+          onUserClick={onUserClick}
+          onToggleCamera={onToggleCamera}
+          onToggleScreenShare={onToggleScreenShare}
+          isCameraOn={isCameraOn}
+          isScreenShareOn={isScreenShareOn}
         />
       </div>
 
       <div className="absolute inset-0 pointer-events-none z-20">
         {children}
       </div>
-
-      {/* Broadcaster Price Control (Preserved) */}
-      {isHost && onSetPrice && (
-        <div className="absolute bottom-20 left-4 md:bottom-4 md:left-4 bg-black/80 px-3 py-1 rounded-lg flex items-center gap-2 z-30 pointer-events-auto">
-          <span className="text-xs text-gray-300">Join Price:</span>
-          <input 
-            type="number" 
-            value={draftPrice}
-            placeholder="Set price"
-            inputMode="numeric"
-            onChange={(e) => setDraftPrice(e.target.value.replace(/[^\d]/g, ''))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const parsed = parseInt(draftPrice || '0') || 0;
-                onSetPrice(Math.max(0, parsed));
-              }
-            }}
-            className="w-20 bg-white/10 border border-white/20 rounded px-2 text-sm text-white"
-          />
-        </div>
-      )}
     </div>
   );
 }

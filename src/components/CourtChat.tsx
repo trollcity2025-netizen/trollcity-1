@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Lock } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -8,6 +10,8 @@ interface Message {
   text: string;
   timestamp: Date;
   isSystem?: boolean;
+  role?: string;
+  messageType?: string;
 }
 
 interface CourtChatProps {
@@ -16,17 +20,9 @@ interface CourtChatProps {
   className?: string;
 }
 
-export default function CourtChat({ courtId: _courtId, isLocked, className = '' }: CourtChatProps) {
-  const { user: _user, profile } = useAuthStore();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      user: 'System',
-      text: 'Welcome to Troll Court. All rise.',
-      timestamp: new Date(),
-      isSystem: true
-    }
-  ]);
+export default function CourtChat({ courtId, isLocked, className = '' }: CourtChatProps) {
+  const { user, profile } = useAuthStore();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -38,32 +34,147 @@ export default function CourtChat({ courtId: _courtId, isLocked, className = '' 
     scrollToBottom();
   }, [messages]);
 
+  // Load initial messages & Subscribe
   useEffect(() => {
-    if (isLocked) {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        user: 'System',
-        text: 'Chat has been locked by the Judge.',
-        timestamp: new Date(),
-        isSystem: true
-      }]);
-    }
-  }, [isLocked]);
+    if (!courtId) return;
 
-  const handleSend = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!inputValue.trim() || isLocked) return;
+    const loadMessages = async () => {
+      const { data, error } = await supabase
+        .from('court_ai_messages')
+        .select(`
+          id,
+          content,
+          created_at,
+          agent_role,
+          user_id,
+          message_type,
+          user_profiles:user_id (username)
+        `)
+        .eq('case_id', courtId)
+        .order('created_at', { ascending: true })
+        .limit(100);
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      user: profile?.username || 'User',
-      text: inputValue.trim(),
-      timestamp: new Date()
+      if (error) {
+        console.error('Error loading chat:', error);
+        return;
+      }
+
+      const formatted = data.map((m: any) => ({
+        id: m.id,
+        user: m.agent_role === 'User' ? (m.user_profiles?.username || 'Unknown') : m.agent_role,
+        text: m.content,
+        timestamp: new Date(m.created_at),
+        isSystem: m.agent_role === 'System',
+        role: m.agent_role,
+        messageType: m.message_type,
+      }));
+      setMessages(formatted);
     };
 
-    setMessages(prev => [...prev, newMessage]);
-    setInputValue('');
+    loadMessages();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel(`court_chat_${courtId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'court_ai_messages',
+          filter: `case_id=eq.${courtId}`
+        },
+        async (payload) => {
+          const m = payload.new as any;
+          
+          // If it's a user message, we might need to fetch the username if not present
+          let username = m.agent_role;
+          if (m.agent_role === 'User' && m.user_id) {
+             if (m.user_id === user?.id) {
+                username = profile?.username || 'Me';
+             } else {
+                const { data } = await supabase.from('user_profiles').select('username').eq('id', m.user_id).single();
+                username = data?.username || 'User';
+             }
+          }
+
+          setMessages(prev => [...prev, {
+            id: m.id,
+            user: username,
+            text: m.content,
+            timestamp: new Date(m.created_at),
+            isSystem: m.agent_role === 'System',
+            role: m.agent_role,
+            messageType: m.message_type,
+          }]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [courtId, user?.id, profile?.username]);
+
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inputValue.trim() || isLocked || !user) return;
+
+    const text = inputValue.trim();
+    setInputValue(''); // optimistic clear
+
+    try {
+      // Determine role (Judge vs User)
+      // Check if user is the judge of this case? 
+      // For simplicity, admins/officers are "Judge" if they want, but let's stick to 'User' unless system explicitly sets it.
+      // Actually, let's check profile role.
+      
+      const isJudge = profile?.role === 'admin' || profile?.is_lead_officer; // Simplified
+      
+      const { error } = await supabase.from('court_ai_messages').insert({
+        case_id: courtId,
+        user_id: user.id,
+        agent_role: isJudge ? 'Judge' : 'User', // Or just 'User' and let the UI decide display? 
+                                                // The prompt logic uses 'Judge' to know authority.
+        message_type: 'chat',
+        content: text
+      });
+
+      if (error) throw error;
+      
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      toast.error('Failed to send message');
+      setInputValue(text); // revert on error
+    }
   };
+
+  const getRoleColor = (role?: string) => {
+    switch(role) {
+      case 'Prosecutor': return 'text-red-400';
+      case 'Defense': return 'text-blue-400';
+      case 'Judge': return 'text-yellow-400';
+      case 'System': return 'text-purple-400';
+      default: return 'text-gray-500';
+    }
+  };
+
+  const latestProsecutorStatement = [...messages]
+    .filter((m) => m.role === 'Prosecutor' && m.messageType === 'statement')
+    .slice(-1)[0];
+
+  const latestDefenseStatement = [...messages]
+    .filter((m) => m.role === 'Defense' && m.messageType === 'statement')
+    .slice(-1)[0];
+
+  const recentInterjections = [...messages]
+    .filter(
+      (m) =>
+        (m.role === 'Prosecutor' || m.role === 'Defense') &&
+        m.messageType &&
+        m.messageType !== 'statement'
+    )
+    .slice(-3);
 
   return (
     <div className={`flex flex-col bg-zinc-900 rounded-lg border border-zinc-800 h-[400px] ${className}`}>
@@ -78,6 +189,35 @@ export default function CourtChat({ courtId: _courtId, isLocked, className = '' 
         )}
       </div>
 
+      {(!latestProsecutorStatement && !latestDefenseStatement && recentInterjections.length === 0) ? null : (
+        <div className="px-3 pt-2 pb-1 border-b border-zinc-800 bg-zinc-950/40 text-[11px] text-gray-300 space-y-1">
+          {latestProsecutorStatement && (
+            <div className="flex gap-1">
+              <span className="font-semibold text-red-400">Prosecutor:</span>
+              <span className="truncate">{latestProsecutorStatement.text}</span>
+            </div>
+          )}
+          {latestDefenseStatement && (
+            <div className="flex gap-1">
+              <span className="font-semibold text-blue-400">Defense:</span>
+              <span className="truncate">{latestDefenseStatement.text}</span>
+            </div>
+          )}
+          {recentInterjections.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {recentInterjections.map((m) => (
+                <span
+                  key={m.id}
+                  className="px-2 py-0.5 rounded-full bg-zinc-900/80 border border-zinc-700 text-[10px]"
+                >
+                  {m.role}: {m.messageType}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
         {messages.map((msg) => (
@@ -88,8 +228,10 @@ export default function CourtChat({ courtId: _courtId, isLocked, className = '' 
               </span>
             ) : (
               <div className="max-w-[85%]">
-                <span className="text-xs text-gray-500 mb-0.5 block ml-1">{msg.user}</span>
-                <div className="bg-zinc-800 px-3 py-2 rounded-2xl rounded-tl-none text-sm text-gray-200 border border-zinc-700/50">
+                <span className={`text-xs mb-0.5 block ml-1 font-bold ${getRoleColor(msg.role)}`}>
+                  {msg.role && msg.role !== 'User' ? `[${msg.role}] ` : ''}{msg.user}
+                </span>
+                <div className={`px-3 py-2 rounded-2xl rounded-tl-none text-sm text-gray-200 border ${msg.role === 'Prosecutor' ? 'bg-red-950/30 border-red-900/50' : msg.role === 'Defense' ? 'bg-blue-950/30 border-blue-900/50' : 'bg-zinc-800 border-zinc-700/50'}`}>
                   {msg.text}
                 </div>
               </div>

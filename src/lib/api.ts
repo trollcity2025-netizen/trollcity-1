@@ -41,6 +41,9 @@ export const API_ENDPOINTS = {
   admin: {
     trollDrop: '/admin/troll-drop',
   },
+  trollcourt: {
+    ai: '/trollcourt-ai',
+  },
   moderation: {
     submitReport: '/moderation',
     takeAction: '/moderation',

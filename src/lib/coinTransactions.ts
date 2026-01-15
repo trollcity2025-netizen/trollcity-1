@@ -3,6 +3,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase, ensureSupabaseSession } from '@/lib/supabase'
+import { useAuthStore } from '@/lib/store'
 import { trackCoinEarning } from './familyTasks'
 import { trackWarActivity } from './familyWars'
 
@@ -46,22 +47,25 @@ const sanitizeMetadata = (metadata?: CoinTransactionMetadata) => {
 }
 
 export type CoinTransactionType = 
-  | 'purchase'          // Buying coins with real money
-  | 'gift_sent'         // Sending a gift
-  | 'gift_received'     // Receiving a gift
-  | 'wheel_win'         // Winning from wheel spin
-  | 'wheel_loss'        // Losing from wheel spin
-  | 'wheel_spin'        // Cost of spinning wheel
-  | 'wheel_prize'       // Prize from wheel spin
-  | 'cashout'           // Broadcaster cashing out
-  | 'admin_grant'       // Admin manually granting coins
-  | 'admin_deduct'      // Admin manually removing coins
-  | 'insurance_purchase' // Buying insurance
-  | 'entrance_effect'   // Buying entrance effect
-  | 'perk_purchase'     // Buying a perk
-  | 'refund'            // Refunding a purchase
-  | 'reward'            // System reward (daily login, achievement, etc.)
-  | 'lucky_gift_win'    // Winning coins from a lucky gift
+  | 'purchase'
+  | 'gift_sent'
+  | 'gift_received'
+  | 'wheel_win'
+  | 'wheel_loss'
+  | 'wheel_spin'
+  | 'wheel_prize'
+  | 'cashout'
+  | 'admin_grant'
+  | 'admin_deduct'
+  | 'insurance_purchase'
+  | 'entrance_effect'
+  | 'perk_purchase'
+  | 'refund'
+  | 'reward'
+  | 'lucky_gift_win'
+  | 'troll_town_purchase'
+  | 'troll_town_sale'
+  | 'troll_town_upgrade'
 
 export type CoinType = 'trollmonds' | 'troll_coins'
 
@@ -289,6 +293,30 @@ export async function deductCoins(params: {
       supabaseClient: sb
     })
 
+    // Update global store if the deduction was for the current user
+    // This ensures UI components (like Sidebar) reflect the change immediately
+    try {
+      const { profile, setProfile } = useAuthStore.getState()
+      if (profile && profile.id === userId && newBalance !== null) {
+        const numericBalance = Number(newBalance)
+        if (!isNaN(numericBalance)) {
+          // Update the specific coin balance based on coinType
+          const updatedProfile = { ...profile }
+          
+          if (coinType === 'trollmonds') {
+             updatedProfile.trollmonds = numericBalance
+          } else {
+             // Default to troll_coins for 'paid' or 'troll_coins'
+             updatedProfile.troll_coins = numericBalance
+          }
+          
+          setProfile(updatedProfile)
+        }
+      }
+    } catch (e) {
+      console.warn('deductCoins: Failed to update local store', e)
+    }
+
     return {
       success: true,
       newBalance,
@@ -372,6 +400,29 @@ export async function addCoins(params: {
       liability,
       supabaseClient: sb
     })
+
+    // Update global store if the addition was for the current user
+    try {
+      const { profile, setProfile } = useAuthStore.getState()
+      if (profile && profile.id === userId && newBalance !== null) {
+        const numericBalance = Number(newBalance)
+        if (!isNaN(numericBalance)) {
+          // Update the specific coin balance based on coinType
+          const updatedProfile = { ...profile }
+          
+          if (finalCoinType === 'trollmonds') {
+             updatedProfile.trollmonds = numericBalance
+          } else {
+             // Default to troll_coins for 'paid' or 'troll_coins'
+             updatedProfile.troll_coins = numericBalance
+          }
+          
+          setProfile(updatedProfile)
+        }
+      }
+    } catch (e) {
+      console.warn('addCoins: Failed to update local store', e)
+    }
 
     // Family coin earning hook: Allocate 10% of troll_coins to family stats
     if (finalCoinType === 'troll_coins' && amount > 0) {

@@ -27,7 +27,7 @@ interface Message {
   };
 }
 
-export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, isBroadcaster }: ChatBoxProps) {
+export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadcaster }: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -36,7 +36,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
   const [isMuted, setIsMuted] = useState(false);
   
   // Cache for user profiles to avoid repeated fetches
-  const userCacheRef = useRef<Record<string, { username: string; perks: string[]; hasInsurance: boolean; rgbExpiresAt?: string; avatar_url?: string }>>({});
+  const userCacheRef = useRef<Record<string, { username: string; perks: string[]; hasInsurance: boolean; rgbExpiresAt?: string; avatar_url?: string; is_ghost_mode?: boolean }>>({});
   
   const [showCoinInput, setShowCoinInput] = useState<string | null>(null);
   const [coinAmount, setCoinAmount] = useState(10);
@@ -60,7 +60,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
     try {
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('username, rgb_username_expires_at, avatar_url')
+        .select('username, rgb_username_expires_at, avatar_url, is_ghost_mode')
         .eq('id', userId)
         .single();
         
@@ -83,7 +83,8 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
         perks: perks?.map(p => p.perk_id) || [],
         hasInsurance: Boolean(insurance && insurance.length > 0),
         rgbExpiresAt: profile?.rgb_username_expires_at,
-        avatar_url: profile?.avatar_url
+        avatar_url: profile?.avatar_url,
+        is_ghost_mode: profile?.is_ghost_mode
       };
 
       userCacheRef.current[userId] = userData;
@@ -292,7 +293,11 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, room, is
             if (!m || !m.id) continue;
             if (!map.has(m.id)) map.set(m.id, m);
           }
-          return Array.from(map.values());
+          return Array.from(map.values()).filter((msg) => {
+            // Filter out ghost mode officers
+            if ((msg.sender_profile as any)?.is_ghost_mode) return false;
+            return true;
+          });
         }, [messages]).map((msg) => {
           // Handle entrance messages
           if (msg.message_type === 'entrance') {

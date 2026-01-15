@@ -19,6 +19,7 @@ interface VideoTileProps {
   compact?: boolean
   isHost?: boolean
   onDisableGuestMedia?: (participantId: string, disableVideo: boolean, disableAudio: boolean) => void
+  onClick?: (participant: Participant) => void
 }
 
 export default function VideoTile({
@@ -33,7 +34,8 @@ export default function VideoTile({
   coinBalance,
   compact = false,
   isHost = false,
-  onDisableGuestMedia
+  onDisableGuestMedia,
+  onClick
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -242,6 +244,12 @@ export default function VideoTile({
 
   const handleBroadcasterClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    if (onClick) {
+      onClick(participant);
+      return;
+    }
+
     // Prevent any action if this is the broadcaster's own tile
     if (isBroadcaster) {
       return;

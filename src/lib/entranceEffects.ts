@@ -149,12 +149,12 @@ export interface EffectConfig {
  */
 export const ROLE_BASED_ENTRANCE_EFFECTS: Record<string, EffectConfig> = {
   'admin': {
-    name: 'The G.O.A.T Arrival',
-    description: 'The ultimate entrance for the supreme leader',
-    animationType: 'admin_best',
-    soundEffect: 'royal_fanfare',
+    name: 'Troll City CEO',
+    description: 'Troll City CEO storms the screen with trolls and city lights',
+    animationType: 'troll_city_ceo',
+    soundEffect: 'city_siren',
     durationSeconds: 8,
-    priority: 100 // Highest priority
+    priority: 100
   },
   'secretary': {
     name: 'Cash Flow Entrance',

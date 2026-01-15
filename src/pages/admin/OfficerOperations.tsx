@@ -7,9 +7,11 @@ import {
   CheckCircle,
   Send,
   Shield,
-  Radio
+  Radio,
+  RefreshCw
 } from 'lucide-react';
 import { supabase, UserRole } from '../../lib/supabase';
+import { toast } from 'sonner';
 import RequireRole from '../../components/RequireRole';
 
 interface OfficerShift {
@@ -166,6 +168,152 @@ export default function OfficerOperations() {
     };
   }, [activeTab, loadData, loadChatMessages, loadPanicAlerts]);
 
+  const syncMessages = async () => {
+    if (!window.confirm('Sync legacy direct messages into the new inbox?')) return;
+
+    setLoading(true);
+    try {
+      const { data: legacyData, error: legacyError } = await supabase
+        .from('messages')
+        .select('id,sender_id,receiver_id,content,created_at,stream_id')
+        .is('stream_id', null);
+
+      if (legacyError) throw legacyError;
+
+      if (!legacyData || legacyData.length === 0) {
+        toast.error('No legacy direct messages found in messages table');
+        setLoading(false);
+        return;
+      }
+
+      const pairKeys: Record<string, { a: string; b: string }> = {};
+
+      for (const msg of legacyData as any[]) {
+        const senderId = msg.sender_id as string | null;
+        const receiverId = msg.receiver_id as string | null;
+        if (!senderId || !receiverId) continue;
+        const a = senderId < receiverId ? senderId : receiverId;
+        const b = senderId < receiverId ? receiverId : senderId;
+        const key = `${a}:${b}`;
+        if (!pairKeys[key]) {
+          pairKeys[key] = { a, b };
+        }
+      }
+
+      const pairEntries = Object.entries(pairKeys);
+      const convMap: Record<string, string> = {};
+
+      for (const [key, pair] of pairEntries) {
+        const { data: existingMembers, error: membersError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id,user_id')
+          .in('user_id', [pair.a, pair.b]);
+
+        if (membersError) throw membersError;
+
+        let conversationId: string | null = null;
+
+        if (existingMembers && existingMembers.length > 0) {
+          const byConv: Record<string, Set<string>> = {};
+          for (const row of existingMembers as any[]) {
+            const cid = row.conversation_id as string;
+            const uid = row.user_id as string;
+            if (!byConv[cid]) byConv[cid] = new Set();
+            byConv[cid].add(uid);
+          }
+          const desired = new Set([pair.a, pair.b]);
+          for (const [cid, membersSet] of Object.entries(byConv)) {
+            if (membersSet.size === desired.size) {
+              let match = true;
+              for (const uid of membersSet) {
+                if (!desired.has(uid)) {
+                  match = false;
+                  break;
+                }
+              }
+              if (match) {
+                conversationId = cid;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!conversationId) {
+          const { data: convData, error: convError } = await supabase
+            .from('conversations')
+            .insert({ created_by: pair.a })
+            .select()
+            .single();
+
+          if (convError) throw convError;
+
+          conversationId = (convData as any).id as string;
+
+          const membersPayload = [
+            { conversation_id: conversationId, user_id: pair.a, role: 'owner' },
+            { conversation_id: conversationId, user_id: pair.b, role: 'member' }
+          ];
+
+          const { error: insertMembersError } = await supabase
+            .from('conversation_members')
+            .insert(membersPayload);
+
+          if (insertMembersError) throw insertMembersError;
+        }
+
+        convMap[key] = conversationId;
+      }
+
+      let migratedCount = 0;
+      const batchSize = 500;
+      const legacy = legacyData as any[];
+
+      for (let i = 0; i < legacy.length; i += batchSize) {
+        const slice = legacy.slice(i, i + batchSize);
+        const rows: any[] = [];
+
+        for (const msg of slice) {
+          const senderId = msg.sender_id as string | null;
+          const receiverId = msg.receiver_id as string | null;
+          const body = msg.content as string | null;
+          const createdAt = msg.created_at as string | null;
+          if (!senderId || !receiverId || !body) continue;
+
+          const a = senderId < receiverId ? senderId : receiverId;
+          const b = senderId < receiverId ? receiverId : senderId;
+          const key = `${a}:${b}`;
+          const conversationId = convMap[key];
+          if (!conversationId) continue;
+
+          rows.push({
+            conversation_id: conversationId,
+            sender_id: senderId,
+            body,
+            created_at: createdAt
+          });
+        }
+
+        if (rows.length === 0) continue;
+
+        const { error: insertError } = await supabase
+          .from('conversation_messages')
+          .insert(rows);
+
+        if (insertError) throw insertError;
+
+        migratedCount += rows.length;
+      }
+
+      toast.success(`Synced ${migratedCount} legacy messages into conversations`);
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      toast.error('Failed to sync messages: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const _createShift = async (officerId: string, startTime: string, endTime: string, patrolArea: string) => {
     try {
       await supabase.rpc('create_officer_shift', {
@@ -275,14 +423,26 @@ export default function OfficerOperations() {
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6 pt-16 lg:pt-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-              <Shield className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold">Officer Operations</h1>
+                <p className="text-gray-400">Shift scheduling, patrol assignments, and emergency response</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold">Officer Operations</h1>
-              <p className="text-gray-400">Shift scheduling, patrol assignments, and emergency response</p>
-            </div>
+
+            <button
+              onClick={syncMessages}
+              disabled={loading}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+              title="Sync legacy direct messages into new conversations"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Sync Messages
+            </button>
           </div>
 
           {/* Tab Navigation */}

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#05010a" />
     
     <!-- PWA / Mobile Capable -->
@@ -30,11 +31,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      if (typeof navigator.serviceWorker !== 'undefined') {
-        navigator.serviceWorker.register('/sw.js')
-      }
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

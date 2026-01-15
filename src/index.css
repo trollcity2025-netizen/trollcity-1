@@ -148,7 +148,7 @@
 
 .seat {
   aspect-ratio: 16 / 9;
-  background: #0b0b0f;
+  background: transparent;
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -158,38 +158,33 @@
 /* RGB border and speaking animations for grid tiles (neon-blue variant) */
 .rgb-border {
   border-radius: 12px;
-  padding: 2px; /* creates inner space for the gradient border */
-  background-image: linear-gradient(90deg, var(--troll-blue-neon), #4cc1ff, var(--troll-cyan-neon), var(--troll-blue-neon));
-  background-size: 400% 400%;
-  animation: rgbGradient 6s linear infinite;
+  padding: 2px;
+  background: transparent;
   transition: all 0.3s ease;
-  box-shadow: 0 0 15px rgba(0, 200, 255, 0.2);
+  box-shadow: none;
 }
 
-/* ✅ Hover glow effect */
 .rgb-border:hover {
-  box-shadow: 0 0 25px rgba(0, 200, 255, 0.5), 0 0 40px rgba(0, 200, 255, 0.3);
-  transform: scale(1.02);
+  box-shadow: none;
+  transform: none;
 }
 
-/* ✅ Active/clicked glow effect */
 .rgb-border:active {
-  box-shadow: 0 0 30px rgba(0, 200, 255, 0.7), 0 0 50px rgba(0, 200, 255, 0.5);
-  transform: scale(0.98);
+  box-shadow: none;
+  transform: none;
 }
 
-/* ✅ Glow when box is occupied (user entered) */
 .rgb-border.occupied {
-  box-shadow: 0 0 20px rgba(0, 255, 150, 0.4), 0 0 35px rgba(0, 255, 150, 0.2);
-  animation: occupiedGlow 2s ease-in-out infinite;
+  box-shadow: none;
+  animation: none;
 }
 
 @keyframes occupiedGlow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(0, 255, 150, 0.4), 0 0 35px rgba(0, 255, 150, 0.2);
+    box-shadow: none;
   }
   50% {
-    box-shadow: 0 0 30px rgba(0, 255, 150, 0.6), 0 0 50px rgba(0, 255, 150, 0.4);
+    box-shadow: none;
   }
 }
 
@@ -1385,7 +1380,7 @@ img, video {
   height: 23%;
   border: 2px solid rgba(185, 0, 255, 0.6);
   border-radius: 14px;
-  background: rgba(25, 25, 25, 0.9);
+  background: transparent;
 }
 
 /* CHAT BOX */
@@ -3266,6 +3261,14 @@ html, body, #root {
   height: calc(100svh - var(--app-header));
   max-height: calc(100svh - var(--app-header));
   overflow: hidden;
+  background-image: linear-gradient(
+    130deg,
+    #050118 0%,
+    #031b4b 28%,
+    #0b49ff 52%,
+    #ff1fbf 78%,
+    #260019 100%
+  );
 }
 
 /* Main stage (host) */
@@ -3277,7 +3280,7 @@ html, body, #root {
   border: 2px solid #981cff;
   border-radius: 14px;
   overflow: hidden;
-  background: #000;
+  background: transparent;
   box-shadow: 0 0 22px rgba(152, 28, 255, 0.55);
   min-height: 0;
 }
@@ -3380,7 +3383,7 @@ html, body, #root {
   position: relative;
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(15, 15, 20, 0.9);
+  background: transparent;
   border: 2px solid rgba(185, 0, 255, 0.55);
   box-shadow: 0 0 14px rgba(185, 0, 255, 0.25);
   aspect-ratio: 16 / 9;
@@ -3570,3 +3573,5 @@ html, body, #root {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* (dynamic seat hover & connection effects reverted) */

@@ -20,6 +20,10 @@ export default function MobileShell() {
   const navigate = useNavigate()
   const location = useLocation()
 
+  const go = React.useCallback((path: string) => {
+    navigate(path)
+  }, [navigate])
+
   useEffect(() => {
     if (!user) {
       navigate('/login')
@@ -43,38 +47,6 @@ export default function MobileShell() {
     requireActive: true,
     allowAdminOverride: true,
   })
-
-  const go = (path: string) => {
-    navigate(path)
-  }
-
-  const NavButton = ({ icon: Icon, label, sublabel, path, colorClass, bgClass, borderClass }: NavButtonProps) => {
-    const isActive = location.pathname === path
-    const activeClass = isActive 
-      ? 'border-purple-500/60 bg-white/10 ring-1 ring-purple-500/30' 
-      : `bg-white/5 ${borderClass || 'border-white/10'} hover:bg-white/10`
-
-    return (
-      <button
-        type="button"
-        onClick={() => go(path)}
-        aria-label={label}
-        aria-current={isActive ? 'page' : undefined}
-        className={cn(
-          "flex items-center gap-3 rounded-2xl border px-3 py-3 transition-all active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-purple-500/60",
-          activeClass
-        )}
-      >
-        <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", bgClass, colorClass)}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div className="flex flex-col items-start text-left">
-          <div className={cn("text-xs font-semibold", isActive ? "text-white" : "text-white/90")}>{label}</div>
-          <div className="text-[11px] text-white/60">{sublabel}</div>
-        </div>
-      </button>
-    )
-  }
 
   return (
     <div className="min-h-dvh flex flex-col bg-gradient-to-b from-[#05010a] via-[#080316] to-[#05010a] pb-safe">
@@ -121,6 +93,8 @@ export default function MobileShell() {
               path="/live"
               colorClass="text-purple-400"
               bgClass="bg-purple-500/20"
+              isActive={location.pathname === '/live'}
+              onClick={go}
             />
             <NavButton
               icon={Radio}
@@ -130,6 +104,8 @@ export default function MobileShell() {
               colorClass="text-purple-200"
               bgClass="bg-purple-600/30"
               borderClass="border-purple-500/40"
+              isActive={location.pathname === '/go-live'}
+              onClick={go}
             />
             <NavButton
               icon={MessageSquare}
@@ -138,6 +114,8 @@ export default function MobileShell() {
               path="/messages"
               colorClass="text-cyan-300"
               bgClass="bg-cyan-500/20"
+              isActive={location.pathname === '/messages'}
+              onClick={go}
             />
             <NavButton
               icon={Wallet}
@@ -146,6 +124,8 @@ export default function MobileShell() {
               path="/wallet"
               colorClass="text-amber-300"
               bgClass="bg-amber-500/20"
+              isActive={location.pathname === '/wallet'}
+              onClick={go}
             />
             <NavButton
               icon={Gavel}
@@ -154,6 +134,8 @@ export default function MobileShell() {
               path="/troll-court"
               colorClass="text-rose-300"
               bgClass="bg-rose-500/20"
+              isActive={location.pathname === '/troll-court'}
+              onClick={go}
             />
             <NavButton
               icon={HelpCircle}
@@ -162,6 +144,8 @@ export default function MobileShell() {
               path="/support"
               colorClass="text-sky-300"
               bgClass="bg-sky-500/20"
+              isActive={location.pathname === '/support'}
+              onClick={go}
             />
           </div>
         </section>
@@ -180,6 +164,8 @@ export default function MobileShell() {
                 colorClass="text-emerald-300"
                 bgClass="bg-emerald-500/20"
                 borderClass="border-emerald-500/40 bg-emerald-900/40"
+                isActive={location.pathname === '/officer/lounge'}
+                onClick={go}
               />
               <NavButton
                 icon={LayoutDashboard}
@@ -189,6 +175,8 @@ export default function MobileShell() {
                 colorClass="text-emerald-300"
                 bgClass="bg-emerald-500/20"
                 borderClass="border-emerald-500/40 bg-emerald-900/40"
+                isActive={location.pathname === '/officer/dashboard'}
+                onClick={go}
               />
               <NavButton
                 icon={Shield}
@@ -198,6 +186,8 @@ export default function MobileShell() {
                 colorClass="text-emerald-300"
                 bgClass="bg-emerald-500/20"
                 borderClass="border-emerald-500/40 bg-emerald-900/40"
+                isActive={location.pathname === '/officer/moderation'}
+                onClick={go}
               />
               <NavButton
                 icon={Video}
@@ -207,6 +197,8 @@ export default function MobileShell() {
                 colorClass="text-emerald-300"
                 bgClass="bg-emerald-500/20"
                 borderClass="border-emerald-500/40 bg-emerald-900/40"
+                isActive={location.pathname === '/officer/stream'}
+                onClick={go}
               />
             </div>
           </section>
@@ -226,6 +218,8 @@ export default function MobileShell() {
                 colorClass="text-yellow-300"
                 bgClass="bg-yellow-500/20"
                 borderClass="border-yellow-500/40 bg-yellow-900/40"
+                isActive={location.pathname === '/admin'}
+                onClick={go}
               />
               {/* Removed redundant Admin Mobile button */}
               <NavButton
@@ -236,6 +230,8 @@ export default function MobileShell() {
                 colorClass="text-yellow-300"
                 bgClass="bg-yellow-500/20"
                 borderClass="border-yellow-500/40 bg-yellow-900/40"
+                isActive={location.pathname === '/admin/officer-reports'}
+                onClick={go}
               />
               <NavButton
                 icon={Gavel}
@@ -245,6 +241,8 @@ export default function MobileShell() {
                 colorClass="text-yellow-300"
                 bgClass="bg-yellow-500/20"
                 borderClass="border-yellow-500/40 bg-yellow-900/40"
+                isActive={location.pathname === '/admin/ban-management'}
+                onClick={go}
               />
             </div>
           </section>
@@ -253,3 +251,28 @@ export default function MobileShell() {
     </div>
   )
 }
+
+const NavButton = React.memo(({ icon: Icon, label, sublabel, path, colorClass, bgClass, borderClass, isActive, onClick }: NavButtonProps & { isActive: boolean; onClick: (path: string) => void }) => {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(path)}
+      aria-label={label}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        "relative flex items-center gap-3 rounded-2xl px-3 py-3 transition-all active:scale-[0.97] focus:outline-none w-full text-left rgb-outline-card",
+        "bg-[#110e1b]", // Base background
+        isActive ? "bg-[#1a1625]" : "hover:bg-[#1a1625]",
+        borderClass // Allow specific background overrides (borders will be suppressed by rgb-outline-card)
+      )}
+    >
+      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center relative z-10", bgClass, colorClass)}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="flex flex-col items-start text-left relative z-10">
+        <div className={cn("text-xs font-semibold", isActive ? "text-white" : "text-white/90")}>{label}</div>
+        <div className="text-[11px] text-white/60">{sublabel}</div>
+      </div>
+    </button>
+  )
+})

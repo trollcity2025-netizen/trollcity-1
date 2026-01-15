@@ -4,6 +4,8 @@ import { useAuthStore } from '../lib/store'
 import { supabase, UserRole } from '../lib/supabase'
 import { startCourtSession } from '../lib/courtSessions'
 import { Scale, Gavel, Users, Clock, AlertTriangle, CheckCircle, Search, X } from 'lucide-react'
+import FileLawsuitModal from '../components/FileLawsuitModal'
+import JudgeRulingModal from '../components/JudgeRulingModal'
 import { toast } from 'sonner'
 import UserSearchDropdown from '../components/UserSearchDropdown'
 
@@ -16,8 +18,12 @@ export default function TrollCourt() {
   
   // New state for features
   const [recentCases, setRecentCases] = useState<any[]>([])
+  const [myCivilCases, setMyCivilCases] = useState<any[]>([])
+  const [assignedCases, setAssignedCases] = useState<any[]>([])
+  const [selectedCaseForRuling, setSelectedCaseForRuling] = useState<any>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isFileLawsuitModalOpen, setIsFileLawsuitModalOpen] = useState(false)
   const [_userList, setUserList] = useState<any[]>([])
   const [selectedUser, setSelectedUser] = useState<any>(null)
   const [_isSearchingUsers, setIsSearchingUsers] = useState(false)
@@ -63,6 +69,32 @@ export default function TrollCourt() {
     }
     fetchCases()
   }, [])
+
+  // Fetch my civil cases
+  useEffect(() => {
+    if (!user) return
+    const fetchMyCivilCases = async () => {
+      const { data } = await supabase
+        .from('troll_court_cases')
+        .select('*, defendant:defendant_id(username), plaintiff:plaintiff_id(username)')
+        .or(`plaintiff_id.eq.${user.id},defendant_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+      if (data) setMyCivilCases(data)
+
+      // Fetch assigned cases (if judge)
+      if (profile?.role === 'admin' || profile?.role === 'lead_troll_officer') {
+        const { data: assigned } = await supabase
+            .from('troll_court_cases')
+            .select('*, defendant:defendant_id(username), plaintiff:plaintiff_id(username)')
+            .eq('assigned_judge_id', user.id)
+            .neq('status', 'ruled')
+            .neq('status', 'dismissed')
+            .order('created_at', { ascending: true })
+        if (assigned) setAssignedCases(assigned)
+      }
+    }
+    fetchMyCivilCases()
+  }, [user, isFileLawsuitModalOpen, profile, selectedCaseForRuling]) // Reload when modal closes (potentially filed new case)
 
   // Search users
   useEffect(() => {
@@ -302,6 +334,14 @@ export default function TrollCourt() {
                 </div>
               </div>
 
+              <button
+                onClick={() => setIsFileLawsuitModalOpen(true)}
+                className="w-full bg-red-900/20 hover:bg-red-900/40 border border-red-500/50 text-red-200 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <Gavel className="w-5 h-5" />
+                Take User To Court (File Lawsuit)
+              </button>
+
               <div className="space-y-3">
                 <button
                   onClick={() => navigate(`/court/${courtSession.id}`)}
@@ -350,6 +390,14 @@ export default function TrollCourt() {
                 <p className="text-sm text-gray-300">
                   No active court session. Troll Court is available for viewing official rulings and case history.
                 </p>
+                
+                <button
+                  onClick={() => setIsFileLawsuitModalOpen(true)}
+                  className="mt-4 w-full bg-red-900/20 hover:bg-red-900/40 border border-red-500/50 text-red-200 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  <Gavel className="w-5 h-5" />
+                  Take User To Court (File Lawsuit)
+                </button>
               </div>
 
               <div className="space-y-3">
@@ -446,6 +494,83 @@ export default function TrollCourt() {
             </div>
           </div>
         </div>
+
+        {/* Assigned Cases (Judge View) */}
+        {assignedCases.length > 0 && (
+          <div className="bg-zinc-900 rounded-xl border border-purple-500/50 p-6 shadow-lg shadow-purple-900/10">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Gavel className="w-5 h-5 text-purple-400" />
+              Court Docket (Assigned to You)
+            </h3>
+            <div className="space-y-3">
+              {assignedCases.map((c) => (
+                <div key={c.id} className="bg-purple-900/20 rounded-lg p-4 border border-purple-500/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-purple-200">
+                      Case #{c.case_number}: {c.category}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-purple-600 rounded-full text-white">
+                      ACTION REQUIRED
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-300 mb-2">
+                    <span>Plaintiff: {c.plaintiff?.username}</span>
+                    <span>Defendant: {c.defendant?.username}</span>
+                  </div>
+                  <div className="text-sm text-gray-400 italic">"{c.description}"</div>
+                  
+                  <div className="mt-3 flex gap-2">
+                      <button 
+                        onClick={() => setSelectedCaseForRuling(c)}
+                        className="text-xs bg-purple-600 hover:bg-purple-500 px-3 py-1 rounded text-white font-semibold"
+                      >
+                          Open Case File
+                      </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* My Civil Cases */}
+        {myCivilCases.length > 0 && (
+          <div className="bg-zinc-900 rounded-xl border border-red-500/20 p-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Scale className="w-5 h-5 text-red-400" />
+              My Civil Lawsuits
+            </h3>
+
+            <div className="space-y-3">
+              {myCivilCases.map((c) => (
+                <div key={c.id} className="bg-gray-900/50 rounded-lg p-4 border border-red-500/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-red-200">
+                      {c.category} 
+                      <span className="text-gray-500 text-xs ml-2">#{c.case_number}</span>
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      c.status === 'ruled' ? 'bg-green-600' : 
+                      c.status === 'dismissed' ? 'bg-gray-600' : 'bg-yellow-600'
+                    }`}>
+                      {c.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-300">
+                    <span>vs {c.defendant_id === user?.id ? c.plaintiff?.username : c.defendant?.username}</span>
+                    <span>Claim: {c.claim_amount} coins</span>
+                  </div>
+                  {c.ruling_verdict && (
+                    <div className="mt-2 text-xs bg-black/20 p-2 rounded text-gray-300">
+                        Verdict: <span className="font-bold text-white">{c.ruling_verdict}</span>
+                        {c.judgment_amount > 0 && ` - Award: ${c.judgment_amount}`}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recent Cases */}
         <div className="bg-zinc-900 rounded-xl border border-purple-500/20 p-6">
@@ -583,6 +708,25 @@ export default function TrollCourt() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
+
+      <FileLawsuitModal
+        isOpen={isFileLawsuitModalOpen}
+        onClose={() => setIsFileLawsuitModalOpen(false)}
+        onSuccess={() => {
+            // Refresh cases if needed
+         }}
+       />
+
+       <JudgeRulingModal
+         isOpen={!!selectedCaseForRuling}
+         caseData={selectedCaseForRuling}
+         onClose={() => setSelectedCaseForRuling(null)}
+         onSuccess={() => {
+            setSelectedCaseForRuling(null)
+            // Ideally trigger refresh here, but for now user can refresh page or wait for next interval if any
+            // We should add a refresh trigger to dependency array of useEffect if we want auto-refresh
+         }}
+       />
+     </div>
+   )
+ }

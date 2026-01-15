@@ -41,43 +41,10 @@ const NeonParticle: React.FC<{ delay: number; color: string }> = ({ delay, color
   );
 };
 
-const trollLightningStrokes = [
-  { id: 'stroke-1', left: '10%', delay: 0, duration: 4.5, count: 4, opacity: 0.95 },
-  { id: 'stroke-2', left: '26%', delay: 0.6, duration: 4, count: 5, opacity: 0.85 },
-  { id: 'stroke-3', left: '42%', delay: 0.2, duration: 4.7, count: 3, opacity: 0.9 },
-  { id: 'stroke-4', left: '58%', delay: 1.1, duration: 4.2, count: 4, opacity: 0.8 },
-  { id: 'stroke-5', left: '74%', delay: 0.4, duration: 5, count: 5, opacity: 0.85 },
-  { id: 'stroke-6', left: '88%', delay: 0.8, duration: 4.3, count: 3, opacity: 0.9 },
-]
-
 const TrollCityBackground: React.FC = () => {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none trollcity-background" style={{ zIndex: 1 }}>
-      <div className="absolute inset-0 troll-lightning-storm">
-        {trollLightningStrokes.map((stroke) => (
-          <div
-            key={stroke.id}
-            className="troll-lightning-column"
-            style={{ left: stroke.left, opacity: stroke.opacity }}
-          >
-            {Array.from({ length: stroke.count }).map((_, idx) => (
-              <span
-                key={`${stroke.id}-${idx}`}
-                className="troll-lightning-word"
-                style={{
-                  animationDelay: `${stroke.delay + idx * 0.45}s`,
-                  animationDuration: `${stroke.duration}s`,
-                }}
-              >
-                TROLL CITY
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-      {/* City Skyline with parallax depth */}
+    <div className="absolute bottom-0 w-full h-3/4 pointer-events-none" style={{ zIndex: 1 }}>
       <div className="absolute bottom-0 w-full h-3/4 perspective">
-        {/* Back buildings - furthest */}
         <div className="absolute bottom-0 w-full h-32 opacity-40" style={{ transform: 'translateZ(-500px) scale(1.5)' }}>
           <div className="flex items-end justify-around h-full px-4">
             {[...Array(8)].map((_, i) => (
@@ -512,7 +479,7 @@ const NewUserCard: React.FC<{ user: HomeUser; onClick: (profileRoute: string) =>
   return (
     <button
       onClick={handleProfileClick}
-      className="relative group bg-gradient-to-br from-[#1f1535]/80 via-[#16102a]/60 to-[#0f0820]/40 rounded-xl p-4 border border-purple-500/30 hover:border-purple-400/60 shadow-lg hover:shadow-xl hover:shadow-purple-500/20 transition-all duration-300 flex flex-col items-center gap-3 overflow-hidden"
+      className="relative group bg-gradient-to-br from-[#1f1535]/80 via-[#16102a]/60 to-[#0f0820]/40 rounded-xl p-4 border border-purple-500/30 hover:border-purple-400/60 shadow-lg hover:shadow-xl hover:shadow-purple-500/20 transition-all duration-300 flex flex-col items-center gap-3 overflow-hidden home-outline-rgb"
     >
       <div className="absolute inset-0 bg-gradient-to-t from-purple-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
@@ -539,7 +506,7 @@ const NewUserCard: React.FC<{ user: HomeUser; onClick: (profileRoute: string) =>
       <div className="relative z-10 text-center flex-1 w-full">
         <p className={`text-lg font-semibold truncate ${hasRgbUsername ? 'rgb-username' : 'text-white'}`}>{displayName}</p>
         <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
-          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-all ${
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-all home-outline-rgb-pill ${
             isAdmin
               ? 'bg-yellow-500/20 border border-yellow-400/50 text-yellow-300'
               : 'bg-purple-500/20 border border-purple-400/50 text-purple-300'
@@ -547,7 +514,7 @@ const NewUserCard: React.FC<{ user: HomeUser; onClick: (profileRoute: string) =>
             Lv {user.level ?? 1}
           </span>
           {isAdmin && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 border border-yellow-400/50 text-yellow-300">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 border border-yellow-400/50 text-yellow-300 home-outline-rgb-pill">
               Admin
             </span>
           )}
@@ -802,9 +769,8 @@ useEffect(() => {
       )}
       {showBanPage && <BanPage onClose={() => setShowBanPage(false)} />}
       
-      {/* Troll City Background */}
+      {/* Troll City skyline only (no falling Troll City text) */}
       <TrollCityBackground />
-       
       {/* Holiday Theme: Snow, Christmas Lights, and Candy Canes */}
       {isHolidaySeason && (
         <div className="absolute inset-0 pointer-events-none holiday-theme">
@@ -872,7 +838,7 @@ useEffect(() => {
 
       <div className="relative z-20 max-w-7xl mx-auto px-5 py-3">
         <div className="mb-6 flex justify-center">
-          <div className="w-full max-w-3xl rounded-3xl border border-yellow-400/50 bg-yellow-500/10 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-yellow-100 backdrop-blur-sm shadow-inner shadow-yellow-500/20 sm:text-sm">
+          <div className="w-full max-w-3xl rounded-3xl border border-yellow-400/50 bg-yellow-500/10 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-yellow-100 backdrop-blur-sm shadow-inner shadow-yellow-500/20 sm:text-sm home-outline-rgb">
             We're in test mode; please use support tickets for any issues. Thanks for understanding!
           </div>
         </div>
@@ -944,7 +910,7 @@ useEffect(() => {
             </div>
           )}
 
-          <div className="relative rounded-3xl bg-gradient-to-br from-[#1a0f2e]/40 to-[#0d0820]/20 backdrop-blur-xl border border-purple-500/20 p-6 shadow-lg space-y-4">
+          <div className="relative rounded-3xl bg-gradient-to-br from-[#1a0f2e]/40 to-[#0d0820]/20 backdrop-blur-xl border border-purple-500/20 p-6 shadow-lg space-y-4 home-live-wrapper home-outline-rgb">
             {isHolidaySeason && <ChristmasOutline rowCount={6} colCount={3} />}
             {loadingLive ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stream-grid" style={{ minHeight: '400px' }}>
@@ -958,7 +924,7 @@ useEffect(() => {
                   <button
                     key={s.id}
                     onClick={() => navigate(`/live/${s.id}`, { state: { streamData: { ...s, status: 'live' } } })}
-                    className={`relative rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#1f1535] via-[#16102a] to-[#0f0820] border transition-all duration-300 group ${
+                    className={`relative rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#1f1535] via-[#16102a] to-[#0f0820] border transition-all duration-300 group home-live-card ${
                       s.user_profiles?.date_of_birth && isBirthdayToday(s.user_profiles.date_of_birth)
                         ? 'border-yellow-400/60 shadow-[0_0_30px_rgba(255,215,0,0.7)] birthday-stream'
                         : 'border-purple-500/40 hover:border-purple-400/60 hover:shadow-[0_0_30px_rgba(168,85,247,0.5)]'
@@ -1070,7 +1036,7 @@ useEffect(() => {
 
         {/* New Trollerz - dY"` Step 4: Use visibility pattern */}
         <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-          <div className="relative bg-gradient-to-br from-[#1a0f2e]/40 to-[#0d0820]/20 backdrop-blur-xl rounded-3xl p-8 border border-purple-500/20 shadow-lg">
+          <div className="relative bg-gradient-to-br from-[#1a0f2e]/40 to-[#0d0820]/20 backdrop-blur-xl rounded-3xl p-8 border border-purple-500/20 shadow-lg home-outline-rgb">
             {isHolidaySeason && <ChristmasOutline rowCount={6} colCount={3} />}
             <div className="flex items-center gap-3 mb-8">
               <div className="relative">

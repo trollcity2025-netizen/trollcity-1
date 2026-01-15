@@ -294,22 +294,6 @@ const GoLive: React.FC = () => {
       } catch {}
     };
 
-    // Enhanced timeout helper with better error handling - increased timeouts for database operations
-    const withTimeout = async <T,>(p: Promise<T>, ms = 30000, operation = 'operation'): Promise<T> => {
-      let timer: any = null;
-      return await Promise.race([
-        p.then((v) => {
-          if (timer) clearTimeout(timer);
-          return v;
-        }),
-        new Promise<never>((_, rej) => {
-          timer = setTimeout(() => {
-            rej(new Error(`${operation} timed out after ${ms}ms`));
-          }, ms);
-        }),
-      ]);
-    };
-
     try {
       const streamId = crypto.randomUUID();
       const roomName = streamId; // Use streamId as LiveKit room name
@@ -381,17 +365,19 @@ const GoLive: React.FC = () => {
       // Optimized stream creation with retry logic and better error handling
       console.log('[GoLive] Starting optimized stream creation...', { streamId, broadcasterId: profile.id });
 
-      // Quick session verification - increased timeout for slower networks
-      const { data: sessionData, error: sessionError } = await withTimeout(
-        supabase.auth.getSession(),
-        10000,
-        'Session verification'
-      );
-      
-      if (sessionError || !sessionData.session?.access_token) {
+      // Session verification: prefer cached session from auth store, fall back to Supabase
+      let sessionAccessToken: string | null = useAuthStore.getState().session?.access_token ?? null;
+      let sessionError: any = null;
+
+      if (!sessionAccessToken) {
+        const { data, error } = await supabase.auth.getSession();
+        sessionAccessToken = data?.session?.access_token ?? null;
+        sessionError = error;
+      }
+
+      if (sessionError || !sessionAccessToken) {
         console.error('[GoLive] Session verification failed:', sessionError);
         toast.error('Session expired. Please sign in again.');
-        // Stop media tracks if we fail here
         preflightStream?.getTracks().forEach(t => t.stop());
         cleanup();
         return;

@@ -22,6 +22,7 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
   const [gifts, setGifts] = useState(fallbackGifts);
   const [selectedGift, setSelectedGift] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [sendToAll, setSendToAll] = useState(false);
   const toGiftSlug = (value) => {
     if (!value) return 'gift';
     return value
@@ -55,7 +56,7 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
   const handleSendGift = () => {
     if (!selectedGift) return;
     const giftPayload = { ...selectedGift, slug: toGiftSlug(selectedGift?.name), quantity };
-    if (typeof onSendGift === 'function') onSendGift(giftPayload);
+    if (typeof onSendGift === 'function') onSendGift(giftPayload, sendToAll);
     setQuantity(1);
     if (typeof onClose === 'function') onClose();
   };
@@ -72,11 +73,27 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
                 Gift Shop
               </h2>
             </div>
-            {recipientName && (
-              <p className="text-xs text-purple-400 font-medium mt-1 pl-7">
-                Sending to <span className="text-white">{recipientName}</span>
-              </p>
-            )}
+            <div className="flex items-center gap-2 mt-2">
+              {recipientName && !sendToAll && (
+                <p className="text-xs text-purple-400 font-medium">
+                  Sending to <span className="text-white">{recipientName}</span>
+                </p>
+              )}
+              {sendToAll && (
+                <p className="text-xs text-yellow-400 font-medium">
+                  Sending to <span className="text-white font-bold">ALL USERS</span>
+                </p>
+              )}
+            </div>
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={sendToAll} 
+                onChange={(e) => setSendToAll(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-white/5 text-purple-600 focus:ring-purple-500"
+              />
+              <span className="text-xs text-white/60">Send to all users</span>
+            </label>
           </div>
           
           <button
