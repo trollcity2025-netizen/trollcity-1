@@ -21,7 +21,10 @@ import {
   LifeBuoy,
   Shuffle,
   Star,
-  Building2
+  Building2,
+  Settings,
+  ShoppingBag,
+  RefreshCw
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -40,6 +43,28 @@ export default function Sidebar() {
   const [canSeeOfficer, setCanSeeOfficer] = useState(false)
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
   const [canSeeSecretary, setCanSeeSecretary] = useState(false)
+
+  const handleClearCacheReload = () => {
+    try {
+      if (profile?.id) {
+        const keysToRemove = [
+          `tc-profile-${profile.id}`,
+          `trollcity_car_${profile.id}`,
+          `trollcity_owned_vehicles_${profile.id}`,
+          `trollcity_car_insurance_${profile.id}`,
+          `trollcity_vehicle_condition_${profile.id}`,
+          `trollcity_home_owned_${profile.id}`
+        ]
+
+        keysToRemove.forEach((key) => localStorage.removeItem(key))
+      }
+
+      localStorage.removeItem('pwa-installed')
+      sessionStorage.clear()
+    } catch {}
+
+    window.location.reload()
+  }
   const [showCourtModal, setShowCourtModal] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
@@ -161,7 +186,17 @@ export default function Sidebar() {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-sm truncate">{profile.username}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-sm truncate">{profile.username}</h3>
+                <button
+                  onClick={handleClearCacheReload}
+                  className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-gray-300"
+                  aria-label="Clear cache and reload"
+                  title="Clear cache and reload"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              </div>
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span className="text-purple-400">{profile.role === 'admin' ? 'Admin' : (profile.title || 'Citizen')}</span>
               </div>
@@ -216,7 +251,9 @@ export default function Sidebar() {
         <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={ShoppingBag} label="Troll Mart" to="/trollmart" active={isActive('/trollmart')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Settings} label="Profile Settings" to="/profile/settings" active={isActive('/profile/settings')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Trophy} label="Leaderboard" to="/leaderboard" active={isActive('/leaderboard')} collapsed={isSidebarCollapsed} />

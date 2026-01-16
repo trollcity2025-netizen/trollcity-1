@@ -2,25 +2,23 @@ import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { useBackgroundProfileRefresh } from '../hooks/useBackgroundProfileRefresh'
 import { toast } from 'sonner'
-import { Camera, Upload, CheckCircle, XCircle, Shield, Coins, CreditCard } from 'lucide-react'
+import { Camera, Upload, CheckCircle, XCircle, Shield } from 'lucide-react'
 
 type Step = 'upload_id' | 'selfie' | 'processing' | 'result'
 
 export default function AIVerificationPage() {
   const { user, profile, refreshProfile } = useAuthStore()
   const navigate = useNavigate()
-  const { refreshProfileInBackground } = useBackgroundProfileRefresh()
   const [step, setStep] = useState<Step>('upload_id')
   const [idPhoto, setIdPhoto] = useState<File | null>(null)
   const [idPhotoUrl, setIdPhotoUrl] = useState<string | null>(null)
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<{ status: string; matchScore: number; behaviorScore: number } | null>(null)
-  const [_paymentMethod, setPaymentMethod] = useState<'paypal' | 'coins' | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const autoStartRef = useRef(false)
 
   if (!user) {
     return (
@@ -196,12 +194,32 @@ export default function AIVerificationPage() {
         matchScore: data.aiMatchScore,
         behaviorScore: data.aiBehaviorScore
       })
+      setStep('result')
 
       if (data.autoApproved) {
-        toast.success('Verification approved!')
+        toast.success('✅ Your ID has been verified by Gemini AI!')
+        
+        // Auto-complete verification without requiring payment
+        try {
+          await supabase.rpc('verify_user', {
+            p_user_id: user.id,
+            p_payment_method: 'ai_verified',
+            p_amount: 0
+          })
+        } catch (verifyError) {
+          console.error('Error completing verification:', verifyError)
+          // Continue even if RPC fails
+        }
+        
+        // Refresh profile
         if (refreshProfile) await refreshProfile()
+        
+        // Auto-redirect to home after 2 seconds
+        setTimeout(() => {
+          navigate('/')
+        }, 2000)
       } else if (data.status === 'in_review') {
-        toast.info('Your verification is under review')
+        toast.info('Your verification is under review by our team')
       } else {
         toast.error('Verification denied. Please try again or contact support.')
       }
@@ -213,62 +231,17 @@ export default function AIVerificationPage() {
     }
   }
 
-  const handlePayment = async (method: 'paypal' | 'coins') => {
-    setPaymentMethod(method)
-    
-    if (method === 'coins') {
-      const troll_coins = profile?.troll_coins || 0
-      if (troll_coins < 500) {
-        toast.error(`You need 500 troll_coins. You have ${troll_coins}`)
-        return
-      }
-
-      // Deduct coins and verify
-      const { error } = await supabase.rpc('deduct_troll_coins', {
-        p_user_id: user.id,
-        p_amount: 500
-      })
-
-      if (error) {
-        // Fallback direct update
-        await supabase
-          .from('user_profiles')
-          .update({ troll_coins: (profile?.troll_coins || 0) - 500 })
-          .eq('id', user.id)
-      }
-
-      await supabase.rpc('verify_user', {
-        p_user_id: user.id,
-        p_payment_method: 'coins',
-        p_amount: 500
-      })
-
-      toast.success('Verification purchased!')
-      if (refreshProfile) await refreshProfile()
-      refreshProfileInBackground()
-      navigate('/')
-    } else {
-      // PayPal flow (use existing verify-user-paypal function)
-      const { data: session } = await supabase.auth.getSession()
-      const token = session.session?.access_token
-
-      const edgeFunctionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 
-        'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
-
-      const response = await fetch(`${edgeFunctionsUrl}/verify-user-paypal`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        window.location.href = data.approvalUrl
-      }
+  React.useEffect(() => {
+    if (step !== 'processing') {
+      autoStartRef.current = false
+      return
     }
-  }
+
+    if (!processing && idPhotoUrl && selfieUrl && !result && !autoStartRef.current) {
+      autoStartRef.current = true
+      processVerification()
+    }
+  }, [step, processing, idPhotoUrl, selfieUrl, result])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
@@ -384,16 +357,6 @@ export default function AIVerificationPage() {
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-500 mx-auto mb-4"></div>
             <h2 className="text-xl font-semibold mb-2">AI Processing Your Verification</h2>
             <p className="opacity-80 mb-6">Comparing faces and analyzing your profile...</p>
-
-            {idPhotoUrl && selfieUrl && (
-              <button
-                onClick={processVerification}
-                disabled={processing}
-                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold disabled:opacity-50"
-              >
-                {processing ? 'Processing...' : 'Start AI Verification'}
-              </button>
-            )}
           </div>
         )}
 
@@ -402,32 +365,21 @@ export default function AIVerificationPage() {
           <div className="bg-[#1A1A1A] border-2 border-purple-500/30 rounded-xl p-8">
             {result.status === 'approved' ? (
               <>
-                <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-center mb-4">🎉 Verification Approved!</h2>
+                <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4 animate-pulse" />
+                <h2 className="text-2xl font-bold text-center mb-4">🎉 Verification Complete!</h2>
                 <div className="bg-green-900/20 border border-green-500 rounded-lg p-4 mb-6">
                   <p className="text-sm mb-2">AI Match Score: <strong>{result.matchScore.toFixed(1)}%</strong></p>
                   <p className="text-sm">Behavior Score: <strong>{result.behaviorScore.toFixed(1)}%</strong></p>
                 </div>
                 <p className="text-center opacity-80 mb-6">
-                  Complete your verification by paying $5 via PayPal or 500 troll_coins
+                  Your ID has been automatically verified by Gemini AI. Redirecting to home...
                 </p>
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handlePayment('paypal')}
-                    className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold flex items-center justify-center gap-2"
-                  >
-                    <CreditCard className="w-5 h-5" />
-                    Pay $5 via PayPal
-                  </button>
-                  <button
-                    onClick={() => handlePayment('coins')}
-                    disabled={(profile?.troll_coins || 0) < 500}
-                    className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <Coins className="w-5 h-5" />
-                    Pay 500 troll_coins (You have {profile?.troll_coins || 0})
-                  </button>
-                </div>
+                <button
+                  onClick={() => navigate('/')}
+                  className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold"
+                >
+                  Go to Home
+                </button>
               </>
             ) : result.status === 'in_review' ? (
               <>

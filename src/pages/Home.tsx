@@ -847,10 +847,10 @@ useEffect(() => {
             
             <div className="relative z-10 flex flex-col items-center justify-center gap-1">
                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-pink-300 to-green-300 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
-                 Welcome to Trolls Town 3D
+                 Welcome to Trolls Town
                </h3>
                <p className="text-xs sm:text-sm font-semibold text-purple-200 tracking-wide group-hover:text-white transition-colors">
-                 Click to Enter the Metaverse &middot; Multiplayer &middot; Drive &middot; Raid
+                 Enter Troll Town &middot; Own Homes &middot; Upgrade &middot; Trade
                </p>
             </div>
 

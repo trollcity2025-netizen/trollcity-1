@@ -7,7 +7,7 @@ import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shi
 import { PERK_CONFIG } from '../lib/perkSystem'
 import { ENTRANCE_EFFECTS_MAP, ROLE_BASED_ENTRANCE_EFFECTS, USER_SPECIFIC_ENTRANCE_EFFECTS } from '../lib/entranceEffects'
 
-export default function UserInventory() {
+export default function UserInventory({ embedded = false }: { embedded?: boolean }) {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   const [inventory, setInventory] = useState<any[]>([])
@@ -57,7 +57,11 @@ export default function UserInventory() {
         supabase.from('user_entrance_effects').select('*').eq('user_id', user!.id).order('purchased_at', { ascending: false }),
         supabase.from('user_perks').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
         supabase.from('user_insurances').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
-        supabase.from('user_active_items').select('item_id').eq('user_id', user!.id),
+        supabase
+          .from('user_active_items')
+          .select('item_id, item_type')
+          .eq('user_id', user!.id)
+          .eq('is_active', true),
         supabase
           .from('user_call_sounds')
           .select('sound_id,is_active,call_sound_catalog(id,slug,name,sound_type,asset_url,price_coins)')
@@ -239,13 +243,23 @@ export default function UserInventory() {
 
   const toggleItemActivation = async (itemId: string, itemType: string) => {
     try {
+      if (!itemType) {
+        toast.error('Item type is missing. Cannot activate.')
+        return
+      }
+
+      if (itemType === 'physical') {
+        toast.info('Physical items cannot be activated.')
+        return
+      }
+
       if (activeItems.has(itemId)) {
-        // Deactivate
         const { error } = await supabase
           .from('user_active_items')
-          .delete()
+          .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq('user_id', user!.id)
           .eq('item_id', itemId)
+          .eq('item_type', itemType)
 
         if (error) throw error
 
@@ -257,25 +271,34 @@ export default function UserInventory() {
 
         toast.success('Item deactivated')
       } else {
-        // Check if we can activate this type (some items might have limits)
-        if (itemType === 'effect' || itemType === 'badge') {
-          // Allow multiple of these
-          const { error } = await supabase
+        const allowMultiple = itemType === 'effect' || itemType === 'badge'
+
+        if (!allowMultiple) {
+          await supabase
             .from('user_active_items')
-            .insert({
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('user_id', user!.id)
+            .eq('item_type', itemType)
+        }
+
+        const { error } = await supabase
+          .from('user_active_items')
+          .upsert(
+            {
               user_id: user!.id,
               item_id: itemId,
-              item_type: itemType
-            })
+              item_type: itemType,
+              is_active: true,
+              activated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            },
+            { onConflict: 'user_id,item_id' }
+          )
 
-          if (error) throw error
+        if (error) throw error
 
-          setActiveItems(prev => new Set([...prev, itemId]))
-          toast.success('Item activated!')
-        } else {
-          // For other types, might have single activation limit
-          toast.info('This item type has special activation rules')
-        }
+        setActiveItems(prev => new Set([...prev, itemId]))
+        toast.success('Item activated!')
       }
     } catch (err) {
       console.error('Error toggling item:', err)
@@ -286,20 +309,28 @@ export default function UserInventory() {
   const togglePerk = async (perkId: string, isActive: boolean) => {
     try {
       const { error } = await supabase
+        .from('user_perks')
+        .update({ is_active: !isActive })
+        .eq('id', perkId)
+
+      if (error) throw error
+
+      await supabase
         .from('user_active_items')
-        .delete()
+        .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('user_id', user!.id)
-        .eq('item_id', perkId);
+        .eq('item_type', 'perk')
 
       if (!isActive) {
-        await supabase.from('user_active_items').insert({
+        await supabase.from('user_active_items').upsert({
           user_id: user!.id,
           item_id: perkId,
-          item_type: 'perk'
-        });
+          item_type: 'perk',
+          is_active: true,
+          activated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,item_id' })
       }
-
-      if (error && isActive) throw error;
       
       setActiveItems(prev => {
         const newSet = new Set(prev);
@@ -321,6 +352,10 @@ export default function UserInventory() {
       case 'badge': return <Crown className="w-5 h-5 text-purple-400" />
       case 'ticket': return <Star className="w-5 h-5 text-blue-400" />
       case 'digital': return <Palette className="w-5 h-5 text-green-400" />
+      case 'theme': return <Palette className="w-5 h-5 text-emerald-400" />
+      case 'ringtone': return <Phone className="w-5 h-5 text-cyan-400" />
+      case 'clothing': return <Sparkles className="w-5 h-5 text-pink-400" />
+      case 'call_minutes': return <Phone className="w-5 h-5 text-sky-400" />
       case 'perk': return <Star className="w-5 h-5 text-pink-400" />
       case 'insurance': return <CheckCircle className="w-5 h-5 text-orange-400" />
       default: return <Package className="w-5 h-5 text-gray-400" />
@@ -361,6 +396,11 @@ export default function UserInventory() {
       case 'badge': return 'Badge'
       case 'ticket': return 'Ticket'
       case 'digital': return 'Digital Item'
+      case 'theme': return 'Theme'
+      case 'ringtone': return 'Ringtone'
+      case 'clothing': return 'Clothing'
+      case 'call_minutes': return 'Call Minutes'
+      case 'physical': return 'Physical Item'
       case 'perk': return 'Perk'
       case 'insurance': return 'Insurance'
       default: return 'Item'
@@ -369,9 +409,9 @@ export default function UserInventory() {
 
   if (!user) return null
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+  const content = (
+    <div className="max-w-6xl mx-auto space-y-6">
+      {!embedded && (
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-2 flex items-center justify-center gap-3">
             <Package className="w-8 h-8 text-purple-400" />
@@ -379,6 +419,7 @@ export default function UserInventory() {
           </h1>
           <p className="text-gray-400">Manage your purchased items and activate digital effects</p>
         </div>
+      )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -784,7 +825,16 @@ export default function UserInventory() {
             </div>
           </div>
         </div>
-      </div>
+    </div>
+  )
+
+  if (embedded) {
+    return <div className="text-white">{content}</div>
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      {content}
     </div>
   )
 }

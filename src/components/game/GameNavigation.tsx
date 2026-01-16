@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useGame } from './useGameContext';
+import { useAuthStore } from '../../lib/store';
 
 export function useGameNavigate() {
   const navigate = useNavigate();
   const { startDriving } = useGame();
+  const { profile } = useAuthStore();
 
   const gameNavigate = (to: string) => {
     const majorPages = [
@@ -15,6 +18,7 @@ export function useGameNavigate() {
       '/general-store',
       '/store',
       '/marketplace',
+      '/trollmart',
       '/auctions',
       '/inventory',
       '/wall',
@@ -36,6 +40,22 @@ export function useGameNavigate() {
     const needsDriving = majorPages.some(page => to.startsWith(page));
 
     if (needsDriving) {
+      let hasStoredVehicle = false;
+      if (profile?.id) {
+        try {
+          const stored = localStorage.getItem(`trollcity_car_${profile.id}`);
+          hasStoredVehicle = stored ? Boolean(JSON.parse(stored)?.carId) : false;
+        } catch {
+          hasStoredVehicle = false;
+        }
+      }
+
+      if (!profile?.active_vehicle && !hasStoredVehicle) {
+        toast.error('Select a vehicle before driving.');
+        navigate('/dealership');
+        return;
+      }
+
       let destName = 'Destination';
       if (to === '/' || to.startsWith('/home')) destName = 'Home';
       else if (to.includes('trollstown') || to.includes('trolls-town')) destName = 'Troll Town';
@@ -45,6 +65,7 @@ export function useGameNavigate() {
       else if (to.includes('general-store')) destName = 'General Store';
       else if (to.includes('/store')) destName = 'Coin Store';
       else if (to.includes('/marketplace')) destName = 'Marketplace';
+      else if (to.includes('/trollmart')) destName = 'Troll Mart';
       else if (to.includes('/inventory')) destName = 'Inventory';
       else if (to.includes('/wall')) destName = 'The Wall';
       else if (to.includes('/leaderboard')) destName = 'Leaderboard';

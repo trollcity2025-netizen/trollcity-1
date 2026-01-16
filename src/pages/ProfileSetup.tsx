@@ -114,6 +114,8 @@ const ProfileSetup = () => {
       
       if (error && error.code !== 'PGRST116') throw error
       
+      let nextProfile = updated as any
+
       if (updated) {
         setProfile(updated as any)
         try {
@@ -129,11 +131,17 @@ const ProfileSetup = () => {
           .eq('id', user.id)
           .maybeSingle()
         if (fallback) {
+          nextProfile = fallback as any
           setProfile(fallback as any)
         }
       }
       toast.success('Profile saved')
-      navigate('/')
+
+      if (nextProfile?.is_verified) {
+        navigate('/')
+      } else {
+        navigate('/ai-verification')
+      }
     } catch (err: any) {
       console.error('Profile save error:', err)
       toast.error(err?.message || 'Failed to save profile')

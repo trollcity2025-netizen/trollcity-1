@@ -13,6 +13,7 @@ export default function CarDealershipPage() {
   const [insuring, setInsuring] = useState(false);
   const [selling, setSelling] = useState(false);
   const [ownedCarId, setOwnedCarId] = useState<number | null>(null);
+  const [ownedVehicleIds, setOwnedVehicleIds] = useState<number[]>([]);
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [listingPrice, setListingPrice] = useState('');
   const [listingType, setListingType] = useState<'sale' | 'auction'>('sale');
@@ -187,34 +188,44 @@ export default function CarDealershipPage() {
   };
 
   useEffect(() => {
-    if (profile?.active_vehicle) {
-      setOwnedCarId(profile.active_vehicle);
-      return;
-    }
-    // Fallback to local storage for backward compatibility or if profile update is slow
     if (!user?.id) {
       setOwnedCarId(null);
+      setOwnedVehicleIds([]);
       return;
     }
 
-    const key = `trollcity_car_${user.id}`;
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      setOwnedCarId(null);
-      return;
-    }
-
+    let owned: number[] = [];
     try {
-      const stored = JSON.parse(raw);
-      if (stored && typeof stored.carId === 'number') {
-        setOwnedCarId(stored.carId);
-      } else {
-        setOwnedCarId(null);
+      const rawList = localStorage.getItem(`trollcity_owned_vehicles_${user.id}`);
+      if (rawList) {
+        owned = JSON.parse(rawList).filter((id: any) => typeof id === 'number');
       }
     } catch {
-      setOwnedCarId(null);
+      owned = [];
     }
-  }, [user?.id]);
+
+    let activeId = profile?.active_vehicle ?? null;
+
+    if (!activeId) {
+      const key = `trollcity_car_${user.id}`;
+      try {
+        const raw = localStorage.getItem(key);
+        const stored = raw ? JSON.parse(raw) : null;
+        if (stored && typeof stored.carId === 'number') {
+          activeId = stored.carId;
+        }
+      } catch {
+        activeId = null;
+      }
+    }
+
+    if (activeId && !owned.includes(activeId)) {
+      owned = [activeId, ...owned];
+    }
+
+    setOwnedVehicleIds(owned);
+    setOwnedCarId(activeId);
+  }, [user?.id, profile?.active_vehicle]);
 
   const handlePurchase = async (carId: number) => {
     if (!user || !profile) {
@@ -247,7 +258,7 @@ export default function CarDealershipPage() {
 
       toast.success(`You purchased ${car.name}`);
       
-      // Update local storage
+      // Update local storage (active vehicle)
       localStorage.setItem(
         `trollcity_car_${user.id}`,
         JSON.stringify({
@@ -261,6 +272,20 @@ export default function CarDealershipPage() {
         })
       );
 
+      // Track owned vehicles list
+      const ownedKey = `trollcity_owned_vehicles_${user.id}`;
+      let ownedList: number[] = [];
+      try {
+        const raw = localStorage.getItem(ownedKey);
+        ownedList = raw ? JSON.parse(raw) : [];
+      } catch {
+        ownedList = [];
+      }
+      if (!ownedList.includes(car.id)) {
+        ownedList.push(car.id);
+        localStorage.setItem(ownedKey, JSON.stringify(ownedList));
+      }
+
       // Update user profile with active vehicle
       await supabase
         .from('user_profiles')
@@ -272,9 +297,41 @@ export default function CarDealershipPage() {
       
       refreshProfile();
       setOwnedCarId(car.id);
+      setOwnedVehicleIds(ownedList);
     } finally {
       setBuyingId(null);
     }
+  };
+
+  const handleSelectActiveVehicle = async (vehicleId: number) => {
+    if (!user) return;
+    const car = cars.find(c => c.id === vehicleId);
+    if (!car) return;
+
+    localStorage.setItem(
+      `trollcity_car_${user.id}`,
+      JSON.stringify({
+        carId: car.id,
+        colorFrom: car.colorFrom,
+        colorTo: car.colorTo,
+        name: car.name,
+        tier: car.tier,
+        price: car.price,
+        style: car.style
+      })
+    );
+
+    await supabase
+      .from('user_profiles')
+      .update({
+        active_vehicle: car.id,
+        vehicle_image: car.image
+      })
+      .eq('id', user.id);
+
+    setOwnedCarId(car.id);
+    refreshProfile();
+    toast.success(`${car.name} is now active.`);
   };
 
   const handleInsurance = async () => {
@@ -371,19 +428,53 @@ export default function CarDealershipPage() {
       localStorage.removeItem(`trollcity_car_insurance_${user.id}`);
       localStorage.removeItem(`trollcity_vehicle_condition_${user.id}`);
 
-      // Clear from profile
+      // Update owned vehicles list
+      const ownedKey = `trollcity_owned_vehicles_${user.id}`;
+      let ownedList: number[] = [];
+      try {
+        const raw = localStorage.getItem(ownedKey);
+        ownedList = raw ? JSON.parse(raw) : [];
+      } catch {
+        ownedList = [];
+      }
+      ownedList = ownedList.filter(id => id !== car.id);
+      localStorage.setItem(ownedKey, JSON.stringify(ownedList));
+
+      // Update active vehicle to next owned, or clear
+      const nextActive = ownedList[0] ?? null;
       await supabase
         .from('user_profiles')
         .update({
-          active_vehicle: null,
-          vehicle_image: null
+          active_vehicle: nextActive,
+          vehicle_image: nextActive
+            ? cars.find(c => c.id === nextActive)?.image || null
+            : null
         })
         .eq('id', user.id);
+
+      if (nextActive) {
+        const nextCar = cars.find(c => c.id === nextActive);
+        if (nextCar) {
+          localStorage.setItem(
+            `trollcity_car_${user.id}`,
+            JSON.stringify({
+              carId: nextCar.id,
+              colorFrom: nextCar.colorFrom,
+              colorTo: nextCar.colorTo,
+              name: nextCar.name,
+              tier: nextCar.tier,
+              price: nextCar.price,
+              style: nextCar.style
+            })
+          );
+        }
+      }
       
       refreshProfile();
 
       toast.success(`Sold ${car.name} for ${refundAmount.toLocaleString()} coins`);
-      setOwnedCarId(null);
+      setOwnedCarId(nextActive);
+      setOwnedVehicleIds(ownedList);
     } catch (error: any) {
       console.error('Failed to sell vehicle', error);
       toast.error(error?.message || 'Failed to sell vehicle');
@@ -512,19 +603,44 @@ export default function CarDealershipPage() {
           </div>
         </div>
 
+        {ownedVehicleIds.length > 1 && (
+          <div className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Active Vehicle</h3>
+              <p className="text-xs text-gray-400">
+                Choose which owned vehicle you drive in-game.
+              </p>
+            </div>
+            <select
+              value={ownedCarId ?? ''}
+              onChange={(e) => handleSelectActiveVehicle(Number(e.target.value))}
+              className="bg-black/40 border border-white/10 text-sm rounded-lg px-3 py-2"
+            >
+              {ownedVehicleIds.map((id) => {
+                const vehicle = cars.find(c => c.id === id);
+                return (
+                  <option key={id} value={id}>
+                    {vehicle?.name || `Vehicle ${id}`}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {cars.map((car) => (
             <div key={car.id} className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 hover:border-red-500/50 transition-all group">
-              <div className="h-40 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black flex items-center justify-center relative overflow-hidden">
+              <div className="aspect-square bg-gradient-to-b from-zinc-900 via-zinc-950 to-black flex items-center justify-center relative overflow-hidden">
                 <div className="absolute inset-x-8 bottom-6 h-10 bg-gradient-to-r from-zinc-800/80 via-zinc-900/90 to-black/90 rounded-full blur-md" />
                 <div className="absolute inset-x-12 top-4 h-6 bg-gradient-to-r from-white/5 via-zinc-700/20 to-transparent rounded-full" />
                 
                 {car.image ? (
-                  <div className="relative w-full h-full flex items-center justify-center p-4">
+                  <div className="relative w-full h-full flex items-center justify-center">
                     <img 
                       src={car.image} 
                       alt={car.name} 
-                      className="max-w-full max-h-full object-contain drop-shadow-2xl hover:scale-110 transition-transform duration-300" 
+                      className="w-full h-full object-cover rounded-lg drop-shadow-2xl" 
                     />
                   </div>
                 ) : (
@@ -562,18 +678,18 @@ export default function CarDealershipPage() {
                   <span>•</span>
                   <span>Armor: {car.armor}</span>
                 </div>
-                {ownedCarId === car.id && (
+                {ownedVehicleIds.includes(car.id) && (
                   <div className="text-xs font-semibold text-emerald-400">
-                    Owned vehicle
+                    {ownedCarId === car.id ? 'Active vehicle' : 'Owned vehicle'}
                   </div>
                 )}
                 <button
                   onClick={() => handlePurchase(car.id)}
-                  disabled={buyingId === car.id || ownedCarId === car.id}
+                  disabled={buyingId === car.id || ownedVehicleIds.includes(car.id)}
                   className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <ShoppingCart size={16} />
-                  {ownedCarId === car.id
+                  {ownedVehicleIds.includes(car.id)
                     ? 'Car Owned'
                     : buyingId === car.id
                     ? 'Processing...'
@@ -742,7 +858,7 @@ export default function CarDealershipPage() {
                           <img
                             src={vehicle.image}
                             alt={vehicle.name}
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div

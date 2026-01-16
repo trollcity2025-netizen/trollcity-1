@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore } from '../store'
+import { supabase } from '../supabase'
 
 export type AvatarSkinTone = 'light' | 'medium' | 'dark'
 export type AvatarHairStyle = 'short' | 'long' | 'buzz' | 'none'
@@ -31,23 +32,48 @@ export function useAvatar() {
   const userKey = user?.id ? `trollcity_avatar_${user.id}` : null
 
   useEffect(() => {
-    if (!userKey) {
-      setConfigState(defaultConfig)
-      return
-    }
-    try {
-      const raw = localStorage.getItem(userKey)
-      if (!raw) {
+    let isMounted = true
+
+    const loadConfig = async () => {
+      if (!userKey || !user?.id) {
         setConfigState(defaultConfig)
         return
       }
-      const parsed = JSON.parse(raw)
-      setConfigState({
-        ...defaultConfig,
-        ...parsed
-      })
-    } catch {
-      setConfigState(defaultConfig)
+
+      // Load from local storage first for instant UI
+      try {
+        const raw = localStorage.getItem(userKey)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (isMounted) {
+            setConfigState({
+              ...defaultConfig,
+              ...parsed
+            })
+          }
+        }
+      } catch {}
+
+      // Then try DB
+      try {
+        const { data } = await supabase
+          .from('user_avatar_customization')
+          .select('avatar_config')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (data?.avatar_config && isMounted) {
+          setConfigState({
+            ...defaultConfig,
+            ...data.avatar_config
+          })
+        }
+      } catch {}
+    }
+
+    loadConfig()
+    return () => {
+      isMounted = false
     }
   }, [userKey])
 

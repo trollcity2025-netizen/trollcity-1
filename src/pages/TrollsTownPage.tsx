@@ -191,45 +191,65 @@ const HOME_TIERS = [
     id: 'tier_5k',
     name: 'Neighborhood Starter',
     price: 5000,
-    description: 'A simple extra home to practice upgrades and tasks.'
+    description: 'A simple extra home to practice upgrades and tasks.',
+    image: '/assets/properties/neighborhood_starter.png'
   },
   {
     id: 'tier_50k',
     name: 'Suburban Duplex',
     price: 50_000,
-    description: 'Medium-tier property with more room for experiments.'
+    description: 'Medium-tier property with more room for experiments.',
+    image: '/assets/properties/suburban_duplex.png'
   },
   {
     id: 'tier_250k',
     name: 'Urban Loft',
     price: 250_000,
-    description: 'Stylish loft in a busy part of Troll City.'
+    description: 'Stylish loft in a busy part of Troll City.',
+    image: '/assets/properties/urban_loft.png'
   },
   {
     id: 'tier_1m',
     name: 'City High-Rise',
     price: 1_000_000,
-    description: 'Premium city property with room for serious projects.'
+    description: 'Premium city property with room for serious projects.',
+    image: '/assets/properties/city_high_rise.png'
   },
   {
     id: 'tier_10m',
     name: 'Luxury Penthouse',
     price: 10_000_000,
-    description: 'High-tier Troll Town home with elite potential.'
+    description: 'High-tier Troll Town home with elite potential.',
+    image: '/assets/properties/luxury_penthouse.png'
   },
   {
     id: 'tier_50m',
     name: 'Troll Mansion',
     price: 50_000_000,
-    description: 'A luxurious mansion for the elite of Troll City.'
+    description: 'A luxurious mansion for the elite of Troll City.',
+    image: '/assets/properties/troll_mansion.png'
   },
   {
     id: 'tier_100m',
     name: 'Mega Estate',
     price: 100_000_000,
-    description: 'Ultra-rare estate for top Trolls with massive balances.'
+    description: 'Ultra-rare estate for top Trolls with massive balances.',
+    image: '/assets/properties/mega_estate.png'
   }
 ]
+
+const getTierImageForValue = (value: number | null, isStarter: boolean | null) => {
+  if (isStarter) return HOME_TIERS[0].image
+  const val = value ?? 0
+  const sorted = [...HOME_TIERS].sort((a, b) => a.price - b.price)
+  let selected = sorted[0]
+  for (const tier of sorted) {
+    if (val >= tier.price) {
+      selected = tier
+    }
+  }
+  return selected.image
+}
 
 type HomeVisualTier = 'starter' | 'mid' | 'luxury' | 'apartment' | 'mansion' | 'mega'
 
@@ -1145,7 +1165,13 @@ const TrollsTownPage: React.FC = () => {
                     className="border border-white/10 rounded-xl p-4 bg-black/30 flex flex-col justify-between gap-3"
                   >
                     <div className="space-y-2">
-                      <HomeVisual value={tier.price} isStarter={false} />
+                      <div className="w-full aspect-[4/5] rounded-lg overflow-hidden border border-white/10">
+                        <img
+                          src={tier.image}
+                          alt={tier.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-white">{tier.name}</p>
@@ -1533,8 +1559,12 @@ const TrollsTownPage: React.FC = () => {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-20">
-                              <HomeVisual value={row.base_value} isStarter={row.is_starter} />
+                            <div className="w-20 h-24 rounded-lg overflow-hidden border border-white/10">
+                              <img
+                                src={getTierImageForValue(row.base_value, row.is_starter)}
+                                alt="Property"
+                                className="w-full h-full object-cover"
+                              />
                             </div>
                             <div>
                               <p className="text-sm font-semibold">

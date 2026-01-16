@@ -3,7 +3,7 @@ import { useParams, useNavigate, useInRouterContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import LiveAvatar from '../components/LiveAvatar';
-import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car } from 'lucide-react';
+import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { deductCoins } from '@/lib/coinTransactions';
 import { PERK_CONFIG } from '@/lib/perkSystem';
@@ -35,6 +35,28 @@ function ProfileInner() {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
   const tabDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const handleClearCacheReload = () => {
+    try {
+      if (currentUser?.id) {
+        const keysToRemove = [
+          `tc-profile-${currentUser.id}`,
+          `trollcity_car_${currentUser.id}`,
+          `trollcity_owned_vehicles_${currentUser.id}`,
+          `trollcity_car_insurance_${currentUser.id}`,
+          `trollcity_vehicle_condition_${currentUser.id}`,
+          `trollcity_home_owned_${currentUser.id}`
+        ];
+
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+      }
+
+      localStorage.removeItem('pwa-installed');
+      sessionStorage.clear();
+    } catch {}
+
+    window.location.reload();
+  };
   
 
   const fetchInventory = async (uid: string) => {
@@ -690,6 +712,16 @@ function ProfileInner() {
             {profile.display_name || profile.username}
             {profile.is_verified && (
               <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full" title="Verified">✓</span>
+            )}
+            {isOwnProfile && (
+              <button
+                onClick={handleClearCacheReload}
+                className="ml-1 p-1 rounded-md bg-white/10 hover:bg-white/20 text-gray-300"
+                aria-label="Clear cache and reload"
+                title="Clear cache and reload"
+              >
+                <RefreshCw size={12} />
+              </button>
             )}
           </h1>
           <p className={`text-gray-400 ${profile.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > new Date() ? 'rgb-username font-bold' : ''}`}>@{profile.username}</p>

@@ -55,6 +55,9 @@ const Following = lazy(() => import("./pages/Following"));
 const CoinStore = lazy(() => import("./pages/CoinStore"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
 const UserInventory = lazy(() => import("./pages/UserInventory"));
+const ProfileSettings = lazy(() => import("./pages/ProfileSettings"));
+const AvatarCustomizer = lazy(() => import("./pages/AvatarCustomizer"));
+const TrollMart = lazy(() => import("./pages/TrollMart"));
 const SellOnTrollCity = lazy(() => import("./pages/SellOnTrollCity"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const TrollCityWall = lazy(() => import("./pages/TrollCityWall"));
@@ -643,6 +646,9 @@ function AppContent() {
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/shop/:username" element={<ShopView />} />
                   <Route path="/inventory" element={<UserInventory />} />
+                  <Route path="/profile/settings" element={<ProfileSettings />} />
+                  <Route path="/avatar-customizer" element={<AvatarCustomizer />} />
+                  <Route path="/trollmart" element={<TrollMart />} />
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/wall" element={<TrollCityWall />} />

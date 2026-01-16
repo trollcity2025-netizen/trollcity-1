@@ -166,6 +166,7 @@ export default function GameControlPanel() {
     { label: 'Drive to Hospital', path: '/hospital', visible: true },
     { label: 'Drive to Coin Store', path: '/store', visible: true },
     { label: 'Drive to Marketplace', path: '/marketplace', visible: true },
+    { label: 'Drive to Troll Mart', path: '/trollmart', visible: true },
     { label: 'Drive to Vehicle Auctions', path: '/auctions', visible: true },
     { label: 'Drive to Inventory', path: '/inventory', visible: true },
     { label: 'Drive to The Wall', path: '/wall', visible: true },
