@@ -51,4 +51,9 @@ declare module 'https://esm.sh/stripe@14.25.0?target=deno' {
   export default Stripe
 }
 
+declare module 'https://cdn.skypack.dev/stripe@14.25.0?min' {
+  const Stripe: any
+  export default Stripe
+}
+
 declare module 'jsr:@supabase/functions-js/edge-runtime.d.ts' {}

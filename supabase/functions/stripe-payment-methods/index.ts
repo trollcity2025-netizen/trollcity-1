@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
-import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
+import Stripe from "https://cdn.skypack.dev/stripe@14.25.0?min";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
