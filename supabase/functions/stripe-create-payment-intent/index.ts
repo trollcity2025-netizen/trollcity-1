@@ -190,6 +190,39 @@ serve(async (req: Request) => {
 
     let { data: pkg, error: pkgError } = await pkgQuery.maybeSingle();
 
+    let fallbackCount: number | null = null;
+    if (!pkg && !pkgError && (typeof packageCoins === "number" || typeof packagePrice === "number")) {
+      let fallbackQuery = supabaseAdmin
+        .from("coin_packages")
+        .select("id, coins, price_usd, amount_cents, stripe_price_id, is_active, paypal_sku")
+        .eq("is_active", true);
+
+      if (typeof packageCoins === "number") {
+        fallbackQuery = fallbackQuery.eq("coins", packageCoins);
+      }
+
+      const fallback = await fallbackQuery.limit(50);
+      const rows = Array.isArray(fallback.data) ? fallback.data : [];
+      fallbackCount = rows.length;
+      if (!fallback.error && rows.length > 0) {
+        if (typeof packagePrice === "number") {
+          const targetAmount = Math.round(packagePrice * 100);
+          rows.sort((a, b) => {
+            const aAmount = typeof a.amount_cents === "number"
+              ? a.amount_cents
+              : Math.round(Number(a.price_usd || 0) * 100);
+            const bAmount = typeof b.amount_cents === "number"
+              ? b.amount_cents
+              : Math.round(Number(b.price_usd || 0) * 100);
+            return Math.abs(aAmount - targetAmount) - Math.abs(bAmount - targetAmount);
+          });
+        }
+        pkg = rows[0] as typeof pkg;
+      } else {
+        pkgError = fallback.error as typeof pkgError;
+      }
+    }
+
     if (pkgError && pkgError.message?.includes("is.not.null") && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const filterId = packageId && !isUuid(packageId)
         ? `paypal_sku=eq.${encodeURIComponent(packageId)}`
@@ -217,6 +250,10 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({
         error: "Failed to fetch package",
         details: pkgError ? JSON.stringify(pkgError) : null,
+        packageId: packageId ?? null,
+        packageCoins: typeof packageCoins === "number" ? packageCoins : null,
+        packagePrice: typeof packagePrice === "number" ? packagePrice : null,
+        fallbackCount,
       }), {
         status: 400,
         headers: { ...cors, "Content-Type": "application/json" },
