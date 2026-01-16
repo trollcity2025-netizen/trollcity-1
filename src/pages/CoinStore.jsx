@@ -734,7 +734,6 @@ export default function CoinStore() {
     setCallSoundPurchasing(sound.id);
     try {
       const { data, error } = await supabase.rpc('purchase_call_sound', {
-        p_user_id: user.id,
         p_sound_id: sound.id,
         p_set_active: false,
       });
