@@ -177,7 +177,29 @@ serve(async (req: Request) => {
       pkgQuery = pkgQuery.eq("coins", packageCoins).eq("price_usd", packagePrice);
     }
 
-    const { data: pkg, error: pkgError } = await pkgQuery.maybeSingle();
+    let { data: pkg, error: pkgError } = await pkgQuery.maybeSingle();
+
+    if (pkgError && pkgError.message?.includes("is.not.null") && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const filterId = packageId && !isUuid(packageId)
+        ? `paypal_sku=eq.${encodeURIComponent(packageId)}`
+        : packageId
+          ? `id=eq.${encodeURIComponent(packageId)}`
+          : typeof packageCoins === "number" && typeof packagePrice === "number"
+            ? `coins=eq.${packageCoins}&price_usd=eq.${packagePrice}`
+            : "";
+      const restUrl = `${SUPABASE_URL}/rest/v1/coin_packages?${filterId}&is_active=eq.true&stripe_price_id=is.not_null&select=id,coins,price_usd,amount_cents,stripe_price_id,is_active,paypal_sku`;
+      const restRes = await fetch(restUrl, {
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+        },
+      });
+      if (restRes.ok) {
+        const rows = await restRes.json();
+        pkg = Array.isArray(rows) ? rows[0] : null;
+        pkgError = null as any;
+      }
+    }
 
     if (pkgError || !pkg) {
       return new Response(JSON.stringify({
