@@ -42,4 +42,8 @@ declare module 'https://esm.sh/@supabase/supabase-js@2' {
   export type SupabaseClient = object
 }
 
+declare module 'https://esm.sh/@supabase/supabase-js@2.39.3?target=deno' {
+  export function createClient(url: string, key: string, options?: any): any
+}
+
 declare module 'jsr:@supabase/functions-js/edge-runtime.d.ts' {}
