@@ -57,8 +57,7 @@ export default function DistrictTour() {
         { feature_name: 'Troll City Wall', route_path: '/wall' }
       ],
       entertainment_district: [
-        { feature_name: 'Tromody Show', route_path: '/tromody' },
-        { feature_name: 'Troll Wheel', route_path: '/troll-wheel' }
+        { feature_name: 'Tromody Show', route_path: '/tromody' }
       ],
       commerce_district: [
         { feature_name: 'Coin Store', route_path: '/store' },

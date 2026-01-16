@@ -20,7 +20,6 @@ const ALL_GIFTS = [
   { id: 'car', name: '🚗 Car Gift', cost: 100 },
   { id: 'crown', name: '👑 Troll Crown', cost: 500 },
   { id: 'diamond', name: '💎 Diamond Shower', cost: 1000 },
-  { id: 'trollwheel', name: '🎡 Troll Wheel Spin', cost: 5000 },
   { id: 'insurance', name: '🛡 Troller Insurance', cost: 750 },
 ]
 

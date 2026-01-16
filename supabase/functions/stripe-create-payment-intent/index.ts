@@ -13,6 +13,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
 const STRIPE_TROLL_PASS_PRICE_ID = Deno.env.get("STRIPE_TROLL_PASS_PRICE_ID");
+const STRIPE_CURRENCY = (Deno.env.get("STRIPE_CURRENCY") || "usd").toLowerCase();
 const APP_URL = Deno.env.get("APP_URL");
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -122,36 +123,20 @@ serve(async (req: Request) => {
       const price = await stripe.prices.retrieve(STRIPE_TROLL_PASS_PRICE_ID);
       const amountCents = typeof price.unit_amount === "number" ? price.unit_amount : 0;
 
-      let session;
-      try {
-        session = await stripe.checkout.sessions.create({
-          mode: "payment",
-          success_url: `${APP_URL}/wallet?success=1&session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${APP_URL}/wallet?canceled=1`,
-          customer: customerId,
-          client_reference_id: authData.user.id,
-          line_items: [{ price: STRIPE_TROLL_PASS_PRICE_ID, quantity: 1 }],
-          metadata: {
-            user_id: authData.user.id,
-            purchase_type: "troll_pass_bundle",
-            coins: "1500",
-          },
-        });
-      } catch (err: any) {
-        console.error("stripe error", err);
-        return new Response(
-          JSON.stringify({
-            error: err?.message ?? "Unknown error",
-            type: err?.type,
-            code: err?.code,
-            param: err?.param,
-            raw: err?.raw?.message,
-          }),
-          { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
-        );
-      }
+      const intent = await stripe.paymentIntents.create({
+        amount: amountCents,
+        currency: STRIPE_CURRENCY,
+        customer: customerId,
+        automatic_payment_methods: { enabled: true },
+        setup_future_usage: "off_session",
+        metadata: {
+          user_id: authData.user.id,
+          purchase_type: "troll_pass_bundle",
+          coins: "1500",
+        },
+      });
 
-      const { error: orderError } = await supabaseAdmin
+      const { data: order, error: orderError } = await supabaseAdmin
         .from("coin_orders")
         .insert({
           user_id: authData.user.id,
@@ -159,10 +144,12 @@ serve(async (req: Request) => {
           coins: 1500,
           amount_cents: amountCents,
           status: "created",
-          stripe_checkout_session_id: session.id,
-        });
+          stripe_payment_intent_id: intent.id,
+        })
+        .select("id")
+        .single();
 
-      if (orderError) {
+      if (orderError || !order) {
         console.error("Failed to insert troll pass order", orderError);
         return new Response(JSON.stringify({ error: "Failed to create order" }), {
           status: 500,
@@ -170,7 +157,16 @@ serve(async (req: Request) => {
         });
       }
 
-      return new Response(JSON.stringify({ url: session.url }), {
+      await stripe.paymentIntents.update(intent.id, {
+        metadata: { order_id: order.id },
+      });
+
+      return new Response(JSON.stringify({
+        clientSecret: intent.client_secret,
+        orderId: order.id,
+        amount: amountCents,
+        currency: STRIPE_CURRENCY,
+      }), {
         status: 200,
         headers: { ...cors, "Content-Type": "application/json" },
       });
@@ -234,47 +230,24 @@ serve(async (req: Request) => {
       });
     }
 
-    if (!pkg.stripe_price_id) {
-      return new Response(JSON.stringify({ error: "Package missing stripe_price_id" }), {
-        status: 400,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
     const amountCents = typeof pkg.amount_cents === "number"
       ? pkg.amount_cents
       : Math.round(Number(pkg.price_usd || 0) * 100);
 
-    let session;
-    try {
-      session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        success_url: `${APP_URL}/wallet?success=1&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${APP_URL}/wallet?canceled=1`,
-        customer: customerId,
-        client_reference_id: authData.user.id,
-        line_items: [{ price: pkg.stripe_price_id, quantity: 1 }],
-        metadata: {
-          user_id: authData.user.id,
-          package_id: pkg.id,
-          coins: String(pkg.coins ?? 0),
-        },
-      });
-    } catch (err: any) {
-      console.error("stripe error", err);
-      return new Response(
-        JSON.stringify({
-          error: err?.message ?? "Unknown error",
-          type: err?.type,
-          code: err?.code,
-          param: err?.param,
-          raw: err?.raw?.message,
-        }),
-        { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
-      );
-    }
+    const intent = await stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: STRIPE_CURRENCY,
+      customer: customerId,
+      automatic_payment_methods: { enabled: true },
+      setup_future_usage: "off_session",
+      metadata: {
+        user_id: authData.user.id,
+        package_id: pkg.id,
+        coins: String(pkg.coins ?? 0),
+      },
+    });
 
-    const { error: orderError } = await supabaseAdmin
+    const { data: order, error: orderError } = await supabaseAdmin
       .from("coin_orders")
       .insert({
         user_id: authData.user.id,
@@ -282,10 +255,12 @@ serve(async (req: Request) => {
         coins: pkg.coins,
         amount_cents: amountCents,
         status: "created",
-        stripe_checkout_session_id: session.id,
-      });
+        stripe_payment_intent_id: intent.id,
+      })
+      .select("id")
+      .single();
 
-    if (orderError) {
+    if (orderError || !order) {
       console.error("Failed to insert coin_orders", orderError);
       return new Response(JSON.stringify({ error: "Failed to create order" }), {
         status: 500,
@@ -293,12 +268,21 @@ serve(async (req: Request) => {
       });
     }
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    await stripe.paymentIntents.update(intent.id, {
+      metadata: { order_id: order.id },
+    });
+
+    return new Response(JSON.stringify({
+      clientSecret: intent.client_secret,
+      orderId: order.id,
+      amount: amountCents,
+      currency: STRIPE_CURRENCY,
+    }), {
       status: 200,
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (err: any) {
-    console.error("Stripe checkout error", err);
+    console.error("Stripe payment intent error", err);
     return new Response(JSON.stringify({ error: err?.message || "Server error" }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },

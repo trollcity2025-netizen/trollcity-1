@@ -400,17 +400,6 @@ entrypoint = "./functions/admin/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/admin/*.html" ]
 
-[functions.wheel]
-enabled = true
-verify_jwt = true
-import_map = "./functions/wheel/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/wheel/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/wheel/*.html" ]
-
 [functions.platform-fees]
 enabled = true
 verify_jwt = true
@@ -422,28 +411,6 @@ entrypoint = "./functions/platform-fees/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/platform-fees/*.html" ]
 
-[functions.square]
-enabled = true
-verify_jwt = true
-import_map = "./functions/square/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/square/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/square/*.html" ]
-
-[functions.agora]
-enabled = true
-verify_jwt = true
-import_map = "./functions/agora/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/agora/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/agora/*.html" ]
-
 [functions.broadcast-seats]
 enabled = true
 verify_jwt = true
@@ -454,16 +421,6 @@ entrypoint = "./functions/broadcast-seats/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/broadcast-seats/*.html" ]
-
-[functions.paypal-capture-order]
-enabled = true
-verify_jwt = false
-entrypoint = "./functions/paypal-capture-order/index.ts"
-
-[functions.paypal-webhook]
-enabled = true
-verify_jwt = false
-entrypoint = "./functions/paypal-webhook/index.ts"
 
 [functions.send-announcement]
 enabled = true

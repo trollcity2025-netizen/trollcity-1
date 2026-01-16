@@ -88,16 +88,6 @@ export default function AdminRFC() {
           />
         </Section>
 
-        {/* WHEEL RULES */}
-        <Section title="Wheel Rules" icon={<Activity className="text-red-400 w-6 h-6" />}>
-          <ul className="text-gray-300 space-y-2 pl-6 list-disc text-sm">
-            <li>Only FREE coins can be used to spin the wheel.</li>
-            <li>Wheel only awards FREE coins.</li>
-            <li>Jackpot triggers confetti, troll laugh, and animated coin burst.</li>
-            <li>Probability is system-defined (no user manipulation).</li>
-          </ul>
-        </Section>
-
         {/* OFFICER PAY STRUCTURE */}
         <Section title="Troll Officer Earnings" icon={<Shield className="text-blue-400 w-6 h-6" />}>
           <Table
@@ -119,8 +109,6 @@ export default function AdminRFC() {
           <Table
             headers={['Provider', 'Fee Structure', 'Avg Cost']}
             rows={[
-              ['Square', '2.9% + $0.30', '1st choice'],
-              ['PayPal', '3.49% + $0.49', 'High fees'],
               ['Venmo / Cash App', '1.5%', 'Wallet to wallet'],
               ['Apple Pay / Google Pay', '2.8% + $0.30', 'Tokenized payments'],
             ]}

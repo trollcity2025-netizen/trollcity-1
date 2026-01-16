@@ -258,12 +258,6 @@ export default function FinanceEconomyCenter({
                       ${economySummary.broadcasters?.totalUsdOwed?.toLocaleString() || 0}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Wheel Activity:</span>
-                    <span className="text-white font-medium">
-                      {economySummary.wheel?.totalSpins?.toLocaleString() || 0} spins
-                    </span>
-                  </div>
                 </div>
               </div>
             )}

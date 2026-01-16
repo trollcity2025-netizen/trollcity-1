@@ -139,7 +139,7 @@ export default function TermsAgreement() {
   const terms = {
     pros: [
       { icon: '💰', title: 'Earn Real Money', desc: 'Cash out your earned coins through streaming and engagement' },
-      { icon: '🎮', title: 'Interactive Features', desc: 'Engage with gifts, wheels, family wars, and more' },
+      { icon: '🎮', title: 'Interactive Features', desc: 'Engage with gifts, family wars, and more' },
       { icon: '🏆', title: 'Level Up System', desc: 'Progress through 100 levels with custom tier names and rewards' },
       { icon: '👑', title: 'Exclusive Badges', desc: 'Earn OG badges, admin badges, and family crowns' },
       { icon: '🎯', title: 'Fair Play', desc: 'Transparent rules and moderation for all users' },

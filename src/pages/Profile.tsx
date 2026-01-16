@@ -116,7 +116,7 @@ function ProfileInner() {
         .select('*')
         .eq('user_id', uid)
         .gt('amount', 0)
-        .in('type', ['gift_received', 'wheel_win', 'wheel_prize', 'reward', 'purchase', 'admin_grant'])
+        .in('type', ['gift_received', 'reward', 'purchase', 'admin_grant'])
         .order('created_at', { ascending: false })
         .limit(50);
       setEarnings(data || []);

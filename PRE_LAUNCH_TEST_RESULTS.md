@@ -109,10 +109,6 @@ All required environment variables present:
 - ✅ `/api/gifts/send` - Send gift (with auth + freeze protection)
 - ✅ Route registered and functional
 
-### Wheel (`/api/wheel/*`)
-- ✅ `/api/wheel/spins/status` - Spin status
-- ✅ `/api/wheel/spins/register` - Register spin
-- ✅ `/api/wheel/spin` - Execute spin
 - ✅ Route registered and functional
 
 ### Health Check
@@ -159,7 +155,6 @@ All required environment variables present:
 ### Other Protected Routes
 - ✅ `/officer-lounge` - Officer dashboard
 - ✅ `/leaderboard` - Global leaderboard
-- ✅ `/wheel` - Troll wheel
 - ✅ `/insurance` - Troller insurance
 - ✅ `/cashouts` - Earnings cashouts
 - ✅ `/support` - Support tickets

@@ -50,10 +50,6 @@ export type CoinTransactionType =
   | 'purchase'
   | 'gift_sent'
   | 'gift_received'
-  | 'wheel_win'
-  | 'wheel_loss'
-  | 'wheel_spin'
-  | 'wheel_prize'
   | 'cashout'
   | 'admin_grant'
   | 'admin_deduct'
@@ -79,7 +75,6 @@ export interface CoinTransactionMetadata {
   insurance_id?: string
   gift_id?: string
   package_id?: string
-  wheel_outcome?: string
   admin_reason?: string
 }
 

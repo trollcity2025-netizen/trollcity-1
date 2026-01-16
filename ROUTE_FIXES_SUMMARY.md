@@ -74,7 +74,6 @@ All these pages should work without redirecting:
 ### Other Pages ✅
 - `/stream/:id` - Stream room
 - `/go-live` - Go live
-- `/wheel` - Troll wheel
 - `/leaderboard` - Leaderboard
 - `/battles` - Battle history
 - `/family` - Family page

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { useCoins } from '@/lib/hooks/useCoins';
 import { toast } from 'sonner';
+import { loadStripe } from '@stripe/stripe-js';
 import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { coinPackages, formatCoins, formatUSD } from '../lib/coinMath';
 import { addCoins, deductCoins } from '@/lib/coinTransactions';
@@ -52,6 +53,7 @@ const isMissingTableError = (error) =>
 
 export default function CoinStore() {
   const stripeCheckoutUrl = import.meta.env.VITE_API_URL || '/api/stripe';
+  const stripePaymentIntentUrl = import.meta.env.VITE_STRIPE_PI_URL || stripeCheckoutUrl;
   const { user, profile, refreshProfile } = useAuthStore();
   const navigate = useNavigate();
   const { troll_coins, refreshCoins } = useCoins();
@@ -79,8 +81,12 @@ export default function CoinStore() {
   const [insuranceNote, setInsuranceNote] = useState(null);
   const [savedMethods, setSavedMethods] = useState([]);
   const [methodsLoading, setMethodsLoading] = useState(false);
-  const [paymentPickerOpen, setPaymentPickerOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [pendingPackage, setPendingPackage] = useState(null);
+  const [paymentClientSecret, setPaymentClientSecret] = useState(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentSetupLoading, setPaymentSetupLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
   const activeStreamId = useLiveContextStore((s) => s.activeStreamId);
   const { momentum } = useStreamMomentum(activeStreamId);
   const [liveStreamIsLive, setLiveStreamIsLive] = useState(false);
@@ -90,6 +96,11 @@ export default function CoinStore() {
     if (typeof window === 'undefined') return false;
     return Boolean(sessionStorage.getItem('tc-store-show-complete'));
   });
+
+  const stripeRef = useRef(null);
+  const elementsRef = useRef(null);
+  const paymentElementRef = useRef(null);
+  const paymentAttachedRef = useRef(false);
 
   const getThemeStyle = (theme) => {
     if (!theme) return undefined;
@@ -408,6 +419,60 @@ export default function CoinStore() {
     const timer = setTimeout(() => setShowPurchaseComplete(false), 1400);
     return () => clearTimeout(timer);
   }, [showPurchaseComplete]);
+
+  const initPaymentElement = useCallback(async (clientSecret) => {
+    if (paymentAttachedRef.current) return;
+    const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+    if (!publishableKey) {
+      setPaymentError('Stripe publishable key not configured');
+      return;
+    }
+
+    setPaymentSetupLoading(true);
+    try {
+      const stripe = await loadStripe(publishableKey);
+      if (!stripe) throw new Error('Stripe failed to load');
+
+      const elements = stripe.elements({
+        clientSecret,
+        appearance: { theme: 'night' },
+      });
+
+      const container = document.getElementById('stripe-coin-payment-element');
+      if (!container) throw new Error('Payment element container missing');
+
+      container.innerHTML = '';
+      const paymentElement = elements.create('payment');
+      paymentElement.mount('#stripe-coin-payment-element');
+
+      stripeRef.current = stripe;
+      elementsRef.current = elements;
+      paymentElementRef.current = paymentElement;
+      paymentAttachedRef.current = true;
+    } catch (err) {
+      console.error('Stripe payment element error:', err);
+      setPaymentError(err?.message || 'Stripe setup failed');
+    } finally {
+      setPaymentSetupLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!paymentModalOpen || !paymentClientSecret) return;
+    initPaymentElement(paymentClientSecret);
+
+    return () => {
+      if (paymentElementRef.current) {
+        try {
+          paymentElementRef.current.destroy();
+        } catch {}
+        paymentElementRef.current = null;
+      }
+      elementsRef.current = null;
+      stripeRef.current = null;
+      paymentAttachedRef.current = false;
+    };
+  }, [paymentModalOpen, paymentClientSecret, initPaymentElement]);
   const canBuySnack = (key) => {
     const ts = lastSnackAt[key];
     if (!ts) return true;
@@ -820,36 +885,44 @@ export default function CoinStore() {
     }
   };
 
-  const startCheckout = async (pkg) => {
-    setLoadingPackage(pkg.id);
+  const startPaymentIntent = async (pkg, purchaseType) => {
+    const loadingId = pkg?.id || purchaseType || 'stripe-payment';
+    setLoadingPackage(loadingId);
+    setPaymentError(null);
+    if (pkg) setPendingPackage(pkg);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('No authentication token available');
 
-      const res = await fetch(stripeCheckoutUrl, {
+      const res = await fetch(stripePaymentIntentUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ packageId: pkg.id, coins: pkg.coins, price: pkg.price })
+        body: JSON.stringify(
+          purchaseType
+            ? { purchaseType }
+            : { packageId: pkg.id, coins: pkg.coins, price: pkg.price }
+        )
       });
 
       if (!res.ok) {
         const txt = await res.text();
         console.error('❌ Backend error:', txt);
-        throw new Error(`Checkout error: ${res.status}`);
+        throw new Error(`Payment start error: ${res.status}`);
       }
 
       const data = await res.json();
-      if (!data.url) throw new Error('Missing checkout URL');
+      if (!data.clientSecret) throw new Error('Missing payment client secret');
 
-      window.location.href = data.url;
+      setPaymentClientSecret(data.clientSecret);
+      setPaymentModalOpen(true);
     } catch (err) {
-      console.error('❌ Failed to start Stripe checkout:', err);
-      toast.error('Unable to start checkout.');
+      console.error('❌ Failed to start Stripe payment:', err);
+      toast.error('Unable to start payment.');
     } finally {
       setLoadingPackage(null);
     }
@@ -858,14 +931,8 @@ export default function CoinStore() {
   const handleBuy = async (pkg) => {
     const canProceed = await checkOnboarding();
     if (!canProceed) return;
-
-    if (savedMethods.length > 0) {
-      setPendingPackage(pkg);
-      setPaymentPickerOpen(true);
-      return;
-    }
-
-    await startCheckout(pkg);
+    setPendingPackage(pkg);
+    await startPaymentIntent(pkg);
   };
 
   const handleBuyTrollPass = async () => {
@@ -873,39 +940,53 @@ export default function CoinStore() {
     if (!canProceed) return;
 
     if (!_isViewerOnly || trollPassActive) return;
+    setPendingPackage({
+      ...trollPassBundle,
+      name: 'Troll Pass Bundle',
+    });
+    await startPaymentIntent(null, 'troll_pass_bundle');
+  };
 
-    setLoadingPackage(trollPassBundle.id);
+  const closePaymentModal = () => {
+    setPaymentModalOpen(false);
+    setPaymentClientSecret(null);
+    setPaymentError(null);
+    setPendingPackage(null);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!stripeRef.current || !elementsRef.current) {
+      setPaymentError('Stripe is not ready yet');
+      return;
+    }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('No authentication token available');
+      setPaymentProcessing(true);
+      setPaymentError(null);
 
-      const res = await fetch(stripeCheckoutUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        }
-        ,
-        body: JSON.stringify({ purchaseType: 'troll_pass_bundle' })
+      const { error, paymentIntent } = await stripeRef.current.confirmPayment({
+        elements: elementsRef.current,
+        confirmParams: {
+          return_url: `${window.location.origin}/wallet?success=1`,
+        },
+        redirect: 'if_required',
       });
 
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error('❌ Backend error:', txt);
-        throw new Error(`Checkout error: ${res.status}`);
+      if (error) {
+        throw new Error(error.message || 'Payment failed');
       }
 
-      const data = await res.json();
-      if (!data.url) throw new Error('Missing checkout URL');
-
-      window.location.href = data.url;
+      if (paymentIntent?.status === 'succeeded' || paymentIntent?.status === 'processing') {
+        toast.success('Payment confirmed');
+        showPurchaseCompleteOverlay();
+        closePaymentModal();
+      }
     } catch (err) {
-      console.error('❌ Failed to start Troll Pass checkout:', err);
-      toast.error('Unable to start Troll Pass checkout.');
+      console.error('Stripe confirm error:', err);
+      setPaymentError(err?.message || 'Payment failed');
+      toast.error(err?.message || 'Payment failed');
     } finally {
-      setLoadingPackage(null);
+      setPaymentProcessing(false);
     }
   };
 
@@ -957,7 +1038,7 @@ export default function CoinStore() {
                 Start with $0.75 coin purchase before making large transactions to ensure coins are routed correctly back to your account.
               </p>
               <p>
-                Stripe Checkout is used for purchases. More payment options coming soon.
+                Stripe Payment is used for purchases. More payment options coming soon.
               </p>
             </div>
           </div>
@@ -1096,11 +1177,11 @@ export default function CoinStore() {
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded font-semibold"
                   >
                     {loadingPackage === trollPassBundle.id
-                      ? 'Starting checkout...'
+                      ? 'Starting payment...'
                       : trollPassActive
                         ? 'Active'
                         : _isViewerOnly
-                          ? 'Checkout with Stripe'
+                          ? 'Pay with Stripe'
                           : 'Viewer only'}
                   </button>
                 </div>
@@ -1186,10 +1267,10 @@ export default function CoinStore() {
                           disabled={loadingPackage === pkg.id}
                           className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded font-semibold"
                         >
-                          {loadingPackage === pkg.id ? 'Starting checkout...' : 'Checkout with Stripe'}
+                          {loadingPackage === pkg.id ? 'Starting payment...' : 'Pay with Stripe'}
                         </button>
                         <div className="mt-2 text-xs text-gray-400 text-center">
-                          Secure Stripe checkout
+                          Secure Stripe payment
                         </div>
                       </div>
                     </div>
@@ -1572,7 +1653,7 @@ export default function CoinStore() {
                 </div>
                 <div>
                   <p className="font-semibold">Pay with Stripe</p>
-                  <p className="text-sm text-gray-400">Secure payment processing through Stripe Checkout</p>
+                  <p className="text-sm text-gray-400">Secure payment processing through Stripe</p>
                 </div>
               </div>
 
@@ -1588,31 +1669,43 @@ export default function CoinStore() {
             </div>
           </div>
 
-          {paymentPickerOpen && pendingPackage && (
+          {paymentModalOpen && pendingPackage && (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-[#0D0D1A] border border-[#2C2C2C] rounded-xl p-6 w-full max-w-lg">
-                <h3 className="text-lg font-semibold mb-2">Confirm payment method</h3>
+                <h3 className="text-lg font-semibold mb-2">Complete payment</h3>
                 <p className="text-sm text-gray-400 mb-4">
-                  We found saved payment methods on your account. Stripe will show these again at checkout.
+                  Confirm your Stripe payment to finish this purchase.
                 </p>
 
-                <div className="space-y-2 mb-4">
-                  {savedMethods.map((method) => (
-                    <div key={method.id} className="flex items-center justify-between px-3 py-2 rounded border border-[#2C2C2C]">
-                      <div>
-                        <div className="text-sm font-medium">
-                          {method.display_name || method.brand || 'Payment Method'}
-                          {method.is_default ? ' • Default' : ''}
+                {savedMethods.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {savedMethods.map((method) => (
+                      <div key={method.id} className="flex items-center justify-between px-3 py-2 rounded border border-[#2C2C2C]">
+                        <div>
+                          <div className="text-sm font-medium">
+                            {method.display_name || method.brand || 'Payment Method'}
+                            {method.is_default ? ' • Default' : ''}
+                          </div>
+                          {method.last4 ? (
+                            <div className="text-xs text-gray-400">•••• {method.last4}</div>
+                          ) : (
+                            <div className="text-xs text-gray-500">Saved method</div>
+                          )}
                         </div>
-                        {method.last4 ? (
-                          <div className="text-xs text-gray-400">•••• {method.last4}</div>
-                        ) : (
-                          <div className="text-xs text-gray-500">Saved method</div>
-                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
+
+                <div id="stripe-coin-payment-element" className="p-3 rounded border border-[#2C2C2C] bg-black mb-3" />
+
+                {paymentSetupLoading && (
+                  <div className="text-xs text-gray-400 mb-3">Loading payment options…</div>
+                )}
+
+                {paymentError && (
+                  <div className="text-xs text-red-400 mb-3">{paymentError}</div>
+                )}
 
                 <div className="text-xs text-gray-500 mb-4">
                   Stripe verifies methods automatically (you may see a $0.00 authorization).
@@ -1621,25 +1714,18 @@ export default function CoinStore() {
                 <div className="flex gap-2 justify-end">
                   <button
                     type="button"
-                    onClick={() => {
-                      setPaymentPickerOpen(false);
-                      setPendingPackage(null);
-                    }}
+                    onClick={closePaymentModal}
                     className="px-4 py-2 rounded bg-gray-700"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      const pkg = pendingPackage;
-                      setPaymentPickerOpen(false);
-                      setPendingPackage(null);
-                      if (pkg) startCheckout(pkg);
-                    }}
-                    className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700"
+                    onClick={handleConfirmPayment}
+                    disabled={paymentProcessing || paymentSetupLoading}
+                    className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
                   >
-                    Continue to Checkout
+                    {paymentProcessing ? 'Processing…' : 'Confirm Payment'}
                   </button>
                 </div>
               </div>

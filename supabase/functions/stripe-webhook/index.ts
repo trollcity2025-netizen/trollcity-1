@@ -52,84 +52,174 @@ serve(async (req: Request) => {
 
     const event = stripe.webhooks.constructEvent(payload, signatureHeader, STRIPE_WEBHOOK_SECRET);
 
-    if (event.type !== "checkout.session.completed") {
-      return new Response(JSON.stringify({ received: true }), {
-        status: 200,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const sessionId = session.id as string;
+      const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
+      const purchaseType = session?.metadata?.purchase_type as string | undefined;
 
-    const session = event.data.object as Stripe.Checkout.Session;
-    const sessionId = session.id as string;
-    const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
-    const purchaseType = session?.metadata?.purchase_type as string | undefined;
-
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("coin_orders")
-      .select("id, user_id, coins, status")
-      .eq("stripe_checkout_session_id", sessionId)
-      .single();
-
-    if (orderError || !order) {
-      console.warn("Order not found for session", sessionId, orderError?.message);
-      return new Response(JSON.stringify({ received: true }), {
-        status: 200,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    if (order.status !== "paid" && order.status !== "fulfilled") {
-      const { error: updateError } = await supabaseAdmin
+      const { data: order, error: orderError } = await supabaseAdmin
         .from("coin_orders")
-        .update({
-          status: "paid",
-          stripe_payment_intent_id: paymentIntentId,
-          paid_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
+        .select("id, user_id, coins, status")
+        .eq("stripe_checkout_session_id", sessionId)
+        .single();
 
-      if (updateError) {
-        console.error("Failed to mark order paid", updateError);
+      if (orderError || !order) {
+        console.warn("Order not found for session", sessionId, orderError?.message);
         return new Response(JSON.stringify({ received: true }), {
           status: 200,
           headers: { ...cors, "Content-Type": "application/json" },
         });
       }
-    }
 
-    if (purchaseType === "troll_pass_bundle") {
-      const { error: passError } = await supabaseAdmin.rpc("apply_troll_pass_bundle", {
-        p_user_id: order.user_id,
-      });
+      if (order.status !== "paid" && order.status !== "fulfilled") {
+        const { error: updateError } = await supabaseAdmin
+          .from("coin_orders")
+          .update({
+            status: "paid",
+            stripe_payment_intent_id: paymentIntentId,
+            paid_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", order.id);
 
-      if (passError) {
-        console.error("apply_troll_pass_bundle failed", passError);
+        if (updateError) {
+          console.error("Failed to mark order paid", updateError);
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { ...cors, "Content-Type": "application/json" },
+          });
+        }
       }
 
-      const { error: fulfillError } = await supabaseAdmin
+      if (purchaseType === "troll_pass_bundle") {
+        const { error: passError } = await supabaseAdmin.rpc("apply_troll_pass_bundle", {
+          p_user_id: order.user_id,
+        });
+
+        if (passError) {
+          console.error("apply_troll_pass_bundle failed", passError);
+        }
+
+        const { error: fulfillError } = await supabaseAdmin
+          .from("coin_orders")
+          .update({
+            status: "fulfilled",
+            fulfilled_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", order.id);
+
+        if (fulfillError) {
+          console.error("Failed to fulfill troll pass order", fulfillError);
+        }
+      } else {
+        const { error: creditError } = await supabaseAdmin.rpc("credit_coins", {
+          p_user_id: order.user_id,
+          p_coins: order.coins,
+          p_order_id: order.id,
+        });
+
+        if (creditError) {
+          console.error("credit_coins failed", creditError);
+        }
+      }
+
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    if (event.type === "payment_intent.succeeded") {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const paymentIntentId = paymentIntent.id as string;
+      const metadata = paymentIntent.metadata || {};
+      const purchaseType = metadata.purchase_type as string | undefined;
+      const orderId = metadata.order_id as string | undefined;
+
+      let orderQuery = supabaseAdmin
         .from("coin_orders")
-        .update({
-          status: "fulfilled",
-          fulfilled_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
+        .select("id, user_id, coins, status")
+        .eq("stripe_payment_intent_id", paymentIntentId);
 
-      if (fulfillError) {
-        console.error("Failed to fulfill troll pass order", fulfillError);
+      if (orderId) {
+        orderQuery = orderQuery.eq("id", orderId);
       }
-    } else {
-      const { error: creditError } = await supabaseAdmin.rpc("credit_coins", {
-        p_user_id: order.user_id,
-        p_coins: order.coins,
-        p_order_id: order.id,
+
+      const { data: order, error: orderError } = await orderQuery.maybeSingle();
+
+      if (orderError || !order) {
+        console.warn("Order not found for payment_intent", paymentIntentId, orderError?.message);
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      if (order.status !== "paid" && order.status !== "fulfilled") {
+        const { error: updateError } = await supabaseAdmin
+          .from("coin_orders")
+          .update({
+            status: "paid",
+            stripe_payment_intent_id: paymentIntentId,
+            paid_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", order.id);
+
+        if (updateError) {
+          console.error("Failed to mark order paid", updateError);
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { ...cors, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      if (purchaseType === "troll_pass_bundle") {
+        const { error: passError } = await supabaseAdmin.rpc("apply_troll_pass_bundle", {
+          p_user_id: order.user_id,
+        });
+
+        if (passError) {
+          console.error("apply_troll_pass_bundle failed", passError);
+        }
+
+        const { error: fulfillError } = await supabaseAdmin
+          .from("coin_orders")
+          .update({
+            status: "fulfilled",
+            fulfilled_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", order.id);
+
+        if (fulfillError) {
+          console.error("Failed to fulfill troll pass order", fulfillError);
+        }
+      } else {
+        const { error: creditError } = await supabaseAdmin.rpc("credit_coins", {
+          p_user_id: order.user_id,
+          p_coins: order.coins,
+          p_order_id: order.id,
+        });
+
+        if (creditError) {
+          console.error("credit_coins failed", creditError);
+        }
+      }
+
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
       });
-
-      if (creditError) {
-        console.error("credit_coins failed", creditError);
-      }
     }
+
+    return new Response(JSON.stringify({ received: true }), {
+      status: 200,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
 
     return new Response(JSON.stringify({ received: true }), {
       status: 200,

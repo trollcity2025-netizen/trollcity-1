@@ -2,8 +2,6 @@ import { supabase } from './supabase'
 import { triggerMaiReaction } from './maiEngine'
 
 export type DnaEventType =
-  | 'WHEEL_BANKRUPT'
-  | 'HIGH_RISK_SPIN'
   | 'SENT_CHAOS_GIFT'
   | 'HELPED_SMALL_STREAMER'
   | 'WON_FAMILY_WAR'

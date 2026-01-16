@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import GiftSoundPlayer from './GiftSoundPlayer'
-import WheelModal from './WheelModal'
 import ClickableUsername from '../components/ClickableUsername'
 
 export default function GiftEventOverlay({ gift, onProfileClick }: { gift: any, onProfileClick?: (profile: any) => void }) {
@@ -168,7 +167,6 @@ export default function GiftEventOverlay({ gift, onProfileClick }: { gift: any, 
       {(gift.quantity === undefined || Number(gift.quantity) === 1) && (
         <GiftSoundPlayer giftId={String(gift.id)} />
       )}
-      {gift.id === 'trollwheel' && <WheelModal />}
     </>
   )
 }

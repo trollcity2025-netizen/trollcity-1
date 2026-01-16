@@ -411,26 +411,6 @@ Deno.serve(async (req: Request) => {
 
       const totalUsdPaid = officerPayments?.reduce((sum: number, p: { amount?: number }) => sum + Number(p.amount || 0), 0) || 0;
 
-      // Wheel activity
-      const { data: wheelSpins } = await supabase
-        .from('coin_transactions')
-        .select('amount, metadata')
-        .eq('type', 'wheel_spin');
-
-      let totalSpins = 0;
-      let totalCoinsSpent = 0;
-      let totalCoinsAwarded = 0;
-      let jackpotCount = 0;
-      wheelSpins?.forEach((spin: { amount?: number; metadata?: any }) => {
-        totalSpins++;
-        const spent = Math.abs(Number(spin.amount || 0));
-        totalCoinsSpent += spent;
-        const meta = spin.metadata || {};
-        const awarded = Number(meta.coins_awarded || 0);
-        totalCoinsAwarded += awarded;
-        if (meta.is_jackpot) jackpotCount++;
-      });
-
       return new Response(JSON.stringify({
         troll_coins: {
           totalPurchased,
@@ -444,73 +424,8 @@ Deno.serve(async (req: Request) => {
         },
         officers: {
           totalUsdPaid
-        },
-        wheel: {
-          totalSpins,
-          totalCoinsSpent,
-          totalCoinsAwarded,
-          jackpotCount
         }
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // /wheel/status
-    if (pathname === 'wheel/status' && req.method === 'GET') {
-      let { data: cfg } = await supabase
-        .from('wheel_config')
-        .select('*')
-        .limit(1)
-        .single();
-
-      if (!cfg) {
-        const { data: newCfg } = await supabase
-          .from('wheel_config')
-          .insert({ is_active: true, spin_cost: 500, max_spins_per_day: 10 })
-          .select('*')
-          .single();
-        cfg = newCfg || { is_active: true, spin_cost: 500, max_spins_per_day: 10 };
-      }
-
-      return new Response(JSON.stringify({ success: true, config: cfg }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // /wheel/toggle
-    if (pathname === 'wheel/toggle' && req.method === 'POST') {
-      // Use the body already parsed at the top level if available, otherwise parse it
-      let wheelBody = body;
-      if (!wheelBody || Object.keys(wheelBody).length === 0) {
-        try {
-          wheelBody = await req.json();
-        } catch {
-          wheelBody = {};
-        }
-      }
-      const enabled = !!wheelBody?.enabled;
-
-      const { data: cfg } = await supabase
-        .from('wheel_config')
-        .select('id')
-        .limit(1)
-        .single();
-
-      if (!cfg) {
-        const { error: insErr } = await supabase
-          .from('wheel_config')
-          .insert({ is_active: enabled, spin_cost: 500, max_spins_per_day: 10 });
-        if (insErr) throw insErr;
-      } else {
-        const { error: updErr } = await supabase
-          .from('wheel_config')
-          .update({ is_active: enabled })
-          .eq('id', cfg.id);
-        if (updErr) throw updErr;
-      }
-
-      return new Response(JSON.stringify({ success: true, enabled }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

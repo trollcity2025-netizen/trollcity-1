@@ -7,7 +7,7 @@ export const ROLE_PERMISSIONS = {
     pages: [
       // All pages
       'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
-      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner', 'troll-wheel',
+      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety', 'officer-lounge', 'officer-moderation', 'family',
       'rfc', 'admin-earnings', 'admin', 'admin-applications', 'admin-marketplace',
       'admin-officer-reports', 'store-debug', 'changelog', 'lead-officer'
@@ -22,7 +22,7 @@ export const ROLE_PERMISSIONS = {
   lead_troll_officer: {
     pages: [
       'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
-      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner', 'troll-wheel',
+      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety', 'officer-lounge', 'officer-moderation', 'family',
       'lead-officer'
     ],
@@ -34,7 +34,7 @@ export const ROLE_PERMISSIONS = {
   troll_officer: {
     pages: [
       'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
-      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner', 'troll-wheel',
+      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety', 'officer-lounge', 'officer-moderation', 'family'
     ],
     actions: [
@@ -45,7 +45,7 @@ export const ROLE_PERMISSIONS = {
   broadcaster: {
     pages: [
       'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
-      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner', 'troll-wheel',
+      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety'
     ],
     actions: [
@@ -56,7 +56,7 @@ export const ROLE_PERMISSIONS = {
   empire_partner: {
     pages: [
       'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
-      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner', 'troll-wheel',
+      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety'
     ],
     actions: [
@@ -67,7 +67,7 @@ export const ROLE_PERMISSIONS = {
   troller: {
     pages: [
       'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
-      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner', 'troll-wheel',
+      'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety'
     ],
     actions: [

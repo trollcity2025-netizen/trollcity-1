@@ -96,7 +96,6 @@ VITE_API_URL=https://your-vercel-app.vercel.app
 - ✅ `/api/platform-fees` - Platform fees
 - ✅ `/api/admin` - Admin controls
 - ✅ `/api/payouts` - Payouts
-- ✅ `/api/wheel` - Wheel spins
 - ✅ `/api/admin/economy` - Economy stats
 - ✅ `/api/cashouts` - Cashout requests
 - ✅ `/api/gifts` - Gift transactions
@@ -221,7 +220,6 @@ Test these endpoints:
 - Profile setup
 - Live streaming (Agora)
 - Coin purchases (Square)
-- Troll Wheel game
 - Insurance system
 - Entrance effects
 - Perks system

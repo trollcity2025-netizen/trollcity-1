@@ -7,9 +7,6 @@ export const API_ENDPOINTS = {
   payments: {
     status: `${EDGE_URL}/payments-status`,
   },
-  agora: {
-    token: `${EDGE_URL}/admin/agora-token`,
-  },
   livekit: {
     token: `${EDGE_URL}/livekit-token`,
   },

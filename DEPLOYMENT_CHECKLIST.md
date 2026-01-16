@@ -58,7 +58,6 @@ Run these SQL files in Supabase SQL Editor:
 - Creates risk management tables (user_risk_profile, risk_events)
 - Creates broadcaster_earnings table
 - Creates officer tables (officer_actions, officer_earnings)
-- Creates wheel_spins table
 - Sets up RLS policies
 - Seeds revenue settings
 
@@ -79,7 +78,6 @@ risk_events         | 0
 broadcaster_earnings| 0
 officer_actions     | 0
 officer_earnings    | 0
-wheel_spins         | 0
 ```
 
 ---

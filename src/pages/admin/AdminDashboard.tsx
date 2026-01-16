@@ -56,12 +56,6 @@ interface EconomySummary {
   officers: {
     totalUsdPaid: number
   }
-  wheel: {
-    totalSpins: number
-    totalCoinsSpent: number
-    totalCoinsAwarded: number
-    jackpotCount: number
-  }
   messages?: {
     totalPayments: number
     totalIncome: number
@@ -443,24 +437,6 @@ export default function AdminDashboard() {
           .eq('type', 'officer_payment')
         const totalUsdPaid = (officerPayments || []).reduce((sum: number, p: { amount: number | null }) => sum + Number(p.amount || 0), 0)
 
-        const { data: wheelSpins } = await supabase
-          .from('coin_transactions')
-          .select('amount, metadata')
-          .eq('type', 'wheel_spin')
-        let totalSpins = 0
-        let totalCoinsSpent = 0
-        let totalCoinsAwarded = 0
-        let jackpotCount = 0;
-        ((wheelSpins || []) as CoinTransaction[]).forEach((spin) => {
-          totalSpins++
-          const spent = Math.abs(Number(spin.amount || 0))
-          totalCoinsSpent += spent
-          const meta = spin.metadata || {}
-          const awarded = Number(meta.coins_awarded || 0)
-          totalCoinsAwarded += awarded
-          if (meta.is_jackpot) jackpotCount++
-        })
-
         let messageStats = {
           totalPayments: 0,
           totalIncome: 0,
@@ -496,7 +472,6 @@ export default function AdminDashboard() {
           troll_coins: { totalPurchased, totalSpent, outstandingLiability },
           broadcasters: { totalUsdOwed, pendingCashoutsUsd, paidOutUsd },
           officers: { totalUsdPaid },
-          wheel: { totalSpins, totalCoinsSpent, totalCoinsAwarded, jackpotCount },
           messages: messageStats
         })
       } catch (e) {

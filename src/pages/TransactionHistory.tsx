@@ -2,16 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  ShoppingCart, 
-  Gift, 
-  Sparkles, 
+import {
+  ArrowUpRight,
+  ArrowDownRight,
+  ShoppingCart,
+  Gift,
+  Sparkles,
   DollarSign,
   Settings,
   TrendingUp,
-  Award,
   Filter
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -35,8 +34,6 @@ const TRANSACTION_ICONS: Record<string, any> = {
   store_purchase: ShoppingCart,
   gift_sent: Gift,
   gift_received: Gift,
-  wheel_spin: Sparkles,
-  wheel_prize: Award,
   cashout: DollarSign,
   adjustment: Settings,
   bonus: TrendingUp,
@@ -52,8 +49,6 @@ const TRANSACTION_COLORS: Record<string, string> = {
   store_purchase: 'text-green-500',
   gift_sent: 'text-pink-500',
   gift_received: 'text-purple-500',
-  wheel_spin: 'text-yellow-500',
-  wheel_prize: 'text-yellow-500',
   cashout: 'text-red-500',
   adjustment: 'text-blue-500',
   bonus: 'text-green-500',

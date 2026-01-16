@@ -7,7 +7,6 @@ A production-ready broadcasting application with a troll-themed twist! Built wit
 - **Live Streaming**: Broadcast and view streams using Agora Web SDK
 - **Troll Theme**: Deep purple, neon green, and gold styling throughout
 - **Coin System**: Virtual currency for gifts, purchases, and games
-- **Troll Wheel**: Spin for coins, perks, or bankruptcy!
 - **Insurance**: Protect yourself from kicks and bans
 - **Cashouts**: Convert earned coins to real money via Square
 - **Admin Dashboard**: Moderation tools for admins and moderators
