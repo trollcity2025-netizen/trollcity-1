@@ -1,5 +1,7 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -22,25 +24,9 @@ if (!STRIPE_SECRET_KEY) {
 const supabaseAdmin = createClient(SUPABASE_URL ?? "", SUPABASE_SERVICE_ROLE_KEY ?? "", {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-
-const stripeRequest = async (path: string, method: string, body?: URLSearchParams) => {
-  const res = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body ? body.toString() : undefined,
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error("Stripe error:", errorText);
-    throw new Error(errorText || "Stripe request failed");
-  }
-
-  return res.json();
-};
+const stripe = new Stripe(STRIPE_SECRET_KEY ?? "", {
+  apiVersion: "2023-10-16",
+});
 
 const getOrCreateCustomer = async (userId: string) => {
   const { data: existing } = await supabaseAdmin
@@ -51,9 +37,9 @@ const getOrCreateCustomer = async (userId: string) => {
 
   if (existing?.stripe_customer_id) return existing.stripe_customer_id;
 
-  const customer = await stripeRequest("customers", "POST", new URLSearchParams({
-    "metadata[user_id]": userId,
-  }));
+  const customer = await stripe.customers.create({
+    metadata: { user_id: userId },
+  });
 
   const { error } = await supabaseAdmin
     .from("stripe_customers")
@@ -117,10 +103,10 @@ serve(async (req: Request) => {
     if (action === "create-setup-intent") {
       const customerId = await getOrCreateCustomer(authData.user.id);
 
-      const intent = await stripeRequest("setup_intents", "POST", new URLSearchParams({
+      const intent = await stripe.setupIntents.create({
         customer: customerId,
         usage: "off_session",
-      }));
+      });
 
       return new Response(JSON.stringify({ clientSecret: intent.client_secret }), {
         status: 200,
@@ -139,24 +125,22 @@ serve(async (req: Request) => {
 
       const customerId = await getOrCreateCustomer(authData.user.id);
 
-      const paymentMethod = await stripeRequest(`payment_methods/${paymentMethodId}`, "GET");
+      const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
 
       if (!paymentMethod?.customer || paymentMethod.customer !== customerId) {
-        await stripeRequest(`payment_methods/${paymentMethodId}/attach`, "POST", new URLSearchParams({
-          customer: customerId,
-        }));
+        await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
       }
 
-      await stripeRequest(`customers/${customerId}`, "POST", new URLSearchParams({
-        "invoice_settings[default_payment_method]": paymentMethodId,
-      }));
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
 
       await supabaseAdmin
         .from("user_payment_methods")
         .update({ is_default: false })
         .eq("user_id", authData.user.id);
 
-      const card = paymentMethod?.card;
+      const card = (paymentMethod as Stripe.PaymentMethod).card;
       const displayName = card
         ? `${String(card.brand || "Card").toUpperCase()} •••• ${card.last4 || ""}`
         : paymentMethod?.type || "payment_method";
@@ -223,7 +207,7 @@ serve(async (req: Request) => {
       }
 
       if (method.stripe_payment_method_id) {
-        await stripeRequest(`payment_methods/${method.stripe_payment_method_id}/detach`, "POST");
+        await stripe.paymentMethods.detach(method.stripe_payment_method_id);
       }
 
       const { error: deleteError } = await supabaseAdmin
@@ -274,9 +258,9 @@ serve(async (req: Request) => {
       }
 
       if (method.stripe_customer_id && method.stripe_payment_method_id) {
-        await stripeRequest(`customers/${method.stripe_customer_id}`, "POST", new URLSearchParams({
-          "invoice_settings[default_payment_method]": method.stripe_payment_method_id,
-        }));
+        await stripe.customers.update(method.stripe_customer_id, {
+          invoice_settings: { default_payment_method: method.stripe_payment_method_id },
+        });
       }
 
       await supabaseAdmin

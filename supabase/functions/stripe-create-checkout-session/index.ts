@@ -1,5 +1,7 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -28,25 +30,9 @@ if (!APP_URL) {
 const supabaseAdmin = createClient(SUPABASE_URL ?? "", SUPABASE_SERVICE_ROLE_KEY ?? "", {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-
-const stripeRequest = async (path: string, method: string, body?: URLSearchParams) => {
-  const res = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body ? body.toString() : undefined,
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error("Stripe error:", errorText);
-    throw new Error(errorText || "Stripe request failed");
-  }
-
-  return res.json();
-};
+const stripe = new Stripe(STRIPE_SECRET_KEY ?? "", {
+  apiVersion: "2023-10-16",
+});
 
 const getOrCreateCustomer = async (userId: string) => {
   const { data: existing } = await supabaseAdmin
@@ -57,9 +43,9 @@ const getOrCreateCustomer = async (userId: string) => {
 
   if (existing?.stripe_customer_id) return existing.stripe_customer_id;
 
-  const customer = await stripeRequest("customers", "POST", new URLSearchParams({
-    "metadata[user_id]": userId,
-  }));
+  const customer = await stripe.customers.create({
+    metadata: { user_id: userId },
+  });
 
   const { error } = await supabaseAdmin
     .from("stripe_customers")
@@ -131,23 +117,22 @@ serve(async (req: Request) => {
         });
       }
 
-      const price = await stripeRequest(`prices/${STRIPE_TROLL_PASS_PRICE_ID}`, "GET");
+      const price = await stripe.prices.retrieve(STRIPE_TROLL_PASS_PRICE_ID);
       const amountCents = typeof price.unit_amount === "number" ? price.unit_amount : 0;
 
-      const params = new URLSearchParams({
+      const session = await stripe.checkout.sessions.create({
         mode: "payment",
         success_url: `${APP_URL}/wallet?success=1&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${APP_URL}/wallet?canceled=1`,
         customer: customerId,
         client_reference_id: authData.user.id,
-        "line_items[0][price]": STRIPE_TROLL_PASS_PRICE_ID,
-        "line_items[0][quantity]": "1",
-        "metadata[user_id]": authData.user.id,
-        "metadata[purchase_type]": "troll_pass_bundle",
-        "metadata[coins]": "1500",
+        line_items: [{ price: STRIPE_TROLL_PASS_PRICE_ID, quantity: 1 }],
+        metadata: {
+          user_id: authData.user.id,
+          purchase_type: "troll_pass_bundle",
+          coins: "1500",
+        },
       });
-
-      const session = await stripeRequest("checkout/sessions", "POST", params);
 
       const { error: orderError } = await supabaseAdmin
         .from("coin_orders")
@@ -205,20 +190,19 @@ serve(async (req: Request) => {
       ? pkg.amount_cents
       : Math.round(Number(pkg.price_usd || 0) * 100);
 
-    const params = new URLSearchParams({
+    const session = await stripe.checkout.sessions.create({
       mode: "payment",
       success_url: `${APP_URL}/wallet?success=1&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/wallet?canceled=1`,
       customer: customerId,
       client_reference_id: authData.user.id,
-      "line_items[0][price]": pkg.stripe_price_id,
-      "line_items[0][quantity]": "1",
-      "metadata[user_id]": authData.user.id,
-      "metadata[package_id]": pkg.id,
-      "metadata[coins]": String(pkg.coins ?? 0),
+      line_items: [{ price: pkg.stripe_price_id, quantity: 1 }],
+      metadata: {
+        user_id: authData.user.id,
+        package_id: pkg.id,
+        coins: String(pkg.coins ?? 0),
+      },
     });
-
-    const session = await stripeRequest("checkout/sessions", "POST", params);
 
     const { error: orderError } = await supabaseAdmin
       .from("coin_orders")

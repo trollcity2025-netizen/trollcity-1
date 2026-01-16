@@ -1,5 +1,7 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "@supabase/supabase-js";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +12,7 @@ const cors = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const STRIPE_WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
@@ -19,49 +22,16 @@ if (!STRIPE_WEBHOOK_SECRET) {
   console.error("Missing STRIPE_WEBHOOK_SECRET");
 }
 
+if (!STRIPE_SECRET_KEY) {
+  console.error("Missing STRIPE_SECRET_KEY");
+}
+
 const supabaseAdmin = createClient(SUPABASE_URL ?? "", SUPABASE_SERVICE_ROLE_KEY ?? "", {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-
-const textEncoder = new TextEncoder();
-
-const toHex = (buffer: ArrayBuffer) =>
-  Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-const verifyStripeSignature = async (payload: string, signatureHeader: string) => {
-  if (!STRIPE_WEBHOOK_SECRET) return false;
-
-  const items = signatureHeader.split(",").reduce<Record<string, string>>((acc, part) => {
-    const [key, value] = part.split("=");
-    if (key && value) acc[key] = value;
-    return acc;
-  }, {});
-
-  const timestamp = items.t;
-  const signature = items.v1;
-
-  if (!timestamp || !signature) return false;
-
-  const signedPayload = `${timestamp}.${payload}`;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    textEncoder.encode(STRIPE_WEBHOOK_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const mac = await crypto.subtle.sign("HMAC", key, textEncoder.encode(signedPayload));
-  const expectedSignature = toHex(mac);
-
-  const signatureMatches = expectedSignature === signature;
-  const toleranceSeconds = 300;
-  const timestampOk = Math.abs(Date.now() / 1000 - Number(timestamp)) <= toleranceSeconds;
-
-  return signatureMatches && timestampOk;
-};
+const stripe = new Stripe(STRIPE_SECRET_KEY ?? "", {
+  apiVersion: "2023-10-16",
+});
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -80,12 +50,7 @@ serve(async (req: Request) => {
     const signatureHeader = req.headers.get("stripe-signature") || "";
     const payload = await req.text();
 
-    const valid = await verifyStripeSignature(payload, signatureHeader);
-    if (!valid) {
-      return new Response("Invalid signature", { status: 400, headers: cors });
-    }
-
-    const event = JSON.parse(payload);
+    const event = stripe.webhooks.constructEvent(payload, signatureHeader, STRIPE_WEBHOOK_SECRET);
 
     if (event.type !== "checkout.session.completed") {
       return new Response(JSON.stringify({ received: true }), {
@@ -94,7 +59,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const session = event.data.object;
+    const session = event.data.object as Stripe.Checkout.Session;
     const sessionId = session.id as string;
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
     const purchaseType = session?.metadata?.purchase_type as string | undefined;

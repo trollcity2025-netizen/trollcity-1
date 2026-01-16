@@ -46,4 +46,9 @@ declare module 'https://esm.sh/@supabase/supabase-js@2.39.3?target=deno' {
   export function createClient(url: string, key: string, options?: any): any
 }
 
+declare module 'https://esm.sh/stripe@14.25.0?target=deno' {
+  const Stripe: any
+  export default Stripe
+}
+
 declare module 'jsr:@supabase/functions-js/edge-runtime.d.ts' {}
