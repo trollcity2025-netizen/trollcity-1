@@ -361,23 +361,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? `${card.brand?.toUpperCase() || 'Card'} •••• ${card.last4 || ''}`
           : paymentMethod.type
 
-        const { data: savedMethod, error: saveError } = await supabaseAdmin
+        const methodPayload = {
+          user_id: authData.user.id,
+          provider: 'stripe',
+          token_id: paymentMethodId,
+          display_name: displayName,
+          brand: card?.brand || null,
+          last4: card?.last4 || null,
+          exp_month: card?.exp_month || null,
+          exp_year: card?.exp_year || null,
+          stripe_customer_id: customerId,
+          stripe_payment_method_id: paymentMethodId,
+          is_default: true,
+        }
+
+        const upsertMethod = async (payload: Record<string, unknown>) => supabaseAdmin
           .from('user_payment_methods')
-          .upsert({
-            user_id: authData.user.id,
-            provider: 'stripe',
-            token_id: paymentMethodId,
-            display_name: displayName,
-            brand: card?.brand || null,
-            last4: card?.last4 || null,
-            exp_month: card?.exp_month || null,
-            exp_year: card?.exp_year || null,
-            stripe_customer_id: customerId,
-            stripe_payment_method_id: paymentMethodId,
-            is_default: true,
-          }, { onConflict: 'user_id,provider,token_id' })
+          .upsert(payload, { onConflict: 'user_id,provider,token_id' })
           .select()
           .single()
+
+        let { data: savedMethod, error: saveError } = await upsertMethod(methodPayload)
+
+        if (saveError?.message?.includes('stripe_customer_id') || saveError?.message?.includes('stripe_payment_method_id')) {
+          const { stripe_customer_id, stripe_payment_method_id, ...fallbackPayload } = methodPayload
+          ;({ data: savedMethod, error: saveError } = await upsertMethod(fallbackPayload))
+        }
 
         if (saveError) {
           console.error('[stripe] save-payment-method error:', saveError)
