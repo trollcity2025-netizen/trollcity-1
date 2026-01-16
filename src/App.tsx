@@ -649,7 +649,7 @@ function AppContent() {
                   <Route path="/profile/id/:userId" element={<Profile />} />
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="/trollstown" element={<TrollsTownPage />} />
-                  <Route path="/trolls-town" element={<TrollsTown3DPage />} />
+                  <Route path="/admin/trolls-town-3d" element={<TrollsTown3DPage />} />
                   
                   {/* New Game Routes */}
                   <Route path="/dealership" element={<CarDealershipPage />} />

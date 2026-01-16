@@ -68,7 +68,7 @@ const ChurchPage: React.FC = () => {
         {/* Overlay UI */}
         <div className="absolute top-4 left-4">
             <button 
-                onClick={() => navigate('/trolls-town')}
+                onClick={() => navigate('/trollstown')}
                 className="flex items-center gap-2 px-4 py-2 bg-black/60 text-white rounded-lg hover:bg-black/80"
             >
                 <ArrowLeft size={16} />

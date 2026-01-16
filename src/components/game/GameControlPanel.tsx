@@ -159,7 +159,7 @@ export default function GameControlPanel() {
 
   const locations = [
     { label: 'Drive to Home', path: '/', visible: true },
-    { label: 'Drive to Troll Town', path: '/trolls-town', visible: true },
+    { label: 'Drive to Troll Town', path: '/trollstown', visible: true },
     { label: 'Drive to Car Dealership', path: '/dealership', visible: true },
     { label: 'Drive to Mechanic Shop', path: '/mechanic', visible: true },
     { label: 'Drive to General Store', path: '/general-store', visible: true },
@@ -175,7 +175,7 @@ export default function GameControlPanel() {
   const showBackButton = locations.some(loc => 
     loc.path === location.pathname && 
     loc.path !== '/' && 
-    loc.path !== '/trolls-town'
+    loc.path !== '/trollstown'
   );
 
   const ActionButton = ({ icon: Icon, label, disabled, reason, onClick }: any) => (
@@ -306,7 +306,7 @@ export default function GameControlPanel() {
       {/* Back to Town Button */}
       {showBackButton && (
         <button
-          onClick={() => gameNavigate('/trolls-town')}
+          onClick={() => gameNavigate('/trollstown')}
           className="pointer-events-auto mb-4 flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-900/30 transition-all active:scale-95 border-2 border-emerald-400/50 font-bold animate-in slide-in-from-right-10 fade-in duration-300"
         >
           <ArrowLeft size={20} />

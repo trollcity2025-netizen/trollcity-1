@@ -839,7 +839,7 @@ useEffect(() => {
       <div className="relative z-20 max-w-7xl mx-auto px-5 py-3">
         <div className="mb-6 flex justify-center">
           <Link
-            to="/trolls-town"
+            to="/trollstown"
             className="w-full max-w-3xl rounded-3xl border border-purple-500/50 bg-gradient-to-r from-purple-900/40 via-fuchsia-900/40 to-green-900/40 px-4 py-4 text-center backdrop-blur-sm shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] transition-all duration-300 group relative overflow-hidden home-outline-rgb"
           >
             {/* Neon Glow Effects */}

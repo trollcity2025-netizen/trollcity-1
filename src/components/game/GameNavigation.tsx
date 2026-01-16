@@ -9,7 +9,6 @@ export function useGameNavigate() {
     const majorPages = [
       '/',
       '/trollstown',
-      '/trolls-town',
       '/dealership',
       '/mechanic',
       '/hospital',

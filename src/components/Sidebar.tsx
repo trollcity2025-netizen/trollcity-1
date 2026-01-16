@@ -215,7 +215,7 @@ export default function Sidebar() {
         {/* Main Group */}
         <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} isCollapsed={isSidebarCollapsed}>
           <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Building2} label="Troll Town" to="/trolls-town" active={isActive('/trolls-town')} collapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} />
           <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} />
