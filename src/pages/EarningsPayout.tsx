@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import api from '../lib/api'
 import { toast } from 'sonner'
+import { startFlow, completeFlow } from '../lib/telemetry'
 import { DollarSign, Banknote, Send, History } from 'lucide-react'
 
 type PayoutMethod = 'Gift Card'
@@ -78,6 +79,10 @@ export default function EarningsPayout() {
     return () => { supabase.removeChannel(channel) }
   }, [profile?.id, loadRecent])
 
+  useEffect(() => {
+    startFlow('cashout')
+  }, [])
+
   const cancelRequest = useCallback(async (id: string) => {
     if (!profile) return
     try {
@@ -148,6 +153,7 @@ export default function EarningsPayout() {
       }
 
       toast.success('Cashout request submitted! Admin will review and pay manually.')
+      completeFlow('cashout')
       setPayoutDetails('')
       setFullName('')
       await loadRecent()

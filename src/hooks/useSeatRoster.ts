@@ -175,11 +175,17 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
             table: 'broadcast_seats',
             filter: `room=eq.${roomName}`,
           },
-          () => {
+          (payload) => {
+            console.log('[useSeatRoster] Seat change detected, refreshing for all users', payload)
             refresh()
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+          console.log('[useSeatRoster] Subscription status:', status)
+          if (status === 'SUBSCRIBED') {
+            console.log('[useSeatRoster] Successfully subscribed to seat changes')
+          }
+        })
 
       refresh()
 

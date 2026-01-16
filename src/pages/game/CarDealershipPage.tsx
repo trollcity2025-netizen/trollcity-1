@@ -17,6 +17,7 @@ export default function CarDealershipPage() {
   const [listingPrice, setListingPrice] = useState('');
   const [listingType, setListingType] = useState<'sale' | 'auction'>('sale');
   const [creatingListing, setCreatingListing] = useState(false);
+  const [customModelUrl, setCustomModelUrl] = useState('');
   const [vehicleUpgrades, setVehicleUpgrades] = useState<
     { id: string; vehicle_id: number; upgrade_type: string; status: string; cost: number }[]
   >([]);
@@ -67,6 +68,44 @@ export default function CarDealershipPage() {
 
     loadUpgrades();
   }, [user?.id, ownedCarId]);
+
+  useEffect(() => {
+    if (user?.id && ownedCarId) {
+      const key = `trollcity_car_${user.id}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const stored = JSON.parse(raw);
+          if (stored.modelUrl) {
+            setCustomModelUrl(stored.modelUrl);
+          } else {
+            setCustomModelUrl('');
+          }
+        } catch {}
+      }
+    }
+  }, [user?.id, ownedCarId]);
+
+  const handleSaveCustomModel = () => {
+    if (!user?.id || !ownedCarId) return;
+    
+    const key = `trollcity_car_${user.id}`;
+    const raw = localStorage.getItem(key);
+    let stored = {};
+    if (raw) {
+      try {
+        stored = JSON.parse(raw);
+      } catch {}
+    }
+    
+    const updated = {
+      ...stored,
+      modelUrl: customModelUrl
+    };
+    
+    localStorage.setItem(key, JSON.stringify(updated));
+    toast.success('Custom model URL saved!');
+  };
 
   const handleStartUpgrade = async (upgradeId: string) => {
     if (!user || !profile) {
@@ -447,18 +486,31 @@ export default function CarDealershipPage() {
 
   return (
     <div className="min-h-screen bg-black text-white p-6 pt-24 pb-20">
-      <div className="max-w-4xl mx-auto">
-        <header className="mb-8 flex items-center gap-4">
-          <div className="p-4 bg-red-600/20 rounded-2xl border border-red-500/30">
-            <Car size={32} className="text-red-400" />
+      <div className="max-w-6xl mx-auto">
+        {/* Dealership Banner */}
+        <div className="relative w-full h-64 md:h-80 rounded-2xl overflow-hidden mb-8 border border-zinc-800 shadow-2xl shadow-red-900/20">
+          <img 
+            src="/assets/dealership.png" 
+            alt="Troll Motors Dealership" 
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Fallback if image fails
+              e.currentTarget.style.display = 'none';
+            }} 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+          <div className="absolute bottom-6 left-6 flex items-center gap-4">
+            <div className="p-4 bg-red-600/20 rounded-2xl border border-red-500/30 backdrop-blur-sm">
+              <Car size={32} className="text-red-400" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-white drop-shadow-lg">
+                Troll Motors
+              </h1>
+              <p className="text-gray-200 drop-shadow-md text-lg">Premium rides for discerning trolls.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
-              Troll Motors
-            </h1>
-            <p className="text-gray-400">Premium rides for discerning trolls.</p>
-          </div>
-        </header>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {cars.map((car) => (
@@ -625,6 +677,31 @@ export default function CarDealershipPage() {
                     </div>
                   );
                 })}
+              </div>
+              
+              <div className="border-t border-zinc-800 pt-4 mt-2">
+                 <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                    <Palette size={16} className="text-purple-400"/>
+                    Custom 3D Model (TurboSquid / External)
+                 </h3>
+                 <p className="text-xs text-zinc-500 mb-2">
+                    Paste a URL to a .glb or .obj file (e.g. from /models/cars/) to replace your car's look.
+                 </p>
+                 <div className="flex gap-2">
+                    <input 
+                       type="text" 
+                       placeholder="/models/cars/my_custom_car.glb" 
+                       className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-zinc-700 text-sm text-white focus:outline-none focus:border-purple-500"
+                       value={customModelUrl}
+                       onChange={e => setCustomModelUrl(e.target.value)}
+                    />
+                    <button 
+                       onClick={handleSaveCustomModel}
+                       className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-semibold"
+                    >
+                       Save
+                    </button>
+                 </div>
               </div>
             </div>
           )}

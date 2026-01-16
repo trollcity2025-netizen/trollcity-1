@@ -3,21 +3,13 @@ import { useAuthStore } from '../lib/store'
 import { useNavigate } from 'react-router-dom'
 import { Coins, Gift, Crown, Zap, ArrowLeft } from 'lucide-react'
 import WheelModal from './WheelModal'
+import { useCoins } from '../lib/hooks/useCoins'
 
 export default function TrollWheelPage() {
-  const { profile, user } = useAuthStore()
+  const { user } = useAuthStore()
+  const { balances, loading: loadingBalance } = useCoins()
   const navigate = useNavigate()
   const [showWheel, setShowWheel] = useState(false)
-  const [trollmonds, setTrollmonds] = useState<number>(0)
-  const [loadingBalance, setLoadingBalance] = useState(true)
-
-  useEffect(() => {
-    if (!profile) return
-    setLoadingBalance(true)
-    const trollmonds = profile?.troll_coins ?? 0
-    setTrollmonds(trollmonds)
-    setLoadingBalance(false)
-  }, [profile])
 
   if (!user || !profile) {
     return (
@@ -146,17 +138,17 @@ export default function TrollWheelPage() {
                   <div className="bg-black/20 p-4 rounded-lg">
                     <p className="text-sm text-gray-400 mb-1">Trollmonds Available</p>
                     <p className="text-2xl font-bold text-yellow-400">
-                      {loadingBalance ? '—' : (trollmonds ?? 0).toLocaleString()}
+                      {loadingBalance ? '—' : (balances.troll_coins ?? 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setShowWheel(true)}
-                  disabled={loadingBalance || (trollmonds || 0) < 500}
+                  disabled={loadingBalance || (balances.troll_coins || 0) < 500}
                   className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
                 >
-                  {((trollmonds || 0) >= 500) ? (
+                  {((balances.troll_coins || 0) >= 500) ? (
                     <>
                       <span className="mr-2">dYZн</span>
                       SPIN THE WHEEL - 500 TROLLMONDS
@@ -169,7 +161,7 @@ export default function TrollWheelPage() {
                   )}
                 </button>
 
-                {((trollmonds || 0) < 500) && (
+                {((balances.troll_coins || 0) < 500) && (
                   <p className="text-sm text-gray-400 mt-3">
                     Get more Trollmonds from <button
                       onClick={() => navigate('/go-live')}

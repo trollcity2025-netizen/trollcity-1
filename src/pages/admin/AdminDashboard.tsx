@@ -112,6 +112,7 @@ type TabId =
   | 'broadcasters'
   | 'families'
   | 'support'
+  | 'support_tickets'
   | 'agreements'
   | 'reports'
   | 'send_notifications'
@@ -942,6 +943,7 @@ export default function AdminDashboard() {
         test_diagnostics: '/admin/test-diagnostics',
         reset_maintenance: '/admin/reset-maintenance',
         export_data: '/admin/export-data',
+        support_tickets: '/admin/support-tickets',
         send_notifications: '/admin/send-notifications',
       } as Record<TabId, string>),
     []

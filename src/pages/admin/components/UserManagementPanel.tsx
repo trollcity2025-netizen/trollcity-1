@@ -4,6 +4,7 @@ import { useAuthStore } from '../../../lib/store'
 import { toast } from 'sonner'
 import { User, Coins, Award, Shield, Save, X, Search } from 'lucide-react'
 import ClickableUsername from '../../../components/ClickableUsername'
+import UserDetailsModal from '../../../components/admin/UserDetailsModal'
 
 interface UserProfile {
   id: string
@@ -19,6 +20,11 @@ interface UserProfile {
   is_troller: boolean
   created_at: string
   updated_at?: string
+  full_name?: string | null
+  phone?: string | null
+  onboarding_completed?: boolean | null
+  terms_accepted?: boolean | null
+  id_verification_status?: string | null
 }
 
 interface UserManagementPanelProps {
@@ -36,18 +42,21 @@ export default function UserManagementPanel({
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const [editingCoins, setEditingCoins] = useState({ paid: 0, free: 0 })
-  const [editingLevel, setEditingLevel] = useState(0)
+  const [editingLevel, setEditingLevel] = useState(1)
   const [editingRole, setEditingRole] = useState('user')
   const [saving, setSaving] = useState(false)
+  const [viewingUser, setViewingUser] = useState<{ id: string; username: string } | null>(null)
+  const [notifying, setNotifying] = useState(false)
 
   const canViewEmails = adminProfile?.role === 'admin' || adminProfile?.is_admin === true
+  const canViewDetails = adminProfile?.role === 'admin' || adminProfile?.is_admin === true || adminProfile?.role === 'secretary'
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     try {
       const selectFields = canViewEmails
-        ? 'id, username, email, role, troll_coins, free_coin_balance, level, is_troll_officer, is_lead_officer, is_admin, is_troller, created_at'
-        : 'id, username, role, troll_coins, free_coin_balance, level, is_troll_officer, is_lead_officer, is_admin, is_troller, created_at'
+        ? 'id, username, email, role, troll_coins, free_coin_balance, level, is_troll_officer, is_lead_officer, is_admin, is_troller, created_at, full_name, phone, onboarding_completed, terms_accepted, id_verification_status'
+        : 'id, username, role, troll_coins, free_coin_balance, level, is_troll_officer, is_lead_officer, is_admin, is_troller, created_at, full_name, phone, onboarding_completed, terms_accepted, id_verification_status'
 
       const { data, error } = await supabase
         .from('user_profiles')
@@ -192,6 +201,71 @@ export default function UserManagementPanel({
         )}
       </div>
 
+      {canViewDetails && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={async () => {
+              if (!adminProfile) {
+                toast.error('Profile required')
+                return
+              }
+              if (!(adminProfile.role === 'admin' || adminProfile.is_admin || adminProfile.role === 'secretary')) {
+                toast.error('Admin or secretary access required')
+                return
+              }
+
+              setNotifying(true)
+              try {
+                const buildMissing = (u: UserProfile) => {
+                  const items: string[] = []
+                  if (!u.full_name) items.push('Full name')
+                  if (!u.phone) items.push('Phone number')
+                  if (!u.onboarding_completed) items.push('Onboarding')
+                  if (!u.terms_accepted) items.push('Terms acceptance')
+                  if (u.id_verification_status !== 'approved') items.push('ID verification')
+                  return items
+                }
+
+                const targets = users
+                  .map(u => ({ user: u, missing: buildMissing(u) }))
+                  .filter(({ missing }) => missing.length > 0)
+
+                if (targets.length === 0) {
+                  toast.info('All users are complete—no notifications sent')
+                  return
+                }
+
+                let sent = 0
+                for (const { user: u, missing } of targets) {
+                  const { error } = await supabase.rpc('notify_user_rpc', {
+                    p_target_user_id: u.id,
+                    p_type: 'system_alert',
+                    p_title: 'Complete your account',
+                    p_message: `Please complete the following: ${missing.join(', ')}.`
+                  })
+                  if (!error) {
+                    sent += 1
+                  } else {
+                    console.warn('Notify user failed', { userId: u.id, error })
+                  }
+                }
+
+                toast.success(`Notified ${sent} user(s) with missing items`)
+              } catch (err) {
+                console.error('Notify incomplete users failed', err)
+                toast.error('Failed to send notifications')
+              } finally {
+                setNotifying(false)
+              }
+            }}
+            disabled={notifying}
+            className="px-4 py-2 bg-purple-700 hover:bg-purple-800 rounded-lg text-sm font-semibold disabled:opacity-50"
+          >
+            {notifying ? 'Sending...' : 'Notify users with missing items'}
+          </button>
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -227,14 +301,26 @@ export default function UserManagementPanel({
             </thead>
             <tbody>
               {filteredUsers.map((user) => (
-                <tr key={user.id} className="border-b border-gray-800 hover:bg-gray-900/50">
-                  <td className="py-3 text-white">
-                    <ClickableUsername 
-                      username={user.username} 
-                      userId={user.id} 
-                      profile={user}
-                      className="text-white hover:text-purple-400"
-                    />
+                <tr
+                  key={user.id}
+                  className="border-b border-gray-800 last:border-0"
+                >
+                  <td className="py-3">
+                    {canViewDetails ? (
+                      <button
+                        onClick={() => setViewingUser({ id: user.id, username: user.username })}
+                        className="text-white hover:text-purple-400 font-medium underline transition-colors"
+                      >
+                        {user.username}
+                      </button>
+                    ) : (
+                      <ClickableUsername
+                        username={user.username}
+                        userId={user.id}
+                        profile={user}
+                        className="text-white hover:text-purple-400"
+                      />
+                    )}
                   </td>
                   {canViewEmails && (
                     <td className="py-3 text-gray-400 text-sm">{user.email}</td>
@@ -370,6 +456,15 @@ export default function UserManagementPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* User Details Modal */}
+      {viewingUser && (
+        <UserDetailsModal
+          userId={viewingUser.id}
+          username={viewingUser.username}
+          onClose={() => setViewingUser(null)}
+        />
       )}
     </div>
   )

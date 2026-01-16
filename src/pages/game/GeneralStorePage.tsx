@@ -45,17 +45,29 @@ export default function GeneralStorePage() {
   return (
     <div className="min-h-screen bg-black text-white p-6 pt-24 pb-20">
       <div className="max-w-4xl mx-auto">
-        <header className="mb-8 flex items-center gap-4">
-          <div className="p-4 bg-purple-600/20 rounded-2xl border border-purple-500/30">
-            <ShoppingBag size={32} className="text-purple-400" />
+        {/* Troll Mart Banner */}
+        <div className="relative w-full h-64 rounded-2xl overflow-hidden mb-8 border border-zinc-800 shadow-2xl shadow-purple-900/20">
+          <img 
+            src="/assets/trollmart.png" 
+            alt="Troll Mart Storefront" 
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+          <div className="absolute bottom-6 left-6 flex items-center gap-4">
+            <div className="p-4 bg-purple-600/20 rounded-2xl border border-purple-500/30 backdrop-blur-sm">
+              <ShoppingBag size={32} className="text-purple-400" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-white drop-shadow-lg">
+                Troll Mart
+              </h1>
+              <p className="text-gray-200 drop-shadow-md">Essentials for your daily trolling needs.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Troll Mart
-            </h1>
-            <p className="text-gray-400">Essentials for your daily trolling needs.</p>
-          </div>
-        </header>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 relative overflow-hidden">

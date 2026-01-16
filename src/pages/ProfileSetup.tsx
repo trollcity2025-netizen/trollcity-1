@@ -35,6 +35,8 @@ const ProfileSetup = () => {
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false)
   const [uploadingCover, setUploadingCover] = React.useState(false)
   const [usernameError, setUsernameError] = React.useState('')
+  const [bannerUrl, setBannerUrl] = React.useState(profile?.banner_url || '')
+  const [avatarUrl, setAvatarUrl] = React.useState(profile?.avatar_url || '')
 
   const handleUsernameChange = (value: string) => {
     // Allow letters, numbers, and underscores
@@ -53,6 +55,18 @@ const ProfileSetup = () => {
       setUsername(suggestedUsername)
     }
   }, [suggestedUsername, username])
+
+  React.useEffect(() => {
+    if (profile?.banner_url) {
+      setBannerUrl(profile.banner_url)
+    }
+  }, [profile?.banner_url])
+
+  React.useEffect(() => {
+    if (profile?.avatar_url) {
+      setAvatarUrl(profile.avatar_url)
+    }
+  }, [profile?.avatar_url])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -142,67 +156,50 @@ const ProfileSetup = () => {
       setUploadingAvatar(true)
       if (!file.type.startsWith('image/')) throw new Error('File must be an image')
       if (file.size > 5 * 1024 * 1024) throw new Error('Image too large (max 5MB)')
+      
       const ext = file.name.split('.').pop()
       const name = `${user.id}-${Date.now()}.${ext}`
       const path = `avatars/${name}`
-      // Try multiple bucket names
-      let bucketName = 'troll-city-assets'
-      let uploadErr = null
-      let publicUrl = null
       
-      // Try troll-city-assets first
-      const uploadResult = await supabase.storage
-        .from(bucketName)
-        .upload(path, file, { cacheControl: '3600', upsert: false })
-      uploadErr = uploadResult.error
-      
-      // If that fails, try avatars bucket
-      if (uploadErr) {
-        bucketName = 'avatars'
-        const retryResult = await supabase.storage
-          .from(bucketName)
-          .upload(path, file, { cacheControl: '3600', upsert: false })
-        uploadErr = retryResult.error
-      }
-      
-      // If that fails, try public bucket
-      if (uploadErr) {
-        bucketName = 'public'
-        const retryResult = await supabase.storage
-          .from(bucketName)
-          .upload(path, file, { cacheControl: '3600', upsert: false })
-        uploadErr = retryResult.error
-      }
-      
-      if (uploadErr) throw uploadErr
-      
-      const { data: urlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(path)
-      publicUrl = urlData.publicUrl
+      // Try multiple buckets
+      const buckets = ['troll-city-assets', 'avatars', 'public']
+      let uploadedUrl = null
 
+      for (const bucket of buckets) {
+        try {
+          const { error: uploadErr } = await supabase.storage
+            .from(bucket)
+            .upload(path, file, { cacheControl: '3600', upsert: false })
+          
+          if (!uploadErr) {
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path)
+            uploadedUrl = urlData.publicUrl
+            break
+          }
+        } catch (err) {
+          console.log(`Failed to upload to ${bucket}, trying next...`)
+        }
+      }
+
+      if (!uploadedUrl) throw new Error('Failed to upload avatar to any bucket')
+
+      // Set local avatar URL immediately for instant UI feedback
+      setAvatarUrl(uploadedUrl)
+
+      // Update database
       const { data: updated, error: updateErr } = await supabase
         .from('user_profiles')
-        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .update({ avatar_url: uploadedUrl, updated_at: new Date().toISOString() })
         .eq('id', user.id)
         .select('*')
         .maybeSingle()
       
       if (updateErr && updateErr.code !== 'PGRST116') throw updateErr
-      if (!updated) {
-        const { data: fallback } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle()
-        if (fallback) {
-          setProfile(fallback as any)
-        }
-      } else {
+      if (updated) {
         setProfile(updated as any)
       }
       
-      toast.success('Avatar uploaded')
+      toast.success('Avatar uploaded successfully')
     } catch (err: any) {
       console.error('Avatar upload error:', err)
       toast.error(err?.message || 'Failed to upload avatar')
@@ -216,51 +213,54 @@ const ProfileSetup = () => {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
-    const uploadBuckets = ['covers', 'troll-city-assets', 'avatars', 'public']
-    const uploadPath = `covers/${user.id}-${Date.now()}${file.name.substring(file.name.lastIndexOf('.'))}`
-
-    const tryUpload = async () => {
-      for (const bucket of uploadBuckets) {
-        const result = await supabase.storage
-          .from(bucket)
-          .upload(uploadPath, file, { cacheControl: '3600', upsert: false })
-        if (!result.error) {
-          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(uploadPath)
-          return urlData.publicUrl
-        }
-      }
-      throw new Error('Failed to upload cover photo')
-    }
-
     try {
       setUploadingCover(true)
       if (!file.type.startsWith('image/')) throw new Error('File must be an image')
       if (file.size > 5 * 1024 * 1024) throw new Error('Image too large (max 5MB)')
 
-      const publicUrl = await tryUpload()
+      const ext = file.name.split('.').pop()
+      const name = `${user.id}-${Date.now()}.${ext}`
+      const uploadPath = `covers/${name}`
 
+      // Try multiple buckets
+      const uploadBuckets = ['covers', 'troll-city-assets', 'avatars', 'public']
+      let uploadedUrl = null
+
+      for (const bucket of uploadBuckets) {
+        try {
+          const { error: uploadErr } = await supabase.storage
+            .from(bucket)
+            .upload(uploadPath, file, { cacheControl: '3600', upsert: false })
+          
+          if (!uploadErr) {
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(uploadPath)
+            uploadedUrl = urlData.publicUrl
+            break
+          }
+        } catch (err) {
+          console.log(`Failed to upload to ${bucket}, trying next...`)
+        }
+      }
+
+      if (!uploadedUrl) throw new Error('Failed to upload cover photo to any bucket')
+
+      // Set local banner URL immediately for instant UI feedback
+      setBannerUrl(uploadedUrl)
+
+      // Update database
       const { data: updated, error: updateErr } = await supabase
         .from('user_profiles')
-        .update({ banner_url: publicUrl, updated_at: new Date().toISOString() })
+        .update({ banner_url: uploadedUrl, updated_at: new Date().toISOString() })
         .eq('id', user.id)
         .select('*')
         .maybeSingle()
 
       if (updateErr && updateErr.code !== 'PGRST116') throw updateErr
-      if (!updated) {
-        const { data: fallback } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle()
-        if (fallback) {
-          setProfile(fallback as any)
-        }
-      } else {
+      if (updated) {
         setProfile(updated as any)
       }
 
-      toast.success('Cover photo updated')
+      toast.success('Cover photo updated successfully')
     } catch (err: any) {
       console.error('Cover upload error:', err)
       toast.error(err?.message || 'Failed to upload cover photo')
@@ -271,14 +271,13 @@ const ProfileSetup = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
-      <div className="max-w-4xl mx-auto px-6 py-10">
-
+    <div className="min-h-screen bg-[#0f0f17] text-white p-6">
+      <div className="max-w-2xl mx-auto">
         {/* Cover Photo */}
         <div className="relative h-48 rounded-2xl overflow-hidden mb-6 bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900">
-          {profile?.banner_url ? (
+          {bannerUrl ? (
             <img
-              src={profile.banner_url}
+              src={bannerUrl}
               alt="Cover"
               className="w-full h-full object-cover"
             />
@@ -381,7 +380,7 @@ const ProfileSetup = () => {
           </div>
           <div className="flex items-center gap-4">
             <img
-              src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`}
+              src={avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`}
               alt="avatar"
               className="w-20 h-20 rounded-full border border-[#2C2C2C] object-cover"
             />

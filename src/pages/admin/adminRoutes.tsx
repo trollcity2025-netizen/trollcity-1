@@ -9,6 +9,7 @@ import UserFormsTab from './components/UserFormsTab'
 import AdminErrors from './AdminErrors'
 import AdminCallsTab from './components/AdminCallsTab'
 import OfficerOperations from './OfficerOperations'
+import AdminSupportTicketsPage from './AdminSupportTicketsPage'
 
 export interface AdminRoute {
   id: string
@@ -142,5 +143,18 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileBgColor: 'bg-yellow-500/10',
     tileBorderColor: 'border-yellow-500/30',
     category: 'system'
+  },
+  {
+    id: 'support-tickets',
+    title: 'Support Tickets',
+    path: '/admin/support-tickets',
+    component: AdminSupportTicketsPage,
+    roles: [UserRole.ADMIN],
+    description: 'Manage user support requests',
+    icon: <FileText className="w-5 h-5 text-purple-200" />,
+    tileColor: 'text-purple-200',
+    tileBgColor: 'bg-purple-500/10',
+    tileBorderColor: 'border-purple-500/30',
+    category: 'support'
   }
 ]

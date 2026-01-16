@@ -14,6 +14,7 @@ app.use(express.json());
 
 // Import handlers
 const livekitTokenHandler = require('./api/livekit-token');
+const telemetryHandler = require('./api/telemetry');
 
 // API Routes
 
@@ -54,6 +55,11 @@ app.post('/api/livekit-token', async (req, res) => {
   await livekitTokenHandler(req, res);
 });
 
+// Telemetry
+app.post('/api/telemetry', async (req, res) => {
+  await telemetryHandler(req, res);
+});
+
 // Admin: Cache Clear
 app.post('/api/admin/cache/clear', (req, res) => {
   // In a real app, this would clear Redis or other server-side caches
@@ -69,6 +75,33 @@ app.post('/api/admin/backup/trigger', (req, res) => {
     // Simulate backup time
   }, 2000);
   res.status(200).json({ success: true, message: 'Backup process started', jobId: Date.now() });
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled Server Error:', err);
+  
+  // Log to telemetry
+  if (telemetryHandler.logEvent) {
+    telemetryHandler.logEvent({
+      event_type: 'server_error',
+      message: err.message || 'Unknown Server Error',
+      stack: err.stack,
+      severity: 'error',
+      fingerprint: `server-${err.message || 'unknown'}`,
+      url: req.url,
+      request_info: {
+        method: req.method,
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+      },
+      env: process.env.NODE_ENV || 'development'
+    }).catch(e => console.error('Failed to log server error to telemetry', e));
+  }
+
+  res.status(500).json({ 
+    error: 'Internal Server Error', 
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined 
+  });
 });
 
 app.listen(PORT, () => {

@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Car, Swords, Shield, Wrench, Heart, MapPin, ChevronDown, Radio } from 'lucide-react';
+import { Car, Swords, Shield, Wrench, Heart, MapPin, ChevronDown, Radio, ArrowLeft } from 'lucide-react';
 import { useGameNavigate } from './GameNavigation';
 import { useGame } from './useGameContext';
 import { useAuthStore } from '../../lib/store';
+import { useLocation } from 'react-router-dom';
 
 export default function GameControlPanel() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,7 +12,8 @@ export default function GameControlPanel() {
   const gameNavigate = useGameNavigate();
   const { isDriving } = useGame();
   const { user } = useAuthStore();
-   const [hasCar, setHasCar] = useState(false);
+  const location = useLocation();
+  const [hasCar, setHasCar] = useState(false);
    const [hasHouse, setHasHouse] = useState(false);
    const [hasCarInsurance, setHasCarInsurance] = useState(false);
   const [hasHomeInsurance, setHasHomeInsurance] = useState(false);
@@ -170,6 +172,12 @@ export default function GameControlPanel() {
     { label: 'Drive to Leaderboard', path: '/leaderboard', visible: true },
   ].filter(loc => loc.visible);
 
+  const showBackButton = locations.some(loc => 
+    loc.path === location.pathname && 
+    loc.path !== '/' && 
+    loc.path !== '/trolls-town'
+  );
+
   const ActionButton = ({ icon: Icon, label, disabled, reason, onClick }: any) => (
     <div className="relative group w-full">
       <button
@@ -293,6 +301,17 @@ export default function GameControlPanel() {
             />
           </div>
         </div>
+      )}
+
+      {/* Back to Town Button */}
+      {showBackButton && (
+        <button
+          onClick={() => gameNavigate('/trolls-town')}
+          className="pointer-events-auto mb-4 flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-900/30 transition-all active:scale-95 border-2 border-emerald-400/50 font-bold animate-in slide-in-from-right-10 fade-in duration-300"
+        >
+          <ArrowLeft size={20} />
+          <span>Back to Town</span>
+        </button>
       )}
 
       {/* Toggle Button */}

@@ -11,6 +11,9 @@ const disableHmr = process.env.DISABLE_HMR === '1'
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    global: 'window',
+  },
   plugins: [
     react(),
     tsconfigPaths(),
@@ -45,6 +48,7 @@ export default defineConfig({
       filename: 'service-worker.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        maximumFileSizeToCacheInBytes: 6000000,
       },
       workbox: {
         cleanupOutdatedCaches: true,

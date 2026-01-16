@@ -6,8 +6,8 @@ import './index.css'
 import { LiveKitProvider } from './contexts/LiveKitProvider'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
-// GlobalAppProvider intentionally removed per required root layout
 import { supabase } from './lib/supabase'
+import { initTelemetry } from './lib/telemetry'
 
 // App version for cache busting
 const env = import.meta.env
@@ -31,6 +31,7 @@ try {
 
 if (typeof window !== 'undefined') {
   (window as any).__ENV = env
+  initTelemetry()
 }
 
 const rootElement = document.getElementById('root')

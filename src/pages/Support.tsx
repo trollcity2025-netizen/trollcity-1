@@ -1,13 +1,22 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { notifyAdmins } from '../lib/notifications'
 import { toast } from 'sonner'
 import { FileText, Send } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
 
 export default function Support() {
   const { user, profile } = useAuthStore()
+  const navigate = useNavigate()
+
+  // If user is admin, redirect to admin dashboard support tab
+  useEffect(() => {
+    if (profile?.role === 'admin') {
+      navigate('/admin/support-tickets', { replace: true })
+    }
+  }, [profile?.role, navigate])
   const [subject, setSubject] = useState('')
   const [category, setCategory] = useState<'general' | 'appeal'>('general')
   const [message, setMessage] = useState('')

@@ -1,0 +1,12 @@
+{
+	"BuildId": "47537391",
+	"Modules": 
+	{
+		"LudusChatUI": "UnrealEditor-LudusChatUI.dll",
+		"LudusClient": "UnrealEditor-LudusClient.dll",
+		"LudusCore": "UnrealEditor-LudusCore.dll",
+		"LudusDatabase": "UnrealEditor-LudusDatabase.dll",
+		"LudusEditor": "UnrealEditor-LudusEditor.dll",
+		"LudusMarkdown": "UnrealEditor-LudusMarkdown.dll"
+	}
+}

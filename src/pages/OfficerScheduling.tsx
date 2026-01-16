@@ -30,6 +30,13 @@ export default function OfficerScheduling() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [blockedSlots, setBlockedSlots] = useState<ShiftSlot[]>([])
 
+  const formatTime12h = (time: string) => {
+    if (!time) return ''
+    const date = new Date(`1970-01-01T${time}`)
+    if (Number.isNaN(date.getTime())) return time
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  }
+
   // Check if user is officer or admin
   useEffect(() => {
     if (!profile || !user) {
@@ -336,7 +343,10 @@ export default function OfficerScheduling() {
         if (updateError) throw updateError
         
         // Send push notification
-        await sendPushNotification(assignedOfficer.id, `You have been assigned a new shift: ${slot.shift_date} ${slot.shift_start_time} - ${slot.shift_end_time}`)
+        await sendPushNotification(
+          assignedOfficer.id,
+          `You have been assigned a new shift: ${slot.shift_date} ${formatTime12h(slot.shift_start_time)} - ${formatTime12h(slot.shift_end_time)}`
+        )
         
         toast.success(`Shift reassigned to ${assignedOfficer.username}`)
       } else {
@@ -603,7 +613,7 @@ export default function OfficerScheduling() {
                             <Clock className="w-5 h-5 text-purple-400" />
                             <div>
                               <div className="font-semibold">
-                                {slot.shift_start_time} - {slot.shift_end_time}
+                                {formatTime12h(slot.shift_start_time)} - {formatTime12h(slot.shift_end_time)}
                               </div>
                               <div className="text-sm text-gray-400 capitalize">
                                 Status: {slot.status}

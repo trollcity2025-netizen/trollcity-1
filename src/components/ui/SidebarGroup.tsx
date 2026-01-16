@@ -16,6 +16,7 @@ export default function SidebarGroup({
   isCollapsed = false
 }: SidebarGroupProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const [hoverExpanded, setHoverExpanded] = useState(false)
 
   if (isCollapsed) {
     // When sidebar is collapsed, we might want to just show children without the group header,
@@ -28,15 +29,22 @@ export default function SidebarGroup({
     )
   }
 
+  // Show expanded state if either clicked open OR hovering
+  const shouldShow = isExpanded || hoverExpanded
+
   return (
-    <div className="py-2 border-t border-white/5 first:border-0">
+    <div 
+      className="py-2 border-t border-white/5 first:border-0"
+      onMouseEnter={() => setHoverExpanded(true)}
+      onMouseLeave={() => setHoverExpanded(false)}
+    >
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-gray-300 transition-colors group"
       >
         <span>{title}</span>
         <motion.div
-          animate={{ rotate: isExpanded ? 0 : -90 }}
+          animate={{ rotate: shouldShow ? 0 : -90 }}
           transition={{ duration: 0.2 }}
         >
           <ChevronDown className="w-3 h-3 group-hover:text-white" />
@@ -44,7 +52,7 @@ export default function SidebarGroup({
       </button>
 
       <AnimatePresence initial={false}>
-        {isExpanded && (
+        {shouldShow && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}

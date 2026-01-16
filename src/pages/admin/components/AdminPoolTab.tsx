@@ -37,7 +37,7 @@ export default function AdminPoolTab() {
           .order('created_at', { ascending: false })
           .limit(200)
 
-        if (error) throw error
+        if (error && error.code !== 'PGRST116') throw error
         const rows = (data || []) as AdminPoolTransaction[]
         setTransactions(rows)
 

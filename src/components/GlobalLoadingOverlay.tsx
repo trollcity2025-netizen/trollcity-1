@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useGlobalApp } from '../contexts/GlobalAppContext';
+import { reportSpinnerStuck } from '../lib/telemetry';
 
 interface GlobalLoadingOverlayProps {
   isVisible?: boolean;
@@ -24,6 +25,26 @@ const GlobalLoadingOverlay: React.FC<GlobalLoadingOverlayProps> = ({
     (error ? error : '');
 
   const overlayType = type || (isReconnecting ? 'reconnecting' : error ? 'error' : 'loading');
+
+  // Telemetry: Detect stuck spinner
+  const startTimeRef = useRef<number | null>(null);
+  
+  useEffect(() => {
+    if (showOverlay && overlayType === 'loading') {
+      startTimeRef.current = Date.now();
+      
+      const timer = setTimeout(() => {
+        if (startTimeRef.current) {
+          const duration = Date.now() - startTimeRef.current;
+          reportSpinnerStuck('GlobalLoadingOverlay', duration);
+        }
+      }, 12000); // 12 seconds
+
+      return () => clearTimeout(timer);
+    } else {
+      startTimeRef.current = null;
+    }
+  }, [showOverlay, overlayType]);
 
   if (!showOverlay) return null;
 

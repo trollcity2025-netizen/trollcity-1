@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { AuthApiError } from '@supabase/supabase-js'
 import { isPurchaseRequiredError, openPurchaseGate } from './purchaseGate'
+import { trackEvent } from './telemetry'
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -201,6 +202,21 @@ async function request<T = any>(
     } else {
       const errorMsg = data?.error || data?.message || `API Error: ${response.status} ${response.statusText}`
 
+      if (!endpoint.includes('telemetry')) {
+        trackEvent({
+          event_type: 'api_error',
+          message: errorMsg,
+          severity: response.status >= 500 ? 'error' : 'warning',
+          fingerprint: `api-${response.status}-${endpoint}`,
+          request_info: {
+            endpoint,
+            status: response.status,
+            requestId,
+            duration: Date.now() - Number(requestId.split('_')[1])
+          }
+        });
+      }
+
       if (isPurchaseRequiredError(data) || isPurchaseRequiredError(errorMsg)) {
         openPurchaseGate(data?.error || data?.message || errorMsg)
       }
@@ -231,6 +247,21 @@ async function request<T = any>(
     }
 
     console.error(`[API ${requestId}] ❌ Network/Request Error:`, errorDetails)
+
+    if (!endpoint.includes('telemetry')) {
+      trackEvent({
+        event_type: 'api_network_error',
+        message: errorDetails.message,
+        stack: errorDetails.stack,
+        severity: 'error',
+        fingerprint: `api-net-${endpoint}`,
+        request_info: {
+          endpoint,
+          requestId,
+          duration: Date.now() - Number(requestId.split('_')[1])
+        }
+      });
+    }
 
     // Handle Supabase AuthApiError (invalid refresh token)
     if (error instanceof AuthApiError) {

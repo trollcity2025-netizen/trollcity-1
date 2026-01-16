@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import CourtEntryModal from './CourtEntryModal'
-import ExpandedStatsPanel from './ExpandedStatsPanel'
 import SidebarGroup from './ui/SidebarGroup'
 import {
   Home,
@@ -28,9 +27,11 @@ import {
 import { useAuthStore } from '@/lib/store'
 import { supabase, UserRole } from '@/lib/supabase'
 import { useCoins } from '@/lib/hooks/useCoins'
+import { useXPStore } from '@/stores/useXPStore'
 
 export default function Sidebar() {
   const { profile } = useAuthStore()
+  const { xpTotal, level, xpToNext, progress, fetchXP, subscribeToXP, unsubscribe } = useXPStore()
   const location = useLocation()
   const isActive = (path: string) => location.pathname === path
 
@@ -40,7 +41,6 @@ export default function Sidebar() {
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
   const [canSeeSecretary, setCanSeeSecretary] = useState(false)
   const [showCourtModal, setShowCourtModal] = useState(false)
-  const [showStatsPanel, setShowStatsPanel] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   const { balances, loading } = useCoins()
@@ -60,6 +60,14 @@ export default function Sidebar() {
   const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
   // Officer check matches the logic in useEffect (isAdmin || isOfficer)
   const isOfficer = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.TROLL_OFFICER || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
+
+  useEffect(() => {
+    if (profile?.id) {
+        fetchXP(profile.id)
+        subscribeToXP(profile.id)
+        return () => unsubscribe()
+    }
+  }, [profile?.id, fetchXP, subscribeToXP, unsubscribe])
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -115,24 +123,9 @@ export default function Sidebar() {
 
   if (!profile) return null
 
-  // Calculate Level Progress
-  // Formula from DB: previous + (Level * 500). 
-  // We can approximate or fetch the next level requirement. 
-  // For UI simplicity, let's assume a progress bar based on a generic formula if exact data isn't in profile.
-  // Ideally, profile should have 'current_xp' and 'xp_for_next_level' or we calculate it.
-  // Since we only have 'current_xp' and 'level', let's estimate progress or just show the values.
-  
-  // XP next-level calculation not used in UI
-
-  // Use the profile fields if available, otherwise defaults
-  const currentLevel = profile.level || 1
-  const currentXP = profile.xp || 0 // profile.xp is mapped to current_xp in interface? 
-  // Wait, interface said 'xp: number // Total XP points', DB col is 'current_xp'.
-  // Assuming Supabase type generation maps it or we cast it. 
-  // Let's rely on what's in profile.
-
   return (
     <div className={`flex flex-col h-screen bg-[#0A0814] border-r border-white/10 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
+
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-white/10">
         {!isSidebarCollapsed && (
@@ -164,7 +157,7 @@ export default function Sidebar() {
                 className="w-10 h-10 rounded-full border border-purple-500/50"
               />
               <div className="absolute -bottom-1 -right-1 bg-purple-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#0A0814]">
-                {currentLevel}
+                {level}
               </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -179,13 +172,16 @@ export default function Sidebar() {
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-gray-400">
               <span>XP</span>
-              <span>{currentXP.toLocaleString()}</span>
+              <span>{xpTotal.toLocaleString()}</span>
             </div>
             <div className="h-1.5 bg-black/50 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-full"
-                style={{ width: `${Math.min((currentXP % 1000) / 10, 100)}%` }} // Simplified visual
+                style={{ width: `${Math.min(progress * 100, 100)}%` }}
               ></div>
+            </div>
+            <div className="text-[9px] text-gray-500 text-right">
+                Next Level: {xpToNext.toLocaleString()}
             </div>
           </div>
 
@@ -317,18 +313,17 @@ export default function Sidebar() {
 
       {/* Footer Actions */}
       <div className="p-4 border-t border-white/10 space-y-2">
-        <button 
-          onClick={() => setShowStatsPanel(true)}
+        <Link 
+          to="/stats"
           className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-white/5 text-gray-400 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
         >
           <LayoutDashboard size={20} />
-          {!isSidebarCollapsed && <span className="text-sm font-medium">Stats Panel</span>}
-        </button>
+          {!isSidebarCollapsed && <span className="text-sm font-medium">Stats</span>}
+        </Link>
       </div>
 
       {/* Modals */}
       {showCourtModal && <CourtEntryModal isOpen={true} onClose={() => setShowCourtModal(false)} />}
-      {showStatsPanel && <ExpandedStatsPanel isOpen={true} onClose={() => setShowStatsPanel(false)} />}
     </div>
   )
 }

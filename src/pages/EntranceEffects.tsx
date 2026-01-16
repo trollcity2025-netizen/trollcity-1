@@ -10,37 +10,51 @@ import { ENTRANCE_EFFECTS_DATA as DEFAULT_EFFECTS, type EntranceEffect } from '.
 
 const EntranceEffects = () => {
   const { profile } = useAuthStore()
-  const { refreshCoins } = useCoins()
+  const { balances, refreshCoins } = useCoins()
   const [effects, setEffects] = useState<EntranceEffect[]>([])
   const [loading, setLoading] = useState(true)
   const [purchasing, setPurchasing] = useState<string | null>(null)
   const [_backgroundLoading, setBackgroundLoading] = useState(false)
 
   useEffect(() => {
-    try {
-      const cachedEffects = JSON.parse(localStorage.getItem('tc-effects') || '[]') as EntranceEffect[]
-      if (Array.isArray(cachedEffects) && cachedEffects.length) {
-        setEffects(cachedEffects)
-        setLoading(false)
-      }
-    } catch {}
-    if (effects.length === 0) {
-      setEffects(DEFAULT_EFFECTS)
-      setLoading(false)
-      try { localStorage.setItem('tc-effects', JSON.stringify(DEFAULT_EFFECTS)) } catch {}
-    }
-    loadEntranceEffectsBackground()
-    }, [effects.length])
+    loadEntranceEffectsFromDatabase()
+  }, [])
 
-  const loadEntranceEffectsBackground = async () => {
+  const loadEntranceEffectsFromDatabase = async () => {
     try {
-      setBackgroundLoading(true)
-      const final = [...DEFAULT_EFFECTS].sort((a, b) => a.coin_cost - b.coin_cost)
-      setEffects(final)
-      try { localStorage.setItem('tc-effects', JSON.stringify(final)) } catch {}
+      setLoading(true)
+      // Load entrance effects from database table (not hardcoded)
+      const { data, error } = await supabase
+        .from('entrance_effects')
+        .select('id, name, coin_cost, rarity, animation_type')
+        .order('coin_cost', { ascending: true })
+      
+      if (error) {
+        console.warn('Failed to load entrance effects from DB, using defaults:', error)
+        // Fallback to hardcoded defaults if table doesn't exist
+        setEffects(DEFAULT_EFFECTS)
+      } else if (data && data.length > 0) {
+        // Map database rows to EntranceEffect type
+        const dbEffects = data.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          coin_cost: row.coin_cost,
+          rarity: row.rarity || 'Standard',
+          animation_type: row.animation_type || 'default',
+          icon: '✨',
+          description: `${row.rarity || 'Standard'} effect`,
+          image_url: `https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(row.name)}&image_size=square`
+        } as EntranceEffect))
+        setEffects(dbEffects)
+      } else {
+        // Use defaults if table is empty
+        setEffects(DEFAULT_EFFECTS)
+      }
     } catch (error: any) {
       console.error('Error loading entrance effects:', error)
+      setEffects(DEFAULT_EFFECTS)
     } finally {
+      setLoading(false)
       setBackgroundLoading(false)
     }
   }
@@ -51,7 +65,8 @@ const EntranceEffects = () => {
       return
     }
 
-    if ((profile.troll_coins || 0) < effect.coin_cost) {
+    const userCoins = balances.troll_coins || 0
+    if (userCoins < effect.coin_cost) {
       toast.error('Insufficient coins. Please purchase more coins.')
       return
     }
@@ -239,7 +254,7 @@ const EntranceEffects = () => {
               </div>
               <button
                 onClick={() => purchaseEffect(effect)}
-                disabled={purchasing === effect.id || (!!profile && (profile.troll_coins || 0) < effect.coin_cost)}
+                disabled={purchasing === effect.id || balances.troll_coins < effect.coin_cost}
                 className="px-6 py-2 bg-gradient-to-r from-troll-neon-pink to-troll-neon-purple text-white font-bold rounded-lg hover:from-troll-neon-pink/80 hover:to-troll-neon-purple/80 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 {purchasing === effect.id ? 'Purchasing...' : 'Purchase'}
@@ -269,13 +284,13 @@ const EntranceEffects = () => {
             <DollarSign className="w-6 h-6 text-troll-neon-gold" />
           </div>
           <div className="text-3xl font-bold text-white mb-4">
-            {profile ? (profile.troll_coins || 0) + (profile.trollmonds || 0) : 0}
+            {balances.troll_coins || 0}
           </div>
           <div className="border-t border-troll-neon-green/20 pt-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-troll-neon-blue/70">Total Value:</span>
               <span className="text-troll-neon-green font-bold">
-                ${(((profile ? (profile.troll_coins || 0) + (profile.trollmonds || 0) : 0)) * 0.01).toFixed(2)}
+                ${((balances.troll_coins || 0) * 0.01).toFixed(2)}
               </span>
             </div>
           </div>
@@ -291,13 +306,13 @@ const EntranceEffects = () => {
             </div>
           </div>
           <div className="text-3xl font-bold text-troll-neon-green mb-4">
-            {profile ? profile.troll_coins : 0}
+            {balances.troll_coins || 0}
           </div>
           <div className="border-t border-troll-neon-green/20 pt-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-troll-neon-blue/70">Value:</span>
               <span className="text-troll-neon-purple font-bold">
-                ${(profile ? profile.troll_coins : 0 * 0.01).toFixed(2)}
+                ${((balances.troll_coins || 0) * 0.01).toFixed(2)}
               </span>
             </div>
             <p className="text-xs text-troll-neon-blue/50">Real value • Can spend</p>

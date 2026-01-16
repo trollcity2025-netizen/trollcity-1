@@ -162,7 +162,7 @@ export default function AIVerificationPage() {
       // Upload photos first
       const { idUrl, selfieUrl: uploadedSelfieUrl } = await uploadPhotos()
 
-      // Call AI verification
+      // Call Gemini verification edge function
       const { data: session } = await supabase.auth.getSession()
       const token = session.session?.access_token
 
@@ -174,7 +174,7 @@ export default function AIVerificationPage() {
       const edgeFunctionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 
         'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
 
-      const response = await fetch(`${edgeFunctionsUrl}/ai-verify-user`, {
+      const response = await fetch(`${edgeFunctionsUrl}/gemini-verify-user`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

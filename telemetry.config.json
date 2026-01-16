@@ -1,0 +1,20 @@
+{
+  "thresholds": {
+    "spinner_stuck_ms": 12000,
+    "rage_click_count": 7,
+    "rage_click_time_window_ms": 4000,
+    "rage_click_radius_px": 20,
+    "flow_abandonment_minutes": 5,
+    "api_timeout_ms": 30000
+  },
+  "rate_limits": {
+    "requests_per_minute": 20,
+    "max_payload_size_bytes": 65536
+  },
+  "auto_fix": {
+    "enabled": true,
+    "allowed_files_glob": ["src/**/*.tsx", "src/**/*.ts", "server/**/*.js"],
+    "blocked_files_glob": ["src/lib/purchaseGate.ts", "src/pages/Auth.tsx", "server/api/livekit-token.js"],
+    "max_daily_prs": 5
+  }
+}

@@ -15,3 +15,6 @@ This directory should contain the following assets:
      - mega: 50% 50%
 
 Please place the actual image files here with these exact filenames.
+
+For detailed instructions on importing Unreal Engine assets (Cars, Houses), please see:
+docs/UNREAL_ASSET_PIPELINE.md

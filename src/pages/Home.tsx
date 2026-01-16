@@ -838,9 +838,25 @@ useEffect(() => {
 
       <div className="relative z-20 max-w-7xl mx-auto px-5 py-3">
         <div className="mb-6 flex justify-center">
-          <div className="w-full max-w-3xl rounded-3xl border border-yellow-400/50 bg-yellow-500/10 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-yellow-100 backdrop-blur-sm shadow-inner shadow-yellow-500/20 sm:text-sm home-outline-rgb">
-            We're in test mode; please use support tickets for any issues. Thanks for understanding!
-          </div>
+          <Link
+            to="/trolls-town"
+            className="w-full max-w-3xl rounded-3xl border border-purple-500/50 bg-gradient-to-r from-purple-900/40 via-fuchsia-900/40 to-green-900/40 px-4 py-4 text-center backdrop-blur-sm shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] transition-all duration-300 group relative overflow-hidden home-outline-rgb"
+          >
+            {/* Neon Glow Effects */}
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 animate-pulse" />
+            
+            <div className="relative z-10 flex flex-col items-center justify-center gap-1">
+               <h3 className="text-xl sm:text-2xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-pink-300 to-green-300 drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+                 Welcome to Trolls Town 3D
+               </h3>
+               <p className="text-xs sm:text-sm font-semibold text-purple-200 tracking-wide group-hover:text-white transition-colors">
+                 Click to Enter the Metaverse &middot; Multiplayer &middot; Drive &middot; Raid
+               </p>
+            </div>
+
+            {/* Moving shine effect */}
+            <div className="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white opacity-20 group-hover:animate-shine" />
+          </Link>
         </div>
         {/* Live Now */}
         <section className="mb-8 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>

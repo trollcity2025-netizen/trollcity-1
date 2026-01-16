@@ -249,8 +249,9 @@ const HomeVisual: React.FC<{ value: number | null; isStarter: boolean | null }> 
   isStarter
 }) => {
   const tier = getHomeVisualTier(value, isStarter)
+  // See docs/UNREAL_ASSET_PIPELINE.md for instructions on creating the house_options.jpg collage from Unreal assets
   const collageUrl =
-    import.meta.env.VITE_GEMINI_HOUSE_COLLAGE_URL || '/assets/house_options.jpg'
+    import.meta.env.VITE_GEMINI_HOUSE_COLLAGE_URL || '/assets/house_options.png'
 
   // Map tiers to background positions on the collage
   // Assuming a grid layout in the source image

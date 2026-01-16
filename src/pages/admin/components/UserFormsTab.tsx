@@ -19,6 +19,10 @@ export default function UserFormsTab() {
   const [users, setUsers] = useState<UserFormStatus[]>([]);
   const [filter, setFilter] = useState<'all' | 'incomplete'>('incomplete');
   const [search, setSearch] = useState('');
+  const [viewingUser, setViewingUser] = useState<{ id: string; username: string } | null>(null);
+  const { profile: adminProfile } = useAuthStore();
+
+  const canViewDetails = adminProfile?.role === 'admin' || adminProfile?.is_admin === true || adminProfile?.role === 'secretary';
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -197,7 +201,16 @@ export default function UserFormsTab() {
                           </div>
                         )}
                       </div>
-                      <span className="font-medium text-white">{user.username}</span>
+                      {canViewDetails ? (
+                        <button
+                          onClick={() => setViewingUser({ id: user.id, username: user.username })}
+                          className="font-medium text-white hover:text-purple-400 underline transition-colors"
+                        >
+                          {user.username}
+                        </button>
+                      ) : (
+                        <span className="font-medium text-white">{user.username}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       {user.full_name ? (
@@ -249,6 +262,15 @@ export default function UserFormsTab() {
           </tbody>
         </table>
       </div>
+
+      {/* User Details Modal */}
+      {viewingUser && (
+        <UserDetailsModal
+          userId={viewingUser.id}
+          username={viewingUser.username}
+          onClose={() => setViewingUser(null)}
+        />
+      )}
     </div>
   );
 }

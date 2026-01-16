@@ -23,6 +23,8 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
   const [selectedGift, setSelectedGift] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [sendToAll, setSendToAll] = useState(false);
+  const [sending, setSending] = useState(false);
+  
   const toGiftSlug = (value) => {
     if (!value) return 'gift';
     return value
@@ -53,12 +55,25 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
     loadGifts();
   }, []);
 
-  const handleSendGift = () => {
+  const handleSendGiftNow = async () => {
     if (!selectedGift) return;
-    const giftPayload = { ...selectedGift, slug: toGiftSlug(selectedGift?.name), quantity };
-    if (typeof onSendGift === 'function') onSendGift(giftPayload, sendToAll);
-    setQuantity(1);
-    if (typeof onClose === 'function') onClose();
+    setSending(true);
+    try {
+      const giftPayload = { ...selectedGift, slug: toGiftSlug(selectedGift?.name), quantity };
+      if (typeof onSendGift === 'function') {
+        await onSendGift(giftPayload, sendToAll);
+      }
+      // Auto-close after successful send
+      setTimeout(() => {
+        setQuantity(1);
+        setSelectedGift(null);
+        if (typeof onClose === 'function') onClose();
+      }, 500);
+    } catch (err) {
+      console.error('Error sending gift:', err);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -177,10 +192,11 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
                   </span>
                 </div>
                 <button
-                  onClick={handleSendGift}
-                  className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-105 active:scale-95 bg-gradient-to-r ${selectedGift.color}`}
+                  onClick={handleSendGiftNow}
+                  disabled={sending}
+                  className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-105 active:scale-95 bg-gradient-to-r ${selectedGift.color} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  Send Gift
+                  {sending ? 'Sending...' : 'Send Gift'}
                 </button>
               </div>
             </div>

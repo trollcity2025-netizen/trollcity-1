@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
 import { reportError } from '../lib/supabase'
+import { trackEvent } from '../lib/telemetry'
 
 interface Props {
   children: ReactNode
@@ -22,6 +23,16 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info)
+    
+    trackEvent({
+      event_type: 'react_render_error',
+      message: error?.message || 'ErrorBoundary caught error',
+      stack: error?.stack,
+      severity: 'error',
+      fingerprint: `render-${error?.message?.slice(0, 50)}`,
+      extra: { info }
+    });
+
     void reportError({
       message: error?.message || 'ErrorBoundary caught error',
       stack: error?.stack,

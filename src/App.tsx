@@ -16,6 +16,7 @@ import { updateRoute } from "./utils/sessionStorage";
 import { useDebouncedProfileUpdate } from "./hooks/useDebouncedProfileUpdate";
 import { APP_DATA_REFETCH_EVENT_NAME } from "./lib/appEvents";
 import { autoUnlockPayouts } from "./lib/supabase";
+import { initTelemetry } from "./lib/telemetry";
 
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
@@ -40,6 +41,10 @@ import MechanicShopPage from "./pages/game/MechanicShopPage";
 import HospitalPage from "./pages/game/HospitalPage";
 import GeneralStorePage from "./pages/game/GeneralStorePage";
 import AuctionsPage from "./pages/AuctionsPage";
+const ChurchPage = lazy(() => import("./pages/ChurchPage"));
+const XPSimulatorPage = lazy(() => import("./pages/dev/XPSimulatorPage"));
+
+
 
 // Sidebar pages (instant load)
 const Messages = lazy(() => import("./pages/Messages"));
@@ -142,6 +147,7 @@ const PayoutSetupPage = lazy(() => import("./pages/PayoutSetupPage"));
 const Withdraw = lazy(() => import("./pages/Withdraw"));
 const Profile = lazy(() => import("./pages/Profile"));
 const ProfileSetup = lazy(() => import("./pages/ProfileSetup"));
+const Stats = lazy(() => import("./pages/Stats"));
 const EmpirePartnerApply = lazy(() => import("./pages/EmpirePartnerApply"));
 const AddCard = lazy(() => import("./pages/AddCard"));
 const EarningsDashboard = lazy(() => import("./pages/EarningsDashboard"));
@@ -223,6 +229,18 @@ const LoadingScreen = () => (
 
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
+    
+    // Force new users to complete profile setup first (except profile setup page itself)
+    if (
+      profile &&
+      !profile.username &&
+      location.pathname !== "/profile/setup" &&
+      location.pathname !== "/auth" &&
+      location.pathname !== "/callback"
+    ) {
+      return <Navigate to="/profile/setup" replace />;
+    }
+    
     if (
       profile &&
       profile.role !== "admin" &&
@@ -638,6 +656,8 @@ function AppContent() {
                   <Route path="/mechanic" element={<MechanicShopPage />} />
                   <Route path="/hospital" element={<HospitalPage />} />
                   <Route path="/auctions" element={<AuctionsPage />} />
+                  <Route path="/church" element={<ChurchPage />} />
+                  <Route path="/dev/xp" element={<XPSimulatorPage />} />
                   <Route path="/general-store" element={<GeneralStorePage />} />
                   
                   {/* 🎥 Streaming */}
@@ -687,6 +707,7 @@ function AppContent() {
                   <Route path="/coins" element={<CoinStore />} />
                   <Route path="/coins/complete" element={<CoinsComplete />} />
                   <Route path="/wallet" element={<Wallet />} />
+                  <Route path="/stats" element={<Stats />} />
                   <Route path="/payouts/setup" element={<PayoutSetupPage />} />
                   <Route path="/payouts/request" element={<PayoutRequest />} />
                   <Route path="/payment/callback" element={<PaymentCallback />} />
@@ -1308,6 +1329,10 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    initTelemetry();
+  }, []);
+
   return <AppContent />;
 }
 

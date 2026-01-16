@@ -31,6 +31,7 @@ import BroadcastLayout from '../components/broadcast/BroadcastLayout';
 import GlobalGiftBanner from '../components/GlobalGiftBanner';
 import GiftEventOverlay from './GiftEventOverlay';
 import { getUserEntranceEffect, triggerUserEntranceEffect } from '../lib/entranceEffects';
+import { processGiftXp } from '../lib/xp';
 
 import { useGiftEvents } from '../lib/hooks/useGiftEvents';
 import { useOfficerBroadcastTracking } from '../hooks/useOfficerBroadcastTracking';
@@ -1046,6 +1047,13 @@ export default function LivePage() {
 
     try {
       await claimSeat(seatIndex, { joinPrice: joinPriceForClaim });
+      
+      // Auto-disable screen share when a box is added for smooth transition
+      if (screenShareOn) {
+        const ok = await liveKit.toggleScreenShare();
+        setScreenShareOn(Boolean(ok));
+        console.log('[LivePage] Screen share auto-disabled on box add');
+      }
     } catch (err: any) {
       console.error('Failed to claim seat:', err);
       toast.error(err?.message || 'Failed to join seat');
@@ -1666,13 +1674,24 @@ export default function LivePage() {
       if (data) {
         setStream(prev => {
           if (!prev) return prev;
-          // Force update if values changed
+          
+          // Check if we're within grace period of a local coin update
+          const withinGrace = Date.now() - lastLocalCoinUpdateRef.current < COIN_UPDATE_GRACE_PERIOD;
+          
+          // Force update if values changed, but preserve local coin updates within grace period
+          const shouldUpdateCoins = !withinGrace || prev.total_gifts_coins === data.total_gifts_coins;
+          
           if (
             prev.current_viewers !== data.current_viewers ||
             prev.total_likes !== data.total_likes ||
-            prev.total_gifts_coins !== data.total_gifts_coins
+            (shouldUpdateCoins && prev.total_gifts_coins !== data.total_gifts_coins)
           ) {
-            return { ...prev, ...data };
+            return {
+              ...prev,
+              ...data,
+              // Don't override coins if we just updated them locally
+              ...(withinGrace && { total_gifts_coins: prev.total_gifts_coins })
+            };
           }
           return prev;
         });
@@ -1797,11 +1816,13 @@ export default function LivePage() {
         missing.push('Tax / W9');
       }
 
+      // If forms are complete, clear notification tracking and don't re-notify
       if (missing.length === 0) {
         notifiedMissingFormsRef.current.delete(viewer.userId);
         return;
       }
 
+      // Only notify if we haven't already notified this user about their missing forms
       if (notifiedMissingFormsRef.current.has(viewer.userId)) return;
       void notifyMissingForms(viewer.userId, missing);
     });
@@ -1809,6 +1830,10 @@ export default function LivePage() {
 
   // Gift subscription
   const lastGift = useGiftEvents(streamId);
+  
+  // Track local coin updates to prevent polling from reverting them
+  const lastLocalCoinUpdateRef = useRef<number>(0);
+  const COIN_UPDATE_GRACE_PERIOD = 3000; // 3 seconds
 
   // Update coin count instantly when a gift is received
   useEffect(() => {
@@ -1816,6 +1841,7 @@ export default function LivePage() {
     const amount = Number(lastGift.coinCost || 0);
     if (amount <= 0) return;
 
+    lastLocalCoinUpdateRef.current = Date.now();
     setStream(prev => {
       if (!prev) return prev;
       const updatedCoins = (prev.total_gifts_coins || 0) + amount;
@@ -2056,6 +2082,13 @@ export default function LivePage() {
               p_item: canonicalGiftName,
             });
             if (error) throw error;
+            
+            // Grant XP for sending and receiving gift
+            try {
+              await processGiftXp(senderId, receiverId, totalCoins);
+            } catch (xpErr) {
+              console.warn('[LivePage] Failed to process gift XP:', xpErr);
+            }
             
              setGiftBalanceDelta({
               userId: receiverId,

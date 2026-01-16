@@ -88,9 +88,9 @@ export default function ResponsiveVideoGrid({
   });
 
   return (
-    <div className="w-full h-full flex flex-col gap-6 p-6">
+    <div className="w-full h-full flex flex-col gap-3 sm:gap-6 p-3 sm:p-6">
       {/* Main Broadcaster Area */}
-      <div className="w-full flex-1 min-h-0 relative rounded-3xl overflow-hidden border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)] bg-black/40 group">
+      <div className="w-full flex-1 min-h-0 relative rounded-2xl sm:rounded-3xl overflow-hidden border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)] bg-black/40 group">
         <VideoTile
           participant={broadcaster}
           isBroadcaster
@@ -109,25 +109,25 @@ export default function ResponsiveVideoGrid({
         {/* Broadcaster Controls Overlay (Start Camera / Screen Share) */}
         {isLocalBroadcaster && !isCameraOn && !isScreenShareOn && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20">
-            <div className="flex gap-6">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
               <button 
                 onClick={onToggleCamera}
-                className="group flex flex-col items-center gap-3 p-6 rounded-2xl bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/40 hover:border-purple-400 hover:scale-105 transition-all duration-300"
+                className="group flex flex-col items-center gap-3 p-4 sm:p-6 rounded-xl sm:rounded-2xl bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/40 hover:border-purple-400 hover:scale-105 transition-all duration-300"
               >
-                <div className="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(147,51,234,0.5)] group-hover:shadow-[0_0_30px_rgba(147,51,234,0.7)]">
-                  <Camera size={32} className="text-white" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(147,51,234,0.5)] group-hover:shadow-[0_0_30px_rgba(147,51,234,0.7)]">
+                  <Camera size={24} className="sm:w-8 sm:h-8 text-white" />
                 </div>
-                <span className="text-lg font-bold text-white tracking-wide">Start Camera</span>
+                <span className="text-base sm:text-lg font-bold text-white tracking-wide">Start Camera</span>
               </button>
               
               <button 
                 onClick={onToggleScreenShare}
-                className="group flex flex-col items-center gap-3 p-6 rounded-2xl bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 hover:border-blue-400 hover:scale-105 transition-all duration-300"
+                className="group flex flex-col items-center gap-3 p-4 sm:p-6 rounded-xl sm:rounded-2xl bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/40 hover:border-blue-400 hover:scale-105 transition-all duration-300"
               >
-                <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center shadow-[0_0_20px_rgba(37,99,235,0.5)] group-hover:shadow-[0_0_30px_rgba(37,99,235,0.7)]">
-                  <Monitor size={32} className="text-white" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-600 flex items-center justify-center shadow-[0_0_20px_rgba(37,99,235,0.5)] group-hover:shadow-[0_0_30px_rgba(37,99,235,0.7)]">
+                  <Monitor size={24} className="sm:w-8 sm:h-8 text-white" />
                 </div>
-                <span className="text-lg font-bold text-white tracking-wide">Start Screen Share</span>
+                <span className="text-base sm:text-lg font-bold text-white tracking-wide">Start Screen Share</span>
               </button>
             </div>
           </div>
@@ -135,19 +135,50 @@ export default function ResponsiveVideoGrid({
       </div>
 
       {guestSeatCount > 0 && (
-        <div className="h-[180px] sm:h-[200px] lg:h-[240px] shrink-0 grid grid-cols-3 grid-rows-2 gap-4">
-          {guestAssignments.map(({ key, seatIndex, participant }) => (
-            <div 
-              key={key} 
-              className="relative rounded-xl overflow-hidden bg-[#1a0b2e]/50 border border-purple-500/20 shadow-inner group transition-all hover:border-purple-500/40 hover:bg-[#1a0b2e]/70"
-            >
-              {participant ? (
-                <VideoTile
-                  participant={participant}
-                  isLocal={!!(localParticipant && participant.identity === localParticipant.identity)}
-                  isHost={isHost}
-                  onDisableGuestMedia={onDisableGuestMedia}
-                  price={joinPrice}
+        <div className="shrink-0 grid gap-2 sm:gap-3 lg:gap-4 auto-rows-max">
+          {/* Mobile: 2 columns, Tablet: 3 columns, Desktop: 6 columns in grid pattern */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+            {guestAssignments.slice(0, 6).map(({ key, seatIndex, participant }) => (
+              <div 
+                key={key} 
+                className="aspect-video relative rounded-lg sm:rounded-xl overflow-hidden bg-[#1a0b2e]/50 border border-purple-500/20 shadow-inner group transition-all hover:border-purple-500/40 hover:bg-[#1a0b2e]/70"
+              >
+                {participant ? (
+                  <VideoTile
+                    participant={participant}
+                    isLocal={!!(localParticipant && participant.identity === localParticipant.identity)}
+                    isHost={isHost}
+                    onDisableGuestMedia={onDisableGuestMedia}
+                    price={joinPrice}
+                    coinBalance={participant.identity ? coinBalances?.[participant.identity] : undefined}
+                    compact
+                    className="w-full h-full"
+                    style={{ width: '100%', height: '100%' }}
+                    onClick={() => onUserClick?.(participant)}
+                  />
+                ) : (
+                  <div 
+                    className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+                    onClick={() => onJoinRequest?.(seatIndex)}
+                  >
+                    <div className="text-xl sm:text-2xl font-bold text-purple-300/30 mb-1 group-hover:text-purple-300/50 transition-colors">
+                      #{seatIndex + 1}
+                    </div>
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)] group-hover:shadow-[0_0_15px_rgba(168,85,247,0.5)]">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="sm:w-5 sm:h-5">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
                   coinBalance={participant.identity ? coinBalances?.[participant.identity] : undefined}
                   compact
                   className="w-full h-full"

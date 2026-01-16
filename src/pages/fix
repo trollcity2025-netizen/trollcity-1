@@ -1,0 +1,510 @@
+Upgrade TrollsTown into a real-life inspired city simulation optimized for mobile PWA broadcasting, and implement the following gameplay systems with clear rules and lightweight performance costs.
+
+DAY / NIGHT + SUNDAY DETECTION
+
+Implement an in-game clock with a 24-hour cycle (day → evening → night → morning).
+
+Lighting and sky must shift based on time (mobile-friendly; baked/optimized).
+
+Use the player’s local timezone to determine day-of-week.
+
+Detect Sunday explicitly and expose a boolean state: isSunday.
+
+Church is only open when isSunday = true and during a Sunday service window (example: 8:00 AM–2:00 PM local time).
+
+Outside of that window, church doors show “Closed” and entry is disabled.
+
+CITIZEN NEEDS (REAL-LIFE GAME LOOP)
+Create 3 core citizen needs that are persistent and visible in the HUD:
+
+Gas: Vehicles consume gas while driving; if gas reaches 0, vehicle cannot move until refueled.
+
+Food: Food decreases slowly over time; if low, show warning and reduced stamina/movement benefits (light penalty, not harsh). Food is restored by purchasing groceries at Trollgers.
+
+Clothing: Citizens must own clothing items; clothing affects appearance and can be changed anytime from wardrobe/inventory. Certain locations can enforce “dress presentable” prompts (no blocking gameplay, just feedback).
+
+Needs must be saved per user and synced so they persist across sessions.
+
+STORES + INTERIORS VS EXTERIOR-ONLY
+
+Implement exterior-only for most buildings to preserve performance.
+
+Only the following locations have interiors (instanced scenes) with a clean transition portal/doorway:
+
+TrollMart interior (clothes + furniture + electronics)
+
+Trollgers interior (grocery)
+
+Church interior (seating + stage/pulpit area)
+
+Store interiors must be lightweight: limited props, shared materials, texture atlases, aggressive culling.
+
+All other buildings remain exterior-only with realistic facades, signage, and doors that do not open.
+
+ECONOMY RULES (TROLL COINS)
+
+All purchases use Troll Coins with a single source-of-truth balance.
+
+HUD must display Troll Coin balance and update instantly after any earn/spend event.
+
+Gas price: 1 Troll Coin per gallon.
+
+TrollMart sells: clothes (equippable), furniture (owned/unlocked for personal spaces if applicable), electronics (owned/unlocked).
+
+Trollgers sells groceries that restore Food need.
+
+CHURCH-ONLY BROADCAST RULE SET
+
+When isSunday = true and the church is open, broadcasters may start a Church Session.
+
+Church Session rules:
+
+Only broadcasters physically inside the church interior can host.
+
+Viewers who join are placed into the church interior as seated attendees.
+
+Attendees can: watch, react, participate in Bible study prompts/chat, and remain seated.
+
+No store purchasing UI, no gambling UI, and no disruptive overlays while inside church.
+
+Keep church UI minimal: service title, host name, attendee count, and respectful interaction panel.
+
+If a citizen drives to church while a Church Session is live, transition them into the church interior and auto-seat them in the audience view.
+
+If no Church Session is live, citizens entering church see an “Open for prayer/study” quiet mode with optional broadcasting disabled (unless they start the session as host).
+
+PERFORMANCE & VISUALS (MOBILE FIRST)
+
+Mid-poly realistic GTA-style humans/vehicles; no box/placeholder geometry.
+
+Baked lighting preferred; limit dynamic shadows.
+
+Use LODs, instancing, compressed textures, and culling to keep streaming smooth.
+
+Deliver TrollsTown as a premium-looking real-life city sim inside a broadcasting app, with time/day logic, Sunday church rules, citizen needs, limited interiors, Troll Coin economy, and a respectful church broadcast mode.
+
+HUD OVERLAY — CITIZEN STATUS
+
+Place the following HUD elements in the top-right corner in a vertical stack, using clean, readable fonts sized for mobile screens:
+
+TROLL COINS
+
+Label: TROLL COINS
+
+Display: numeric value only (example: 12,450)
+
+Icon: small coin icon (optional, minimal)
+
+Behavior:
+
+Always visible
+
+Updates instantly when coins are earned, spent, gifted, purchased, or received
+
+Uses the single source-of-truth Troll Coin balance
+
+GAS
+
+Label: GAS
+
+Display: percentage or bar (example: 65%)
+
+Behavior:
+
+Visible only when the citizen owns or is near a vehicle
+
+Decreases while driving
+
+When GAS reaches 0%, show warning text: OUT OF GAS
+
+Disable vehicle movement until refueled
+
+FOOD
+
+Label: FOOD
+
+Display: bar or percentage (example: 40%)
+
+Behavior:
+
+Always visible
+
+Slowly decreases over time
+
+When FOOD is low, show warning text: HUNGRY
+
+Restored by purchasing groceries from Trollgers
+
+HUD STYLE RULES
+
+Minimal, semi-transparent background
+
+No flashing or intrusive animations
+
+Must remain readable during live broadcasts
+
+Scales properly for phones and tablets
+
+CHURCH — SEATED AUDIENCE CAMERA BEHAVIOR (EXACT RULES)
+
+CHURCH CAMERA MODE — SEATED AUDIENCE
+
+When a citizen enters the church interior during a Church Session, switch to Fixed Pew Camera Mode:
+
+Camera type: Fixed pew cam (default)
+
+Position:
+
+Camera is seated at pew height
+
+Slight offset behind the citizen’s shoulder
+
+Facing forward toward the pulpit/stage
+
+Movement:
+
+No free camera movement
+
+No character walking while seated
+
+Optional subtle head/idle movement only
+
+VIEW MODES (OPTIONAL TOGGLE)
+
+Default: Fixed pew cam
+
+Optional secondary view:
+
+First-person seated view (eyes facing pulpit)
+
+Third-person free camera is disabled inside church to preserve atmosphere and performance
+
+CAMERA TRANSITIONS
+
+Entering church: smooth fade-in or short camera blend to seated view
+
+Exiting church: return camera to standard third-person follow mode
+
+BROADCAST INTEGRATION
+
+Host camera remains free (stage/pulpit facing view)
+
+Attendee cameras remain seated and synchronized
+
+Camera must prioritize stable framing for viewers
+
+IMMERSION RULES
+
+No HUD clutter beyond Troll Coins + minimal interaction panel
+
+No store UI or vehicle UI while inside church
+
+Environment audio dampened for calm atmosphere
+
+You are Trae.ai acting as the lead architect + senior full-stack engineer for my app/site (TrollCity / MAI Studios style). Your job is to implement a complete XP-first progression system where every meaningful user action ties into XP, levels, rewards, unlocks, and UI updates in real time.
+
+1) NON-NEGOTIABLE RULES (Must Follow)
+
+XP is a core platform service (not page-specific logic).
+
+The database is the source of truth for XP/level (no UI-only XP).
+
+All XP writes must be atomic (race-condition safe).
+
+All clients must receive real-time XP updates (sidebar + profile + broadcast overlay) without refresh.
+
+XP must be recorded in an append-only ledger (audit trail) + a fast summary (current XP/level).
+
+XP cannot be exploited: add rate limits, deduplication, and server validation for any XP reward.
+
+Every XP grant must include:
+
+user_id
+
+source (gift/chat/purchase/win/etc.)
+
+source_id (event id / transaction id)
+
+xp_amount
+
+reason
+
+created_at
+
+2) DATA MODEL (Design + Implement)
+
+Create these tables/collections (or equivalent):
+
+A) user_stats
+
+user_id (pk)
+
+xp_total (bigint)
+
+level (int)
+
+xp_to_next_level (bigint)
+
+xp_progress (0–1 float)
+
+updated_at
+
+B) xp_ledger (append-only)
+
+id (pk)
+
+user_id
+
+source (enum/string)
+
+source_id (unique per source to prevent dupes)
+
+xp_amount
+
+metadata (json)
+
+created_at
+
+C) level_config (optional but recommended)
+
+level
+
+xp_required_total
+
+title
+
+perks (json)
+
+3) LEVELING RULES (Define Clearly)
+
+Implement a deterministic leveling system:
+
+xp_total increases over time.
+
+Level is derived from xp_total.
+
+Provide a function:
+
+computeLevel(xp_total) -> { level, xpToNext, progress }
+
+Ensure it’s consistent across backend + frontend.
+
+Use a scalable curve (example):
+
+Level 1 starts at 0 XP.
+
+XP requirement increases gradually (avoid steep early grind).
+
+Must support high XP values (bigint safe).
+
+4) XP SERVICE (Core Backend Module)
+
+Implement a single backend entry point for XP updates:
+
+Function: grantXP(userId, amount, source, sourceId, metadata)
+
+Validates user + amount
+
+Checks dedupe (same source/sourceId cannot be applied twice)
+
+Inserts into xp_ledger
+
+Atomically increments user_stats.xp_total
+
+Recomputes level, xp_to_next_level, xp_progress
+
+Emits a real-time event: xp_updated with:
+
+{ userId, xp_total, level, xp_to_next_level, xp_progress, delta: amount, source }
+
+If an action affects multiple users (ex: gift sender gets XP + receiver gets XP), call grantXP for each user with unique sourceIds.
+
+5) REAL-TIME UI REQUIREMENTS (Sidebar Must Always Update)
+
+All UI surfaces must subscribe to XP changes:
+
+Sidebar XP bar and number
+
+Profile page XP + level badge
+
+Broadcast overlay (optional)
+
+Any leaderboard widgets
+
+Implement:
+
+A client “XP Store” (global state)
+
+On app load: fetch user_stats
+
+Subscribe to real-time events (xp_updated) and update instantly
+
+Prevent stale UI by making sidebar read ONLY from the XP Store
+
+6) XP SOURCES (Tie EVERYTHING Into XP)
+
+Implement XP for the following actions (server-validated):
+
+Broadcast & Social
+
+Receiving gifts (broadcaster XP)
+
+Sending gifts (sender XP)
+
+Chat messages (rate limited; anti-spam)
+
+Watching stream time (tick every X minutes, capped/day)
+
+Following a broadcaster
+
+Going live (start stream bonus, cooldown)
+
+Daily login streak
+
+Completing profile (avatar/bio/email verification etc.)
+
+Store / Purchases
+
+Buying coin packages
+
+Buying cosmetic items / memberships
+
+First purchase bonus
+
+Refund-safe logic: if refunded, create a negative ledger entry
+
+Gambling / Games (if enabled in app)
+
+XP for participating (small)
+
+XP for winning (bigger)
+
+Loss XP (optional small, to reduce rage quit)
+
+Hard caps per hour/day to prevent farming
+
+Moderation / Community (optional)
+
+Reporting valid issues (only if verified)
+
+Completing tutorial/onboarding
+
+7) ANTI-EXPLOIT + SAFETY CONTROLS (Must Implement)
+
+Rate limits:
+
+chat XP: max X per minute + diminishing returns
+
+watch XP: max per day
+
+gift XP: derived from verified transaction only
+
+Deduplication using source_id
+
+All XP grants must occur server-side or via secured RPC / API route.
+
+If the client calls XP: it must call an endpoint that verifies:
+
+auth user
+
+event integrity
+
+transaction id
+
+Add logging for suspicious spikes.
+
+8) XP MAPPINGS (DEFAULT VALUES YOU MUST APPLY)
+
+Use these defaults and keep them configurable:
+
+Gifts
+
+broadcaster_xp = coins_spent * 1.0
+
+sender_xp = coins_spent * 0.25
+
+Chat
+
+1 XP per message, max 10 XP / 5 minutes, spam filter + cooldown
+
+Watching
+
+20 XP per 5 minutes watched, max 500 XP/day
+
+Purchases
+
+xp = dollars_spent * 50 (or coin-based equivalent)
+
+First purchase bonus +500 XP
+
+Going Live
+
++200 XP once per 6 hours
+
+Daily Login
+
+Day 1: 100 XP, scales with streak up to cap
+
+9) SIDEBAR BUG FIX (YOUR CURRENT PROBLEM)
+
+Explicitly fix this:
+
+When gifts occur in broadcast, XP must:
+
+persist in DB
+
+emit xp_updated real-time
+
+sidebar listens and updates XP bar + number immediately
+
+Confirm the sidebar is not reading a stale user object or cached profile.
+
+Ensure the broadcast gift handler triggers the XP Service, not local state.
+
+10) TESTS + DEBUG TOOLS (Must Deliver)
+
+Provide:
+
+A “simulate gift” dev tool that triggers a fake gift event to test XP.
+
+Unit tests for:
+
+computeLevel
+
+grantXP dedupe
+
+rate limits
+
+Integration test:
+
+send gift -> XP updated -> sidebar reflects change within 1 second
+
+11) OUTPUT FORMAT I WANT FROM YOU (Trae)
+
+Deliver:
+
+DB schema migrations / SQL (or schema definitions)
+
+Backend XP service module + API/RPC endpoints
+
+Real-time subscription wiring
+
+Sidebar + UI updates
+
+Gift event integration fix
+
+Tests + a simple dev simulator
+
+FINAL CHECKLIST (Must Pass)
+
+Gifts always increase XP immediately
+
+Sidebar always updates in real time
+
+XP updates are atomic and safe
+
+Ledger exists and prevents duplicates
+
+XP is tied into every feature above
+
+Exploit prevention is active

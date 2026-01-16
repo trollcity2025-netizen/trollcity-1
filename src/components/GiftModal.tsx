@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../lib/store';
+import { useCoins } from '../lib/hooks/useCoins';
 import { toast } from 'sonner';
 import { Gift, Coins, Zap, X, Loader2 } from 'lucide-react';
 import LuckyWinOverlay from './LuckyWinOverlay';
@@ -24,30 +25,13 @@ const GiftModal: React.FC<GiftModalProps> = ({
   recipientUsername
 }) => {
   const { user } = useAuthStore();
+  const { balances } = useCoins();
   const [amount, setAmount] = useState<number>(100);
   const [loading, setLoading] = useState(false);
   const [luckyResult, setLuckyResult] = useState<LuckyResult | null>(null);
   const [showLuckyOverlay, setShowLuckyOverlay] = useState(false);
-  const [balance, setBalance] = useState({ troll_coins: 0, trollmonds: 0 });
 
   const presetAmounts = [50, 100, 200, 500, 1000, 2500, 5000];
-
-  useEffect(() => {
-    const loadBalance = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('troll_coins, trollmonds')
-          .eq('id', user!.id)
-          .single();
-  
-        if (error) throw error;
-        setBalance({
-          troll_coins: data.troll_coins || 0,
-          trollmonds: data.trollmonds || 0
-        });
-      } catch (error) {
-        console.error('Error loading balance:', error);
       }
     };
 
@@ -57,7 +41,7 @@ const GiftModal: React.FC<GiftModalProps> = ({
   }, [isOpen, user]);
 
   const sendGift = async () => {
-    if (!user || amount <= 0 || amount > balance.troll_coins) {
+    if (!user || amount <= 0 || amount > balances.troll_coins) {
       toast.error('Invalid gift amount or insufficient balance');
       return;
     }
@@ -73,12 +57,6 @@ const GiftModal: React.FC<GiftModalProps> = ({
       if (error) throw error;
 
       if (data.success) {
-        // Update local balance
-        setBalance(prev => ({
-          ...prev,
-          troll_coins: prev.troll_coins - amount
-        }));
-
         // Check for lucky win
         if (data.lucky_multiplier) {
           setLuckyResult({
@@ -171,16 +149,16 @@ const GiftModal: React.FC<GiftModalProps> = ({
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-green-400" />
+                <span cls.troll_coins.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-green-400" />
                 <span className="text-sm text-gray-400">Trollmonds</span>
               </div>
               <span className="text-lg font-bold text-green-400">
-                {balance.trollmonds.toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          {/* Amount Selection */}
-          <div className="mb-6">
+                {balances.troll_coin
             <label className="block text-sm font-medium text-gray-300 mb-3">
               Gift Amount
             </label>
@@ -252,7 +230,7 @@ const GiftModal: React.FC<GiftModalProps> = ({
           {/* Send Button */}
           <button
             onClick={sendGift}
-            disabled={loading || amount <= 0 || amount > balance.troll_coins}
+            disabled={loading || amount <= 0 || amount > balances.troll_coins}
             className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -268,7 +246,7 @@ const GiftModal: React.FC<GiftModalProps> = ({
             )}
           </button>
 
-          {amount > balance.troll_coins && (
+          {amount > balances.troll_coins && (
             <p className="text-red-400 text-sm mt-2 text-center">
               Insufficient Troll Coins balance
             </p>

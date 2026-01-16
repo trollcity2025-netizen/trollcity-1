@@ -13232,23 +13232,40 @@ CREATE OR REPLACE FUNCTION "public"."record_agreement_acceptance"("p_user_id" "u
     AS $$
 DECLARE
   v_agreement_id uuid := gen_random_uuid();
+  v_username text;
+  v_email text;
 BEGIN
+  -- Get username and email from user_profiles
+  SELECT username, email INTO v_username, v_email
+  FROM public.user_profiles
+  WHERE id = p_user_id;
+
+  IF v_username IS NULL THEN
+    RAISE EXCEPTION 'User not found or username is null';
+  END IF;
+
   INSERT INTO public.user_agreements (
     id,
     user_id,
+    username,
+    email,
     agreement_version,
-    agreed_at,
+    accepted_at,
     ip_address,
     user_agent,
+    terms_accepted,
     created_at
   )
   VALUES (
     v_agreement_id,
     p_user_id,
+    v_username,
+    v_email,
     COALESCE(p_agreement_version, '1.0'),
     now(),
     p_ip_address,
     p_user_agent,
+    true,
     now()
   );
 
