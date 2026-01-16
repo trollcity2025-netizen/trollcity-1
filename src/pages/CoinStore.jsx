@@ -6,7 +6,7 @@ import { useCoins } from '@/lib/hooks/useCoins';
 import { toast } from 'sonner';
 import { loadStripe } from '@stripe/stripe-js';
 import { Coins, DollarSign, ShoppingCart, CreditCard, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { coinPackages, formatCoins, formatUSD } from '../lib/coinMath';
+import { formatCoins, formatUSD } from '../lib/coinMath';
 import { addCoins, deductCoins } from '@/lib/coinTransactions';
 import { useLiveContextStore } from '../lib/liveContextStore';
 import { useStreamMomentum } from '@/lib/hooks/useStreamMomentum';
@@ -96,11 +96,34 @@ export default function CoinStore() {
     if (typeof window === 'undefined') return false;
     return Boolean(sessionStorage.getItem('tc-store-show-complete'));
   });
+  const [coinPackages, setCoinPackages] = useState([]);
 
   const stripeRef = useRef(null);
   const elementsRef = useRef(null);
   const paymentElementRef = useRef(null);
   const paymentAttachedRef = useRef(false);
+
+  useEffect(() => {
+    const loadCoinPackages = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('coin_packages')
+          .select('id, name, coins, price_usd, amount_cents')
+          .eq('is_active', true)
+          .order('coins', { ascending: true });
+
+        if (error) throw error;
+        if (Array.isArray(data)) {
+          setCoinPackages(data);
+        }
+      } catch (err) {
+        console.error('Failed to load coin packages:', err);
+        toast.error('Unable to load coin packages');
+      }
+    };
+
+    loadCoinPackages();
+  }, []);
 
   const getThemeStyle = (theme) => {
     if (!theme) return undefined;
@@ -1241,8 +1264,7 @@ export default function CoinStore() {
                     <div key={pkg.id} className="bg-zinc-900 rounded-xl p-4 border border-purple-500/20 hover:border-purple-500/40 transition-all">
                       <div className="mb-3">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-lg font-bold text-purple-300">{pkg.name}</span>
-                          <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded-full">{pkg.id}</span>
+                          <span className="text-lg font-bold text-purple-300">{pkg.name || 'Coin Package'}</span>
                         </div>
                         <p className="text-xs text-gray-400 mb-2">Package</p>
                       </div>
@@ -1258,7 +1280,7 @@ export default function CoinStore() {
                           <DollarSign className="w-4 h-4 text-green-400" />
                           <span className="text-sm text-gray-400">Price</span>
                         </div>
-                        <p className="text-xl font-bold text-green-400">{formatUSD(pkg.price)}</p>
+                        <p className="text-xl font-bold text-green-400">{formatUSD(pkg.price_usd)}</p>
                       </div>
                       <div className="mt-4">
                         <button
