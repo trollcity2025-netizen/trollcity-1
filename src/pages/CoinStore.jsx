@@ -835,7 +835,7 @@ export default function CoinStore() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ packageId: pkg.id })
+        body: JSON.stringify({ packageId: pkg.id, coins: pkg.coins, price: pkg.price })
       });
 
       if (!res.ok) {

@@ -99,6 +99,8 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const purchaseType = body?.purchaseType as string | undefined;
     const packageId = body?.packageId as string | undefined;
+    const packageCoins = body?.coins as number | undefined;
+    const packagePrice = body?.price as number | undefined;
 
     if (!packageId && purchaseType !== "troll_pass_bundle") {
       return new Response(JSON.stringify({ error: "Missing packageId" }), {
@@ -159,15 +161,30 @@ serve(async (req: Request) => {
       });
     }
 
-    const { data: pkg, error: pkgError } = await supabaseAdmin
+    const isUuid = (value: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+    let pkgQuery = supabaseAdmin
       .from("coin_packages")
-      .select("id, coins, price_usd, amount_cents, stripe_price_id, is_active")
-      .eq("id", packageId)
-      .single();
+      .select("id, coins, price_usd, amount_cents, stripe_price_id, is_active, paypal_sku")
+      .eq("is_active", true);
+
+    if (packageId) {
+      pkgQuery = isUuid(packageId)
+        ? pkgQuery.eq("id", packageId)
+        : pkgQuery.eq("paypal_sku", packageId);
+    } else if (typeof packageCoins === "number" && typeof packagePrice === "number") {
+      pkgQuery = pkgQuery.eq("coins", packageCoins).eq("price_usd", packagePrice);
+    }
+
+    const { data: pkg, error: pkgError } = await pkgQuery.maybeSingle();
 
     if (pkgError || !pkg) {
-      return new Response(JSON.stringify({ error: "Package not found" }), {
-        status: 404,
+      return new Response(JSON.stringify({
+        error: "Failed to fetch package",
+        details: pkgError ? JSON.stringify(pkgError) : null,
+      }), {
+        status: 400,
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
