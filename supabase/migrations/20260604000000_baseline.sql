@@ -679,6 +679,20 @@ SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
 
+CREATE OR REPLACE FUNCTION public.increment_gift_vote_count(p_gift_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'extensions'
+AS $$
+BEGIN
+  UPDATE user_gifts
+  SET vote_count = vote_count + 1,
+      updated_at = now()
+  WHERE id = p_gift_id;
+END;
+$$;
+
 
 CREATE TABLE IF NOT EXISTS "public"."payout_requests" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -49205,7 +49219,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
 
 
 

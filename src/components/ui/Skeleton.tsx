@@ -2,7 +2,7 @@ import React from 'react';
 
 export const StreamSkeleton: React.FC = () => (
   <div className="relative rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-[#1f1535] via-[#16102a] to-[#0f0820] border border-purple-500/40 animate-pulse">
-    <div className="relative overflow-hidden h-52 bg-gray-700">
+    <div className="relative overflow-hidden h-32 bg-gray-700">
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
     </div>
     <div className="p-4 flex flex-col justify-between h-28 bg-gradient-to-t from-black/90 via-black/70 to-black/40">

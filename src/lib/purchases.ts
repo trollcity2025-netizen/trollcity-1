@@ -4,6 +4,70 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { UserPurchase, PurchaseActivationOptions } from '@/types/purchases';
+import {
+  deductCoins,
+  type CoinTransactionType,
+  type CoinTransactionMetadata,
+  type CoinType,
+} from '@/lib/coinTransactions';
+
+export interface StandardPurchaseFlowParams {
+  userId: string;
+  amount: number;
+  transactionType: CoinTransactionType;
+  coinType?: CoinType;
+  description?: string;
+  metadata?: CoinTransactionMetadata;
+  supabaseClient?: SupabaseClient;
+  ensureOwnership: (client: SupabaseClient) => Promise<{ success: boolean; error?: string }>;
+  activate?: (client: SupabaseClient) => Promise<{ success: boolean; error?: string }>;
+}
+
+export async function runStandardPurchaseFlow(
+  params: StandardPurchaseFlowParams
+): Promise<{ success: boolean; error?: string }> {
+  const {
+    userId,
+    amount,
+    transactionType,
+    coinType,
+    description,
+    metadata,
+    supabaseClient,
+    ensureOwnership,
+    activate,
+  } = params;
+
+  const client = supabaseClient || supabase;
+
+  const deductResult = await deductCoins({
+    userId,
+    amount,
+    type: transactionType,
+    coinType,
+    description,
+    metadata,
+    supabaseClient: client,
+  });
+
+  if (!deductResult.success) {
+    return { success: false, error: deductResult.error || 'Failed to deduct coins' };
+  }
+
+  const ownershipResult = await ensureOwnership(client);
+  if (!ownershipResult.success) {
+    return { success: false, error: ownershipResult.error || 'Failed to grant ownership' };
+  }
+
+  if (activate) {
+    const activationResult = await activate(client);
+    if (!activationResult.success) {
+      return { success: false, error: activationResult.error || 'Failed to activate item' };
+    }
+  }
+
+  return { success: true };
+}
 
 /**
  * Create a purchase record when user buys an item

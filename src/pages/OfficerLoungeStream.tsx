@@ -13,7 +13,7 @@ import {
 
 const TEXT_ENCODER = new TextEncoder()
 const ROOM_NAME = 'officer-stream'
-const SEAT_COUNT = 6
+const SEAT_COUNT = 9
 
 type ControlMessage = {
   type: 'admin-action'
@@ -251,7 +251,7 @@ const OfficerLoungeStream: React.FC = () => {
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.4em] text-white/50">Seat roster</p>
-                <p className="text-sm text-white/70">Six seats · {participants.size} active</p>
+                <p className="text-sm text-white/70">{SEAT_COUNT} seats · {participants.size} active</p>
               </div>
               <span className="rounded-full border border-white/30 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-white/70">
                 Officers only

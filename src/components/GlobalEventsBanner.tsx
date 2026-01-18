@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Gift, Trophy, Zap, Crown, Flame, X } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
+import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 interface GlobalEvent {
   id: string;
@@ -11,52 +13,135 @@ interface GlobalEvent {
   endTime: Date;
   isActive: boolean;
   multiplier?: number;
+  linkPath?: string;
 }
+
+interface VoteEventRow {
+  id: string;
+  event_type: string;
+  created_at: string;
+}
+
+const mapVoteEventToGlobal = (row: VoteEventRow): GlobalEvent => {
+  const baseStart = row.created_at ? new Date(row.created_at) : new Date();
+  const baseEnd = new Date(baseStart.getTime() + 60 * 60 * 1000);
+
+  if (row.event_type === 'trollg_fee_paid') {
+    return {
+      id: row.id,
+      title: 'New TrollG Creator',
+      description: 'A new TrollG creator has unlocked access. Watch for their gift and vote.',
+      type: 'special_event',
+      startTime: baseStart,
+      endTime: baseEnd,
+      isActive: true,
+    };
+  }
+
+  if (row.event_type === 'gift_submitted') {
+    return {
+      id: row.id,
+      title: 'New TrollG Gift',
+      description: 'A new TrollG gift has been submitted — vote now.',
+      type: 'special_event',
+      startTime: baseStart,
+      endTime: baseEnd,
+      isActive: true,
+    };
+  }
+
+  if (row.event_type === 'officer_cycle_started') {
+    return {
+      id: row.id,
+      title: 'Vote: Troll Officer of the Week',
+      description: 'Support your favorite broadcaster and cast your vote.',
+      type: 'special_event',
+      startTime: baseStart,
+      endTime: baseEnd,
+      isActive: true,
+      linkPath: '/officer/vote',
+    };
+  }
+
+  if (row.event_type === 'officer_cycle_winner') {
+    return {
+      id: row.id,
+      title: 'Troll Officer of the Week Selected',
+      description: 'A new Troll Officer has been chosen by the community.',
+      type: 'special_event',
+      startTime: baseStart,
+      endTime: baseEnd,
+      isActive: true,
+      linkPath: '/officer/vote',
+    };
+  }
+
+  return {
+    id: row.id,
+    title: 'Troll City Event',
+    description: 'A new city event just dropped. Jump in and participate.',
+    type: 'special_event',
+    startTime: baseStart,
+    endTime: baseEnd,
+    isActive: true,
+  };
+};
 
 const GlobalEventsBanner: React.FC = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [currentEvent, setCurrentEvent] = useState<GlobalEvent | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // Mock occasional, system-generated events (not every hour)
-    const now = Date.now();
-    const randomHours = 3 + Math.floor(Math.random() * 5); // 3-7 hours from now
-    const start = now + randomHours * 60 * 60 * 1000;
-    const end = start + 60 * 60 * 1000; // 1 hour window
-
-    const mockEvents: GlobalEvent[] = [
-      {
-        id: 'system-double-gift',
-        title: 'Double Gift Blast',
-        description: 'System-triggered bonus gift window. Watch for surprise drops.',
-        type: 'double_gift',
-        startTime: new Date(start),
-        endTime: new Date(end),
-        isActive: false,
-        multiplier: 2,
-      },
-    ];
-
-    // Find the next upcoming event
-    const nextEvent = mockEvents
-      .filter((event) => event.startTime > new Date())
-      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())[0];
-
-    if (nextEvent) {
-      setCurrentEvent(nextEvent);
+    if (!user?.id) {
+      setCurrentEvent(null);
+      setIsVisible(false);
+      return;
     }
 
-    // Check for active events
-    const activeEvent = mockEvents.find(
-      (event) => event.startTime <= new Date() && event.endTime > new Date()
-    );
+    let cancelled = false;
 
-    if (activeEvent) {
-      setCurrentEvent({ ...activeEvent, isActive: true });
-    }
-  }, []);
+    const loadEvents = async () => {
+      const { data: events, error } = await supabase
+        .from('vote_events')
+        .select('id, event_type, created_at, is_active')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error || !events || events.length === 0 || cancelled) {
+        setCurrentEvent(null);
+        setIsVisible(false);
+        return;
+      }
+
+      const eventIds = events.map((e) => e.id);
+
+      const { data: dismissals } = await supabase
+        .from('user_event_dismissals')
+        .select('event_id')
+        .eq('user_id', user.id)
+        .in('event_id', eventIds);
+
+      const dismissedIds = new Set((dismissals || []).map((d: any) => d.event_id));
+      const next = events.find((e) => !dismissedIds.has(e.id));
+
+      if (!next || cancelled) {
+        setCurrentEvent(null);
+        setIsVisible(false);
+        return;
+      }
+
+      setCurrentEvent(mapVoteEventToGlobal(next as VoteEventRow));
+    };
+
+    void loadEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!currentEvent) return;
@@ -89,15 +174,14 @@ const GlobalEventsBanner: React.FC = () => {
     return () => clearInterval(interval);
   }, [currentEvent]);
 
-  // Show only once per login session (not on page refresh) unless dismissed
   useEffect(() => {
     if (!user?.id || !currentEvent) {
       setIsVisible(false);
       return;
     }
 
-    const dismissedKey = `global-event-banner-dismissed-${user.id}`;
-    const shownKey = `global-event-banner-shown-${user.id}`;
+    const dismissedKey = `global-event-banner-dismissed-${user.id}-${currentEvent.id}`;
+    const shownKey = `global-event-banner-shown-${user.id}-${currentEvent.id}`;
     const isDismissed = sessionStorage.getItem(dismissedKey) === 'true';
     const alreadyShown = sessionStorage.getItem(shownKey) === 'true';
 
@@ -142,18 +226,37 @@ const GlobalEventsBanner: React.FC = () => {
 
   const handleDismiss = () => {
     if (!user?.id) return;
-    const dismissedKey = `global-event-banner-dismissed-${user.id}`;
+    if (!currentEvent) {
+      setIsVisible(false);
+      return;
+    }
+    const dismissedKey = `global-event-banner-dismissed-${user.id}-${currentEvent.id}`;
     sessionStorage.setItem(dismissedKey, 'true');
     setIsVisible(false);
+    void (async () => {
+      try {
+        await supabase
+          .from('user_event_dismissals')
+          .insert({ event_id: currentEvent.id, user_id: user.id });
+      } catch {
+      }
+    })();
   };
 
   if (!currentEvent || !isVisible) return null;
+
+  const handleClick = () => {
+    if (currentEvent.linkPath) {
+      navigate(currentEvent.linkPath);
+    }
+  };
 
   return (
     <div
       className={`fixed top-0 left-0 right-0 z-50 bg-gradient-to-r ${getEventColors(
         currentEvent.type
-      )} border-b-2 shadow-lg`}
+      )} border-b-2 shadow-lg ${currentEvent.linkPath ? 'cursor-pointer' : ''}`}
+      onClick={handleClick}
     >
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">

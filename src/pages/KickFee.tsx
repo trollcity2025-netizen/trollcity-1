@@ -4,12 +4,14 @@ import { AlertCircle, CreditCard, Home } from "lucide-react";
 import { useAuthStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
+import { EDGE_URL } from "../lib/config";
 
 export default function KickFee() {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile } = useAuthStore();
+  const { user, profile, refreshProfile, logout } = useAuthStore();
   const [kickCount, setKickCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [showCashAppInfo, setShowCashAppInfo] = useState(false);
 
   const reinstatementFee = 500;
@@ -76,6 +78,58 @@ export default function KickFee() {
     toast.info("Follow the Cash App instructions below to complete your re-entry fee.");
   };
 
+  const handleDeleteAccountAndLogout = async () => {
+    if (!user) {
+      toast.error("You must be logged in");
+      navigate("/auth");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "This will permanently delete your Troll City account and all progress. This cannot be undone. Continue?"
+    );
+    if (!confirmed) return;
+
+    setDeleteLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        toast.error("Not authenticated");
+        return;
+      }
+
+      const response = await fetch(`${EDGE_URL}/auth/delete-account`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok || body?.error || body?.success === false) {
+        const message = body?.error || "Failed to delete account";
+        toast.error(message);
+        return;
+      }
+
+      localStorage.removeItem("kickCount");
+      localStorage.removeItem("banDays");
+
+      toast.success("Account deleted. Logging out.");
+      await logout();
+      navigate("/auth", { replace: true });
+    } catch (err: any) {
+      console.error("Error deleting account:", err);
+      toast.error(err?.message || "Failed to delete account");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950 to-gray-950 text-white flex items-center justify-center p-4">
 
@@ -115,7 +169,7 @@ export default function KickFee() {
           <div className="space-y-3">
             <button
               onClick={handlePayWithCoins}
-              disabled={loading}
+              disabled={loading || deleteLoading}
               className="w-full py-3 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-700 hover:to-yellow-600 rounded-lg font-bold transition flex items-center justify-center gap-2"
             >
               💰 {loading ? "Processing..." : `Pay ${reinstatementFee} Coins`}
@@ -123,6 +177,7 @@ export default function KickFee() {
 
             <button
               onClick={handlePayWithCashApp}
+              disabled={deleteLoading}
               className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-lg font-bold transition flex items-center justify-center gap-2"
             >
               <CreditCard size={18} />
@@ -148,7 +203,16 @@ export default function KickFee() {
             )}
 
             <button
+              onClick={handleDeleteAccountAndLogout}
+              disabled={deleteLoading || loading}
+              className="w-full py-3 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-800 hover:to-red-700 rounded-lg font-bold transition flex items-center justify-center gap-2 text-red-50"
+            >
+              {deleteLoading ? "Deleting account..." : "Log out and delete account"}
+            </button>
+
+            <button
               onClick={() => navigate("/")}
+              disabled={deleteLoading}
               className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-lg font-bold transition flex items-center justify-center gap-2 text-gray-300"
             >
               <Home size={18} />

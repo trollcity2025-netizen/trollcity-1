@@ -66,6 +66,7 @@ export default function CoinStore() {
   const STORE_TAB_KEY = 'tc-store-active-tab';
   const STORE_COMPLETE_KEY = 'tc-store-show-complete';
   const CASHAPP_TAG_KEY = 'tc-cashapp-tag';
+  const MANUAL_ORDER_KEY_PREFIX = 'tc-manual-order-';
   const [loading, setLoading] = useState(true);
   const [loadingPackage, setLoadingPackage] = useState(null);
   const [tab, setTab] = useState('coins');
@@ -226,6 +227,8 @@ export default function CoinStore() {
         return 'border-white/10';
     }
   };
+
+  const getManualOrderStorageKey = (pkgId) => `${MANUAL_ORDER_KEY_PREFIX}${pkgId}`;
 
   const normalizeCashAppTag = useCallback((value) => {
     const trimmed = String(value || '').trim();
@@ -1010,13 +1013,45 @@ export default function CoinStore() {
     if (!canProceed) return;
     setPendingPackage(pkg);
     if (!STRIPE_ENABLED) {
-      // Manual Cash App flow
       try {
         const tag = ensureCashAppTag();
         if (!tag) return;
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) throw new Error('Not authenticated');
+        const storageKey = getManualOrderStorageKey(pkg.id);
+        let existingOrderId = null;
+        if (typeof window !== 'undefined') {
+          existingOrderId = localStorage.getItem(storageKey);
+        }
+        if (existingOrderId) {
+          const statusRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manual-coin-order`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({
+              action: 'status',
+              order_id: existingOrderId,
+            }),
+          });
+          const statusText = await statusRes.text();
+          let statusJson = null;
+          try { statusJson = JSON.parse(statusText); } catch {}
+          if (statusRes.ok && statusJson?.success && statusJson.order) {
+            if (statusJson.order.status !== 'fulfilled') {
+              setManualOrderRefId(existingOrderId);
+              setPaymentModalOpen(true);
+              toast('You already have a pending manual order for this package.');
+              return;
+            }
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem(storageKey);
+            }
+          }
+        }
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manual-coin-order`, {
           method: 'POST',
           headers: {
@@ -1037,6 +1072,9 @@ export default function CoinStore() {
         try { json = JSON.parse(txt); } catch {}
         if (!res.ok) throw new Error(json?.error || 'Failed to create manual order');
         setManualOrderRefId(json?.orderId || null);
+        if (json?.orderId && typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, json.orderId);
+        }
         setPaymentModalOpen(true);
         toast.success('Manual order created. Follow Cash App instructions.');
       } catch (e) {
@@ -1070,6 +1108,39 @@ export default function CoinStore() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not authenticated');
+      const storageKey = getManualOrderStorageKey(pkg.id);
+      let existingOrderId = null;
+      if (typeof window !== 'undefined') {
+        existingOrderId = localStorage.getItem(storageKey);
+      }
+      if (existingOrderId) {
+        const statusRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manual-coin-order`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            action: 'status',
+            order_id: existingOrderId,
+          }),
+        });
+        const statusText = await statusRes.text();
+        let statusJson = null;
+        try { statusJson = JSON.parse(statusText); } catch {}
+        if (statusRes.ok && statusJson?.success && statusJson.order) {
+          if (statusJson.order.status !== 'fulfilled') {
+            setManualOrderRefId(existingOrderId);
+            setPaymentModalOpen(true);
+            toast('You already have a pending manual order for this package.');
+            return;
+          }
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(storageKey);
+          }
+        }
+      }
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manual-coin-order`, {
         method: 'POST',
         headers: {
@@ -1083,7 +1154,7 @@ export default function CoinStore() {
           coins: pkg.coins || pkg?.coins_amount || 0,
           amount_usd: pkg.price_usd || Number(String(pkg.price).replace(/[^0-9.]/g, '')) || 0,
           username: profile?.username,
-            cashapp_tag: tag,
+          cashapp_tag: tag,
         }),
       });
       const txt = await res.text();
@@ -1091,6 +1162,9 @@ export default function CoinStore() {
       try { json = JSON.parse(txt); } catch {}
       if (!res.ok) throw new Error(json?.error || 'Failed to create manual order');
       setManualOrderRefId(json?.orderId || null);
+      if (json?.orderId && typeof window !== 'undefined') {
+        localStorage.setItem(storageKey, json.orderId);
+      }
       setPaymentModalOpen(true);
       openAdminManualTab(json?.orderId, pkg);
       toast.success('Manual order created. Cash App instructions ready.');

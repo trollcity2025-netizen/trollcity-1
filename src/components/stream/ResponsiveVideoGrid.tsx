@@ -47,11 +47,20 @@ export default function ResponsiveVideoGrid({
     participants[0] ||
     null;
 
-  if (!broadcaster) {
-    return null;
-  }
+  const [frameMode, setFrameMode] = React.useState<'none' | 'neon' | 'rgb'>(() => {
+    if (typeof window === 'undefined') return 'neon';
+    const stored = window.localStorage.getItem('troll_frame_mode');
+    if (stored === 'none' || stored === 'neon' || stored === 'rgb') return stored;
+    return 'neon';
+  });
 
-  const isLocalBroadcaster = localParticipant && broadcaster.identity === localParticipant.identity;
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('troll_frame_mode', frameMode);
+  }, [frameMode]);
+
+  const isLocalBroadcaster =
+    !!(localParticipant && broadcaster && broadcaster.identity === localParticipant.identity);
 
   const maxGuestSeats = 6;
   const guestSeatCount = Math.max(0, Math.min(maxGuestSeats, boxCount || 0));
@@ -66,12 +75,10 @@ export default function ResponsiveVideoGrid({
     }
 
     if (!participant) {
-       // Simple mapping for guests not in seats (fallback)
-       const guests = participants.filter(p => p.identity !== broadcaster.identity);
-       // Avoid duplicates if possible, but for now simple index
+       const guests = broadcaster
+        ? participants.filter((p) => p.identity !== broadcaster.identity)
+        : participants;
        if (index < guests.length) {
-         // Check if this guest is already assigned to a seat? 
-         // For now, assume seats are the source of truth.
        }
     }
 
@@ -83,10 +90,65 @@ export default function ResponsiveVideoGrid({
     };
   });
 
+  const hasGuests = guestSeatCount > 0;
+  const canControlFrames = !!isLocalBroadcaster || !!isHost;
+
+  if (!broadcaster) {
+    return null;
+  }
+
+  const hostFrameClass =
+    frameMode === 'neon'
+      ? 'border-2 border-purple-400 shadow-[0_0_40px_rgba(168,85,247,0.7)] animate-neon-pulse'
+      : frameMode === 'rgb'
+        ? 'border-2 border-transparent rgb-frame'
+        : 'border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]';
+
   return (
     <div className="w-full h-full min-h-0 flex flex-col gap-2 sm:gap-4 lg:gap-6 p-2 sm:p-4 lg:p-6">
-      {/* Main Broadcaster Area */}
-      <div className="w-full flex-none min-h-0 h-[clamp(220px,40vh,320px)] lg:h-[clamp(260px,52vh,520px)] relative rounded-2xl sm:rounded-3xl overflow-hidden border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)] bg-black/40 group">
+      {canControlFrames && (
+        <div className="flex items-center justify-end gap-2 mb-1 text-[11px] sm:text-xs">
+          <span className="text-gray-400">Frames</span>
+          <button
+            type="button"
+            onClick={() => setFrameMode('none')}
+            className={`px-2 py-1 rounded-full border text-xs ${
+              frameMode === 'none'
+                ? 'bg-zinc-800 border-zinc-500 text-white'
+                : 'bg-transparent border-zinc-700 text-gray-400'
+            }`}
+          >
+            Off
+          </button>
+          <button
+            type="button"
+            onClick={() => setFrameMode('neon')}
+            className={`px-2 py-1 rounded-full border text-xs ${
+              frameMode === 'neon'
+                ? 'bg-purple-700 border-purple-400 text-white shadow-[0_0_16px_rgba(168,85,247,0.8)]'
+                : 'bg-transparent border-purple-700 text-purple-300'
+            }`}
+          >
+            Neon
+          </button>
+          <button
+            type="button"
+            onClick={() => setFrameMode('rgb')}
+            className={`px-2 py-1 rounded-full border text-xs ${
+              frameMode === 'rgb'
+                ? 'bg-pink-700 border-pink-400 text-white shadow-[0_0_16px_rgba(244,114,182,0.8)]'
+                : 'bg-transparent border-pink-700 text-pink-300'
+            }`}
+          >
+            RGB
+          </button>
+        </div>
+      )}
+      <div className={`w-full flex-none min-h-0 ${
+        hasGuests
+          ? 'h-[clamp(180px,32vh,230px)] lg:h-[clamp(190px,38vh,340px)]'
+          : 'h-[clamp(240px,46vh,360px)] lg:h-[clamp(260px,52vh,520px)]'
+      } relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black/40 group ${hostFrameClass}`}>
         <VideoTile
           participant={broadcaster}
           isBroadcaster
@@ -121,12 +183,18 @@ export default function ResponsiveVideoGrid({
       </div>
 
       {guestSeatCount > 0 && (
-        <div className="shrink-0 h-[clamp(150px,28vw,220px)] sm:h-[clamp(72px,14vw,110px)] lg:h-[160px]">
+        <div className="shrink-0 h-[clamp(170px,36vh,260px)] sm:h-[clamp(80px,16vw,130px)] lg:h-[210px]">
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 lg:gap-4 h-full">
             {guestAssignments.slice(0, 6).map(({ key, seatIndex, participant }) => (
               <div 
-                key={key} 
-                className="h-full aspect-square sm:aspect-square lg:aspect-auto relative rounded-lg sm:rounded-xl overflow-hidden bg-[#1a0b2e]/50 border border-purple-500/20 shadow-inner group transition-all hover:border-purple-500/40 hover:bg-[#1a0b2e]/70"
+                key={key}
+                className={`h-full aspect-square sm:aspect-square lg:aspect-auto relative rounded-lg sm:rounded-xl overflow-hidden bg-[#1a0b2e]/50 shadow-inner group transition-all hover:bg-[#1a0b2e]/70 ${
+                  frameMode === 'neon'
+                    ? 'border border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.6)] animate-neon-pulse'
+                    : frameMode === 'rgb'
+                      ? 'border border-transparent rgb-frame-small'
+                      : 'border border-purple-500/20 hover:border-purple-500/40'
+                }`}
               >
                 {participant ? (
                   <VideoTile

@@ -92,6 +92,10 @@ const ProfileSetup = () => {
       toast.error('Use 2–20 letters, numbers, or underscores')
       return
     }
+    if (!fullName.trim()) {
+      toast.error('Full name is required')
+      return
+    }
     if (!gender) {
       toast.error('Gender is required')
       return
@@ -170,11 +174,7 @@ const ProfileSetup = () => {
         })
       }
 
-      if (nextProfile?.is_verified) {
-        navigate('/')
-      } else {
-        navigate('/ai-verification')
-      }
+      navigate('/')
     } catch (err: any) {
       console.error('Profile save error:', err)
       toast.error(err?.message || 'Failed to save profile')

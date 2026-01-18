@@ -29,6 +29,9 @@ export default function ProfileModal({
   const [isFollowedByProfile, setIsFollowedByProfile] = useState(false);
   const [hasMessagePerk, setHasMessagePerk] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(currentUser?.id || null);
+  const [followersCount, setFollowersCount] = useState<number | null>(null);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
+  const [giftsCount, setGiftsCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -71,6 +74,55 @@ export default function ProfileModal({
 
     checkStatus();
   }, [currentUserId, profile?.id]);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!profile?.id) {
+        setFollowersCount(null);
+        setFollowingCount(null);
+        setGiftsCount(null);
+        return;
+      }
+
+      try {
+        const [followersRes, followingRes, giftsRes] = await Promise.all([
+          supabase
+            .from('user_follows')
+            .select('id', { count: 'exact', head: true })
+            .eq('following_id', profile.id),
+          supabase
+            .from('user_follows')
+            .select('id', { count: 'exact', head: true })
+            .eq('follower_id', profile.id),
+          supabase
+            .from('gifts')
+            .select('id', { count: 'exact', head: true })
+            .eq('receiver_id', profile.id),
+        ]);
+
+        setFollowersCount(followersRes.count ?? 0);
+        setFollowingCount(followingRes.count ?? 0);
+        setGiftsCount(giftsRes.count ?? 0);
+      } catch (err) {
+        console.error('Failed to load profile stats', err);
+      }
+    };
+
+    loadStats();
+  }, [profile?.id]);
+
+  const formatCount = (value: number | null) => {
+    if (value === null || Number.isNaN(value)) return '...';
+    if (value >= 1_000_000) {
+      const v = (value / 1_000_000).toFixed(1);
+      return `${v.endsWith('.0') ? v.slice(0, -2) : v}M`;
+    }
+    if (value >= 1_000) {
+      const v = (value / 1_000).toFixed(1);
+      return `${v.endsWith('.0') ? v.slice(0, -2) : v}K`;
+    }
+    return String(value);
+  };
 
   const handleSendCoins = () => {
     onSendCoins(coinAmount);
@@ -189,16 +241,28 @@ export default function ProfileModal({
 
         <div className="grid grid-cols-3 gap-2 mb-6">
           <div className="bg-gray-800/50 rounded-lg p-3 border border-white/5">
-            <div className="text-xl font-bold text-white">2.5K</div>
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Followers</div>
+            <div className="text-xl font-bold text-white">
+              {formatCount(followersCount)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+              Followers
+            </div>
           </div>
           <div className="bg-gray-800/50 rounded-lg p-3 border border-white/5">
-            <div className="text-xl font-bold text-white">842</div>
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Following</div>
+            <div className="text-xl font-bold text-white">
+              {formatCount(followingCount)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+              Following
+            </div>
           </div>
           <div className="bg-gray-800/50 rounded-lg p-3 border border-white/5">
-            <div className="text-xl font-bold text-white">1.2K</div>
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Gifts</div>
+            <div className="text-xl font-bold text-white">
+              {formatCount(giftsCount)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+              Gifts
+            </div>
           </div>
         </div>
         

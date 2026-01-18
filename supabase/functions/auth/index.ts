@@ -178,14 +178,58 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // /logout
     if (path === 'logout' && req.method === 'POST') {
       return new Response(JSON.stringify({ message: 'Logged out.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // /fix-admin-role
+    if (path === 'delete-account' && req.method === 'POST') {
+      const authHeader = req.headers.get('Authorization') || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+
+      if (!token) {
+        return new Response(JSON.stringify({ error: 'Missing token' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data, error } = await supabase.auth.getUser(token);
+      if (error || !data?.user) {
+        return new Response(JSON.stringify({ error: 'Invalid token' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const userId = data.user.id;
+
+      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+      if (authError) {
+        return new Response(JSON.stringify({ error: authError.message || 'Failed to delete auth user' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) {
+        return new Response(JSON.stringify({ error: profileError.message || 'Failed to delete profile' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (path === 'fix-admin-role' && req.method === 'POST') {
       const authHeader = req.headers.get('Authorization') || '';
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined;

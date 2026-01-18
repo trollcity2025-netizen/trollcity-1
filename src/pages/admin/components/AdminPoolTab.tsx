@@ -4,6 +4,8 @@ import { useAuthStore } from '../../../lib/store'
 import { toast } from 'sonner'
 import { PieChart } from 'lucide-react'
 
+const ADMIN_POOL_COINS_PER_DOLLAR = 222.3
+
 type AdminPoolTransaction = {
   id: string
   transaction_id: string
@@ -26,6 +28,7 @@ export default function AdminPoolTab() {
   const [transactions, setTransactions] = useState<AdminPoolTransaction[]>([])
   const [users, setUsers] = useState<Record<string, UserLite>>({})
   const [loading, setLoading] = useState(false)
+  const [poolCoins, setPoolCoins] = useState<number | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -51,6 +54,17 @@ export default function AdminPoolTab() {
           const map: Record<string, UserLite> = {}
           ;(profiles || []).forEach((u: any) => { map[u.id] = { id: u.id, username: u.username } })
           setUsers(map)
+        }
+
+        const { data: poolRow, error: poolError } = await supabase
+          .from('admin_pool')
+          .select('trollcoins_balance')
+          .maybeSingle()
+        if (poolError && (poolError as any).code !== 'PGRST116') throw poolError
+        if (poolRow && typeof (poolRow as any).trollcoins_balance !== 'undefined') {
+          setPoolCoins(Number((poolRow as any).trollcoins_balance || 0))
+        } else {
+          setPoolCoins(null)
         }
       } catch (err: any) {
         console.error('Failed to load admin pool:', err)
@@ -85,8 +99,7 @@ export default function AdminPoolTab() {
           Admin Pool
         </h1>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-[#121212] border border-troll-green/30 rounded-xl p-6">
             <h3 className="text-gray-400 text-sm mb-1">Total Admin Profit</h3>
             <div className="text-3xl font-bold text-troll-green">${totalProfit.toFixed(2)}</div>
@@ -94,6 +107,18 @@ export default function AdminPoolTab() {
           <div className="bg-[#121212] border border-blue-500/30 rounded-xl p-6">
             <h3 className="text-gray-400 text-sm mb-1">Total Admin Fees Collected</h3>
             <div className="text-3xl font-bold text-blue-400">${totalFees.toFixed(2)}</div>
+          </div>
+          <div className="bg-[#121212] border border-emerald-500/30 rounded-xl p-6">
+            <h3 className="text-gray-400 text-sm mb-1">Admin Pool Coins</h3>
+            <div className="text-3xl font-bold text-emerald-300">
+              {poolCoins === null ? '—' : poolCoins.toLocaleString()}
+            </div>
+          </div>
+          <div className="bg-[#121212] border border-purple-500/30 rounded-xl p-6">
+            <h3 className="text-gray-400 text-sm mb-1">Admin Pool Cash Value</h3>
+            <div className="text-3xl font-bold text-purple-300">
+              {poolCoins === null ? '—' : `$${(poolCoins / ADMIN_POOL_COINS_PER_DOLLAR).toFixed(2)}`}
+            </div>
           </div>
         </div>
 

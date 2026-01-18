@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Store, Video, User, Shield, Gavel, Star, Zap, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Gamepad2, Music, Swords, Camera } from 'lucide-react'
+import { Home, MessageSquare, Store, Video, User, Shield, Gavel, Star, Zap, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Gamepad2, Music, Swords, Camera, Gift } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -149,6 +149,7 @@ export default function BottomNavigation() {
         return [
           { category: 'General', label: 'Go Live', icon: Video, path: '/go-live' },
           { category: 'General', label: 'Buy Coins', icon: Store, path: '/store' },
+          { category: 'Creative', label: 'TrollG Studio', icon: Gift, path: '/trollg' },
           { category: 'General', label: 'Support', icon: Heart, path: '/support' }
         ]
     }

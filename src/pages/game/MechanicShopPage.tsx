@@ -11,6 +11,7 @@ export default function MechanicShopPage() {
   const [repairing, setRepairing] = useState<'quick' | 'full' | null>(null);
   const [tintPercent, setTintPercent] = useState(20);
   const [savingTint, setSavingTint] = useState(false);
+  const [activeVehicleId, setActiveVehicleId] = useState<number | null>(null);
   const [vehicleUpgrades, setVehicleUpgrades] = useState<
     { id: string; vehicle_id: number; upgrade_type: string; status: string; cost: number }[]
   >([]);
@@ -108,7 +109,51 @@ export default function MechanicShopPage() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id || !profile?.active_vehicle) {
+    if (!user?.id) {
+      setActiveVehicleId(null);
+      return;
+    }
+
+    const activeFromProfile =
+      typeof (profile as any)?.active_vehicle === 'number'
+        ? ((profile as any).active_vehicle as number)
+        : null;
+
+    if (activeFromProfile) {
+      setActiveVehicleId(activeFromProfile);
+      return;
+    }
+
+    const key = `trollcity_car_${user.id}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const stored = JSON.parse(raw);
+        if (stored && typeof stored.carId === 'number') {
+          setActiveVehicleId(stored.carId);
+          return;
+        }
+      }
+    } catch {
+    }
+
+    const ownedIds =
+      Array.isArray((profile as any)?.owned_vehicle_ids) && (profile as any).owned_vehicle_ids.length > 0
+        ? ((profile as any).owned_vehicle_ids as any[])
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id))
+        : [];
+
+    if (ownedIds.length > 0) {
+      setActiveVehicleId(ownedIds[0]);
+      return;
+    }
+
+    setActiveVehicleId(null);
+  }, [user?.id, profile]);
+
+  useEffect(() => {
+    if (!user?.id || !activeVehicleId) {
       setVehicleUpgrades([]);
       return;
     }
@@ -118,7 +163,7 @@ export default function MechanicShopPage() {
         .from('vehicle_upgrades')
         .select('id, vehicle_id, upgrade_type, status, cost')
         .eq('user_id', user.id as string)
-        .eq('vehicle_id', profile.active_vehicle as number);
+        .eq('vehicle_id', activeVehicleId as number);
 
       if (error) {
         console.error('Failed to load vehicle upgrades', error);
@@ -130,7 +175,7 @@ export default function MechanicShopPage() {
     };
 
     loadUpgrades();
-  }, [user?.id, profile?.active_vehicle]);
+  }, [user?.id, activeVehicleId]);
 
   const handleRepair = async (mode: 'quick' | 'full') => {
     if (!user || !profile) {
@@ -221,13 +266,13 @@ export default function MechanicShopPage() {
             <div>
               <h2 className="text-xl font-bold text-white mb-2">Vehicle in Shop</h2>
               <p className="text-gray-400 text-sm">
-                {profile?.active_vehicle ? 'Ready for service' : 'No vehicle selected'}
+                {activeVehicleId ? 'Ready for service' : 'No vehicle selected'}
               </p>
             </div>
-            {profile?.active_vehicle ? (
+            {activeVehicleId ? (
                <div className="h-32 w-48 relative">
                  <VehicleRenderer 
-                   vehicleId={profile.active_vehicle} 
+                   vehicleId={activeVehicleId} 
                    className="w-full h-full object-contain"
                    showShadow={true}
                  />
@@ -286,7 +331,7 @@ export default function MechanicShopPage() {
               </div>
               <p className="text-xs text-gray-400">Adjust between 5% and 40% for your current car.</p>
             </div>
-            {profile?.active_vehicle ? (
+            {activeVehicleId ? (
               <>
                 <div className="flex items-center justify-between text-sm text-gray-300">
                   <span>Current tint</span>
@@ -325,12 +370,12 @@ export default function MechanicShopPage() {
               </div>
               <p className="text-xs text-gray-400">Overview of mods currently available for this vehicle.</p>
             </div>
-            {profile?.active_vehicle ? (
+            {activeVehicleId ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {VEHICLE_UPGRADE_CATALOG.map((upgrade) => {
                   const installed = vehicleUpgrades.some(
                     (u) =>
-                      u.vehicle_id === profile.active_vehicle &&
+                      u.vehicle_id === activeVehicleId &&
                       u.upgrade_type === upgrade.id &&
                       u.status === 'installed'
                   );

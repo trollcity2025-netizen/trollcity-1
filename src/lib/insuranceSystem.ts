@@ -2,6 +2,7 @@
 // Time-limited shields that block wallet penalties and kicks
 
 import { supabase } from './supabase';
+import { runStandardPurchaseFlow } from './purchases';
 
 export type ProtectionType = 'kick' | 'full';
 
@@ -113,80 +114,88 @@ export async function purchaseInsurance(userId: string, planId: string): Promise
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
-    // Deduct coins
-    const { error: deductError } = await supabase.rpc('deduct_coins', {
-      p_user_id: userId,
-      p_amount: plan.cost,
-      p_coin_type: 'paid'
+    let finalExpiresAt: string | undefined;
+
+    const flowResult = await runStandardPurchaseFlow({
+      userId,
+      amount: plan.cost,
+      transactionType: 'insurance_purchase',
+      description: `Purchased insurance: ${plan.name}`,
+      metadata: {
+        insurance_id: plan.id,
+        protection_type: plan.protection_type,
+        duration_hours: plan.duration_hours
+      },
+      ensureOwnership: async (client) => {
+        const existingInsurance = await getActiveInsurance(userId);
+        const sameTypeInsurance = existingInsurance.find(
+          ins => ins.protection_type === plan.protection_type
+        );
+
+        const now = new Date();
+        let expiresAt: Date;
+
+        if (sameTypeInsurance) {
+          const currentExpiry = new Date(sameTypeInsurance.expires_at);
+          expiresAt = new Date(currentExpiry.getTime() + plan.duration_hours * 60 * 60 * 1000);
+
+          const { error: updateError } = await client
+            .from('user_insurances')
+            .update({
+              expires_at: expiresAt.toISOString(),
+              updated_at: now.toISOString()
+            })
+            .eq('id', sameTypeInsurance.id);
+
+          if (updateError) {
+            console.error('Insurance extension error:', updateError);
+            await client.rpc('add_coins', {
+              p_user_id: userId,
+              p_amount: plan.cost,
+              p_coin_type: 'paid'
+            });
+            return { success: false, error: 'Failed to extend insurance' };
+          }
+
+          finalExpiresAt = expiresAt.toISOString();
+        } else {
+          expiresAt = new Date(now.getTime() + plan.duration_hours * 60 * 60 * 1000);
+
+          const { error: insertError } = await client
+            .from('user_insurances')
+            .insert({
+              user_id: userId,
+              insurance_id: plan.id,
+              protection_type: plan.protection_type,
+              purchased_at: now.toISOString(),
+              expires_at: expiresAt.toISOString(),
+              is_active: true
+            });
+
+          if (insertError) {
+            console.error('Insurance creation error:', insertError);
+            await client.rpc('add_coins', {
+              p_user_id: userId,
+              p_amount: plan.cost,
+              p_coin_type: 'paid'
+            });
+            return { success: false, error: 'Failed to create insurance' };
+          }
+
+          finalExpiresAt = expiresAt.toISOString();
+        }
+
+        return { success: true };
+      }
     });
 
-    if (deductError) {
-      console.error('Coin deduction error:', deductError);
-      return { success: false, error: 'Failed to deduct coins' };
-    }
-
-    // Check for existing insurance of same type
-    const existingInsurance = await getActiveInsurance(userId);
-    const sameTypeInsurance = existingInsurance.find(
-      ins => ins.protection_type === plan.protection_type
-    );
-
-    const now = new Date();
-    let expiresAt: Date;
-
-    if (sameTypeInsurance) {
-      // Extend existing insurance
-      const currentExpiry = new Date(sameTypeInsurance.expires_at);
-      expiresAt = new Date(currentExpiry.getTime() + plan.duration_hours * 60 * 60 * 1000);
-
-      const { error: updateError } = await supabase
-        .from('user_insurances')
-        .update({
-          expires_at: expiresAt.toISOString(),
-          updated_at: now.toISOString()
-        })
-        .eq('id', sameTypeInsurance.id);
-
-      if (updateError) {
-        console.error('Insurance extension error:', updateError);
-        // Try to refund coins
-        await supabase.rpc('add_coins', {
-          p_user_id: userId,
-          p_amount: plan.cost,
-          p_coin_type: 'paid'
-        });
-        return { success: false, error: 'Failed to extend insurance' };
-      }
-    } else {
-      // Create new insurance
-      expiresAt = new Date(now.getTime() + plan.duration_hours * 60 * 60 * 1000);
-
-      const { error: insertError } = await supabase
-        .from('user_insurances')
-        .insert({
-          user_id: userId,
-          insurance_id: plan.id,
-          protection_type: plan.protection_type,
-          purchased_at: now.toISOString(),
-          expires_at: expiresAt.toISOString(),
-          is_active: true
-        });
-
-      if (insertError) {
-        console.error('Insurance creation error:', insertError);
-        // Try to refund coins
-        await supabase.rpc('add_coins', {
-          p_user_id: userId,
-          p_amount: plan.cost,
-          p_coin_type: 'paid'
-        });
-        return { success: false, error: 'Failed to create insurance' };
-      }
+    if (!flowResult.success) {
+      return { success: false, error: flowResult.error || 'Purchase failed' };
     }
 
     return {
       success: true,
-      expiresAt: expiresAt.toISOString()
+      expiresAt: finalExpiresAt
     };
 
   } catch (err) {

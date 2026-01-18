@@ -86,7 +86,7 @@ export default function GiftModal({ onClose, onSendGift, recipientName, profile 
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] p-0 sm:p-4 animate-fadeIn">
-      <div className="bg-[#0b091f] sm:rounded-3xl rounded-t-3xl border border-purple-500/20 w-full max-w-md flex flex-col max-h-[85vh] shadow-[0_0_50px_rgba(139,92,246,0.3)]">
+      <div className="bg-[#0b091f] sm:rounded-3xl rounded-t-3xl border border-purple-500/20 w-full max-w-md flex flex-col max-h-[85vh] shadow-[0_0_50px_rgba(139,92,246,0.3)] pointer-events-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/5 bg-gradient-to-r from-[#120f24] to-[#0b091f]">
           <div>

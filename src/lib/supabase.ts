@@ -30,6 +30,7 @@ export interface UserProfile {
   username: string
   avatar_url: string
   banner_url?: string | null
+  full_name?: string | null
   bio: string
   email?: string
   role: UserRole

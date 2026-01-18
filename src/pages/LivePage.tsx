@@ -1270,12 +1270,31 @@ export default function LivePage() {
         target = videoInputs.length > 1 ? videoInputs[1] : videoInputs[0];
       }
 
+      let switched = false;
+
       if (liveKit.service && (liveKit.service as any).selectCamera) {
         const ok = await (liveKit.service as any).selectCamera(target.deviceId);
-        if (!ok) {
-          toast.error('Failed to switch camera');
-          return;
+        if (ok) {
+          switched = true;
         }
+      }
+
+      if (!switched) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('tc_camera_facing', nextFacing);
+        }
+        const firstToggle = await liveKit.toggleCamera();
+        if (firstToggle) {
+          const secondToggle = await liveKit.toggleCamera();
+          if (secondToggle) {
+            switched = true;
+          }
+        }
+      }
+
+      if (!switched) {
+        toast.error('Camera switch failed');
+        return;
       }
 
       setCameraFacing(nextFacing);
@@ -1287,7 +1306,7 @@ export default function LivePage() {
       console.error('Camera switch failed', err);
       toast.error('Camera switch failed');
     }
-  }, [cameraFacing, cameraOn, liveKit.service]);
+  }, [cameraFacing, cameraOn, liveKit]);
 
   // Officer Tool Handlers
   const [isOfficerBubbleVisible, setIsOfficerBubbleVisible] = useState(true);

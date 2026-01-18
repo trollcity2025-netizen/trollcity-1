@@ -229,6 +229,11 @@ const GoLive: React.FC = () => {
       return;
     }
 
+    if (!profile.full_name) {
+      toast.error('Please complete your profile (add your full name) before going live.');
+      return;
+    }
+
     if (liveRestriction.isRestricted) {
       toast.error(liveRestriction.message);
       return;

@@ -40,7 +40,7 @@ export default function StreamLayout({
     return (
       <div className="grid grid-cols-4 gap-2">
         {/* Host box: spans 2 cols */}
-        <div className="col-span-2 row-span-2 h-[500px] bg-black rounded-xl overflow-hidden">
+        <div className="col-span-2 row-span-2 h-[420px] bg-black rounded-xl overflow-hidden">
           <VideoBox
             participant={host}
             size="full"
@@ -52,7 +52,7 @@ export default function StreamLayout({
 
         {/* Opponent box: spans 2 cols */}
         {opponent && (
-          <div className="col-span-2 row-span-2 h-[500px] bg-black rounded-xl overflow-hidden">
+          <div className="col-span-2 row-span-2 h-[420px] bg-black rounded-xl overflow-hidden">
             <VideoBox
               participant={opponent}
               size="full"
@@ -66,7 +66,7 @@ export default function StreamLayout({
         {guests.map((guest, i) => (
           <div
             key={guest.userId || i}
-            className="col-span-1 h-[240px] bg-black rounded-xl overflow-hidden"
+            className="col-span-1 h-[280px] bg-black rounded-xl overflow-hidden"
           >
             <VideoBox
               participant={guest}
@@ -90,7 +90,7 @@ export default function StreamLayout({
         const isHostParticipant = participant.role === 'host'
         const colSpan = isHostParticipant && visibleParticipants.length > 2 ? 2 : 1
         const rowSpan = isHostParticipant && visibleParticipants.length > 2 ? 2 : 1
-        const height = isHostParticipant && visibleParticipants.length > 2 ? 500 : 240
+        const height = isHostParticipant && visibleParticipants.length > 2 ? 420 : 280
 
         return (
           <div

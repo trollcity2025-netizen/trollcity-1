@@ -11,6 +11,7 @@ import GlobalErrorBanner from "./components/GlobalErrorBanner";
 import GlobalGiftBanner from "./components/GlobalGiftBanner";
 import GlobalPayoutBanner from "./components/GlobalPayoutBanner";
 import BroadcastAnnouncement from "./components/BroadcastAnnouncement";
+import GlobalEventsBanner from "./components/GlobalEventsBanner";
 import { useGlobalApp } from "./contexts/GlobalAppContext";
 import { updateRoute } from "./utils/sessionStorage";
 import { useDebouncedProfileUpdate } from "./hooks/useDebouncedProfileUpdate";
@@ -127,6 +128,7 @@ const OfficerScheduling = lazy(() => import("./pages/OfficerScheduling"));
 const OfficerPayrollDashboard = lazy(() => import("./pages/officer/OfficerPayrollDashboard"));
 const OfficerDashboard = lazy(() => import("./pages/officer/OfficerDashboard"));
 const OfficerOWCDashboard = lazy(() => import("./pages/OfficerOWCDashboard"));
+const OfficerVote = lazy(() => import("./pages/OfficerVote"));
 const ReportDetailsPage = lazy(() => import("./pages/ReportDetailsPage"));
 const TrollFamilyCity = lazy(() => import("./pages/TrollFamilyCity"));
 const FamilyProfilePage = lazy(() => import("./pages/FamilyProfilePage"));
@@ -216,6 +218,7 @@ const UserFormsTab = lazy(() => import("./pages/admin/components/UserFormsTab"))
 const BucketsDashboard = lazy(() => import("./pages/admin/BucketsDashboard"));
 const GrantCoins = lazy(() => import("./pages/admin/GrantCoins"));
 const OfficerOperations = lazy(() => import("./pages/admin/OfficerOperations"));
+const TrollG = lazy(() => import("./pages/TrollG"));
 
 const LoadingScreen = () => (
     <div className="min-h-screen flex items-center justify-center bg-[#0A0814] text-white">
@@ -235,7 +238,6 @@ const LoadingScreen = () => (
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
     
-    // Force new users to complete profile setup first (except profile setup page itself)
     if (
       profile &&
       !profile.username &&
@@ -244,20 +246,6 @@ const LoadingScreen = () => (
       location.pathname !== "/callback"
     ) {
       return <Navigate to="/profile/setup" replace />;
-    }
-
-    // Require AI verification before accessing protected app routes (non-admin users only)
-    if (
-      profile &&
-      profile.role !== "admin" &&
-      !profile.is_admin &&
-      !profile.is_verified &&
-      location.pathname !== "/ai-verification" &&
-      location.pathname !== "/verification" &&
-      location.pathname !== "/verification/complete" &&
-      location.pathname !== "/support"
-    ) {
-      return <Navigate to="/ai-verification" replace />;
     }
     
     if (
@@ -581,7 +569,7 @@ function AppContent() {
               <GlobalErrorBanner />
               
               <GlobalPayoutBanner />
-              
+              <GlobalEventsBanner />
               {/* Officer Alert Banner */}
               <OfficerAlertBanner />
               
@@ -679,6 +667,7 @@ function AppContent() {
                   <Route path="/profile/id/:userId" element={<Profile />} />
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="/trollstown" element={<TrollsTownPage />} />
+                  <Route path="/trollg" element={<TrollG />} />
                   
                   {/* New Game Routes */}
                   <Route path="/dealership" element={<CarDealershipPage />} />
@@ -857,6 +846,7 @@ function AppContent() {
                       </RequireRole>
                     }
                   />
+                  <Route path="/officer/vote" element={<OfficerVote />} />
 
                   {/* 👑 Admin */}
                   <Route

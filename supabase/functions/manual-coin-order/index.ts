@@ -149,42 +149,220 @@ Deno.serve(async (req) => {
         externalTxId = undefined;
       }
 
-      const { data: manualOrder, error: manualOrderError } = await supabaseAdmin
+      const { data: order, error: orderError } = await supabaseAdmin
         .from("manual_coin_orders")
-        .select("id, coin_orders_id, status")
+        .select("*")
         .eq("id", rawOrderId)
         .single();
-      if (manualOrderError || !manualOrder) {
-        return new Response(JSON.stringify({ error: "manual_order_not_found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
+      if (orderError || !order) {
+        return new Response(JSON.stringify({ error: "Order not found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
       }
-      if (!manualOrder.coin_orders_id) {
-        return new Response(JSON.stringify({ error: "manual_order_missing_coin_order" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      if (order.status === "fulfilled") {
+        const { data: walletRow } = await supabaseAdmin
+          .from("wallets")
+          .select("coin_balance")
+          .eq("user_id", order.user_id)
+          .single();
+        const existingBalance = walletRow?.coin_balance ?? 0;
+        return new Response(JSON.stringify({ success: true, newBalance: existingBalance }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
       }
-
-      const { data: result, error: rpcError } = await supabaseAdmin.rpc("approve_manual_order", {
-        p_order_id: manualOrder.coin_orders_id,
-        p_admin_id: authData.user.id,
-        p_external_tx_id: externalTxId ?? null,
-      });
-      if (rpcError) {
-        console.error("approve_manual_order RPC error", rpcError);
-        return new Response(JSON.stringify({ error: rpcError.message || "Approval failed" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      if (order.status !== "pending") {
+        return new Response(JSON.stringify({ error: "Invalid status" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       }
-      const row = Array.isArray(result) ? result[0] : result;
-      if (!row?.success) {
-        return new Response(JSON.stringify({ error: row?.error_message || "Approval failed" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-      }
-      const { error: manualUpdateError } = await supabaseAdmin
+      const nowIso = new Date().toISOString();
+      const { error: markPaidError } = await supabaseAdmin
         .from("manual_coin_orders")
         .update({
-          status: "approved",
+          status: "paid",
+          paid_at: nowIso,
+          external_tx_id: externalTxId ?? order.external_tx_id,
+          updated_at: nowIso,
+        })
+        .eq("id", rawOrderId);
+      if (markPaidError) {
+        console.error("Fallback mark paid error", markPaidError);
+        return new Response(JSON.stringify({ error: "Approval failed" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      let newBalance = 0;
+      const { data: walletExisting, error: walletSelectError } = await supabaseAdmin
+        .from("wallets")
+        .select("coin_balance")
+        .eq("user_id", order.user_id)
+        .single();
+      if (walletSelectError || !walletExisting) {
+        const { data: insertedWallet, error: walletInsertError } = await supabaseAdmin
+          .from("wallets")
+          .insert({
+            user_id: order.user_id,
+            coin_balance: order.coins,
+          })
+          .select("coin_balance")
+          .single();
+        if (walletInsertError || !insertedWallet) {
+          console.error("Fallback wallet insert error", walletInsertError);
+          return new Response(JSON.stringify({ error: "Approval failed" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        newBalance = insertedWallet.coin_balance;
+      } else {
+        const { data: updatedWallet, error: walletUpdateError } = await supabaseAdmin
+          .from("wallets")
+          .update({
+            coin_balance: walletExisting.coin_balance + order.coins,
+          })
+          .eq("user_id", order.user_id)
+          .select("coin_balance")
+          .single();
+        if (walletUpdateError || !updatedWallet) {
+          console.error("Fallback wallet update error", walletUpdateError);
+          return new Response(JSON.stringify({ error: "Approval failed" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        newBalance = updatedWallet.coin_balance;
+      }
+      const purchaseType = order.metadata?.purchase_type ?? "";
+      if (purchaseType === "troll_pass") {
+        const { error: trollPassError } = await supabaseAdmin.rpc("apply_troll_pass_bundle", {
+          p_user_id: order.user_id,
+        });
+        if (trollPassError) {
+          console.error("Fallback apply_troll_pass_bundle error", trollPassError);
+        }
+        const { data: profileRow } = await supabaseAdmin
+          .from("user_profiles")
+          .select("paid_coins, total_earned_coins")
+          .eq("id", order.user_id)
+          .single();
+        const currentPaid = profileRow?.paid_coins ?? 0;
+        const currentEarned = profileRow?.total_earned_coins ?? 0;
+        const { error: profileUpdateError } = await supabaseAdmin
+          .from("user_profiles")
+          .update({
+            paid_coins: currentPaid + order.coins,
+            total_earned_coins: currentEarned + order.coins,
+          })
+          .eq("id", order.user_id);
+        if (profileUpdateError) {
+          console.error("Fallback profile troll_pass update error", profileUpdateError);
+        }
+      } else {
+        const { data: profileRow } = await supabaseAdmin
+          .from("user_profiles")
+          .select("troll_coins, paid_coins, total_earned_coins")
+          .eq("id", order.user_id)
+          .single();
+        const currentTroll = profileRow?.troll_coins ?? 0;
+        const currentPaid = profileRow?.paid_coins ?? 0;
+        const currentEarned = profileRow?.total_earned_coins ?? 0;
+        const { error: profileUpdateError } = await supabaseAdmin
+          .from("user_profiles")
+          .update({
+            troll_coins: currentTroll + order.coins,
+            paid_coins: currentPaid + order.coins,
+            total_earned_coins: currentEarned + order.coins,
+          })
+          .eq("id", order.user_id);
+        if (profileUpdateError) {
+          console.error("Fallback profile coin update error", profileUpdateError);
+        }
+      }
+      const txMeta: Record<string, any> = {
+        admin_id: authData.user.id,
+        amount_cents: order.amount_cents,
+      };
+      if ((order as any).payer_cashtag) {
+        txMeta.payer_cashtag = (order as any).payer_cashtag;
+      }
+      const { error: walletTxError } = await supabaseAdmin
+        .from("wallet_transactions")
+        .insert({
+          user_id: order.user_id,
+          type: "manual_purchase",
+          currency: "troll_coins",
+          amount: order.coins,
+          reason: "Cash App purchase",
+          source: "cashapp",
+          reference_id: order.id,
+          metadata: txMeta,
+        });
+      if (walletTxError) {
+        console.error("Fallback wallet transaction error", walletTxError);
+      }
+      const coinTxMeta: Record<string, any> = {
+        source: "cashapp_manual",
+        order_id: order.id,
+        amount_cents: order.amount_cents,
+      };
+      if ((order as any).payer_cashtag) {
+        coinTxMeta.payer_cashtag = (order as any).payer_cashtag;
+      }
+      const { error: coinTxError } = await supabaseAdmin
+        .from("coin_transactions")
+        .insert({
+          user_id: order.user_id,
+          amount: order.coins,
+          type: "store_purchase",
+          description: "Manual Cash App purchase",
+          metadata: coinTxMeta,
+        });
+      if (coinTxError) {
+        console.error("Fallback coin transaction error", coinTxError);
+      }
+      const amountUsd = typeof order.amount_cents === "number" ? order.amount_cents / 100 : 0;
+      const adminPoolCoinsRaw = amountUsd * 222.3;
+      const adminPoolCoins = Math.round(adminPoolCoinsRaw);
+      if (adminPoolCoins > 0) {
+        const { data: poolRow, error: poolSelectError } = await supabaseAdmin
+          .from("admin_pool")
+          .select("id, trollcoins_balance")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        if (!poolSelectError && poolRow) {
+          const currentBalance = Number((poolRow as any).trollcoins_balance || 0);
+          const { error: poolUpdateError } = await supabaseAdmin
+            .from("admin_pool")
+            .update({
+              trollcoins_balance: currentBalance + adminPoolCoins,
+            })
+            .eq("id", (poolRow as any).id);
+          if (poolUpdateError) {
+            console.error("manual-coin-order admin_pool update error", poolUpdateError);
+          }
+        } else if (poolSelectError && (poolSelectError as any).code !== "PGRST116") {
+          console.error("manual-coin-order admin_pool select error", poolSelectError);
+        }
+      }
+      const { error: notificationError } = await supabaseAdmin
+        .from("notifications")
+        .insert({
+          user_id: order.user_id,
+          type: "system_update",
+          title: "Cash App purchase completed",
+          message: `You received ${order.coins} coins from your Cash App purchase.`,
+          metadata: {
+            source: "cashapp_manual",
+            order_id: order.id,
+            amount_cents: order.amount_cents,
+            coins: order.coins,
+            payer_cashtag: (order as any).payer_cashtag ?? null,
+          },
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+      if (notificationError) {
+        console.error("manual-coin-order notification error", notificationError);
+      }
+      const { error: fulfillError } = await supabaseAdmin
+        .from("manual_coin_orders")
+        .update({
+          status: "fulfilled",
+          fulfilled_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq("id", manualOrder.id);
-      if (manualUpdateError) {
-        console.error("Failed to mark manual order approved", manualUpdateError);
+        .eq("id", rawOrderId);
+      if (fulfillError) {
+        console.error("Fallback fulfill error", fulfillError);
       }
-      return new Response(JSON.stringify({ success: true, newBalance: row.new_balance }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, newBalance }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     if (action === "status") {
@@ -198,6 +376,44 @@ Deno.serve(async (req) => {
         .single();
       if (error || !order) return new Response(JSON.stringify({ error: "Order not found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ success: true, order }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    if (action === "delete") {
+      const adminKey = req.headers.get("x-admin-key") || "";
+
+      const { data: requesterProfile } = await supabaseAdmin
+        .from("user_profiles")
+        .select("role, is_admin")
+        .eq("id", authData.user.id)
+        .single();
+
+      const isPrivileged =
+        requesterProfile?.role === "admin" ||
+        requesterProfile?.role === "secretary" ||
+        requesterProfile?.is_admin === true ||
+        (ADMIN_KEY && adminKey === ADMIN_KEY);
+      if (!isPrivileged) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      const rawOrderId = (body?.order_id as string | undefined)?.trim();
+      if (!rawOrderId) {
+        return new Response(JSON.stringify({ error: "Missing order_id" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      if (!/^[0-9a-fA-F-]{36}$/.test(rawOrderId)) {
+        return new Response(JSON.stringify({ error: "Invalid order_id" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      const { error: deleteError } = await supabaseAdmin
+        .from("manual_coin_orders")
+        .delete()
+        .eq("id", rawOrderId);
+      if (deleteError) {
+        console.error("manual-coin-order delete error", deleteError);
+        return new Response(JSON.stringify({ error: deleteError.message || "Delete failed" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });

@@ -10,7 +10,7 @@ import * as dotenv from 'dotenv'
 
 dotenv.config()
 
-const supabaseUrl = process.env.SUPABASE_URL
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
@@ -29,8 +29,7 @@ async function runMigration(filePath) {
     
     console.log('🚀 Executing migration...')
     
-    // Execute SQL via RPC (most Supabase projects allow this)
-    const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql })
+    const { data, error } = await supabase.rpc('exec_sql', { sql })
     
     if (error) {
       // If exec_sql doesn't exist, try direct query

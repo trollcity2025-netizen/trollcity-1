@@ -2,7 +2,7 @@
 // Framework-agnostic but structured for React + Supabase
 
 import { supabase } from './supabase';
-import { deductCoins } from './coinTransactions';
+import { runStandardPurchaseFlow } from './purchases';
 
 // Perk configuration - static data describing all available perks
 export const PERK_CONFIG = {
@@ -162,29 +162,9 @@ export async function purchasePerk(userId: string, perkKey: PerkKey, customOptio
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
-    // Deduct coins using the proper coin transaction system
-    const deductResult = await deductCoins({
-      userId,
-      amount: perkConfig.cost,
-      type: 'perk_purchase',
-      description: `Purchased ${perkConfig.name} perk`,
-      metadata: {
-        perk_id: perkKey,
-        perk_name: perkConfig.name,
-        duration_minutes: perkConfig.duration_minutes
-      }
-    });
-
-    if (!deductResult.success) {
-      console.error('Coin deduction error:', deductResult.error);
-      return { success: false, error: 'Failed to deduct coins' };
-    }
-
-    // Calculate expiration
     const now = new Date();
     const expiresAt = new Date(now.getTime() + perkConfig.duration_minutes * 60 * 1000);
 
-    // Prepare metadata for custom options
     const metadata: any = {
       perk_name: perkConfig.name,
       duration_minutes: perkConfig.duration_minutes
@@ -194,42 +174,55 @@ export async function purchasePerk(userId: string, perkKey: PerkKey, customOptio
       metadata.glowColor = customOptions.glowColor;
     }
 
-    // Activate perk
-    const { error: insertError } = await supabase
-      .from('user_perks')
-      .insert({
-        user_id: userId,
+    const flowResult = await runStandardPurchaseFlow({
+      userId,
+      amount: perkConfig.cost,
+      transactionType: 'perk_purchase',
+      description: `Purchased ${perkConfig.name} perk`,
+      metadata: {
         perk_id: perkKey,
-        purchased_at: now.toISOString(),
-        expires_at: expiresAt.toISOString(),
-        is_active: true,
-        metadata: metadata
-      });
+        perk_name: perkConfig.name,
+        duration_minutes: perkConfig.duration_minutes
+      },
+      ensureOwnership: async (client) => {
+        const { error: insertError } = await client
+          .from('user_perks')
+          .insert({
+            user_id: userId,
+            perk_id: perkKey,
+            purchased_at: now.toISOString(),
+            expires_at: expiresAt.toISOString(),
+            is_active: true,
+            metadata: metadata
+          });
 
-    if (insertError) {
-      console.error('Perk activation error:', insertError);
-      // Try to refund coins if perk activation failed
-      await supabase.rpc('add_coins', {
-        p_user_id: userId,
-        p_amount: perkConfig.cost,
-        p_coin_type: 'paid'
-      });
-      return { success: false, error: 'Failed to activate perk' };
-    }
+        if (insertError) {
+          console.error('Perk activation error:', insertError);
+          await client.rpc('add_coins', {
+            p_user_id: userId,
+            p_amount: perkConfig.cost,
+            p_coin_type: 'paid'
+          });
+          return { success: false, error: 'Failed to activate perk' };
+        }
 
-    // Special handling for RGB Username perk - update user profile directly for efficient querying
-    if (perkKey === 'perk_rgb_username') {
-      const { error: profileUpdateError } = await supabase
-        .from('user_profiles')
-        .update({ rgb_username_expires_at: expiresAt.toISOString() })
-        .eq('id', userId);
-        
-      if (profileUpdateError) {
-        console.error('Failed to update RGB username expiration in profile:', profileUpdateError);
-        // We don't fail the whole transaction here as the perk is technically purchased and active in user_perks
-        // but we should probably log it or try to recover. 
-        // For now, just logging error. Ideally this should be a transaction.
+        if (perkKey === 'perk_rgb_username') {
+          const { error: profileUpdateError } = await client
+            .from('user_profiles')
+            .update({ rgb_username_expires_at: expiresAt.toISOString() })
+            .eq('id', userId);
+
+          if (profileUpdateError) {
+            console.error('Failed to update RGB username expiration in profile:', profileUpdateError);
+          }
+        }
+
+        return { success: true };
       }
+    });
+
+    if (!flowResult.success) {
+      return { success: false, error: flowResult.error || 'Purchase failed' };
     }
 
     return {

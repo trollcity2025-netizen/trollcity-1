@@ -33,6 +33,7 @@ export function useGameNavigate() {
       '/officer',
       '/officer/dashboard',
       '/officer/moderation',
+      '/officer/vote',
       '/lead-officer',
       '/secretary',
       '/application',

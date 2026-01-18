@@ -2,6 +2,7 @@
 // Permanent purchases with activation/deactivation and stream entrance animations
 
 import { supabase } from './supabase';
+import { runStandardPurchaseFlow } from './purchases';
 
 export interface EntranceEffect {
   id: string
@@ -306,36 +307,42 @@ export async function purchaseEntranceEffect(userId: string, effectKey: Entrance
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
-    // Deduct coins
-    const { error: deductError } = await supabase.rpc('deduct_coins', {
-      p_user_id: userId,
-      p_amount: effectConfig.cost,
-      p_coin_type: 'paid'
+    const purchasedAt = new Date().toISOString();
+
+    const flowResult = await runStandardPurchaseFlow({
+      userId,
+      amount: effectConfig.cost,
+      transactionType: 'entrance_effect',
+      description: `Purchased ${effectConfig.name} entrance effect`,
+      metadata: {
+        effect_id: effectKey,
+        effect_name: effectConfig.name
+      },
+      ensureOwnership: async (client) => {
+        const { error: insertError } = await client
+          .from('user_entrance_effects')
+          .insert({
+            user_id: userId,
+            effect_id: effectKey,
+            purchased_at: purchasedAt
+          });
+
+        if (insertError) {
+          console.error('Effect ownership error:', insertError);
+          await client.rpc('add_coins', {
+            p_user_id: userId,
+            p_amount: effectConfig.cost,
+            p_coin_type: 'paid'
+          });
+          return { success: false, error: 'Failed to add effect ownership' };
+        }
+
+        return { success: true };
+      }
     });
 
-    if (deductError) {
-      console.error('Coin deduction error:', deductError);
-      return { success: false, error: 'Failed to deduct coins' };
-    }
-
-    // Add ownership
-    const { error: insertError } = await supabase
-      .from('user_entrance_effects')
-      .insert({
-        user_id: userId,
-        effect_id: effectKey,
-        purchased_at: new Date().toISOString()
-      });
-
-    if (insertError) {
-      console.error('Effect ownership error:', insertError);
-      // Try to refund coins if ownership failed
-      await supabase.rpc('add_coins', {
-        p_user_id: userId,
-        p_amount: effectConfig.cost,
-        p_coin_type: 'paid'
-      });
-      return { success: false, error: 'Failed to add effect ownership' };
+    if (!flowResult.success) {
+      return { success: false, error: flowResult.error || 'Purchase failed' };
     }
 
     return { success: true };

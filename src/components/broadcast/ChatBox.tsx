@@ -20,10 +20,15 @@ interface Message {
   message_type: string;
   created_at: string;
   sender_profile?: {
+    id: string;
     username: string;
     perks: string[];
     hasInsurance?: boolean;
     rgbExpiresAt?: string;
+    avatar_url?: string;
+    is_ghost_mode?: boolean;
+    role?: string | null;
+    is_admin?: boolean;
   };
 }
 
@@ -34,9 +39,22 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const suppressAutoScrollRef = useRef(false);
   const [isMuted, setIsMuted] = useState(false);
-  
-  // Cache for user profiles to avoid repeated fetches
-  const userCacheRef = useRef<Record<string, { username: string; perks: string[]; hasInsurance: boolean; rgbExpiresAt?: string; avatar_url?: string; is_ghost_mode?: boolean }>>({});
+  const userCacheRef = useRef<
+    Record<
+      string,
+      {
+        id: string;
+        username: string;
+        perks: string[];
+        hasInsurance: boolean;
+        rgbExpiresAt?: string;
+        avatar_url?: string;
+        is_ghost_mode?: boolean;
+        role?: string | null;
+        is_admin?: boolean;
+      }
+    >
+  >({});
   
   const [showCoinInput, setShowCoinInput] = useState<string | null>(null);
   const [coinAmount, setCoinAmount] = useState(10);
@@ -60,7 +78,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
     try {
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('username, rgb_username_expires_at, avatar_url, is_ghost_mode')
+        .select('id, username, rgb_username_expires_at, avatar_url, is_ghost_mode, role, is_admin')
         .eq('id', userId)
         .single();
         
@@ -79,19 +97,27 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
         .limit(1);
 
       const userData = {
+        id: profile?.id || userId,
         username: profile?.username || 'Unknown Troll',
-        perks: perks?.map(p => p.perk_id) || [],
+        perks: perks?.map((p) => p.perk_id) || [],
         hasInsurance: Boolean(insurance && insurance.length > 0),
         rgbExpiresAt: profile?.rgb_username_expires_at,
         avatar_url: profile?.avatar_url,
-        is_ghost_mode: profile?.is_ghost_mode
+        is_ghost_mode: profile?.is_ghost_mode,
+        role: profile?.role ?? null,
+        is_admin: profile?.is_admin ?? false,
       };
 
       userCacheRef.current[userId] = userData;
       return userData;
     } catch (e) {
       console.error('Failed to fetch user profile', e);
-      return { username: 'Unknown', perks: [], hasInsurance: false };
+      return {
+        id: userId,
+        username: 'Unknown',
+        perks: [],
+        hasInsurance: false,
+      };
     }
   }, []);
 
@@ -119,7 +145,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
 
         setMessages(reversed.map(m => ({
           ...m,
-          sender_profile: cacheUpdates[m.user_id || m.sender_id]
+        sender_profile: cacheUpdates[m.user_id || m.sender_id]
         })));
       }
     };
@@ -141,9 +167,9 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
           const newMsg = payload.new as Message;
           
           // Fetch sender profile if not in cache
-          let profile = userCacheRef.current[newMsg.user_id];
-          if (!profile) {
-            profile = await fetchUserProfile(newMsg.user_id);
+          let senderProfile = userCacheRef.current[newMsg.user_id];
+          if (!senderProfile) {
+            senderProfile = await fetchUserProfile(newMsg.user_id);
           }
 
           setMessages(prev => {
@@ -154,7 +180,7 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
               const msgTime = new Date(msg.created_at).getTime();
               return Math.abs(msgTime - createdAt) > 3000;
             });
-            return [...cleaned, { ...newMsg, sender_profile: profile }];
+            return [...cleaned, { ...newMsg, sender_profile: senderProfile }];
           });
         }
       )
@@ -351,7 +377,11 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
                     isBroadcaster={isBroadcaster}
                     streamId={streamId}
                     className={getUsernameStyle(msg.sender_profile?.perks, msg.sender_profile?.rgbExpiresAt)}
-                    onClick={() => onProfileClick?.(msg.sender_profile || { id: msg.user_id, name: 'Unknown', username: 'Unknown' })}
+                    onClick={() => {
+                      const base = msg.sender_profile || { username: 'Unknown' };
+                      const payload = { id: msg.user_id, ...base };
+                      onProfileClick?.(payload);
+                    }}
                   />
                   <UserBadge profile={msg.sender_profile ? { level: 1, ...msg.sender_profile } : undefined} />
                 </div>

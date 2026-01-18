@@ -954,7 +954,7 @@ useEffect(() => {
                         : 'border-purple-500/40 hover:border-purple-400/60 hover:shadow-[0_0_30px_rgba(168,85,247,0.5)]'
                     }`}
                   >
-                    <div className="relative overflow-hidden h-52">
+                    <div className="relative overflow-hidden h-32">
                       {s.category === 'Officer Stream' ? (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 border-b border-purple-500/30 p-4">
                            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-3 animate-pulse">

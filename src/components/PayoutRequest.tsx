@@ -127,6 +127,11 @@ const PayoutRequest: React.FC<PayoutRequestProps> = ({ onRequestComplete }) => {
       return;
     }
 
+    if (!profile?.full_name) {
+      toast.error('Please complete your profile (Full Name) before requesting a payout');
+      return;
+    }
+
     if (requestAmount > stats.available_for_payout) {
       toast.error('Request amount exceeds available balance');
       return;
