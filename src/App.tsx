@@ -104,7 +104,6 @@ const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 const EarningsPage = lazy(() => import("./pages/EarningsPage"));
 const VerificationPage = lazy(() => import("./pages/VerificationPage"));
 const VerificationComplete = lazy(() => import("./pages/VerificationComplete"));
-const AIVerificationPage = lazy(() => import("./pages/AIVerificationPage"));
 const PayoutStatus = lazy(() => import("./pages/PayoutStatus"));
 const FoundingOfficerTrial = lazy(() => import("./pages/FoundingOfficerTrial"));
 const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
@@ -625,7 +624,6 @@ function AppContent() {
                 <Route path="/tax-onboarding" element={<TaxOnboarding />} />
                 <Route path="/verification" element={<VerificationPage />} />
                 <Route path="/verification/complete" element={<VerificationComplete />} />
-                <Route path="/ai-verification" element={<AIVerificationPage />} />
                 <Route path="/founding-officer-trial" element={<FoundingOfficerTrial />} />
                   <Route path="/account/earnings" element={<EarningsDashboard />} />
                   <Route path="/payout-status" element={<PayoutStatus />} />
