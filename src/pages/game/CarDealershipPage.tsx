@@ -548,13 +548,30 @@ export default function CarDealershipPage() {
               active_vehicle: activeCarId,
               vehicle_image: activeCarId
                 ? cars.find((c) => c.id === activeCarId)?.image || null
-                : null,
-              owned_vehicle_ids: ownedIds
+                : null
             })
             .eq('id', user.id);
-          refreshProfile();
         } catch (profileErr) {
-          console.error('Failed to sync profile after vehicle purchase:', profileErr);
+          console.error('Failed to sync active vehicle after purchase:', profileErr);
+        }
+
+        try {
+          const { data, error: ownershipError } = await supabase.rpc(
+            'add_owned_vehicle_to_profile',
+            { p_vehicle_id: car.id }
+          );
+
+          if (ownershipError) {
+            console.error('Failed to update owned_vehicle_ids via RPC:', ownershipError);
+            toast.error(ownershipError.message || 'Failed to update vehicle ownership');
+          } else if (data && (data as any).owned_vehicle_ids) {
+            console.log('Updated owned_vehicle_ids:', (data as any).owned_vehicle_ids);
+          }
+
+          await refreshProfile();
+        } catch (ownershipErr: any) {
+          console.error('Vehicle ownership RPC failed:', ownershipErr);
+          toast.error(ownershipErr?.message || 'Failed to update vehicle ownership');
         }
       }
     } catch (err: any) {

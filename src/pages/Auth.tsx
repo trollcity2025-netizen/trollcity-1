@@ -140,7 +140,7 @@ const Auth = () => {
               navigate('/')
             } else {
               toast.success('Login successful! Please complete your profile.')
-              navigate('/profile-setup')
+              navigate('/profile/setup')
             }
           } else {
             // Profile doesn't exist, try polling for it
@@ -182,13 +182,13 @@ const Auth = () => {
                 navigate('/')
               } else {
                 toast.success('Login successful! Please complete your profile.')
-                navigate('/profile-setup')
+                navigate('/profile/setup')
               }
             } else {
               // Still no profile found - redirect to setup to let it handle creation/fetching
               console.log('No profile found after polling, redirecting to setup')
               toast.success('Login successful! Please complete your profile.')
-              navigate('/profile-setup')
+              navigate('/profile/setup')
             }
           }
         } else if (data.user && !data.session) {
@@ -220,13 +220,21 @@ const Auth = () => {
 
         if (signUpError) {
           console.error('Signup failed:', signUpError)
-          throw new Error(signUpError.message || 'Signup failed')
+          const rawMessage = String(signUpError.message || '')
+          const lower = rawMessage.toLowerCase()
+          if (signUpError.name === 'AbortError' || lower.includes('aborted')) {
+            toast.error('Signup was interrupted. Please check your connection and try again.')
+            setLoading(false)
+            return
+          }
+          toast.error(rawMessage || 'Signup failed')
+          setLoading(false)
+          return
         }
         
         console.log('User created and signed in')
         let session = signUpData.session
         if (!session) {
-          // Try to get session, with retries
           for (let i = 0; i < 3; i++) {
             const { data: sessionData } = await supabase.auth.getSession()
             if (sessionData?.session) {
@@ -238,7 +246,10 @@ const Auth = () => {
         }
 
         if (!session) {
-          throw new Error('Failed to establish session after signup')
+          toast.success('Account created! Please check your email to confirm, then log in.')
+          navigate('/auth')
+          setLoading(false)
+          return
         }
 
         // Refresh the session to ensure it's fully established
@@ -292,7 +303,13 @@ const Auth = () => {
       }
     } catch (err: any) {
       console.error('Email auth error:', err)
-      toast.error(err.message || 'Authentication failed')
+      const rawMessage = String(err?.message || '')
+      const lower = rawMessage.toLowerCase()
+      if (err?.name === 'AbortError' || lower.includes('aborted')) {
+        toast.error('Request was interrupted. Please check your connection and try again.')
+      } else {
+        toast.error(rawMessage || 'Authentication failed')
+      }
     } finally {
       setLoading(false)
     }

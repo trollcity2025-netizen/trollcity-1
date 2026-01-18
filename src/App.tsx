@@ -246,9 +246,11 @@ const LoadingScreen = () => (
       return <Navigate to="/profile/setup" replace />;
     }
 
-    // Require AI verification before accessing protected app routes
+    // Require AI verification before accessing protected app routes (non-admin users only)
     if (
       profile &&
+      profile.role !== "admin" &&
+      !profile.is_admin &&
       !profile.is_verified &&
       location.pathname !== "/ai-verification" &&
       location.pathname !== "/verification" &&

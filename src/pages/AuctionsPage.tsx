@@ -286,14 +286,20 @@ export default function AuctionsPage() {
         }
         localStorage.setItem(ownedKey, JSON.stringify(ownedList));
 
-        await supabase
-          .from('user_profiles')
-          .update({
-            owned_vehicle_ids: ownedList
-          })
-          .eq('id', user.id);
-      } catch (e) {
+        const { data, error: ownershipError } = await supabase.rpc(
+          'add_owned_vehicle_to_profile',
+          { p_vehicle_id: listing.vehicle_id }
+        );
+
+        if (ownershipError) {
+          console.error('Failed to update buyer vehicle ownership via RPC', ownershipError);
+          toast.error(ownershipError.message || 'Failed to update vehicle ownership');
+        } else if (data && (data as any).owned_vehicle_ids) {
+          console.log('Updated owned_vehicle_ids after auction:', (data as any).owned_vehicle_ids);
+        }
+      } catch (e: any) {
         console.error('Failed to update buyer vehicle ownership', e);
+        toast.error(e?.message || 'Failed to update vehicle ownership');
       }
 
       if (refreshProfile) {

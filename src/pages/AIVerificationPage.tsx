@@ -73,7 +73,14 @@ export default function AIVerificationPage() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' }
+        })
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      }
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -86,24 +93,39 @@ export default function AIVerificationPage() {
   }
 
   const captureSelfie = async () => {
-    if (!videoRef.current) return
+    const video = videoRef.current
+    if (!video) {
+      toast.error('Camera is not ready yet. Please try again.')
+      return
+    }
+
+    if (
+      video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+      !video.videoWidth ||
+      !video.videoHeight
+    ) {
+      toast.error('Camera is still loading. Please wait a moment and try again.')
+      return
+    }
 
     const canvas = document.createElement('canvas')
-    canvas.width = videoRef.current.videoWidth
-    canvas.height = videoRef.current.videoHeight
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0)
-      const dataUrl = canvas.toDataURL('image/jpeg')
-      setSelfieUrl(dataUrl)
-
-      // Stop camera
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-      }
-
-      setStep('processing')
+    if (!ctx) {
+      toast.error('Unable to capture selfie. Please try again.')
+      return
     }
+
+    ctx.drawImage(video, 0, 0)
+    const dataUrl = canvas.toDataURL('image/jpeg')
+    setSelfieUrl(dataUrl)
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+    }
+
+    setStep('processing')
   }
 
   const uploadPhotos = async (): Promise<{ idUrl: string; selfieUrl: string }> => {

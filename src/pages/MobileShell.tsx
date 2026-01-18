@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   HelpCircle,
   Crown,
+  User,
   LucideIcon,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -62,6 +63,7 @@ export default function MobileShell() {
   })
 
   const isActive = (base: string) => pathname === base || pathname.startsWith(base + '/')
+  const profilePath = profile.username ? `/profile/${profile.username}` : '/profile/setup'
 
   return (
     <div className="min-h-dvh flex flex-col bg-gradient-to-b from-[#05010a] via-[#080316] to-[#05010a] pb-safe">
@@ -133,6 +135,16 @@ export default function MobileShell() {
               colorClass="text-cyan-300"
               bgClass="bg-cyan-500/20"
               isActive={isActive('/messages')}
+              onClick={go}
+            />
+            <NavButton
+              icon={User}
+              label="Profile"
+              sublabel="View and edit profile"
+              path={profilePath}
+              colorClass="text-indigo-300"
+              bgClass="bg-indigo-500/20"
+              isActive={isActive('/profile')}
               onClick={go}
             />
             <NavButton
