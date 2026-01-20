@@ -50,7 +50,7 @@ export default defineConfig({
       filename: 'service-worker.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        maximumFileSizeToCacheInBytes: 6000000,
+        maximumFileSizeToCacheInBytes: 10000000,
       },
       workbox: {
         cleanupOutdatedCaches: true,
