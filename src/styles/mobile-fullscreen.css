@@ -1,0 +1,284 @@
+/**
+ * Mobile Fullscreen & Safe Area CSS
+ * Ensures app is fullscreen on all mobile devices including PWA/Android wrapper
+ */
+
+/* ========================================
+   MOBILE FULLSCREEN BASE
+   ======================================== */
+
+html, body {
+  /* Use dynamic viewport height to account for mobile browsers' address bars */
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  
+  /* Prevent overscroll/bounce on mobile */
+  overscroll-behavior: none;
+  overflow: hidden;
+  
+  /* Prevent iOS bounce */
+  position: fixed;
+  width: 100%;
+  
+  /* Touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: pan-x pan-y;
+}
+
+#root {
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  
+  /* Ensure safe area padding is applied */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ========================================
+   SAFE AREA UTILITIES
+   ======================================== */
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-all {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Margin variants */
+.mt-safe {
+  margin-top: env(safe-area-inset-top);
+}
+
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+/* ========================================
+   FULLSCREEN CONTAINER
+   ======================================== */
+
+.mobile-fullscreen-container {
+  height: 100dvh;
+  width: 100vw;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  
+  /* Safe area handling */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ========================================
+   SCROLLABLE CONTENT AREAS
+   ======================================== */
+
+.mobile-scroll-container {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Prevent double scroll */
+.mobile-no-scroll {
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ========================================
+   KEYBOARD HANDLING
+   ======================================== */
+
+/* Prevent viewport resize on keyboard open */
+.mobile-keyboard-resize {
+  height: 100dvh;
+  resize: none;
+}
+
+/* Ensure input fields scroll into view */
+input, textarea, select {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input:focus, textarea:focus, select:focus {
+  /* iOS will scroll to focused input */
+  scroll-margin-bottom: 120px;
+}
+
+/* ========================================
+   NOTCH & SAFE AREA BACKGROUNDS
+   ======================================== */
+
+/* Extend background to safe areas */
+.extend-to-safe-area {
+  margin-top: calc(-1 * env(safe-area-inset-top));
+  margin-bottom: calc(-1 * env(safe-area-inset-bottom));
+  margin-left: calc(-1 * env(safe-area-inset-left));
+  margin-right: calc(-1 * env(safe-area-inset-right));
+  
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ========================================
+   BOTTOM NAVIGATION SAFE AREA
+   ======================================== */
+
+.bottom-nav-mobile {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--troll-dark-bg, #06030e);
+  z-index: 50;
+}
+
+/* ========================================
+   MOBILE VIEWPORT HEIGHT UTILITIES
+   ======================================== */
+
+.h-dvh {
+  height: 100dvh;
+}
+
+.min-h-dvh {
+  min-height: 100dvh;
+}
+
+.max-h-dvh {
+  max-height: 100dvh;
+}
+
+/* ========================================
+   PWA DISPLAY MODES
+   ======================================== */
+
+/* Hide URL bar in PWA standalone mode */
+@media (display-mode: standalone) {
+  html, body {
+    height: 100vh;
+    min-height: 100vh;
+  }
+  
+  #root {
+    height: 100vh;
+    min-height: 100vh;
+  }
+}
+
+/* Fullscreen mode */
+@media (display-mode: fullscreen) {
+  html, body, #root {
+    height: 100vh;
+    min-height: 100vh;
+  }
+}
+
+/* ========================================
+   MOBILE-SPECIFIC OVERRIDES
+   ======================================== */
+
+@media (max-width: 768px) {
+  /* Ensure all main containers respect mobile viewport */
+  .container-mobile {
+    width: 100vw;
+    max-width: 100vw;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Prevent double-tap zoom */
+  * {
+    touch-action: manipulation;
+  }
+}
+
+/* ========================================
+   ANDROID BACK BUTTON HANDLING
+   ======================================== */
+
+/* Capacitor Android will handle this via JS */
+.android-back-button-indicator {
+  /* Visual indicator if needed */
+  display: none;
+}
+
+/* ========================================
+   VIDEO/BROADCAST FULLSCREEN
+   ======================================== */
+
+.broadcast-fullscreen-mobile {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 100;
+  
+  /* Safe area for video controls */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+.video-container-mobile {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ========================================
+   STATUS BAR THEMING (Android)
+   ======================================== */
+
+@supports (-webkit-backdrop-filter: blur(10px)) {
+  .status-bar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background: rgba(6, 3, 14, 0.95);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+  }
+}

@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
 import { supabase } from './lib/supabase'
 import { initTelemetry } from './lib/telemetry'
+import { initMobilePlatform, isMobilePlatform } from './lib/mobilePlatform'
 
 // App version for cache busting
 const env = import.meta.env
@@ -15,6 +16,14 @@ const APP_VERSION =
   (env.VITE_APP_VERSION as string | undefined) ||
   (env.VITE_PUBLIC_APP_VERSION as string | undefined) ||
   '1.0.0'
+
+// Initialize mobile platform features (Capacitor)
+if (isMobilePlatform) {
+  console.log('[Main] Running on native mobile platform');
+  initMobilePlatform().catch((error) => {
+    console.error('[Main] Failed to initialize mobile platform:', error);
+  });
+}
 
 // App version guard - clear storage on deploy
 try {
