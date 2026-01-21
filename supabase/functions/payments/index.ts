@@ -1,6 +1,5 @@
 // Payments Edge Function - Square Status Check & Card Saving
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { withCors, handleCorsPreflight } from '../_shared/cors.ts'
 
 /**

@@ -382,6 +382,31 @@ function AppContent() {
     };
   }, []);
 
+  // Show update toast when update is available
+  useEffect(() => {
+    if (updateAvailable) {
+      toast.info("New update available!", {
+        duration: Infinity,
+        description: "A new version of Troll City is available.",
+        action: {
+          label: "Update Now",
+          onClick: () => {
+            if (waitingServiceWorker) {
+              waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+            // Reload after a short delay to allow SW to activate
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
+          }
+        },
+        onDismiss: () => {
+           // Optional: Remind them later? For now, let them dismiss.
+        }
+      });
+    }
+  }, [updateAvailable, waitingServiceWorker]);
+
   useEffect(() => {
     if (!user || !isStandalone) return;
     if (location.pathname === '/' || location.pathname === '/auth') {

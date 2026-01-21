@@ -48,7 +48,7 @@ serve(async (req) => {
                     if (payload.role === 'service_role') {
                         isAuthorized = true;
                     }
-                } catch (_e) {
+                } catch {
                     // ignore
                 }
             }

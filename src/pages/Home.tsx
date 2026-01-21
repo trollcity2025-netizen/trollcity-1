@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Crown, PartyPopper, X, Shield } from 'lucide-react';
+import { Crown, Shield } from 'lucide-react';
 import { APP_DATA_REFETCH_EVENT_NAME as REFRESH_EVENT } from '../lib/appEvents';
 import { isBirthdayToday } from '../lib/birthdayUtils';
 import { useAuthStore } from '../lib/store';
@@ -12,7 +12,7 @@ import BanPage from '../components/BanPage';
 import KickPage from '../components/KickPage';
 import EmptyStateLiveNow from '../components/ui/EmptyStateLiveNow';
 import TrollPassBanner from '../components/ui/TrollPassBanner';
-import { StreamSkeleton, UserCardSkeleton } from '../components/ui/Skeleton';
+import { UserCardSkeleton } from '../components/ui/Skeleton';
 
 type HomeUser = {
   id: string;
@@ -555,9 +555,9 @@ const HomePageContent = () => {
     profile?.is_troll_officer ||
     profile?.is_lead_officer
   const isAdmin = profile?.role === 'admin' || profile?.is_admin
-  const canEndLive = isAdmin || isOfficer
+  const _canEndLive = isAdmin || isOfficer
 
-  const endLiveStream = async (streamId: string) => {
+  const _endLiveStream = async (streamId: string) => {
     try {
       const { error } = await supabase
         .from('streams')
@@ -937,33 +937,47 @@ useEffect(() => {
           <div className="relative rounded-3xl bg-gradient-to-br from-[#1a0f2e]/40 to-[#0d0820]/20 backdrop-blur-xl border border-purple-500/20 p-6 shadow-lg space-y-4 home-live-wrapper home-outline-rgb">
             {isHolidaySeason && <ChristmasOutline rowCount={6} colCount={3} />}
             {loadingLive ? (
-              <div className="grid grid-cols-2 gap-1 stream-grid" style={{ minHeight: '400px' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 stream-grid" style={{ minHeight: '400px' }}>
                 {Array.from({ length: 40 }).map((_, i) => (
-                  <div key={i} className="flex gap-2 p-1 rounded-lg bg-[#1f1535]/50 animate-pulse border border-purple-500/10 h-12">
-                    <div className="w-16 h-full bg-purple-500/10 rounded" />
-                    <div className="flex-1 space-y-1 py-1">
-                      <div className="h-2 w-3/4 bg-purple-500/10 rounded" />
-                      <div className="h-2 w-1/2 bg-purple-500/10 rounded" />
+                  <div key={i} className="flex gap-2 p-1 rounded-lg bg-[#1f1535]/50 animate-pulse border border-purple-500/10 h-8 items-center">
+                    <div className="w-[20px] h-[20px] bg-purple-500/10 rounded-sm ml-1" />
+                    <div className="flex-1 space-y-1 py-1 min-w-0">
+                      <div className="h-1.5 w-3/4 bg-purple-500/10 rounded" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : displayStreams.length > 0 && (
-              <div className="grid grid-cols-2 gap-2 stream-grid" style={{ minHeight: '400px' }}>
-                {displayStreams.map((s) => (
-                  <button
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3 stream-grid" style={{ minHeight: '400px' }}>
+                {displayStreams.map((s) => {
+                  const isOfficer = profile?.role === 'admin' || profile?.role === 'lead_troll_officer' || profile?.role === 'troll_officer' || profile?.is_admin || profile?.is_lead_officer || profile?.is_troll_officer;
+                  
+                  const handleEndStream = async (e: React.MouseEvent, streamId: string) => {
+                    e.stopPropagation();
+                    if (!confirm('End this stream?')) return;
+                    try {
+                      await supabase.from('streams').update({ status: 'ended', is_live: false, ended_at: new Date().toISOString() }).eq('id', streamId);
+                      toast.success('Stream ended');
+                    } catch (err) {
+                      console.error('Failed to end stream:', err);
+                      toast.error('Failed to end stream');
+                    }
+                  };
+                  
+                  return (
+                  <div
                     key={s.id}
+                    className="relative flex flex-col items-center gap-1.5 transition-all duration-300 group cursor-pointer"
                     onClick={() => navigate(`/live/${s.id}`, { state: { streamData: { ...s, status: 'live' } } })}
-                    className={`relative flex items-center rounded-lg overflow-hidden shadow-lg bg-[#1f1535] border transition-all duration-300 group h-12 ${
-                      s.user_profiles?.date_of_birth && isBirthdayToday(s.user_profiles.date_of_birth)
-                        ? 'border-yellow-400/60 shadow-[0_0_10px_rgba(255,215,0,0.3)]'
-                        : 'border-purple-500/20 hover:border-purple-400/60'
-                    }`}
                   >
-                    <div className="w-16 h-full relative flex-shrink-0">
+                    <div className={`relative w-10 h-10 rounded-lg overflow-hidden border-2 transition-all duration-300 ${
+                      s.user_profiles?.date_of_birth && isBirthdayToday(s.user_profiles.date_of_birth)
+                        ? 'border-yellow-400 shadow-[0_0_15px_rgba(255,215,0,0.5)]'
+                        : 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)] group-hover:shadow-[0_0_20px_rgba(239,68,68,0.6)]'
+                    }`}>
                       {s.category === 'Officer Stream' ? (
                          <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                           <Shield className="w-4 h-4 text-blue-400" />
+                           <Shield className="w-5 h-5 text-blue-400" />
                          </div>
                       ) : (
                         <img
@@ -972,28 +986,29 @@ useEffect(() => {
                           alt="Stream"
                         />
                       )}
-                      <div className="absolute top-0.5 left-0.5">
-                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-sm shadow-red-500/50" />
-                      </div>
+                      <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-lg shadow-red-500/50 flex items-center justify-center border border-[#0F0820]" />
+                      {isOfficer && (
+                        <button
+                          onClick={(e) => handleEndStream(e, s.id)}
+                          className="absolute -top-1 -left-1 w-4 h-4 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          title="End Stream"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
 
-
-
-                    <div className="flex-1 px-2 min-w-0 flex flex-col justify-center text-left">
-                      <div className="flex items-center gap-1">
-                        <p className="text-[11px] font-bold text-white truncate leading-tight">{s.title || 'Untitled'}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                         <span className="text-[10px] text-gray-400 truncate">{s.user_profiles?.username}</span>
+                    <div className="flex flex-col items-center gap-0.5 min-w-0 w-full">
+                      <p className="text-[10px] font-bold text-white truncate w-full text-center leading-tight">{s.title || 'Untitled'}</p>
+                      <p className="text-[9px] text-gray-400 truncate w-full text-center leading-tight">{s.user_profiles?.username}</p>
+                      <div className="flex items-center gap-0.5">
+                         <span className="text-[9px]">👁</span>
+                         <span className="text-[9px] font-semibold text-cyan-400">{s.current_viewers || 0}</span>
                       </div>
                     </div>
-
-                    <div className="pr-2 flex items-center gap-1 flex-shrink-0">
-                       <span className="text-[10px]">👁</span>
-                       <span className="text-[10px] font-semibold text-cyan-400">{s.current_viewers || 0}</span>
-                    </div>
-                  </button>
-                ))}
+                  </div>
+                );
+                })}
               </div>
             )}
 

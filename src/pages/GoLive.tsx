@@ -598,36 +598,48 @@ const GoLive: React.FC = () => {
                console.warn('[GoLive] Service missing publishAudioTrack');
              }
           }
-          
           console.log('[GoLive] ✅ Connected and published!');
           isConnectedNow = true;
+          
+          // Update stream to live immediately (non-blocking)
+          supabase
+            .from('streams')
+            .update({ 
+              is_live: true, 
+              status: 'live' 
+            })
+            .eq('id', createdId)
+            .then(() => console.log('[GoLive] Stream marked live'))
+            .catch(err => console.error('[GoLive] Failed to mark stream live:', err));
         }
       } catch (err) {
         console.error('[GoLive] Pre-connection failed (will retry on LivePage):', err);
         // Do not return, allow navigation to proceed so LivePage can try
       }
       
-      // Update stream to starting status (not live yet)
-      // The LivePage will update it to 'live' once fully connected
+      // If not connected yet, update stream to starting status
       // Fire and forget (don't await) to speed up navigation
-      supabase
-        .from('streams')
-        .update({ 
-          is_live: isConnectedNow, 
-          status: isConnectedNow ? 'live' : 'starting' 
-        })
-        .eq('id', createdId)
-        .then(() => console.log('[GoLive] Stream status updated (background)'));
+      if (!isConnectedNow) {
+        supabase
+          .from('streams')
+          .update({ 
+            is_live: false, 
+            status: 'starting' 
+          })
+          .eq('id', createdId)
+          .then(() => console.log('[GoLive] Stream status updated (background)'));
+      }
 
       if (sessionId) {
         // Fire and forget
         api.request(API_ENDPOINTS.stream.markLive, {
           method: 'POST',
-          body: JSON.stringify({ sessionId, status: 'live', streamId: createdId })
+          body: JSON.stringify({ sessionId, status: isConnectedNow ? 'live' : 'starting', streamId: createdId })
         });
       }
 
-      console.log('[GoLive] ✅ preparing navigation');
+      // Navigate immediately without waiting for database updates
+      console.log('[GoLive] ✅ preparing immediate navigation');
       
       // ✅ Pass stream data directly via navigation state to avoid database query
       // This eliminates replication delay issues

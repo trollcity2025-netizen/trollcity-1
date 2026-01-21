@@ -45,7 +45,7 @@ async function authorizeUser(req: Request): Promise<AuthorizedProfile> {
 
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
-    .select("id, username, role, avatar_url, is_admin, is_lead_officer, is_troll_officer, is_broadcaster, has_paid")
+    .select("id, username, role, avatar_url, is_admin, is_lead_officer, is_troll_officer, is_broadcaster, has_paid, troll_coins")
     .eq("id", user.id)
     .single()
 
@@ -55,8 +55,9 @@ async function authorizeUser(req: Request): Promise<AuthorizedProfile> {
   }
 
   const hasElevatedAccess = Boolean(profile.is_admin || profile.is_lead_officer)
+  const hasTrollCoins = Number(profile.troll_coins || 0) > 0
 
-  if (!hasElevatedAccess && !profile.has_paid) {
+  if (!hasElevatedAccess && !profile.has_paid && !hasTrollCoins) {
     const err = new Error(PURCHASE_REQUIRED_MESSAGE)
     ;(err as any).status = 403
     throw err

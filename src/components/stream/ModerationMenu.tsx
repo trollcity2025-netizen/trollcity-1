@@ -52,7 +52,8 @@ export default function ModerationMenu({
       throw new Error('Officer access required')
     }
 
-    return { currentUser, officerProfile, isPrivileged: isAdmin || isGlobalOfficer || isBroadcaster || isBroadofficer }
+    // Officers pay fees, but Admins, Broadcasters, and Broadofficers (stream mods) are exempt
+    return { currentUser, officerProfile, isPrivileged: isAdmin || isBroadcaster || isBroadofficer }
   }, [isBroadcaster, isBroadofficer])
 
   const recordOfficerAction = useCallback(
@@ -102,13 +103,39 @@ export default function ModerationMenu({
     duration?: number
   ) => {
     try {
-      const { officerProfile } = await fetchOfficerContext()
+      // Determine privilege - Officers are NOT privileged for fees (they must pay)
+      const isPrivileged = isAdmin || isBroadcaster // Officers removed from privilege to enforce fees
 
       switch (actionType) {
         case 'mute': {
           const muteDurationMs = duration || 10 * 60 * 1000
           const muteMinutes = Math.round(muteDurationMs / 60000)
           const muteUntil = new Date(Date.now() + muteDurationMs)
+          
+          const fee = 25; // Fee for mute
+          
+          if (!isPrivileged) {
+            if ((officerProfile?.troll_coins || 0) < fee) {
+              toast.error(`Insufficient coins. Need ${fee} coins to mute.`);
+              return;
+            }
+
+            // Deduct coins
+            const { error: spendError } = await supabase.rpc('troll_bank_spend_coins', {
+              p_user_id: officerProfile.id,
+              p_amount: fee,
+              p_bucket: 'paid',
+              p_source: 'moderation_fee',
+              p_metadata: { action: 'mute', target_id: target.userId }
+            });
+
+            if (spendError) {
+              console.error('Failed to deduct mute fee:', spendError);
+              toast.error('Failed to process fee. Action cancelled.');
+              return;
+            }
+          }
+
           await supabase
             .from('user_profiles')
             .update({ mic_muted_until: muteUntil.toISOString() })
@@ -121,7 +148,7 @@ export default function ModerationMenu({
           )
 
           await recordOfficerAction(officerProfile.id, 'mute', {
-            fee_coins: 25,
+            fee_coins: fee,
             metadata: { mute_until: muteUntil.toISOString(), duration_minutes: muteMinutes },
           })
           break
@@ -165,6 +192,31 @@ export default function ModerationMenu({
         }
         case 'block': {
           const blockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000)
+          
+          const fee = 500;
+          
+          if (!isPrivileged) {
+            if ((officerProfile?.troll_coins || 0) < fee) {
+              toast.error(`Insufficient coins. Need ${fee} coins to block.`);
+              return;
+            }
+
+            // Deduct coins
+            const { error: spendError } = await supabase.rpc('troll_bank_spend_coins', {
+              p_user_id: officerProfile.id,
+              p_amount: fee,
+              p_bucket: 'paid',
+              p_source: 'moderation_fee',
+              p_metadata: { action: 'block', target_id: target.userId }
+            });
+
+            if (spendError) {
+              console.error('Failed to deduct block fee:', spendError);
+              toast.error('Failed to process fee. Action cancelled.');
+              return;
+            }
+          }
+          
           await supabase
             .from('user_profiles')
             .update({ no_ban_until: blockUntil.toISOString() })
@@ -173,7 +225,7 @@ export default function ModerationMenu({
           toast.success(`Blocked ${target.username} from bans for 24 hours.`)
 
           await recordOfficerAction(officerProfile.id, 'block', {
-            fee_coins: 500,
+            fee_coins: fee,
             metadata: { block_until: blockUntil.toISOString() },
           })
           break
@@ -214,19 +266,36 @@ export default function ModerationMenu({
 
   const handleKick = async () => {
     try {
-      const { currentUser, officerProfile } = await fetchOfficerContext()
+      const { currentUser, officerProfile, isPrivileged } = await fetchOfficerContext()
 
-      const { data: kickerProfile, error: kickerError } = await supabase
+      const fee = isPrivileged ? 0 : 500
+      
+      // Check coins
+      const { data: profile } = await supabase
         .from('user_profiles')
         .select('troll_coins')
         .eq('id', currentUser.id)
         .single()
-
-      if (kickerError) throw kickerError
-      const coins = kickerProfile?.troll_coins || 0
-      if (coins < 500) {
-        toast.error('You need 500 troll_coins to kick a user')
+        
+      if (!isPrivileged && (profile?.troll_coins || 0) < fee) {
+        toast.error(`Insufficient coins. Need ${fee} coins to kick.`)
         return
+      }
+
+      if (!isPrivileged) {
+        const { error: spendError } = await supabase.rpc('troll_bank_spend_coins', {
+          p_user_id: officerProfile.id,
+          p_amount: fee,
+          p_bucket: 'paid',
+          p_source: 'moderation_fee',
+          p_metadata: { action: 'kick', target_id: target.userId }
+        });
+
+        if (spendError) {
+          console.error('Failed to deduct kick fee:', spendError);
+          toast.error('Failed to process fee. Action cancelled.');
+          return;
+        }
       }
 
       const { data, error } = await supabase.rpc('kick_user', {
@@ -238,14 +307,14 @@ export default function ModerationMenu({
       if (error) throw error
 
       await recordOfficerAction(officerProfile.id, 'kick', {
-        fee_coins: 500,
+        fee_coins: fee,
         metadata: { stream_id: streamId || null },
       })
 
       if (data?.auto_banned) {
-        toast.success(`${target.username} was kicked and auto-banned. They must pay 3000 troll_coins to restore.`)
+        toast.success(`${target.username} was kicked and auto-banned.`)
       } else {
-        toast.success(`${target.username} was kicked. They can pay 500 coins to re-enter.`)
+        toast.success(`${target.username} was kicked.`)
       }
 
       onActionComplete()
@@ -312,7 +381,7 @@ export default function ModerationMenu({
         onClick={handleKick}
         className="w-full text-left px-3 py-2 hover:bg-red-500/20 rounded text-red-400 flex items-center gap-2 transition-colors"
       >
-        Kick User (500 coins)
+        Kick User
       </button>
       
       <div className="space-y-2 mt-3 border-t border-white/10 pt-2">

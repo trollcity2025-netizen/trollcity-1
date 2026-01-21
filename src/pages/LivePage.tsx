@@ -170,6 +170,7 @@ function BroadcasterSettings({
 }) {
   const [participants, setParticipants] = useState<Array<{ user_id: string; username: string; avatar_url?: string; is_moderator?: boolean; can_chat?: boolean; chat_mute_until?: string; is_active?: boolean }>>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
   const [kicking, setKicking] = useState<string | null>(null);
   const [updatingMod, setUpdatingMod] = useState<string | null>(null);
   const [draftPrice, setDraftPrice] = useState(() =>
@@ -1539,7 +1540,13 @@ export default function LivePage() {
           });
           supabase.removeChannel(channel);
         }
+        // Force disconnect the broadcaster's LiveKit connection
+        if (liveKit.room) {
+          liveKit.disconnect();
+        }
         toast.success('Broadcast ended by Officer');
+        // Navigate to stream ended page
+        setTimeout(() => navigate('/stream-ended'), 1000);
       } catch { toast.error('Failed to end broadcast'); }
   };
   
@@ -1861,7 +1868,8 @@ export default function LivePage() {
               const payloadUserId =
                 data.user_id || data.sender_id || msg.user_id || msg.sender_id;
 
-              if (payloadUserId && stream?.broadcaster_id && isBroadcaster && payloadUserId === String(stream.broadcaster_id)) {
+              // Don't show your own entrance effect to yourself
+              if (payloadUserId && user?.id && payloadUserId === user.id) {
                 return;
               }
 
@@ -1913,7 +1921,7 @@ export default function LivePage() {
       }
       supabase.removeChannel(channel);
     };
-  }, [streamId, stream?.broadcaster_id, isBroadcaster]);
+  }, [streamId, stream?.broadcaster_id, isBroadcaster, user?.id]);
 
 
   // Load Stream Data
@@ -2361,6 +2369,8 @@ export default function LivePage() {
         .select('user_id')
         .eq('stream_id', streamId);
 
+      console.log('[LivePage] Refreshing viewer snapshot. Found:', viewerRows?.length || 0, 'viewers');
+
       if (viewerError) {
         console.error('Failed to load active viewers:', viewerError);
         return;
@@ -2433,11 +2443,14 @@ export default function LivePage() {
           table: 'stream_viewers',
           filter: `stream_id=eq.${streamId}`,
         },
-        () => {
+        (payload) => {
+          console.log('[LivePage] Viewer change detected:', payload.eventType);
           refreshViewerSnapshot();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[LivePage] Viewer subscription status:', status);
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -2707,15 +2720,11 @@ export default function LivePage() {
       const isPrivileged = isBroadcaster || isCurrentUserBroadofficer || isRoleExempt;
       const fee = isPrivileged ? 0 : 500;
       
-      if (!isPrivileged) {
-          // Check balance
-          const { data: profile } = await supabase.from('user_profiles').select('troll_coins').eq('id', user.id).single();
-          if ((profile?.troll_coins || 0) < fee) {
-              toast.error(`You need ${fee} troll_coins to kick a user`);
-              return;
-          }
+      if (!isPrivileged && (user.troll_coins || 0) < fee) {
+          toast.error(`Insufficient funds. Need ${fee} coins.`);
+          return;
       }
-
+      
       try {
         const { error } = await supabase.rpc('kick_user', {
             p_target_user_id: generalUserActionTarget.userId,
@@ -2817,6 +2826,11 @@ export default function LivePage() {
       const isPrivileged = isBroadcaster || isCurrentUserBroadofficer || isOfficerUser;
       const fee = isPrivileged ? 0 : 25;
 
+      if (!isPrivileged && (user.troll_coins || 0) < fee) {
+          toast.error(`Insufficient funds. Need ${fee} coins.`);
+          return;
+      }
+
       const muteDurationMs = 10 * 60 * 1000;
       const muteUntil = new Date(Date.now() + muteDurationMs).toISOString();
       
@@ -2856,6 +2870,11 @@ export default function LivePage() {
   const handleBlock = async (target: { userId: string; username: string }) => {
        const isPrivileged = isBroadcaster || isCurrentUserBroadofficer || isOfficerUser;
        const fee = isPrivileged ? 0 : 500;
+
+       if (!isPrivileged && (user.troll_coins || 0) < fee) {
+          toast.error(`Insufficient funds. Need ${fee} coins.`);
+          return;
+       }
 
        const blockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
        const { error } = await supabase

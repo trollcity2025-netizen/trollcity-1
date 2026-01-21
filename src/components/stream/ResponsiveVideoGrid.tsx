@@ -92,8 +92,6 @@ export default function ResponsiveVideoGrid({
       seat
     };
   });
-
-  const hasGuests = guestSeatCount > 0;
   const canControlFrames = !!isLocalBroadcaster || !!isHost;
 
   if (!broadcaster) {
@@ -172,11 +170,7 @@ export default function ResponsiveVideoGrid({
           </button>
         </div>
       )}
-      <div className={`w-full flex-none min-h-0 ${
-        hasGuests
-          ? 'h-[clamp(180px,32vh,230px)] lg:h-[clamp(190px,38vh,340px)]'
-          : 'h-[clamp(240px,46vh,360px)] lg:h-[clamp(260px,52vh,520px)]'
-      } relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black/40 group ${hostFrameClass}`}>
+      <div className={`flex-none relative rounded-2xl sm:rounded-3xl overflow-hidden bg-black/40 group ${hostFrameClass}`} style={{ width: '60px', height: '60px' }}>
         <VideoTile
           participant={broadcaster}
           isBroadcaster
@@ -211,19 +205,20 @@ export default function ResponsiveVideoGrid({
       </div>
 
       {guestSeatCount > 0 && (
-        <div className="shrink-0 w-full">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-4 auto-rows-fr">
+        <div className="shrink-0 flex flex-wrap gap-2">
             {guestAssignments.slice(0, 6).map(({ key, seatIndex, participant }) => (
         <div 
           key={key}
-          className={`w-full aspect-square relative rounded-lg sm:rounded-xl overflow-hidden bg-[#1a0b2e]/50 shadow-inner group transition-all hover:bg-[#1a0b2e]/70 ${
+          className={`relative rounded-lg overflow-hidden bg-[#1a0b2e]/50 shadow-inner group transition-all hover:bg-[#1a0b2e]/70 ${
             frameMode === 'neon'
               ? getNeonStyle(neonColor)
               : frameMode === 'rgb'
                 ? 'border border-transparent rgb-frame-small'
                 : 'border border-purple-500/20 hover:border-purple-500/40'
           }`}
+          style={{ width: '40px', height: '40px' }}
         >
+
                 {participant ? (
                   <VideoTile
                     participant={participant}
@@ -239,24 +234,17 @@ export default function ResponsiveVideoGrid({
                   />
                 ) : (
                   <div 
-                    className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+                    className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
                     onClick={() => onJoinRequest?.(seatIndex)}
                   >
-                    <div className="text-xl sm:text-2xl font-bold text-purple-300/30 mb-1 group-hover:text-purple-300/50 transition-colors">
-                      #{seatIndex + 1}
-                    </div>
-                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)] group-hover:shadow-[0_0_15px_rgba(168,85,247,0.5)]">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="sm:w-5 sm:h-5">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                      </svg>
+                    <div className="text-xs font-bold text-purple-300/30 group-hover:text-purple-300/50 transition-colors">
+                      +
                     </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
-        </div>
       )}
     </div>
   );

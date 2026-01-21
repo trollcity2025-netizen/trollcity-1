@@ -44,25 +44,12 @@ export const API_ENDPOINTS = {
   rtmp: {
     start: '/rtmp-relay',
   },
-  trollg: {
-    payFee: '/pay-trollg-fee',
-    submitGift: '/submit-gift-for-voting',
-    voteGift: '/vote-gift',
-    selectWinners: '/select-gift-winners',
-    sendGift: '/send-gift',
-  },
   admin: {
     trollDrop: '/admin/troll-drop',
     sendAnnouncement: '/send-announcement',
   },
   trollcourt: {
     ai: '/trollcourt-ai',
-  },
-  officerVoting: {
-    startCycle: '/start-officer-vote-cycle',
-    vote: '/vote-for-officer',
-    closeCycle: '/close-officer-vote-cycle',
-    expireRoles: '/expire-officer-roles',
   },
   moderation: {
     submitReport: '/moderation',
