@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
         .from("user_profiles")
         .select("id, username")
         .eq("id", authData.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError || !userProfile) {
         return new Response(JSON.stringify({ error: "User profile not found" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
         .from("manual_coin_orders")
         .select("*")
         .eq("id", rawOrderId)
-        .single();
+        .maybeSingle();
       if (orderError || !order) {
         return new Response(JSON.stringify({ error: "Order not found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
       }
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
           .from("wallets")
           .select("coin_balance")
           .eq("user_id", order.user_id)
-          .single();
+          .maybeSingle();
         const existingBalance = walletRow?.coin_balance ?? 0;
         return new Response(JSON.stringify({ success: true, newBalance: existingBalance }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
       }
@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
           .from("user_profiles")
           .select("paid_coins, total_earned_coins")
           .eq("id", order.user_id)
-          .single();
+          .maybeSingle();
         const currentPaid = profileRow?.paid_coins ?? 0;
         const currentEarned = profileRow?.total_earned_coins ?? 0;
         const { error: profileUpdateError } = await supabaseAdmin
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
           .from("user_profiles")
           .select("paid_coins, total_earned_coins")
           .eq("id", order.user_id)
-          .single();
+          .maybeSingle();
         const currentPaid = profileRow?.paid_coins ?? 0;
         const currentEarned = profileRow?.total_earned_coins ?? 0;
         
@@ -342,7 +342,7 @@ Deno.serve(async (req) => {
         .from("manual_coin_orders")
         .select("id, status, coins, amount_cents, paid_at, fulfilled_at, payer_cashtag")
         .eq("id", orderId)
-        .single();
+        .maybeSingle();
       if (error || !order) return new Response(JSON.stringify({ error: "Order not found" }), { status: 404, headers: { ...cors, "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ success: true, order }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
     }
@@ -354,7 +354,7 @@ Deno.serve(async (req) => {
         .from("user_profiles")
         .select("role, is_admin")
         .eq("id", authData.user.id)
-        .single();
+        .maybeSingle();
 
       const isPrivileged =
         requesterProfile?.role === "admin" ||

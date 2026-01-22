@@ -25,7 +25,7 @@ export function useBroadcastLockdown() {
           .from('admin_settings')
           .select('setting_value')
           .eq('setting_key', 'broadcast_lockdown_enabled')
-          .single();
+          .maybeSingle();
 
         if (queryError) throw queryError;
         

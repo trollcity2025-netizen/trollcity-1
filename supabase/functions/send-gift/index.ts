@@ -86,56 +86,45 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("user_profiles")
-      .select("troll_coins")
-      .eq("id", senderId)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(JSON.stringify({ error: "Profile not found" }), {
-        status: 404,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    const balance = profile.troll_coins || 0;
-    if (balance < GIFT_COST) {
-      return new Response(JSON.stringify({ error: "Insufficient balance" }), {
-        status: 400,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    const royalty = GIFT_COST * ROYALTY_RATE;
-
-    const { error: deductError } = await supabaseAdmin.rpc(
-      "deduct_user_troll_coins",
+    const { data: spendResult, error: spendError } = await supabaseAdmin.rpc(
+      "troll_bank_spend_coins",
       {
         p_user_id: senderId,
-        p_amount: GIFT_COST.toString(),
-        p_coin_type: "troll_coins",
-      },
+        p_amount: GIFT_COST,
+        p_bucket: "gift_sends",
+        p_source: "gift",
+        p_ref_id: giftId,
+        p_metadata: { recipient_id: recipientId, stream_id: streamId }
+      }
     );
 
-    if (deductError) {
-      return new Response(JSON.stringify({ error: "Failed to deduct coins" }), {
+    if (spendError || !spendResult || !spendResult.success) {
+      console.error("Spend error:", spendError || spendResult);
+      return new Response(JSON.stringify({ error: spendResult?.error || "Insufficient balance or transaction failed" }), {
         status: 400,
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    const { error: ledgerError } = await supabaseAdmin
-      .from("coin_ledger")
-      .insert({
-        user_id: gift.creator_id,
-        delta: royalty,
-        reason: "trollg_royalty",
-        ref_id: giftId,
-      });
-
-    if (ledgerError) {
-      console.error("Failed to write coin_ledger", ledgerError);
+    const royalty = Math.floor(GIFT_COST * ROYALTY_RATE);
+    
+    if (royalty > 0) {
+      const { error: creditError } = await supabaseAdmin.rpc(
+        "troll_bank_credit_coins",
+        {
+          p_user_id: gift.creator_id,
+          p_coins: royalty,
+          p_bucket: "gifted",
+          p_source: "trollg_royalty",
+          p_ref_id: giftId,
+          p_metadata: { original_sender_id: senderId }
+        }
+      );
+      
+      if (creditError) {
+        console.error("Failed to credit royalty:", creditError);
+        // Continue, as the gift was sent and paid for. Royalty failure shouldn't fail the user request.
+      }
     }
 
     const { error: sendError } = await supabaseAdmin
@@ -146,7 +135,7 @@ Deno.serve(async (req) => {
         recipient_id: recipientId || null,
         stream_id: streamId,
         coins_spent: GIFT_COST,
-        creator_royalty: royalty,
+        creator_royalty: royalty, // Use the integer value
       });
 
     if (sendError) {

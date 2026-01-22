@@ -42,6 +42,21 @@ CREATE INDEX IF NOT EXISTS idx_credit_events_event_type
   ON public.credit_events(event_type);
 
 -- 3) Public view exposing only non-sensitive fields
+DO $$
+DECLARE
+  v_kind char;
+BEGIN
+  SELECT relkind INTO v_kind FROM pg_class WHERE oid = 'public.public_user_credit'::regclass;
+  IF FOUND THEN
+    IF v_kind = 'v' THEN
+      EXECUTE 'DROP VIEW public.public_user_credit CASCADE';
+    ELSE
+      EXECUTE 'DROP TABLE public.public_user_credit CASCADE';
+    END IF;
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 CREATE OR REPLACE VIEW public.public_user_credit AS
 SELECT user_id, score, tier, trend_7d, updated_at
 FROM public.user_credit;
@@ -51,24 +66,48 @@ ALTER TABLE public.user_credit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_events ENABLE ROW LEVEL SECURITY;
 
 -- Allow owners to read full credit row
-CREATE POLICY IF NOT EXISTS user_credit_select_owner
-  ON public.user_credit FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_credit' AND policyname = 'user_credit_select_owner'
+    ) THEN
+        CREATE POLICY user_credit_select_owner ON public.user_credit FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
 -- Allow service role full access
-CREATE POLICY IF NOT EXISTS user_credit_service_role_all
-  ON public.user_credit FOR ALL
-  USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_credit' AND policyname = 'user_credit_service_role_all'
+    ) THEN
+        CREATE POLICY user_credit_service_role_all ON public.user_credit FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 -- Allow owners to view their own credit events
-CREATE POLICY IF NOT EXISTS credit_events_select_owner
-  ON public.credit_events FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'credit_events' AND policyname = 'credit_events_select_owner'
+    ) THEN
+        CREATE POLICY credit_events_select_owner ON public.credit_events FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
 -- Allow service role full access to credit_events
-CREATE POLICY IF NOT EXISTS credit_events_service_role_all
-  ON public.credit_events FOR ALL
-  USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'credit_events' AND policyname = 'credit_events_service_role_all'
+    ) THEN
+        CREATE POLICY credit_events_service_role_all ON public.credit_events FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 -- Public access to limited view
 GRANT SELECT ON public.public_user_credit TO anon, authenticated;

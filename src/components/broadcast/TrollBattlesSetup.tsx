@@ -106,7 +106,10 @@ export default function TrollBattlesSetup({ streamId, onOpponentFound, onCancel:
   }, [status, user, streamId, assignTopGuests]);
 
   const handleFindOpponent = async () => {
-    if (!user) return;
+    if (!user) {
+      toast.error('You must be logged in to battle');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

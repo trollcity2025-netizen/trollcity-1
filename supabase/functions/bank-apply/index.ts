@@ -1,18 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "jsr:@supabase/supabase-js@2"
-import { corsHeaders } from "../_shared/cors.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3"
+
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { 
-        status: 200, 
-        headers: {
-            ...corsHeaders,
-            // Explicitly allow all headers to avoid issues with custom headers like x-client-info
-            "Access-Control-Allow-Headers": "*",
-        }
-    })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
@@ -27,18 +25,33 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    const { requested_coins } = await req.json()
+    const body = await req.json()
+    const coins = body.amount || body.requested_coins
 
-    if (!requested_coins) {
-         return new Response(JSON.stringify({ error: 'Missing requested_coins' }), { status: 400, headers: corsHeaders })
+    if (!coins) {
+         return new Response(JSON.stringify({ error: 'Missing amount' }), { status: 400, headers: corsHeaders })
     }
 
     const { data, error } = await supabaseClient.rpc('troll_bank_apply_for_loan', {
         p_user_id: user.id,
-        p_requested_coins: requested_coins
+        p_requested_coins: coins
     })
 
-    if (error) throw error
+    if (error) {
+      console.error('RPC Error:', error)
+      return new Response(JSON.stringify({ error: error.message || 'Loan application failed' }), { 
+        status: 400, 
+        headers: corsHeaders 
+      })
+    }
+
+    // Check if the RPC returned a logical error structure
+    if (data && data.success === false) {
+       return new Response(JSON.stringify({ error: data.message || 'Loan application denied' }), { 
+        status: 400, 
+        headers: corsHeaders 
+      })
+    }
 
     const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
@@ -49,7 +62,7 @@ serve(async (req) => {
         action: 'loan_application',
         performed_by: user.id,
         target_user_id: user.id,
-        details: { requested_coins, result: data }
+        details: { requested_coins: coins, result: data }
     })
 
     return new Response(JSON.stringify(data), { headers: corsHeaders })

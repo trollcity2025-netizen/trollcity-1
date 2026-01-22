@@ -1,6 +1,7 @@
 import { useState, KeyboardEvent, useRef } from 'react'
 import { Send, Smile } from 'lucide-react'
 import { supabase, sendConversationMessage } from '../../../lib/supabase'
+import { sendNotification } from '../../../lib/sendNotification'
 import { useAuthStore } from '../../../lib/store'
 import { canMessageAdmin } from '../../../lib/perkEffects'
 import { toast } from 'sonner'
@@ -66,18 +67,13 @@ export default function MessageInput({ otherUserId, conversationId, onMessageSen
       console.log('✅ Message sent successfully:', sentMessage.id);
 
       try {
-        await supabase.from('notifications').insert([
-          {
-            user_id: otherUserId,
-            type: 'message',
-            title: 'New message',
-            message: `New message from ${profile.username}`,
-            metadata: {
-              sender_id: profile.id
-            },
-            read: false
-          }
-        ])
+        await sendNotification(
+          otherUserId,
+          'message',
+          'New message',
+          `New message from ${profile.username}`,
+          { sender_id: profile.id }
+        )
       } catch (notifErr) {
         console.warn('Notification error (non-critical):', notifErr)
       }

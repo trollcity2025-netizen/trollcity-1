@@ -61,7 +61,7 @@ export function useBank() {
   }, [fetchBankData])
 
   const applyForLoan = async (amount: number) => {
-    if (!user) return
+    if (!user) return { success: false, error: 'User not logged in' }
     setLoading(true)
     try {
         const { data, error } = await supabase.functions.invoke('bank-apply', {
@@ -73,10 +73,10 @@ export function useBank() {
 
         toast.success('Loan approved and disbursed!')
         fetchBankData()
-        return true
+        return { success: true }
     } catch (error: any) {
         toast.error(error.message || 'Failed to apply for loan')
-        return false
+        return { success: false, error: error.message || 'Failed to apply for loan' }
     } finally {
         setLoading(false)
     }

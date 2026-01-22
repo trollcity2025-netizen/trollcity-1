@@ -129,11 +129,27 @@ create index if not exists idx_user_level_perks_level on user_level_perks(level)
 
 alter table user_level_perks enable row level security;
 
-create policy if not exists "User level perks publicly readable" on user_level_perks
-  for select using (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_level_perks' AND policyname = 'User level perks publicly readable'
+    ) THEN
+        create policy "User level perks publicly readable" on user_level_perks
+          for select using (true);
+    END IF;
+END $$;
 
-create policy if not exists "User level perks insert by service role" on user_level_perks
-  for insert with check (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_level_perks' AND policyname = 'User level perks insert by service role'
+    ) THEN
+        create policy "User level perks insert by service role" on user_level_perks
+          for insert with check (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 grant select on user_level_perks to anon, authenticated;
 grant all on user_level_perks to service_role;
@@ -156,11 +172,27 @@ create index if not exists idx_xp_transactions_created on xp_transactions(create
 
 alter table xp_transactions enable row level security;
 
-create policy if not exists "Users can view own XP transactions" on xp_transactions
-  for select using (auth.uid() = user_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'xp_transactions' AND policyname = 'Users can view own XP transactions'
+    ) THEN
+        create policy "Users can view own XP transactions" on xp_transactions
+          for select using (auth.uid() = user_id);
+    END IF;
+END $$;
 
-create policy if not exists "XP transactions insert by service role" on xp_transactions
-  for insert with check (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'xp_transactions' AND policyname = 'XP transactions insert by service role'
+    ) THEN
+        create policy "XP transactions insert by service role" on xp_transactions
+          for insert with check (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 grant select on xp_transactions to authenticated;
 grant all on xp_transactions to service_role;

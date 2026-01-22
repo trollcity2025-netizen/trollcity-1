@@ -41,27 +41,15 @@ DO $$ BEGIN
         WHERE table_name = 'deed_transfers' AND column_name = 'seller_username'
     ) THEN
         ALTER TABLE public.deed_transfers ADD COLUMN seller_username text;
-        COMMENT ON COLUMN public.deed_transfers.seller_username IS 'Username of seller';
+        COMMENT ON COLUMN public.deed_transfers.seller_username IS 'Cached username of seller at time of transfer';
     END IF;
 END $$;
-
 DO $$ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'deed_transfers' AND column_name = 'buyer_username'
     ) THEN
         ALTER TABLE public.deed_transfers ADD COLUMN buyer_username text;
-        COMMENT ON COLUMN public.deed_transfers.buyer_username IS 'Username of buyer';
-    END IF;
-END $$;
-
--- Also ensure properties table has name column
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'properties' AND column_name = 'name'
-    ) THEN
-        ALTER TABLE public.properties ADD COLUMN name text;
-        COMMENT ON COLUMN public.properties.name IS 'User-defined name for the property';
+        COMMENT ON COLUMN public.deed_transfers.buyer_username IS 'Cached username of buyer at time of transfer';
     END IF;
 END $$;

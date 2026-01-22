@@ -1,0 +1,3 @@
+-- Renamed from 20270120009000_troting_and_pitches.sql to 20270122090000_troting_and_pitches.sql on 2026-01-22 to resolve duplicate migration version error.
+
+-- ...existing migration content...

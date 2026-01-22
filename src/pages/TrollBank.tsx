@@ -111,7 +111,7 @@ export default function TrollBank() {
     
     setApplying(true)
     try {
-      const success = await applyForLoan(requestedAmount)
+      const { success } = await applyForLoan(requestedAmount)
 
       if (success) {
         // toast handled by hook

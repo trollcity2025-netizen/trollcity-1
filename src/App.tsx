@@ -537,7 +537,7 @@ function AppContent() {
       const checkLogin = async () => {
         try {
           // This function checks the date, updates streak, and awards XP if valid
-          await supabase.rpc('check_daily_login', { p_user_id: user.id });
+          await supabase.rpc('check_daily_login');
         } catch (e) {
           console.error('Error checking daily login:', e);
         }

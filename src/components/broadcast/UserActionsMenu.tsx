@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { X, Eye, EyeOff, Gift, Ban, AlertCircle, UserPlus, Gavel } from "lucide-react";
+import { X, Eye, EyeOff, Gift, Ban, AlertCircle, UserPlus, Gavel, Mic, MicOff, Shield } from "lucide-react";
 
-interface UserActionMenuProps {
+export interface UserActionsMenuProps {
   user: {
     name: string;
     role?: string;
@@ -16,6 +16,9 @@ interface UserActionMenuProps {
   onSummon?: () => void;
   onAssignOfficer?: () => void;
   onRemoveOfficer?: () => void;
+  onMute?: () => void;
+  onUnmute?: () => void;
+  onBlock?: () => void;
   isBroadofficer?: boolean;
   isBroadcaster?: boolean;
   isCurrentUserBroadofficer?: boolean;
@@ -33,10 +36,13 @@ export default function UserActionsMenu({
   onSummon,
   onAssignOfficer,
   onRemoveOfficer,
+  onMute,
+  onUnmute,
+  onBlock,
   isBroadofficer,
   isBroadcaster,
   isCurrentUserBroadofficer,
-}: UserActionMenuProps) {
+}: UserActionsMenuProps) {
   const [showGiftAmount, setShowGiftAmount] = useState(false);
   const [giftAmount, setGiftAmount] = useState(100);
   const [hideRoles, setHideRoles] = useState(false);
@@ -164,6 +170,36 @@ export default function UserActionsMenu({
                       </button>
                     </div>
                   </div>
+                )}
+
+                {onMute && (
+                  <button
+                    onClick={onMute}
+                    className="w-full px-3 py-2 bg-yellow-600 hover:bg-yellow-700 rounded font-bold transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <MicOff size={16} />
+                    Mute (10m)
+                  </button>
+                )}
+
+                {onUnmute && (
+                  <button
+                    onClick={onUnmute}
+                    className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 rounded font-bold transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Mic size={16} />
+                    Unmute
+                  </button>
+                )}
+
+                {onBlock && (
+                  <button
+                    onClick={onBlock}
+                    className="w-full px-3 py-2 bg-red-800 hover:bg-red-900 rounded font-bold transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Shield size={16} />
+                    Block (24h)
+                  </button>
                 )}
 
                 <button

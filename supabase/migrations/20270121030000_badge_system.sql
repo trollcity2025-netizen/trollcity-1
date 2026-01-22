@@ -36,30 +36,86 @@ alter table badge_catalog enable row level security;
 alter table user_badges enable row level security;
 
 -- Policies for badge_catalog: public read; mutations only by service role
-create policy if not exists "Badge catalog is publicly readable" on badge_catalog
-  for select using (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'badge_catalog' AND policyname = 'Badge catalog is publicly readable'
+    ) THEN
+        create policy "Badge catalog is publicly readable" on badge_catalog for select using (true);
+    END IF;
+END $$;
 
-create policy if not exists "Badge catalog insert by service role" on badge_catalog
-  for insert with check (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'badge_catalog' AND policyname = 'Badge catalog insert by service role'
+    ) THEN
+        create policy "Badge catalog insert by service role" on badge_catalog for insert with check (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-create policy if not exists "Badge catalog update by service role" on badge_catalog
-  for update using (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'badge_catalog' AND policyname = 'Badge catalog update by service role'
+    ) THEN
+        create policy "Badge catalog update by service role" on badge_catalog for update using (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-create policy if not exists "Badge catalog delete by service role" on badge_catalog
-  for delete using (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'badge_catalog' AND policyname = 'Badge catalog delete by service role'
+    ) THEN
+        create policy "Badge catalog delete by service role" on badge_catalog for delete using (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 -- Policies for user_badges: public read limited columns; mutations only by service role
-create policy if not exists "User badges publicly readable" on user_badges
-  for select using (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_badges' AND policyname = 'User badges publicly readable'
+    ) THEN
+        create policy "User badges publicly readable" on user_badges for select using (true);
+    END IF;
+END $$;
 
-create policy if not exists "User badges insert by service role" on user_badges
-  for insert with check (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_badges' AND policyname = 'User badges insert by service role'
+    ) THEN
+        create policy "User badges insert by service role" on user_badges for insert with check (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-create policy if not exists "User badges update by service role" on user_badges
-  for update using (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_badges' AND policyname = 'User badges update by service role'
+    ) THEN
+        create policy "User badges update by service role" on user_badges for update using (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-create policy if not exists "User badges delete by service role" on user_badges
-  for delete using (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'user_badges' AND policyname = 'User badges delete by service role'
+    ) THEN
+        create policy "User badges delete by service role" on user_badges for delete using (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 -- Grants: expose catalog; expose limited columns for user_badges; keep metadata private
 revoke all on badge_catalog from anon, authenticated;

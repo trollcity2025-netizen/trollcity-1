@@ -225,6 +225,17 @@ export default function KickFee() {
           </p>
         </div>
       </div>
+
+      {showCoinStore && (
+        <CoinStoreModal
+          onClose={() => setShowCoinStore(false)}
+          onPurchase={() => {
+            refreshProfile?.();
+            // Don't close immediately, let them buy more if they want? 
+            // Or close it? Usually keep open or user closes.
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -78,6 +78,7 @@ export default function Sidebar() {
   const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
   // Officer check matches the logic in useEffect (isAdmin || isOfficer)
   const isOfficer = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.TROLL_OFFICER || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
+  const canSeeCourt = isOfficer || isSecretary;
   const hasRgb = useMemo(() => {
     if (!profile?.rgb_username_expires_at) return false
     return new Date(profile.rgb_username_expires_at) > new Date()
@@ -279,8 +280,18 @@ export default function Sidebar() {
         </SidebarGroup>
 
         {/* Special Access */}
-        {(canSeeOfficer || canSeeFamilyLounge || canSeeSecretary) && (
+        {(canSeeOfficer || canSeeFamilyLounge || canSeeSecretary || canSeeCourt) && (
           <SidebarGroup title={isSidebarCollapsed ? '' : "Special Access"} isCollapsed={isSidebarCollapsed}>
+            {canSeeCourt && (
+              <SidebarItem 
+                icon={Gavel} 
+                label="Court Dockets" 
+                to="/admin/court-dockets" 
+                active={location.pathname.startsWith('/admin/court-dockets')} 
+                collapsed={isSidebarCollapsed}
+                className="text-orange-400 hover:text-orange-300"
+              />
+            )}
             {canSeeOfficer && (
               <>
                 <SidebarItem 
@@ -290,14 +301,6 @@ export default function Sidebar() {
                   active={location.pathname.startsWith('/officer/dashboard')} 
                   collapsed={isSidebarCollapsed}
                   className="text-emerald-400 hover:text-emerald-300"
-                />
-                <SidebarItem 
-                  icon={Gavel} 
-                  label="Court Dockets" 
-                  to="/admin/court-dockets" 
-                  active={location.pathname.startsWith('/admin/court-dockets')} 
-                  collapsed={isSidebarCollapsed}
-                  className="text-orange-400 hover:text-orange-300"
                 />
                 <SidebarItem 
                   icon={Shield} 

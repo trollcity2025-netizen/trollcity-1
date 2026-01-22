@@ -178,7 +178,7 @@ export function useGiftSystem(
                 .from('user_profiles')
                 .select('*')
                 .eq('id', user.id)
-                .single()
+                .maybeSingle()
               if (refreshedProfile) {
                 useAuthStore.getState().setProfile(refreshedProfile as any)
               }

@@ -103,8 +103,7 @@ export default function ModerationMenu({
     duration?: number
   ) => {
     try {
-      // Determine privilege - Officers are NOT privileged for fees (they must pay)
-      const isPrivileged = isAdmin || isBroadcaster // Officers removed from privilege to enforce fees
+      const { officerProfile, isPrivileged } = await fetchOfficerContext()
 
       switch (actionType) {
         case 'mute': {

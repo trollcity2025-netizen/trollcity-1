@@ -583,7 +583,7 @@ const GoLive: React.FC = () => {
           },
           {
             tokenOverride: livekitToken || undefined,
-            serverUrl: LIVEKIT_URL,
+            url: LIVEKIT_URL,
             allowPublish: true,
             autoPublish: false, // Manual publish to use existing tracks
             preflightStream: preflightStream || undefined
@@ -614,14 +614,27 @@ const GoLive: React.FC = () => {
           isConnectedNow = true;
           
           // Update stream to live immediately (non-blocking)
-          supabase
+          Promise.resolve(supabase
             .from('streams')
             .update({ 
               is_live: true, 
               status: 'live' 
             })
-            .eq('id', createdId)
-            .then(() => console.log('[GoLive] Stream marked live'))
+            .eq('id', createdId))
+            .then(() => {
+              console.log('[GoLive] Stream marked live');
+              // Notify followers
+              supabase.functions.invoke('send-push-notification', {
+                body: {
+                  broadcast_followers_id: profile.id,
+                  title: 'Live Stream',
+                  body: `${profile.username} is live! ${streamTitle}`,
+                  url: `/broadcast/${createdId}`,
+                  create_db_notification: true,
+                  type: 'stream_live'
+                }
+              }).catch(err => console.warn('Broadcast push failed', err));
+            })
             .catch(err => console.error('[GoLive] Failed to mark stream live:', err));
         }
       } catch (err) {
@@ -732,11 +745,11 @@ const GoLive: React.FC = () => {
 
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 go-live-wrapper">
+    <div className="max-w-6xl mx-auto space-y-6 go-live-wrapper bg-gradient-to-br from-[#1a003a] via-[#0fffc1] to-[#1a003a] p-1 rounded-2xl shadow-[0_0_32px_4px_rgba(0,255,255,0.15)]">
 
-      <h1 className="text-3xl font-extrabold flex items-center gap-2">
-        <Video className="text-troll-gold w-8 h-8" />
-        Go Live
+      <h1 className="text-4xl font-extrabold flex items-center gap-3 neon-text drop-shadow-[0_0_8px_#0fffc1]" style={{textShadow:'0 0 16px #0fffc1, 0 0 32px #ff00ea'}}>
+        <Video className="w-10 h-10 text-[#0fffc1] animate-pulse drop-shadow-[0_0_8px_#0fffc1]" />
+        <span className="bg-gradient-to-r from-[#0fffc1] via-[#ff00ea] to-[#00b3ff] bg-clip-text text-transparent">Go Live</span>
       </h1>
       
       {/* Broadcast Lockdown Alert */}
@@ -773,8 +786,9 @@ const GoLive: React.FC = () => {
             <input
               value={streamTitle}
               onChange={(e) => setStreamTitle(e.target.value)}
-              className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-4 py-3"
+              className="w-full bg-[#0e0020] border-2 border-[#0fffc1]/60 focus:border-[#ff00ea] text-white rounded-lg px-4 py-3 neon-input focus:shadow-[0_0_8px_#0fffc1]"
               placeholder="Enter your stream title..."
+              style={{boxShadow:'0 0 8px #0fffc1'}}
             />
           </div>
 
@@ -784,7 +798,8 @@ const GoLive: React.FC = () => {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-4 py-3"
+                className="w-full bg-[#0e0020] border-2 border-[#ff00ea]/60 focus:border-[#0fffc1] text-white rounded-lg px-4 py-3 neon-input"
+                style={{boxShadow:'0 0 8px #ff00ea'}}
               >
                 <option>Chat</option>
                 <option>Gaming</option>
@@ -810,7 +825,7 @@ const GoLive: React.FC = () => {
               </div>
               {isPrivateStream && (
                 <div className="space-y-1 mt-2">
-                  <label className="text-xs uppercase tracking-[0.3em] text-gray-400">
+                  <label className="text-xs uppercase tracking-[0.3em] text-[#0fffc1] drop-shadow-[0_0_4px_#0fffc1]">
                     Invite Password
                   </label>
                   <input
@@ -818,9 +833,9 @@ const GoLive: React.FC = () => {
                     value={privateStreamPassword}
                     onChange={(e) => setPrivateStreamPassword(e.target.value)}
                     placeholder="Enter a password for invited viewers"
-                    className="w-full bg-[#0E0A1A] border border-purple-600/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-400"
+                    className="w-full bg-[#0e0020] border-2 border-[#ff00ea]/60 focus:border-[#0fffc1] rounded-lg px-3 py-2 text-sm text-white neon-input focus:shadow-[0_0_8px_#ff00ea]"
                   />
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-[#bafffa]">
                     Only users with this password can watch.
                   </p>
                 </div>
@@ -835,7 +850,7 @@ const GoLive: React.FC = () => {
                   <select
                     value={boxPriceType}
                     onChange={(e) => setBoxPriceType(e.target.value as 'per_minute' | 'flat')}
-                    className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-3 py-2 text-sm"
+                    className="w-full bg-[#0e0020] border-2 border-[#0fffc1]/60 focus:border-[#ff00ea] text-white rounded-lg px-3 py-2 text-sm neon-input"
                   >
                     <option value="per_minute">Coins Per Minute</option>
                     <option value="flat">Flat Fee (One-time)</option>
@@ -848,7 +863,7 @@ const GoLive: React.FC = () => {
                     min="0"
                     value={boxPriceAmount}
                     onChange={(e) => setBoxPriceAmount(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-3 py-2 text-sm"
+                    className="w-full bg-[#0e0020] border-2 border-[#ff00ea]/60 focus:border-[#0fffc1] text-white rounded-lg px-3 py-2 text-sm neon-input"
                   />
                 </div>
               </div>
@@ -864,8 +879,8 @@ const GoLive: React.FC = () => {
 
           <div>
             <label className="text-gray-300">Stream Quality</label>
-            <div className="mt-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-              HD streaming is enabled for everyone by default. No boosts or upgrades needed.
+            <div className="mt-2 rounded-lg border-2 border-[#0fffc1]/60 bg-[#0fffc1]/10 px-4 py-3 text-sm text-[#0fffc1] shadow-[0_0_8px_#0fffc1]">
+              <span className="font-bold text-[#ff00ea]">HD streaming</span> is enabled for everyone by default. No boosts or upgrades needed.
             </div>
           </div>
 
@@ -877,7 +892,7 @@ const GoLive: React.FC = () => {
                 <select
                   value={selectedThemeId || ''}
                   onChange={(e) => setSelectedThemeId(e.target.value || null)}
-                  className="w-full bg-[#171427] border border-purple-500/40 text-white rounded-lg px-4 py-3"
+                  className="w-full bg-[#0e0020] border-2 border-[#0fffc1]/60 focus:border-[#ff00ea] text-white rounded-lg px-4 py-3 neon-input"
                   disabled={themesLoading}
                 >
                   <option value="">Default (free)</option>
@@ -996,18 +1011,19 @@ const GoLive: React.FC = () => {
                   !streamTitle.trim() ||
                   liveRestriction.isRestricted
                 }
-                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-[#0fffc1] via-[#ff00ea] to-[#00b3ff] text-white font-extrabold neon-btn shadow-[0_0_16px_4px_rgba(0,255,255,0.25)] hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed w-full"
+                style={{textShadow:'0 0 8px #0fffc1, 0 0 16px #ff00ea'}}
               >
                 {isConnecting ? (
                   <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-[#0fffc1]/30 border-t-[#ff00ea] rounded-full animate-spin"></div>
                     <div className="text-left">
                       <div>Creating Stream...</div>
                       <div className="text-xs opacity-75">This may take 10-30 seconds</div>
                     </div>
                   </span>
                 ) : (
-                  'Go Live Now!'
+                  <span className="drop-shadow-[0_0_8px_#0fffc1]">Go Live Now!</span>
                 )}
               </button>
             </div>

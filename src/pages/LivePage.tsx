@@ -12,6 +12,7 @@ import { useLiveKitToken } from '../hooks/useLiveKitToken';
 import { useStreamEndListener } from '../hooks/useStreamEndListener';
 import { useAuthStore } from '../lib/store';
 import { supabase, createConversation, sendConversationMessage } from '../lib/supabase';
+import { sendNotification } from '../lib/sendNotification';
 import { toast } from 'sonner';
 import { Participant } from 'livekit-client';
 import {
@@ -656,6 +657,7 @@ export default function LivePage() {
 
   const [joinPrice, setJoinPrice] = useState(0);
   const [showTrollBattles, setShowTrollBattles] = useState(false);
+  const [showTrollBattleOverlay, setShowTrollBattleOverlay] = useState(false);
   const [activeBattle, setActiveBattle] = useState<{id: string, player1_id: string, player2_id: string, status: string} | null>(null);
   const [boxCount, setBoxCount] = useState(6);
   const [seatBans, setSeatBans] = useState<SeatBan[]>([]);
@@ -1259,6 +1261,21 @@ export default function LivePage() {
         if (list.length > 0) {
           await supabase.from('notifications').insert(list);
           toast.success('Alert sent to troll officers');
+
+          // Send push notifications to officers
+          try {
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                user_ids: list.map((n) => n.user_id),
+                title: 'Stream Moderation Alert',
+                body: messageWithReporter,
+                url: `/live/${streamId}?source=officer_alert`,
+                create_db_notification: false,
+              },
+            });
+          } catch (err) {
+            console.warn('Failed to send push to officers', err);
+          }
         } else {
           toast.info('No officers found to notify');
         }
@@ -1585,7 +1602,7 @@ export default function LivePage() {
           supabase.removeChannel(channel);
         }
         // Force disconnect the broadcaster's LiveKit connection
-        if (liveKit.room) {
+        if (liveKit.getRoom()) {
           liveKit.disconnect();
         }
         toast.success('Broadcast ended by Officer');
@@ -2719,18 +2736,13 @@ export default function LivePage() {
       await sendConversationMessage(conversationId, messageBody);
 
       try {
-        await supabase.from('notifications').insert([
-          {
-            user_id: messageBubbleTarget.id,
-            type: 'message',
-            title: 'New message',
-            message: `New message from ${profile.username}`,
-            metadata: {
-              sender_id: profile.id,
-            },
-            read: false,
-          },
-        ]);
+        await sendNotification(
+          messageBubbleTarget.id,
+          'message',
+          'New message',
+          `New message from ${profile.username}`,
+          { sender_id: profile.id }
+        );
       } catch (notifErr) {
         console.warn('Notification error (bubble message):', notifErr);
       }
@@ -2783,7 +2795,7 @@ export default function LivePage() {
       const isPrivileged = isBroadcaster || isCurrentUserBroadofficer || isRoleExempt;
       const fee = isPrivileged ? 0 : 500;
       
-      if (!isPrivileged && (user.troll_coins || 0) < fee) {
+      if (!isPrivileged && (profile?.troll_coins || 0) < fee) {
           toast.error(`Insufficient funds. Need ${fee} coins.`);
           return;
       }
@@ -2889,7 +2901,7 @@ export default function LivePage() {
       const isPrivileged = isBroadcaster || isCurrentUserBroadofficer || isOfficerUser;
       const fee = isPrivileged ? 0 : 25;
 
-      if (!isPrivileged && (user.troll_coins || 0) < fee) {
+      if (!isPrivileged && (profile?.troll_coins || 0) < fee) {
           toast.error(`Insufficient funds. Need ${fee} coins.`);
           return;
       }
@@ -2934,10 +2946,10 @@ export default function LivePage() {
        const isPrivileged = isBroadcaster || isCurrentUserBroadofficer || isOfficerUser;
        const fee = isPrivileged ? 0 : 500;
 
-       if (!isPrivileged && (user.troll_coins || 0) < fee) {
+       if (!isPrivileged && (profile?.troll_coins || 0) < fee) {
           toast.error(`Insufficient funds. Need ${fee} coins.`);
           return;
-       }
+      }
 
        const blockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
        const { error } = await supabase

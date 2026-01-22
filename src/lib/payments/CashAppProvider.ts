@@ -6,7 +6,7 @@ export const CashAppProvider: PaymentProvider = {
   displayName: 'CashApp Pay',
   logoUrl: '/img/cashapp-logo.svg',
 
-  async createPayment(_options: PaymentCreateOptions): Promise<PaymentSession> {
+  async createPayment(options: PaymentCreateOptions): Promise<PaymentSession> {
     // Always trigger the manual CashApp modal for coin packages and troll pass
     return {
       sessionId: '',

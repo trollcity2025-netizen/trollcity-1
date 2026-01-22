@@ -2,8 +2,11 @@
 -- Description: Adds tracking for platform liability, accurate user earnings, and atomic gift/cashout logic.
 
 -- 1. Ensure admin_pool table exists and has tracking columns
+
+-- Add user_id column to admin_pool for admin ownership
 CREATE TABLE IF NOT EXISTS public.admin_pool (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE SET NULL,
   trollcoins_balance NUMERIC(18,2) DEFAULT 0, -- Existing fee accumulator
   total_liability_coins BIGINT DEFAULT 0,     -- Unpaid user earnings
   total_liability_usd NUMERIC(18,2) DEFAULT 0, -- USD value of unpaid earnings
@@ -12,9 +15,23 @@ CREATE TABLE IF NOT EXISTS public.admin_pool (
 );
 
 -- Initialize admin_pool row if not exists
-INSERT INTO public.admin_pool (id, trollcoins_balance)
-SELECT gen_random_uuid(), 0
-WHERE NOT EXISTS (SELECT 1 FROM public.admin_pool);
+-- Insert a default admin_pool row with a valid admin user_id if available
+DO $$
+DECLARE
+  v_admin_id UUID;
+BEGIN
+  -- Only insert if a matching admin exists in both user_profiles and auth.users
+  SELECT up.id INTO v_admin_id
+  FROM public.user_profiles up
+  JOIN auth.users au ON au.id = up.id
+  WHERE up.role = 'admin'
+  LIMIT 1;
+  IF v_admin_id IS NOT NULL THEN
+    INSERT INTO public.admin_pool (id, user_id, trollcoins_balance)
+    SELECT v_admin_id, v_admin_id, 0
+    WHERE NOT EXISTS (SELECT 1 FROM public.admin_pool);
+  END IF;
+END $$;
 
 -- 2. Enhance user_profiles with explicit 'earned' balance
 -- This separates "Spendable" (troll_coins) from "Cashable" (earned_balance)

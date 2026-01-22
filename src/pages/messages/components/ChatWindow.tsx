@@ -312,68 +312,79 @@ export default function ChatWindow({
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'conversation_messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
-          const newMsgRaw = payload.new as any
-          const senderId = newMsgRaw.sender_id as string
+          if (payload.eventType === 'INSERT') {
+            const newMsgRaw = payload.new as any
+            const senderId = newMsgRaw.sender_id as string
 
-          let senderProfile:
-            | {
-                username: string
-                avatar_url: string | null
-                rgb_username_expires_at?: string | null
+            let senderProfile:
+              | {
+                  username: string
+                  avatar_url: string | null
+                  rgb_username_expires_at?: string | null
+                }
+              | null = null
+
+            try {
+              const { data } = await supabase
+                .from('user_profiles')
+                .select('id,username,avatar_url,rgb_username_expires_at')
+                .eq('id', senderId)
+                .single()
+              if (data) {
+                senderProfile = {
+                  username: data.username,
+                  avatar_url: data.avatar_url,
+                  rgb_username_expires_at: (data as any).rgb_username_expires_at,
+                }
               }
-            | null = null
+            } catch (err) {
+              console.warn('Could not load sender profile for new message:', err)
+            }
 
-          try {
-            const { data } = await supabase
-              .from('user_profiles')
-              .select('id,username,avatar_url,rgb_username_expires_at')
-              .eq('id', senderId)
-              .single()
-            if (data) {
-              senderProfile = {
-                username: data.username,
-                avatar_url: data.avatar_url,
-                rgb_username_expires_at: (data as any).rgb_username_expires_at,
+            const newMsg: Message = {
+              id: newMsgRaw.id,
+              conversation_id: newMsgRaw.conversation_id,
+              sender_id: newMsgRaw.sender_id,
+              content: newMsgRaw.body,
+              created_at: newMsgRaw.created_at,
+              read_at: undefined,
+              sender_username: senderProfile?.username || 'Unknown',
+              sender_avatar_url: senderProfile?.avatar_url || null,
+              sender_rgb_expires_at: senderProfile?.rgb_username_expires_at,
+            }
+
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) {
+                return prev
               }
+              return [...prev, newMsg]
+            })
+
+            const container = messagesContainerRef.current
+            const nearBottom = container
+              ? container.scrollHeight - (container.scrollTop + container.clientHeight) < 150
+              : true
+
+            if (nearBottom) {
+              setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+              }, 100)
             }
-          } catch (err) {
-            console.warn('Could not load sender profile for new message:', err)
-          }
-
-          const newMsg: Message = {
-            id: newMsgRaw.id,
-            conversation_id: newMsgRaw.conversation_id,
-            sender_id: newMsgRaw.sender_id,
-            content: newMsgRaw.body,
-            created_at: newMsgRaw.created_at,
-            read_at: undefined,
-            sender_username: senderProfile?.username || 'Unknown',
-            sender_avatar_url: senderProfile?.avatar_url || null,
-            sender_rgb_expires_at: senderProfile?.rgb_username_expires_at,
-          }
-
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) {
-              return prev
-            }
-            return [...prev, newMsg]
-          })
-
-          const container = messagesContainerRef.current
-          const nearBottom = container
-            ? container.scrollHeight - (container.scrollTop + container.clientHeight) < 150
-            : true
-
-          if (nearBottom) {
-            setTimeout(() => {
-              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-            }, 100)
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMsg = payload.new as any
+            setMessages((prev) => 
+              prev.map((msg) => 
+                msg.id === updatedMsg.id 
+                  ? { ...msg, read_at: updatedMsg.read_at } 
+                  : msg
+              )
+            )
           }
         }
       )

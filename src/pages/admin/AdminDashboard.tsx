@@ -4,6 +4,7 @@ import './admin.css'
 import { useAuthStore } from '../../lib/store'
 import { supabase, isAdminEmail } from '../../lib/supabase'
 import { sendNotification } from '../../lib/sendNotification'
+import { sendGlobalNotification } from '../../lib/ntfyNotify'
 import { Shield } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -167,6 +168,20 @@ export default function AdminDashboard() {
   })
 
   const [activeTab, setActiveTab] = useState<TabId>('connections')
+    // Real-time toast and push notifications for tab changes
+    useEffect(() => {
+      toast.info(`Switched to tab: ${activeTab}`)
+      // Optionally notify admins via ntfy.sh for critical tabs
+      if ([
+        'payouts',
+        'payout_queue',
+        'purchases',
+        'stream_monitor',
+        'send_notifications',
+      ].includes(activeTab)) {
+        sendGlobalNotification('Admin Tab Change', `Admin switched to ${activeTab} tab`).catch(() => {})
+      }
+    }, [activeTab])
   const [liveKitStatus, setLiveKitStatus] = useState<unknown | null>(null)
   const [supabaseStatus, setSupabaseStatus] = useState<unknown | null>(null)
   const [paypalStatus, setPaypalStatus] = useState<unknown | null>(null)
@@ -521,11 +536,37 @@ export default function AdminDashboard() {
     return () => clearInterval(id)
   }, [loadDashboardData, loadEconomySummary, loadLiveStreams])
 
-    // Global monitoring channels
-    useEffect(() => {
-      const streamsChannel = supabase
+  // Global monitoring channels with real-time notifications
+  useEffect(() => {
+    const transactionsChannel = supabase
+      .channel('admin-global-transactions')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions' }, (payload) => {
+        const tx = payload.new
+        if (tx?.type === 'store_purchase') {
+          toast.success('New store purchase detected!')
+          sendGlobalNotification('New Purchase', 'A new store purchase just occurred.').catch(() => {})
+        }
+        if (tx?.type === 'payout') {
+          toast.success('New payout request detected!')
+          sendGlobalNotification('New Payout', 'A new payout request was submitted.').catch(() => {})
+        }
+        // Add more transaction types as needed
+        loadDashboardData()
+        loadEconomySummary()
+      })
+      .subscribe()
+
+    const streamsChannel = supabase
       .channel('admin-global-streams')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams' }, (payload) => {
+        if (payload.new?.is_live && !payload.old?.is_live) {
+          toast.info('A stream just started!')
+          sendGlobalNotification('Stream Started', `Stream "${payload.new.title}" is now live.`).catch(() => {})
+        }
+        if (!payload.new?.is_live && payload.old?.is_live) {
+          toast.info('A stream just ended.')
+          sendGlobalNotification('Stream Ended', `Stream "${payload.old.title}" has ended.`).catch(() => {})
+        }
         loadLiveStreams()
         loadDashboardData()
       })
@@ -545,20 +586,11 @@ export default function AdminDashboard() {
       })
       .subscribe()
 
-    const transactionsChannel = supabase
-      .channel('admin-global-transactions')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions' }, () => {
-        console.log('📊 New coin transaction detected, refreshing dashboard...')
-        loadDashboardData()
-        loadEconomySummary()
-      })
-      .subscribe()
-
     return () => {
+      supabase.removeChannel(transactionsChannel)
       supabase.removeChannel(streamsChannel)
       supabase.removeChannel(appsChannel)
       supabase.removeChannel(payoutsChannel)
-      supabase.removeChannel(transactionsChannel)
     }
   }, [loadLiveStreams, loadDashboardData, loadEconomySummary])
 

@@ -5,6 +5,7 @@ ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS boost_expires_at TIMES
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS fee_reduction_expires_at TIMESTAMPTZ;
 
 -- RPC to Approve Creator Claim
+DROP FUNCTION IF EXISTS public.approve_creator_claim(UUID, UUID);
 CREATE OR REPLACE FUNCTION public.approve_creator_claim(
     p_claim_id UUID,
     p_admin_id UUID
@@ -55,6 +56,7 @@ END;
 $$;
 
 -- RPC to Reject Creator Claim
+DROP FUNCTION IF EXISTS public.reject_creator_claim;
 CREATE OR REPLACE FUNCTION public.reject_creator_claim(
     p_claim_id UUID,
     p_admin_id UUID,

@@ -121,8 +121,19 @@ if (typeof window !== 'undefined' && env.PROD) {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) {
           return
         }
-        const permission = await Notification.requestPermission()
-        if (permission !== 'granted') {
+
+        // Check if we already asked or if permission is already granted/denied
+        if (Notification.permission === 'default') {
+          const hasAsked = localStorage.getItem('push_notification_requested')
+          if (hasAsked) {
+            return
+          }
+          localStorage.setItem('push_notification_requested', 'true')
+          const permission = await Notification.requestPermission()
+          if (permission !== 'granted') {
+            return
+          }
+        } else if (Notification.permission !== 'granted') {
           return
         }
 

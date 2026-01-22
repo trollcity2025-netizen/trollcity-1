@@ -8,30 +8,57 @@ CREATE TABLE IF NOT EXISTS public.daily_login_posts (
   post_id UUID NOT NULL REFERENCES public.troll_wall_posts(id) ON DELETE CASCADE,
   coins_earned INTEGER NOT NULL DEFAULT 0 CHECK (coins_earned >= 0 AND coins_earned <= 100),
   posted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id, DATE(posted_at)) -- Only one post per user per day
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Create a unique index on user_id and the date part of posted_at (using UTC to ensure immutability)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_login_posts_user_date_unique 
+ON public.daily_login_posts (user_id, ((posted_at AT TIME ZONE 'UTC')::date));
 
 -- Add index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_daily_login_posts_user_id ON public.daily_login_posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_daily_login_posts_posted_at ON public.daily_login_posts(posted_at DESC);
-CREATE INDEX IF NOT EXISTS idx_daily_login_posts_user_date ON public.daily_login_posts(user_id, DATE(posted_at));
+-- idx_daily_login_posts_user_date_unique handles the user_date lookup
 
 -- Enable RLS
 ALTER TABLE public.daily_login_posts ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
-CREATE POLICY IF NOT EXISTS daily_login_posts_select_own
-  ON public.daily_login_posts FOR SELECT
-  USING (auth.uid() = user_id OR auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'daily_login_posts' AND policyname = 'daily_login_posts_select_own'
+    ) THEN
+        CREATE POLICY daily_login_posts_select_own
+          ON public.daily_login_posts FOR SELECT
+          USING (auth.uid() = user_id OR auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY IF NOT EXISTS daily_login_posts_insert_service
-  ON public.daily_login_posts FOR INSERT
-  WITH CHECK (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'daily_login_posts' AND policyname = 'daily_login_posts_insert_service'
+    ) THEN
+        CREATE POLICY daily_login_posts_insert_service
+          ON public.daily_login_posts FOR INSERT
+          WITH CHECK (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY IF NOT EXISTS daily_login_posts_update_service
-  ON public.daily_login_posts FOR UPDATE
-  USING (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'daily_login_posts' AND policyname = 'daily_login_posts_update_service'
+    ) THEN
+        CREATE POLICY daily_login_posts_update_service
+          ON public.daily_login_posts FOR UPDATE
+          USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 -- 2) RPC Function: record_daily_login_post with proper once-per-day enforcement
 CREATE OR REPLACE FUNCTION public.record_daily_login_post(

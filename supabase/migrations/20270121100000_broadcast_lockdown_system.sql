@@ -9,11 +9,41 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ensure description column exists if table already existed
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'admin_settings' AND column_name = 'description') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN description TEXT;
+    END IF;
+END $$;
+
+-- Ensure unique constraint on setting_key exists
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'admin_settings_setting_key_key'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM pg_indexes 
+        WHERE tablename = 'admin_settings' AND indexdef LIKE '%(setting_key)%'
+    ) THEN
+        ALTER TABLE public.admin_settings ADD CONSTRAINT admin_settings_setting_key_key UNIQUE (setting_key);
+    END IF;
+END $$;
+
 -- Create initial broadcast_lockdown setting
-INSERT INTO public.admin_settings (setting_key, setting_value, description)
-VALUES 
-  ('broadcast_lockdown_enabled', '{"enabled": false, "admin_broadcast_room": null}', 'Controls whether only admin can broadcast or everyone can')
-ON CONFLICT (setting_key) DO NOTHING;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.admin_settings WHERE setting_key = 'broadcast_lockdown_enabled') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'admin_settings' AND column_name = 'key') THEN
+             INSERT INTO public.admin_settings (setting_key, setting_value, description, key)
+             VALUES ('broadcast_lockdown_enabled', '{"enabled": false, "admin_broadcast_room": null}', 'Controls whether only admin can broadcast or everyone can', 'broadcast_lockdown_enabled');
+        ELSE
+             INSERT INTO public.admin_settings (setting_key, setting_value, description)
+             VALUES ('broadcast_lockdown_enabled', '{"enabled": false, "admin_broadcast_room": null}', 'Controls whether only admin can broadcast or everyone can');
+        END IF;
+    END IF;
+END $$;
 
 -- Grant permissions
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;

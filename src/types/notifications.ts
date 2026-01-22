@@ -14,6 +14,16 @@ export type NotificationType =
   | 'payout_request'
   | 'support_ticket'
   | 'system_update'
+  | 'stream_live'
+  | 'join_approved'
+  | 'moderation_alert'
+  | 'new_follower'
+  | 'message'
+  | 'support_reply'
+  | 'payout_update'
+  | 'role_update'
+  | 'application_result'
+  | 'troll_drop'
 
 export interface Notification {
   id: string

@@ -519,9 +519,9 @@ export default function CoinStoreModal({
                   onClick={async () => {
                     setLoanProcessing(true);
                     try {
-                      const success = await applyForLoan(loanAmount);
+                      const { success } = await applyForLoan(loanAmount);
                       if (success) {
-                        toast.success(`Loan approved! Received ${loanAmount} coins.`);
+                        // toast handled by hook
                         refreshProfile();
                         setActiveTab('coins'); // Switch back to coins or stay?
                       }

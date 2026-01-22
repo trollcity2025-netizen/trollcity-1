@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/lib/store';
 import { useEffect } from 'react';
+import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe';
 import { 
   Gamepad2, 
   Users, 
@@ -111,9 +112,10 @@ export default function Home() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
 
-  // Auto-scroll to top on page load
+  // Auto-scroll to top and subscribe to push notifications on page load
   useEffect(() => {
     window.scrollTo(0, 0);
+    subscribeToNtfyGlobal();
   }, []);
 
   const features = [

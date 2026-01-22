@@ -5,7 +5,9 @@
   "imports": {
     "https://deno.land/std@0.168.0/": "https://deno.land/std@0.168.0/",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno",
-    "@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno"
+    "@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno",
+    "web-push": "https://esm.sh/web-push@3.6.7?target=deno",
+    "@types/web-push": "https://esm.sh/@types/web-push@3.6.3"
   },
   "compilerOptions": {
     "allowJs": true,

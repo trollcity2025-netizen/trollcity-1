@@ -1,6 +1,7 @@
 // Helper functions for creating notifications
 import { supabase } from './supabase'
 import { NotificationType, NotificationMetadata } from '../types/notifications'
+import { sendNotification } from './sendNotification'
 
 /**
  * Create a notification for a user
@@ -13,21 +14,7 @@ export async function createNotification(
   metadata?: NotificationMetadata
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase
-      .from('notifications')
-      .insert({
-        user_id: userId,
-        type,
-        title,
-        message,
-        metadata: metadata || {}
-      })
-
-    if (error) {
-      console.error('Error creating notification:', error)
-      return { success: false, error: error.message }
-    }
-
+    await sendNotification(userId, type, title, message, metadata || {})
     return { success: true }
   } catch (err: any) {
     console.error('Error creating notification:', err)

@@ -75,7 +75,7 @@ export default function CoinStore() {
   const navigate = useNavigate();
   const { troll_coins, refreshCoins } = useCoins();
   const { checkOnboarding } = useCheckOfficerOnboarding();
-  const { loan: activeLoan, ledger, refresh: refreshBank, applyForLoan } = useBankHook(); // useBank hook
+  const { loan: activeLoan, ledger, refresh: refreshBank, applyForLoan, tiers } = useBankHook(); // useBank hook
 
   const STORE_TAB_KEY = 'tc-store-active-tab';
   const STORE_COMPLETE_KEY = 'tc-store-show-complete';
@@ -87,11 +87,44 @@ export default function CoinStore() {
   const [bankBalance] = useState(null);
   const [applying, setApplying] = useState(false);
   const [requestedAmount, setRequestedAmount] = useState(100);
-  const [eligibility] = useState({
+  const [eligibility, setEligibility] = useState({
     canApply: false,
     reasons: [],
     maxAmount: 0
   });
+
+  // Calculate Loan Eligibility
+  useEffect(() => {
+    if (!user || !tiers.length) return;
+
+    const reasons = [];
+    let maxAmount = 0;
+    
+    // 1. Check active loan
+    if (activeLoan) {
+      reasons.push('You already have an active loan.');
+    }
+
+    // 2. Calculate Max Amount based on Tenure
+    const accountAgeDays = Math.floor((new Date() - new Date(user.created_at)) / (1000 * 60 * 60 * 24));
+    
+    // Find highest tier matching tenure
+    const eligibleTier = tiers
+      .filter(t => t.min_tenure_days <= accountAgeDays)
+      .sort((a, b) => b.min_tenure_days - a.min_tenure_days)[0];
+
+    if (eligibleTier) {
+      maxAmount = eligibleTier.max_loan_coins;
+    } else {
+      reasons.push('Account too new for loan eligibility.');
+    }
+
+    setEligibility({
+      canApply: reasons.length === 0 && maxAmount > 0,
+      reasons,
+      maxAmount
+    });
+  }, [user, activeLoan, tiers]);
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [cashAppModalOpen, setCashAppModalOpen] = useState(false);
@@ -682,13 +715,12 @@ export default function CoinStore() {
     }
 
     setThemePurchasing(theme.id);
-    try {
-      const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
-        p_user_id: user.id,
-        p_theme_id: theme.id,
-        p_set_active: false,
-      });
-      if (error || data?.success === false) {
+          try {
+            const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
+              p_theme_id: theme.id,
+              p_set_active: false,
+            });
+            if (error || data?.success === false) {
         throw new Error(data?.error || error?.message || 'Theme purchase failed');
       }
 
@@ -1127,6 +1159,12 @@ export default function CoinStore() {
                     setSelectedPackage(trollPassPkg);
                     const provider = paymentProviders.find(p => p.id === selectedProviderId);
                     if (!provider) return toast.error('No payment provider selected');
+                    
+                    if (provider.id === 'cashapp') {
+                      setCashAppModalOpen(true);
+                      return;
+                    }
+
                     setLoadingPay(true);
                     try {
                       const paymentSession = await provider.createPayment({
@@ -1184,7 +1222,8 @@ export default function CoinStore() {
                           <div className="text-sm text-gray-400 mb-4">Troll Coins</div>
                           {selectedProviderId === 'paypal' ? (
                             <PayPalButtons
-                              style={{ layout: 'vertical', color: 'blue', shape: 'rect', label: 'paypal' }}
+                              fundingSource="paypal"
+                              style={{ layout: 'vertical', color: 'gold', shape: 'pill', label: 'checkout', height: 48 }}
                               disabled={loadingPay}
                               forceReRender={[pkg.price, pkg.id, user?.id]}
                               createOrder={async (_data, _actions) => {
@@ -1192,24 +1231,20 @@ export default function CoinStore() {
                                 setLoadingPay(true);
                                 try {
                                   // Call your backend or edge function to create the order
-                                  const res = await fetch('https://yjxpwfalenorzrqxwmtr.functions.supabase.co/paypal-create-order', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-                                    },
-                                    body: JSON.stringify({
+                                  const { data, error } = await supabase.functions.invoke('paypal-create-order', {
+                                    body: {
                                       amount: parseFloat(pkg.price.replace('$','')),
                                       currency: 'USD',
                                       userId: user.id,
                                       productType: 'coins',
                                       packageId: pkg.id,
                                       metadata: { coins: pkg.coins }
-                                    })
+                                    }
                                   });
-                                  const _data = await res.json();
-                                  if (!res.ok || !_data.orderId) throw new Error(_data.error || 'Failed to create PayPal order');
-                                  return _data.orderId;
+                                  
+                                  if (error) throw error;
+                                  if (!data.orderId) throw new Error(data.error || 'Failed to create PayPal order');
+                                  return data.orderId;
                                 } catch (err) {
                                   toast.error(err.message || 'Failed to create PayPal order');
                                   throw err;
@@ -1221,20 +1256,16 @@ export default function CoinStore() {
                                 setLoadingPay(true);
                                 try {
                                   // Call your edge function to fulfill the purchase
-                                  const res = await fetch('https://yjxpwfalenorzrqxwmtr.functions.supabase.co/fulfill-paypal-purchase', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-                                    },
-                                    body: JSON.stringify({
+                                  const { data, error } = await supabase.functions.invoke('fulfill-paypal-purchase', {
+                                    body: {
                                       orderId: _data.orderID,
                                       userId: user.id,
                                       packageId: pkg.id
-                                    })
+                                    }
                                   });
-                                  const result = await res.json();
-                                  if (!result.success) throw new Error(result.error || 'Failed to fulfill PayPal purchase');
+                                  
+                                  if (error) throw error;
+                                  if (!data.success) throw new Error(data.error || 'Failed to fulfill PayPal purchase');
                                   toast.success('Coins credited!');
                                   refreshCoins();
                                   showPurchaseCompleteOverlay();
@@ -1254,6 +1285,12 @@ export default function CoinStore() {
                                 setSelectedPackage(pkg);
                                 const provider = paymentProviders.find(p => p.id === selectedProviderId);
                                 if (!provider) return toast.error('No payment provider selected');
+                                
+                                if (provider.id === 'cashapp') {
+                                  setCashAppModalOpen(true);
+                                  return;
+                                }
+
                                 setLoadingPay(true);
                                 try {
                                   const _paymentSession = await provider.createPayment({
@@ -1592,7 +1629,7 @@ export default function CoinStore() {
         <CashAppPaymentModal
           isOpen={cashAppModalOpen}
           onClose={() => setCashAppModalOpen(false)}
-          amount={selectedPackage?.price ? parseFloat(selectedPackage.price.replace('$','')) : 0}
+          amount={selectedPackage?.price ? parseFloat(String(selectedPackage.price).replace('$','')) : 0}
           packageId={selectedPackage?.id}
           coins={selectedPackage?.coins}
           purchaseType={selectedPackage?.purchaseType || 'coin_package'}
