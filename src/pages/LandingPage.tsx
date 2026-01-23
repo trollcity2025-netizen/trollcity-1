@@ -170,7 +170,7 @@ export default function LandingPage() {
                 <div className="space-y-4">
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-4">
                     <Sparkles className="w-4 h-4 text-purple-400" />
-                    <span className="text-purple-400 font-semibold text-sm">Get Paid 2X Weekly</span>
+                    <span className="text-purple-400 font-semibold text-sm">Get Paid Daily</span>
                   </div>
                   
                   <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black">
