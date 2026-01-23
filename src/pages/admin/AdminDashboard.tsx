@@ -14,7 +14,7 @@ import FinanceEconomyCenter from './components/FinanceEconomyCenter'
 import OperationsControlDeck from './components/OperationsControlDeck'
 import AdditionalTasksGrid from './components/AdditionalTasksGrid'
 import QuickActionsBar from './components/QuickActionsBar'
-import MAIAuthorityPanel from '../../components/mai/MAIAuthorityPanel'
+// import MAIAuthorityPanel from '../../components/mai/MAIAuthorityPanel'
 
 
 
@@ -1177,7 +1177,7 @@ export default function AdminDashboard() {
           liveStreamsCount={liveStreams.length}
         />
 
-        <MAIAuthorityPanel mode="admin" location="admin_dashboard" />
+        {/* <MAIAuthorityPanel mode="admin" location="admin_dashboard" /> */}
 
         {/* City Controls & Health Section */}
         <CityControlsHealth
