@@ -82,7 +82,11 @@ export default function CoinStoreProd() {
               <button
                 key={p.id}
                 onClick={() => setSelectedProviderId(p.id)}
-                className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 border transition-colors ${selectedProviderId === p.id ? 'bg-purple-600 text-white border-purple-400' : 'bg-[#181825] text-gray-300 border-[#2C2C2C] hover:bg-[#232336]'}`}
+                className={`group relative px-5 py-2.5 rounded-full font-semibold flex items-center gap-2 border transition-all duration-200 ${
+                  selectedProviderId === p.id
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-transparent shadow-lg shadow-purple-500/40 scale-105'
+                    : 'bg-[#11111b] text-gray-300 border-[#2C2C2C] hover:border-purple-500/70 hover:bg-[#181825] hover:shadow-md hover:-translate-y-0.5'
+                }`}
               >
                 {p.logoUrl && <img src={p.logoUrl} alt={p.displayName} className="h-5 w-5" />}
                 {p.displayName}
@@ -99,7 +103,11 @@ export default function CoinStoreProd() {
               <button
                 key={pkg.id}
                 onClick={() => setSelectedPackage(pkg)}
-                className={`p-6 rounded-xl border flex flex-col items-center gap-2 transition-all font-semibold ${selectedPackage.id === pkg.id ? 'bg-purple-700/80 border-purple-400 text-white scale-105 shadow-lg' : 'bg-[#181825] border-[#2C2C2C] text-gray-200 hover:bg-[#232336]'}`}
+                className={`group relative p-6 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-200 font-semibold ${
+                  selectedPackage.id === pkg.id
+                    ? 'bg-gradient-to-b from-purple-700/90 via-purple-600/80 to-indigo-700/80 border-purple-400/80 text-white shadow-xl shadow-purple-500/40 scale-105'
+                    : 'bg-[#11111b]/90 border-[#2C2C2C] text-gray-200 hover:border-purple-500/60 hover:bg-[#181825] hover:shadow-lg hover:-translate-y-1'
+                }`}
               >
                 <span className="text-3xl">💰</span>
                 <span className="text-lg">{pkg.label}</span>

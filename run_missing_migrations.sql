@@ -5,7 +5,6 @@
 -- 0. SCHEDULED ANNOUNCEMENTS TABLE
 -- ============================================
 
--- Create table if it doesn't exist
 CREATE TABLE IF NOT EXISTS scheduled_announcements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   message text NOT NULL,
@@ -13,6 +12,18 @@ CREATE TABLE IF NOT EXISTS scheduled_announcements (
   is_sent boolean DEFAULT false,
   created_at timestamptz DEFAULT now()
 );
+
+-- Ensure is_sent column exists (for older tables missing this column)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'scheduled_announcements' AND column_name = 'is_sent'
+  ) THEN
+    ALTER TABLE scheduled_announcements 
+      ADD COLUMN is_sent boolean DEFAULT false;
+  END IF;
+END $$;
 
 -- Ensure scheduled_time column exists (add if missing)
 DO $$
@@ -326,7 +337,6 @@ SELECT
   p.username,
   p.total_earned_coins,
   p.troll_coins,
-  p.troll_coins,
   COALESCE(ce.total_coins, 0) AS current_month_earnings,
   COALESCE(ce.transaction_count, 0) AS current_month_transactions,
   COALESCE(ps.paid_out_usd, 0) AS current_month_paid_out,
@@ -368,7 +378,7 @@ SELECT
   SUM(g.coins_spent) AS coins_earned_from_gifts,
   COUNT(DISTINCT g.id) AS gift_count,
   COUNT(DISTINCT g.sender_id) AS unique_gifters,
-  SUM(CASE WHEN g.gift_type = 'paid' THEN g.coins_spent ELSE 0 END) AS troll_coins_earned,
+  SUM(CASE WHEN g.gift_type = 'paid' THEN g.coins_spent ELSE 0 END) AS paid_coins_earned,
   SUM(CASE WHEN g.gift_type = 'free' THEN g.coins_spent ELSE 0 END) AS free_coins_earned
 FROM user_profiles p
 JOIN gifts g ON g.receiver_id = p.id
@@ -549,4 +559,18 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION request_payout(uuid, bigint) TO authenticated;
+
+-- ============================================
+-- 5. PERMISSION FIXES FOR AUTHENTICATED USERS
+-- ============================================
+
+-- Ensure authenticated users can access key tables (RLS still applies)
+GRANT SELECT, INSERT, UPDATE, DELETE ON notifications TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON payout_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON cashout_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON streams TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_profiles TO authenticated;
+
+-- Ensure RPCs are callable (safe if already granted)
+GRANT EXECUTE ON FUNCTION is_ip_banned(inet) TO authenticated;
 
