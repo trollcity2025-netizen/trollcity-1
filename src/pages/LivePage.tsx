@@ -1461,6 +1461,10 @@ export default function LivePage() {
     publishUpgradeRef.current = true;
     resetJoinGuard();
     liveKit.disconnect();
+
+    // Auto-enable camera/mic state since we are upgrading to publisher
+    setCameraOn(true);
+    setMicOn(true);
   }, [canPublish, isBroadcaster, tokenReady, serverUrl, isConnected, resetJoinGuard, liveKit]);
 
 
