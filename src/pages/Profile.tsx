@@ -727,13 +727,18 @@ function ProfileInner() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="-mt-16 mb-4 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
            <div className="flex items-end relative">
-             <img 
-                src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
-                alt={profile.username}
-                className="w-32 h-32 rounded-full border-4 border-[#0A0814] bg-[#0A0814] object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
-                }}
+             <img
+               src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
+               alt={profile.username}
+               className={`w-32 h-32 rounded-full border-4 border-[#0A0814] bg-[#0A0814] object-cover ${isProfileLive ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+               onError={(e) => {
+                 e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
+               }}
+               onClick={() => {
+                 if (isProfileLive) {
+                   navigate(`/live/${profile.id}`);
+                 }
+               }}
              />
              {isProfileLive && (
                <div className="absolute bottom-0 right-0 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-[#0A0814]">

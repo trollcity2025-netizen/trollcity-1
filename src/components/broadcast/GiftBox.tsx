@@ -18,9 +18,10 @@ interface GiftBoxProps {
   gifts: GiftItem[];
   loading?: boolean;
   loadError?: string | null;
+  onShowCoinStore?: () => void;
 }
 
-export default function GiftBox({ onSendGift, gifts, loading, loadError }: GiftBoxProps) {
+export default function GiftBox({ onSendGift, gifts, loading, loadError, onShowCoinStore }: GiftBoxProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [recipientMode, setRecipientMode] = useState<RecipientMode>("broadcaster");
   const { profile } = useAuthStore();
@@ -32,7 +33,11 @@ export default function GiftBox({ onSendGift, gifts, loading, loadError }: GiftB
   }, [gifts]);
 
   const handleGiftClick = (gift: GiftItem) => {
-    onSendGift?.(gift, recipientMode);
+    if (balance < gift.value) {
+      onShowCoinStore?.();
+    } else {
+      onSendGift?.(gift, recipientMode);
+    }
   };
 
   return (
