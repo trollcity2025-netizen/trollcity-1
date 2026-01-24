@@ -389,7 +389,19 @@ export const useGoLiveFlow = () => {
       }
 
       console.log(`[useGoLiveFlow] ✅ Stream ${r} is now live`)
-      toast.success('You are live!')
+            
+            // Auto-track family task: Host a Clan Stream
+            if (user?.id) {
+              supabase.rpc('track_family_event', { 
+                p_user_id: user.id, 
+                p_metric: 'streams_started', 
+                p_increment: 1 
+              }).then(({ error }) => {
+                if (error) console.error('Error tracking family stream task:', error)
+              })
+            }
+
+            toast.success('You are live!')
       return true
     } catch (err: any) {
       console.error('[useGoLiveFlow] finishGoingLive error:', err.message || err)

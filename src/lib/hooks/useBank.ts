@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
+import { post, API_ENDPOINTS } from '../api'
 import { useAuthStore } from '../store'
 import { toast } from 'sonner'
 
@@ -64,12 +65,10 @@ export function useBank() {
     if (!user) return { success: false, error: 'User not logged in' }
     setLoading(true)
     try {
-        const { data, error } = await supabase.functions.invoke('bank-apply', {
-            body: { amount }
-        })
+        const response = await post(API_ENDPOINTS.bank.apply, { amount })
 
-        if (error) throw error
-        if (!data.success) throw new Error(data.reason || 'Application failed')
+        if (response.error) throw new Error(response.error)
+        if (response.success === false) throw new Error(response.message || response.reason || 'Application failed')
 
         toast.success('Loan approved and disbursed!')
         fetchBankData()

@@ -14,7 +14,7 @@ export async function getCurrentSeason() {
       .eq('is_active', true)
       .order('starts_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     return season
   } catch (error) {
@@ -164,7 +164,7 @@ export async function getFamilySeasonStats(familyId: string) {
       .from('family_stats')
       .select('season_coins, weekly_coins')
       .eq('family_id', familyId)
-      .single()
+      .maybeSingle()
 
     const { data: rank } = await supabase
       .from('family_stats')

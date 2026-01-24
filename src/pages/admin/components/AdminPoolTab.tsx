@@ -1028,6 +1028,25 @@ export default function AdminPoolTab() {
 
         {activeTab === 'allocations' && (
           <div className="space-y-6">
+            {/* Total Pool Overview Card */}
+            <div className="bg-[#121212] border border-emerald-500/30 rounded-xl p-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+              <div className="flex justify-between items-center relative z-10">
+                <div>
+                  <h3 className="text-gray-400 text-sm mb-2 uppercase tracking-wider font-bold">Total Admin Pool Reserves</h3>
+                  <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 drop-shadow-sm font-mono">
+                    {poolCoins === null ? '—' : poolCoins.toLocaleString()}
+                  </div>
+                  <div className="text-lg text-green-400 font-mono mt-2 font-medium">
+                    {poolCoins ? formatUSD(poolCoins) : '$0.00'} Cash Value
+                  </div>
+                </div>
+                <div className="hidden md:block bg-emerald-500/10 p-6 rounded-2xl border border-emerald-500/20">
+                  <Building className="w-12 h-12 text-emerald-400" />
+                </div>
+              </div>
+            </div>
+
             {/* Overview & Buckets */}
             {allocationLoading ? (
               <div className="p-8 text-center text-gray-400">Loading allocations...</div>

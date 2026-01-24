@@ -16,12 +16,14 @@ export default function ProfileSettings() {
   
   // Profile Edit State
   const [username, setUsername] = useState('')
+  const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
 
   useEffect(() => {
     if (profile) {
       setUsername(profile.username || '')
+      setFullName((profile as any).full_name || '')
       setBio(profile.bio || '')
     }
   }, [profile])
@@ -62,6 +64,7 @@ export default function ProfileSettings() {
         .from('user_profiles')
         .update({
           username: newUsername,
+          full_name: fullName.trim(),
           bio: bio.trim(),
           updated_at: new Date().toISOString()
         })
@@ -101,6 +104,17 @@ export default function ProfileSettings() {
         <div className="bg-black/40 border border-purple-500/20 rounded-2xl p-6 space-y-4">
           <h2 className="text-xl font-semibold">Profile Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">Full Name</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:border-purple-500 focus:outline-none transition-colors"
+                placeholder="Your Name"
+              />
+              <p className="text-xs text-gray-500">Used for password recovery.</p>
+            </div>
             <div className="space-y-2">
               <label className="text-sm text-gray-400">Username</label>
               <input

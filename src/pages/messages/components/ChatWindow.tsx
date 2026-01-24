@@ -52,7 +52,6 @@ export default function ChatWindow({
 
   const ensureConversationId = useCallback(async () => {
     if (!profile?.id || !otherUserId) return null
-    if (conversationId) return conversationId
 
     try {
       const { data: myMemberships, error: myError } = await supabase
@@ -90,7 +89,7 @@ export default function ChatWindow({
       setLoading(false)
       return null
     }
-  }, [profile?.id, otherUserId, conversationId])
+  }, [profile?.id, otherUserId])
 
   const loadMessages = useCallback(async (options?: { background?: boolean }) => {
     const background = options?.background ?? false
@@ -278,6 +277,8 @@ export default function ChatWindow({
     let cancelled = false
 
     const init = async () => {
+      setMessages([]) // Clear messages from previous conversation
+      setConversationId(null) // Reset conversation ID
       setLoading(true)
       const id = await ensureConversationId()
       if (!cancelled && id) {

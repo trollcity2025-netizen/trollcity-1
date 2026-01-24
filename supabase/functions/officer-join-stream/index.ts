@@ -86,7 +86,8 @@ Deno.serve(async (req) => {
         last_activity: now
       });
 
-    // Start a new work session
+    // Start a new work session - REMOVED per user request for manual clock-in only
+    /*
     if (!insertError) {
       await supabase
         .from("officer_work_sessions")
@@ -96,6 +97,7 @@ Deno.serve(async (req) => {
           clock_in: now
         });
     }
+    */
 
     if (insertError) {
       console.error("Insert error:", insertError);

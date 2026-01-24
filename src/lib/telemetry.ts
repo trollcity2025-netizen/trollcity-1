@@ -71,6 +71,12 @@ export function addBreadcrumb(breadcrumb: Omit<Breadcrumb, 'timestamp'>) {
 }
 
 export async function trackEvent(event: Omit<TelemetryEvent, 'session_id' | 'device' | 'browser' | 'os' | 'breadcrumbs'>) {
+  // Skip sending telemetry in development to avoid 500 errors when local backend is not running
+  if (import.meta.env.DEV) {
+    // console.debug('[Telemetry Skipped]', event.event_type, event.message);
+    return;
+  }
+
   const { browser, os, device } = getBrowserInfo();
   
   const payload: TelemetryEvent = {

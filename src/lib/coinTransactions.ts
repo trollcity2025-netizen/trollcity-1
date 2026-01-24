@@ -561,7 +561,7 @@ export async function addCoins(params: {
           .from('family_members')
           .select('family_id')
           .eq('user_id', userId)
-          .single()
+          .maybeSingle()
 
         if (familyMember?.family_id) {
           const familyBonus = Math.floor(amount * 0.10) // 10% of earned coins

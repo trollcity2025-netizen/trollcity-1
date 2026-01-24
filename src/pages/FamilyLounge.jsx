@@ -277,8 +277,9 @@ const FamilyLounge = () => {
   }, [user, loadFamilyData])
 
   const contributeToTask = async (taskId) => {
+    // This function is now deprecated for manual contribution to auto-tracked tasks
+    // But kept for any manual tasks if they exist
     try {
-      // Increment task progress (simplified - in real implementation this would be based on actual metrics)
       const { error } = await supabase.rpc('increment_task_progress', {
         p_task_id: taskId,
         p_increment: 1
@@ -287,11 +288,23 @@ const FamilyLounge = () => {
       if (error) throw error
 
       toast.success('Contribution recorded!')
-      loadFamilyData() // Refresh data
+      loadFamilyData() 
     } catch (error) {
       console.error('Error contributing to task:', error)
       toast.error('Failed to record contribution')
     }
+  }
+
+  // Helper to check if task is auto-tracked
+  const isAutoTracked = (metric) => {
+    const autoMetrics = [
+      'family_members_recruited',
+      'streams_started', 
+      'gifts_sent',
+      'wars_declared',
+      'wars_won'
+    ]
+    return autoMetrics.includes(metric)
   }
 
   const getEventIcon = (eventType) => {
@@ -590,12 +603,22 @@ const FamilyLounge = () => {
                       ></div>
                     </div>
                     {memberRole !== 'member' && (
-                      <button
-                        onClick={() => contributeToTask(task.id)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition-colors"
-                      >
-                        Contribute
-                      </button>
+                      isAutoTracked(task.metric) ? (
+                        <button
+                          disabled
+                          className="px-4 py-2 bg-zinc-700 text-gray-400 rounded-lg text-sm font-semibold cursor-not-allowed border border-zinc-600"
+                          title="This task tracks progress automatically"
+                        >
+                          Auto Tracked
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => contributeToTask(task.id)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          Contribute
+                        </button>
+                      )
                     )}
                   </div>
                 )

@@ -515,27 +515,6 @@ const Auth = () => {
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="px-3 bg-slate-900/60 text-slate-400">Or continue with</span>
-          </div>
-        </div>
-
-        {/* Google Button */}
-        <button
-          onClick={handleGoogle}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white hover:bg-slate-800/70 hover:border-cyan-400/30 transition-all duration-300 disabled:opacity-50"
-          type="button"
-        >
-          <span className="text-lg font-bold">G</span>
-          Continue with Google
-        </button>
-
         {installPrompt && !installed && (
           <div className="mt-6 p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-xl">
             <div className="text-xs text-slate-300 mb-3 text-center">Install the app now. Use the same login on web and app.</div>

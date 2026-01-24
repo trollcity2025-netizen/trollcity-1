@@ -49,7 +49,7 @@ export default function PasswordReset() {
         <div className="text-sm text-gray-400 space-y-1">
           <p>To reset your password, enter:</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>Your registered <span className="text-gray-300 font-medium">full legal name</span>.</li>
+            <li>Your registered <span className="text-gray-300 font-medium">full name</span> (as set in Profile).</li>
             <li>Your <span className="text-gray-300 font-medium">account email address</span>.</li>
             <li>Your <span className="text-gray-300 font-medium">6-digit PIN</span> (set in Profile Settings).</li>
           </ul>

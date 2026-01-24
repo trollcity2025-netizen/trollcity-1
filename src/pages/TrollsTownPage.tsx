@@ -341,6 +341,7 @@ const TrollsTownPage: React.FC = () => {
   const [transactions, setTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const [sellingToBank, setSellingToBank] = useState(false)
+  const [sellingAllToBank, setSellingAllToBank] = useState(false)
 
   const effectiveBalance = useMemo(() => {
     const hookBalance = typeof trollCoins === 'number' ? trollCoins : 0
@@ -749,6 +750,59 @@ const TrollsTownPage: React.FC = () => {
       toast.error(error?.message || 'Failed to sell home to bank')
     } finally {
       setSellingToBank(false)
+    }
+  }
+
+  const handleSellAllHomesToBank = async () => {
+    if (!user || ownedProperties.length === 0) return
+    
+    setSellingAllToBank(true)
+    try {
+      const { data, error } = await supabase.rpc('sell_all_houses_to_bank')
+      
+      if (error) {
+        throw error
+      }
+
+      if (data && (data as any).success === false) {
+        toast.error((data as any).message || 'Failed to sell homes')
+        return
+      }
+
+      await refreshCoins()
+      
+      // Wait a moment for DB propagation
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const { data: properties, error: propError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('owner_user_id', user.id)
+        .order('created_at', { ascending: true })
+        
+      if (propError && propError.code !== 'PGRST116' && propError.code !== 'PGRST106') {
+        throw propError
+      }
+      
+      if (properties && properties.length > 0) {
+        const rows = properties as PropertyRow[]
+        setOwnedProperties(rows)
+        const starter = rows.find(p => p.is_starter)
+        const selected = starter || rows[0]
+        await loadPropertyDetails(selected)
+      } else {
+        setOwnedProperties([])
+        setMyProperty(null)
+        setMyDeed(null)
+        setUpgrades([])
+      }
+      
+      toast.success('All eligible homes sold to bank')
+    } catch (error: any) {
+      console.error('Failed to sell all homes to bank', error)
+      toast.error(error?.message || 'Failed to sell all homes to bank')
+    } finally {
+      setSellingAllToBank(false)
     }
   }
 
@@ -1864,6 +1918,24 @@ const TrollsTownPage: React.FC = () => {
                       className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold disabled:opacity-60"
                     >
                       {sellingToBank ? 'Selling...' : 'Sell Home For Coins'}
+                    </button>
+                  </div>
+
+                  <div className="border border-white/10 rounded-xl p-4 mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-widest">
+                        Sell All Homes To Bank
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Bank buys all eligible homes at system value in one transaction.
+                      </p>
+                    </div>
+                    <button
+                      disabled={sellingAllToBank}
+                      onClick={handleSellAllHomesToBank}
+                      className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold disabled:opacity-60"
+                    >
+                      {sellingAllToBank ? 'Selling All...' : 'Sell All Homes For Coins'}
                     </button>
                   </div>
 

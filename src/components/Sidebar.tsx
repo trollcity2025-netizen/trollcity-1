@@ -34,11 +34,13 @@ import { useAuthStore } from '@/lib/store'
 import { supabase, UserRole } from '@/lib/supabase'
 import { useCoins } from '@/lib/hooks/useCoins'
 import { useXPStore } from '@/stores/useXPStore'
+import { useSidebarUpdates } from '@/hooks/useSidebarUpdates'
 
 export default function Sidebar() {
   const { profile } = useAuthStore()
   const { level, fetchXP, subscribeToXP, unsubscribe } = useXPStore()
   const { balances, loading } = useCoins()
+  const { isUpdated, isCategoryUpdated, markAsViewed } = useSidebarUpdates()
   const location = useLocation()
   const isActive = (path: string) => location.pathname === path
 
@@ -242,38 +244,39 @@ export default function Sidebar() {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar min-h-0">
         {/* Main Group */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} isCollapsed={isSidebarCollapsed}>
-          <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Crown} label="Troll G" to="/trollg" active={isActive('/trollg')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Vote} label="Troting" to="/troting" active={isActive('/troting')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Trophy} label="Leaderboard" to="/leaderboard" active={isActive('/leaderboard')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={TrendingUp} label="Credit Scores" to="/credit-scores" active={isActive('/credit-scores')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Coins} label="Coin Store" to="/store" active={isActive('/store')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Shuffle} label="Creator Switch" to="/creator-switch" active={isActive('/creator-switch')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Scale} label="Troll Court" to="/troll-court" active={isActive('/troll-court')} collapsed={isSidebarCollapsed} />
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Main"} isCollapsed={isSidebarCollapsed} highlight={isCategoryUpdated('Main')}>
+          <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} highlight={isUpdated('/')} onClick={() => markAsViewed('/')} />
+          <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} highlight={isUpdated('/trollstown')} onClick={() => markAsViewed('/trollstown')} />
+          <SidebarItem icon={Crown} label="Troll G" to="/trollg" active={isActive('/trollg')} collapsed={isSidebarCollapsed} highlight={isUpdated('/trollg')} onClick={() => markAsViewed('/trollg')} />
+          <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} highlight={isUpdated('/inventory')} onClick={() => markAsViewed('/inventory')} />
+          <SidebarItem icon={Vote} label="Troting" to="/troting" active={isActive('/troting')} collapsed={isSidebarCollapsed} highlight={isUpdated('/troting')} onClick={() => markAsViewed('/troting')} />
+          <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wall')} onClick={() => markAsViewed('/wall')} />
+          <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} highlight={isUpdated('/marketplace')} onClick={() => markAsViewed('/marketplace')} />
+          <SidebarItem icon={Trophy} label="Leaderboard" to="/leaderboard" active={isActive('/leaderboard')} collapsed={isSidebarCollapsed} highlight={isUpdated('/leaderboard')} onClick={() => markAsViewed('/leaderboard')} />
+          <SidebarItem icon={TrendingUp} label="Credit Scores" to="/credit-scores" active={isActive('/credit-scores')} collapsed={isSidebarCollapsed} highlight={isUpdated('/credit-scores')} onClick={() => markAsViewed('/credit-scores')} />
+          <SidebarItem icon={Coins} label="Coin Store" to="/store" active={isActive('/store')} collapsed={isSidebarCollapsed} highlight={isUpdated('/store')} onClick={() => markAsViewed('/store')} />
+          <SidebarItem icon={Shuffle} label="Creator Switch" to="/creator-switch" active={isActive('/creator-switch')} collapsed={isSidebarCollapsed} highlight={isUpdated('/creator-switch')} onClick={() => markAsViewed('/creator-switch')} />
+          <SidebarItem icon={Scale} label="Troll Court" to="/troll-court" active={isActive('/troll-court')} collapsed={isSidebarCollapsed} highlight={isUpdated('/troll-court')} onClick={() => markAsViewed('/troll-court')} />
         </SidebarGroup>
 
 
 
         {/* Support & Safety */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "Support"} isCollapsed={isSidebarCollapsed}>
-          <SidebarItem icon={LifeBuoy} label="Support" to="/support" active={isActive('/support')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Shield} label="Safety" to="/safety" active={isActive('/safety')} collapsed={isSidebarCollapsed} />
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Support"} isCollapsed={isSidebarCollapsed} highlight={isCategoryUpdated('Support')}>
+          <SidebarItem icon={LifeBuoy} label="Support" to="/support" active={isActive('/support')} collapsed={isSidebarCollapsed} highlight={isUpdated('/support')} onClick={() => markAsViewed('/support')} />
+          <SidebarItem icon={Shield} label="Safety" to="/safety" active={isActive('/safety')} collapsed={isSidebarCollapsed} highlight={isUpdated('/safety')} onClick={() => markAsViewed('/safety')} />
         </SidebarGroup>
 
         {/* Social */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "Social"} isCollapsed={isSidebarCollapsed}>
-          <SidebarItem icon={MessageSquare} label="Messages" to="/messages" active={isActive('/messages')} collapsed={isSidebarCollapsed} />
+        <SidebarGroup title={isSidebarCollapsed ? '' : "Social"} isCollapsed={isSidebarCollapsed} highlight={isCategoryUpdated('Social')}>
+          <SidebarItem icon={MessageSquare} label="Messages" to="/messages" active={isActive('/messages')} collapsed={isSidebarCollapsed} highlight={isUpdated('/messages')} onClick={() => markAsViewed('/messages')} />
           <SidebarItem 
             icon={Waves} 
             label="Public Pool" 
             to="/pool" 
             active={isActive('/pool')} 
             collapsed={isSidebarCollapsed}
+            highlight={isUpdated('/pool')} onClick={() => markAsViewed('/pool')}
             className="text-cyan-400 hover:text-cyan-300"
           />
           {canSeeFamilyLounge && (
@@ -283,6 +286,7 @@ export default function Sidebar() {
               to="/family/lounge" 
               active={location.pathname.startsWith('/family')} 
               collapsed={isSidebarCollapsed}
+              highlight={isUpdated('/family/lounge')} onClick={() => markAsViewed('/family/lounge')}
               className="text-amber-400 hover:text-amber-300"
             />
           )}
@@ -290,7 +294,7 @@ export default function Sidebar() {
 
         {/* Special Access */}
         {(canSeeOfficer || canSeeFamilyLounge || canSeeSecretary || canSeeCourt) && (
-          <SidebarGroup title={isSidebarCollapsed ? '' : "Special Access"} isCollapsed={isSidebarCollapsed}>
+          <SidebarGroup title={isSidebarCollapsed ? '' : "Special Access"} isCollapsed={isSidebarCollapsed} highlight={isCategoryUpdated('Special Access')}>
             {canSeeCourt && (
               <SidebarItem 
                 icon={Gavel} 
@@ -298,6 +302,7 @@ export default function Sidebar() {
                 to="/admin/court-dockets" 
                 active={location.pathname.startsWith('/admin/court-dockets')} 
                 collapsed={isSidebarCollapsed}
+                highlight={isUpdated('/admin/court-dockets')} onClick={() => markAsViewed('/admin/court-dockets')}
                 className="text-orange-400 hover:text-orange-300"
               />
             )}
@@ -309,6 +314,7 @@ export default function Sidebar() {
                   to="/officer/dashboard" 
                   active={location.pathname.startsWith('/officer/dashboard')} 
                   collapsed={isSidebarCollapsed}
+                  highlight={isUpdated('/officer/dashboard')} onClick={() => markAsViewed('/officer/dashboard')}
                   className="text-emerald-400 hover:text-emerald-300"
                 />
                 <SidebarItem 
@@ -317,6 +323,7 @@ export default function Sidebar() {
                   to="/officer/lounge" 
                   active={location.pathname.startsWith('/officer/lounge')} 
                   collapsed={isSidebarCollapsed}
+                  highlight={isUpdated('/officer/lounge')} onClick={() => markAsViewed('/officer/lounge')}
                   className="text-purple-400 hover:text-purple-300"
                 />
                 <SidebarItem 
@@ -325,6 +332,7 @@ export default function Sidebar() {
                   to="/officer/moderation" 
                   active={location.pathname.startsWith('/officer/moderation')} 
                   collapsed={isSidebarCollapsed}
+                  highlight={isUpdated('/officer/moderation')} onClick={() => markAsViewed('/officer/moderation')}
                   className="text-blue-400 hover:text-blue-300"
                 />
               </>
@@ -336,6 +344,7 @@ export default function Sidebar() {
                 to="/lead-officer" 
                 active={location.pathname.startsWith('/lead-officer')} 
                 collapsed={isSidebarCollapsed}
+                highlight={isUpdated('/lead-officer')} onClick={() => markAsViewed('/lead-officer')}
                 className="text-yellow-400 hover:text-yellow-300"
               />
             )}
@@ -346,6 +355,7 @@ export default function Sidebar() {
                   to="/secretary" 
                   active={location.pathname.startsWith('/secretary')} 
                   collapsed={isSidebarCollapsed}
+                  highlight={isUpdated('/secretary')} onClick={() => markAsViewed('/secretary')}
                   className="text-pink-400 hover:text-pink-300"
                 />
             )}
@@ -356,6 +366,7 @@ export default function Sidebar() {
                   to="/admin/applications" 
                   active={location.pathname.startsWith('/admin/applications')} 
                   collapsed={isSidebarCollapsed}
+                  highlight={isUpdated('/admin/applications')} onClick={() => markAsViewed('/admin/applications')}
                   className="text-red-400 hover:text-red-300"
                 />
             )}
@@ -363,9 +374,9 @@ export default function Sidebar() {
         )}
 
         {/* System */}
-        <SidebarGroup title={isSidebarCollapsed ? '' : "System"} isCollapsed={isSidebarCollapsed}>
-          <SidebarItem icon={FileText} label="Applications" to="/application" active={isActive('/application')} collapsed={isSidebarCollapsed} />
-          <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} />
+        <SidebarGroup title={isSidebarCollapsed ? '' : "System"} isCollapsed={isSidebarCollapsed} highlight={isCategoryUpdated('System')}>
+          <SidebarItem icon={FileText} label="Applications" to="/application" active={isActive('/application')} collapsed={isSidebarCollapsed} highlight={isUpdated('/application')} onClick={() => markAsViewed('/application')} />
+          <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wallet')} onClick={() => markAsViewed('/wallet')} />
         </SidebarGroup>
       </div>
 
@@ -394,6 +405,8 @@ function SidebarItem({
   active, 
   collapsed, 
   badge, 
+  highlight,
+  onClick,
   className = '' 
 }: { 
   icon: any, 
@@ -402,17 +415,22 @@ function SidebarItem({
   active: boolean, 
   collapsed: boolean, 
   badge?: string, 
+  highlight?: boolean,
+  onClick?: () => void,
   className?: string 
 }) {
   return (
     <Link
       to={to}
+      onClick={onClick}
       className={`
         relative z-0 bg-transparent
         flex items-center gap-3 px-4 py-2 mx-2 rounded-xl transition-all duration-200 group
         ${active 
           ? 'text-white bg-white/5 border border-white/10 shadow-[0_10px_30px_rgba(109,40,217,0.35)]' 
-          : 'text-gray-300 hover:bg-white/5 hover:text-white border border-transparent'
+          : highlight
+            ? 'text-white bg-gradient-to-r from-red-500/20 via-green-500/20 to-blue-500/20 border border-white/30 shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse'
+            : 'text-gray-300 hover:bg-white/5 hover:text-white border border-transparent'
         }
         ${collapsed ? 'justify-center px-2' : ''}
         ${className}
@@ -420,7 +438,7 @@ function SidebarItem({
       title={collapsed ? label : undefined}
     >
       <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-full bg-gradient-to-b from-purple-500 to-cyan-400 ${active ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`} />
-      <Icon size={20} className={`min-w-[20px] ${active ? 'text-purple-200' : 'group-hover:text-white'}`} />
+      <Icon size={20} className={`min-w-[20px] ${active ? 'text-purple-200' : highlight ? 'text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]' : 'group-hover:text-white'}`} />
       
       {!collapsed && (
         <div className="flex items-center justify-between flex-1 min-w-0">
@@ -430,11 +448,14 @@ function SidebarItem({
               {badge}
             </span>
           )}
+          {highlight && !badge && (
+            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500 shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
+          )}
         </div>
       )}
       
-      {collapsed && badge && (
-        <div className="absolute top-0 right-0 w-2 h-2 bg-purple-600 rounded-full"></div>
+      {collapsed && (badge || highlight) && (
+        <div className={`absolute top-0 right-0 w-2 h-2 rounded-full ${highlight ? 'bg-gradient-to-r from-red-500 via-green-500 to-blue-500 shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'bg-purple-600'}`}></div>
       )}
     </Link>
   )

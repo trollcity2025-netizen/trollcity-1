@@ -4,15 +4,18 @@ const path = require('path');
 
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Use service role key for migrations
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+if (!process.env.DATABASE_URL && (!supabaseUrl || !supabaseKey)) {
+  console.error('Error: DATABASE_URL is missing AND (SUPABASE_URL+SERVICE_KEY) are missing.');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase;
+if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+}
 
 async function applyMigration(filePath) {
   try {
@@ -62,6 +65,12 @@ async function applyMigration(filePath) {
 
     // Fallback: Try to use a system function if available, or just log that we need to run it.
     console.log("Attempting to run via Supabase RPC 'exec_sql' (if exists)...");
+    
+    if (!supabase) {
+         console.error('Supabase keys missing, cannot use RPC fallback.');
+         process.exit(1);
+    }
+
     const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
     
     if (error) {

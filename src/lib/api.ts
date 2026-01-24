@@ -6,12 +6,15 @@ import { trackEvent } from './telemetry'
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Use Supabase edge functions URL for proper API routing
-const API_BASE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_EDGE_FUNCTIONS_URL || 'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1';
 // Centralized API endpoint definitions
 export const API_ENDPOINTS = {
   auth: {
     fixAdminRole: '/auth/fix-admin-role',
     signup: '/auth/signup',
+  },
+  bank: {
+    apply: '/bank-apply',
   },
   payments: {
     status: '/payments-status',
@@ -138,8 +141,11 @@ async function request<T = any>(
       });
     }
 
-    // For LiveKit and broadcast endpoints, try to refresh session if no token or expiring soon
-    if (((!token || sessionExpiringSoon) && (isLiveKitEndpoint || isBroadcastEndpoint))) {
+    // Don't require auth for signup endpoint (user doesn't exist yet)
+    const isSignupEndpoint = endpoint.includes('/auth/signup');
+
+    // For all endpoints (except signup), try to refresh session if no token or expiring soon
+    if (((!token || sessionExpiringSoon) && !isSignupEndpoint)) {
       console.log(`[API ${requestId}] No token or session expiring for ${endpoint}, attempting session refresh...`);
       try {
         const { error: refreshError } = await supabase.auth.refreshSession();
@@ -155,9 +161,6 @@ async function request<T = any>(
         console.warn(`[API ${requestId}] Session refresh error:`, refreshErr);
       }
     }
-
-    // Don't require auth for signup endpoint (user doesn't exist yet)
-    const isSignupEndpoint = endpoint.includes('/auth/signup');
 
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -190,10 +193,73 @@ async function request<T = any>(
     // Merge any additional headers (these can override defaults)
     Object.assign(requestHeaders, headers);
 
-    const response = await fetch(url, {
+    if (endpoint.includes('bank-apply')) {
+      console.log(`[API ${requestId}] bank-apply headers:`, {
+        hasApiKey: !!requestHeaders['apikey'],
+        hasAuth: !!requestHeaders['Authorization'],
+        authHeader: requestHeaders['Authorization']?.substring(0, 20) + '...',
+        tokenAvailable: !!token,
+        sessionExpiringSoon
+      });
+    }
+
+    let response = await fetch(url, {
       ...fetchOptions,
       headers: requestHeaders,
     })
+
+    // Retry logic for 401 Unauthorized
+     if (response.status === 401 && !isSignupEndpoint) {
+       console.log(`[API ${requestId}] 401 Unauthorized. Attempting token refresh and retry...`);
+       try {
+         // Add timeout to prevent hanging indefinitely
+         // Increased timeout to 10s as 5s might be too short for slow connections
+         const refreshPromise = supabase.auth.refreshSession();
+         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 10000));
+         
+         // Check if we already have a new token in memory that differs from the one we sent
+         const currentSession = await supabase.auth.getSession();
+         const currentToken = currentSession?.data?.session?.access_token;
+         
+         let newToken: string | undefined = undefined;
+         
+         if (currentToken && currentToken !== token) {
+            console.log(`[API ${requestId}] Found fresh token in memory, using it.`);
+            newToken = currentToken;
+         } else {
+             const result: any = await Promise.race([refreshPromise, timeoutPromise]);
+             const { error: refreshError } = result;
+
+             if (!refreshError) {
+               const sessionData = await supabase.auth.getSession();
+               newToken = sessionData?.data?.session?.access_token;
+             } else {
+               console.warn(`[API ${requestId}] Token refresh failed during retry:`, refreshError.message);
+               // If refresh fails with specific errors, we might want to sign out, but we'll let the 401 pass through for now
+             }
+         }
+
+         if (newToken) {
+           requestHeaders['Authorization'] = `Bearer ${newToken}`;
+           
+           // Also timeout the retry fetch
+           const fetchPromise = fetch(url, {
+             ...fetchOptions,
+             headers: requestHeaders,
+           });
+           const fetchTimeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Retry fetch timeout')), 10000));
+           
+           response = await Promise.race([fetchPromise, fetchTimeoutPromise]) as Response;
+           console.log(`[API ${requestId}] Retry successful (status: ${response.status})`);
+         }
+       } catch (retryErr: any) {
+         console.error(`[API ${requestId}] Error during retry:`, retryErr);
+         // If we timed out or failed to refresh, we should consider if we need to force logout
+         if (retryErr.message === 'Refresh timeout' || retryErr.message === 'Retry fetch timeout') {
+            console.warn(`[API ${requestId}] Retry timed out. Session may be dead.`);
+         }
+       }
+     }
 
     const contentType = response.headers.get('content-type');
     let data: any;

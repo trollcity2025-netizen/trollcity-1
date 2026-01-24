@@ -92,22 +92,22 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profErr } = await supabaseAdmin
       .from("user_profiles")
-      .select("id, email, legal_full_name, password_reset_pin_hash")
+      .select("id, email, full_name, password_reset_pin_hash")
       .eq("email", email)
-      .eq("legal_full_name", fullName)
+      .eq("full_name", fullName)
       .maybeSingle();
 
     if (profErr) return json({ error: "Lookup failed" }, 500);
     if (!profile?.id) return json({ error: "No matching account found" }, 404);
 
-    let valid = false;
-    if (profile.password_reset_pin_hash) {
-      const computed = await sha256Hex(`${profile.id}:${pin}:${PIN_SALT}`);
-      valid = profile.password_reset_pin_hash === computed;
-    } else {
-      valid = pin === "000000";
+    if (!profile.password_reset_pin_hash) {
+      return json({ error: "Password reset PIN is not set on this account. You cannot reset your password." }, 403);
     }
-    if (!valid) return json({ error: "Invalid PIN" }, 403);
+
+    const computed = await sha256Hex(`${profile.id}:${pin}:${PIN_SALT}`);
+    if (profile.password_reset_pin_hash !== computed) {
+      return json({ error: "Invalid PIN" }, 403);
+    }
 
     const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(profile.id, {
       password: newPassword,

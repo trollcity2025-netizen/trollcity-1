@@ -4,7 +4,7 @@ import { X, MessageSquare, Swords, Users, Settings } from 'lucide-react';
 export interface MoreControlsConfig {
   showFlyingChats: boolean;
   enableBattles: boolean;
-  theme: 'purple' | 'neon' | 'rgb';
+  theme: 'purple' | 'rgb';
 }
 
 interface MoreControlsDrawerProps {
@@ -15,7 +15,7 @@ interface MoreControlsDrawerProps {
   onBattlesToggle: (enabled: boolean) => void;
   onAddGuest: () => void;
   onSettings: () => void;
-  onThemeChange: (theme: 'purple' | 'neon' | 'rgb') => void;
+  onThemeChange: (theme: 'purple' | 'rgb') => void;
   className?: string;
 }
 
@@ -35,8 +35,7 @@ export default function MoreControlsDrawer({
   }
 
   const themeOptions = [
-    { id: 'purple', label: 'Purple', icon: '💜' },
-    { id: 'neon', label: 'Neon', icon: '⚡' },
+    { id: 'purple', label: 'Off', icon: '⚫' },
     { id: 'rgb', label: 'RGB', icon: '🌈' }
   ] as const;
 

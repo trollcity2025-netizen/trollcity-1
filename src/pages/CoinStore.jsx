@@ -1033,6 +1033,15 @@ export default function CoinStore() {
                             </div>
                         </div>
                     ) : (
+                        <div className="p-8 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-center">
+                            <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
+                            <h3 className="text-xl font-bold text-yellow-400 mb-2">Loan System Maintenance</h3>
+                            <p className="text-gray-300 max-w-md mx-auto">
+                                The Troll Bank loan system is currently undergoing scheduled maintenance. 
+                                Please check back later to apply for a new loan.
+                            </p>
+                        </div>
+                        /*
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div>
                                 <h3 className="font-semibold text-white mb-2 text-sm">Apply for a Loan</h3>
@@ -1088,6 +1097,7 @@ export default function CoinStore() {
                                 )}
                             </div>
                         </div>
+                        */
                     )}
                  </div>
 

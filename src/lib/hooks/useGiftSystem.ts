@@ -286,6 +286,17 @@ export function useGiftSystem(
       }
       
       // Return bonus info if awarded, otherwise return true
+      
+      // Auto-track family task: Gift Raid (Gifts Sent)
+      if (user?.id) {
+        // Fire and forget
+        supabase.rpc('track_family_event', { 
+          p_user_id: user.id, 
+          p_metric: 'gifts_sent', 
+          p_increment: 1 
+        }).catch(err => console.error('Error tracking family gift task:', err))
+      }
+
       if (bonusInfo) {
         return { success: true, bonus: bonusInfo }
       }

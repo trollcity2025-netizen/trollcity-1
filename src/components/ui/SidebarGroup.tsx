@@ -7,13 +7,15 @@ interface SidebarGroupProps {
   children: React.ReactNode
   defaultExpanded?: boolean
   isCollapsed?: boolean // Sidebar itself is collapsed
+  highlight?: boolean
 }
 
 export default function SidebarGroup({ 
   title, 
   children, 
   defaultExpanded = false,
-  isCollapsed = false
+  isCollapsed = false,
+  highlight = false
 }: SidebarGroupProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [hoverExpanded, setHoverExpanded] = useState(false)
@@ -40,7 +42,11 @@ export default function SidebarGroup({
     >
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider hover:text-gray-100 transition-colors group"
+        className={`w-full flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all duration-300 group ${
+          highlight 
+            ? 'text-white shadow-[0_0_15px_rgba(255,255,255,0.3)] bg-gradient-to-r from-red-500/20 via-green-500/20 to-blue-500/20 border-y border-white/20 animate-pulse' 
+            : 'text-gray-400 hover:text-gray-100'
+        }`}
       >
         <span className="flex-1 text-left">{title}</span>
         <motion.div
