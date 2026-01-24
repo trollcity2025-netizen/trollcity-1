@@ -386,28 +386,31 @@ function AppContent() {
 
   // Show update toast when update is available
   useEffect(() => {
-    if (updateAvailable) {
-      toast.info("New update available!", {
-        duration: Infinity,
-        description: "A new version of Troll City is available.",
-        action: {
-          label: "Update Now",
-          onClick: () => {
-            if (waitingServiceWorker) {
-              waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-            // Reload after a short delay to allow SW to activate
-            setTimeout(() => {
-              window.location.reload();
-            }, 500);
-          }
-        },
-        onDismiss: () => {
-           // Optional: Remind them later? For now, let them dismiss.
-        }
-      });
+    if (!updateAvailable || !waitingServiceWorker) return;
+
+    if (isStandalone) {
+      waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+      return;
     }
-  }, [updateAvailable, waitingServiceWorker]);
+
+    toast.info("New update available!", {
+      duration: Infinity,
+      description: "A new version of Troll City is available.",
+      action: {
+        label: "Update Now",
+        onClick: () => {
+          waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        }
+      },
+      onDismiss: () => {}
+    });
+  }, [updateAvailable, waitingServiceWorker, isStandalone]);
 
   useEffect(() => {
     if (!user || !isStandalone) return;

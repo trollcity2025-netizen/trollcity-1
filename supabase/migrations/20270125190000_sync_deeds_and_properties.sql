@@ -46,11 +46,32 @@ AND (
     d.owner_username IS DISTINCT FROM up.username
 );
 
--- 4. Fix RLS for Real-time Oversight
--- Ensure the realtime publication includes these tables for admins
-ALTER PUBLICATION supabase_realtime ADD TABLE public.deeds;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.properties;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.deed_transfers;
+49→-- 4. Fix RLS for Real-time Oversight
+50→-- Ensure the realtime publication includes these tables for admins
+51→DO $$
+52→BEGIN
+53→  BEGIN
+54→    ALTER PUBLICATION supabase_realtime ADD TABLE public.deeds;
+55→  EXCEPTION
+56→    WHEN duplicate_object THEN
+57→      NULL;
+58→  END;
+59→
+60→  BEGIN
+61→    ALTER PUBLICATION supabase_realtime ADD TABLE public.properties;
+62→  EXCEPTION
+63→    WHEN duplicate_object THEN
+64→      NULL;
+65→  END;
+66→
+67→  BEGIN
+68→    ALTER PUBLICATION supabase_realtime ADD TABLE public.deed_transfers;
+69→  EXCEPTION
+70→    WHEN duplicate_object THEN
+71→      NULL;
+72→  END;
+73→END;
+74→$$;
 
 -- 5. Create a view or function to help Admin Dashboard fetch all deeds efficiently
 -- This view joins deeds, properties, and profiles for a complete picture

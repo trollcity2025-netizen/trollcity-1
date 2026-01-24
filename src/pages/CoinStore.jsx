@@ -128,8 +128,8 @@ export default function CoinStore() {
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [cashAppModalOpen, setCashAppModalOpen] = useState(false);
-  // Default to PayPal as the payment provider
-  const [selectedProviderId, setSelectedProviderId] = useState('paypal');
+  // Default to CashApp as the payment provider (PayPal temporarily disabled)
+  const [selectedProviderId, setSelectedProviderId] = useState('cashapp');
   const [loadingPay, setLoadingPay] = useState(false);
   const [durationMultiplier, setDurationMultiplier] = useState(1);
   const [effects, setEffects] = useState([]);
@@ -1157,36 +1157,7 @@ export default function CoinStore() {
                       purchaseType: 'troll_pass_bundle'
                     };
                     setSelectedPackage(trollPassPkg);
-                    const provider = paymentProviders.find(p => p.id === selectedProviderId);
-                    if (!provider) return toast.error('No payment provider selected');
-                    
-                    if (provider.id === 'cashapp') {
-                      setCashAppModalOpen(true);
-                      return;
-                    }
-
-                    setLoadingPay(true);
-                    try {
-                      const paymentSession = await provider.createPayment({
-                        userId: user.id,
-                        amount: trollPassPkg.price,
-                        currency: 'USD',
-                        productType: 'troll_pass',
-                        packageId: trollPassPkg.id,
-                        metadata: { coins: trollPassPkg.coins }
-                      });
-                      if (provider.id === 'paypal' && paymentSession.approvalUrl) {
-                        window.location.href = paymentSession.approvalUrl;
-                      } else if (provider.id === 'cashapp') {
-                        setCashAppModalOpen(true);
-                      } else {
-                        toast.error('Unknown provider or missing approval URL');
-                      }
-                    } catch (err) {
-                      toast.error(err.message || 'Failed to start payment');
-                    } finally {
-                      setLoadingPay(false);
-                    }
+                setCashAppModalOpen(true);
                   }} />
                 </div>
                  
@@ -1220,104 +1191,16 @@ export default function CoinStore() {
                           <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">{pkg.emoji}</div>
                           <div className="font-bold text-2xl text-white mb-1">{formatCoins(pkg.coins)}</div>
                           <div className="text-sm text-gray-400 mb-4">Troll Coins</div>
-                          {selectedProviderId === 'paypal' ? (
-                            <PayPalButtons
-                              fundingSource="paypal"
-                              style={{ layout: 'vertical', color: 'gold', shape: 'pill', label: 'checkout', height: 48 }}
-                              disabled={loadingPay}
-                              forceReRender={[pkg.price, pkg.id, user?.id]}
-                              createOrder={async (_data, _actions) => {
-                                setSelectedPackage(pkg);
-                                setLoadingPay(true);
-                                try {
-                                  // Call your backend or edge function to create the order
-                                  const { data, error } = await supabase.functions.invoke('paypal-create-order', {
-                                    body: {
-                                      amount: parseFloat(pkg.price.replace('$','')),
-                                      currency: 'USD',
-                                      userId: user.id,
-                                      productType: 'coins',
-                                      packageId: pkg.id,
-                                      metadata: { coins: pkg.coins }
-                                    }
-                                  });
-                                  
-                                  if (error) throw error;
-                                  if (!data.orderId) throw new Error(data.error || 'Failed to create PayPal order');
-                                  return data.orderId;
-                                } catch (err) {
-                                  toast.error(err.message || 'Failed to create PayPal order');
-                                  throw err;
-                                } finally {
-                                  setLoadingPay(false);
-                                }
-                              }}
-                              onApprove={async (_data, _actions) => {
-                                setLoadingPay(true);
-                                try {
-                                  // Call your edge function to fulfill the purchase
-                                  const { data, error } = await supabase.functions.invoke('fulfill-paypal-purchase', {
-                                    body: {
-                                      orderId: _data.orderID,
-                                      userId: user.id,
-                                      packageId: pkg.id
-                                    }
-                                  });
-                                  
-                                  if (error) throw error;
-                                  if (!data.success) throw new Error(data.error || 'Failed to fulfill PayPal purchase');
-                                  toast.success('Coins credited!');
-                                  refreshCoins();
-                                  showPurchaseCompleteOverlay();
-                                } catch (err) {
-                                  toast.error(err.message || 'Failed to complete PayPal purchase');
-                                } finally {
-                                  setLoadingPay(false);
-                                }
-                              }}
-                              onError={(_err) => {
-                                toast.error('PayPal error');
-                              }}
-                            />
-                          ) : (
-                            <button
-                              onClick={async () => {
-                                setSelectedPackage(pkg);
-                                const provider = paymentProviders.find(p => p.id === selectedProviderId);
-                                if (!provider) return toast.error('No payment provider selected');
-                                
-                                if (provider.id === 'cashapp') {
-                                  setCashAppModalOpen(true);
-                                  return;
-                                }
-
-                                setLoadingPay(true);
-                                try {
-                                  const _paymentSession = await provider.createPayment({
-                                    userId: user.id,
-                                    amount: parseFloat(pkg.price.replace('$','')),
-                                    currency: 'USD',
-                                    productType: 'coins',
-                                    packageId: pkg.id,
-                                    metadata: { coins: pkg.coins }
-                                  });
-                                  if (provider.id === 'cashapp') {
-                                    setCashAppModalOpen(true);
-                                  } else {
-                                    toast.error('Unknown provider or missing approval URL');
-                                  }
-                                } catch (err) {
-                                  toast.error(err.message || 'Failed to start payment');
-                                } finally {
-                                  setLoadingPay(false);
-                                }
-                              }}
-                              className="w-full py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                              disabled={loadingPay}
-                            >
-                              {loadingPay && selectedPackage?.id === pkg.id ? 'Processing...' : pkg.price}
-                            </button>
-                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedPackage(pkg);
+                              setCashAppModalOpen(true);
+                            }}
+                            className="w-full py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                            disabled={loadingPay && selectedPackage?.id === pkg.id}
+                          >
+                            {loadingPay && selectedPackage?.id === pkg.id ? 'Processing...' : pkg.price}
+                          </button>
                         </div>
                       </div>
                     ))}

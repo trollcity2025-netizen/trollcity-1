@@ -40,7 +40,7 @@ export const PayPalProvider: PaymentProvider = {
 
   async capturePayment(sessionId: string, options?: any): Promise<PaymentResult> {
     try {
-      const { data, error } = await supabase.functions.invoke('fulfill-paypal-purchase', {
+      const { data, error } = await supabase.functions.invoke('paypal-complete-order', {
         body: {
           orderId: sessionId,
           userId: options?.userId,
