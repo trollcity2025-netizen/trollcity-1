@@ -58,7 +58,11 @@ self.addEventListener('fetch', (event: any) => {
         try {
           const preloadResp = await event.preloadResponse;
           if (preloadResp) return preloadResp;
+        } catch {
+          // Preload failed, proceed to network
+        }
 
+        try {
           const networkResp = await fetch(req);
           return networkResp;
         } catch {
