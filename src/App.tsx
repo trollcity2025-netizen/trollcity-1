@@ -270,6 +270,7 @@ const LoadingScreen = () => (
       return <Navigate to="/terms" replace />;
     }
     if (
+      profile && // Add this check
       profile?.application_required &&
       !profile?.application_submitted &&
       location.pathname !== "/application"

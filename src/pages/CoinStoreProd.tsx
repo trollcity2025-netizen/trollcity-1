@@ -8,7 +8,8 @@ import { paymentProviders } from '../lib/payments'
 import { toast } from 'sonner'
 
 const coinPackages = [
-  { id: 'pkg-500', coins: 500, price: 4.99, label: '500 Coins', popular: true },
+  { id: 'pkg-1000-promo', coins: 1000, price: 0.10, label: '1,000 Coins', popular: true, promo: true },
+  { id: 'pkg-500', coins: 500, price: 4.99, label: '500 Coins' },
   { id: 'pkg-1000', coins: 1000, price: 9.99, label: '1,000 Coins' },
   { id: 'pkg-2500', coins: 2500, price: 19.99, label: '2,500 Coins', bestValue: true },
   { id: 'pkg-5000', coins: 5000, price: 36.99, label: '5,000 Coins' },
@@ -110,9 +111,10 @@ export default function CoinStoreProd() {
                 }`}
               >
                 <span className="text-3xl">💰</span>
-                <span className="text-lg">{pkg.label}</span>
-                <span className="text-yellow-400 font-bold text-xl">${pkg.price.toFixed(2)}</span>
-                {pkg.popular && <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Popular</span>}
+                <span className="text-lg font-bold text-white">{pkg.label}</span>
+                <span className="text-yellow-400 font-extrabold text-2xl">${pkg.price.toFixed(2)}</span>
+                {pkg.promo && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 animate-pulse">HOT DEAL</span>}
+                {pkg.popular && !pkg.promo && <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Popular</span>}
                 {pkg.bestValue && <span className="text-xs bg-green-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Best Value</span>}
               </button>
             ))}

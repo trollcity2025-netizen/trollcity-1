@@ -18,6 +18,7 @@ import { paymentProviders } from '../lib/payments';
 import { toast } from 'sonner';
 
 const coinPackages = [
+  { id: 'pkg-1000-promo', coins: 1000, price: "$0.10", emoji: "💎", popular: true, promo: true, expiresAt: new Date('2026-01-28T00:51:27Z').getTime() },
   { id: 1, coins: 300, price: "$1.99", emoji: "💰", popular: true },
   { id: 2, coins: 500, price: "$4.99", emoji: "💰", popular: true },
   { id: 3, coins: 1000, price: "$9.99", emoji: "💎" },
@@ -26,7 +27,7 @@ const coinPackages = [
   { id: 6, coins: 10000, price: "$69.99", emoji: "⭐", bestValue: true },
   { id: 7, coins: 13000, price: "$89.99", emoji: "🌟" },
   { id: 8, coins: 20000, price: "$129.00", emoji: "🏆" },
-];
+].filter(p => !p.expiresAt || Date.now() < p.expiresAt);
 
 const SAMPLE_EFFECTS = [
   { id: 'effect_confetti_pop', name: 'Confetti Pop', description: 'Confetti burst', coin_cost: 1000 },
@@ -96,6 +97,19 @@ export default function CoinStore() {
 
   // Calculate Loan Eligibility
   useEffect(() => {
+    // DEBUG: Check if coin_packages table is accessible
+    const debugLoadPackages = async () => {
+      const { data, error } = await supabase
+        .from("coin_packages")
+        .select("*");
+
+      console.log("coin packages data:", data);
+      console.log("coin packages error:", error);
+
+      if (error) throw error;
+    };
+    debugLoadPackages();
+
     if (!user || !tiers.length) return;
 
     const reasons = [];
@@ -718,6 +732,7 @@ export default function CoinStore() {
     setThemePurchasing(theme.id);
           try {
             const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
+              p_user_id: user.id,
               p_theme_id: theme.id,
               p_set_active: false,
             });
@@ -873,6 +888,9 @@ export default function CoinStore() {
         }
       });
 
+      console.log("paypal-complete-order data:", result);
+      console.log("paypal-complete-order error:", error);
+
       if (error) throw error;
       if (!result?.success) throw new Error(result?.error || 'Payment verification failed');
 
@@ -882,7 +900,7 @@ export default function CoinStore() {
       showPurchaseCompleteOverlay();
 
     } catch (err) {
-      console.error('Capture Error:', err);
+      console.error('Capture Error (full):', err);
       toast.error(err.message || 'Payment failed');
     } finally {
       setLoadingPay(false);
@@ -1261,15 +1279,16 @@ export default function CoinStore() {
                 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {coinPackages.map((pkg) => (
-                      <div key={pkg.id} className={`bg-black/40 p-4 rounded-lg border ${pkg.popular || pkg.bestValue ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-purple-500/20'} relative overflow-hidden group`}>
-                        {(pkg.popular || pkg.bestValue) && (
-                          <div className="absolute top-3 right-3 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                            {pkg.popular ? 'Popular' : 'Best Value'}
+                      <div key={pkg.id} className={`bg-black/40 p-4 rounded-lg border ${pkg.promo ? 'border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : (pkg.popular || pkg.bestValue ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-purple-500/20')} relative overflow-hidden group`}>
+                        {(pkg.popular || pkg.bestValue || pkg.promo) && (
+                          <div className={`absolute top-3 right-3 ${pkg.promo ? 'bg-green-500' : 'bg-yellow-500'} text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider`}>
+                            {pkg.promo ? 'Limited Offer' : (pkg.popular ? 'Popular' : 'Best Value')}
                           </div>
                         )}
                         <div className="flex flex-col items-center text-center p-2">
                           <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">{pkg.emoji}</div>
                           <div className="font-bold text-2xl text-white mb-1">{formatCoins(pkg.coins)}</div>
+                          <div className="text-lg font-semibold text-green-400 mb-1">{pkg.price}</div>
                           <div className="text-sm text-gray-400 mb-4">Troll Coins</div>
                           {selectedProviderId === 'paypal' ? (
                             <PayPalButtons

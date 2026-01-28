@@ -78,21 +78,21 @@ export default function TrollBattlesSetup({ streamId, onOpponentFound, onCancel:
         // Check if we have been matched
         const { data } = await supabase
             .from('troll_battles')
-            .select('*, player1:player1_id(username, avatar_url, level), player2:player2_id(username, avatar_url, level)')
-            .or(`player1_id.eq.${user?.id},player2_id.eq.${user?.id}`)
+            .select('*, host:host_id(username, avatar_url, level), challenger:challenger_id(username, avatar_url, level)')
+            .or(`host_id.eq.${user?.id},challenger_id.eq.${user?.id}`)
             .eq('status', 'pending')
             .maybeSingle();
 
         if (data) {
-            const isPlayer1 = data.player1_id === user?.id;
-            const opp = isPlayer1 ? data.player2 : data.player1;
+            const isHost = data.host_id === user?.id;
+            const opp = isHost ? data.challenger : data.host;
             setBattleId(data.id);
             setOpponent(opp);
             setStatus('matched');
             
             // Auto-assign top guests if we are the host/broadcaster
             if (streamId) {
-                assignTopGuests(data.id, isPlayer1);
+                assignTopGuests(data.id, isHost);
             }
         }
     };

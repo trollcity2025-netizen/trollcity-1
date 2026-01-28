@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
                 currency_code: 'USD',
                 value: amount.toString()
             },
+            description: `${coins.toLocaleString()} Troll Coins`,
             custom_id: JSON.stringify({ user_id, package_id, coins })
         }]
     }

@@ -16,8 +16,17 @@ interface CoinPackage {
   bestValue?: boolean;
 }
 
+const PROMO_EXPIRY = new Date('2026-01-28T00:51:27Z').getTime();
+
 const coinPackages: CoinPackage[] = [
-  { id: 2, coins: 500, price: "$4.99", emoji: "💰", popular: true },
+  { 
+    id: 1, 
+    coins: 1000, 
+    price: Date.now() < PROMO_EXPIRY ? "$0.10" : "$1.00", 
+    emoji: "🔥", 
+    popular: true 
+  },
+  { id: 2, coins: 500, price: "$4.99", emoji: "💰" },
   { id: 3, coins: 1000, price: "$9.99", emoji: "💎" },
   { id: 4, coins: 2500, price: "$19.99", emoji: "👑" },
   { id: 5, coins: 5000, price: "$39.99", emoji: "🚀" },

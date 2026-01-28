@@ -4,6 +4,7 @@ import { Room, Participant } from 'livekit-client'
 import ResponsiveVideoGrid from '../stream/ResponsiveVideoGrid'
 import { supabase } from '../../lib/supabase'
 
+
 interface BroadcastLayoutProps {
   room: Room
   streamId?: string
@@ -19,7 +20,6 @@ interface BroadcastLayoutProps {
   onDisableGuestMedia?: (participantId: string, disableVideo?: boolean, disableAudio?: boolean) => void
   giftBalanceDelta?: { userId: string; delta: number; key: number } | null
   backgroundStyle?: React.CSSProperties
-  children?: React.ReactNode
   onSeatAction?: (params: { seatIndex: number; seat: any; participant?: any }) => void
   hostSeatIndex?: number
   onHostSeatChange?: (seatIndex: number) => void
@@ -29,6 +29,7 @@ interface BroadcastLayoutProps {
   onSetPrice?: (price: number) => void
 }
 
+
 export default function BroadcastLayout({
   giftBalanceDelta,
   room,
@@ -37,7 +38,7 @@ export default function BroadcastLayout({
   isHost,
   className,
   joinPrice = 0,
-  boxCount = 0,
+  boxCount = 5,
   seats,
   lastGift,
   onJoinRequest,
@@ -45,7 +46,6 @@ export default function BroadcastLayout({
   onDisableGuestMedia,
   onSeatAction,
   backgroundStyle,
-  children,
   hostSeatIndex,
   onHostSeatChange,
   onUserClick,
@@ -215,8 +215,9 @@ export default function BroadcastLayout({
   if (!room) return null;
 
   return (
-    <div className={`relative w-full min-h-0 overflow-visible ${className || ''}`} style={backgroundStyle}>
-      <div className="relative z-10">
+    <div className="flex flex-1 min-h-0 bg-black text-white">
+      {/* VIDEO AREA */}
+      <div className="flex-1 p-4">
         <ResponsiveVideoGrid
           participants={participants}
           localParticipant={room.localParticipant}
@@ -236,10 +237,6 @@ export default function BroadcastLayout({
           onToggleCamera={onToggleCamera}
           isCameraOn={isCameraOn}
         />
-      </div>
-
-      <div className="absolute inset-0 pointer-events-none z-20">
-        {children}
       </div>
     </div>
   );

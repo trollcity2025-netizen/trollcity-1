@@ -1,0 +1,15 @@
+# Troll City LLM Documentation
+
+This project is a social streaming platform built with React, Supabase, and LiveKit.
+
+## Core Concepts
+
+- **Troll Coins**: The main currency used for gifts and battles.
+- **Battles**: 1v1 streaming competitions where viewers determine the winner via gifts.
+- **Streams**: Live video broadcasts powered by LiveKit.
+
+## Architecture
+
+- Frontend: React + Vite + TailwindCSS
+- Backend: Supabase (PostgreSQL + Edge Functions)
+- Realtime: Supabase Realtime + LiveKit

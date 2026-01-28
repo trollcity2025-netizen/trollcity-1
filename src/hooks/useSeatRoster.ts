@@ -77,12 +77,10 @@ export function useSeatRoster(roomName: string = DEFAULT_ROOM) {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await api.request(API_ENDPOINTS.broadcastSeats.list, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'list',
+      const response = await api.get(API_ENDPOINTS.broadcastSeats.list, {
+        params: {
           room: roomName,
-        }),
+        },
       })
 
       const { data, error: invokeError } = response

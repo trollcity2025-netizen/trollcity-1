@@ -47,23 +47,12 @@ export default function ResponsiveVideoGrid({
     participants[0] ||
     null;
 
-  const [frameMode, setFrameMode] = React.useState<'none' | 'neon' | 'rgb'>(() => {
-    if (typeof window === 'undefined') return 'neon';
+  const [frameMode, setFrameMode] = React.useState<'none' | 'rgb'>(() => {
+    if (typeof window === 'undefined') return 'none';
     const stored = window.localStorage.getItem('troll_frame_mode');
-    if (stored === 'none' || stored === 'neon' || stored === 'rgb') return stored;
-    return 'neon';
+    if (stored === 'none' || stored === 'rgb') return stored;
+    return 'none';
   });
-
-  const [neonColor, setNeonColor] = React.useState<string>(() => {
-    if (typeof window === 'undefined') return 'purple';
-    return window.localStorage.getItem('troll_neon_color') || 'purple';
-  });
-  const neonColors = ['purple', 'blue', 'green', 'red', 'pink', 'yellow', 'cyan', 'orange'];
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('troll_neon_color', neonColor);
-  }, [neonColor]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -107,34 +96,16 @@ export default function ResponsiveVideoGrid({
     return null;
   }
 
-  const getNeonStyle = (color: string) => {
-    const colorMap: Record<string, string> = {
-      purple: 'border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.7)]',
-      blue: 'border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.7)]',
-      green: 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.7)]',
-      red: 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.7)]',
-      pink: 'border-pink-400 shadow-[0_0_20px_rgba(244,114,182,0.7)]',
-      yellow: 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.7)]',
-      cyan: 'border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.7)]',
-      orange: 'border-orange-400 shadow-[0_0_20px_rgba(251,146,60,0.7)]'
-    };
-    return `border-2 ${colorMap[color] || colorMap['purple']} animate-neon-pulse`;
-  };
-
   const hostFrameClass =
-    frameMode === 'neon'
-      ? getNeonStyle(neonColor)
-      : frameMode === 'rgb'
-        ? 'border-2 border-transparent rgb-frame'
-        : 'border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]';
+    frameMode === 'rgb'
+      ? 'border-2 border-transparent rgb-frame'
+      : 'border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]';
 
   const guestFrameClass = (position: string) => {
     const baseClass =
-      frameMode === 'neon'
-        ? getNeonStyle(neonColor)
-        : frameMode === 'rgb'
-          ? 'border border-transparent rgb-frame-small'
-          : 'border border-purple-500/20 hover:border-purple-500/40';
+      frameMode === 'rgb'
+        ? 'border border-transparent rgb-frame-small'
+        : 'border border-purple-500/20 hover:border-purple-500/40';
 
     // Keep positional class for testing/debugging and potential layout tweaks
     const safePosition = position?.toString().replace(/[^a-z0-9-_]/gi, '').toLowerCase() || 'slot';
@@ -145,22 +116,6 @@ export default function ResponsiveVideoGrid({
     <div className="w-full h-auto min-h-0 flex flex-col gap-3 p-2 md:p-4">
       {canControlFrames && (
         <div className="flex items-center justify-end gap-2 mb-1 text-[11px] sm:text-xs">
-          {frameMode === 'neon' && (
-            <div className="flex items-center gap-1 pr-1">
-              <select
-                value={neonColor}
-                onChange={(e) => setNeonColor(e.target.value)}
-                className="bg-zinc-800 text-white text-xs border border-zinc-600 rounded px-2 py-1 outline-none focus:border-purple-500"
-                aria-label="Select neon color"
-              >
-                {neonColors.map((c) => (
-                  <option key={c} value={c}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <span className="text-gray-400">Frames</span>
           <button
             type="button"
@@ -172,17 +127,6 @@ export default function ResponsiveVideoGrid({
             }`}
           >
             Off
-          </button>
-          <button
-            type="button"
-            onClick={() => setFrameMode('neon')}
-            className={`px-2 py-1 rounded-full border text-xs ${
-              frameMode === 'neon'
-                ? 'bg-purple-700 border-purple-400 text-white shadow-[0_0_16px_rgba(168,85,247,0.8)]'
-                : 'bg-transparent border-purple-700 text-purple-300'
-            }`}
-          >
-            Neon
           </button>
           <button
             type="button"
@@ -223,7 +167,6 @@ export default function ResponsiveVideoGrid({
             style={{ width: '100%', height: '100%' }}
             onClick={() => onUserClick?.(broadcaster)}
             frameMode={frameMode}
-            neonColor={neonColor}
           />
           
           {/* Broadcaster Controls Overlay (Start Camera) */}
@@ -297,11 +240,10 @@ export default function ResponsiveVideoGrid({
                       : undefined
                   }
                   frameMode={frameMode}
-                  neonColor={neonColor}
                 />
               ) : slot.isActive ? (
-                <div className={`w-full h-full flex items-center justify-center cursor-pointer transition-colors border-2 border-dashed ${frameMode === 'neon' ? 'border-purple-500/30 hover:border-purple-500/60 bg-purple-500/5' : 'border-white/10 hover:border-white/30 bg-white/5'}`}>
-                  <div className={`text-4xl font-bold transition-colors ${frameMode === 'neon' ? 'text-purple-400/50 group-hover:text-purple-400' : 'text-white/20 group-hover:text-white/40'}`}>
+                <div className={`w-full h-full flex items-center justify-center cursor-pointer transition-colors border-2 border-dashed ${'border-white/10 hover:border-white/30 bg-white/5'}`}>
+                  <div className={`text-4xl font-bold transition-colors ${'text-white/20 group-hover:text-white/40'}`}>
                     +
                   </div>
                 </div>

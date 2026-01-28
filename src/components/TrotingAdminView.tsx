@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { Check, X, Loader2, DollarSign, Settings } from 'lucide-react'
+import { Check, X, Loader2, DollarSign, Settings, Trash2 } from 'lucide-react'
 
 interface Pitch {
   id: string
@@ -9,6 +9,8 @@ interface Pitch {
   description: string
   status: string
   vote_count: number
+  up_votes: number
+  down_votes: number
   author: {
     username: string
     avatar_url: string
@@ -19,6 +21,7 @@ interface Contest {
   id: string
   status: string
   week_start: string
+  week_end: string
   title?: string
 }
 
@@ -33,6 +36,7 @@ export default function TrotingAdminView() {
   const [newSplitUser, setNewSplitUser] = useState('')
   const [newSplitPercent, setNewSplitPercent] = useState('')
   const [formTitle, setFormTitle] = useState('')
+  const [duration, setDuration] = useState('7') // Default 1 week
 
   useEffect(() => {
     loadContests()
@@ -128,6 +132,28 @@ export default function TrotingAdminView() {
     setLoading(false)
   }
 
+  const deletePitch = async (pitchId: string) => {
+    if (!window.confirm('Are you sure you want to delete this pitch?')) return
+    
+    setActionLoading(pitchId)
+    try {
+      const { error } = await supabase
+        .from('pitches')
+        .delete()
+        .eq('id', pitchId)
+
+      if (error) throw error
+      
+      setPitches(current => current.filter(p => p.id !== pitchId))
+      toast.success('Pitch deleted')
+    } catch (err) {
+      console.error('Error deleting pitch:', err)
+      toast.error('Failed to delete pitch')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const updatePitchStatus = async (pitchId: string, status: string) => {
     setActionLoading(pitchId)
     try {
@@ -201,6 +227,30 @@ export default function TrotingAdminView() {
     }
   }
 
+  const deleteAllContests = async () => {
+    if (!window.confirm('WARNING: This will delete ALL contests, pitches, votes, and revenue splits. This action cannot be undone. Are you sure?')) return
+    
+    if (!window.confirm('Last chance: Are you absolutely sure you want to wipe all contest data?')) return
+
+    try {
+      // Delete all contests where id is not empty (effectively all)
+      const { error } = await supabase
+        .from('pitch_contests')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000')
+
+      if (error) throw error
+      
+      setContests([])
+      setSelectedContest(null)
+      setPitches([])
+      toast.success('All contests deleted')
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to delete all contests')
+    }
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
@@ -235,6 +285,14 @@ export default function TrotingAdminView() {
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
           >
             + New Contest
+          </button>
+
+          <button
+            onClick={deleteAllContests}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+            title="Delete ALL Contests"
+          >
+            <Trash2 className="w-5 h-5" />
           </button>
 
           <div className="h-8 w-px bg-zinc-700 mx-2" />
@@ -275,7 +333,12 @@ export default function TrotingAdminView() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-white">{pitch.title}</h4>
-                    <p className="text-sm text-gray-400">by {pitch.author?.username} • {pitch.vote_count} votes</p>
+                    <p className="text-sm text-gray-400">
+                      by {pitch.author?.username} • 
+                      <span className="text-green-400 ml-1">+{pitch.up_votes || 0}</span> / 
+                      <span className="text-red-400 ml-1">-{pitch.down_votes || 0}</span> • 
+                      Total: {pitch.vote_count}
+                    </p>
                   </div>
                 </div>
 
@@ -312,6 +375,14 @@ export default function TrotingAdminView() {
                     title="Manage Revenue Splits"
                   >
                     <DollarSign className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => deletePitch(pitch.id)}
+                    disabled={actionLoading === pitch.id}
+                    className="p-2 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-lg transition-colors"
+                    title="Delete Pitch"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

@@ -280,7 +280,6 @@
 }
 
 /* Frame Styles - Maintain proportions at all sizes */
-.frame-neon,
 .frame-rgb,
 .frame-default {
   box-sizing: border-box;
@@ -510,20 +509,6 @@
 }
 
 /* ================== ANIMATIONS ================== */
-
-/* Neon pulse animation for frames */
-@keyframes neon-pulse {
-  0%, 100% {
-    box-shadow: 0 0 20px currentColor;
-  }
-  50% {
-    box-shadow: 0 0 30px currentColor, 0 0 40px currentColor;
-  }
-}
-
-.animate-neon-pulse {
-  animation: neon-pulse 2s ease-in-out infinite;
-}
 
 /* RGB rotating border animation */
 @keyframes rgb-rotate {

@@ -81,48 +81,66 @@ Deno.serve(async (req) => {
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token as string;
 
-    const captureRes = await fetch(
-      `${baseUrl}/v2/checkout/orders/${orderId}/capture`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    if (!captureRes.ok) {
-      const text = await captureRes.text();
-      console.error("PayPal capture error:", text);
-      throw new Error("Failed to capture PayPal order");
+    // Fetch order first
+    const orderRes = await fetch(`${baseUrl}/v2/checkout/orders/${orderId}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    });
+    if (!orderRes.ok) {
+      const text = await orderRes.text();
+      console.error("PayPal get order error:", text);
+      throw new Error("Failed to fetch PayPal order");
     }
 
-    const captureData: any = await captureRes.json();
+    let orderData: any = await orderRes.json();
+    let status: string = orderData?.status ?? "";
 
-    const status: string =
-      captureData?.status ??
-      captureData?.purchase_units?.[0]?.payments?.captures?.[0]?.status ??
-      "";
+    // Capture only if approved
+    if (status === "APPROVED") {
+      const captureRes = await fetch(`${baseUrl}/v2/checkout/orders/${orderId}/capture`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      });
 
-    if (status !== "COMPLETED") {
+      if (!captureRes.ok) {
+        const text = await captureRes.text();
+        console.error("PayPal capture error:", text);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Failed to capture PayPal order",
+          paypal_details: text,
+          orderId,
+          mode: Deno.env.get("PAYPAL_MODE"),
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }});
+      }
+
+      orderData = await captureRes.json();
+      status = orderData?.status ?? "";
+    }
+
+    // Accept already completed
+    const completed =
+      status === "COMPLETED" ||
+      orderData?.purchase_units?.[0]?.payments?.captures?.[0]?.status === "COMPLETED";
+
+    if (!completed) {
       throw new Error(`Payment not completed (status: ${status || "unknown"})`);
     }
 
     const capture =
-      captureData?.purchase_units?.[0]?.payments?.captures?.[0] ?? null;
+      orderData?.purchase_units?.[0]?.payments?.captures?.[0] ?? null;
 
     const captureId: string | null = capture?.id ?? null;
 
     const amountValueString: string =
       capture?.amount?.value ??
-      captureData?.purchase_units?.[0]?.amount?.value ??
+      orderData?.purchase_units?.[0]?.amount?.value ??
       "0";
 
     const verifiedAmount = parseFloat(amountValueString || "0");
     const verifiedCurrency: string =
       capture?.amount?.currency_code ??
-      captureData?.purchase_units?.[0]?.amount?.currency_code ??
+      orderData?.purchase_units?.[0]?.amount?.currency_code ??
       "USD";
 
     // 2. Determine how many coins to credit
@@ -131,6 +149,8 @@ Deno.serve(async (req) => {
     if (packageId) {
       if (String(packageId) === 'troll_pass_bundle') {
         coinsToCredit = 1500;
+      } else if (String(packageId) === 'pkg-1000-promo') {
+        coinsToCredit = 1000;
       } else if (String(packageId).startsWith("custom_")) {
         const parts = String(packageId).split("_");
         const raw = parts[1];
@@ -151,7 +171,8 @@ Deno.serve(async (req) => {
         }
 
         if (!pkg?.coins || pkg.coins <= 0) {
-          throw new Error("Invalid coin package");
+          console.error(`Invalid coin package ID: ${packageId}`);
+          throw new Error(`Invalid coin package: ${packageId}`);
         }
 
         coinsToCredit = pkg.coins;

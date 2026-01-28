@@ -7,6 +7,14 @@ export default function Changelog() {
   const { profile } = useAuthStore()
   const navigate = useNavigate()
 
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-[#0A0814] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+      </div>
+    )
+  }
+
   // Prevent refresh redirect - only redirect if not admin
   useEffect(() => {
     if (profile?.role !== 'admin') {

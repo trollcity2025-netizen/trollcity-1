@@ -278,6 +278,7 @@ export default function AdminDashboard() {
         taxReviewsRes,
         supportRes,
         alertsRes,
+        paypalRevenueRes,
       ] = await Promise.all([
         supabase.from('user_profiles').select('id'),
         supabase.from('user_profiles').select('id').eq('role', 'admin'),
@@ -292,6 +293,7 @@ export default function AdminDashboard() {
         supabase.from('user_tax_info').select('id').eq('status', 'pending'),
         supabase.from('support_tickets').select('id').eq('status', 'open'),
         supabase.from('system_alerts').select('id').eq('status', 'unread'),
+        supabase.from('view_admin_coin_revenue').select('*'),
       ])
 
       const users = usersRes.data || []
@@ -303,6 +305,7 @@ export default function AdminDashboard() {
       const taxReviews = taxReviewsRes.data || []
       const supportTickets = supportRes.data || []
       const alerts = alertsRes.data || []
+      const paypalRevenueData = paypalRevenueRes.data || []
 
       const balances = balancesRes.data || []
       let purchasedCoins = 0

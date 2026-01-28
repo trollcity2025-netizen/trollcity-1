@@ -659,7 +659,7 @@ export default function LivePage() {
   const [joinPrice, setJoinPrice] = useState(0);
   const [showTrollBattles, setShowTrollBattles] = useState(false);
   const [activeBattle, setActiveBattle] = useState<{id: string, player1_id: string, player2_id: string, status: string} | null>(null);
-  const [boxCount, setBoxCount] = useState(6);
+  const [boxCount, setBoxCount] = useState(0);
   const [seatBans, setSeatBans] = useState<SeatBan[]>([]);
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
@@ -748,9 +748,9 @@ export default function LivePage() {
         const parsed = parseInt(parts[1], 10);
         if (Number.isNaN(parsed)) return;
 
-        const maxBoxes = 6;
+        const maxBoxes = 5;
         const next = Math.max(0, Math.min(maxBoxes, parsed));
-        setBoxCount(next);
+        setBoxCount(next === 0 ? 5 : next);
       } catch (err) {
         console.error('Failed to refresh box count from messages:', err);
       }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { Vote, Calendar, Trophy, Plus, AlertCircle, Loader2, XCircle, ShieldAlert } from 'lucide-react'
+import { Vote, Calendar, Trophy, Plus, AlertCircle, Loader2, XCircle, ShieldAlert, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { getWeeklyTopBroadcasters } from '../lib/leaderboards'
 import TrotingAdminView from '../components/TrotingAdminView'
 
@@ -11,8 +11,10 @@ interface Pitch {
   title: string
   description: string
   image_url?: string
-  author_id: string
+  user_id: string
   vote_count: number
+  up_votes: number
+  down_votes: number
   created_at: string
   author?: {
     username: string
@@ -127,10 +129,6 @@ export default function Troting() {
   const handleVote = async (pitch: Pitch) => {
     if (!user) return
     
-    // Confirm dialog
-    const confirm = window.confirm(`Vote for "${pitch.title}"? This will cost 10 Troll Coins.`)
-    if (!confirm) return
-
     try {
       setVotingId(pitch.id)
       
@@ -142,7 +140,7 @@ export default function Troting() {
       if (error) throw error
 
       if (data.success) {
-        toast.success(`Voted for ${pitch.title}! Remaining balance: ${data.new_balance}`)
+        toast.success(`Voted for ${pitch.title}!`)
         // Update local state optimistically or wait for subscription
       } else {
         toast.error(data.error || 'Failed to vote')
@@ -152,6 +150,27 @@ export default function Troting() {
       toast.error('Failed to process vote')
     } finally {
       setVotingId(null)
+    }
+  }
+
+  const handleDeletePitch = async (pitch: Pitch) => {
+    if (!isAdmin && user?.id !== pitch.user_id) return
+    
+    if (!window.confirm('Are you sure you want to delete this pitch?')) return
+
+    try {
+      const { error } = await supabase
+        .from('pitches')
+        .delete()
+        .eq('id', pitch.id)
+
+      if (error) throw error
+
+      toast.success('Pitch deleted')
+      loadContest()
+    } catch (err) {
+      console.error('Delete error:', err)
+      toast.error('Failed to delete pitch')
     }
   }
 
@@ -166,7 +185,7 @@ export default function Troting() {
         .from('pitches')
         .insert({
           contest_id: contest.id,
-          author_id: user.id,
+          user_id: user.id,
           title,
           description,
           status: 'approved' // Auto-approve for now or 'pending' if moderation needed
@@ -207,7 +226,7 @@ export default function Troting() {
             </div>
           </div>
           
-          {isEligible && contest?.status === 'submission' && (
+          {contest?.status === 'submission' && (
             <button
               onClick={() => setShowSubmitModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors"
@@ -294,7 +313,7 @@ export default function Troting() {
                     </span>
                   </div>
                   <p className="text-gray-300">
-                    Vote for your favorite broadcaster idea! Each vote costs 10 Troll Coins.
+                    Vote for your favorite broadcaster idea! Voting is free.
                     {contest.status === 'submission' && ' Voting starts soon.'}
                   </p>
                 </div>
@@ -305,7 +324,7 @@ export default function Troting() {
                       <div className="p-6">
                         <div className="flex items-center gap-3 mb-4">
                           <img 
-                            src={pitch.author?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${pitch.author_id}`} 
+                            src={pitch.author?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${pitch.user_id}`} 
                             alt={pitch.author?.username}
                             className="w-10 h-10 rounded-full bg-gray-800"
                           />
@@ -326,19 +345,34 @@ export default function Troting() {
                           </div>
                           
                           {contest.status === 'voting' && (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => handleVote(pitch, 'up')}
+                                    disabled={votingId === pitch.id}
+                                    className="px-3 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    <ThumbsUp className="w-5 h-5" />
+                                    <span className="font-bold">{pitch.up_votes || 0}</span>
+                                </button>
+                                
+                                <button
+                                    onClick={() => handleVote(pitch, 'down')}
+                                    disabled={votingId === pitch.id}
+                                    className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    <ThumbsDown className="w-5 h-5" />
+                                    <span className="font-bold">{pitch.down_votes || 0}</span>
+                                </button>
+                            </div>
+                          )}
+                          
+                          {(isAdmin || (user && user.id === pitch.user_id)) && (
                             <button
-                              onClick={() => handleVote(pitch)}
-                              disabled={votingId === pitch.id}
-                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center gap-2"
+                              onClick={() => handleDeletePitch(pitch)}
+                              className="p-2 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-lg transition-colors ml-2"
+                              title="Delete Pitch"
                             >
-                              {votingId === pitch.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Vote className="w-4 h-4" />
-                                  Vote (10c)
-                                </>
-                              )}
+                              <Trash2 className="w-5 h-5" />
                             </button>
                           )}
                         </div>
