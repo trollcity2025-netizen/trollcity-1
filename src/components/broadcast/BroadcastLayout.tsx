@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 
 
 interface BroadcastLayoutProps {
+  children?: React.ReactNode
   room: Room
   streamId?: string
   broadcasterId: string
@@ -51,7 +52,8 @@ export default function BroadcastLayout({
   onUserClick,
   onToggleCamera,
   isCameraOn,
-  onSetPrice: _onSetPrice
+  onSetPrice: _onSetPrice,
+  children
 }: BroadcastLayoutProps) {
   const participants = useRoomParticipants(room);
   const [coinBalances, setCoinBalances] = useState<Record<string, number>>({});
@@ -237,6 +239,7 @@ export default function BroadcastLayout({
           onToggleCamera={onToggleCamera}
           isCameraOn={isCameraOn}
         />
+        {children}
       </div>
     </div>
   );

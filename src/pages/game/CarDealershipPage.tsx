@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Car, ShoppingCart, ShieldCheck, Palette, DollarSign, Wrench } from 'lucide-react';
+import { Car, ShoppingCart, ShieldCheck, Palette, DollarSign, Wrench, BadgeCheck, FileText } from 'lucide-react';
 import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 import { deductCoins, addCoins } from '../../lib/coinTransactions';
@@ -58,7 +58,7 @@ export default function CarDealershipPage() {
         }
         // Call purchase_car_v2 with p_is_free=true to bypass vehicle limit check
         const { data: purchaseResult, error } = await supabase.rpc('purchase_car_v2', {
-          p_vehicle_id: vehicleCatalogId,
+          p_car_id: vehicleCatalogId,
           p_model_url: car.modelUrl,
           p_customization: { color: car.colorFrom, car_model_id: car.id },
           p_is_free: true
@@ -86,8 +86,10 @@ export default function CarDealershipPage() {
   const [ownedCarId, setOwnedCarId] = useState<number | null>(null);
   const [ownedVehicleIds, setOwnedVehicleIds] = useState<number[]>([]);
   const [garageCars, setGarageCars] = useState<
-    { id: string; car_id: string; is_active: boolean; purchased_at: string; model_url: string; customization_json: any }[]
+    { id: string; car_id: string; is_active: boolean; purchased_at: string; model_url: string; customization_json: any; title_status?: string; notarized_at?: string }[]
   >([]);
+
+  const [requestingNotary, setRequestingNotary] = useState(false);
 
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [listingPrice, setListingPrice] = useState('');
@@ -592,9 +594,9 @@ export default function CarDealershipPage() {
       }
 
       let usedLegacyVehicles = false;
-      // Preferred call: use p_vehicle_id (vehicles_catalog.id) - p_is_free is false for purchases
+      // Preferred call: use p_car_id (vehicles_catalog.id) - p_is_free is false for purchases
       let { data: purchaseResult, error } = await supabase.rpc('purchase_car_v2', {
-        p_vehicle_id: vehicleCatalogId,
+        p_car_id: vehicleCatalogId,
         p_model_url: modelUrl,
         p_customization: { color: car.colorFrom, car_model_id: car.id },
         p_is_free: false
@@ -602,8 +604,8 @@ export default function CarDealershipPage() {
 
       // Fallbacks
       const msgLower = (error?.message || '').toLowerCase();
-      // If RPC rejects p_vehicle_id argument name, fall back to p_car_id using the catalog UUID
-      if (error && (msgLower.includes('invalid named argument') || msgLower.includes('missing required argument'))) {
+      // If RPC rejects p_vehicle_id argument name (or function not found due to param mismatch), fall back to p_car_id
+      if (error && (msgLower.includes('invalid named argument') || msgLower.includes('missing required argument') || msgLower.includes('could not find the function'))) {
         console.warn('purchase_car_v2 named argument mismatch; retrying with p_car_id using catalog UUID');
         const retry = await supabase.rpc('purchase_car_v2', {
           p_car_id: vehicleCatalogId,
@@ -904,6 +906,48 @@ export default function CarDealershipPage() {
       }
     } finally {
       setInsuring(false);
+    }
+  };
+
+  const handleRequestNotarization = async () => {
+    if (!user || !ownedCarId) {
+      toast.error('You must own a vehicle to request notarization');
+      return;
+    }
+
+    const userCarRow = garageCars.find((g) => Number(g.car_id) === ownedCarId);
+    if (!userCarRow) {
+      toast.error('Vehicle data not found');
+      return;
+    }
+
+    setRequestingNotary(true);
+    try {
+      const { error } = await supabase
+        .from('user_cars')
+        .update({ title_status: 'pending_notarization' })
+        .eq('id', userCarRow.id);
+
+      if (error) {
+        toast.error('Failed to request notarization: ' + error.message);
+        return;
+      }
+
+      toast.success('Notarization request submitted. Waiting for Secretary approval.');
+      
+      // Refresh garage cars to update UI
+      const { data: refreshedCars } = await supabase
+        .from('user_cars')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (refreshedCars) {
+        setGarageCars(refreshedCars as any);
+      }
+    } catch (err: any) {
+      toast.error('Failed to request notarization: ' + (err.message || 'Unknown error'));
+    } finally {
+      setRequestingNotary(false);
     }
   };
 

@@ -260,6 +260,20 @@ const GoLive: React.FC = () => {
       return;
     }
 
+    // Backend enforcement: double-check with database RPC
+    try {
+      const { data: canBroadcast, error: broadcastError } = await supabase.rpc('can_start_broadcast');
+      if (broadcastError) {
+        console.warn('Could not verify broadcast permission with backend:', broadcastError);
+        // Fall back to frontend check only if RPC fails
+      } else if (!canBroadcast) {
+        toast.error('🔴 Broadcasts are currently locked by admin. Please try again later.');
+        return;
+      }
+    } catch (rpcError) {
+      console.warn('RPC call failed, using frontend check only:', rpcError);
+    }
+
     const availableCoins = Number(profile.troll_coins || 0);
     if (!isPrivileged && availableCoins < 500) {
       toast.error('You need at least 500 coins to go live. Go make friends and gain more followers to go live.');
@@ -922,7 +936,8 @@ const GoLive: React.FC = () => {
                 disabled={
                   isConnecting ||
                   !streamTitle.trim() ||
-                  liveRestriction.isRestricted
+                  liveRestriction.isRestricted ||
+                  (lockdownSettings.enabled && !isAdmin)
                 }
                 className="flex-1 py-3 rounded-lg bg-gradient-to-r from-[#0fffc1] via-[#ff00ea] to-[#00b3ff] text-white font-extrabold neon-btn shadow-[0_0_16px_4px_rgba(0,255,255,0.25)] hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed w-full"
                 style={{textShadow:'0 0 8px #0fffc1, 0 0 16px #ff00ea'}}

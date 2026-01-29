@@ -11,6 +11,7 @@ import { useLiveKitSession } from '../hooks/useLiveKitSession';
 import { useLiveKitToken } from '../hooks/useLiveKitToken';
 import { useStreamEndListener } from '../hooks/useStreamEndListener';
 import { useAuthStore } from '../lib/store';
+import { useCoins } from '../lib/hooks/useCoins';
 import { supabase, createConversation, sendConversationMessage } from '../lib/supabase';
 import { sendNotification } from '../lib/sendNotification';
 import { toast } from 'sonner';
@@ -657,6 +658,7 @@ export default function LivePage() {
   const navigate = useNavigate();
   
   const { user, profile, refreshProfile } = useAuthStore();
+  const { optimisticDebit } = useCoins();
 
   useViewerTracking(streamId || null, user?.id || null);
 
@@ -3074,6 +3076,9 @@ export default function LivePage() {
 
       try {
         const promises = recipients.map(async (receiverId) => {
+          // Optimistically update sender's balance immediately
+          optimisticDebit(totalCoins);
+          
           const { data: spendResult, error } = await supabase.rpc("spend_coins", {
             p_sender_id: senderId,
             p_receiver_id: receiverId,
@@ -3190,7 +3195,7 @@ export default function LivePage() {
         toast.error("Failed to send some gifts. Please try again.");
       }
     },
-    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id, lastThemeId, refreshProfile, activeViewers, profile?.username]
+    [stream?.id, user?.id, giftReceiver, stream?.broadcaster_id, broadcastTheme?.id, lastThemeId, refreshProfile, activeViewers, profile?.username, optimisticDebit]
   );
   useEffect(() => {
     if (!streamId) return;

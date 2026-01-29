@@ -98,7 +98,6 @@ export function useCoins() {
       const nextBalances = {
         troll_coins: mergedPaid,
         paid_coins: profileData?.paid_coins ?? currentProfile?.paid_coins ?? 0,
-        trollmonds: profileData?.trollmonds ?? currentProfile?.trollmonds ?? 0,
         total_earned_coins: nextTotals.total_earned_coins,
         total_spent_coins: nextTotals.total_spent_coins,
       }
@@ -107,7 +106,6 @@ export function useCoins() {
         const isSame =
           prev.troll_coins === nextBalances.troll_coins &&
           prev.paid_coins === nextBalances.paid_coins &&
-          prev.trollmonds === nextBalances.trollmonds &&
           prev.total_earned_coins === nextBalances.total_earned_coins &&
           prev.total_spent_coins === nextBalances.total_spent_coins
 
@@ -117,7 +115,6 @@ export function useCoins() {
       if (currentProfile) {
         const profileNeedsUpdate =
           currentProfile.troll_coins !== mergedPaid ||
-          currentProfile.trollmonds !== nextBalances.trollmonds ||
           currentProfile.total_earned_coins !== nextTotals.total_earned_coins ||
           currentProfile.total_spent_coins !== nextTotals.total_spent_coins
 
@@ -125,7 +122,6 @@ export function useCoins() {
             const updatedProfile: UserProfile = {
               ...currentProfile,
               troll_coins: mergedPaid as number,
-              trollmonds: nextBalances.trollmonds,
               total_earned_coins: nextTotals.total_earned_coins,
               total_spent_coins: nextTotals.total_spent_coins,
             }
@@ -333,6 +329,24 @@ export function useCoins() {
     setOptimisticUntil(Date.now() + 8000)
   }, [user?.id, balances.troll_coins])
 
+  const optimisticDebit = useCallback((delta: number) => {
+    if (!user?.id) return
+    if (!Number.isFinite(delta) || delta <= 0) return
+    const currentProfile = useAuthStore.getState().profile
+    const base = currentProfile?.troll_coins ?? balances.troll_coins
+    const next = base - delta
+    setBalances((prev) => ({ ...prev, troll_coins: next }))
+    if (currentProfile) {
+      const updatedProfile: UserProfile = {
+        ...currentProfile,
+        troll_coins: next,
+      }
+      useAuthStore.getState().setProfile(updatedProfile)
+    }
+    setOptimisticTroll(next)
+    setOptimisticUntil(Date.now() + 8000)
+  }, [user?.id, balances.troll_coins])
+
   return {
     balances,
     loading,
@@ -340,6 +354,7 @@ export function useCoins() {
     refreshCoins,
     spendCoins,
     optimisticCredit,
+    optimisticDebit,
     // Convenience getters
     troll_coins: balances.troll_coins,
     totalEarned: balances.total_earned_coins,

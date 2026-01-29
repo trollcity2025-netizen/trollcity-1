@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
@@ -92,8 +93,27 @@ serve(async (req) => {
     
     const { access_token } = await tokenResp.json();
 
+    // Define the payout record type from the DB
+    interface PayoutRecord {
+      id: string;
+      user_id: string;
+      run_id: string;
+      amount_usd: number;
+      paypal_email: string;
+      status: string;
+      [key: string]: unknown;
+    }
+    
+    interface PayoutItem {
+      recipient_type: string;
+      amount: { value: string; currency: string };
+      receiver: string;
+      note: string;
+      sender_item_id: string;
+    }
+    
     // Construct Batch
-    const items = payouts.map((p) => ({
+    const items: PayoutItem[] = payouts.map((p: PayoutRecord) => ({
       recipient_type: "EMAIL",
       amount: {
         value: p.amount_usd.toString(),
@@ -160,8 +180,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Payout Process Failed:", error);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Refund if run was created but failed before completion
     if (currentRunId) {
@@ -174,7 +196,7 @@ serve(async (req) => {
         }
     }
 
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

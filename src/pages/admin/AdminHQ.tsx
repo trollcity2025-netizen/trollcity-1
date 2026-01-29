@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Users, Briefcase, DollarSign, FileText, Activity, Plus, Edit, Trash2, Eye, X, Search, UserPlus, Gift } from 'lucide-react';
+import { Building2, Users, Briefcase, DollarSign, FileText, Activity, Plus, Edit, Trash2, Eye, X, Search, UserPlus, Gift, Shield } from 'lucide-react';
+import BroadcastLockdownControl from './components/BroadcastLockdownControl';
 import { supabase, UserRole } from '../../lib/supabase';
 import RequireRole from '../../components/RequireRole';
 
@@ -1970,6 +1971,11 @@ export default function AdminHQ() {
               <Gift className="w-5 h-5" />
               Manage User Cashouts
             </Link>
+          </div>
+
+          {/* Broadcast Lockdown Control */}
+          <div className="mb-6">
+            <BroadcastLockdownControl />
           </div>
 
           {/* Tabs */}
