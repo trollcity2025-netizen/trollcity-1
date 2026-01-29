@@ -1,5 +1,5 @@
 // Officer Activity Tracker
-// Updates last_activity timestamp in officer_shift_logs when officers perform actions
+// Updates last_activity timestamp in officer_work_sessions when officers perform actions
 
 import { supabase } from './supabase'
 
@@ -18,11 +18,11 @@ export async function updateOfficerActivity(officerId: string, activeShiftId?: s
     // If shift ID not provided, find the active shift
     if (!shiftId) {
       const { data: activeShift, error: findError } = await supabase
-        .from('officer_shift_logs')
+        .from('officer_work_sessions')
         .select('id')
         .eq('officer_id', officerId)
-        .is('shift_end', null)
-        .order('shift_start', { ascending: false })
+        .is('clock_out', null)
+        .order('clock_in', { ascending: false })
         .limit(1)
         .single()
 
@@ -46,7 +46,7 @@ export async function updateOfficerActivity(officerId: string, activeShiftId?: s
 
     // Update last_activity timestamp directly using shift ID
     const { error: updateError } = await supabase
-      .from('officer_shift_logs')
+      .from('officer_work_sessions')
       .update({ last_activity: new Date().toISOString() })
       .eq('id', shiftId)
 

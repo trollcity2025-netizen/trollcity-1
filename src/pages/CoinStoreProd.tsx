@@ -3,9 +3,10 @@
 
 import React, { useState } from 'react'
 import { useAuthStore } from '../lib/store'
-import { AlertCircle, Coins, Wallet } from 'lucide-react'
+import { AlertCircle, Coins, Wallet, Crown } from 'lucide-react'
 import { paymentProviders } from '../lib/payments'
 import { toast } from 'sonner'
+import AdminForWeekModal from '../components/AdminForWeekModal'
 
 const coinPackages = [
   { id: 'pkg-1000-promo', coins: 1000, price: 0.10, label: '1,000 Coins', popular: true, promo: true },
@@ -21,6 +22,7 @@ export default function CoinStoreProd() {
   const [selectedProviderId, setSelectedProviderId] = useState(paymentProviders[0]?.id || 'paypal')
   const [selectedPackage, setSelectedPackage] = useState(coinPackages[0])
   const [loading, setLoading] = useState(false)
+  const [showAdminModal, setShowAdminModal] = useState(false)
 
   const provider = paymentProviders.find(p => p.id === selectedProviderId)
 
@@ -66,14 +68,23 @@ export default function CoinStoreProd() {
     <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-            <Coins className="w-8 h-8 text-purple-500" />
-            Troll Bank Coin Store
-          </h1>
-          <p className="text-gray-400">
-            Current balance: <span className="text-purple-400 font-semibold">{(profile?.troll_coins || 0).toLocaleString()}</span> coins
-          </p>
+        <div className="mb-8 flex justify-between items-end">
+          <div>
+            <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
+                <Coins className="w-8 h-8 text-purple-500" />
+                Troll Bank Coin Store
+            </h1>
+            <p className="text-gray-400">
+                Current balance: <span className="text-purple-400 font-semibold">{(profile?.troll_coins || 0).toLocaleString()}</span> coins
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowAdminModal(true)}
+            className="bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-400 border border-yellow-500/50 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all"
+          >
+            <Crown className="w-5 h-5" />
+            Admin For A Week
+          </button>
         </div>
 
         {/* Payment Provider Selector */}
@@ -155,6 +166,7 @@ export default function CoinStoreProd() {
           </p>
         </div>
       </div>
+      <AdminForWeekModal isOpen={showAdminModal} onClose={() => setShowAdminModal(false)} />
     </div>
   )
 }

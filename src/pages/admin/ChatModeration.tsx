@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Loader2 } from 'lucide-react'
+import { Loader2, MessageSquare, X } from 'lucide-react'
+import { format } from 'date-fns'
 
 interface ChatReport {
   id: string
@@ -11,9 +12,23 @@ interface ChatReport {
   reported_by_id: string
 }
 
+interface ChatMessage {
+  id: string
+  user_id: string
+  content: string
+  created_at: string
+  user_profiles: {
+    username: string
+    avatar_url: string | null
+  } | null
+}
+
 export default function ChatModeration() {
   const [reports, setReports] = useState<ChatReport[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedReport, setSelectedReport] = useState<ChatReport | null>(null)
+  const [chatContext, setChatContext] = useState<ChatMessage[]>([])
+  const [loadingContext, setLoadingContext] = useState(false)
 
   const loadReports = async () => {
     setLoading(true)
@@ -31,6 +46,43 @@ export default function ChatModeration() {
       setReports([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadContext = async (report: ChatReport) => {
+    setSelectedReport(report)
+    setLoadingContext(true)
+    try {
+      // Load messages from 5 minutes before to 1 minute after the report
+      const reportTime = new Date(report.created_at).getTime()
+      const startTime = new Date(reportTime - 5 * 60 * 1000).toISOString()
+      const endTime = new Date(reportTime + 1 * 60 * 1000).toISOString()
+
+      const { data, error } = await supabase
+        .from('messages')
+        .select(`
+          id,
+          content,
+          created_at,
+          user_id,
+          user_profiles:user_id (
+            username,
+            avatar_url
+          )
+        `)
+        .eq('stream_id', report.stream_id)
+        .gte('created_at', startTime)
+        .lte('created_at', endTime)
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+      // @ts-ignore
+      setChatContext(data || [])
+    } catch (error) {
+      console.error('Failed to load chat context:', error)
+      setChatContext([])
+    } finally {
+      setLoadingContext(false)
     }
   }
 
@@ -67,13 +119,14 @@ export default function ChatModeration() {
                     <th className="py-3 pr-4">Reason</th>
                     <th className="py-3 pr-4">Status</th>
                     <th className="py-3 pr-4">Submitted At</th>
+                    <th className="py-3 pr-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2C2C2C]">
                   {reports.map((report) => (
                     <tr key={report.id} className="hover:bg-white/5">
-                      <td className="py-3 pr-4 text-white">{report.stream_id}</td>
-                      <td className="py-3 pr-4 text-gray-200">{report.reported_by_id}</td>
+                      <td className="py-3 pr-4 text-white font-mono text-xs">{report.stream_id.slice(0, 8)}...</td>
+                      <td className="py-3 pr-4 text-gray-200">{report.reported_by_id.slice(0, 8)}...</td>
                       <td className="py-3 pr-4 text-gray-200">{report.reason || 'General concern'}</td>
                       <td className="py-3 pr-4">
                         <span
@@ -91,6 +144,15 @@ export default function ChatModeration() {
                           ? new Date(report.created_at).toLocaleString()
                           : 'Unknown'}
                       </td>
+                      <td className="py-3 pr-4">
+                        <button
+                          onClick={() => loadContext(report)}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-colors"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          View Context
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -99,6 +161,86 @@ export default function ChatModeration() {
           )}
         </div>
       </div>
+
+      {/* Chat Context Modal */}
+      {selectedReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1A1A1A] border border-[#333] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-[#333]">
+              <div>
+                <h3 className="text-lg font-bold text-white">Chat Context</h3>
+                <p className="text-xs text-gray-400">
+                  Showing messages around report time ({new Date(selectedReport.created_at).toLocaleTimeString()})
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedReport(null)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {loadingContext ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                </div>
+              ) : chatContext.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No messages found in the timeframe surrounding this report.
+                </div>
+              ) : (
+                chatContext.map((msg) => {
+                  const isReportedTime = Math.abs(new Date(msg.created_at).getTime() - new Date(selectedReport.created_at).getTime()) < 5000;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-3 p-3 rounded-lg ${
+                        isReportedTime ? 'bg-red-900/20 border border-red-500/30' : 'bg-black/20'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
+                        {msg.user_profiles?.avatar_url ? (
+                          <img
+                            src={msg.user_profiles.avatar_url}
+                            alt={msg.user_profiles.username}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-400">
+                            {msg.user_profiles?.username?.[0]?.toUpperCase() || '?'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold text-sm text-blue-400">
+                            {msg.user_profiles?.username || 'Unknown User'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {format(new Date(msg.created_at), 'HH:mm:ss')}
+                          </span>
+                        </div>
+                        <p className="text-gray-300 text-sm mt-0.5 break-words">{msg.content}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[#333] bg-[#141414] rounded-b-xl flex justify-end gap-2">
+              <button
+                onClick={() => setSelectedReport(null)}
+                className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

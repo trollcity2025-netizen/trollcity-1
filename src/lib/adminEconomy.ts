@@ -1,12 +1,12 @@
 /**
  * Admin Economy Management
- * Handles admin-specific coin and trollmond operations
+ * Handles admin-specific coin operations
  */
 
 import { supabase } from './supabase'
 
 /**
- * Reset admin coins to 0 and set unlimited trollmonds
+ * Reset admin coins to 0
  */
 export async function resetAdminEconomy(): Promise<{ success: boolean; error?: string }> {
   try {
@@ -31,9 +31,7 @@ export async function resetAdminEconomy(): Promise<{ success: boolean; error?: s
       return { success: false, error: 'Only admins can perform this action' }
     }
 
-    // Reset coins to 0 and set unlimited trollmonds
-    const UNLIMITED_TROLLMONDS = 999999999
-
+    // Reset coins to 0
     // Update user profile coins
     const { error: profileUpdateError } = await supabase
       .from('user_profiles')
@@ -48,46 +46,6 @@ export async function resetAdminEconomy(): Promise<{ success: boolean; error?: s
       return { success: false, error: 'Failed to update profile' }
     }
 
-    // Check if wallets table exists and update trollmonds there
-    try {
-      const { data: wallet, error: walletError } = await supabase
-        .from('wallets')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (walletError && walletError.code === 'PGRST205') {
-        // Wallets table doesn't exist, create it
-        const { error: createError } = await supabase
-          .from('wallets')
-          .insert({
-            user_id: user.id,
-            trollmonds: UNLIMITED_TROLLMONDS,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-
-        if (createError) {
-          console.warn('Could not create wallets table:', createError)
-        }
-      } else if (wallet) {
-        // Update existing wallet
-        const { error: walletUpdateError } = await supabase
-          .from('wallets')
-          .update({
-            trollmonds: UNLIMITED_TROLLMONDS,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id)
-
-        if (walletUpdateError) {
-          console.warn('Could not update wallet:', walletUpdateError)
-        }
-      }
-    } catch (walletErr) {
-      console.warn('Wallets table operation failed:', walletErr)
-    }
-
     // Log the transaction
     const { error: txError } = await supabase
       .from('coin_transactions')
@@ -96,11 +54,10 @@ export async function resetAdminEconomy(): Promise<{ success: boolean; error?: s
         type: 'admin_reset',
         amount: 0,
         coin_type: 'paid',
-        description: 'Admin economy reset - coins set to 0, trollmonds set to unlimited',
+        description: 'Admin economy reset - coins set to 0',
         metadata: {
           action: 'admin_economy_reset',
           reset_coins: true,
-          unlimited_trollmonds: UNLIMITED_TROLLMONDS,
           reset_at: new Date().toISOString()
         },
         balance_after: 0,

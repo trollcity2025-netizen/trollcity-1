@@ -129,12 +129,12 @@ export default function MobileShell() {
             />
             <NavButton
               icon={MessageSquare}
-              label="Messages"
-              sublabel="Chats and inbox"
-              path="/messages"
+              label="TCPS"
+              sublabel="Troll City Postal Service"
+              path="/tcps"
               colorClass="text-cyan-300"
               bgClass="bg-cyan-500/20"
-              isActive={isActive('/messages')}
+              isActive={isActive('/tcps')}
               onClick={go}
             />
             <NavButton
@@ -165,6 +165,16 @@ export default function MobileShell() {
               colorClass="text-rose-300"
               bgClass="bg-rose-500/20"
               isActive={isActive('/troll-court')}
+              onClick={go}
+            />
+            <NavButton
+              icon={Landmark}
+              label="City Hall"
+              sublabel="Admin Queue"
+              path="/city-hall"
+              colorClass="text-yellow-300"
+              bgClass="bg-yellow-500/20"
+              isActive={isActive('/city-hall')}
               onClick={go}
             />
             <NavButton

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase, UserRole } from '../lib/supabase'
@@ -9,13 +10,13 @@ import JudgeRulingModal from '../components/JudgeRulingModal'
 import { toast } from 'sonner'
 import UserSearchDropdown from '../components/UserSearchDropdown'
 
+
 export default function TrollCourt() {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   const [courtSession, setCourtSession] = useState<any>(null)
   const [isStartingSession, setIsStartingSession] = useState(false)
   const [pendingSummons, setPendingSummons] = useState<any[]>([])
-  
   // New state for features
   const [recentCases, setRecentCases] = useState<any[]>([])
   const [myCivilCases, setMyCivilCases] = useState<any[]>([])
@@ -27,9 +28,51 @@ export default function TrollCourt() {
   const [_userList, setUserList] = useState<any[]>([])
   const [selectedUser, setSelectedUser] = useState<any>(null)
   const [_isSearchingUsers, setIsSearchingUsers] = useState(false)
-
   const [selectedCaseType, setSelectedCaseType] = useState<string>('')
   const [showDropdown, setShowDropdown] = useState(false)
+
+  // Timer for next Sunday opening (must be inside component)
+  const [timeUntilOpen, setTimeUntilOpen] = useState('');
+  // Court opens every Sunday at 1 PM
+  const getNextSundayAt1PM = () => {
+    const now = new Date();
+    const day = now.getDay(); // 0 = Sunday
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    let daysUntilSunday = (7 - day) % 7;
+    // If today is Sunday and before 1 PM, open today at 1 PM
+    if (day === 0 && (hour < 13 || (hour === 13 && minute === 0))) {
+      daysUntilSunday = 0;
+    } else if (day === 0 && hour >= 13) {
+      daysUntilSunday = 7;
+    }
+    const nextSunday = new Date(now);
+    nextSunday.setDate(now.getDate() + daysUntilSunday);
+    nextSunday.setHours(13, 0, 0, 0); // 1 PM
+    return nextSunday;
+  };
+  useEffect(() => {
+    if (courtSession) return;
+    const updateTimer = () => {
+      const now = new Date();
+      const nextOpen = getNextSundayAt1PM();
+      const diff = nextOpen.getTime() - now.getTime();
+      if (diff <= 0) {
+        setTimeUntilOpen('Now');
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      let timeString = '';
+      if (days > 0) timeString += `${days}d `;
+      timeString += `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+      setTimeUntilOpen(timeString.trim());
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000 * 30); // update every 30s
+    return () => clearInterval(interval);
+  }, [courtSession]);
 
   const CASE_TYPES = [
     'Harassment / Threats',
@@ -312,8 +355,9 @@ export default function TrollCourt() {
                   In Session
                 </span>
               ) : (
-                <span className="px-3 py-1 bg-gray-600 text-white rounded-full text-sm">
-                  Court Adjourned
+                <span className="px-3 py-1 bg-gray-600 text-white rounded-full text-sm flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-purple-400" />
+                  CLOSED • OPENS IN {timeUntilOpen}
                 </span>
               )}
             </div>

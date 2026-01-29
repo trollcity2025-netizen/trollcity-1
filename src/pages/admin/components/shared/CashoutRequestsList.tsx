@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { CashoutRequest } from '../../../../types/admin'
 import { toast } from 'sonner'
-import { DollarSign, Check, X, CreditCard } from 'lucide-react'
+import { DollarSign, Check, X, CreditCard, Lock, Unlock, AlertTriangle } from 'lucide-react'
 import { useAuthStore } from '../../../../lib/store'
 
 interface CashoutRequestsListProps {
@@ -14,6 +14,10 @@ type ExtendedCashoutRequest = CashoutRequest & {
     username: string;
     email?: string;
   }
+  is_held?: boolean;
+  held_reason?: string;
+  release_date?: string;
+  is_new_user_hold?: boolean;
 }
 
 export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequestsListProps) {
@@ -25,6 +29,8 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
   const [isFulfillModalOpen, setIsFulfillModalOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>('pending')
   const [filterUser, setFilterUser] = useState<string>('')
+  const [holdReason, setHoldReason] = useState('')
+  const [requestToHold, setRequestToHold] = useState<ExtendedCashoutRequest | null>(null)
 
   const fetchRequests = useCallback(async () => {
     setLoading(true)
@@ -33,7 +39,7 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
         .from('cashout_requests')
         .select(`
           *,
-          user_profile:user_profiles(username, email)
+          user_profile:user_profiles!cashout_requests_user_id_fkey(username, email)
         `)
         .order('requested_at', { ascending: false })
 
@@ -104,6 +110,28 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
     }
   }
 
+  const handleToggleHold = async (req: ExtendedCashoutRequest, hold: boolean, reason?: string) => {
+    if (!user) return
+    try {
+      const { error } = await supabase.rpc('toggle_cashout_hold', {
+        p_request_id: req.id,
+        p_admin_id: user.id,
+        p_hold: hold,
+        p_reason: reason || null
+      })
+
+      if (error) throw error
+      
+      toast.success(hold ? 'Request put on hold' : 'Request released from hold')
+      setRequestToHold(null)
+      setHoldReason('')
+      fetchRequests()
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to update hold status')
+    }
+  }
+
   const openFulfillModal = (req: ExtendedCashoutRequest) => {
     setSelectedRequest(req)
     setGiftCardCode('')
@@ -134,6 +162,20 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
 
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 relative">
+      
+      {/* Schedule Banner */}
+      <div className="mb-6 bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-center gap-3">
+        <div className="bg-blue-900/50 p-2 rounded-full">
+            <DollarSign className="w-5 h-5 text-blue-400" />
+        </div>
+        <div>
+            <h4 className="text-sm font-bold text-blue-200">Payout Schedule</h4>
+            <p className="text-xs text-blue-300/80">
+                Payouts are processed twice a week: <span className="text-white font-bold">Mondays</span> and <span className="text-white font-bold">Fridays</span>.
+            </p>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center gap-4 mb-6 flex-wrap">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <DollarSign className="w-5 h-5 text-green-400" />
@@ -195,6 +237,9 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
                   <td className="p-3 font-medium text-white">
                     {req.user_profile?.username || 'Unknown'}
                     <div className="text-xs text-slate-500">{req.user_id.slice(0, 8)}</div>
+                    {req.is_new_user_hold && (
+                       <div className="text-[10px] text-orange-400 mt-1">New User Hold</div>
+                    )}
                   </td>
                   <td className="p-3 font-mono text-yellow-400">
                     {(req.coin_amount || 0).toLocaleString()} coins
@@ -205,15 +250,35 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
                     </span>
                   </td>
                   <td className="p-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      req.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
-                      req.status === 'approved' ? 'bg-blue-500/20 text-blue-300' :
-                      req.status === 'fulfilled' ? 'bg-green-500/20 text-green-300' :
-                      req.status === 'denied' ? 'bg-red-500/20 text-red-300' :
-                      'bg-slate-500/20 text-slate-300'
-                    }`}>
-                      {req.status.toUpperCase()}
-                    </span>
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        req.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                        req.status === 'approved' ? 'bg-blue-500/20 text-blue-300' :
+                        req.status === 'fulfilled' ? 'bg-green-500/20 text-green-300' :
+                        req.status === 'denied' ? 'bg-red-500/20 text-red-300' :
+                        'bg-slate-500/20 text-slate-300'
+                      }`}>
+                        {req.status.toUpperCase()}
+                      </span>
+                      {req.is_held && (
+                        <div className="flex flex-col gap-0.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 flex items-center gap-1 w-fit">
+                                <Lock className="w-3 h-3" />
+                                HELD
+                            </span>
+                            {req.release_date && (
+                                <span className="text-[10px] text-slate-400">
+                                    Release: {new Date(req.release_date).toLocaleDateString()}
+                                </span>
+                            )}
+                             {req.held_reason && (
+                                <span className="text-[10px] text-slate-500 italic max-w-[150px] truncate" title={req.held_reason}>
+                                    "{req.held_reason}"
+                                </span>
+                            )}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3 text-slate-400">
                     {new Date(req.requested_at).toLocaleDateString()}
@@ -221,20 +286,40 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
                   <td className="p-3 text-right space-x-2">
                     {req.status === 'pending' && (
                       <>
-                        <button 
-                          onClick={() => handleUpdateStatus(req.id, 'approved')}
-                          className="p-1.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded transition-colors"
-                          title="Approve"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateStatus(req.id, 'denied')}
-                          className="p-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded transition-colors"
-                          title="Deny"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        {!req.is_held ? (
+                            <>
+                                <button 
+                                  onClick={() => handleUpdateStatus(req.id, 'approved')}
+                                  className="p-1.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded transition-colors"
+                                  title="Approve"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => handleUpdateStatus(req.id, 'denied')}
+                                  className="p-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded transition-colors"
+                                  title="Deny"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => setRequestToHold(req)}
+                                  className="p-1.5 bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 rounded transition-colors"
+                                  title="Hold Request"
+                                >
+                                  <Lock className="w-4 h-4" />
+                                </button>
+                            </>
+                        ) : (
+                            <button 
+                              onClick={() => handleToggleHold(req, false)}
+                              className="p-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded transition-colors inline-flex items-center gap-1 px-2"
+                              title="Release Hold"
+                            >
+                              <Unlock className="w-4 h-4" />
+                              <span className="text-xs font-bold">Release</span>
+                            </button>
+                        )}
                       </>
                     )}
                     {req.status === 'approved' && (
@@ -318,6 +403,62 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
                 className="flex-1 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send Gift Card
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {requestToHold && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1A1A24] border border-[#2C2C2C] rounded-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Lock className="w-5 h-5 text-orange-400" />
+                Hold Payout Request
+              </h3>
+              <button 
+                onClick={() => setRequestToHold(null)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-orange-900/10 border border-orange-900/30 p-4 rounded-lg">
+                <p className="text-sm text-orange-200/80">
+                    Holding this request will prevent it from being processed. 
+                    {requestToHold.is_new_user_hold && (
+                        <span className="block mt-1 font-bold text-orange-300">
+                            Note: This is already flagged as a New User Hold.
+                        </span>
+                    )}
+                </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">Reason (Optional)</label>
+              <input
+                type="text"
+                value={holdReason}
+                onChange={(e) => setHoldReason(e.target.value)}
+                placeholder="e.g. Verification needed, Suspicious activity..."
+                className="w-full bg-[#0D0D16] border border-[#2C2C2C] rounded-lg p-3 text-white focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setRequestToHold(null)}
+                className="flex-1 px-4 py-2 rounded-lg border border-[#2C2C2C] text-gray-300 hover:bg-[#2C2C2C] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleToggleHold(requestToHold, true, holdReason)}
+                className="flex-1 px-4 py-2 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-500 transition-colors"
+              >
+                Confirm Hold
               </button>
             </div>
           </div>

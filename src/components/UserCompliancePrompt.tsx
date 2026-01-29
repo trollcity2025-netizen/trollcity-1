@@ -18,7 +18,8 @@ export default function UserCompliancePrompt() {
     location.pathname.startsWith('/officer/onboarding') ||
     location.pathname === '/profile' ||
     location.pathname === '/tax-onboarding' ||
-    location.pathname === '/terms';
+    location.pathname === '/terms' ||
+    location.pathname === '/';
 
   useEffect(() => {
     const checkCompliance = async () => {

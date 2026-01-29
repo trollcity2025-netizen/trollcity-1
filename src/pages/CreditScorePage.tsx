@@ -67,30 +67,39 @@ export default function CreditScorePage() {
   const fetchAllCreditScores = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Fetch all user profiles
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, username, created_at');
+
+      if (profilesError) throw profilesError;
+
+      // 2. Fetch all existing credit scores
+      const { data: creditData, error: creditError } = await supabase
         .from('user_credit')
-        .select('user_id, score, tier, trend_7d, updated_at')
-        .order('score', { ascending: false });
+        .select('user_id, score, tier, trend_7d, updated_at');
 
-      if (error) throw error;
+      if (creditError) throw creditError;
 
-      // Fetch usernames for each user
-      if (Array.isArray(data)) {
-        const userIds = data.map(d => d.user_id);
-        const { data: profiles } = await supabase
-          .from('user_profiles')
-          .select('id, username')
-          .in('id', userIds);
+      // 3. Merge data
+      const creditMap = new Map(creditData?.map(d => [d.user_id, d]) || []);
+      
+      const combinedData: CreditUser[] = (profiles || []).map(profile => {
+        const credit = creditMap.get(profile.id);
+        return {
+          user_id: profile.id,
+          username: profile.username || 'Unknown',
+          score: credit?.score ?? 400,
+          tier: credit?.tier ?? 'Building',
+          trend_7d: credit?.trend_7d ?? 0,
+          updated_at: credit?.updated_at ?? profile.created_at ?? new Date().toISOString()
+        };
+      });
 
-        const profileMap = new Map(profiles?.map(p => [p.id, p.username]) || []);
+      // 4. Sort by score descending
+      combinedData.sort((a, b) => b.score - a.score);
 
-        const enrichedData = data.map(d => ({
-          ...d,
-          username: profileMap.get(d.user_id) || 'Unknown'
-        }));
-
-        setCreditUsers(enrichedData);
-      }
+      setCreditUsers(combinedData);
     } catch (err) {
       console.error('Failed to fetch credit scores:', err);
       toast.error('Failed to load credit scores');

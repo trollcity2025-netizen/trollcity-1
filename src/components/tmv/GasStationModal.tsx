@@ -133,7 +133,7 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
                      // The logic in RPC handles capping at 100.
                      // But we shouldn't show +100% if we have 90%.
                      
-                     let displayAmount = pct;
+                     const displayAmount = pct;
                      if (gas + pct > 100) {
                          // Optional: Adjust to exact fill? 
                          // "Fill Up" button might be better.

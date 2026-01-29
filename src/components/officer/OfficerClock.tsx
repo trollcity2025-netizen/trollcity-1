@@ -59,15 +59,30 @@ export default function OfficerClock({ onActionComplete }: OfficerClockProps) {
     }
     setActionLoading(true);
     try {
-      const currentSession = targetId === user?.id ? activeSession : await fetchActiveSession(targetId);
+      // Check for ANY active sessions to determine if we are clocking in or out
+      const { data: activeSessions, error: fetchError } = await supabase
+        .from('officer_work_sessions')
+        .select('id')
+        .eq('officer_id', targetId)
+        .is('clock_out', null);
+
+      if (fetchError) throw fetchError;
+
+      const hasActiveSession = activeSessions && activeSessions.length > 0;
       
-      if (currentSession) {
-        // Clock Out
-        const { error } = await supabase.rpc('manual_clock_out', { 
-          p_session_id: currentSession.id 
-        });
-        if (error) throw error;
-        toast.success(`Clocked out successfully at ${format12hr(new Date())}`);
+      if (hasActiveSession) {
+        // Clock Out - Close ALL active sessions to fix "auto-start" loops
+        let successCount = 0;
+        for (const session of activeSessions) {
+          const { error } = await supabase.rpc('manual_clock_out', { 
+            p_session_id: session.id 
+          });
+          if (!error) successCount++;
+        }
+        
+        if (successCount > 0) {
+          toast.success(`Clocked out successfully${successCount > 1 ? ` (Closed ${successCount} active sessions)` : ''} at ${format12hr(new Date())}`);
+        }
       } else {
         // Clock In
         const { error } = await supabase.rpc('manual_clock_in', { 

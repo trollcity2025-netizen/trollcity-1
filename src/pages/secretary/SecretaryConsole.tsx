@@ -11,7 +11,8 @@ import {
   Shield,
   Users,
   Crown,
-  BookOpen
+  BookOpen,
+  DollarSign
 } from 'lucide-react'
 import ExecutiveIntakeList from '../admin/components/shared/ExecutiveIntakeList'
 import CashoutRequestsList from '../admin/components/shared/CashoutRequestsList'
@@ -22,8 +23,9 @@ import ManualCoinOrdersList from '../admin/components/shared/ManualCoinOrdersLis
 import ManualTrollPassOrdersList from '../admin/components/shared/ManualTrollPassOrdersList'
 import PastorApplicationsList from '../admin/components/shared/PastorApplicationsList'
 import StaffManagement from '../admin/components/StaffManagement'
+import AutomatedPayouts from '../admin/components/AutomatedPayouts'
 
-type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps'
+type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts'
 
 export default function SecretaryConsole() {
   const { user, profile, logout } = useAuthStore()
@@ -93,6 +95,21 @@ export default function SecretaryConsole() {
               <div className="text-left">
                 <div className="font-medium">Cashouts</div>
                 <div className="text-[10px] opacity-70">Process payments</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('automated_payouts')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                activeTab === 'automated_payouts' 
+                  ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30' 
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <DollarSign className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Automated Payouts</div>
+                <div className="text-[10px] opacity-70">Mon/Fri Batches</div>
               </div>
             </button>
 
@@ -226,6 +243,16 @@ export default function SecretaryConsole() {
               </div>
             )}
 
+            {activeTab === 'automated_payouts' && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-white mb-2">Automated Payout Runs</h2>
+                  <p className="text-slate-400">Monitor automatic batch payouts (Mon/Fri).</p>
+                </div>
+                <AutomatedPayouts />
+              </div>
+            )}
+
             {activeTab === 'manual_payments' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="mb-6">
@@ -243,6 +270,16 @@ export default function SecretaryConsole() {
                   <p className="text-slate-400">Review and approve manual Troll Pass purchases.</p>
                 </div>
                 <ManualTrollPassOrdersList />
+              </div>
+            )}
+
+            {activeTab === 'pastor_apps' && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-white mb-2">Pastor Applications</h2>
+                  <p className="text-slate-400">Review and process pastor role applications.</p>
+                </div>
+                <PastorApplicationsList />
               </div>
             )}
 

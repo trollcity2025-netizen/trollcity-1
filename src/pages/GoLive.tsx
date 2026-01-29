@@ -6,6 +6,7 @@ import { useAuthStore } from '../lib/store';
 import { useCoins } from '../lib/hooks/useCoins';
 import { useBroadcastLockdown } from '../lib/hooks/useBroadcastLockdown';
 import { Video } from 'lucide-react';
+import BroadcastThemePicker from '../components/broadcast/BroadcastThemePicker';
 import { toast } from 'sonner';
 import { useLiveKit } from '../hooks/useLiveKit';
 import { LIVEKIT_URL } from '../lib/LiveKitConfig';
@@ -202,7 +203,6 @@ const GoLive: React.FC = () => {
     setThemePurchaseId(themeId);
     try {
       const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
-        p_user_id: user.id,
         p_theme_id: themeId,
         p_set_active: true
       });
@@ -887,118 +887,31 @@ const GoLive: React.FC = () => {
           <div>
             <label className="text-gray-300">Broadcast Background</label>
             <div className="mt-2 space-y-4">
-            <div className="rounded-xl border border-purple-700/30 bg-[#0b091f] p-4 space-y-3">
-                <div className="text-sm font-semibold text-white">Select a theme</div>
-                <select
-                  value={selectedThemeId || ''}
-                  onChange={(e) => setSelectedThemeId(e.target.value || null)}
-                  className="w-full bg-[#0e0020] border-2 border-[#0fffc1]/60 focus:border-[#ff00ea] text-white rounded-lg px-4 py-3 neon-input"
-                  disabled={themesLoading}
-                >
-                  <option value="">Default (free)</option>
-                  {themes.map((theme) => {
-                    const owned = ownedThemeIds.has(theme.id);
-                    const eligibility = getEligibility(theme);
-                    const locked = !eligibility.isEligible;
-                    const labelParts = [
-                      theme.name,
-                      owned ? 'Owned' : `${theme.price_coins.toLocaleString()} coins`,
-                      locked ? 'Locked' : null
-                    ].filter(Boolean);
-                    return (
-                      <option key={theme.id} value={theme.id} disabled={locked}>
-                      {labelParts.join(' - ')}
-                      </option>
-                    );
-                  })}
-                </select>
-
-                {themesLoading && <div className="text-xs text-gray-400">Loading themes...</div>}
-                {!themesLoading && themes.length === 0 && (
-                  <div className="text-xs text-gray-500">No themes available yet.</div>
-                )}
-
-                {(() => {
-                  const selectedTheme = themes.find((t) => t.id === selectedThemeId);
-                  if (!selectedTheme) {
-                    return (
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>Default background active.</span>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectTheme(null)}
-                          className={`px-3 py-1 rounded border ${!activeThemeId ? 'border-cyan-400/70 text-cyan-200' : 'border-white/10 text-white/60'}`}
-                        >
-                          Use Default
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  const owned = ownedThemeIds.has(selectedTheme.id);
-                  const isActive = activeThemeId === selectedTheme.id;
-                  const eligibility = getEligibility(selectedTheme);
-                  const isAnimated = selectedTheme.asset_type === 'video';
-                  const isLimited = Boolean(selectedTheme.is_limited);
-                  const isExclusive = Boolean(selectedTheme.is_streamer_exclusive || selectedTheme.min_stream_level || selectedTheme.min_followers || selectedTheme.min_total_hours_streamed);
-
-                  return (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-gray-400">
-                        <span>{selectedTheme.rarity || 'standard'}</span>
-                        {isAnimated && <span className="text-cyan-200">Animated</span>}
-                        {isLimited && <span className="text-pink-200">Limited</span>}
-                        {isExclusive && <span className="text-amber-200">Exclusive</span>}
-                      </div>
-                      {!eligibility.isEligible && (
-                        <div className="text-[11px] text-red-200 space-y-1">
-                          <div>{eligibility.seasonalState || 'Locked'}</div>
-                          {eligibility.requiresStreamer && !eligibility.meetsStreamer && (
-                            <div className="text-[10px] text-white/60">
-                              Needs
-                              {eligibility.minLevel ? ` Lv ${eligibility.minLevel}` : ''}
-                              {eligibility.minFollowers ? ` - ${eligibility.minFollowers}+ followers` : ''}
-                              {eligibility.minHours ? ` - ${eligibility.minHours}+ hrs` : ''}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {eligibility.isEligible && eligibility.seasonalState && (
-                        <div className="text-[11px] text-yellow-200">{eligibility.seasonalState}</div>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        {owned ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleSelectTheme(selectedTheme.id)}
-                              className={`flex-1 text-xs px-3 py-2 rounded border ${isActive ? 'border-cyan-400/80 text-cyan-200' : 'border-white/10 text-white/70 hover:text-white'}`}
-                            >
-                              {isActive ? 'Active' : 'Enable'}
-                            </button>
-                            <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-200">Owned</span>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleBuyTheme(selectedTheme.id)}
-                            disabled={!eligibility.isEligible || themePurchaseId === selectedTheme.id}
-                            className="flex-1 text-xs px-3 py-2 rounded border border-pink-500/40 text-pink-200 hover:text-white"
-                          >
-                            {themePurchaseId === selectedTheme.id
-                              ? 'Purchasing...'
-                              : Number(selectedTheme.price_coins || 0) === 0
-                                ? 'Claim Free'
-                                : eligibility.isEligible
-                                  ? 'Buy Theme'
-                                  : 'Locked'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+              <div className="rounded-xl border border-purple-700/30 bg-[#0b091f] p-4 space-y-3">
+                <div className="text-sm font-semibold text-white mb-2">Select a theme</div>
+                <BroadcastThemePicker
+                  themes={themes}
+                  selected={selectedThemeId}
+                  onSelect={(id) => setSelectedThemeId(id)}
+                  ownedThemeIds={ownedThemeIds}
+                />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTheme(selectedThemeId)}
+                    className={`flex-1 text-xs px-3 py-2 rounded border border-cyan-400/80 text-cyan-200`}
+                    disabled={!selectedThemeId}
+                  >
+                    Use Selected Theme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTheme(null)}
+                    className={`flex-1 text-xs px-3 py-2 rounded border border-white/10 text-white/60`}
+                  >
+                    Use Default
+                  </button>
+                </div>
               </div>
             </div>
           </div>

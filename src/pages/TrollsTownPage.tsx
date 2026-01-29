@@ -62,6 +62,7 @@ type UpgradeDefinition = {
   tasksRequiredTotal: number
 }
 
+
 import { formatCompactNumber } from '../lib/utils'
 
 const STARTER_HOME_BASE_VALUE = 1500
@@ -1559,6 +1560,9 @@ const TrollsTownPage: React.FC = () => {
               })}
             </div>
           </div>
+
+          {/* Consumables Section */}
+
 
             <div className="bg-black/40 border border-purple-500/30 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">

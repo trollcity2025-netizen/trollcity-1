@@ -72,7 +72,7 @@ export default function Withdraw() {
     ] as const;
     const tier = tiers.find(t => t.coins === coinAmount);
     if (!tier) {
-      toast.error("Select a valid Visa tier: 12k, 30k, 60k, 120k");
+      toast.error("Select a valid PayPal tier: 12k, 30k, 60k, 120k");
       return;
     }
     const { data, error } = await supabase.rpc('request_visa_redemption', {
@@ -86,7 +86,7 @@ export default function Withdraw() {
       return toast.error("Error submitting request");
     }
     
-    toast.success(`Visa redemption created: ID ${String(data?.redemption_id || '')}`);
+    toast.success(`PayPal payout request created: ID ${String(data?.redemption_id || '')}`);
     setAmount("");
     loadBalance();
   };

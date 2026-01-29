@@ -51,7 +51,7 @@ export default function DistrictTour() {
     const features: { [key: string]: { feature_name: string, route_path: string }[] } = {
       main_plaza: [
         { feature_name: 'Live Streams', route_path: '/live' },
-        { feature_name: 'Messages', route_path: '/messages' },
+        { feature_name: 'TCPS', route_path: '/tcps' },
         { feature_name: 'Following', route_path: '/following' },
         { feature_name: 'Leaderboard', route_path: '/leaderboard' },
         { feature_name: 'Troll City Wall', route_path: '/wall' }

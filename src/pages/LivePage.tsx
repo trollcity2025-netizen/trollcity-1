@@ -51,6 +51,7 @@ import UserActionsMenu from '../components/broadcast/UserActionsMenu';
 import { useViewerTracking } from '../hooks/useViewerTracking';
 import TrollBattleOverlay from '../components/broadcast/TrollBattleOverlay';
 import TrollBattlesSetup from '../components/broadcast/TrollBattlesSetup';
+import BroadcastLevelBar from '../components/broadcast/BroadcastLevelBar';
 
 // Constants
 const STREAM_POLL_INTERVAL = 2000;
@@ -110,6 +111,9 @@ interface StreamRow {
   agora_channel?: string;
   category?: string;
   is_private?: boolean;
+  broadcast_level_percent?: number;
+  last_level_update_at?: string;
+  broadcast_xp?: number;
 }
 
 interface ActiveViewer {
@@ -2086,7 +2090,7 @@ export default function LivePage() {
         // Fetch by Stream ID ONLY
         const { data: streamRow, error } = await supabase
           .from("streams")
-        .select("id, broadcaster_id, title, category, status, start_time, end_time, current_viewers, total_gifts_coins, total_unique_gifters, is_live, is_private, thumbnail_url, room_name, created_at, updated_at")
+        .select("id, broadcaster_id, title, category, status, start_time, end_time, current_viewers, total_gifts_coins, total_unique_gifters, is_live, is_private, thumbnail_url, room_name, created_at, updated_at, broadcast_level_percent, last_level_update_at, broadcast_xp")
           .eq("id", streamId)
           .maybeSingle();
 
@@ -3616,6 +3620,15 @@ export default function LivePage() {
             }
           }}
         >
+          {stream && (
+             <BroadcastLevelBar 
+               streamId={stream.id} 
+               currentLevel={stream.broadcast_level_percent || 0} 
+               lastLevelUpdateAt={stream.last_level_update_at}
+               onLevelUpdate={loadStreamData}
+             />
+          )}
+
           <div className="shrink-0 min-h-0 flex flex-col relative w-full">
             <BroadcastLayout 
               className="h-auto"

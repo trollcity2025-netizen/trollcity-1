@@ -4,9 +4,42 @@ import { useAuthStore } from '../lib/store'
 import { deductCoins } from '../lib/coinTransactions'
 import { toast } from 'sonner'
 import { ShoppingBag, Coins } from 'lucide-react'
+
 import { getTrollMartItems, purchaseTrollMartItem } from '../lib/purchases'
 import { useTrollMartInventory } from '../hooks/usePurchases'
 import type { TrollMartClothing } from '../types/purchases'
+
+// Mock consumables for now (replace with DB fetch if needed)
+const CONSUMABLES = [
+  {
+    id: 'broadcast_notification',
+    name: 'Stream Notification',
+    category: 'broadcast_notification',
+    item_code: 'broadcast_notification',
+    price_coins: 500,
+    image_url: null,
+    model_url: null,
+    description: 'Send a notification to all users to watch your stream. Lasts 1 hour.',
+    rarity: 'rare',
+    is_active: true,
+    sort_order: 100,
+    created_at: '',
+  },
+  {
+    id: 'broadcast_feature',
+    name: 'Top Broadcaster Feature',
+    category: 'broadcast_feature',
+    item_code: 'broadcast_feature',
+    price_coins: 1000,
+    image_url: null,
+    model_url: null,
+    description: 'Feature your stream in the top broadcasters on the homepage for 1 hour.',
+    rarity: 'epic',
+    is_active: true,
+    sort_order: 101,
+    created_at: '',
+  },
+]
 
 export default function TrollMart() {
   const { user, profile, refreshProfile } = useAuthStore()
@@ -26,12 +59,12 @@ export default function TrollMart() {
       setLoading(true)
       try {
         const data = await getTrollMartItems()
-        setItems(data as TrollMartClothing[])
+        // Add consumables to the end of the list
+        setItems([...(data as TrollMartClothing[]), ...CONSUMABLES])
       } finally {
         setLoading(false)
       }
     }
-
     loadItems()
   }, [user, navigate])
 
@@ -91,7 +124,7 @@ export default function TrollMart() {
           </div>
           <div>
             <h1 className="text-3xl font-bold">Troll Mart</h1>
-            <p className="text-sm text-gray-400">Avatar clothing and style upgrades.</p>
+            <p className="text-sm text-gray-400">Avatar clothing, style upgrades, and stream consumables.</p>
           </div>
         </div>
 

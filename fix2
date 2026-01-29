@@ -1,0 +1,226 @@
+You are Trae.ai acting as lead full-stack engineer + database architect for my Troll City app. Implement a complete “Living” (Housing) system with apartments, landlords, leases, rent, utilities, restricted-purpose bank loans, credit score penalties, and Troll Court enforcement.
+
+DO NOT add any unrelated features. Keep existing theme. Wire all buttons and flows end-to-end. No mock data.
+
+========================================================
+0) CORE PRINCIPLES (NON-NEGOTIABLE)
+========================================================
+A) No coin minting loopholes: all transfers must be atomic and auditable.
+B) All permissions enforced server-side (RLS + secure RPC/Edge functions). Never trust client checks.
+C) Every financial event must write to a ledger (who paid whom, what for, when, and reference IDs).
+D) Users can continue using the app while apartment application is pending.
+E) Admin is automatically a Landlord and can instantly approve apartments and landlord applications.
+
+========================================================
+1) NEW MAIN NAV / PAGE
+========================================================
+Add a new main page called: “Living”
+It contains:
+- Available Apartments (catalog + filters + details + apply)
+- My Housing (tenant view: application status, lease, next rent due, pay buttons, utilities)
+- Landlord Dashboard (only for landlords + admin)
+- Utility Company pages users only can see pay and transactions for the two companies: “Trollectric Company:electric” and “Trotter Company” (water)
+
+========================================================
+2) APARTMENT CATALOG + APPLICATION FLOW
+========================================================
+A) Catalog
+- Show apartment listings with: name, location/area, bedrooms, rent, deposit, application fee, photos (ai generated , rules
+- Listing detail page shows full details and landlord info
+
+B) Application
+- Users must choose an apartment from catalog
+- Pay application fee (Troll Coins) at application submit, set price for app fee is 35 troll coins
+- Application status: pending → approved/rejected
+- While pending, user can use app normally
+- Once approved: user must sign lease and then pay deposit + first month rent (or required move-in charges)
+
+C) Lease signing
+- Lease agreement record created with terms:
+  - rent amount
+  - deposit amount
+  - due day each month
+  - grace period (if any)
+  - late fee rules (if any)
+- Lease must be viewable by tenant and landlord (read-only terms, signed date, lease status)
+
+========================================================
+3) LANDLORD SYSTEM + “BECOME A LANDLORD” PURCHASE (7,000 COINS)
+========================================================
+Add an application/purchase page: “Become a Landlord”
+- Cost: 7,000 Troll Coins (one-time)
+- On purchase success:
+  - user becomes landlord (role/flag) and gains access to landlord dashboard
+- Admin is landlord by default without paying and has instant approval powers
+
+Landlord Dashboard Requirements:
+- Create/edit listings with full customization:
+  - rent, deposit, application fee, bedrooms, description, rules, images, availability
+- View applications per listing:
+  - approve/reject, see applicant profile and credit score
+- View leases:
+  - active leases, due dates, payment status
+- Evict tenant flow (with court / reasons / finalization)
+- Take tenant to Troll Court for non-payment (automated when due, plus manual action)
+
+========================================================
+4) RENT COLLECTION + ENFORCEMENT (MONTHLY)
+========================================================
+A) Rent due schedule
+- Each active lease has a monthly rent due date.
+- On due date:
+  - If tenant balance >= rent: rent is paid instantly (automatic).
+  - If tenant balance < rent: tenant is instantly summoned to Troll Court.
+
+B) Automatic payment rule
+- Implement server-side scheduled job (cron/edge scheduled function) that runs daily (or hourly) and checks:
+  - rent due today
+  - attempt payment
+  - record ledger entry
+  - update lease payment status
+  - if insufficient funds, create court summons and mark delinquent
+
+C) Landlord receiving
+- Rent and deposits go directly to landlord balance (as coins the landlord can cash out).
+- Must be recorded as “restricted rent payment transfer” for audit.
+
+========================================================
+5) BANK LOANS FOR RENT/DEPOSIT ONLY (RESTRICTED COINS)
+========================================================
+Add bank feature:
+- “Rent Loan” and “Deposit Loan”
+Rules:
+1) Loan coins are restricted-purpose and cannot be spent on anything else.
+2) Loan must be paid directly to landlord for rent/deposit only.
+3) User cannot withdraw or gift these restricted loan coins.
+4) When user selects “Pay rent” or “Pay deposit” they can choose:
+   - pay from wallet balance
+   - or use bank loan (if eligible) to cover shortage
+5) Loan disbursement should not credit the user’s normal spendable wallet.
+   Instead: create a “bank voucher” that can only be applied to that specific invoice (rent/deposit) and then transfers to landlord.
+
+Eligibility:
+- Tie to credit score and/or account age.
+- Add limits to avoid abuse (max amount = rent/deposit amount, one active housing loan at a time, etc.)
+Repayment:
+- Define repayment rules (weekly/monthly). Must be server-driven with ledger events and affects credit score if delinquent.
+
+========================================================
+6) UTILITIES: ELECTRIC + WATER (TROLLECTRIC + TROTTER)
+========================================================
+Each tenant with an active lease must pay:
+- Electric bill 100 troll coins
+- Water bill 75 troll coins
+
+Implementation:
+- Create monthly utility invoices per lease (or per tenant) with due date.
+- Tenant can pay utilities from normal wallet balance (NOT from rent/deposit restricted loan unless you explicitly allow a separate utility loan; default: NOT allowed).
+
+Non-payment penalty:
+- If user fails to pay water or electric:
+  - Credit score goes down by HALF (score = score / 2) and remains reduced until bill is caught up.
+  - When caught up: credit score returns to prior baseline (restore; do NOT permanently lose beyond any additional penalty rules you implement).
+- Log credit score changes in credit_score_events with reason and references.
+
+Utility company pages (landlord/admin only):
+- “Trollectric Company” dashboard: sees all electric invoices, who is delinquent
+- “Trotter Company” dashboard: sees all water invoices, who is delinquent
+- Ability to mark invoice corrected/adjusted (admin only)
+
+========================================================
+7) TROLL COURT INTEGRATION
+========================================================
+Court triggers:
+- Rent due and insufficient funds => automatic summons
+- Landlord can manually file a case for non-payment or lease violation
+Court records must include:
+- tenant, landlord, lease_id, invoice_id(s), reason, timestamps
+Outcomes:
+- Payment plan (optional)
+- Eviction (landlord action must reference a court outcome or admin override)
+- These actions must be logged and reversible by admin if abuse detected.
+
+========================================================
+8) REQUIRED DB / SCHEMA OBJECTS (IMPLEMENT OR EXTEND)
+========================================================
+Add/extend tables (names can vary but must cover these concepts):
+- apartments (listings)
+- landlord_profiles (verified landlord data + role)
+- apartment_applications (tenant applications + statuses + fees)
+- leases (signed leases, due dates, statuses)
+- invoices (rent + utilities with types: rent, deposit, electric, water)
+- payments_ledger (all transfers, source, destination, type, reference IDs)
+- bank_loans (type: rent_loan, deposit_loan; amounts; status; repayment schedule)
+- restricted_balances_or_vouchers (tied to invoice_id; spend limited)
+- court_cases (summons and landlord-filed cases)
+- credit_score_events (if not already) with reversible event support
+
+Also ensure RLS policies:
+- Tenant can read their own application/lease/invoices.
+- Landlord can read applications/leasing/invoices for their listings.
+- Admin can read all.
+- Only secure server functions can create payments, loans, and automated rent pulls.
+
+========================================================
+9) UI REQUIREMENTS
+========================================================
+Tenant UI:
+- Living → Available Apartments → Apply
+- Living → My Housing:
+  - application status
+  - lease view + sign
+  - invoices list (rent/deposit/utilities)
+  - pay now buttons
+  - alerts for delinquency and court summons
+
+Landlord UI:
+- Living → Landlord Dashboard:
+  - listings CRUD
+  - applications review approve/reject
+  - leases list and lease detail
+  - evict action (with court linkage)
+  - court case filing
+
+Admin UI:
+- Can do everything landlord can
+- Plus: instant approval, overrides, reverse abusive actions
+
+========================================================
+10) AUTOMATION + REALTIME
+========================================================
+- Scheduled jobs:
+  - generate monthly rent invoices
+  - generate monthly utility invoices
+  - attempt automatic rent payment on due date
+  - summons generation if insufficient funds
+- Realtime updates:
+  - when application approved/rejected
+  - when lease signed
+  - when invoice paid
+  - when court summons created
+
+========================================================
+11) TESTING / QA (MANDATORY)
+========================================================
+Provide:
+- Manual QA checklist for:
+  - apply → approve → sign → pay deposit/rent
+  - bank rent/deposit loan restricted spending
+  - auto rent pull success and insufficient funds summons
+  - utility delinquency halves credit score and restores when paid
+  - landlord listing creation + approval flow
+  - eviction/court flow
+- Automated tests where feasible:
+  - restricted loan cannot be spent elsewhere
+  - atomic transfers (no double charge)
+  - RLS permission checks
+
+DELIVERABLES
+1) Code changes + migrations
+2) “Living System Report”:
+   - schema summary
+   - endpoints/functions summary
+   - permission matrix
+   - how to test each flow
+Start implementation now.
+add landlord to applications page

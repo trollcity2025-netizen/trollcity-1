@@ -46,7 +46,7 @@ export default function OfficerShiftsPanel() {
     setLoading(true)
     try {
       let query = supabase
-        .from('officer_shift_logs')
+        .from('officer_work_sessions')
         // Avoid FK-name joins to prevent schema-cache/constraint-name drift (PGRST200)
         .select('*')
         .order('clock_in', { ascending: false })
@@ -129,7 +129,7 @@ export default function OfficerShiftsPanel() {
         {
           event: '*',
           schema: 'public',
-          table: 'officer_shift_logs'
+          table: 'officer_work_sessions'
         },
         () => {
           loadShifts()

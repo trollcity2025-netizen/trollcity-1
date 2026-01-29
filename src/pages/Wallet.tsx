@@ -3,6 +3,7 @@ import { useAuthStore } from "../lib/store";
 import { useNavigate } from "react-router-dom";
 import { Wallet as WalletIcon, Coins, DollarSign, RefreshCw, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
 import { getTransactionHistory, logCoinAction } from "../lib/coinUtils";
+import { supabase } from "../lib/supabase";
 import { format12hr } from "../utils/timeFormat";
 import { toast } from "sonner";
 
@@ -68,7 +69,7 @@ export default function Wallet() {
       await logCoinAction(user.id, 'wallet_viewed', {
         timestamp: new Date().toISOString(),
         transactionCount: transactions.length
-      });
+      }, supabase);
 
     } catch (err: any) {
       console.error('Wallet loading error:', err);

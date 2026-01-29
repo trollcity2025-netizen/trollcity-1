@@ -39,11 +39,11 @@ serve(async (req) => {
     // Get user profile to check role
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('is_officer, role, is_banned')
+      .select('is_troll_officer, is_lead_officer, is_admin, role, is_banned')
       .eq('id', user.id)
       .single()
 
-    const isOfficer = profile?.is_officer || profile?.role === 'admin' || profile?.role === 'troll_officer'
+    const isOfficer = profile?.is_troll_officer || profile?.is_lead_officer || profile?.is_admin || profile?.role === 'admin' || profile?.role === 'troll_officer'
 
     const { action, ...payload } = await req.json()
 
@@ -218,7 +218,7 @@ serve(async (req) => {
           .order('created_at', { ascending: false })
 
         // Officers see pending + reviewing, admins see all
-        if (profile?.role !== 'admin') {
+        if (profile?.role !== 'admin' && !profile?.is_admin) {
           query = query.in('status', ['pending', 'reviewing'])
         }
 

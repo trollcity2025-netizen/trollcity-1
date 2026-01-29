@@ -28,7 +28,9 @@ import { useGiftEvents } from '../lib/hooks/useGiftEvents';
 import EntranceEffect from '../components/broadcast/EntranceEffect';
 import { getUserEntranceEffect } from '../lib/entranceEffects';
 import { attachLiveKitDebug } from '../lib/livekit-debug';
-import VideoFeed from '../components/stream/VideoFeed';
+import ResponsiveVideoGrid from '../components/stream/ResponsiveVideoGrid';
+import { useRoomParticipants } from '../hooks/useRoomParticipants';
+import { useSeatRoster } from '../hooks/useSeatRoster';
 import { useViewerTracking } from '../hooks/useViewerTracking';
 
 // Constants
@@ -74,6 +76,8 @@ export default function WatchPage() {
   const [reactiveEvent, setReactiveEvent] = useState<{ key: number; style: string; intensity: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [activeMobilePanel, setActiveMobilePanel] = useState<'seats' | 'gifts' | 'chat'>('seats');
+  const [boxCount, setBoxCount] = useState(0);
+  const [loggedOutAt, setLoggedOutAt] = useState<number | null>(null);
 
   const liveKit = useLiveKit();
   const roomName = useMemo(() => String(streamId || ''), [streamId]);
@@ -84,6 +88,56 @@ export default function WatchPage() {
   const canAccessPrivate = !needsPrivateGate || privateAccessGranted;
   const canJoinStream = sessionReady && hasValidStreamId && canAccessPrivate;
   const effectiveRoomName = canJoinStream ? roomName : '';
+
+  const { seats } = useSeatRoster(effectiveRoomName);
+  const participants = useRoomParticipants(liveKit.getRoom());
+  const { startWatchTracking, stopWatchTracking, updateWatchTime } = useXPTracking();
+
+  useEffect(() => {
+    if (!streamId || !user) return;
+
+    startWatchTracking(streamId);
+    const interval = setInterval(() => updateWatchTime(streamId), 60000);
+
+    return () => {
+      clearInterval(interval);
+      stopWatchTracking(streamId);
+    };
+  }, [streamId, user, startWatchTracking, stopWatchTracking, updateWatchTime]);
+
+  const refreshBoxCountFromMessages = useCallback(async () => {
+    if (!streamId) return;
+    try {
+      const { data } = await supabase
+        .from('messages')
+        .select('content')
+        .eq('stream_id', streamId)
+        .eq('message_type', 'system')
+        .like('content', 'BOX_COUNT_UPDATE:%')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        const parts = (data.content as string).split(':');
+        if (parts.length >= 2) {
+          const parsed = parseInt(parts[1], 10);
+          if (!isNaN(parsed)) {
+            setBoxCount(parsed);
+          }
+        }
+      } else {
+        // Default to 5 if no update found, assuming standard broadcast
+        setBoxCount(5);
+      }
+    } catch (err) {
+      console.error('Failed to refresh box count:', err);
+    }
+  }, [streamId]);
+
+  useEffect(() => {
+    refreshBoxCountFromMessages();
+  }, [refreshBoxCountFromMessages]);
 
   useViewerTracking(canJoinStream ? streamId || null : null, stableIdentity || null);
 
@@ -113,6 +167,54 @@ export default function WatchPage() {
       attachLiveKitDebug(room);
     }
   }, [isConnected, liveKit]);
+
+  useEffect(() => {
+    if (user?.id) {
+      setLoggedOutAt(null);
+    } else {
+      setLoggedOutAt((prev) => prev ?? Date.now());
+    }
+  }, [user?.id]);
+
+  const messageIconClass = useMemo(() => {
+    if (stream?.is_live) return 'text-red-500';
+    if (user?.id) return 'text-green-500';
+    if (loggedOutAt && Date.now() - loggedOutAt > 30000) return 'text-orange-500';
+    return '';
+  }, [stream?.is_live, user?.id, loggedOutAt]);
+
+  useEffect(() => {
+    if (!streamId) return;
+
+    const channel = supabase
+      .channel(`box-count-${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          if (newMsg.message_type === 'system' && newMsg.content?.startsWith('BOX_COUNT_UPDATE:')) {
+            const parts = newMsg.content.split(':');
+            if (parts.length >= 2) {
+              const parsed = parseInt(parts[1], 10);
+              if (!isNaN(parsed)) {
+                setBoxCount(parsed);
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId]);
 
   // Auth/Session checks (defensive)
   useEffect(() => {
@@ -678,7 +780,17 @@ export default function WatchPage() {
           reactiveEvent ? `theme-reactive-${reactiveEvent.style} theme-reactive-intensity-${reactiveEvent.intensity}` : ''
         }`}
       />
-      <VideoFeed room={liveKit.getRoom()} isHost={false} />
+      <ResponsiveVideoGrid
+        participants={participants}
+        localParticipant={liveKit.getRoom()?.localParticipant}
+        broadcasterId={stream?.broadcaster_id}
+        seats={seats}
+        isHost={false}
+        boxCount={boxCount}
+        onUserClick={(p) => {
+          // Find profile from participants if possible, or just ignore
+        }}
+      />
       {lastGift && <GiftEventOverlay gift={lastGift} onProfileClick={setSelectedProfile} />}
     </div>
   );
@@ -829,7 +941,7 @@ export default function WatchPage() {
                     aria-pressed={activeMobilePanel === 'chat'}
                     onClick={() => handleMobilePanelChange('chat')}
                   >
-                    <MessageCircle size={16} /> Chat
+                  <MessageCircle size={16} className={messageIconClass} /> Chat
                   </button>
                 </div>
               </div>

@@ -113,30 +113,15 @@ export default function AdminManualOrders() {
   const approveOrder = useCallback(async (orderId: string) => {
     setActionId(orderId)
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) throw new Error('Not authenticated')
-
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manual-coin-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          action: 'approve',
-          order_id: orderId,
-          external_tx_id: txRefs[orderId] || undefined,
-        }),
+      const { data, error } = await supabase.rpc('process_manual_coin_order', {
+        p_order_id: orderId,
+        p_external_tx_id: txRefs[orderId] || null
       })
 
-      const text = await res.text()
-      let json: any = null
-      try { json = JSON.parse(text) } catch {}
-      if (!res.ok) throw new Error(json?.error || 'Approval failed')
+      if (error) throw error
+      if (data && !data.success) throw new Error(data.error || 'Approval failed')
 
-      toast.success('Order credited')
+      toast.success('Order credited successfully')
       loadOrders()
     } catch (e: any) {
       console.error('Approve manual order error', e)
@@ -150,27 +135,13 @@ export default function AdminManualOrders() {
     if (!window.confirm('Delete this manual Cash App order? This cannot be undone.')) return
     setActionId(orderId)
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      if (!token) throw new Error('Not authenticated')
+      // Soft delete
+      const { error } = await supabase
+        .from('manual_coin_orders')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', orderId)
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manual-coin-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          action: 'delete',
-          order_id: orderId,
-        }),
-      })
-
-      const text = await res.text()
-      let json: any = null
-      try { json = JSON.parse(text) } catch {}
-      if (!res.ok) throw new Error(json?.error || 'Delete failed')
+      if (error) throw error
 
       toast.success('Manual order deleted')
       loadOrders()

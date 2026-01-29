@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   FileText,
   Users,
@@ -8,6 +8,8 @@ import {
   Star,
   RefreshCw
 } from 'lucide-react'
+import { supabase } from '../../../lib/supabase'
+import { toast } from 'sonner'
 
 interface ApplicationsHubProps {
   onLoadApplications?: () => void
@@ -23,6 +25,45 @@ export default function ApplicationsHub({
   onRejectApplication
 }: ApplicationsHubProps) {
   const [activeTab, setActiveTab] = useState<string>('officer')
+  const [applications, setApplications] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchApplications = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('applications')
+        .select(`
+          *,
+          user_profiles!user_id (
+            username,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setApplications(data || [])
+    } catch (error) {
+      console.error('Error fetching applications:', error)
+      toast.error('Failed to load applications')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchApplications()
+  }, [])
+
+  const handleRefresh = () => {
+    fetchApplications()
+    if (onLoadApplications) onLoadApplications()
+  }
+
+  const officerApps = applications.filter(app => app.type.includes('officer') && app.status === 'pending')
+  const creatorApps = applications.filter(app => (app.type === 'creator' || app.type === 'seller') && app.status === 'pending')
+  const approvedApps = applications.filter(app => app.status === 'approved').slice(0, 10)
 
   const tabs = [
     {
@@ -32,16 +73,16 @@ export default function ApplicationsHub({
       color: 'text-blue-400',
       bgColor: 'bg-blue-500/20',
       borderColor: 'border-blue-500/30',
-      count: 0 // Will be populated from data
+      count: officerApps.length
     },
     {
       id: 'creator',
-      label: 'Creator Applications',
+      label: 'Creator/Seller Apps',
       icon: <Star className="w-4 h-4" />,
       color: 'text-yellow-400',
       bgColor: 'bg-yellow-500/20',
       borderColor: 'border-yellow-500/30',
-      count: 0 // Will be populated from data
+      count: creatorApps.length
     },
     {
       id: 'approved',
@@ -50,61 +91,17 @@ export default function ApplicationsHub({
       color: 'text-green-400',
       bgColor: 'bg-green-500/20',
       borderColor: 'border-green-500/30',
-      count: 0 // Will be populated from data
+      count: approvedApps.length
     }
   ]
 
-  const mockApplications = {
-    officer: [
-      {
-        id: '1',
-        user_id: 'user-1',
-        username: 'TrollMaster2025',
-        type: 'officer',
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        experience: '2 years streaming',
-        reason: 'Want to help maintain order in Troll City'
-      },
-      {
-        id: '2',
-        user_id: 'user-2',
-        username: 'CityGuardian',
-        type: 'officer',
-        status: 'pending',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        experience: 'Former moderator',
-        reason: 'Passionate about community safety'
-      }
-    ],
-    creator: [
-      {
-        id: '4',
-        user_id: 'user-4',
-        username: 'ArtisticTroll',
-        type: 'creator',
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        portfolio: 'Digital art and animations',
-        experience: '3 years creating content'
-      }
-    ],
-    approved: [
-      {
-        id: '5',
-        user_id: 'user-5',
-        username: 'OfficerMike',
-        type: 'officer',
-        status: 'approved',
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        approved_at: new Date(Date.now() - 86400000).toISOString(),
-        approved_by: 'Admin'
-      }
-    ]
-  }
-
   const getApplicationsForTab = (tabId: string) => {
-    return mockApplications[tabId as keyof typeof mockApplications] || []
+    switch (tabId) {
+      case 'officer': return officerApps
+      case 'creator': return creatorApps
+      case 'approved': return approvedApps
+      default: return []
+    }
   }
 
   const renderApplicationCard = (app: any) => (
@@ -115,8 +112,8 @@ export default function ApplicationsHub({
             <Users className="w-5 h-5 text-gray-400" />
           </div>
           <div>
-            <h4 className="font-medium text-white">{app.username}</h4>
-            <p className="text-xs text-gray-400 capitalize">{app.type} Application</p>
+            <h4 className="font-medium text-white">{app.user_profiles?.username || 'Unknown'}</h4>
+            <p className="text-xs text-gray-400 capitalize">{app.type.replace('_', ' ')} Application</p>
           </div>
         </div>
         <div className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -129,49 +126,30 @@ export default function ApplicationsHub({
       </div>
 
       <div className="space-y-2 mb-4">
-        {app.experience && (
-          <div className="text-sm">
-            <span className="text-gray-400">Experience:</span>
-            <span className="text-white ml-2">{app.experience}</span>
-          </div>
-        )}
-        {app.reason && (
-          <div className="text-sm">
-            <span className="text-gray-400">Reason:</span>
-            <span className="text-white ml-2">{app.reason}</span>
-          </div>
-        )}
-        {app.content_type && (
-          <div className="text-sm">
-            <span className="text-gray-400">Content Type:</span>
-            <span className="text-white ml-2">{app.content_type}</span>
-          </div>
-        )}
-        {app.followers && (
-          <div className="text-sm">
-            <span className="text-gray-400">Followers:</span>
-            <span className="text-white ml-2">{app.followers.toLocaleString()}</span>
-          </div>
-        )}
-        {app.portfolio && (
-          <div className="text-sm">
-            <span className="text-gray-400">Portfolio:</span>
-            <span className="text-white ml-2">{app.portfolio}</span>
-          </div>
+        {/* Render dynamic fields from JSONB or columns if they exist, for now basic info */}
+        <div className="text-sm">
+          <span className="text-gray-400">Applied:</span>
+          <span className="text-white ml-2">{new Date(app.created_at).toLocaleDateString()}</span>
+        </div>
+        {app.store_name && (
+           <div className="text-sm">
+           <span className="text-gray-400">Store Name:</span>
+           <span className="text-white ml-2">{app.store_name}</span>
+         </div>
         )}
       </div>
 
       <div className="flex items-center justify-between text-xs text-gray-400">
-        <span>Applied {new Date(app.created_at).toLocaleDateString()}</span>
-        {app.approved_at && (
-          <span>Approved {new Date(app.approved_at).toLocaleDateString()}</span>
+        <span>ID: {app.id.slice(0, 8)}</span>
+        {app.reviewed_at && (
+          <span>Reviewed {new Date(app.reviewed_at).toLocaleDateString()}</span>
         )}
       </div>
 
       {app.status === 'pending' && (
         <div className="flex gap-2 mt-4">
           <button
-            onClick={() => onApproveApplication?.(app.id, app.user_id, app.type === 'officer' ? 'troll_officer' : app.type)}
+            onClick={() => onApproveApplication?.(app.id, app.user_id, app.type)}
             className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             <CheckCircle className="w-4 h-4" />
@@ -204,11 +182,11 @@ export default function ApplicationsHub({
           </div>
         </div>
         <button
-          onClick={onLoadApplications}
-          disabled={applicationsLoading}
+          onClick={handleRefresh}
+          disabled={loading || applicationsLoading}
           className="flex items-center gap-2 px-4 py-2 bg-[#2C2C2C] hover:bg-[#3C3C3C] rounded-lg transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`w-4 h-4 ${applicationsLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${(loading || applicationsLoading) ? 'animate-spin' : ''}`} />
           <span className="text-sm">Refresh</span>
         </button>
       </div>
@@ -242,7 +220,7 @@ export default function ApplicationsHub({
 
       {/* Applications Grid */}
       <div className="space-y-4">
-        {applicationsLoading ? (
+        {loading ? (
           <div className="text-center py-12">
             <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-gray-400" />
             <p className="text-gray-400">Loading applications...</p>
@@ -263,15 +241,15 @@ export default function ApplicationsHub({
       {/* Summary Stats */}
       <div className="mt-6 grid grid-cols-3 gap-4">
         <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-400">{mockApplications.officer.length}</div>
+          <div className="text-2xl font-bold text-blue-400">{officerApps.length}</div>
           <div className="text-xs text-gray-400">Officer Apps</div>
         </div>
         <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-yellow-400">{mockApplications.creator.length}</div>
-          <div className="text-xs text-gray-400">Creator Apps</div>
+          <div className="text-2xl font-bold text-yellow-400">{creatorApps.length}</div>
+          <div className="text-xs text-gray-400">Creator/Seller Apps</div>
         </div>
         <div className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-400">{mockApplications.approved.length}</div>
+          <div className="text-2xl font-bold text-green-400">{approvedApps.length}</div>
           <div className="text-xs text-gray-400">Recently Approved</div>
         </div>
       </div>

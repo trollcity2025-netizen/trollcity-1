@@ -28,7 +28,7 @@ export default function LandingPage() {
       if (user) {
         navigate('/');
       } else {
-        navigate('/auth');
+        navigate('/auth?mode=login');
       }
     }, 1000);
   };
@@ -111,7 +111,7 @@ export default function LandingPage() {
     {
       icon: Play,
       title: 'Go Live & Get Paid',
-      description: '2x weekly payouts for your content'
+      description: 'Get Paid Daily'
     },
     {
       icon: Users,
@@ -202,17 +202,15 @@ export default function LandingPage() {
                       </>
                     ) : (
                       <>
-                        Enter Troll City
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        Enter Troll City <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
                   </button>
-                  
                   <button
-                    onClick={() => navigate('/auth')}
-                    className="px-8 py-4 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl font-semibold text-lg text-slate-50 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+                    onClick={() => navigate('/auth?mode=signup')}
+                    className="px-8 py-4 bg-white/10 border border-white/20 rounded-2xl font-bold text-lg text-white hover:bg-white/20 transition-colors duration-300"
                   >
-                    Sign Up Free
+                    Sign Up
                   </button>
                 </div>
 

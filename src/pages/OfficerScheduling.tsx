@@ -80,10 +80,10 @@ export default function OfficerScheduling() {
       try {
         // Load completed shift logs for earnings
         const { data: logs, error: logsError } = await supabase
-          .from('officer_shift_logs')
-          .select('id, coins_earned, hours_worked, shift_start, shift_end')
+          .from('officer_work_sessions')
+          .select('id, coins_earned, hours_worked, clock_in, clock_out')
           .eq('officer_id', profile.id)
-          .not('shift_end', 'is', null)
+          .not('clock_out', 'is', null)
 
         if (logsError) {
           console.warn('Error loading shift logs (non-critical):', logsError)
@@ -93,10 +93,10 @@ export default function OfficerScheduling() {
 
         // Load active shift logs to check if clocked in
         const { data: activeLogs, error: activeLogsError } = await supabase
-          .from('officer_shift_logs')
-          .select('id, shift_start, shift_end')
+          .from('officer_work_sessions')
+          .select('id, clock_in, clock_out')
           .eq('officer_id', profile.id)
-          .is('shift_end', null)
+          .is('clock_out', null)
 
         if (activeLogsError) {
           console.warn('Error loading active shift logs (non-critical):', activeLogsError)
@@ -128,15 +128,15 @@ export default function OfficerScheduling() {
         
         // Find matching completed shift log by date
         const shiftLog = logsData?.find(log => {
-          if (!log.shift_start) return false
-          const logDate = new Date(log.shift_start)
+          if (!log.clock_in) return false
+          const logDate = new Date(log.clock_in)
           return logDate.toDateString() === slotDate.toDateString()
         })
         
         // Find matching active shift log by checking if there's an active log that matches this slot
         const activeLog = activeLogsData?.find(log => {
-          if (!log.shift_start) return false
-          const logStart = new Date(log.shift_start)
+          if (!log.clock_in) return false
+          const logStart = new Date(log.clock_in)
           // Match by date and approximate time (within 1 hour)
           const timeDiff = Math.abs(logStart.getTime() - slotDateTime.getTime())
           return logStart.toDateString() === slotDate.toDateString() && timeDiff < 3600000 // 1 hour

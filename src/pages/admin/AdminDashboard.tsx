@@ -24,15 +24,6 @@ type StatState = {
   trollOfficers: number
   aiFlags: number
   coinSalesRevenue: number
-  totalPayouts: number
-  feesCollected: number
-  platformProfit: number
-  totalCoinsInCirculation: number
-  totalValue: number
-  purchasedCoins: number
-  earnedCoins: number
-  freeCoins: number
-  trollmonds: number
   giftCoins: number
   appSponsoredGifts: number
   savPromoCount: number
@@ -156,7 +147,6 @@ export default function AdminDashboard() {
     purchasedCoins: 0,
     earnedCoins: 0,
     freeCoins: 0,
-    trollmonds: 0,
     giftCoins: 0,
     appSponsoredGifts: 0,
     savPromoCount: 0,
@@ -309,15 +299,13 @@ export default function AdminDashboard() {
 
       const balances = balancesRes.data || []
       let purchasedCoins = 0
-      let trollmonds = 0
       let savBonusTotal = 0
       for (const row of balances as any[]) {
         purchasedCoins += Number(row.troll_coins || 0)
-        trollmonds += Number(row.troll_coins || 0)
         savBonusTotal += Number(row.sav_bonus_coins || 0)
       }
-      const freeCoins = trollmonds + savBonusTotal
-      const totalCoins = purchasedCoins + trollmonds
+      const freeCoins = savBonusTotal
+      const totalCoins = purchasedCoins
       const totalValue = totalCoins / 100
 
       const coinTx = coinTxRes.data || []

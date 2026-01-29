@@ -138,39 +138,14 @@ export default function AdminApplications() {
       setLoading(true)
 
       if (app.type === "seller") {
-        // Special handling for seller applications
-        const { error: appError } = await supabase
-          .from('applications')
-          .update({
-            status: 'approved',
-            reviewed_by: user.id,
-            reviewed_at: new Date().toISOString()
-          })
-          .eq('id', app.id)
+        // Special handling for seller applications via Atomic RPC
+        const { data: result, error: rpcError } = await supabase.rpc('approve_seller_application', {
+          p_application_id: app.id,
+          p_reviewer_id: user.id
+        })
 
-        if (appError) throw appError
-
-        // Grant seller permissions to user profile
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .update({
-            seller_verified: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', app.user_id)
-
-        if (profileError) throw profileError
-
-        // Auto-create store for the seller
-        const { error: storeError } = await supabase
-          .from('stores')
-          .insert({
-            owner_id: app.user_id,
-            name: app.store_name || `${app.user_profiles?.username || 'User'}'s Store`,
-            description: app.store_description || 'A new seller store'
-          })
-
-        if (storeError) throw storeError
+        if (rpcError) throw rpcError
+        if (result && !result.success) throw new Error(result.error || "Failed to approve seller application")
 
         toast.success("Seller application approved! Store created and user can now manage their shop.")
       }

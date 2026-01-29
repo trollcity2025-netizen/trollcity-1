@@ -59,6 +59,11 @@ export const API_ENDPOINTS = {
     submitReport: '/moderation',
     takeAction: '/moderation',
     listReports: '/moderation',
+    shadowBan: '/shadow-ban-user',
+    logEvent: '/log-moderation-event',
+    giftFreeze: '/moderation', // Handled by take_action with type gift_freeze
+    chatPurge: '/moderation', // Handled by take_action with type chat_purge
+    disableStream: '/moderation', // Handled by take_action with type suspend_stream
   },
 };
 

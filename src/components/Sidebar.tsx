@@ -30,7 +30,9 @@ import {
   Waves,
   Car,
   BookOpen,
-  Radio
+  Radio,
+  Warehouse,
+  Landmark
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -115,8 +117,20 @@ export default function Sidebar() {
         return 
       }
       
-      // Troll Officer Lounge: Only admin and troll_officer role
-      setCanSeeOfficer(isOfficer)
+      // Check Admin for Week
+      let activeAdmin = false
+      try {
+        const { data } = await supabase
+            .from('admin_for_week_queue')
+            .select('user_id')
+            .eq('status', 'active')
+            .eq('user_id', profile.id)
+            .maybeSingle()
+        activeAdmin = !!data
+      } catch {}
+
+      // Troll Officer Lounge: Only admin and troll_officer role (or Admin for Week)
+      setCanSeeOfficer(isOfficer || activeAdmin)
 
       // Troll Family Lounge: Admin, troll_officer, OR approved family application
       if (isOfficer) { 
@@ -163,7 +177,7 @@ export default function Sidebar() {
   
   const supportPaths = ['/support', '/safety']
   
-  const socialPaths = ['/messages', '/pool']
+  const socialPaths = ['/tcps', '/pool']
   if (canSeeFamilyLounge) socialPaths.push('/family/lounge')
   
   const specialAccessPaths: string[] = []
@@ -220,10 +234,10 @@ export default function Sidebar() {
               <div className="flex items-center gap-2">
                 <h3 className={`font-semibold text-sm truncate text-slate-50 ${hasRgb ? 'rgb-username' : ''}`}>{profile.username}</h3>
                 {(profile as any).gender === 'male' && (
-                  <Mars size={14} className="text-blue-400" title="Male" />
+                  <Mars size={14} className="text-blue-400" />
                 )}
                 {(profile as any).gender === 'female' && (
-                  <Venus size={14} className="text-pink-400" title="Female" />
+                  <Venus size={14} className="text-pink-400" />
                 )}
                 <button
                   onClick={handleClearCacheReload}
@@ -277,6 +291,8 @@ export default function Sidebar() {
         <SidebarGroup title={isSidebarCollapsed ? '' : "City Center"} isCollapsed={isSidebarCollapsed} highlight={isAnyUpdated(mainPaths)}>
           <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} highlight={isUpdated('/')} onClick={() => markAsViewed('/')} />
           <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} highlight={isUpdated('/trollstown')} onClick={() => markAsViewed('/trollstown')} />
+          <SidebarItem icon={Landmark} label="City Hall" to="/city-hall" active={isActive('/city-hall')} collapsed={isSidebarCollapsed} highlight={isUpdated('/city-hall')} onClick={() => markAsViewed('/city-hall')} />
+          <SidebarItem icon={Warehouse} label="Living" to="/living" active={isActive('/living')} collapsed={isSidebarCollapsed} highlight={isUpdated('/living')} onClick={() => markAsViewed('/living')} />
           <SidebarItem icon={Crown} label="Troll G" to="/trollg" active={isActive('/trollg')} collapsed={isSidebarCollapsed} highlight={isUpdated('/trollg')} onClick={() => markAsViewed('/trollg')} />
           <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} highlight={isUpdated('/inventory')} onClick={() => markAsViewed('/inventory')} />
           <SidebarItem icon={Vote} label="Troting" to="/troting" active={isActive('/troting')} collapsed={isSidebarCollapsed} highlight={isUpdated('/troting')} onClick={() => markAsViewed('/troting')} />
@@ -295,7 +311,7 @@ export default function Sidebar() {
         <SidebarGroup title={isSidebarCollapsed ? '' : "Public Services"} isCollapsed={isSidebarCollapsed} highlight={isAnyUpdated(supportPaths)}>
           <SidebarItem icon={BookOpen} label="Troll Church" to="/church" active={isActive('/church')} collapsed={isSidebarCollapsed} highlight={isUpdated('/church')} onClick={() => markAsViewed('/church')} />
           {/* Pastor Dashboard - Visible to Pastors/Admins */}
-          {(profile?.is_pastor || profile?.role === 'admin' || (profile as any)?.is_admin) && (
+          {((profile as any)?.is_pastor || profile?.role === 'admin' || (profile as any)?.is_admin) && (
             <SidebarItem 
               icon={LayoutDashboard} 
               label="Pastor Dashboard" 
@@ -312,7 +328,7 @@ export default function Sidebar() {
 
         {/* Social */}
         <SidebarGroup title={isSidebarCollapsed ? '' : "Social"} isCollapsed={isSidebarCollapsed} highlight={isAnyUpdated(socialPaths)}>
-          <SidebarItem icon={MessageSquare} label="Messages" to="/messages" active={isActive('/messages')} collapsed={isSidebarCollapsed} highlight={isUpdated('/messages')} onClick={() => markAsViewed('/messages')} />
+          <SidebarItem icon={MessageSquare} label="TCPS" to="/tcps" active={isActive('/tcps')} collapsed={isSidebarCollapsed} highlight={isUpdated('/tcps')} onClick={() => markAsViewed('/tcps')} />
           <SidebarItem 
             icon={Waves} 
             label="Public Pool" 

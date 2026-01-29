@@ -1,7 +1,16 @@
 // Type definitions for purchase and activation system
 
-export type ItemType = 'effect' | 'perk' | 'insurance' | 'ringtone' | 'theme' | 'clothing' | 'call_minutes';
-export type ItemCategory = 'entrance_effect' | 'perk' | 'insurance' | 'audio_ringtone' | 'video_ringtone' | 'broadcast_theme' | 'avatar_clothing';
+export type ItemType = 'effect' | 'perk' | 'insurance' | 'ringtone' | 'theme' | 'clothing' | 'call_minutes' | 'broadcast_consumable';
+export type ItemCategory =
+  | 'entrance_effect'
+  | 'perk'
+  | 'insurance'
+  | 'audio_ringtone'
+  | 'video_ringtone'
+  | 'broadcast_theme'
+  | 'avatar_clothing'
+  | 'broadcast_notification'
+  | 'broadcast_feature';
 export type ClothingCategory = 'head' | 'body' | 'legs' | 'feet' | 'accessories';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 

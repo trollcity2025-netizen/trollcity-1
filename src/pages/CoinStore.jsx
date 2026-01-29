@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { useCoins } from '@/lib/hooks/useCoins';
 import { useBank as useBankHook } from '../lib/hooks/useBank';
+import { useAllCreditScores } from '../lib/hooks/useAllCreditScores';
 // import { toast } from 'sonner';
 import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatCoins } from '../lib/coinMath';
@@ -74,10 +75,11 @@ const isMissingTableError = (error) =>
 
 export default function CoinStore() {
   const { user, profile, refreshProfile } = useAuthStore();
+  const { scores: allCreditScores, loading: loadingScores } = useAllCreditScores(user?.id);
   const navigate = useNavigate();
   const { troll_coins, refreshCoins } = useCoins();
   const { checkOnboarding } = useCheckOfficerOnboarding();
-  const { loan: activeLoan, ledger, refresh: refreshBank, applyForLoan, tiers } = useBankHook(); // useBank hook
+  const { loans: activeLoans, ledger, refresh: refreshBank, applyForLoan, tiers } = useBankHook(); // useBank hook
 
   const STORE_TAB_KEY = 'tc-store-active-tab';
   const STORE_COMPLETE_KEY = 'tc-store-show-complete';
@@ -87,6 +89,7 @@ export default function CoinStore() {
   
   // Bank State
   const [bankBalance] = useState(null);
+  const [showActiveLoanModal, setShowActiveLoanModal] = useState(false);
   const [applying, setApplying] = useState(false);
   const [requestedAmount, setRequestedAmount] = useState(100);
   const [eligibility, setEligibility] = useState({
@@ -116,7 +119,7 @@ export default function CoinStore() {
     let maxAmount = 0;
     
     // 1. Check active loan
-    if (activeLoan) {
+    if (activeLoans && activeLoans.length > 0) {
       reasons.push('You already have an active loan.');
     }
 
@@ -139,7 +142,7 @@ export default function CoinStore() {
       reasons,
       maxAmount
     });
-  }, [user, activeLoan, tiers]);
+  }, [user, activeLoans, tiers]);
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [cashAppModalOpen, setCashAppModalOpen] = useState(false);
@@ -730,13 +733,43 @@ export default function CoinStore() {
     }
 
     setThemePurchasing(theme.id);
-          try {
-            const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
-              p_user_id: user.id,
-              p_theme_id: theme.id,
-              p_set_active: false,
-            });
-            if (error || data?.success === false) {
+    try {
+      // Get theme price (assume theme.price_coins is available on theme object)
+      const price = theme.price_coins || theme.price || 0;
+      if (price <= 0) {
+        toast.error('Invalid theme price');
+        setThemePurchasing(null);
+        return;
+      }
+      if (troll_coins < price) {
+        toast.error(`Not enough Troll Coins. Need ${price}, have ${troll_coins}`);
+        setThemePurchasing(null);
+        return;
+      }
+
+      // Deduct coins first
+      const { error: deductErr } = await deductCoins({
+        userId: user.id,
+        amount: price,
+        type: 'purchase',
+        description: `Purchased broadcast theme: ${theme.name}`,
+        metadata: { theme_id: theme.id, theme_name: theme.name },
+        supabaseClient: supabase,
+      });
+      if (deductErr) {
+        console.error('Coin deduction error:', deductErr);
+        toast.error('Failed to deduct coins: ' + (deductErr.message || deductErr));
+        setThemePurchasing(null);
+        return;
+      }
+
+      // Now call the purchase RPC to record the purchase (no deduction logic inside)
+      const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
+        p_user_id: user.id,
+        p_theme_id: String(theme.id),
+        p_set_active: false
+      });
+      if (error || data?.success === false) {
         throw new Error(data?.error || error?.message || 'Theme purchase failed');
       }
 
@@ -982,6 +1015,7 @@ export default function CoinStore() {
             <div className="flex gap-2 hidden md:flex">
               <button type="button" className={`px-3 py-2 rounded ${tab==='coins'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('coins')}>Coins</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='bank'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('bank')}>Bank</button>
+              {/* Only show Make a Payment as a separate tab if needed; My Loan and Credit Report will be inside Bank tab */}
               <button type="button" className={`px-3 py-2 rounded ${tab==='effects'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('effects')}>Entrance Effects</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('perks')}>Perks</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='calls'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('calls')}>Call Minutes</button>
@@ -999,6 +1033,7 @@ export default function CoinStore() {
               >
                 <option value="coins">Coins</option>
                 <option value="bank">Troll Bank & Loans</option>
+                {/* Only show Make a Payment as a separate tab if needed; My Loan and Credit Report will be inside Bank tab */}
                 <option value="effects">Entrance Effects</option>
                 <option value="perks">Perks</option>
                 <option value="calls">Call Minutes</option>
@@ -1007,6 +1042,31 @@ export default function CoinStore() {
                 {showLiveSnacks && <option value="live_snacks">LIVE SNACKS</option>}
               </select>
             </div>
+
+
+                      {/* Make a Payment Tab */}
+                      {tab === 'make_payment' && activeLoans && activeLoans.length > 0 && (
+                        <div className="space-y-6 animate-fadeIn">
+                          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                            <CreditCard className="w-5 h-5 text-purple-400" />
+                            Make a Payment
+                          </h2>
+                          {/* TODO: Payment form, preset amounts, call Edge Function, show score preview */}
+                          <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+                            <div className="mb-4">Loan Balance: <span className="font-bold text-red-400">{activeLoans[0].balance}</span></div>
+                            <div className="flex gap-2 mb-4">
+                              <button className="px-3 py-1 bg-purple-600 rounded text-white">Pay 25%</button>
+                              <button className="px-3 py-1 bg-purple-600 rounded text-white">Pay 50%</button>
+                              <button className="px-3 py-1 bg-purple-600 rounded text-white">Pay Full</button>
+                            </div>
+                            <input type="number" min={1} max={activeLoans[0].balance} placeholder="Custom amount" className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-sm mb-4" />
+                            <button className="w-full py-2 bg-green-600 hover:bg-green-700 rounded text-white font-bold">Submit Payment</button>
+                            <div className="mt-4 text-xs text-gray-400">Credit score increase preview: <span className="font-bold text-yellow-400">{/* TODO: Show preview */}---</span></div>
+                          </div>
+                        </div>
+                      )}
+
+
           </div>
 
           {/* Wallet Summary */}
@@ -1027,11 +1087,32 @@ export default function CoinStore() {
                 </p>
                 <div className="flex gap-2 mt-2">
                     <button
-                        onClick={() => setTab('bank')}
+                        onClick={() => {
+                          if (activeLoans && activeLoans.length > 0) {
+                            setShowActiveLoanModal(true);
+                          } else {
+                            setTab('bank');
+                          }
+                        }}
                         className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-white"
                     >
                         Request Loan
                     </button>
+                      {/* Active Loan Modal */}
+                      {showActiveLoanModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+                          <div className="bg-zinc-900 border border-purple-500/40 rounded-xl p-8 shadow-2xl max-w-sm w-full text-center animate-fadeIn">
+                            <h2 className="text-xl font-bold text-red-400 mb-4">Active Loan Detected</h2>
+                            <p className="mb-6 text-gray-200">You already have an active loan. Please pay off your existing loan before requesting a new one.</p>
+                            <button
+                              className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded text-white font-bold"
+                              onClick={() => setShowActiveLoanModal(false)}
+                            >
+                              OK
+                            </button>
+                          </div>
+                        </div>
+                      )}
                 </div>
               </div>
             </div>
@@ -1043,6 +1124,88 @@ export default function CoinStore() {
             {/* Bank Tab */}
             {tab === 'bank' && (
               <div className="space-y-8 animate-fadeIn">
+                                 {/* My Loan Section (moved from tab) */}
+                                 {activeLoans && activeLoans.length > 0 && (
+                                   <div className="space-y-6">
+                                     <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                       <CreditCard className="w-5 h-5 text-purple-400" />
+                                       My Loans
+                                     </h2>
+                                     {activeLoans.map((loan) => (
+                                       <div key={loan.id} className="bg-black/30 border border-white/5 rounded-xl p-4 mb-6">
+                                         <div className="grid grid-cols-2 gap-4">
+                                           <div>
+                                             <div className="text-gray-400 text-xs">Original Amount</div>
+                                             <div className="text-2xl font-bold text-yellow-400">{loan.principal}</div>
+                                           </div>
+                                           <div>
+                                             <div className="text-gray-400 text-xs">Remaining Balance</div>
+                                             <div className="text-2xl font-bold text-red-400">{loan.balance}</div>
+                                           </div>
+                                           <div>
+                                             <div className="text-gray-400 text-xs">Interest Rate</div>
+                                             <div className="text-lg font-bold text-blue-400">{loan.interest_rate || 0}%</div>
+                                           </div>
+                                           <div>
+                                             <div className="text-gray-400 text-xs">Due Date</div>
+                                             <div className="text-lg font-bold text-green-400">{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : 'N/A'}</div>
+                                           </div>
+                                         </div>
+                                         <div className="mt-6 flex gap-6">
+                                           <div>
+                                             <div className="text-gray-400 text-xs">Loan Status</div>
+                                             <div className="text-lg font-bold text-purple-400">{loan.status}</div>
+                                           </div>
+                                           <div>
+                                             <div className="text-gray-400 text-xs">Credit Score</div>
+                                             <div className="text-lg font-bold text-yellow-400">---</div>
+                                           </div>
+                                         </div>
+                                       </div>
+                                     ))}
+                                   </div>
+                                 )}
+
+                                 {/* Credit Report Section (all users, current user first) */}
+                                 <div className="space-y-6">
+                                   <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                     <Landmark className="w-5 h-5 text-purple-400" />
+                                     Credit Report
+                                   </h2>
+                                   <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+                                     <div className="mb-4 font-bold text-lg text-yellow-300">All Users' Credit Scores</div>
+                                     {loadingScores ? (
+                                       <div className="text-gray-400">Loading...</div>
+                                     ) : (
+                                       <table className="w-full text-xs text-left">
+                                         <thead>
+                                           <tr className="border-b border-white/10">
+                                             <th className="py-1 px-2">#</th>
+                                             <th className="py-1 px-2">User</th>
+                                             <th className="py-1 px-2">Score</th>
+                                             <th className="py-1 px-2">Last Updated</th>
+                                           </tr>
+                                         </thead>
+                                         <tbody>
+                                           {allCreditScores.map((row, i) => (
+                                             <tr key={row.user_id} className={row.user_id === user?.id ? 'bg-purple-900/30 font-bold' : ''}>
+                                               <td className="py-1 px-2">{i + 1}</td>
+                                               <td className="py-1 px-2 flex items-center gap-2">
+                                                 {row.users?.avatar_url && (
+                                                   <img src={row.users.avatar_url} alt="avatar" className="w-5 h-5 rounded-full" />
+                                                 )}
+                                                 {row.users?.username || row.user_id.slice(0, 8)}
+                                                 {row.user_id === user?.id && <span className="ml-1 text-green-400">(You)</span>}
+                                               </td>
+                                               <td className="py-1 px-2">{row.score}</td>
+                                               <td className="py-1 px-2">{row.updated_at ? new Date(row.updated_at).toLocaleDateString() : ''}</td>
+                                             </tr>
+                                           ))}
+                                         </tbody>
+                                       </table>
+                                     )}
+                                   </div>
+                                 </div>
                  {/* Bank Header Stats */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-black/30 border border-white/5 rounded-xl p-4 relative overflow-hidden group">
@@ -1064,23 +1227,23 @@ export default function CoinStore() {
                     <div className="bg-black/30 border border-white/5 rounded-xl p-4 relative overflow-hidden">
                         <div className="relative z-10">
                             <p className="text-gray-400 text-sm font-medium mb-1">Your Active Loan</p>
-                            {activeLoan ? (
-                                <div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-bold text-red-400">{activeLoan.balance.toLocaleString()}</span>
-                                    <span className="text-xs text-red-400/70">due</span>
-                                </div>
-                                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-[10px] text-red-200">
-                                    Auto-repayment active (50% of purchases)
-                                </div>
-                                </div>
+                            {activeLoans && activeLoans.length > 0 ? (
+                              <div>
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-2xl font-bold text-red-400">{activeLoans[0].balance.toLocaleString()}</span>
+                                <span className="text-xs text-red-400/70">due</span>
+                              </div>
+                              <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-[10px] text-red-200">
+                                Auto-repayment active (50% of purchases)
+                              </div>
+                              </div>
                             ) : (
-                                <div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-bold text-green-400">None</span>
-                                </div>
-                                <p className="mt-1 text-xs text-gray-400">You are debt free!</p>
-                                </div>
+                              <div>
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-2xl font-bold text-green-400">None</span>
+                              </div>
+                              <p className="mt-1 text-xs text-gray-400">You are debt free!</p>
+                              </div>
                             )}
                         </div>
                     </div>
@@ -1093,7 +1256,7 @@ export default function CoinStore() {
                         Loan Services
                     </h2>
                     
-                    {activeLoan ? (
+                    {activeLoans && activeLoans.length > 0 ? (
                         <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
                             <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5" />
                             <div>
@@ -1141,8 +1304,8 @@ export default function CoinStore() {
                                 <h3 className="font-semibold text-white mb-2 text-sm">Eligibility Requirements</h3>
                                 <ul className="space-y-2">
                                     <li className="flex items-center gap-2 text-xs">
-                                        {!activeLoan ? <CheckCircle className="w-3 h-3 text-green-500"/> : <div className="w-3 h-3 border rounded-full border-gray-600"/>}
-                                        <span className={!activeLoan ? 'text-gray-200' : 'text-gray-500'}>No active loans</span>
+                                        {!(activeLoans && activeLoans.length > 0) ? <CheckCircle className="w-3 h-3 text-green-500"/> : <div className="w-3 h-3 border rounded-full border-gray-600"/>}
+                                        <span className={!(activeLoans && activeLoans.length > 0) ? 'text-gray-200' : 'text-gray-500'}>No active loans</span>
                                     </li>
                                     <li className="flex items-center gap-2 text-xs">
                                         {eligibility.maxAmount > 0 ? <CheckCircle className="w-3 h-3 text-green-500"/> : <div className="w-3 h-3 border rounded-full border-gray-600"/>}
@@ -1544,12 +1707,168 @@ export default function CoinStore() {
                     <div key={theme.id} className={`bg-black/40 p-4 rounded-lg border ${owned ? 'border-green-500/30' : 'border-purple-500/20'} relative overflow-hidden`}>
                       {owned && <div className="absolute top-2 right-2 bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded">Owned</div>}
                       
-                      <div className="h-24 mb-3 rounded bg-zinc-800 w-full overflow-hidden relative">
-                         {theme.image_url ? (
-                           <img src={theme.image_url} alt={theme.name} className="w-full h-full object-cover" />
-                         ) : (
-                           <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">No Preview</div>
-                         )}
+                      <div className="h-24 mb-3 rounded w-full overflow-hidden relative">
+                        {theme.image_url ? (
+                          <img src={theme.image_url} alt={theme.name} className="w-full h-full object-cover" />
+                        ) : (
+                          (() => {
+                            // Custom preview by theme name
+                            const name = (theme.name || '').toLowerCase();
+                            if (name.includes('royal purple')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-800 via-purple-600 to-purple-900">
+                                  <span className="text-yellow-200 text-xs font-bold drop-shadow">Royal Purple</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('cyber neon')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-blue-900 animate-pulse">
+                                  <span className="text-cyan-100 text-xs font-bold drop-shadow">Cyber Neon</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('gamer rgb')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center rgb-frame">
+                                  <span className="text-white text-xs font-bold drop-shadow">Gamer RGB</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('neon purple haze')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-700 via-fuchsia-500 to-pink-700 blur-[1px]">
+                                  <span className="text-pink-100 text-xs font-bold drop-shadow">Neon Purple Haze</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('neon aurora')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-300 via-pink-400 to-purple-900 animate-pulse">
+                                  <span className="text-cyan-50 text-xs font-bold drop-shadow">Neon Aurora</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('pink velocity')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-500 via-pink-700 to-fuchsia-900 animate-pulse">
+                                  <span className="text-white text-xs font-bold drop-shadow">Pink Velocity</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('troll city grid')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-cyan-900">
+                                  <span className="text-cyan-200 text-xs font-bold drop-shadow">Troll City Grid</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('golden crown')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-yellow-400 via-yellow-600 to-yellow-900">
+                                  <span className="text-yellow-100 text-xs font-bold drop-shadow">Golden Crown</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('cyan fog')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-200 via-cyan-400 to-cyan-900">
+                                  <span className="text-cyan-900 text-xs font-bold drop-shadow">Cyan Fog</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('midnight violet')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-900 via-violet-700 to-violet-950">
+                                  <span className="text-violet-200 text-xs font-bold drop-shadow">Midnight Violet</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('neon circuit')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-400 via-blue-700 to-fuchsia-700 animate-pulse">
+                                  <span className="text-cyan-50 text-xs font-bold drop-shadow">Neon Circuit</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('pink haze')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-200 via-pink-400 to-pink-900">
+                                  <span className="text-pink-900 text-xs font-bold drop-shadow">Pink Haze</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('aurora wave')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-200 via-pink-200 to-purple-900 animate-pulse">
+                                  <span className="text-cyan-900 text-xs font-bold drop-shadow">Aurora Wave</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('lava room')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-yellow-900 via-red-700 to-orange-900 animate-pulse">
+                                  <span className="text-orange-100 text-xs font-bold drop-shadow">Lava Room</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('galaxy warp')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-black animate-pulse">
+                                  <span className="text-white text-xs font-bold drop-shadow">Galaxy Warp</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('diamond night')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900 to-white animate-pulse">
+                                  <span className="text-blue-200 text-xs font-bold drop-shadow">Diamond Night</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('cyber rose')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-400 via-fuchsia-700 to-black animate-pulse">
+                                  <span className="text-pink-100 text-xs font-bold drop-shadow">Cyber Rose</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('royal velvet')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 via-purple-700 to-black animate-pulse">
+                                  <span className="text-purple-100 text-xs font-bold drop-shadow">Royal Velvet</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('stormlight')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-200 via-blue-400 to-blue-900 animate-pulse">
+                                  <span className="text-blue-900 text-xs font-bold drop-shadow">Stormlight</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('midnight surge')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-900 via-blue-900 to-black animate-pulse">
+                                  <span className="text-violet-100 text-xs font-bold drop-shadow">Midnight Surge</span>
+                                </div>
+                              );
+                            }
+                            if (name.includes('pink static')) {
+                              return (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-200 via-pink-500 to-pink-900 animate-pulse">
+                                  <span className="text-pink-900 text-xs font-bold drop-shadow">Pink Static</span>
+                                </div>
+                              );
+                            }
+                            // Default fallback
+                            return (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 via-zinc-800 to-pink-900">
+                                <span className="text-white/70 text-xs font-bold drop-shadow">{theme.name || 'No Preview'}</span>
+                              </div>
+                            );
+                          })()
+                        )}
                       </div>
                       
                       <div className="font-semibold text-lg">{theme.name}</div>

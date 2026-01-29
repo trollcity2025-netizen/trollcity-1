@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Calendar,
   MessageSquare,
@@ -74,14 +75,27 @@ export default function OfficerOperations() {
 
   const loadShifts = React.useCallback(async () => {
     const { data } = await supabase
-      .from('officer_shifts')
+      .from('officer_work_sessions')
       .select(`
         *,
         officer:user_profiles(username)
       `)
-      .order('shift_start', { ascending: false })
+      .order('clock_in', { ascending: false })
       .limit(50);
-    setShifts(data || []);
+    
+    const mappedData = (data || []).map((s: any) => ({
+      id: s.id,
+      officer_id: s.officer_id,
+      officer: s.officer,
+      shift_start: s.clock_in,
+      shift_end: s.clock_out,
+      shift_type: s.shift_type || 'Standard',
+      status: s.clock_out ? 'completed' : 'active',
+      patrol_area: s.patrol_area || 'General',
+      owc_earned: s.coins_earned || 0
+    }));
+
+    setShifts(mappedData);
   }, []);
 
   const loadPatrols = React.useCallback(async () => {
@@ -442,7 +456,7 @@ export default function OfficerOperations() {
               title="Sync legacy direct messages into new conversations"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Sync Messages
+              Sync TCPS
             </button>
           </div>
 
@@ -478,11 +492,11 @@ export default function OfficerOperations() {
           {activeTab === 'shifts' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Officer Shift Scheduling</h2>
-                <button className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center gap-2">
+                <h2 className="text-xl font-bold">Recent Officer Shifts</h2>
+                <Link to="/admin/schedule" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center gap-2 text-white no-underline">
                   <Calendar className="w-4 h-4" />
-                  Schedule Shift
-                </button>
+                  View Schedule
+                </Link>
               </div>
 
               <div className="bg-zinc-900/50 rounded-lg overflow-hidden">
@@ -528,7 +542,10 @@ export default function OfficerOperations() {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Active Patrol Assignments</h2>
-                <button className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg flex items-center gap-2">
+                <button 
+                  onClick={() => setShowAssignModal(true)}
+                  className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg flex items-center gap-2"
+                >
                   <MapPin className="w-4 h-4" />
                   Assign Patrol
                 </button>
@@ -718,6 +735,88 @@ export default function OfficerOperations() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {/* Assign Patrol Modal */}
+          {showAssignModal && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+              <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-lg max-w-md w-full space-y-4">
+                <h3 className="text-xl font-bold">Assign New Patrol</h3>
+                
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Officer</label>
+                  <select
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded p-2"
+                    value={selectedOfficer}
+                    onChange={(e) => setSelectedOfficer(e.target.value)}
+                  >
+                    <option value="">Select Officer...</option>
+                    {officers.map(o => (
+                      <option key={o.id} value={o.id}>{o.username}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Patrol Type</label>
+                  <select
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded p-2"
+                    value={newPatrolType}
+                    onChange={(e) => setNewPatrolType(e.target.value)}
+                  >
+                    <option value="general_patrol">General Patrol</option>
+                    <option value="chat_monitoring">Chat Monitoring</option>
+                    <option value="stream_audit">Stream Audit</option>
+                    <option value="user_support">User Support</option>
+                    <option value="investigation">Investigation</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Priority</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setNewPatrolPriority(p)}
+                        className={`w-8 h-8 rounded flex items-center justify-center ${
+                          newPatrolPriority === p 
+                            ? 'bg-blue-600 text-white' 
+                            : 'bg-zinc-800 text-gray-400 hover:bg-zinc-700'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Instructions</label>
+                  <textarea
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 h-24"
+                    value={newPatrolInstructions}
+                    onChange={(e) => setNewPatrolInstructions(e.target.value)}
+                    placeholder="Specific instructions for this patrol..."
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={() => setShowAssignModal(false)}
+                    className="px-4 py-2 text-gray-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={_assignPatrol}
+                    disabled={!selectedOfficer}
+                    className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white disabled:opacity-50"
+                  >
+                    Assign Patrol
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

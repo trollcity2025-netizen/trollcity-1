@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Coins, Shield } from "lucide-react";
+import { Send, Coins, Shield, Image as ImageIcon } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { toast } from "sonner";
 import ClickableUsername from "../ClickableUsername";
 import { UserBadge } from "../UserBadge";
+import { useXPTracking } from '../../lib/hooks/useXPTracking';
 
 interface ChatBoxProps {
   streamId: string;
@@ -34,12 +35,15 @@ interface Message {
 }
 
 export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadcaster }: ChatBoxProps) {
+  const { trackChatMessage } = useXPTracking();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const suppressAutoScrollRef = useRef(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const userCacheRef = useRef<
     Record<
       string,
@@ -61,13 +65,17 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
   const [showCoinInput, setShowCoinInput] = useState<string | null>(null);
   const [coinAmount, setCoinAmount] = useState(10);
 
+  const [isGlobalBanned, setIsGlobalBanned] = useState(false);
+  const [shadowBannedUsers, setShadowBannedUsers] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   const fetchUserProfile = useCallback(async (userId: string) => {
     if (userCacheRef.current[userId]) return userCacheRef.current[userId];
 
     try {
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('id, username, rgb_username_expires_at, avatar_url, is_ghost_mode, role, is_admin, drivers_license_status')
+        .select('id, username, rgb_username_expires_at, avatar_url, is_ghost_mode, role, is_admin, drivers_license_status, is_banned')
         .eq('id', userId)
         .single();
         
@@ -95,7 +103,8 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
         is_ghost_mode: profile?.is_ghost_mode,
         role: profile?.role ?? null,
         is_admin: profile?.is_admin ?? false,
-        drivers_license_status: profile?.drivers_license_status
+        drivers_license_status: profile?.drivers_license_status,
+        is_banned: profile?.is_banned ?? false
       };
 
       userCacheRef.current[userId] = userData;
@@ -110,6 +119,61 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
       };
     }
   }, []);
+
+  // Fetch active shadow bans
+  useEffect(() => {
+    if (!streamId) return;
+
+    const fetchShadowBans = async () => {
+      const { data } = await supabase
+        .from('shadow_bans')
+        .select('target_user_id')
+        .eq('stream_id', streamId)
+        .eq('is_active', true)
+        .gt('expires_at', new Date().toISOString());
+      
+      if (data) {
+        setShadowBannedUsers(new Set(data.map(b => b.target_user_id)));
+      }
+    };
+
+    fetchShadowBans();
+
+    const channel = supabase
+      .channel(`shadow_bans:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shadow_bans',
+          filter: `stream_id=eq.${streamId}`
+        },
+        () => {
+          fetchShadowBans();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId]);
+
+  // Check global ban status and get current user
+  useEffect(() => {
+    const checkBanStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        const profile = await fetchUserProfile(user.id);
+        if (profile.is_banned) {
+          setIsGlobalBanned(true);
+        }
+      }
+    };
+    checkBanStatus();
+  }, [fetchUserProfile]);
 
   // Listen for new messages
   useEffect(() => {
@@ -315,6 +379,81 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
     }
   };
 
+  const handleUploadImage = async (file: File) => {
+    if (!file) return;
+    if (isMuted) {
+      toast.error("You are muted in this stream.");
+      return;
+    }
+    try {
+      setImageUploading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('You must be logged in to chat');
+        setImageUploading(false);
+        return;
+      }
+      const ext = file.name.split('.').pop() || 'jpg';
+      const name = `${user.id}-${Date.now()}.${ext}`;
+      const attempts = [
+        { bucket: 'covers', path: `chat/${name}` },
+        { bucket: 'profile-avatars', path: `chat/${name}` },
+        { bucket: 'public', path: name }
+      ];
+      let uploadedUrl: string | null = null;
+      let lastErr: any = null;
+      for (const attempt of attempts) {
+        try {
+          const { error: uploadErr } = await supabase.storage
+            .from(attempt.bucket)
+            .upload(attempt.path, file, { cacheControl: '3600', upsert: true });
+          if (uploadErr) {
+            lastErr = uploadErr;
+            continue;
+          }
+          const { data: urlData } = supabase.storage.from(attempt.bucket).getPublicUrl(attempt.path);
+          if (urlData?.publicUrl) {
+            uploadedUrl = urlData.publicUrl;
+            break;
+          }
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      if (!uploadedUrl) {
+        throw lastErr || new Error('Failed to upload image');
+      }
+      const { error } = await supabase.from('messages').insert({
+        stream_id: streamId,
+        user_id: user.id,
+        content: uploadedUrl,
+        message_type: 'image'
+      });
+      if (error) {
+        throw error;
+      }
+      const profile = await fetchUserProfile(user.id);
+      const optimisticMessage: Message = {
+        id: (globalThis.crypto && 'randomUUID' in globalThis.crypto)
+          ? (globalThis.crypto as Crypto).randomUUID()
+          : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        user_id: user.id,
+        content: uploadedUrl,
+        message_type: 'image',
+        created_at: new Date().toISOString(),
+        sender_profile: profile,
+      };
+      setMessages((prev) => [...prev, optimisticMessage]);
+      setTimeout(() => scrollToBottom(), 200);
+    } catch (e: any) {
+      console.error('Image upload failed', e);
+      toast.error(e?.message || 'Failed to upload image');
+    } finally {
+      setImageUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -402,7 +541,15 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
                   <Coins size={14} />
                 </button>
               </div>
-              <span className="text-gray-300 break-words">{msg.content}</span>
+              {msg.message_type === 'image' ? (
+                <img
+                  src={msg.content}
+                  alt="image"
+                  className="mt-1 max-h-64 rounded border border-white/10 object-contain"
+                />
+              ) : (
+                <span className="text-gray-300 break-words">{msg.content}</span>
+              )}
 
               {showCoinInput === msg.id && (
                 <div className="mt-2 flex gap-2 items-center">
@@ -435,16 +582,36 @@ export default function ChatBox({ streamId, onProfileClick, onCoinSend, isBroadc
 
       <div className="flex gap-2 sticky bottom-0 bg-gray-900/95 px-1 py-2 -mx-1 sm:static sm:bg-transparent sm:px-0 sm:py-0 sm:mx-0">
         <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            if (f) handleUploadImage(f);
+          }}
+        />
+        <button
+          onClick={() => imageInputRef.current?.click()}
+          disabled={imageUploading}
+          className="bg-white/10 hover:bg-white/20 p-2 rounded transition-colors disabled:opacity-60"
+        >
+          <ImageIcon size={16} />
+        </button>
+        <input
           type="text"
-          placeholder="Type a message..."
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={handleKeyPress}
-          className="flex-1 bg-gray-800 text-white placeholder-gray-500 rounded px-3 py-2 text-[clamp(12px,3.5vw,14px)] focus:outline-none purple-neon transition-all"
+          onKeyDown={handleKeyPress}
+          placeholder={isGlobalBanned ? "You are banned" : isMuted ? "You are muted" : "Type a message..."}
+          className="flex-1 bg-white/10 border-none rounded px-3 py-2 text-xs text-white focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
+          disabled={isMuted || isGlobalBanned}
         />
         <button
           onClick={handleSendMessage}
-          className="bg-purple-600 hover:bg-purple-700 p-2 rounded purple-neon transition-colors"
+          disabled={isMuted || isGlobalBanned || !inputValue.trim()}
+          className="bg-purple-600 hover:bg-purple-500 p-2 rounded text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Send size={16} />
         </button>

@@ -28,9 +28,18 @@ export default function PerksStore() {
     )
   }
 
+  return <PerksStoreContent profile={profile} user={user} />
+}
+
+function PerksStoreContent({ profile, user }: { profile: any, user: any }) {
+  const [perks, setPerks] = useState<Perk[]>([])
+  const [loading, setLoading] = useState(true)
+  const [purchasing, setPurchasing] = useState<string | null>(null)
+
   useEffect(() => {
     loadPerks()
   }, [])
+
 
   const loadPerks = async () => {
     try {

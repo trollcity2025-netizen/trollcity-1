@@ -1,0 +1,171 @@
+You are Trae.ai acting as lead full-stack engineer + database architect for Troll City. Implement a revenue distribution system for rent + utilities that ensures Troll City staff are funded from in-app economics.
+
+DO NOT add unrelated features. Keep theme. No mock logic. Every transaction must be atomic and written to a ledger with full audit metadata. All enforcement must be server-side.
+
+========================================================
+1) DEFINITIONS / REQUIRED CONFIG
+========================================================
+A) Admin Exempt Landlord Rule
+- Any landlord listing owned by an ADMIN (or any landlord account flagged as “admin_landlord”) is EXEMPT from the officer rent share tax.
+- This exemption must be data-driven (config/flag), not hard-coded user IDs.
+
+Create config:
+- system_config table or settings:
+  - officer_rent_share_percent = 10
+  - admin_landlord_exempt = true
+  - utility_admin_pool_enabled = true
+  - include_admin_in_officer_split = false (default)
+
+B) Officer Eligibility
+- Officers eligible for revenue share are roles:
+  - troll_officer
+  - lead_troll_officer
+  - secretary
+- Admin is excluded from the split by default (config can enable it).
+
+========================================================
+2) RENT TAX + OFFICER SPLIT (10% OF RENT)
+========================================================
+New rule:
+- For ALL landlords EXCEPT ADMIN landlords:
+  - 10% of each RENT payment (not deposit, not application fee) is diverted to an Officer Pool.
+  - Remaining 90% goes to the landlord.
+
+Scope rules:
+- Apply ONLY to invoice_type = RENT.
+- Deposit payments: NOT taxed.
+- Application fees: NOT taxed.
+
+Distribution:
+- Officer Pool is split evenly among all eligible officers who are ACTIVE at the moment of payout.
+- Active = not banned/suspended and currently holds one of the officer roles above.
+- If there are zero eligible officers, Officer Pool retains funds until next distribution run.
+
+Implementation requirements:
+- All rent payments must go through a single secure server function (RPC/Edge function), never direct client updates.
+- The function must:
+  1) Validate invoice is RENT and payable
+  2) Validate payer has funds (and/or allowed bank loan mechanisms)
+  3) In one DB transaction:
+     - debit tenant
+     - credit landlord (90% or 100% if admin-exempt)
+     - credit officer_pool (10% if applicable)
+     - write ledger entries for each movement
+  4) Trigger pool distribution:
+     - choose either instant distribution per payment OR daily batch distribution (document choice)
+     - credit each eligible officer and create ledger rows
+
+Ledger requirements (must exist or be added):
+- payments_ledger:
+  - event_type = RENT_PAYMENT
+  - invoice_id, lease_id, tenant_id, landlord_id
+  - gross_amount
+  - officer_tax_amount
+  - landlord_net_amount
+  - is_admin_exempt boolean
+- officer_pool_ledger:
+  - source_payment_ledger_id
+  - amount_added
+- officer_payouts:
+  - officer_user_id
+  - amount
+  - payout_batch_id or source_pool_entry_id
+
+========================================================
+3) UTILITIES → ADMIN POOL
+========================================================
+New rule:
+- Electric and Water payments are credited 100% to an “Admin Pool”.
+- They do NOT go to landlords.
+
+Implementation requirements:
+- Utility invoices must be paid via secure server function.
+- In one transaction:
+  - debit tenant
+  - credit admin_pool
+  - ledger entries recorded
+
+Create:
+- admin_pool table/balance (single row wallet)
+- admin_pool_ledger entries for each utility payment
+
+Ensure existing utility delinquency penalty still works:
+- If utility unpaid: credit score is cut in half until caught up
+- When paid/caught up: credit score restores per existing system rule
+- All score changes logged in credit_score_events with references
+
+========================================================
+4) LANDLORD PAYOUTS STILL IN COINS
+========================================================
+- Landlords receive rent payouts in Troll Coins.
+- Landlords can cash out per existing payout rules.
+- Their inflows are net of the 10% officer tax unless the landlord is admin-exempt.
+
+========================================================
+5) UI REQUIREMENTS
+========================================================
+Tenant UI:
+- Rent payment confirmation shows:
+  - Gross rent
+  - Officer support share (10%) if applicable
+  - Net to landlord
+- Utility payment confirmation shows:
+  - Payment goes to Admin Pool (city services)
+
+Landlord UI:
+- Payment history shows:
+  - Gross rent
+  - Officer tax deduction (if applicable)
+  - Net credited
+
+Officer UI:
+- “Officer Earnings” page:
+  - payouts received
+  - totals by day/week/month
+  - payout sources (rent pool)
+
+Admin UI:
+- “Admin Pool” page:
+  - Utility income totals
+  - ledger list
+  - export/report
+
+========================================================
+6) SAFETY / ANTI-ABUSE
+========================================================
+- Idempotency on payment endpoints (no double charge).
+- Consistent rounding rules:
+  - tax = floor(gross_amount * 0.10)
+  - remainder goes to landlord
+- Basic anti-abuse checks if not already present:
+  - prevent rapid repeated payments
+  - detect suspicious circular transfers (log for admin review)
+
+========================================================
+7) TESTING / QA (MANDATORY)
+========================================================
+Add tests:
+1) Non-admin landlord rent payment:
+   - 10% to officer_pool
+   - 90% to landlord
+   - pool splits correctly among active officers
+2) Admin landlord rent payment:
+   - 0% officer tax
+   - 100% to landlord
+3) Utility payments:
+   - 100% to admin_pool
+4) Zero officers:
+   - pool retains funds
+5) Idempotency:
+   - double-submit does not double debit
+
+Deliverables:
+- Migrations
+- Updated secure payment functions
+- Updated UI
+- “Revenue Share Report” explaining logic + how to test
+
+START NOW:
+- Find current rent and utility payment code paths.
+- Refactor payments to use the new secure server functions.
+- Implement admin-exempt detection based on role/flag, not user ID.

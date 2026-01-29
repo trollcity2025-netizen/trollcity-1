@@ -45,13 +45,13 @@ const UserActions: React.FC<UserActionsProps> = ({ user, refresh }) => {
   const deleteUser = async () => {
     if (!confirm(`Delete user @${user.username}? This action cannot be undone.`)) return;
     try {
-      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
-      if (authError) throw authError;
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .delete()
-        .eq('id', user.id);
-      if (profileError) throw profileError;
+      const { error } = await supabase.rpc('admin_soft_delete_user', {
+        p_user_id: user.id,
+        p_reason: 'Admin deleted via dashboard'
+      });
+      
+      if (error) throw error;
+      
       toast.success(`User @${user.username} deleted`);
       refresh();
     } catch (err) {

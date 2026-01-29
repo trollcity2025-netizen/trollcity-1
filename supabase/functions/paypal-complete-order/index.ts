@@ -105,9 +105,23 @@ Deno.serve(async (req) => {
       if (!captureRes.ok) {
         const text = await captureRes.text();
         console.error("PayPal capture error:", text);
+
+        let errorMessage = "Failed to capture PayPal order";
+        try {
+          const jsonError = JSON.parse(text);
+          const details = jsonError.details?.[0];
+          if (details?.issue === "INSTRUMENT_DECLINED") {
+            errorMessage = "Payment declined by bank. Please check your funds or try another card.";
+          } else if (jsonError.name === "UNPROCESSABLE_ENTITY") {
+            errorMessage = "Payment could not be processed. Please try again.";
+          }
+        } catch (e) {
+          // Keep default error
+        }
+
         return new Response(JSON.stringify({
           success: false,
-          error: "Failed to capture PayPal order",
+          error: errorMessage,
           paypal_details: text,
           orderId,
           mode: Deno.env.get("PAYPAL_MODE"),

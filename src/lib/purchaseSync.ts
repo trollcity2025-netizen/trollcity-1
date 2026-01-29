@@ -111,7 +111,7 @@ export async function syncCarPurchase(userId: string) {
       }
     }
 
-    return { success: true, ownedIds, activeVehicleId };
+    return { success: true, ownedIds, activeVehicleId: activeVehicleModelId };
   } catch (error) {
     console.error('Purchase sync failed:', error);
     throw error;

@@ -1,13 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Shield, Package } from 'lucide-react';
+import { ShoppingBag, Shield } from 'lucide-react';
 import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
+import { deductCoins } from '../../lib/coinTransactions';
 
 export default function GeneralStorePage() {
-  const { user } = useAuthStore();
+  const { user, profile, refreshProfile } = useAuthStore();
+  const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [buyingPolicy, setBuyingPolicy] = useState(false);
   const [hasHomeInsurance, setHasHomeInsurance] = useState(false);
+
+  const handleBuyConsumable = async (item: { id: string; name: string; price: number }) => {
+    if (!user) return toast.error('You must be logged in');
+    if ((profile?.troll_coins || 0) < item.price) return toast.error('Not enough TrollCoins');
+    setPurchasingId(item.id);
+    try {
+      const spend = await deductCoins({
+        userId: user.id,
+        amount: item.price,
+        type: 'purchase',
+        coinType: 'troll_coins',
+        description: `General Store purchase: ${item.name}`,
+        metadata: { consumable_id: item.id }
+      });
+      if (!spend.success) {
+        toast.error(spend.error || 'Failed to purchase item');
+        return;
+      }
+      // Add to user_inventory (or similar table)
+      const { error } = await supabase
+        .from('user_inventory')
+        .upsert({ user_id: user.id, item_id: item.id, quantity: 1 }, { onConflict: 'user_id,item_id' });
+      if (error) {
+        toast.error(error.message || 'Failed to add to inventory');
+        return;
+      }
+      toast.success(`${item.name} added to your inventory`);
+      if (refreshProfile) refreshProfile();
+    } catch (err: any) {
+      toast.error(err?.message || 'Purchase failed');
+    } finally {
+      setPurchasingId(null);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -199,24 +235,43 @@ export default function GeneralStorePage() {
              </div>
            </div>
 
-           <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 opacity-50 cursor-not-allowed">
-             <div className="flex items-center gap-4 mb-4">
-               <div className="p-3 bg-gray-700/50 rounded-lg text-gray-500">
-                 <Package size={24} />
+           <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
+             <h3 className="font-bold text-lg mb-4">Stream Consumables</h3>
+             <div className="grid grid-cols-1 gap-4">
+               <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
+                 <div className="p-4 flex-1">
+                   <h4 className="font-semibold">Stream Notification</h4>
+                   <p className="text-xs text-gray-400 mb-2">Send a notification to all users to watch your stream. Lasts 1 hour.</p>
+                   <span className="text-xs uppercase tracking-widest text-emerald-300">broadcast_notification</span>
+                 </div>
+                 <div className="flex items-center justify-between p-4 border-t border-white/5">
+                   <span className="flex items-center gap-1 text-yellow-300 font-semibold">500 Coins</span>
+                   <button
+                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60"
+                     disabled={purchasingId === 'broadcast_notification'}
+                     onClick={() => handleBuyConsumable({ id: 'broadcast_notification', name: 'Stream Notification', price: 500 })}
+                   >
+                     {purchasingId === 'broadcast_notification' ? 'Purchasing…' : 'Buy'}
+                   </button>
+                 </div>
                </div>
-               <div>
-                 <h3 className="font-bold text-lg">Consumables</h3>
-                 <p className="text-xs text-gray-500">Coming Soon</p>
+               <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
+                 <div className="p-4 flex-1">
+                   <h4 className="font-semibold">Top Broadcaster Feature</h4>
+                   <p className="text-xs text-gray-400 mb-2">Feature your stream in the top broadcasters on the homepage for 1 hour.</p>
+                   <span className="text-xs uppercase tracking-widest text-emerald-300">broadcast_feature</span>
+                 </div>
+                 <div className="flex items-center justify-between p-4 border-t border-white/5">
+                   <span className="flex items-center gap-1 text-yellow-300 font-semibold">1000 Coins</span>
+                   <button
+                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60"
+                     disabled={purchasingId === 'broadcast_feature'}
+                     onClick={() => handleBuyConsumable({ id: 'broadcast_feature', name: 'Top Broadcaster Feature', price: 1000 })}
+                   >
+                     {purchasingId === 'broadcast_feature' ? 'Purchasing…' : 'Buy'}
+                   </button>
+                 </div>
                </div>
-             </div>
-             <p className="text-sm text-gray-500 mb-6">
-               Energy drinks, snacks, and other items to boost your performance.
-             </p>
-             <div className="flex items-center justify-between mt-auto">
-               <span className="text-xl font-bold text-gray-600">??? Coins</span>
-               <button className="px-4 py-2 bg-gray-700 rounded-lg text-sm font-bold text-gray-400" disabled>
-                 Out of Stock
-               </button>
              </div>
            </div>
         </div>

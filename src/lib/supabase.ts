@@ -46,7 +46,6 @@ export interface UserProfile {
   troll_coins: number
   paid_coins?: number
   reserved_troll_coins?: number
-  trollmonds?: number
   has_paid?: boolean
   total_earned_coins: number
   total_spent_coins: number

@@ -536,13 +536,13 @@
 }
 
 .rgb-frame {
-  border: 2px solid rgb(255, 0, 0);
+  border: 1px solid rgb(255, 0, 0);
   animation: rgb-rotate 3s linear infinite;
-  box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
 }
 
 .rgb-frame-small {
-  border: 1px solid rgb(255, 0, 0);
+  border: 0.5px solid rgb(255, 0, 0);
   animation: rgb-rotate 3s linear infinite;
-  box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+  box-shadow: 0 0 5px rgba(255, 0, 0, 0.3);
 }

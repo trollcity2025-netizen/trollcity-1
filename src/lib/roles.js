@@ -33,7 +33,7 @@ export const ROLE_PERMISSIONS = {
 
   troll_officer: {
     pages: [
-      'home', 'messages', 'following', 'store', 'marketplace', 'inventory', 'sell',
+      'home', 'tcps', 'following', 'store', 'marketplace', 'inventory', 'sell',
       'leaderboard', 'wall', 'tromody', 'troll-court', 'empire-partner',
       'apply', 'support', 'safety', 'officer-lounge', 'officer-moderation', 'family'
     ],

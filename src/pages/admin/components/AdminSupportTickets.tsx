@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "../../../lib/supabase";
-import { sendNotification } from "../../../lib/sendNotification";
 import { toast } from "sonner";
 
 interface SupportTicket {
@@ -55,27 +54,16 @@ const AdminSupportTickets: React.FC = () => {
     };
   }, [loadTickets]);
 
-  const sendResponse = useCallback(async (ticketId: string, userId: string) => {
+  const sendResponse = useCallback(async (ticketId: string, _userId: string) => {
     if (!responding) return;
 
     try {
-      await supabase
-        .from("support_tickets")
-        .update({
-          admin_response: responding?.message,
-          admin_id: "admin", // Replace with real admin ID
-          response_at: new Date().toISOString(),
-          status: "resolved",
-        })
-        .eq("id", ticketId);
+      const { error } = await supabase.rpc('resolve_support_ticket', {
+        p_ticket_id: ticketId,
+        p_response: responding.message
+      })
 
-      await sendNotification(
-        userId,
-        "support_reply",
-        "Support Ticket Reply",
-        `Admin replied to your support ticket: "${responding?.message.slice(0, 80)}..."`,
-        { ticketId }
-      );
+      if (error) throw error
 
       toast.success("Response sent to user");
       setResponding(null);
@@ -108,10 +96,7 @@ const AdminSupportTickets: React.FC = () => {
       // Optimistically remove from state first
       setTickets((prev) => prev.filter((t) => t.id !== ticketId));
       
-      const { error } = await supabase
-        .from("support_tickets")
-        .delete()
-        .eq("id", ticketId);
+      const { error } = await supabase.rpc('delete_support_ticket', { p_ticket_id: ticketId })
         
       if (error) {
         console.error("Delete ticket failed", error);

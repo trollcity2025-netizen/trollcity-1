@@ -110,18 +110,11 @@ export default function DailyLoginWall({ onPostCreated }: DailyLoginWallProps) {
         return
       }
 
-      // Submit daily login reward
-      const result = await submitDailyPost(postData.id)
-
-      if (result.success) {
-        // Reset form
-        setContent('')
-        setPreviewReward(null)
-
-        // Callback
-        if (onPostCreated) {
-          onPostCreated(postData.id)
-        }
+      // Just reset form and callback, no coin reward
+      setContent('')
+      setPreviewReward(null)
+      if (onPostCreated) {
+        onPostCreated(postData.id)
       }
     } catch (err) {
       console.error('Error submitting daily post:', err)

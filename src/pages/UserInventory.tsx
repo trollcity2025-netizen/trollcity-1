@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shield, Phone, X } from 'lucide-react'
+import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shield, Phone, X, Car, Home } from 'lucide-react'
 import { PERK_CONFIG } from '../lib/perkSystem'
 import { ENTRANCE_EFFECTS_MAP, ROLE_BASED_ENTRANCE_EFFECTS, USER_SPECIFIC_ENTRANCE_EFFECTS } from '../lib/entranceEffects'
 import { GlowingUsernameColorPicker } from '../components/GlowingUsernameColorPicker'
 import AvatarCustomizer from './AvatarCustomizer'
+import { cars } from '../data/vehicles'
+import TitleDeedModal from '../components/TitleDeedModal'
+import ShopConsumablesSection from '../components/ShopConsumablesSection'
 
 export default function UserInventory({ embedded = false }: { embedded?: boolean }) {
   const { user, profile, refreshProfile } = useAuthStore()
@@ -20,7 +23,100 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
   const [loading, setLoading] = useState(true)
   const [activeItems, setActiveItems] = useState<Set<string>>(new Set())
   const [showColorPickerModal, setShowColorPickerModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'inventory' | 'avatar'>('inventory')
+  const [activeTab, setActiveTab] = useState<'items' | 'titles' | 'deeds' | 'shop'>('items')
+  const [userTitles, setUserTitles] = useState<any[]>([])
+  const [userDeeds, setUserDeeds] = useState<any[]>([])
+  const [selectedTitleDeed, setSelectedTitleDeed] = useState<any>(null)
+
+  // Delete all expired purchases, perks, and insurances
+  const deleteAllExpiredPurchases = useCallback(async () => {
+    if (!user?.id) return;
+    // Expired inventory
+    const expiredInventory = inventory.filter(item => item.expires_at && new Date(item.expires_at) < new Date() && !activeItems.has(item.item_id));
+    // Expired perks
+    const expiredPerks = perks.filter(perk => perk.expires_at && new Date(perk.expires_at) < new Date());
+    // Expired insurances
+    const expiredInsurances = insurances.filter(ins => ins.expires_at && new Date(ins.expires_at) < new Date());
+    console.log('Expired inventory:', expiredInventory);
+    console.log('Expired perks:', expiredPerks);
+    console.log('Expired insurances:', expiredInsurances);
+
+    // Always attempt delete on Supabase, even if local state is empty, to ensure server is in sync
+    if (expiredInventory.length === 0 && expiredPerks.length === 0 && expiredInsurances.length === 0) {
+      // Try to delete any expired items from Supabase in case local state is out of sync
+      try {
+        const nowIso = new Date().toISOString();
+        const invResp = await supabase.from('user_inventory')
+          .delete()
+          .not('expires_at', 'is', null)
+          .filter('expires_at', 'lt', nowIso)
+          .eq('user_id', user.id);
+        const perkResp = await supabase.from('user_perks')
+          .delete()
+          .not('expires_at', 'is', null)
+          .filter('expires_at', 'lt', nowIso)
+          .eq('user_id', user.id);
+        const insResp = await supabase.from('user_insurances')
+          .delete()
+          .not('expires_at', 'is', null)
+          .filter('expires_at', 'lt', nowIso)
+          .eq('user_id', user.id);
+        console.log('Delete responses:', { invResp, perkResp, insResp });
+        await loadInventory();
+      } catch (err) {
+        console.error('Delete all expired error:', err);
+      }
+      toast.info('No expired purchases, perks, or insurances to delete.');
+      return;
+    }
+    try {
+      console.log('Deleting expired inventory:', expiredInventory.map(i => i.id));
+      console.log('Deleting expired perks:', expiredPerks.map(i => i.id));
+      console.log('Deleting expired insurances:', expiredInsurances.map(i => i.id));
+      let deletedCount = 0;
+      // Delete expired inventory
+      if (expiredInventory.length > 0) {
+        const ids = expiredInventory.map(item => item.id);
+        const { error } = await supabase
+          .from('user_inventory')
+          .delete()
+          .in('id', ids)
+          .eq('user_id', user.id);
+        if (error) throw error;
+        setInventory(prev => prev.filter(entry => !ids.includes(entry.id)));
+        deletedCount += ids.length;
+      }
+      // Delete expired perks
+      if (expiredPerks.length > 0) {
+        const ids = expiredPerks.map(perk => perk.id);
+        const { error } = await supabase
+          .from('user_perks')
+          .delete()
+          .in('id', ids)
+          .eq('user_id', user.id);
+        if (error) throw error;
+        setPerks(prev => prev.filter(entry => !ids.includes(entry.id)));
+        deletedCount += ids.length;
+      }
+      // Delete expired insurances
+      if (expiredInsurances.length > 0) {
+        const ids = expiredInsurances.map(ins => ins.id);
+        const { error } = await supabase
+          .from('user_insurances')
+          .delete()
+          .in('id', ids)
+          .eq('user_id', user.id);
+        if (error) throw error;
+        setInsurances(prev => prev.filter(entry => !ids.includes(entry.id)));
+        deletedCount += ids.length;
+      }
+      await loadInventory();
+      toast.success(`Deleted ${deletedCount} expired item${deletedCount !== 1 ? 's' : ''}.`);
+    } catch (err) {
+      console.error('Error deleting expired items:', err);
+      toast.error('Failed to delete expired items');
+    }
+  }, [user?.id, inventory, perks, insurances, activeItems]);
 
   const roleEffectKey = (() => {
     if (!profile) return null;
@@ -71,20 +167,12 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
     },
     [user?.id, activeItems]
   )
-
   const loadInventory = useCallback(async () => {
     try {
       setLoading(true)
 
       // Parallel fetch of all inventory types
-      const [
-        inventoryRes,
-        effectsRes,
-        perksRes,
-        insuranceRes,
-        activeRes,
-        callSoundsRes
-      ] = await Promise.all([
+      const results = await Promise.all([
         supabase.from('user_inventory').select('*').eq('user_id', user!.id).order('acquired_at', { ascending: false }),
         supabase.from('user_entrance_effects').select('*').eq('user_id', user!.id).order('purchased_at', { ascending: false }),
         supabase.from('user_perks').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
@@ -97,8 +185,23 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
         supabase
           .from('user_call_sounds')
           .select('sound_id,is_active,call_sound_catalog(id,slug,name,sound_type,asset_url,price_coins)')
-          .eq('user_id', user!.id)
+          .eq('user_id', user!.id),
+        supabase.from('user_cars').select('*').eq('user_id', user!.id).order('purchased_at', { ascending: false }),
+        supabase.from('properties').select('*').eq('owner_id', user!.id).order('created_at', { ascending: false }),
+        supabase.from('vehicles_catalog').select('*')
       ]);
+
+      const inventoryRes = results[0];
+      const effectsRes = results[1];
+      const perksRes = results[2];
+      const insuranceRes = results[3];
+      const activeRes = results[4];
+      const callSoundsRes = results[5];
+      const titlesRes = results[6];
+      const deedsRes = results[7];
+      const catalogRes = results[8];
+      
+      const carsCatalog = catalogRes.data || [];
 
       // 1. Process Standard Inventory
       const inventoryData = inventoryRes.data || []
@@ -116,7 +219,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       setInventory(inventoryData.map((entry) => ({
         ...entry,
         marketplace_item: itemDetailsMap[entry.item_id] || null,
-      })))
+      })).filter((item: any) => item.marketplace_item?.type !== 'physical'))
 
       // 2. Process Entrance Effects
       const effectsData = effectsRes.data || []
@@ -159,6 +262,26 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       }));
       setCallSounds(callSoundsData)
 
+      // Process Titles and Deeds
+      // Only show active vehicle title (one vehicle per user)
+      const allTitlesData = titlesRes.data || [];
+      const activeTitle = allTitlesData.find((t: any) => t.is_active === true);
+      const titlesData = activeTitle ? [activeTitle] : [];
+      const deedsData = deedsRes.data || [];
+      
+      setUserTitles(titlesData.map((t: any) => {
+         // Find car details for display
+         // Try matching by model_url first (reliable), then by car_id (legacy)
+         const carDef = carsCatalog.find((c: any) => 
+             c.model_url === t.model_url || 
+             c.id === t.car_id || 
+             c.slug === t.car_id
+         );
+         return { ...t, carDef };
+      }));
+      
+      setUserDeeds(deedsData);
+      
       // 5. Active Items
       const activeSet = new Set(activeRes.data?.map(item => item.item_id) || [])
       
@@ -195,6 +318,32 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
     }
     loadInventory()
   }, [user, navigate, loadInventory])
+
+  const deleteItem = async (recordId: string, itemId: string, tableName: string, stateSetter: React.Dispatch<React.SetStateAction<any[]>>) => {
+    if (!user?.id) return;
+    if (activeItems.has(itemId)) {
+      toast.error('Deactivate item before deleting');
+      return;
+    }
+    // Confirmation is handled by caller if needed, but we can double check or just proceed.
+    // The caller at line 912 already confirms.
+
+    try {
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('id', recordId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      stateSetter(prev => prev.filter(entry => entry.id !== recordId));
+      toast.success('Item deleted');
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      toast.error('Failed to delete item');
+    }
+  };
 
   const toggleEntranceEffect = async (effectId: string, isActive: boolean) => {
     try {
@@ -450,6 +599,8 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       case 'physical': return 'Physical Item'
       case 'perk': return 'Perk'
       case 'insurance': return 'Insurance'
+      case 'title': return 'Title'
+      case 'deed': return 'Deed'
       default: return 'Item'
     }
   }
@@ -458,6 +609,17 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
 
   const content = (
     <div className="max-w-6xl mx-auto space-y-6">
+      {/* Delete All Expired Purchases Button */}
+      {activeTab === 'items' && (
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={deleteAllExpiredPurchases}
+            className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-semibold shadow transition-colors"
+          >
+            Delete All Expired Purchases
+          </button>
+        </div>
+      )}
       {!embedded && (
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-2 flex items-center justify-center gap-3">
@@ -471,9 +633,9 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
         <div className="flex items-center justify-center">
           <div className="inline-flex bg-black/40 border border-[#2C2C2C] rounded-full p-1">
             <button
-              onClick={() => setActiveTab('inventory')}
+              onClick={() => setActiveTab('items')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === 'inventory'
+                activeTab === 'items'
                   ? 'bg-purple-600 text-white'
                   : 'text-gray-400 hover:text-white'
               }`}
@@ -481,23 +643,39 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
               Items
             </button>
             <button
-              onClick={() => setActiveTab('avatar')}
+              onClick={() => setActiveTab('titles')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === 'avatar'
+                activeTab === 'titles'
                   ? 'bg-purple-600 text-white'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Avatar
+              Titles
+            </button>
+            <button
+              onClick={() => setActiveTab('deeds')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeTab === 'deeds'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Deeds
+            </button>
+            <button
+              onClick={() => setActiveTab('shop')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeTab === 'shop'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Shop
             </button>
           </div>
         </div>
 
-        {activeTab === 'avatar' ? (
-          <div className="mt-4">
-            <AvatarCustomizer />
-          </div>
-        ) : loading ? (
+    {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1,2,3,4,5,6].map(i => (
               <div key={i} className="bg-zinc-900 rounded-xl p-6 border border-[#2C2C2C] animate-pulse">
@@ -505,6 +683,85 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                 <div className="h-8 bg-gray-700 rounded w-3/4"></div>
               </div>
             ))}
+          </div>
+        ) : activeTab === 'shop' ? (
+          <ShopConsumablesSection />
+        ) : activeTab === 'titles' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userTitles.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <Car className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold mb-2">No Vehicle Titles</h2>
+                <p className="text-gray-400 mb-6">Visit the Dealership to buy vehicles.</p>
+                <button
+                  onClick={() => navigate('/dealership')}
+                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold"
+                >
+                  Go to Dealership
+                </button>
+              </div>
+            ) : (
+              userTitles.map((title) => {
+                const car = title.carDef;
+                return (
+                  <div key={title.id} className="bg-zinc-900 rounded-xl p-6 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer" onClick={() => setSelectedTitleDeed({ type: 'title', ...title })}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Car className="w-5 h-5 text-emerald-400" />
+                      <span className="text-sm text-emerald-400 font-bold uppercase tracking-wider">Title</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-1">
+                      {car?.name || `Vehicle #${title.car_id || title.id.slice(0,8)}`}
+                    </h3>
+                    <p className="text-gray-400 text-sm mb-4">
+                      Purchased: {new Date(title.purchased_at).toLocaleDateString()}
+                    </p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-500">Value</span>
+                      <span className="text-white font-mono">
+                        {(title.current_value || car?.price || 0).toLocaleString()} coins
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : activeTab === 'deeds' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userDeeds.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <Home className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold mb-2">No Property Deeds</h2>
+                <p className="text-gray-400 mb-6">Visit the Living section to buy properties.</p>
+                <button
+                  onClick={() => navigate('/living')}
+                  className="px-6 py-3 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold"
+                >
+                  Find a Home
+                </button>
+              </div>
+            ) : (
+              userDeeds.map((deed) => (
+                <div key={deed.id} className="bg-zinc-900 rounded-xl p-6 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer" onClick={() => navigate('/living')}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Home className="w-5 h-5 text-amber-400" />
+                    <span className="text-sm text-amber-400 font-bold uppercase tracking-wider">Deed</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-1">
+                    {deed.name || `Property #${deed.id.slice(0, 8)}`}
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    {deed.address || 'No address'}
+                  </p>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-500">Rent Income</span>
+                    <span className="text-white font-mono">
+                      {(deed.rent_amount || 0).toLocaleString()} coins/week
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         ) : (inventory.length === 0 && entranceEffects.length === 0 && perks.length === 0 && insurances.length === 0 && callSounds.length === 0) ? (
           <div className="text-center py-12">
@@ -828,21 +1085,10 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                   {inventory.map((item) => {
                     const isActive = activeItems.has(item.item_id)
                     const isDigital = ['effect', 'badge', 'digital'].includes(item.marketplace_item?.type)
+                    const isExpired = item.expires_at && new Date(item.expires_at) < new Date()
 
                     return (
                       <div key={item.id} className="relative bg-zinc-900 rounded-xl p-6 border border-purple-500/20 hover:border-purple-500/40 transition-all group">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm('Are you sure you want to delete this item?')) {
-                              deleteItem(item.id, item.item_id, 'user_inventory', setInventory);
-                            }
-                          }}
-                          className="absolute top-4 right-4 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete Item"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
                             {getItemIcon(item.marketplace_item?.type)}
@@ -852,6 +1098,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                             {isActive && (
                               <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">
                                 ACTIVE
+                              </span>
+                            )}
+                            {isExpired && (
+                              <span className="bg-red-600 text-white text-xs px-2 py-1 rounded-full ml-2">
+                                EXPIRED
                               </span>
                             )}
                           </div>
@@ -867,6 +1118,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                           <p className="text-xs text-gray-500">
                             Acquired: {new Date(item.acquired_at).toLocaleDateString()}
                           </p>
+                          {item.expires_at && (
+                            <p className="text-xs text-gray-500">
+                              Expires: {new Date(item.expires_at).toLocaleString()}
+                            </p>
+                          )}
                         </div>
 
                         {isDigital ? (
@@ -892,12 +1148,13 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                               )}
                             </button>
 
-                            {!isActive && (
+                            {/* Show delete button only for expired items and only if not active */}
+                            {isExpired && !isActive && (
                               <button
                                 onClick={() => deleteInventoryItem(item.id, item.item_id)}
                                 className="w-full py-2 rounded-lg font-semibold border border-red-600 text-red-400 hover:bg-red-600 hover:text-white transition-colors text-sm"
                               >
-                                Delete Item
+                                Delete (Expired)
                               </button>
                             )}
                           </div>
@@ -908,12 +1165,15 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                               <p className="text-sm">Physical Item</p>
                               <p className="text-xs">Contact seller for delivery</p>
                             </div>
-                            <button
-                              onClick={() => deleteInventoryItem(item.id, item.item_id)}
-                              className="w-full py-2 rounded-lg font-semibold border border-red-600 text-red-400 hover:bg-red-600 hover:text-white transition-colors text-sm"
-                            >
-                              Delete Item
-                            </button>
+                            {/* Show delete button only for expired items */}
+                            {isExpired && (
+                              <button
+                                onClick={() => deleteInventoryItem(item.id, item.item_id)}
+                                className="w-full py-2 rounded-lg font-semibold border border-red-600 text-red-400 hover:bg-red-600 hover:text-white transition-colors text-sm"
+                              >
+                                Delete (Expired)
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -997,6 +1257,13 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
           </div>
         </div>
       )}
+
+      {/* Title/Deed Details Modal */}
+      <TitleDeedModal 
+        isOpen={!!selectedTitleDeed} 
+        onClose={() => setSelectedTitleDeed(null)} 
+        item={selectedTitleDeed} 
+      />
     </>
   )
 }

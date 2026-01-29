@@ -366,7 +366,7 @@ export default function ShopView() {
                     </div>
                     {item.stock_quantity !== null && (
                       <div className="text-xs text-gray-400">
-                        {item.stock_quantity > 0 ? `${item.stock_quantity} left` : 'Out of stock'}
+                        {item.item_type === 'broadcast_consumable' ? '' : (item.stock_quantity > 0 ? `${item.stock_quantity} left` : 'Out of stock')}
                       </div>
                     )}
                   </div>
@@ -380,7 +380,7 @@ export default function ShopView() {
                   {purchasing === item.id ? (
                     <>Processing...</>
                   ) : item.stock_quantity !== null && item.stock_quantity <= 0 ? (
-                    <>Out of Stock</>
+                    <>{item.item_type !== 'broadcast_consumable' && <>Out of Stock</>}</>
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />

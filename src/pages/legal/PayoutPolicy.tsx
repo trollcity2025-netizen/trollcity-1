@@ -30,26 +30,40 @@ export default function PayoutPolicy() {
 
         <h2>2. Payout Process</h2>
         <p>
-          Payouts and cashouts are currently disabled. You may continue to earn and
-          use troll_coins inside Troll City, but you cannot convert them to cash or
-          gift cards at this time.
+          Payouts are processed 2 times a week, on Mondays and Fridays. You can submit a payout request at any time, 
+          but it will only be processed during these windows.
         </p>
 
-        <h2>3. Conversion Rate</h2>
+        <h2>3. Payout Tiers & Conversion Rates</h2>
         <p>
-          Current conversion rate: <strong>100 troll_coins = $1.00 USD</strong>
+          Payouts are processed according to the following fixed tiers. You must reach the minimum balance for a tier to be eligible.
         </p>
-        <p>
-          This rate may be adjusted at any time. You will be notified of rate changes
-          before they take effect. The rate at the time of your request submission
-          will be honored.
+        <ul className="list-none space-y-2 pl-0">
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-slate-200">Starter Tier:</span>
+            <span>7,000 coins = <span className="text-green-400">$21.00 USD</span></span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-bronze-400 text-amber-600">Bronze Tier:</span>
+            <span>14,000 coins = <span className="text-green-400">$49.50 USD</span></span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-slate-400">Silver Tier:</span>
+            <span>27,000 coins = <span className="text-green-400">$90.00 USD</span></span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-yellow-400">Gold Tier:</span>
+            <span>47,000 coins = <span className="text-green-400">$150.00 USD</span></span>
+          </li>
+        </ul>
+        <p className="mt-4 text-sm text-slate-400">
+          Rates and tiers are subject to change. The system automatically selects the highest tier your balance qualifies for.
         </p>
 
         <h2>4. Minimum and Maximum Payouts</h2>
         <p>
-          Because payouts are disabled, minimums, maximums, and payout frequencies
-          are not currently applicable. If payouts are re-enabled in the future,
-          updated limits and requirements will be published here.
+          Minimum payout: <strong>7,000 troll_coins ($21.00 USD)</strong><br />
+          Maximum payout per week: <strong>$10,000 USD</strong>
         </p>
 
         <h2>5. Tax Obligations</h2>
@@ -88,22 +102,21 @@ export default function PayoutPolicy() {
 
         <h2>7. Processing Fees</h2>
         <p>
-          Because payouts are disabled, no payout processing fees are charged. If
-          payouts return in the future, details about any applicable fees will be
-          updated in this section.
+          Standard PayPal transaction fees may apply and will be deducted from the
+          payout amount. We do not charge an additional platform fee for payouts.
         </p>
 
         <h2>8. Payment Method</h2>
         <p>
-          Payouts, including gift card payouts, are currently unavailable. If payout
-          methods are reintroduced, the supported options and requirements will be
-          documented here.
+          Payouts are sent via PayPal. You must have a verified PayPal account
+          matching your Troll City account details.
         </p>
 
         <h2>9. Payout Timeline</h2>
         <p>
-          There is no payout processing timeline while payouts are disabled. Any
-          future payout program will include updated processing expectations.
+          Payouts are processed on Mondays and Fridays. Once processed, funds usually
+          arrive in your PayPal account within 24 hours, though some transactions
+          may take longer depending on PayPal's processing times.
         </p>
 
         <h2>10. Disputes and Appeals</h2>

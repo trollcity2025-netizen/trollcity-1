@@ -49,7 +49,7 @@ export default function EarningsPage() {
 
       // Load payout history
       const { data: payoutHistory, error: payoutError } = await supabase
-        .from('payout_requests')
+        .from('payout_history_view')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
@@ -362,13 +362,13 @@ export default function EarningsPage() {
                   <div key={payout.id} className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg border border-gray-700">
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${
-                        payout.status === 'paid' ? 'bg-green-400' :
-                        payout.status === 'pending' ? 'bg-yellow-400' :
-                        payout.status === 'rejected' ? 'bg-red-400' : 'bg-gray-400'
+                        ['paid', 'success'].includes(payout.status) ? 'bg-green-400' :
+                        ['pending', 'processing'].includes(payout.status) ? 'bg-yellow-400' :
+                        ['rejected', 'failed', 'refunded'].includes(payout.status) ? 'bg-red-400' : 'bg-gray-400'
                       }`} />
                       <div>
                         <p className="font-semibold">
-                          {formatUSD(payout.amount_usd)} • {formatCoins(payout.requested_coins)} coins
+                          {formatUSD(payout.cash_amount)} • {formatCoins(payout.coins_redeemed)} coins
                         </p>
                         <p className="text-xs text-gray-400">
                           {new Date(payout.created_at).toLocaleDateString()} • {payout.status}
@@ -376,9 +376,9 @@ export default function EarningsPage() {
                       </div>
                     </div>
                     <span className={`text-xs px-2 py-1 rounded-full ${
-                      payout.status === 'paid' ? 'bg-green-900/50 text-green-300' :
-                      payout.status === 'pending' ? 'bg-yellow-900/50 text-yellow-300' :
-                      payout.status === 'rejected' ? 'bg-red-900/50 text-red-300' : 'bg-gray-700 text-gray-300'
+                      ['paid', 'success'].includes(payout.status) ? 'bg-green-900/50 text-green-300' :
+                      ['pending', 'processing'].includes(payout.status) ? 'bg-yellow-900/50 text-yellow-300' :
+                      ['rejected', 'failed', 'refunded'].includes(payout.status) ? 'bg-red-900/50 text-red-300' : 'bg-gray-700 text-gray-300'
                     }`}>
                       {payout.status}
                     </span>

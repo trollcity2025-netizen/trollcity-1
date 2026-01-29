@@ -180,7 +180,7 @@ export default function Trollifications() {
       if (notif.metadata.stream_id) {
         navigate(`/stream/${notif.metadata.stream_id}`)
       } else if (notif.metadata.sender_id) {
-        navigate(`/messages?user=${notif.metadata.sender_id}`)
+        navigate(`/tcps?user=${notif.metadata.sender_id}`)
       } else if (notif.metadata.payout_id) {
         navigate('/my-earnings')
       } else if (notif.metadata.battle_id) {

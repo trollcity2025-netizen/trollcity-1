@@ -129,30 +129,11 @@ export default function UserManagementPanel({
       const updates: Partial<UserProfile> = {
         free_coin_balance: editingCoins.free,
         level: editingLevel,
-        role: editingRole,
+        // role: editingRole, // Handled via RPC
         updated_at: new Date().toISOString()
       }
 
-      // Update role-specific flags
-      if (editingRole === 'admin') {
-        updates.is_admin = true
-        updates.is_troll_officer = false
-        updates.is_troller = false
-      } else if (editingRole === 'troll_officer') {
-        updates.is_troll_officer = true
-        updates.is_admin = false
-        updates.is_troller = false
-      } else if (editingRole === 'troller') {
-        updates.is_troller = true
-        updates.is_admin = false
-        updates.is_troll_officer = false
-      } else {
-        updates.is_admin = false
-        updates.is_troll_officer = false
-        updates.is_troller = false
-      }
-
-      // 2. Execute direct update for non-Troll Bank fields
+      // 2. Execute direct update for basic fields
       const { error } = await supabase
         .from('user_profiles')
         .update(updates)
@@ -160,7 +141,21 @@ export default function UserManagementPanel({
 
       if (error) throw error
 
-      // 3. Handle Troll Coins via Troll Bank RPC
+      // 3. Handle Role Update via Secure RPC if changed
+      if (editingRole !== selectedUser.role) {
+        const { error: roleError } = await supabase.rpc('set_user_role', {
+          target_user: selectedUser.id,
+          new_role: editingRole,
+          reason: `Admin panel update by ${adminProfile.username}`
+        })
+        
+        if (roleError) {
+          console.error('Error setting role:', roleError)
+          toast.error('Failed to update role: ' + roleError.message)
+        }
+      }
+
+      // 4. Handle Troll Coins via Troll Bank RPC
       const currentTrollCoins = selectedUser.troll_coins || 0
       const newTrollCoins = editingCoins.paid
       const delta = newTrollCoins - currentTrollCoins

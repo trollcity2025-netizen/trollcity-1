@@ -4,7 +4,6 @@ import { useAuthStore } from '../lib/store'
 import { useCoins } from '../lib/hooks/useCoins'
 import { toast } from 'sonner'
 import { Gift, Coins, Zap, X, Loader2 } from 'lucide-react'
-import LuckyWinOverlay from './LuckyWinOverlay'
 
 interface GiftModalProps {
   isOpen: boolean
@@ -13,20 +12,13 @@ interface GiftModalProps {
   recipientUsername: string
 }
 
-interface LuckyResult {
-  multiplier: number
-  trollmondsAwarded: number
-}
-
 const presetAmounts = [50, 100, 200, 500, 1000, 2500, 5000]
 
 const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, recipientUsername }) => {
   const { user } = useAuthStore()
-  const { balances } = useCoins()
+  const { balances, spendCoins } = useCoins()
   const [amount, setAmount] = useState<number>(100)
   const [loading, setLoading] = useState(false)
-  const [luckyResult, setLuckyResult] = useState<LuckyResult | null>(null)
-  const [showLuckyOverlay, setShowLuckyOverlay] = useState(false)
 
   if (!isOpen) return null
 
@@ -38,27 +30,20 @@ const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, rec
 
     setLoading(true)
     try {
-      const { data, error } = await supabase.rpc('process_gift_with_lucky', {
-        p_sender_id: user.id,
-        p_receiver_id: recipientId,
-        p_troll_coins: amount
+      const success = await spendCoins({
+        senderId: user.id,
+        receiverId: recipientId,
+        amount: amount,
+        source: 'gift',
+        item: 'Coin Gift'
       })
 
-      if (error) throw error
-
-      if (data.success) {
-        if (data.lucky_multiplier) {
-          setLuckyResult({ multiplier: data.lucky_multiplier, trollmondsAwarded: data.trollmonds_awarded })
-          setShowLuckyOverlay(true)
-        } else {
-          toast.success('Gift sent successfully!')
-          setTimeout(() => {
-            onClose()
-            setAmount(100)
-          }, 1500)
-        }
-      } else {
-        toast.error(data.error || 'Failed to send gift')
+      if (success) {
+        toast.success('Gift sent successfully!')
+        setTimeout(() => {
+          onClose()
+          setAmount(100)
+        }, 1500)
       }
     } catch (err: any) {
       console.error('Gift error:', err)
@@ -66,13 +51,6 @@ const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, rec
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleLuckyComplete = () => {
-    setShowLuckyOverlay(false)
-    setLuckyResult(null)
-    onClose()
-    setAmount(100)
   }
 
   return (
@@ -102,15 +80,6 @@ const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, rec
               </div>
               <span className="text-lg font-bold text-yellow-400">
                 {balances.troll_coins?.toLocaleString?.() ?? '0'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-green-400" />
-                <span className="text-sm text-gray-400">Trollmonds</span>
-              </div>
-              <span className="text-lg font-bold text-green-400">
-                {balances.trollmonds?.toLocaleString?.() ?? '0'}
               </span>
             </div>
           </div>
@@ -143,36 +112,6 @@ const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, rec
             <Coins className="absolute right-3 top-3 w-5 h-5 text-yellow-400" />
           </div>
 
-          <div className="bg-gradient-to-r from-yellow-500/10 to-purple-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-yellow-400" />
-              <span className="text-sm font-medium text-yellow-400">Lucky Chance!</span>
-            </div>
-            <p className="text-xs text-gray-300 mb-3">Every gift has a chance to win Trollmonds multipliers!</p>
-            <div className="grid grid-cols-5 gap-1 text-xs">
-              <div className="text-center">
-                <div className="text-yellow-400 font-bold">x100</div>
-                <div className="text-gray-400">6.0%</div>
-              </div>
-              <div className="text-center">
-                <div className="text-orange-400 font-bold">x200</div>
-                <div className="text-gray-400">2.5%</div>
-              </div>
-              <div className="text-center">
-                <div className="text-pink-400 font-bold">x500</div>
-                <div className="text-gray-400">1.0%</div>
-              </div>
-              <div className="text-center">
-                <div className="text-cyan-400 font-bold">x1000</div>
-                <div className="text-gray-400">0.25%</div>
-              </div>
-              <div className="text-center">
-                <div className="text-red-400 font-bold">x10k</div>
-                <div className="text-gray-400">0.01%</div>
-              </div>
-            </div>
-          </div>
-
           <button
             onClick={sendGift}
             disabled={loading || amount <= 0 || amount > (balances.troll_coins || 0)}
@@ -196,13 +135,6 @@ const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, rec
           )}
         </div>
       </div>
-
-      <LuckyWinOverlay
-        multiplier={luckyResult?.multiplier || 0}
-        trollmondsAwarded={luckyResult?.trollmondsAwarded || 0}
-        isVisible={showLuckyOverlay}
-        onComplete={handleLuckyComplete}
-      />
     </>
   )
 }

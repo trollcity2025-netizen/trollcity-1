@@ -52,22 +52,22 @@ export async function checkEconomyBadges(userId: string): Promise<BadgeCheckResu
   
   // Get user's economy stats
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('total_coins_spent, total_gifts_sent, total_cashouts')
+    .from('user_profiles')
+    .select('total_spent_coins, total_gifts_sent, total_cashouts')
     .eq('id', userId)
     .maybeSingle()
   
   if (!profile) return results
   
   // First Spend (any paid coin)
-  if (profile.total_coins_spent > 0) {
+  if (profile.total_spent_coins > 0) {
     if (await awardBadgeIfNotExists(userId, 'first-spend')) {
       results.push({ awarded: true, badgeSlug: 'first-spend' })
     }
   }
   
   // Whale (100,000 paid coins)
-  if (profile.total_coins_spent >= 100000) {
+  if (profile.total_spent_coins >= 100000) {
     if (await awardBadgeIfNotExists(userId, 'whale')) {
       results.push({ awarded: true, badgeSlug: 'whale' })
     }

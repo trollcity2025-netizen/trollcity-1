@@ -9,7 +9,9 @@ import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 
 const Auth = () => {
   const [loading, setLoading] = useState(false)
-  const [isLogin, setIsLogin] = useState(true)
+  const [searchParams] = useSearchParams()
+  const initialIsLogin = searchParams.get('mode') === 'signup' ? false : true
+  const [isLogin, setIsLogin] = useState(initialIsLogin)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
@@ -19,7 +21,6 @@ const Auth = () => {
   const [alertDetails, setAlertDetails] = useState('')
   const [alertSubmitting, setAlertSubmitting] = useState(false)
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
   const { user, profile, setAuth, setProfile } = useAuthStore()
   const [installPrompt, setInstallPrompt] = useState<any>(null)
   const [installed, setInstalled] = useState(() => {

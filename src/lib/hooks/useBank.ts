@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 export function useBank() {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
-  const [loan, setLoan] = useState<any>(null)
+  const [loans, setLoans] = useState<any[]>([])
   const [ledger, setLedger] = useState<any[]>([])
   const [tiers, setTiers] = useState<any[]>([])
   const [applications, setApplications] = useState<any[]>([])
@@ -16,14 +16,14 @@ export function useBank() {
     if (!user) return
     setLoading(true)
     try {
-      // Fetch active loan
-      const { data: loans } = await supabase
+      // Fetch all active loans
+      const { data: activeLoans } = await supabase
         .from('loans')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'active')
-        .maybeSingle()
-      setLoan(loans)
+        .order('created_at', { ascending: false })
+      setLoans(activeLoans || [])
 
       // Fetch ledger (recent 50)
       const { data: ledgers } = await supabase
@@ -83,7 +83,7 @@ export function useBank() {
 
   return {
     loading,
-    loan,
+    loans,
     ledger,
     tiers,
     applications,

@@ -97,7 +97,7 @@ export default function ChurchPage() {
     
     if (!isOpenNow) {
        // Calculate time until next opening
-       let nextOpen = new Date();
+       const nextOpen = new Date();
        nextOpen.setHours(13, 0, 0, 0);
        
        if (hours >= 15) {

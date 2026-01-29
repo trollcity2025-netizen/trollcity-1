@@ -21,22 +21,33 @@ const DatabaseBackup: React.FC = () => {
     setLoading(true);
     setBackupStatus('processing');
     try {
-      const response = await fetch('/api/admin/backup/trigger', { method: 'POST' });
-      if (!response.ok) throw new Error('Backup failed');
+      // Trigger a real backup request via RPC
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase.rpc('trigger_manual_backup', {
+        p_admin_id: user.user.id
+      });
       
-      setTimeout(() => {
-        setBackupStatus('success');
-        setLastBackup(new Date().toLocaleString());
-        setLoading(false);
-      }, 2000);
-    } catch (error) {
+      if (error) throw error;
+      
+      // We don't fake success anymore. We wait for the system to process it.
+      // For UX, we show "Request Sent" and let the user know it's queued.
+      toast.success("Backup request queued successfully");
+      setBackupStatus('idle'); // Reset to idle so they can request again if needed, or we could track the active request.
+      
+      // In a real app with a background worker, we would subscribe to the request status.
+      // For now, we just acknowledge the request.
+    } catch (error: any) {
       console.error(error);
+      toast.error(error.message || "Backup request failed");
       setBackupStatus('error');
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleExportData = async (table: string) => {
+  const handleExportData = async (table: string, filename?: string) => {
     try {
       const { data, error } = await supabase.from(table).select('*').limit(1000);
       if (error) throw error;
@@ -45,7 +56,7 @@ const DatabaseBackup: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${table}_export_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `${filename || table}_export_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -159,13 +170,14 @@ const DatabaseBackup: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: 'User Profiles', table: 'user_profiles' },
-              { label: 'Transactions', table: 'transactions' },
-              { label: 'Chat Logs', table: 'chat_messages' }, // Assuming table name
-              { label: 'System Health', table: 'system_health' }
+              { label: 'Transactions', table: 'coin_transactions' },
+              { label: 'Stream Chats', table: 'messages', filename: 'stream_chat_logs' },
+              { label: 'Direct Messages', table: 'conversation_messages', filename: 'dm_logs' },
+              { label: 'Audit Logs', table: 'audit_logs', filename: 'system_audit_logs' }
             ].map((item) => (
               <button
-                key={item.table}
-                onClick={() => handleExportData(item.table)}
+                key={item.table + item.label}
+                onClick={() => handleExportData(item.table, item.filename)}
                 className="flex items-center justify-between p-4 bg-[#1a1a24] hover:bg-[#252532] border border-gray-800 hover:border-gray-700 rounded-lg transition-all group"
               >
                 <div className="flex items-center gap-3">

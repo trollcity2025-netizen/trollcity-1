@@ -66,6 +66,10 @@ export function UserBadge({ profile }: UserBadgeProps) {
       {isDriver && (
         <span className="text-blue-400 text-xs" title="Licensed Driver">🚗</span>
       )}
+
+      {isLandlord && (
+        <span className="text-green-400 text-xs" title="Landlord">🏢</span>
+      )}
     </span>
   )
 }

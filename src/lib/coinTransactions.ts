@@ -63,7 +63,7 @@ export type CoinTransactionType =
   | 'troll_town_sale'
   | 'troll_town_upgrade'
 
-export type CoinType = 'trollmonds' | 'troll_coins'
+export type CoinType = 'troll_coins'
 
 export interface CoinTransactionMetadata {
   [key: string]: any
@@ -385,12 +385,7 @@ export async function deductCoins(params: {
           // Update the specific coin balance based on coinType
           const updatedProfile = { ...profile }
           
-          if (coinType === 'trollmonds') {
-             updatedProfile.trollmonds = numericBalance
-          } else {
-             // Default to troll_coins for 'paid' or 'troll_coins'
-             updatedProfile.troll_coins = numericBalance
-          }
+          updatedProfile.troll_coins = numericBalance
           
           setProfile(updatedProfile)
         }
@@ -534,18 +529,7 @@ export async function addCoins(params: {
       if (profile && profile.id === userId) {
         const updatedProfile = { ...profile }
         
-        if (finalCoinType === 'trollmonds') {
-            // Trollmonds logic remains separate for now if needed, 
-            // but addCoins seems to default to troll_coins. 
-            // If coinType is trollmonds, we should probably NOT use Troll Bank RPC 
-            // unless Troll Bank supports trollmonds. 
-            // For now assuming troll_coins.
-            if (finalCoinType === 'troll_coins') {
-                 updatedProfile.troll_coins = finalBalance
-            }
-        } else {
-            updatedProfile.troll_coins = finalBalance
-        }
+        updatedProfile.troll_coins = finalBalance
         
         setProfile(updatedProfile)
       }

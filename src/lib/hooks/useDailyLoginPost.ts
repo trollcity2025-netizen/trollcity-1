@@ -61,100 +61,15 @@ export function useDailyLoginPost() {
     return Math.floor(Math.random() * 101) // 0-100 inclusive
   }, [])
 
-  // Submit daily login post with coin reward
-  const submitDailyPost = useCallback(
-    async (postId: string): Promise<DailyLoginPostReward> => {
-      if (!user?.id) {
-        toast.error('You must be logged in to post')
-        return {
-          success: false,
-          coinsEarned: 0,
-          message: 'Not logged in',
-          canPostToday: false,
-        }
-      }
 
-      if (!canPostToday) {
-        toast.error('You have already posted today. Come back tomorrow!')
-        return {
-          success: false,
-          coinsEarned: 0,
-          message: 'Already posted today',
-          canPostToday: false,
-        }
-      }
-
-      setLoading(true)
-
-      try {
-        // Generate random coins (0-100)
-        const coinsEarned = generateRandomReward()
-
-        // Call Supabase function to record post and award coins
-        const { data, error } = await supabase
-          .rpc('record_daily_login_post', {
-            p_post_id: postId,
-            p_coins: coinsEarned,
-          })
-          .select()
-          .single()
-
-        if (error) {
-          console.error('Error recording daily post:', error)
-          toast.error(error.message || 'Failed to record post')
-          return {
-            success: false,
-            coinsEarned: 0,
-            message: error.message || 'Failed to record post',
-            canPostToday,
-          }
-        }
-
-        // Check if the RPC call was successful
-        if (!data || !data.success) {
-          toast.error(data?.message || 'Failed to record post')
-          return {
-            success: false,
-            coinsEarned: 0,
-            message: data?.message || 'Failed to record post',
-            canPostToday,
-          }
-        }
-
-        // Refresh coins in UI
-        await refreshCoins()
-
-        // Update local state
-        setCanPostToday(false)
-        setLastPostDate(new Date().toISOString())
-
-        // Show success toast with coin amount
-        toast.success(`🎉 You earned ${data.coins_earned} Troll Coins!`, {
-          description: 'Come back tomorrow for another daily post!',
-        })
-
-        return {
-          success: true,
-          coinsEarned: data.coins_earned,
-          message: `You earned ${data.coins_earned} Troll Coins!`,
-          canPostToday: false,
-          lastPostDate: new Date().toISOString(),
-        }
-      } catch (err) {
-        console.error('Error submitting daily post:', err)
-        toast.error('An error occurred while posting')
-        return {
-          success: false,
-          coinsEarned: 0,
-          message: 'An error occurred',
-          canPostToday,
-        }
-      } finally {
-        setLoading(false)
-      }
-    },
-    [user?.id, canPostToday, generateRandomReward, refreshCoins]
-  )
+  // No-op for submitDailyPost, just for compatibility
+  const submitDailyPost = useCallback(async (postId: string) => ({
+    success: true,
+    coinsEarned: 0,
+    message: 'Posted',
+    canPostToday: false,
+    lastPostDate: new Date().toISOString(),
+  }), [])
 
   return {
     loading,

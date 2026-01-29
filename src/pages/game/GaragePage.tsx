@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Car, Gavel, Coins } from 'lucide-react';
+import { Car, Gavel, Coins, Wrench } from 'lucide-react';
 import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 import { subscribeToUserCars, listenForPurchaseBroadcasts } from '../../lib/purchaseSync';
 import { cars } from '../../data/vehicles';
 import { toast } from 'sonner';
+import CarUpgradesModal from '../../components/CarUpgradesModal';
 
 interface VehicleListing {
   id: string;
@@ -34,6 +35,7 @@ export default function GaragePage() {
   const [listings, setListings] = useState<VehicleListing[]>([]);
   const [highestBids, setHighestBids] = useState<Record<string, HighestBidInfo>>({});
   const [loading, setLoading] = useState(true);
+  const [showUpgradesModal, setShowUpgradesModal] = useState<string | null>(null);
 
   const loadGarageData = useCallback(async () => {
     if (!user) return;
@@ -102,7 +104,8 @@ export default function GaragePage() {
               return Number.isFinite(asNum) ? asNum : null;
             })(),
             is_active: row.is_active,
-            acquired_at: row.purchased_at
+            acquired_at: row.purchased_at,
+            current_value: row.current_value
         }));
         setGarageCars(rows);
 
@@ -361,7 +364,12 @@ export default function GaragePage() {
                   {ownedVehicleIds.map((id) => {
                     const vehicle = cars.find((c) => c.id === id);
                     if (!vehicle) return null;
-                    const titleValue = vehicle.price.toLocaleString();
+                    
+                    // Find the dynamic car data to get current value
+                    const garageCar = garageCars.find(g => g.car_model_id === id);
+                    const currentValue = garageCar?.current_value || vehicle.price;
+                    const titleValue = currentValue.toLocaleString();
+                    
                     const isActive = activeVehicleId === id;
                     return (
                       <div
@@ -413,6 +421,14 @@ export default function GaragePage() {
                               Set Active
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setShowUpgradesModal(garageCar?.id || null)}
+                            className="mt-2 ml-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-purple-600 hover:bg-purple-500 text-white"
+                          >
+                            <Wrench className="w-3 h-3 inline-block mr-1" />
+                            Upgrade
+                          </button>
                         </div>
                       </div>
                     );
@@ -550,6 +566,13 @@ export default function GaragePage() {
           </div>
         </section>
       </div>
+      {showUpgradesModal && (
+        <CarUpgradesModal
+          userCarId={showUpgradesModal}
+          onClose={() => setShowUpgradesModal(null)}
+          onUpdate={loadGarageData}
+        />
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 const QUESTIONS = [
   { q: "What is the speed limit in Troll City?", options: ["40 mph", "No Limit", "100 mph", "Whatever you want"], a: "A" }, 
   { q: "What happens if your license expires?", options: ["Nothing", "Court Summons", "Free Gas", "You get a medal"], a: "B" },
-  { q: "How often must you renew your license?", options: ["Every year", "Every 30 days", "Never", "Every week"], a: "B" },
+   { q: "How often must you renew your license? (Admins never need to renew)", options: ["Every year", "Every 30 days", "Never (Admins only)", "Every week"], a: "B" },
   { q: "Who pays for gas?", options: ["Admins", "Staff", "Everyone except Staff", "Nobody"], a: "C" },
   { q: "What is the gas consumption per action?", options: ["1%", "5%", "10%", "20%"], a: "B" },
   { q: "Can you drive with a suspended license?", options: ["Yes", "No", "Maybe", "Only at night"], a: "B" },

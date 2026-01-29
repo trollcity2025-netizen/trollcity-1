@@ -1,0 +1,218 @@
+You are Trae.ai acting as the lead full-stack engineer for my Troll City app. Your task is to implement the following EXACT changes end-to-end (database, backend, UI, permissions, realtime, and QA). Do not add any other features. Do not remove any existing features unless explicitly requested below. Keep existing theme and layouts.
+
+GLOBAL RULES (NON-NEGOTIABLE)
+1) No mock data. No placeholders. Everything must be production-real.
+2) Every new UI element must be wired to backend state and must work in realtime where relevant.
+3) All permissions must be enforced server-side (RLS/policies + API/edge function validation). UI checks are not enough.
+4) Every moderation action must be auditable and reversible by staff roles (as specified below).
+5) Provide a “Change Report” listing: files changed, schema changes, endpoints/functions added/updated, and how to test each item.
+
+========================================================
+A) RENAME / COPY CHANGE (NO SIDE EFFECTS)
+========================================================
+1) Change “Messages” page naming to: “TCPS” (Troll City Postal Service).
+- Update navigation labels, page title, header text.
+- Do NOT change routes unless the route is also labeled “messages”; if you change route paths, add redirects so no links break.
+
+========================================================
+B) TITLES & DEEDS – CLICKABLE + VISIBLE
+========================================================
+Problem: titles and deeds aren’t showing and cannot be clicked/viewed.
+
+Required behavior:
+1) Wherever Titles and Deeds are displayed (profile / inventory / ownership UI), ensure they render.
+2) Make each Title and Deed item clickable.
+3) On click: open a details view (modal or page) showing:
+   - name
+   - description
+   - owner
+   - issue date
+   - metadata (rarity, serial/ID, etc if present)
+4) Backend must supply correct data; fix broken queries, missing joins, or missing permissions.
+5) Add empty state and error state UI.
+
+========================================================
+C) CAR UPGRADES MUST INCREASE CAR VALUE
+========================================================
+Problem: upgrades do not change car value.
+
+Required behavior:
+1) Define a deterministic car valuation formula:
+   - base car value + sum(upgrades value impact) + any modifiers already in system
+2) When user applies an upgrade:
+   - persist upgrade to DB
+   - recalc the car’s current value using the formula
+   - update UI instantly
+3) Ensure upgrades affect resale value, display value, and any “garage” value indicators.
+4) Add safeguards against double-applying upgrades.
+5) Add tests for: value changes correctly, upgrades can’t be duplicated, rollback works if transaction fails.
+
+========================================================
+D) SPONSOR/BUY ITEMS IN BROADCAST WITH POPUP → BUY PAGE
+========================================================
+Add a system that allows users to sponsor each other with Coin Store items inside broadcasts.
+
+Required behavior:
+1) During a live broadcast, show a small popup/button (“Sponsor” or “Send Item”) that viewers can click.
+2) Clicking opens a “Buy” flow:
+   - list coin store items eligible for sponsoring
+   - quantity (if allowed)
+   - confirm purchase + recipient (broadcaster by default, optionally another viewer if that exists in the broadcast UI)
+3) Purchase must:
+   - deduct coins from buyer
+   - grant item to recipient
+   - produce a realtime event in the broadcast UI (toast/banner animation)
+4) Include abuse controls:
+   - rate limit purchases
+   - prevent purchasing if buyer is muted/banned
+5) Ensure transactional integrity: coins deducted and item granted in a single atomic operation.
+
+========================================================
+E) BROADCAST LEVEL BAR (PERCENT) + DECAY IF NO GIFTS
+========================================================
+Create a Broadcast Level system with a progress bar (0–100%).
+
+Required behavior:
+1) Each broadcast session has a “broadcast_level_percent” (0–100).
+2) Gift impact:
+   - Each normal gift increases +1%
+   - Large gifts increase more based on existing “gift value” system.
+   - Implement mapping: gift_value → percent increase. Use current system values; do NOT invent arbitrary values. If gift tiers exist, use them.
+3) Decay rule:
+   - If a broadcaster has been live > 30 minutes with NO gifts received, the broadcast level percent must begin going DOWN automatically.
+   - Define a decay rate (must be consistent and documented). Implement as server-driven scheduled logic or realtime tick logic that cannot be bypassed client-side.
+4) Display:
+   - Show the bar + numeric percent in broadcast UI (broadcaster view and viewer view if applicable).
+5) Persist & realtime:
+   - Changes must persist in DB for the current live session and broadcast UI updates in realtime.
+
+Additionally:
+6) Add a button “Boost Level +1%” (or “Increase Broadcast Level”) costing 200 Troll Coins.
+   - Clicking deducts 200 coins and increases broadcast level percent by a defined amount (use +1% unless your system specifies a different increment).
+   - Must be rate-limited to prevent spam.
+   - Must be blocked if the user doesn’t have enough coins.
+
+========================================================
+F) COIN STORE ITEM: “ADMIN FOR A WEEK” (5000 COINS) + QUEUE + LIMITED POWERS
+========================================================
+Add a purchasable perk in Coin Store:
+- Name: “Admin for a Week”
+- Cost: 5000 Troll Coins
+- Duration: 7 days of “limited admin” powers
+- IMPORTANT: This is NOT the real admin role. It is a timed perk role with limited abilities.
+
+Required behavior:
+1) Buying “Admin for a Week”:
+   - Deduct 5000 coins
+   - Create/assign a timed role/perk: admin_for_week
+   - If there is already an active admin_for_week in effect, the purchase goes into a queue.
+2) Queue system:
+   - Maintain an ordered queue of upcoming “Admin for a Week” holders.
+   - UI should show queue: who is active now, who is next, and their scheduled start times.
+   - When active period ends, next in queue automatically becomes active.
+3) Limited powers for admin_for_week:
+   - Kick users
+   - Ban users
+   - Mute users’ mics
+   - Disable chats
+   These must be wired in the moderation panel UI and must work in realtime.
+4) Strict guardrails:
+   - admin_for_week cannot grant roles, cannot change payouts, cannot access staff-only admin dashboards, cannot view sensitive data, cannot delete content.
+   - Enforce server-side permissions.
+
+========================================================
+G) ABUSE HANDLING: STAFF CAN REVERSE ACTIONS + INSTANT BAN
+========================================================
+If admin_for_week abuses power:
+1) Any staff role (troll_officer, lead_troll_officer, secretary, admin) can:
+   - Reverse all actions taken by a specific admin_for_week user (bulk rollback) OR revert individual actions
+   - Instantly ban the abusing admin_for_week user
+   - Remove their active perk and remove them from the queue (if queued)
+2) You must implement a complete audit trail for every moderation action:
+   - actor_user_id
+   - target_user_id
+   - action_type
+   - duration
+   - reason (optional)
+   - timestamp
+   - context (broadcast_id, chat_id, etc.)
+3) Rollback requirements:
+   - Kick rollback: no-op (kicks are ephemeral)
+   - Ban rollback: unban user, restore prior ban state if it existed
+   - Mute mic rollback: restore previous mic permission state
+   - Disable chat rollback: restore previous chat permission state
+   - All rollbacks must be safe and idempotent.
+
+========================================================
+H) AI BROADCAST MODERATION (KICK/BAN/MUTE MIC/DISABLE CHAT)
+========================================================
+Implement AI-assisted moderation for broadcasts, but ONLY for these actions:
+- kick users
+- ban users
+- mute users’ mics
+- disable chats
+
+Required behavior:
+1) Add an AI moderation pipeline that watches broadcast chat/voice events (where available) and flags spam/abuse.
+2) AI must NOT have unrestricted powers; it must propose actions and then:
+   - auto-execute only when confidence >= threshold AND rule is severe, OR
+   - require human confirmation from staff panel (configurable)
+3) Every AI action must be logged with:
+   - model decision metadata (confidence, rule matched, snippet reference)
+   - actor marked as “AI_MODERATION”
+4) Provide admin controls to:
+   - enable/disable AI moderation per broadcast
+   - adjust thresholds
+   - view AI action history
+5) Ensure AI cannot act on staff roles (troll_officer+ and above), only on regular users/broadcasters unless explicitly allowed.
+
+========================================================
+IMPLEMENTATION REQUIREMENTS
+========================================================
+1) Database changes:
+- Add/verify tables needed for:
+  - broadcast_sessions (with broadcast_level_percent, start_time, last_gift_time, etc.)
+  - admin_for_week_queue (status, start/end, position)
+  - moderation_actions_log (audit + rollback metadata)
+  - titles/deeds ownership tables (if missing) OR fix relationships
+  - car_upgrades + car_valuation fields (if missing)
+2) Backend:
+- Implement secure endpoints/edge functions for:
+  - sponsor purchase in broadcast (atomic transaction)
+  - broadcast level increment/decay updates
+  - purchase and queue management for admin_for_week
+  - moderation actions + rollback actions
+  - AI moderation action execution (with guardrails)
+3) Realtime:
+- Use realtime subscriptions/events so broadcast UI updates immediately for:
+  - sponsor purchases
+  - broadcast level changes
+  - moderation actions
+  - queue updates
+4) UI:
+- Ensure all buttons for:
+  - TCPS page navigation
+  - titles/deeds click
+  - sponsor popup → buy flow
+  - broadcast level bar + boost button
+  - admin_for_week queue display
+  - moderation actions (kick/ban/mute mic/disable chat)
+  are fully wired and display success/failure states.
+
+========================================================
+TESTING / QA (MANDATORY)
+========================================================
+Provide:
+1) A manual test checklist for each feature A–H.
+2) Automated tests where feasible:
+   - broadcast level increments/decay
+   - sponsor transaction atomicity
+   - admin_for_week queue rotation
+   - permission enforcement for admin_for_week actions
+   - rollback correctness
+3) A migration plan if schema changes are required.
+
+START NOW
+Step 1: Inventory current code paths for Messages, Titles/Deeds, Cars/Upgrades, Broadcast UI, Coin Store, Moderation panels.
+Step 2: Implement A–H exactly as specified.
+Step 3: Deliver Change Report + Test Checklist.

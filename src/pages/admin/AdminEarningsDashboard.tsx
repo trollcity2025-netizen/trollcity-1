@@ -6,9 +6,11 @@ import { toast } from 'sonner'
 import { 
   Loader, DollarSign, Users, 
   Search, TrendingUp,
-  Building, Settings, Plus, Trash
+  Building, Settings, Plus, Trash,
+  RefreshCw
 } from 'lucide-react'
 import { EarningsView } from '../../types/earnings'
+import AutomatedPayouts from './components/AutomatedPayouts'
 
 interface CreatorEarnings extends EarningsView {
   w9_status?: string
@@ -287,6 +289,12 @@ const AdminEarningsDashboard: React.FC = () => {
         </div>
 
         {/* Tab Content */}
+        {activeTab === 'automated' && (
+          <div className="animate-fade-in">
+             <AutomatedPayouts />
+          </div>
+        )}
+
         {activeTab === 'creators' && (
           <div className="space-y-6 animate-fade-in">
             {/* Summary Cards */}

@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { startFlow, completeFlow } from '../lib/telemetry'
 import { DollarSign, Banknote, Send, History } from 'lucide-react'
 
-type PayoutMethod = 'Gift Card'
+type PayoutMethod = 'PayPal'
 
 interface CashoutTier {
   id: string
@@ -25,7 +25,7 @@ const CASHOUT_TIERS: CashoutTier[] = [
 
 export default function EarningsPayout() {
   const { profile, user } = useAuthStore()
-  const [payoutMethod] = useState<PayoutMethod>('Gift Card')
+  const [payoutMethod] = useState<PayoutMethod>('PayPal')
   const [payoutDetails, setPayoutDetails] = useState('')
   const [fullName, setFullName] = useState('')
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null)
@@ -224,7 +224,7 @@ export default function EarningsPayout() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm mb-1">Payout Method</label>
-              <div className="w-full bg-[#171427] border border-purple-500/40 rounded-lg px-3 py-2 text-sm">Gift Card</div>
+              <div className="w-full bg-[#171427] border border-purple-500/40 rounded-lg px-3 py-2 text-sm">PayPal</div>
             </div>
             <div>
               <label className="block text-sm mb-1">Full Name</label>

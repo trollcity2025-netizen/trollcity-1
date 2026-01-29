@@ -59,7 +59,23 @@ export default function BanPage({ onClose }: BanPageProps) {
               You can restore your account by paying <strong className="text-yellow-400">2000 troll_coins</strong>.
               Your account will be reset to level 0 with 0 coins.
             </p>
-            <button className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 rounded-lg font-semibold transition-colors">
+            <button 
+              onClick={async () => {
+                try {
+                  const { data, error } = await import('../lib/supabase').then(m => m.supabase.rpc('restore_banned_account'));
+                  if (error) throw error;
+                  if (data && data.success) {
+                    window.location.reload();
+                  } else {
+                    alert(data?.message || 'Failed to restore account');
+                  }
+                } catch (e) {
+                  console.error(e);
+                  alert('Error restoring account');
+                }
+              }}
+              className="w-full py-3 bg-yellow-600 hover:bg-yellow-500 rounded-lg font-semibold transition-colors"
+            >
               Pay 2000 Coins to Restore Account
             </button>
           </div>

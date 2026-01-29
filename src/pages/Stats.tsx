@@ -15,7 +15,6 @@ interface UserStats {
   nextLevelXp: number
   troll_coins: number
   paid_coins: number
-  trollmonds: number
   familyName?: string
   familyLevel?: number
   familyXp?: number
@@ -116,7 +115,7 @@ export default function Stats() {
     return () => {
       unsubscribe()
     }
-  }, [user?.id, level, xpTotal, xpToNext, profile?.role, profile?.troll_role, balances.troll_coins, balances.paid_coins, balances.trollmonds, fetchXP, subscribeToXP, unsubscribe])
+  }, [user?.id, level, xpTotal, xpToNext, profile?.role, profile?.troll_role, balances.troll_coins, balances.paid_coins, fetchXP, subscribeToXP, unsubscribe])
 
   const computedProgress =
     progress === 0 || progress
@@ -283,15 +282,6 @@ export default function Stats() {
                   <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-black/80 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     Purchased/Gifted Coins
                   </div>
-                </div>
-                <div className="bg-[#2A2A34] rounded-lg p-4 flex justify-between items-center">
-                  <span className="text-white flex items-center gap-2">
-                    <span className="text-2xl">💎</span>
-                    Trollmonds
-                  </span>
-                  <span className="font-bold text-cyan-400 text-xl">
-                    {stats.trollmonds.toLocaleString()}
-                  </span>
                 </div>
                 <div className="bg-[#1A1A24] border border-white/10 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">

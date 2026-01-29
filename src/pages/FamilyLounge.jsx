@@ -602,24 +602,7 @@ const FamilyLounge = () => {
                         style={{ width: `${Math.min(progress, 100)}%` }}
                       ></div>
                     </div>
-                    {memberRole !== 'member' && (
-                      isAutoTracked(task.metric) ? (
-                        <button
-                          disabled
-                          className="px-4 py-2 bg-zinc-700 text-gray-400 rounded-lg text-sm font-semibold cursor-not-allowed border border-zinc-600"
-                          title="This task tracks progress automatically"
-                        >
-                          Auto Tracked
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => contributeToTask(task.id)}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          Contribute
-                        </button>
-                      )
-                    )}
+                    {/* Contribute button removed as requested */}
                   </div>
                 )
               })

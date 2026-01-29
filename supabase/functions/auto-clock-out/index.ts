@@ -15,11 +15,12 @@ Deno.serve(async () => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get all active shifts (where shift_end is null)
+    // Get all active shifts (where clock_out is null)
+    // Using the new table 'officer_work_sessions'
     const { data: shifts, error: shiftsError } = await supabase
-      .from('officer_shift_logs')
+      .from('officer_work_sessions')
       .select('*')
-      .is('shift_end', null) // active shifts only
+      .is('clock_out', null) // active shifts only
 
     if (shiftsError) {
       console.error(`[AutoClockOut ${requestId}] Error fetching shifts:`, shiftsError)
@@ -50,11 +51,12 @@ Deno.serve(async () => {
     const now = Date.now()
 
     for (const shift of shifts) {
-      const start = new Date(shift.shift_start).getTime()
-      const lastActivity = new Date(shift.last_activity).getTime()
+      const start = new Date(shift.clock_in).getTime()
+      // Use last_activity if available, otherwise default to clock_in
+      const lastActivityTime = shift.last_activity ? new Date(shift.last_activity).getTime() : start
 
       const hoursWorked = (now - start) / (1000 * 60 * 60)
-      const inactiveMinutes = (now - lastActivity) / (1000 * 60)
+      const inactiveMinutes = (now - lastActivityTime) / (1000 * 60)
 
       console.log(`[AutoClockOut ${requestId}] Shift ${shift.id}:`, {
         officer_id: shift.officer_id,
@@ -66,12 +68,14 @@ Deno.serve(async () => {
       // 1. Worked 6+ hours
       // 2. Inactive for 30+ minutes
       if (hoursWorked >= 6 || inactiveMinutes >= 30) {
+        // Calculate earnings: 100 coins per hour (rounded down)
         const coinsEarned = Math.floor(hoursWorked * 100)
 
+        // 1. Close the session
         const { error: updateError } = await supabase
-          .from('officer_shift_logs')
+          .from('officer_work_sessions')
           .update({
-            shift_end: new Date().toISOString(),
+            clock_out: new Date().toISOString(),
             hours_worked: hoursWorked,
             coins_earned: coinsEarned,
             auto_clocked_out: true,
@@ -88,23 +92,33 @@ Deno.serve(async () => {
           coinsEarned
         })
 
-        clockedOutCount++
-
-        // Optionally: Credit coins to officer's account
-        // This would require additional logic to update user_profiles.troll_troll_coins
-        // Uncomment if you want automatic coin crediting:
-        /*
-        const { error: creditError } = await supabase
-          .from('user_profiles')
-          .update({
-            troll_coins: supabase.raw(`troll_coins + ${coinsEarned}`)
+        // 2. Credit coins to officer's account using centralized RPC
+        if (coinsEarned > 0) {
+          const { error: creditError } = await supabase.rpc('troll_bank_credit_coins', {
+            p_user_id: shift.officer_id,
+            p_coins: coinsEarned,
+            p_bucket: 'paid', // Salary counts as paid/earned
+            p_source: 'officer_salary',
+            p_ref_id: shift.id,
+            p_metadata: {
+              session_id: shift.id,
+              hours: hoursWorked,
+              auto_clocked_out: true
+            }
           })
-          .eq('id', shift.officer_id)
 
-        if (creditError) {
-          console.error(`[AutoClockOut ${requestId}] Error crediting coins:`, creditError)
+          if (creditError) {
+             console.error(`[AutoClockOut ${requestId}] Error crediting coins for shift ${shift.id}:`, creditError)
+             // Note: We don't rollback the clock-out, but we log the error.
+             // In a perfect world, we'd use a transaction for both, but Edge Functions + REST makes that harder without a dedicated RPC.
+             // Given the constraints, this is acceptable. The user is clocked out, but might miss coins. 
+             // Admin can reconcile via logs if needed.
+          } else {
+             console.log(`[AutoClockOut ${requestId}] 💰 Credited ${coinsEarned} coins to officer ${shift.officer_id}`)
+          }
         }
-        */
+
+        clockedOutCount++
       }
     }
 
@@ -132,4 +146,3 @@ Deno.serve(async () => {
     })
   }
 })
-

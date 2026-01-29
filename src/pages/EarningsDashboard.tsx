@@ -31,7 +31,7 @@ interface PayoutRequest {
   id: string
   cash_amount: number
   coins_redeemed: number
-  status: 'pending' | 'approved' | 'paid' | 'rejected'
+  status: string
   created_at: string
   processed_at?: string
   notes?: string

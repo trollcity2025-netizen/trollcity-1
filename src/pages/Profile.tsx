@@ -8,7 +8,7 @@ import { UserBadge } from '../components/UserBadge';
 import { useCreditScore } from '../lib/hooks/useCreditScore';
 import { getLevelName } from '../lib/xp';
 import { ENTRANCE_EFFECTS_MAP } from '../lib/entranceEffects';
-import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw, Home, Mars, Venus, Trash2, CheckCircle, CreditCard } from 'lucide-react';
+import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw, Home, Mars, Venus, Trash2, CheckCircle, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { deductCoins } from '@/lib/coinTransactions';
 import { PERK_CONFIG } from '@/lib/perkSystem';
@@ -204,7 +204,8 @@ function ProfileInner() {
         callMinutes: callRes.data || null,
         homeListings: homesRes.data || [],
         vehicleListings: vehicleListingsRes.data || [],
-        vehicles: [...(vehiclesRes.data || []), ...legacyVehicles]
+        vehicles: [...(vehiclesRes.data || []), ...legacyVehicles],
+        titlesAndDeeds: titlesDeedsRes.data || []
       });
     } catch (e) {
       console.error('Error fetching inventory', e);
@@ -561,7 +562,7 @@ function ProfileInner() {
         }
     }
     
-    navigate(`/messages?user=${profile.id}`);
+    navigate(`/tcps?user=${profile.id}`);
   };
 
   // Defer early returns to after hooks to satisfy lint rules
@@ -1138,6 +1139,32 @@ function ProfileInner() {
                       )
                     })}
                     {inventory.perks.length === 0 && <p className="text-gray-500 text-sm">No perks found.</p>}
+                  </div>
+               </div>
+
+               {/* Titles & Deeds */}
+               <div>
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><FileText className="w-5 h-5 text-yellow-500"/> Titles & Deeds</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {inventory.titlesAndDeeds.map((item: any) => (
+                      <div key={item.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex items-start gap-4">
+                         <div className="bg-zinc-800 p-2 rounded-lg">
+                           {item.marketplace_item.image_url ? (
+                             <img src={item.marketplace_item.image_url} alt={item.marketplace_item.title} className="w-10 h-10 object-cover rounded" />
+                           ) : (
+                             <FileText className="w-8 h-8 text-gray-400" />
+                           )}
+                         </div>
+                         <div>
+                           <h4 className="font-bold text-white">{item.marketplace_item.title}</h4>
+                           <p className="text-sm text-gray-400">{item.marketplace_item.description}</p>
+                           <span className={`text-[10px] px-2 py-0.5 rounded uppercase mt-2 inline-block ${item.marketplace_item.type === 'title' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30' : 'bg-blue-900/30 text-blue-400 border border-blue-500/30'}`}>
+                             {item.marketplace_item.type}
+                           </span>
+                         </div>
+                      </div>
+                    ))}
+                    {inventory.titlesAndDeeds.length === 0 && <p className="text-gray-500 text-sm">No titles or deeds found.</p>}
                   </div>
                </div>
 

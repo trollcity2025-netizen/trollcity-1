@@ -42,22 +42,29 @@ export default function StaffManagement() {
 
   const toggleLeadRole = async (officerId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ is_lead_officer: !currentStatus })
-        .eq('id', officerId);
+      const newRole = currentStatus ? 'troll_officer' : 'lead_troll_officer';
+      
+      const { error } = await supabase.rpc('set_user_role', {
+        target_user: officerId,
+        new_role: newRole,
+        reason: currentStatus ? 'Demoted from Lead Officer' : 'Promoted to Lead Officer'
+      });
 
       if (error) throw error;
       
-      toast.success(`Lead Officer role ${!currentStatus ? 'assigned' : 'removed'}`);
+      toast.success(`Role updated to ${newRole}`);
       
       // Update local state
       setOfficers(prev => prev.map(o => 
-        o.id === officerId ? { ...o, is_lead_officer: !currentStatus } : o
+        o.id === officerId ? { 
+          ...o, 
+          is_lead_officer: !currentStatus,
+          role: newRole
+        } : o
       ));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating role:', err);
-      toast.error('Failed to update role');
+      toast.error('Failed to update role: ' + err.message);
     }
   };
 

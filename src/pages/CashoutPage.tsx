@@ -3,7 +3,7 @@ import { useAuthStore } from '../lib/store';
 import { supabase, getSystemSettings, getCountdown } from '../lib/supabase';
 import { toast } from 'sonner';
 import { CASHOUT_TIERS } from '../lib/payoutConfig';
-import { CreditCard, Smartphone, CheckCircle, AlertTriangle, ShieldCheck, Loader2 } from 'lucide-react';
+import { CreditCard, Smartphone, CheckCircle, AlertTriangle, ShieldCheck, Loader2, Lock } from 'lucide-react';
 
 import { Link } from 'react-router-dom';
 
@@ -19,6 +19,10 @@ interface CashoutRequest {
   gift_card_code?: string;
   gift_card_provider?: string;
   delivery_method?: string;
+  is_held?: boolean;
+  held_reason?: string;
+  release_date?: string;
+  is_new_user_hold?: boolean;
 }
 
 const CashoutPage: React.FC = () => {
@@ -201,6 +205,30 @@ const CashoutPage: React.FC = () => {
               {existingRequest.status}
             </div>
           </div>
+
+          {existingRequest.is_held && (
+            <div className="bg-orange-900/20 border border-orange-500/50 rounded-xl p-4 mb-6 text-left">
+                <h3 className="text-orange-400 font-bold flex items-center gap-2 mb-2">
+                    <Lock className="w-4 h-4" />
+                    Request On Hold
+                </h3>
+                <p className="text-sm text-gray-300 mb-2">
+                    Your payout request is currently on hold.
+                    {existingRequest.is_new_user_hold && " (New User Security Hold)"}
+                </p>
+                {existingRequest.release_date && (
+                    <p className="text-xs text-orange-300">
+                        Estimated Release: {new Date(existingRequest.release_date).toLocaleDateString()}
+                    </p>
+                )}
+                {existingRequest.held_reason && !existingRequest.is_new_user_hold && (
+                    <p className="text-xs text-gray-400 mt-1">
+                        Reason: {existingRequest.held_reason}
+                    </p>
+                )}
+            </div>
+          )}
+
           <p className="text-gray-400 text-sm mb-6">
             Your request is being processed. You will receive a notification when your payout is ready.
           </p>
@@ -226,19 +254,18 @@ const CashoutPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0A0814] text-white flex justify-center px-4 py-8">
       <div className="w-full max-w-xl bg-[#0B0B12] rounded-2xl border border-purple-500 p-6 shadow-[0_0_25px_rgba(147,51,234,0.5)] text-center">
-        <h1 className="text-2xl font-bold mb-4">Cashout Unavailable</h1>
+        <h1 className="text-2xl font-bold mb-4">Request Payout</h1>
         <p className="text-gray-300 text-sm mb-4">
-          Gift card cashouts are no longer supported.
+          PayPal payouts are processed 2 times a week (Monday and Fridays).
         </p>
         <p className="text-gray-400 text-sm mb-6">
-          You can continue to earn and spend coins inside Troll City. Check back later
-          for updated payout options.
+          Please use the new Payout Request page to submit your request.
         </p>
         <Link
-          to="/wallet"
+          to="/payouts/request"
           className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-sm font-semibold"
         >
-          Back to Wallet
+          Go to Payout Request
         </Link>
       </div>
     </div>

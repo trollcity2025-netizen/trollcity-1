@@ -56,7 +56,8 @@ export default function DistrictNavigation() {
     const features: { [key: string]: DistrictFeature[] } = {
       main_plaza: [
         { feature_name: 'Live Streams', route_path: '/live', required_role: 'user' },
-        { feature_name: 'Messages', route_path: '/messages', required_role: 'user' },
+        { feature_name: 'TCPS', route_path: '/tcps', required_role: 'user' },
+        { feature_name: 'Living & Housing', route_path: '/living', required_role: 'user' },
         { feature_name: 'Following', route_path: '/following', required_role: 'user' },
         { feature_name: 'Leaderboard', route_path: '/leaderboard', required_role: 'user' },
         { feature_name: 'Troll City Wall', route_path: '/wall', required_role: 'user' }

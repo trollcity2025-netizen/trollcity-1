@@ -66,7 +66,7 @@ export const checkBalance = async (
   try {
     const { data: profile, error } = await supabase
       .from('user_profiles')
-      .select('troll_coins, trollmonds, total_earned_coins')
+      .select('troll_coins, total_earned_coins')
       .eq('id', userId)
       .single()
 
@@ -317,14 +317,19 @@ export const getTransactionHistory = async (
   }
 }
 
+import { supabase, UserProfile } from './supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 // Production-ready audit logging
 export const logCoinAction = async (
   userId: string,
   action: string,
-  details: Record<string, any>
+  details: Record<string, any>,
+  client?: SupabaseClient
 ): Promise<void> => {
+  const sb = client || supabase
   try {
-    await supabase.from('coin_audit_log').insert({
+    await sb.from('coin_audit_log').insert({
       user_id: userId,
       action,
       details,

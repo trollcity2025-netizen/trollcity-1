@@ -67,6 +67,11 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
         .from('court_docket')
         .update(updateData)
         .eq('id', docketId);
+  // Soft delete function
+  const softDeleteDocket = async (docketId: string) => {
+    if (!confirm('Are you sure you want to delete this docket entry?')) return;
+    await updateDocketStatus(docketId, 'deleted', 'Entry deleted');
+  };
 
       if (error) throw error;
 
@@ -93,7 +98,9 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
     }
   };
 
+  // Filter out deleted entries
   const filteredEntries = docketEntries.filter(entry => {
+    if (entry.status === 'deleted') return false;
     if (filter === 'all') return true;
     return entry.status === filter;
   });
@@ -232,28 +239,39 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
                   </div>
 
                   <div className="flex gap-1">
-                    {canManageCases && entry.status === 'scheduled' && (
+                    {canManageCases && (entry.status === 'scheduled' || entry.status === 'in_session') && (
                       <>
+                        {entry.status === 'scheduled' && (
+                          <>
+                            <button
+                              onClick={() => completeCase(entry.id)}
+                              className="p-1 bg-green-600 hover:bg-green-700 rounded text-xs"
+                              title="Mark Completed"
+                            >
+                              <CheckCircle className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => markMissed(entry.id)}
+                              className="p-1 bg-red-600 hover:bg-red-700 rounded text-xs"
+                              title="Mark Missed"
+                            >
+                              <XCircle className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => dismissCase(entry.id)}
+                              className="p-1 bg-gray-600 hover:bg-gray-700 rounded text-xs"
+                              title="Dismiss Case"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => completeCase(entry.id)}
-                          className="p-1 bg-green-600 hover:bg-green-700 rounded text-xs"
-                          title="Mark Completed"
+                          onClick={() => softDeleteDocket(entry.id)}
+                          className="p-1 bg-black hover:bg-red-800 rounded text-xs ml-1"
+                          title="Delete (Soft)"
                         >
-                          <CheckCircle className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => markMissed(entry.id)}
-                          className="p-1 bg-red-600 hover:bg-red-700 rounded text-xs"
-                          title="Mark Missed"
-                        >
-                          <XCircle className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => dismissCase(entry.id)}
-                          className="p-1 bg-gray-600 hover:bg-gray-700 rounded text-xs"
-                          title="Dismiss Case"
-                        >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3 h-3 text-red-400" />
                         </button>
                       </>
                     )}

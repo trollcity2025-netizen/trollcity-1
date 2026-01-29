@@ -162,7 +162,7 @@ export default function ProfileModal({
       }
       
       onClose();
-      navigate(`/messages?user=${profile.id}`);
+      navigate(`/tcps?user=${profile.id}`);
   };
 
   const handleGift = () => {

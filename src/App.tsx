@@ -48,6 +48,8 @@ import HospitalPage from "./pages/game/HospitalPage";
 import GeneralStorePage from "./pages/game/GeneralStorePage";
 import AuctionsPage from "./pages/AuctionsPage";
 import TrollBank from "./pages/TrollBank";
+import CityHall from "./pages/CityHall";
+const LivingPage = lazy(() => import("./pages/LivingPage"));
 const ChurchPage = lazy(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazy(() => import("./pages/church/PastorDashboard"));
 const XPSimulatorPage = lazy(() => import("./pages/dev/XPSimulatorPage"));
@@ -56,7 +58,7 @@ const BadgePopup = lazy(() => import("./components/BadgePopup"));
 
 
 // Sidebar pages (instant load)
-const Messages = lazy(() => import("./pages/Messages"));
+const TCPS = lazy(() => import("./pages/TCPS"));
 
 // Lazy-loaded pages
 const Following = lazy(() => import("./pages/Following"));
@@ -762,7 +764,9 @@ function AppContent() {
                 <Route element={<RequireAuth />}>
                   <Route path="/mobile" element={<MobileShell />} />
                   <Route path="/live" element={<Home />} />
-                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/messages" element={<Navigate to="/tcps" replace />} />
+                  <Route path="/tcps" element={<TCPS />} />
+          <Route path="/city-hall" element={<CityHall />} />
                   <Route path="/call/:roomId/:type/:userId" element={<Call />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
@@ -786,6 +790,7 @@ function AppContent() {
                   <Route path="/profile/id/:userId" element={<Profile />} />
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="/trollstown" element={<TrollsTownPage />} />
+                  <Route path="/living" element={<LivingPage />} />
                   <Route path="/trollg" element={<TrollG />} />
                   
                   {/* New Game Routes */}

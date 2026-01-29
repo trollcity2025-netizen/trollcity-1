@@ -224,35 +224,8 @@ export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPan
                       <span className="text-lg">🪙</span>
                       Admin Coins
                     </span>
-                    <span className="font-bold text-gray-400">
-                      {stats.troll_coins.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center relative group">
-                    <span className="text-white flex items-center gap-2">
-                      <span className="text-lg">💰</span>
-                      Gifted Coins
-                    </span>
-                    <span className="font-bold text-green-400">
-                      {stats.paid_coins.toLocaleString()}
-                    </span>
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/95 text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-green-500/30">
-                      Actual Value Coins
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white flex items-center gap-2">
-                      <span className="text-lg">💎</span>
-                      Trollmonds
-                    </span>
-                    <span className="font-bold text-cyan-400">
-                      {stats.trollmonds.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-[#2C2C2C]">
-                    <span className="text-gray-300">Cashout Value</span>
                     <span className="font-bold text-yellow-400">
-                      ${(stats.paid_coins * 0.0001 * 0.8).toFixed(2)}
+                      {stats.troll_coins.toLocaleString()}
                     </span>
                   </div>
                 </div>

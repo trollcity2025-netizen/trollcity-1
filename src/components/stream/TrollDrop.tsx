@@ -47,7 +47,7 @@ export default function TrollDrop({ drop, onExpire, onClaimSuccess }: TrollDropP
           userId: user.id,
           amount: Math.floor(amountPerUser),
           type: 'reward',
-          coinType: 'trollmonds',
+          coinType: 'troll_coins',
           description: `Green troll drop bonus`,
           metadata: {
             troll_drop_id: drop.id,
@@ -59,14 +59,14 @@ export default function TrollDrop({ drop, onExpire, onClaimSuccess }: TrollDropP
         if (result.success) {
           setClaimed(true);
           onClaimSuccess(drop.id, Math.floor(amountPerUser));
-          toast.success(`+${Math.floor(amountPerUser)} Trollmonds! 🧌`);
+          toast.success(`+${Math.floor(amountPerUser)} Troll Coins! 🧌`);
         } else {
           toast.error(result.error || 'Failed to claim reward');
         }
       } else {
         const balanceCheck = (profile.troll_coins || 0);
         if (balanceCheck < Math.floor(amountPerUser)) {
-          toast.error('Not enough Trollmonds to click the red troll!');
+          toast.error('Not enough Troll Coins to click the red troll!');
           setIsProcessing(false);
           return;
         }
@@ -75,7 +75,7 @@ export default function TrollDrop({ drop, onExpire, onClaimSuccess }: TrollDropP
           userId: user.id,
           amount: Math.floor(amountPerUser),
           type: 'admin_deduct',
-          coinType: 'trollmonds',
+          coinType: 'troll_coins',
           description: `Red troll drop penalty`,
           metadata: {
             troll_drop_id: drop.id,
@@ -86,7 +86,7 @@ export default function TrollDrop({ drop, onExpire, onClaimSuccess }: TrollDropP
 
         if (result.success) {
           setClaimed(true);
-          toast.error(`-${Math.floor(amountPerUser)} Trollmonds! 🧌`);
+          toast.error(`-${Math.floor(amountPerUser)} Troll Coins! 🧌`);
         } else {
           toast.error(result.error || 'Failed to process penalty');
         }
@@ -156,7 +156,7 @@ export default function TrollDrop({ drop, onExpire, onClaimSuccess }: TrollDropP
 
         <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 text-center pointer-events-none">
           <div className="text-sm font-bold text-white drop-shadow">
-            {isGreen ? '+ 5000 Trollmonds' : '- 5000 Trollmonds'}
+            {isGreen ? '+ 5000 Troll Coins' : '- 5000 Troll Coins'}
           </div>
           <div className="text-xs text-gray-300 drop-shadow">
             Split {drop.participants.length + 1} ways

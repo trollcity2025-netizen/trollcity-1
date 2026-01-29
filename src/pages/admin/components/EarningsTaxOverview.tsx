@@ -51,58 +51,31 @@ export default function EarningsTaxOverview() {
 
   const loadDashboardCards = React.useCallback(async () => {
     try {
-      // Total Liability - sum of net_earnings_cents converted to USD
-      const { data: earnings } = await supabase
-        .from('broadcaster_earnings')
-        .select('usd_value')
+      // 1. Get creators tax status for selected year
+      const { data: taxData, error: taxError } = await supabase
+        .from('view_admin_creator_tax_status')
+        .select('*')
+        .eq('tax_year', selectedYear)
+
+      if (taxError) throw taxError
+
+      // 2. Get payouts for selected year
+      const startDate = new Date(selectedYear, 0, 1).toISOString()
+      const endDate = new Date(selectedYear, 11, 31, 23, 59, 59).toISOString()
       
-      const totalLiability = earnings?.reduce((sum, e) => sum + (Number(e.usd_value) || 0), 0) || 0
-
-      // Creators over $600 threshold
-      let creatorsOverThreshold = 0
-      try {
-        const { data: creatorsOver600 } = await supabase
-          .rpc('get_creators_over_threshold', { threshold: 600 })
-        
-        if (creatorsOver600) {
-          creatorsOverThreshold = creatorsOver600.length
-        }
-      } catch {
-        // Fallback if RPC doesn't exist - calculate manually
-        const { data: allCreators } = await supabase
-          .from('broadcaster_earnings')
-          .select('broadcaster_id, usd_value')
-        
-        const creatorTotals = new Map<string, number>()
-        allCreators?.forEach(e => {
-          const current = creatorTotals.get(e.broadcaster_id) || 0
-          creatorTotals.set(e.broadcaster_id, current + (Number(e.usd_value) || 0))
-        })
-        
-        creatorsOverThreshold = Array.from(creatorTotals.values()).filter(total => total >= 600).length
-      }
-
-      // Total payouts processed (from payout_requests table)
       const { data: payouts } = await supabase
         .from('payout_requests')
-        .select('cash_amount, status')
+        .select('cash_amount')
         .eq('status', 'paid')
-      
-      const totalPayouts = payouts?.reduce((sum, p) => sum + (Number(p.cash_amount) || 0), 0) || 0
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
 
-      // Total platform kept (platform revenue minus creator payouts)
-      // Platform keeps a percentage of earnings (typically 30-50%)
-      // For now, calculate as: total liability - total payouts
-      // In reality, platform would keep fees before payouts
+      // Calculate Metrics
+      const totalLiability = taxData?.reduce((sum, item) => sum + (Number(item.total_earnings_usd) || 0), 0) || 0
+      const creatorsOverThreshold = taxData?.filter(item => item.is_irs_threshold_met).length || 0
+      const totalPayouts = payouts?.reduce((sum, p) => sum + (Number(p.cash_amount) || 0), 0) || 0
       const platformKept = Math.max(0, totalLiability - totalPayouts)
-      
-      // 1099 Forms sent (fallback to user_profiles tax metadata)
-      const { data: forms1099 } = await supabase
-        .from('user_profiles')
-        .select('id, tax_form_url, w9_status')
-        .or('tax_form_url.not.is.null,w9_status.eq.submitted,w9_status.eq.verified')
-      
-      const forms1099Sent = forms1099?.length || 0
+      const forms1099Sent = taxData?.filter(item => item.has_tax_form).length || 0
 
       setEarningsData({
         totalLiability,
@@ -111,113 +84,21 @@ export default function EarningsTaxOverview() {
         platformKept,
         forms1099Sent
       })
-    } catch (error) {
-      console.error('Error loading dashboard cards:', error)
-    }
-  }, [])
 
-  const loadMonthlyEarnings = React.useCallback(async () => {
-    try {
-      const startDate = new Date(selectedYear, 0, 1).toISOString()
-      const endDate = new Date(selectedYear, 11, 31, 23, 59, 59).toISOString()
-
-      const { data: earnings } = await supabase
-        .from('broadcaster_earnings')
-        .select('usd_value, created_at')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
-
-      // Group by month
-      const monthlyMap = new Map<string, number>()
-
-      earnings?.forEach(e => {
-        const date = new Date(e.created_at)
-        const monthName = date.toLocaleString('default', { month: 'short' })
-        
-        monthlyMap.set(monthName, (monthlyMap.get(monthName) || 0) + (Number(e.usd_value) || 0))
-      })
-
-      const monthlyArray: MonthlyEarnings[] = Array.from(monthlyMap.entries())
-        .map(([month, total_usd]) => ({
-          month,
-          total_usd: Number(total_usd.toFixed(2)),
-          creator_count: 0 // Would need separate query for accurate count
-        }))
-        .sort((a, b) => {
-          const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-          return monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month)
-        })
-
-      setMonthlyData(monthlyArray)
-    } catch (error) {
-      console.error('Error loading monthly earnings:', error)
-    }
-  }, [selectedYear])
-
-  const loadCreatorsList = React.useCallback(async () => {
-    try {
-      // Get all creators with their total earnings
-      const { data: earnings } = await supabase
-        .from('broadcaster_earnings')
-        .select('broadcaster_id, usd_value, created_at')
-
-      // Group by broadcaster
-      const creatorMap = new Map<string, { total: number; monthly: Map<string, number> }>()
-      
-      earnings?.forEach(e => {
-        const current = creatorMap.get(e.broadcaster_id) || { total: 0, monthly: new Map() }
-        const value = Number(e.usd_value) || 0
-        current.total += value
-
-        // Monthly breakdown
-        const date = new Date(e.created_at)
-        const monthKey = date.toLocaleString('default', { month: 'short', year: 'numeric' })
-        current.monthly.set(monthKey, (current.monthly.get(monthKey) || 0) + value)
-
-        creatorMap.set(e.broadcaster_id, current)
-      })
-
-      // Get user profiles for usernames
-      const broadcasterIds = Array.from(creatorMap.keys())
-      const { data: profiles } = await supabase
-        .from('user_profiles')
-        .select('id, username, country, tax_form_url, w9_status')
-        .in('id', broadcasterIds)
-
-      const profileMap = new Map<string, { username: string; country?: string; tax_form_url?: string | null; w9_status?: string | null }>()
-      profiles?.forEach(p => {
-        profileMap.set(p.id, {
-          username: p.username,
-          country: p.country || undefined,
-          tax_form_url: (p as any).tax_form_url ?? null,
-          w9_status: (p as any).w9_status ?? null
-        })
-      })
-
-      // Build creators list
-      const creatorsList: CreatorEarnings[] = Array.from(creatorMap.entries())
-        .map(([user_id, data]) => {
-          const profile = profileMap.get(user_id)
-          const totalEarnings = data.total
-          const reachedThreshold = totalEarnings >= 600
-          const form1099Generated = Boolean(profile?.tax_form_url || profile?.w9_status === 'submitted' || profile?.w9_status === 'verified')
-          
-          return {
-            user_id,
-            username: profile?.username || 'Unknown',
-            total_earnings_usd: Number(totalEarnings.toFixed(2)),
-            reached_threshold: reachedThreshold,
-            form_1099_generated: form1099Generated,
-            documents_status: form1099Generated ? 'Submitted' : reachedThreshold ? 'Required' : 'Not Required',
-            country: profile?.country,
-            monthly_breakdown: Array.from(data.monthly.entries()).map(([month, earnings]) => ({
-              month,
-              earnings: Number(earnings.toFixed(2))
-            }))
-          }
-        })
+      // Set Creators List
+      const creatorsList: CreatorEarnings[] = taxData?.map(item => ({
+        user_id: item.user_id,
+        username: item.username || 'Unknown',
+        total_earnings_usd: Number(item.total_earnings_usd),
+        reached_threshold: item.is_irs_threshold_met,
+        form_1099_generated: item.has_tax_form,
+        documents_status: item.document_status,
+        country: 'US', // Default or fetch from profile if needed
+        monthly_breakdown: [] // We can fetch this if detailed view is opened
+      })) || []
 
       setCreators(creatorsList)
+
     } catch (error) {
       console.error('Error loading creators list:', error)
     }

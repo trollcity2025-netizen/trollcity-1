@@ -44,7 +44,7 @@ export default function PayoutRequest() {
   const grossUsd = parsed > 0 ? parsed * rate : 0;
   const netUsd = Math.max(grossUsd - FIXED_FEE_USD, 0);
 
-  const payoutsDisabled = true;
+  const payoutsDisabled = false;
 
   if (payoutsDisabled) {
     return (
@@ -79,7 +79,7 @@ export default function PayoutRequest() {
       }
       
       if (![12000, 30000, 60000, 120000].includes(num)) {
-        toast.error("Select a valid Visa tier: 12k, 30k, 60k, 120k.");
+        toast.error("Select a valid PayPal tier: 12k, 30k, 60k, 120k.");
         return;
       }
       
@@ -89,7 +89,7 @@ export default function PayoutRequest() {
       }
       const tier = TIERS.find(t => t.coins === num);
       if (!tier) {
-        toast.error("Select a valid Visa tier: 12k, 30k, 60k, 120k.");
+        toast.error("Select a valid PayPal tier: 12k, 30k, 60k, 120k.");
         return;
       }
       const { data, error } = await supabase.rpc('request_visa_redemption', {
@@ -143,7 +143,7 @@ export default function PayoutRequest() {
 
         <div>
           <label className="block text-sm font-semibold mb-2">
-            Select a Visa tier (12k, 30k, 60k, 120k)
+            Select a Cashout tier (12k, 30k, 60k, 120k)
           </label>
           <input
             className="w-full mb-2 px-4 py-3 rounded-lg bg-zinc-800 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"

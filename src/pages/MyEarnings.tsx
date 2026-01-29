@@ -255,17 +255,26 @@ export default function MyEarnings() {
             <DollarSign className="w-8 h-8 text-green-400" />
             My Earnings
           </h1>
-          {canRequestPayout && (
-            <button
-              type="button"
-              onClick={() => setShowPayoutModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg font-semibold flex items-center gap-2 transition-all"
-            >
-              Request Payout
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          )}
+          <div className="flex flex-col items-end">
+            <div className="px-4 py-2 bg-purple-900/30 border border-purple-500/30 rounded-lg text-sm text-purple-200">
+              <span className="font-semibold text-purple-400">Automated Payouts:</span> Mondays & Fridays
+            </div>
+          </div>
         </div>
+
+        {payoutsOnHold && (
+          <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-4 flex items-start gap-4">
+            <AlertTriangle className="w-6 h-6 text-yellow-500 flex-shrink-0 mt-1" />
+            <div>
+              <h3 className="text-lg font-bold text-yellow-500">Payouts Currently Paused</h3>
+              <p className="text-gray-300">
+                Automated payouts are currently on hold for administrative review. 
+                Your earnings are safe and will be processed when the system resumes. 
+                Thank you for your patience.
+              </p>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -566,16 +575,18 @@ export default function MyEarnings() {
                             ${((p.cash_amount || 0) as number).toFixed(2)}
                           </td>
                           <td className="text-center py-2">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              p.status === 'paid'
+                            <span className={`px-2 py-1 rounded text-xs capitalize ${
+                              ['paid', 'success'].includes(p.status || '')
                                 ? 'bg-green-900 text-green-300'
-                                : p.status === 'approved'
+                                : ['approved', 'processing'].includes(p.status || '')
                                 ? 'bg-blue-900 text-blue-300'
-                                : p.status === 'rejected'
+                                : ['rejected', 'failed'].includes(p.status || '')
                                 ? 'bg-red-900 text-red-300'
+                                : ['refunded'].includes(p.status || '')
+                                ? 'bg-orange-900 text-orange-300'
                                 : 'bg-yellow-900 text-yellow-300'
                             }`}>
-                              {p.status || 'pending'}
+                              {p.status === 'success' ? 'paid' : (p.status || 'pending')}
                             </span>
                           </td>
                           <td className="py-2 text-gray-300">

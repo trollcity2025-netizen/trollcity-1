@@ -9,6 +9,75 @@ import { toast } from 'sonner';
 import { cars } from '../../data/vehicles';
 
 export default function CarDealershipPage() {
+  // --- Driving Test Reward State ---
+  const [showDrivingTestPopup, setShowDrivingTestPopup] = useState(false);
+  const [collectingFreeCar, setCollectingFreeCar] = useState(false);
+    // Simulate driving test pass (replace with real trigger as needed)
+    const handlePassDrivingTest = () => {
+      setShowDrivingTestPopup(true);
+    };
+
+    // Grant free Troll Compact S1 (id: 1) and set as active car
+    const handleCollectFreeCar = async () => {
+      if (!user) return;
+      setCollectingFreeCar(true);
+      const car = cars.find((c) => c.id === 1); // Troll Compact S1
+      if (!car) {
+        toast.error('Troll Compact S1 not found');
+        setCollectingFreeCar(false);
+        return;
+      }
+      try {
+        // Look up vehicles_catalog row by model_url first, then by name
+        let vehicleCatalogId: string | null = null;
+        try {
+          const byModel = await supabase
+            .from('vehicles_catalog')
+            .select('id, model_url, name')
+            .eq('model_url', car.modelUrl)
+            .maybeSingle();
+          if (!byModel.error && byModel.data?.id) {
+            vehicleCatalogId = byModel.data.id as string;
+          } else {
+            const byName = await supabase
+              .from('vehicles_catalog')
+              .select('id, name')
+              .eq('name', car.name)
+              .maybeSingle();
+            if (!byName.error && byName.data?.id) {
+              vehicleCatalogId = byName.data.id as string;
+            }
+          }
+        } catch {
+          vehicleCatalogId = null;
+        }
+        if (!vehicleCatalogId) {
+          toast.error('Catalog vehicle not found for reward');
+          setCollectingFreeCar(false);
+          return;
+        }
+        // Call purchase_car_v2 with p_is_free=true to bypass vehicle limit check
+        const { data: purchaseResult, error } = await supabase.rpc('purchase_car_v2', {
+          p_vehicle_id: vehicleCatalogId,
+          p_model_url: car.modelUrl,
+          p_customization: { color: car.colorFrom, car_model_id: car.id },
+          p_is_free: true
+        });
+        if (error) {
+          toast.error('Failed to grant free car: ' + error.message);
+          setCollectingFreeCar(false);
+          return;
+        }
+        // Sync and set as active
+        await syncCarPurchase(user.id);
+        toast.success('Troll Compact S1 added and set as your active car!');
+        setShowDrivingTestPopup(false);
+      } catch (err: any) {
+        toast.error('Failed to grant car: ' + (err.message || 'Unknown error'));
+      } finally {
+        setCollectingFreeCar(false);
+      }
+    };
   const { user, profile, refreshProfile } = useAuthStore();
   const [buyingId, setBuyingId] = useState<number | null>(null);
   const [insuring, setInsuring] = useState(false);
@@ -455,6 +524,12 @@ export default function CarDealershipPage() {
       return;
     }
 
+    // Check if user already has a vehicle (client-side check before server)
+    if (ownedCarId) {
+      toast.error('You already own a vehicle. Please sell your current vehicle before purchasing a new one.');
+      return;
+    }
+
     const car = cars.find((c) => c.id === carId);
     if (!car) return;
 
@@ -517,11 +592,12 @@ export default function CarDealershipPage() {
       }
 
       let usedLegacyVehicles = false;
-      // Preferred call: use p_vehicle_id (vehicles_catalog.id)
+      // Preferred call: use p_vehicle_id (vehicles_catalog.id) - p_is_free is false for purchases
       let { data: purchaseResult, error } = await supabase.rpc('purchase_car_v2', {
         p_vehicle_id: vehicleCatalogId,
         p_model_url: modelUrl,
-        p_customization: { color: car.colorFrom, car_model_id: car.id }
+        p_customization: { color: car.colorFrom, car_model_id: car.id },
+        p_is_free: false
       });
 
       // Fallbacks
@@ -627,7 +703,9 @@ export default function CarDealershipPage() {
       
       // Cross-platform sync: clear caches, update profile, broadcast to other tabs
       try {
-        await syncCarPurchase(user.id);
+        const syncResult = await syncCarPurchase(user.id);
+        // Optionally, you can use syncResult.activeVehicleId here if needed
+        // Example: console.log('Synced activeVehicleId:', syncResult.activeVehicleId);
         // If legacy user_vehicles was used, ensure one equipped and sync profile.active_vehicle
         if (usedLegacyVehicles && purchaseResult) {
           try {
@@ -1014,6 +1092,39 @@ export default function CarDealershipPage() {
 
   return (
     <div className="min-h-screen bg-black text-white p-6 pt-24 pb-20">
+      {/* TEMP: Button to simulate passing the driving test (replace with real trigger) */}
+      <div className="mb-4">
+        <button
+          className="px-4 py-2 bg-green-700 text-white rounded-lg font-bold"
+          onClick={handlePassDrivingTest}
+        >
+          Simulate Passing Driving Test
+        </button>
+      </div>
+            {/* Driving Test Reward Popup */}
+            {showDrivingTestPopup && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 flex flex-col items-center">
+                  <h2 className="text-2xl font-bold text-emerald-400 mb-2">Congratulations!</h2>
+                  <p className="text-lg text-white mb-4 text-center">You passed your driving test!<br/>Collect your free <span className="font-bold text-sky-400">Troll Compact S1</span> as your first car.</p>
+                  <img src="/assets/cars/troll_compact_s1.png" alt="Troll Compact S1" className="w-40 h-20 object-contain mb-4" />
+                  <button
+                    className="px-6 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-bold text-lg disabled:opacity-60"
+                    onClick={handleCollectFreeCar}
+                    disabled={collectingFreeCar}
+                  >
+                    {collectingFreeCar ? 'Adding Car...' : 'Collect & Set as Active'}
+                  </button>
+                  <button
+                    className="mt-3 text-zinc-400 hover:text-white text-sm"
+                    onClick={() => setShowDrivingTestPopup(false)}
+                    disabled={collectingFreeCar}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
       <div className="max-w-6xl mx-auto">
         {/* Dealership Banner */}
         <div className="relative w-full h-64 md:h-80 rounded-2xl overflow-hidden mb-8 border border-zinc-800 shadow-2xl shadow-red-900/20">
@@ -1040,28 +1151,26 @@ export default function CarDealershipPage() {
           </div>
         </div>
 
-        {ownedVehicleIds.length > 1 && (
-          <div className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-white">Active Vehicle</h3>
-              <p className="text-xs text-gray-400">
-                Choose which owned vehicle you drive in-game.
-              </p>
+        {ownedCarId && (
+          <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-xl">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-amber-400">Your Current Vehicle</h3>
+                <p className="text-xs text-gray-400">
+                  You already own a vehicle. Sell it before purchasing a new one.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const activeCar = cars.find(c => c.id === ownedCarId);
+                  return activeCar ? (
+                    <div className="flex items-center gap-2 px-3 py-1 bg-zinc-800 rounded-lg">
+                      <span className="text-sm font-medium text-white">{activeCar.name}</span>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
             </div>
-            <select
-              value={ownedCarId ?? ''}
-              onChange={(e) => handleSelectActiveVehicle(Number(e.target.value))}
-              className="bg-black/40 border border-white/10 text-sm rounded-lg px-3 py-2"
-            >
-              {ownedVehicleIds.map((id) => {
-                const vehicle = cars.find(c => c.id === id);
-                return (
-                  <option key={id} value={id}>
-                    {vehicle?.name || `Vehicle ${id}`}
-                  </option>
-                );
-              })}
-            </select>
           </div>
         )}
 
@@ -1132,9 +1241,14 @@ export default function CarDealershipPage() {
                     disabled={ownedCarId === car.id}
                     className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-black/40 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:bg-zinc-800 disabled:border-zinc-700"
                   >
-                    {ownedCarId === car.id ? <ShieldCheck size={16} /> : <Wrench size={16} />}
-                    {ownedCarId === car.id ? 'Equipped & Ready' : 'Equip This Car'}
+                    <ShieldCheck size={16} />
+                    {ownedCarId === car.id ? 'Your Active Vehicle' : 'Equip This Car'}
                   </button>
+                ) : ownedCarId ? (
+                  <div className="w-full py-2 bg-zinc-800 text-gray-400 rounded-lg text-sm font-bold text-center flex items-center justify-center gap-2 cursor-not-allowed">
+                    <ShoppingCart size={16} />
+                    Sell Current Vehicle First
+                  </div>
                 ) : (
                   <button
                     onClick={() => handlePurchase(car.id)}

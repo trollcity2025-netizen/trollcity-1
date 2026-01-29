@@ -112,7 +112,7 @@ export default function BottomNavigation() {
       active: isActive('/live') || isLiveMenuOpen 
     },
     { isCenter: true, ...centerBtn },
-    { icon: MessageSquare, label: 'Inbox', path: '/messages', active: isActive('/messages') },
+    { icon: MessageSquare, label: 'TCPS', path: '/tcps', active: isActive('/tcps') },
     { icon: User, label: 'Profile', path: `/profile/${profile?.username || profile?.id}`, active: isActive('/profile') }
   ]
 
