@@ -121,7 +121,7 @@ export default async function handler(req: any, res: any) {
     
     const userIdHash = user_id ? hashUserId(user_id) : body.user_id_hash;
 
-    // 5. Insert
+    // 5. Insert - FAIL SAFE (Never return 500)
     const { error } = await supabaseAdmin.from('telemetry_events').insert({
       event_type,
       message: sanitizedMessage,
@@ -143,14 +143,17 @@ export default async function handler(req: any, res: any) {
     });
 
     if (error) {
-      console.error('Telemetry insert error:', error);
-      return res.status(500).json({ error: 'Failed to store event' });
+      console.error('Telemetry insert error (swallowed):', error);
+      // Return 200 even on database error to avoid blocking client
+      return res.status(200).json({ success: false, ok: false, error: 'Internal storage failed, but handled safely' });
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, ok: true });
 
   } catch (err: any) {
-    console.error('Telemetry handler error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Telemetry handler error (swallowed):', err);
+    // Return 200 even on unhandled exception
+    return res.status(200).json({ success: false, ok: false, error: 'Internal server error handled safely' });
   }
+
 }

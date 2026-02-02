@@ -4,10 +4,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-requested-with, accept",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
+
 serve(async (req) => {
+  // 1. Handle Preflight Options
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -21,17 +24,20 @@ serve(async (req) => {
       throw new Error("Missing Supabase environment variables");
     }
 
-    // Create a client with the Auth context of the user
+    // 2. Auth Header Check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("Missing Authorization header");
+      return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Get the user from the token
+    // 3. Get User
     const {
       data: { user },
       error: userError,
@@ -44,12 +50,12 @@ serve(async (req) => {
       });
     }
 
-    // Verify Admin/Secretary Role using Service Key (Server-side check)
+    // 4. Role Check
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("user_profiles")
-      .select("role, is_admin")
+      .select("role, is_admin, is_lead_officer")
       .eq("id", user.id)
       .single();
 
@@ -62,8 +68,10 @@ serve(async (req) => {
 
     const isAdmin = 
       profile.role === "admin" || 
-      profile.role === "lead_officer" || // PayoutAdmin allows lead_officer too
+      profile.role === "lead_troll_officer" || 
+      profile.is_lead_officer === true ||
       profile.is_admin === true;
+
 
     const isSecretary = profile.role === "secretary";
 
@@ -74,7 +82,7 @@ serve(async (req) => {
       });
     }
 
-    // Handle Actions
+    // 5. Handle Actions
     const { action, ...params } = await req.json();
 
     let result;
@@ -2081,7 +2089,7 @@ serve(async (req) => {
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

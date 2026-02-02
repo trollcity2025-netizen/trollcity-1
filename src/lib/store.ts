@@ -10,8 +10,10 @@ interface AuthState {
   isLoading: boolean
   isAdmin: boolean | null
   showLegacySidebar: boolean
+  isRefreshing: boolean
   setAuth: (user: User | null, session: Session | null) => void
   setProfile: (profile: UserProfile | null) => void
+
   setLoading: (loading: boolean) => void
   setAdmin: (isAdmin: boolean | null) => void
   setShowLegacySidebar: (value: boolean) => void
@@ -27,7 +29,8 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       isLoading: false,
       isAdmin: null,
-       showLegacySidebar: true,
+      showLegacySidebar: true,
+      isRefreshing: false,
 
       // Called when Supabase auth changes
       setAuth: (user, session) => {
@@ -129,100 +132,106 @@ export const useAuthStore = create<AuthState>()(
 
       setShowLegacySidebar: (value) => set({ showLegacySidebar: value }),
 
-      // Reload profile from DB
+      // Reload profile from DB - NON-BLOCKING & FAIL-SAFE
       refreshProfile: async () => {
-        const u = get().user
+        const state = get()
+        const u = state.user
         if (!u) return
+
+        // Prevent concurrent refreshes
+        if (state.isRefreshing) {
+             return
+        }
+        
+        // Set refreshing lock
+        set({ isRefreshing: true })
 
         try {
           await ensureSupabaseSession(supabase)
 
-          const dataPromise = supabase
+          // 1. Core Profile Fetch (Awaited)
+          const { data, error } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', u.id)
             .maybeSingle()
-          const timeoutMs = 5000
-          const result = await Promise.race([
-            dataPromise.then(res => ({ ...res, timedOut: false })),
-            new Promise<{ data: any; error: any; timedOut: boolean }>((resolve) =>
-              setTimeout(() => resolve({ data: null, error: null, timedOut: true }), timeoutMs)
-            )
-          ])
-
-          const { data, error, timedOut } = result as { data: any; error: any; timedOut: boolean }
-
-          if (timedOut) {
-            console.warn('refreshProfile timed out after', timeoutMs, 'ms')
-            return
-          }
 
           if (error) {
             console.error('refreshProfile error:', error)
+            // Do not throw, just return. 
             return
           }
 
           if (data) {
             let profileData = data as any
-
-            // Sync authoritative level/xp from user_stats (Source of Truth)
-            try {
-              const { data: levelRow, error: levelError } = await supabase
-                .from('user_stats')
-                .select('level, xp_total, xp_to_next_level')
-                .eq('user_id', u.id)
-                .maybeSingle()
-
-              if (levelError && levelError.code !== 'PGRST116') {
-                console.warn('refreshProfile level sync error:', levelError)
-              } else if (levelRow) {
-                profileData = {
-                  ...profileData,
-                  level: levelRow.level ?? profileData.level ?? 1,
-                  xp: levelRow.xp_total ?? profileData.xp ?? 0,
-                  total_xp: levelRow.xp_total ?? profileData.total_xp,
-                  next_level_xp: levelRow.xp_to_next_level ?? profileData.next_level_xp,
-                }
-              }
-            } catch (err) {
-              console.error('Level sync failed:', err)
-            }
-            try {
-              const nowIso = new Date().toISOString()
-              const { data: rgbPerk } = await supabase
-                .from('user_perks')
-                .select('expires_at')
-                .eq('user_id', u.id)
-                .eq('perk_id', 'perk_rgb_username')
-                .eq('is_active', true)
-                .gt('expires_at', nowIso)
-                .order('expires_at', { ascending: false })
-                .limit(1)
-                .maybeSingle()
-
-              const desiredRgb = rgbPerk?.expires_at || null
-              const currentRgb = profileData?.rgb_username_expires_at || null
-
-              if (desiredRgb !== currentRgb) {
-                const { error: rgbUpdateError } = await supabase
-                  .from('user_profiles')
-                  .update({ rgb_username_expires_at: desiredRgb })
-                  .eq('id', u.id)
-
-                if (!rgbUpdateError) {
-                  profileData = { ...profileData, rgb_username_expires_at: desiredRgb }
-                }
-              }
-            } catch (err) {
-              console.error('RGB perk sync failed:', err)
-            }
-
+            
+            // Update state immediately with core data
             get().setProfile(profileData as UserProfile)
+
+            // 2. Secondary Data (Fire-and-Forget)
+            // We do NOT await this. We let it run in background.
+            // If it succeeds, it will call setProfile again with merged data.
+            ;(async () => {
+              try {
+                // A. Level/XP Sync
+                const { data: levelRow } = await supabase
+                  .from('user_stats')
+                  .select('level, xp_total, xp_to_next_level')
+                  .eq('user_id', u.id)
+                  .maybeSingle()
+
+                if (levelRow) {
+                  profileData = {
+                    ...profileData,
+                    level: levelRow.level ?? profileData.level ?? 1,
+                    xp: levelRow.xp_total ?? profileData.xp ?? 0,
+                    total_xp: levelRow.xp_total ?? profileData.total_xp,
+                    next_level_xp: levelRow.xp_to_next_level ?? profileData.next_level_xp,
+                  }
+                  // Update with level data
+                  get().setProfile(profileData as UserProfile)
+                }
+
+                // B. RGB Perk Sync
+                const nowIso = new Date().toISOString()
+                const { data: rgbPerk } = await supabase
+                  .from('user_perks')
+                  .select('expires_at')
+                  .eq('user_id', u.id)
+                  .eq('perk_id', 'perk_rgb_username')
+                  .eq('is_active', true)
+                  .gt('expires_at', nowIso)
+                  .order('expires_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+
+                const desiredRgb = rgbPerk?.expires_at || null
+                const currentRgb = profileData?.rgb_username_expires_at || null
+
+                if (desiredRgb !== currentRgb) {
+                  const { error: rgbUpdateError } = await supabase
+                    .from('user_profiles')
+                    .update({ rgb_username_expires_at: desiredRgb })
+                    .eq('id', u.id)
+
+                  if (!rgbUpdateError) {
+                     profileData = { ...profileData, rgb_username_expires_at: desiredRgb }
+                     get().setProfile(profileData as UserProfile)
+                  }
+                }
+              } catch (secondaryErr) {
+                // Silently fail secondary updates
+                console.warn('Secondary profile refresh failed:', secondaryErr)
+              }
+            })()
           }
         } catch (err) {
           console.error('refreshProfile failed:', err)
-          // Still clear loading state even if profile fails
+          // Ensure loading state is cleared
           get().setLoading(false)
+        } finally {
+            // Always release the lock
+            set({ isRefreshing: false })
         }
       },
 

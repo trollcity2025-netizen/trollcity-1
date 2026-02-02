@@ -14,7 +14,7 @@ app.use(express.json());
 
 // Import handlers
 const livekitTokenHandler = require('./api/livekit-token');
-const telemetryHandler = require('./api/telemetry');
+const telemetryHandler = require('./api/telemetryHandler');
 
 // API Routes
 

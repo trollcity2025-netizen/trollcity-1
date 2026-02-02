@@ -38,6 +38,7 @@ export default function MaiTalentPage() {
   const [clipUrl, setClipUrl] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [featureUnavailable, setFeatureUnavailable] = useState(false);
 
   // Access Control: Under Construction for non-admins
   const isAdmin = profile?.role === 'admin' || profile?.is_admin === true;
@@ -46,40 +47,55 @@ export default function MaiTalentPage() {
   const fetchAuditions = async () => {
     setLoading(true);
     try {
-      // Fetch auditions joined with profiles and vote sums
-      // Note: This query depends on the view 'mai_talent_leaderboard' or we can join manually
-      // For now, let's try to fetch from the view if it exists, or fallback to manual join
-      
+      // 1. Try fetching from the View first (Preferred)
       const { data, error } = await supabase
         .from('mai_talent_leaderboard')
         .select('*')
         .order('total_votes', { ascending: false });
 
       if (error) {
-        // Fallback if view doesn't exist yet (for dev robustness)
-        console.warn('View mai_talent_leaderboard not found, trying raw table', error);
-        const { data: rawData, error: rawError } = await supabase
-          .from('mai_talent_auditions')
-          .select(`
-            *,
-            user:user_profiles(username, avatar_url)
-          `)
-          .in('status', ['approved', 'featured']);
-        
-        if (rawError) throw rawError;
-        
-        // Manually calculate votes if needed (mock for now if table empty)
-        const formattedData = rawData.map(a => ({
-          ...a,
-          total_votes: 0 // Fetch votes separately if needed, or 0
-        }));
-        setAuditions(formattedData as Audition[]);
+        // 2. Check for specific 404/Missing relation error
+        // Supabase/Postgres often returns code '42P01' (undefined_table) or 404 in REST
+        if (error.code === '42P01' || error.message?.includes('does not exist') || error.code === '404') {
+          console.warn('mai_talent_leaderboard view missing. Attempting fallback to raw table.');
+          
+          // 3. Fallback: Try raw table
+          const { data: rawData, error: rawError } = await supabase
+            .from('mai_talent_auditions')
+            .select(`
+              *,
+              user:user_profiles(username, avatar_url)
+            `)
+            .in('status', ['approved', 'featured']);
+          
+          if (rawError) {
+             // If raw table also missing, feature is not deployed.
+             if (rawError.code === '42P01' || rawError.message?.includes('does not exist')) {
+                console.error('CRITICAL: mai_talent_auditions table missing. Feature unavailable.');
+                setAuditions([]); // Empty state
+                setFeatureUnavailable(true); // Stop polling
+                return; // Stop here, do not throw
+             }
+
+             throw rawError;
+          }
+          
+          // Manually calculate votes if needed (mock for now if table empty)
+          const formattedData = rawData ? rawData.map(a => ({
+            ...a,
+            total_votes: 0 // Fetch votes separately if needed, or 0
+          })) : [];
+          setAuditions(formattedData as Audition[]);
+        } else {
+          // Other error (e.g. network)
+          throw error;
+        }
       } else {
         setAuditions(data as Audition[]);
       }
     } catch (err) {
       console.error('Error fetching auditions:', err);
-      // toast.error('Failed to load auditions');
+      // Do NOT show toast on every poll failure to avoid spam
     } finally {
       setLoading(false);
     }
@@ -108,14 +124,16 @@ export default function MaiTalentPage() {
 
     // Polling instead of Realtime for leaderboard to reduce DB load
     const interval = setInterval(() => {
-      fetchAuditions();
+      if (!featureUnavailable) {
+        fetchAuditions();
+      }
     }, 15000); // 15 seconds
 
     return () => {
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
+  }, [profile, featureUnavailable]);
 
   if (!isAdmin) {
     return (
