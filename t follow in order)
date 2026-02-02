@@ -1,0 +1,143 @@
+// src/App.tsx
+import React, { useEffect, Suspense, useState, useRef, lazy } from "react";
+import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuthStore } from "./lib/store";
+
+import { useEligibilityStore } from "./lib/eligibilityStore";
+import { supabase, UserRole, reportError } from "./lib/supabase";
+import { Toaster, toast } from "sonner";
+import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
+import GlobalErrorBanner from "./components/GlobalErrorBanner";
+import GlobalGiftBanner from "./components/GlobalGiftBanner";
+import GlobalPayoutBanner from "./components/GlobalPayoutBanner";
+import BroadcastAnnouncement from "./components/BroadcastAnnouncement";
+import DailyChurchNotification from "./components/church/DailyChurchNotification";
+import GlobalEventsBanner from "./components/GlobalEventsBanner";
+import { useGlobalApp } from "./contexts/GlobalAppContext";
+import { updateRoute } from "./utils/sessionStorage";
+import { useDebouncedProfileUpdate } from "./hooks/useDebouncedProfileUpdate";
+import { APP_DATA_REFETCH_EVENT_NAME } from "./lib/appEvents";
+import { autoUnlockPayouts } from "./lib/supabase";
+import { initTelemetry } from "./lib/telemetry";
+
+// Layout
+import OfficerAlertBanner from "./components/OfficerAlertBanner";
+import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
+
+// Import GameTrollzPage for /gametrollz route
+import GameTrollzPage from "./pages/game";
+import AdminErrors from "./pages/admin/AdminErrors";
+import ProfileSetupModal from "./components/ProfileSetupModal";
+import RequireRole from "./components/RequireRole";
+import { RequireLeadOrOwner } from "./components/auth/RequireLeadOrOwner";
+import ErrorBoundary from "./components/ErrorBoundary";
+
+import AppLayout from "./components/layout/AppLayout";
+
+// Static pages (fast load)
+import Home from "./pages/Home";
+import Auth from "./pages/Auth";
+import AuthCallback from "./pages/AuthCallback";
+import SessionMonitor from "./components/auth/SessionMonitor";
+import TermsAgreement from "./pages/TermsAgreement";
+import ExitPage from "./pages/ExitPage";
+
+import { GameProvider } from "./components/game/GameContext";
+import GameControlPanel from "./components/game/GameControlPanel";
+import CarDealershipPage from "./pages/game/CarDealershipPage";
+import MechanicShopPage from "./pages/game/MechanicShopPage";
+import GaragePage from "./pages/game/GaragePage";
+import HospitalPage from "./pages/game/HospitalPage";
+import GeneralStorePage from "./pages/game/GeneralStorePage";
+import AuctionsPage from "./pages/AuctionsPage";
+import TrollBank from "./pages/TrollBank";
+import CityHall from "./pages/CityHall";
+const LivingPage = lazy(() => import("./pages/LivingPage"));
+const ChurchPage = lazy(() => import("./pages/ChurchPage"));
+const PastorDashboard = lazy(() => import("./pages/church/PastorDashboard"));
+const XPSimulatorPage = lazy(() => import("./pages/dev/XPSimulatorPage"));
+const BadgePopup = lazy(() => import("./components/BadgePopup"));
+
+
+
+// Sidebar pages (instant load)
+const TCPS = lazy(() => import("./pages/TCPS"));
+
+// Lazy-loaded pages
+const Following = lazy(() => import("./pages/Following"));
+const ExploreFeed = lazy(() => import("./pages/ExploreFeed"));
+const CoinStore = lazy(() => import("./pages/CoinStore"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
+const PublicPool = lazy(() => import("./pages/PublicPool"));
+const UserInventory = lazy(() => import("./pages/UserInventory"));
+const Troting = lazy(() => import("./pages/Troting"));
+const ProfileSettings = lazy(() => import("./pages/ProfileSettings"));
+const SellOnTrollCity = lazy(() => import("./pages/SellOnTrollCity"));
+const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const TrollCityWall = lazy(() => import("./pages/TrollCityWall"));
+const WallPostPage = lazy(() => import("./pages/WallPostPage"));
+const TrollCourt = lazy(() => import("./pages/TrollCourt"));
+const EmpirePartnerDashboard = lazy(() => import("./pages/EmpirePartnerDashboard"));
+// Gift store pages removed
+const Application = lazy(() => import("./pages/Application"));
+const ApplicationPage = lazy(() => import("./pages/ApplicationPage"));
+const TrollsTownPage = lazy(() => import("./pages/TrollsTownPage"));
+const TrollOfficerLounge = lazy(() => import("./pages/TrollOfficerLounge"));
+const OfficerModeration = lazy(() => import("./pages/OfficerModeration"));
+const TrollFamily = lazy(() => import("./pages/TrollFamily"));
+const FamilyLounge = lazy(() => import("./pages/FamilyLounge.jsx"));
+const FamilyWarsHub = lazy(() => import("./pages/FamilyWarsHub.jsx"));
+const FamilyLeaderboard = lazy(() => import("./pages/FamilyLeaderboard.jsx"));
+const FamilyShop = lazy(() => import("./pages/FamilyShop.jsx"));
+const FamilyBrowse = lazy(() => import("./pages/FamilyBrowse"));
+const Support = lazy(() => import("./pages/Support"));
+const Safety = lazy(() => import("./pages/Safety"));
+const AdminRFC = lazy(() => import("./components/AdminRFC"));
+const AdminEarningsDashboard = lazy(() => import("./pages/admin/AdminEarningsDashboard"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const ApplicationsPage = lazy(() => import("./pages/admin/Applications"));
+const AdminMarketplace = lazy(() => import("./pages/admin/AdminMarketplace"));
+const AdminOfficerReports = lazy(() => import("./pages/admin/AdminOfficerReports"));
+const StoreDebug = lazy(() => import("./pages/admin/StoreDebug"));
+const Changelog = lazy(() => import("./pages/Changelog"));
+const AccessDenied = lazy(() => import("./pages/AccessDenied"));
+const ReferralBonusPanel = lazy(() => import("./pages/admin/ReferralBonusPanel"));
+const SecretaryConsole = lazy(() => import("./pages/secretary/SecretaryConsole"));
+import { systemManagementRoutes } from "./pages/admin/adminRoutes";
+
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const PaymentTerms = lazy(() => import("./pages/PaymentTerms"));
+const CreatorAgreement = lazy(() => import("./pages/CreatorAgreement"));
+const TaxOnboarding = lazy(() => import("./pages/TaxOnboarding"));
+const MyEarnings = lazy(() => import("./pages/MyEarnings"));
+const EarningsPage = lazy(() => import("./pages/EarningsPage"));
+const VerificationPage = lazy(() => import("./pages/VerificationPage"));
+const VerificationComplete = lazy(() => import("./pages/VerificationComplete"));
+const PayoutStatus = lazy(() => import("./pages/PayoutStatus"));
+const FoundingOfficerTrial = lazy(() => import("./pages/FoundingOfficerTrial"));
+const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
+
+const GoLive = lazy(() => import("./pages/GoLive"));
+const JoinPage = lazy(() => import("./pages/Join"));
+const LazyLivePage = lazy(() => import("./pages/LivePage"));
+const BroadcastSummary = lazy(() => import("./pages/BroadcastSummary"));
+const KickFee = lazy(() => import("./pages/KickFee"));
+const BanFee = lazy(() => import("./pages/BanFee"));
+const MobileShell = lazy(() => import("./pages/MobileShell"));
+const TrollCourtSession = lazy(() => import("./pages/TrollCourtSession"));
+const TromodyShow = lazy(() => import("./pages/TromodyShow"));
+const TromodyShowBroadcast = lazy(() => import("./pages/TromodyShowBroadcast"));
+const OfficerLoungeStream = lazy(() => import("./pages/OfficerLoungeStream"));
+const StreamPicture = lazy(() => import("./pages/StreamPicture"));
+const Call = lazy(() => import("./pages/Call"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Trollifications = lazy(() => import("./pages/Trollifications"));
+const OfficerScheduling = lazy(() => import("./pages/OfficerScheduling"));
+const OfficerPayrollDashboard = lazy(() => import("./pages/officer/OfficerPayrollDashboard"));
+const OfficerDashboard = lazy(() => import("./pages/officer/OfficerDashboard"));
+const OfficerOWCDashboard = lazy(() => import("./pages/OfficerOWCDashboard"));
+const OfficerVote = lazy(() => import("./pages/OfficerVote"));
+const GovernmentStream

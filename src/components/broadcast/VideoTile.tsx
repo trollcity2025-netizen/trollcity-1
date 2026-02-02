@@ -228,11 +228,11 @@ export default function VideoTile({
   // Extract metadata
   const metadata = React.useMemo(() => {
     try {
-      return JSON.parse(participant.metadata || '{}');
+      return JSON.parse(participant?.metadata || '{}');
     } catch {
       return {};
     }
-  }, [participant.metadata]);
+  }, [participant?.metadata]);
 
   const level = (metadata as any).level || 1;
   const role = (metadata as any).role || 'Guest';

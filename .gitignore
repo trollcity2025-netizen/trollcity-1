@@ -20,6 +20,7 @@ dist-ssr
 *.env
 vite-env.d.ts
 src/vite-env.d.ts
+gixnow
 
 # Editor directories and files
 .vscode/*
