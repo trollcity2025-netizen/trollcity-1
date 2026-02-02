@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "Authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -22,8 +22,10 @@ interface PrepareBody {
 }
 
 async function authorizeUser(req: Request) {
-  const authHeader = req.headers.get("authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) {
+  const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.error("Missing auth header. Headers:", JSON.stringify(Object.fromEntries(req.headers.entries())));
     throw new Error("Missing authorization header");
   }
 

@@ -315,13 +315,29 @@ const GoLive: React.FC = () => {
     let publishConfig: any = null;
     let livekitToken: string | null = null;
     let hdPaid = false;
+    let accessToken: string | null = null;
 
     try {
       const idempotencyKey = idempotencyKeyRef.current || crypto.randomUUID();
       idempotencyKeyRef.current = idempotencyKey;
 
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session || !session.access_token) {
+        toast.error('Authentication error: Your session may have expired. Please try again.');
+        cleanup();
+        return;
+      }
+      accessToken = session.access_token;
+      
+      console.log('[GoLive] Preparing session. Token length:', accessToken.length);
+
       const prepareResponse = await api.request(API_ENDPOINTS.stream.prepare, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'x-client-info': 'trollcity-web-golive'
+        },
         body: JSON.stringify({
           requestedQuality,
           idempotencyKey,
@@ -373,6 +389,9 @@ const GoLive: React.FC = () => {
         if (hdPaid && sessionId) {
           await api.request(API_ENDPOINTS.stream.refundHDBoost, {
             method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            },
             body: JSON.stringify({ sessionId, reason: 'permission_denied' })
           });
         }
@@ -623,6 +642,9 @@ const GoLive: React.FC = () => {
       if (sessionId) {
         api.request(API_ENDPOINTS.stream.markLive, {
           method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          },
           body: JSON.stringify({ sessionId, status: isConnectedNow ? 'live' : 'starting', streamId: createdId })
         });
       }
@@ -666,6 +688,9 @@ const GoLive: React.FC = () => {
         try {
           await api.request(API_ENDPOINTS.stream.refundHDBoost, {
             method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            },
             body: JSON.stringify({ sessionId, reason: 'start_stream_failed' })
           });
         } catch {}
