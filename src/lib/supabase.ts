@@ -68,8 +68,6 @@ export interface UserProfile {
   created_at: string
   updated_at: string
 
-  sav_bonus_coins?: number
-  vived_bonus_coins?: number
   payment_methods?: Array<any>
   payout_method?: string
   payout_details?: string

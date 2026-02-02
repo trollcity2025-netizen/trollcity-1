@@ -20,7 +20,6 @@ interface CitySummaryBarProps {
     freeCoins: number
     giftCoins: number
     appSponsoredGifts: number
-    savPromoCount: number
     total_liability_coins: number
     total_platform_profit_usd: number
     kick_ban_revenue: number

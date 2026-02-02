@@ -43,7 +43,7 @@ This file tells any AI tool:
     - `effect` — Unlock entrance effect or animation badge (no gifting)
     - `nothing` — "Better luck next time" (loss slice)
   - **FORBIDDEN REWARD TYPES:**
-    - gift_item, gift, promo_sav, promo_vived, platform payout
+    - gift_item, gift, platform payout
     - Any gift-related logic or promotional payouts
   - **Example Wheel Slice Entries:**
     ```sql
@@ -57,7 +57,7 @@ This file tells any AI tool:
     ('💀 Better Luck 😭', 'nothing', null, 0.35, 1);
     ```
 - **wheel_spins** — user history for wheel spins and limits.
-- **special_gift_earnings** — used for SAV/VIVED promo coins with cap.
+- **special_gift_earnings** — deprecated table (formerly used for SAV/VIVED).
 - **troll_gift_items** — cosmetic animation and metadata for gifts.
 - **entrance_effects** — visual effects when users join a live stream.
 - **officer_chat_messages**, **officer_actions** — Troll Officer system moderation.

@@ -1,3 +1,4 @@
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"
@@ -87,9 +88,19 @@ Deno.serve(async (req) => {
 
   try {
     const profile = await authorizeUser(req)
-    const body: SeatActionRequest = req.method === "GET"
-      ? {}
-      : await req.json().catch(() => ({} as SeatActionRequest))
+    
+    // Handle GET params or POST body
+    let body: SeatActionRequest = {};
+    if (req.method === "GET") {
+        const url = new URL(req.url);
+        body = {
+            action: "list",
+            room: url.searchParams.get("room") || ROOM_NAME
+        };
+    } else {
+        body = await req.json().catch(() => ({} as SeatActionRequest));
+    }
+
     const action = body.action || "list"
     const room = String(body.room ?? ROOM_NAME)
     const seatIndex = Number(body.seat_index)
@@ -198,18 +209,13 @@ Deno.serve(async (req) => {
           JSON.stringify({ error: "Failed to claim seat" }),
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 400,
+            status: 500,
           }
         )
       }
 
       return new Response(
-        JSON.stringify({
-          success: true,
-          seat,
-          created: seat.created,
-          is_owner: seat.is_owner,
-        }),
+        JSON.stringify({ success: true, seat }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
@@ -233,58 +239,38 @@ Deno.serve(async (req) => {
         )
       }
 
-      const banMinutes =
-        typeof body.ban_minutes === "number" && body.ban_minutes > 0
-          ? body.ban_minutes
-          : null
-      const banPermanent = Boolean(body.ban_permanent)
-
-      if (banMinutes || banPermanent) {
-        const bannedUntil = banPermanent
-          ? null
-          : new Date(Date.now() + (banMinutes as number) * 60 * 1000).toISOString()
-
-        try {
-          await supabase
-            .from("broadcast_seat_bans")
-            .upsert(
-              {
-                room,
-                user_id: profile.id,
-                banned_until: bannedUntil,
-                created_by: profile.id,
-              },
-              { onConflict: "room,user_id" }
-            )
-        } catch (banErr) {
-          console.error("[broadcast-seats] failed to record seat ban:", banErr)
-        }
-      }
-
       return new Response(
-        JSON.stringify({
-          success: true,
-          seat: data?.[0] ?? null,
-        }),
+        JSON.stringify({ success: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
     return new Response(
-      JSON.stringify({ error: "Unknown action" }),
+      JSON.stringify({ error: "Invalid action" }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       }
     )
-  } catch (error: any) {
-    console.error("[broadcast-seats] error:", error)
-    const status = getPurchaseErrorStatus(error)
+
+  } catch (err: any) {
+    console.error("[broadcast-seats] internal error:", err)
+    
+    if (err.status === 403) {
+      return new Response(
+        JSON.stringify({ error: err.message, purchaseRequired: true }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403,
+        }
+      )
+    }
+
     return new Response(
-      JSON.stringify({ error: error?.message || "Internal server error" }),
+      JSON.stringify({ error: err.message || "Internal server error" }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status,
+        status: 500,
       }
     )
   }

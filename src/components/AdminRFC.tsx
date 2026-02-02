@@ -72,8 +72,6 @@ export default function AdminRFC() {
               ['Bong', '25', '20', 'Green vapor'],
               ['Troll Hat', '40', '32', 'Rotating hat'],
               ['Tool Box (Admin)', '75', '35', '+1% Store Profit'],
-              ['Basketball - VIVED', '100', '5 troll_coins', 'Tracks 5000 coin goal'],
-              ['SAV Cat Scratch', '200', '5 troll_coins', 'Screen-wide scratch'],
             ]}
           />
         </Section>

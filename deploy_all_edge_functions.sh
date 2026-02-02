@@ -89,6 +89,7 @@ UTILITY_FUNCTIONS=(
     "sendEmail"
     "streams-maintenance"
     "troll-battle"
+    "battles"
     "troll-events"
     "ping"
 )

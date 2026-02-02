@@ -40,6 +40,10 @@ export const handler = async (req: Request): Promise<Response> => {
     const body: BattleAction = await req.json().catch(() => ({}));
     const { action } = body;
 
+    if (!action) {
+      return withCors({ error: "Action is required" }, 400);
+    }
+
     switch (action) {
       case 'start_battle': {
         const { stream_id, host_id, opponent_id } = body;

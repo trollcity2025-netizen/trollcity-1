@@ -15,8 +15,6 @@ const ALL_GIFTS = [
   { id: 'trollhat', name: '🧢 Troll Hat', cost: 40 },
   { id: 'trollavatar', name: '👤 Troll Character', cost: 50 },
   { id: 'toolbox', name: '🧰 Toolbox (Admin Gift)', cost: 75 },
-  { id: 'vivedball', name: '🏀 Vived Basketball', cost: 100 },
-  { id: 'savscratch', name: '😼 Sav Cat Scratch', cost: 200 },
   { id: 'car', name: '🚗 Car Gift', cost: 100 },
   { id: 'crown', name: '👑 Troll Crown', cost: 500 },
   { id: 'diamond', name: '💎 Diamond Shower', cost: 1000 },

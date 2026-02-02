@@ -34,7 +34,6 @@ type StatState = {
   totalValue: number
   giftCoins: number
   appSponsoredGifts: number
-  savPromoCount: number
   total_liability_coins: number
   total_platform_profit_usd: number
   kick_ban_revenue: number
@@ -158,7 +157,6 @@ export default function AdminDashboard() {
     freeCoins: 0,
     giftCoins: 0,
     appSponsoredGifts: 0,
-    savPromoCount: 0,
     total_liability_coins: 0,
     total_platform_profit_usd: 0,
     kick_ban_revenue: 0,
@@ -285,7 +283,7 @@ export default function AdminDashboard() {
         supabase.from('payout_requests').select('id').eq('status', 'pending'),
         supabase.from('user_profiles').select('id').eq('role', 'troll_officer'),
         supabase.from('stream_reports').select('id').eq('status', 'pending'),
-        supabase.from('user_profiles').select('troll_coins, sav_bonus_coins'),
+        supabase.from('user_profiles').select('troll_coins'),
         supabase.from('coin_transactions').select('metadata, platform_profit, amount').in('type', ['store_purchase', 'paypal_purchase', 'purchase']),
         supabase.from('coin_transactions').select('amount, type').eq('type', 'gift'),
         supabase.from('payout_requests').select('cash_amount, processing_fee'),
@@ -349,8 +347,7 @@ export default function AdminDashboard() {
         const amt = Number(g.amount || 0)
         if (amt < 0) giftCoins += Math.abs(amt)
       }
-      const appSponsoredGifts = savBonusTotal
-      const savPromoCount = balances.filter((b: any) => Number(b.sav_bonus_coins || 0) > 0).length
+      const appSponsoredGifts = 0
 
       const payoutRows = payoutAggRes.data || []
       let totalPayouts = 0
@@ -391,7 +388,6 @@ export default function AdminDashboard() {
         platformProfit, // Updated
         giftCoins,
         appSponsoredGifts,
-        savPromoCount,
         total_liability_coins: 0,
         total_platform_profit_usd: platformProfit, // Updated
 

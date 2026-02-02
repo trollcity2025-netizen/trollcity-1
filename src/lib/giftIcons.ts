@@ -7,8 +7,6 @@ const GIFT_EMOJI_OVERRIDES: Record<string, string> = {
   "crown blast": "👑",
   "diamond storm": "💎",
   "the big crown": "🌟",
-  sav: "🪙",
-  vived: "✨",
   rose: "🌹",
   "golden maple leaf": "🍁",
   fireworks: "🎆",
@@ -38,7 +36,6 @@ const GIFT_EMOJI_OVERRIDES: Record<string, string> = {
   crown: "👑",
   "mic support": "🎙️",
   "laugh riot": "😂",
-  savscratch: "✂️",
 }
 
 const DEFAULT_GIFT_ICON = "🎁"

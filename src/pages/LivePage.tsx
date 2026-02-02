@@ -53,6 +53,7 @@ import { useViewerTracking } from '../hooks/useViewerTracking';
 import TrollBattleOverlay from '../components/broadcast/TrollBattleOverlay';
 import TrollBattlesSetup from '../components/broadcast/TrollBattlesSetup';
 import BroadcastLevelBar from '../components/broadcast/BroadcastLevelBar';
+import { startTrollBattle } from '../lib/battleHelpers';
 
 // Constants
 
@@ -3813,14 +3814,8 @@ export default function LivePage() {
               streamId={streamId || ''}
               onOpponentFound={async (opponent, battleId) => {
                 try {
-                  const { error } = await supabase.functions.invoke('officer-actions', {
-                    body: {
-                      action: 'start_troll_battle',
-                      battleId
-                    }
-                  });
-
-                  if (error) throw error;
+                  // Use the helper which targets the correct edge function
+                  await startTrollBattle(opponent.id, streamId);
 
                   setActiveBattle({ 
                     id: battleId, 

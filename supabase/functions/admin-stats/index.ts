@@ -30,7 +30,6 @@ interface AdminStatsResponse {
       totalValue: number;
       giftCoins: number;
       appSponsoredGifts: number;
-      savPromoCount: number;
     };
     financial: {
       total_liability_coins: number;
@@ -259,9 +258,6 @@ Deno.serve(async (req: Request) => {
     // App-sponsored gifts
     const appSponsoredGifts = sum(appSponsoredGiftsData, "amount");
 
-    // SAV promo count
-    const savPromoCount = count(savPromoData);
-
     // Total liability coins
     const liability = liabilityData || [];
     const total_liability_coins = liability.reduce(
@@ -347,7 +343,6 @@ Deno.serve(async (req: Request) => {
           totalValue: 0,
           giftCoins: 0,
           appSponsoredGifts: 0,
-          savPromoCount: 0,
         },
         financial: {
           total_liability_coins: 0,

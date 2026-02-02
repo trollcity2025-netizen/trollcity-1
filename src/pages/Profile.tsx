@@ -1055,17 +1055,17 @@ function ProfileInner() {
                     {inventory.titlesAndDeeds.map((item: any) => (
                       <div key={item.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex items-start gap-4">
                          <div className="bg-zinc-800 p-2 rounded-lg">
-                           {item.marketplace_item.image_url ? (
+                           {item.marketplace_item?.image_url ? (
                              <img src={item.marketplace_item.image_url} alt={item.marketplace_item.title} className="w-10 h-10 object-cover rounded" />
                            ) : (
                              <FileText className="w-8 h-8 text-gray-400" />
                            )}
                          </div>
                          <div>
-                           <h4 className="font-bold text-white">{item.marketplace_item.title}</h4>
-                           <p className="text-sm text-gray-400">{item.marketplace_item.description}</p>
-                           <span className={`text-[10px] px-2 py-0.5 rounded uppercase mt-2 inline-block ${item.marketplace_item.type === 'title' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30' : 'bg-blue-900/30 text-blue-400 border border-blue-500/30'}`}>
-                             {item.marketplace_item.type}
+                           <h4 className="font-bold text-white">{item.marketplace_item?.title || 'Unknown Item'}</h4>
+                           <p className="text-sm text-gray-400">{item.marketplace_item?.description || 'No description'}</p>
+                           <span className={`text-[10px] px-2 py-0.5 rounded uppercase mt-2 inline-block ${item.marketplace_item?.type === 'title' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30' : 'bg-blue-900/30 text-blue-400 border border-blue-500/30'}`}>
+                             {item.marketplace_item?.type || 'item'}
                            </span>
                          </div>
                       </div>
