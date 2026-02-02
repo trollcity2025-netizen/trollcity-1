@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface MarkBody {
   sessionId: string;
-  status: "live" | "ended" | "failed" | "created";
+  status: "live" | "ended" | "failed" | "created" | "starting";
   streamId?: string;
 }
 

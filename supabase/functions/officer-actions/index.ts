@@ -671,21 +671,230 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "find_opponent": {
+          const { data, error } = await supabaseAdmin.rpc('find_opponent', {
+              p_user_id: user.id
+          });
+          
+          if (error) throw error;
+          result = data;
+          break;
+      }
+
+      case "skip_opponent": {
+          const { battleId } = params;
+          if (!battleId) throw new Error("Missing battleId");
+
+          // 1. Mark current battle as cancelled
+          const { error: updateError } = await supabaseAdmin
+              .from('troll_battles')
+              .update({ status: 'cancelled' })
+              .eq('id', battleId);
+
+          if (updateError) throw updateError;
+
+          // 2. Increment skips (upsert)
+          const today = new Date().toISOString().split('T')[0];
+          
+          // Check existing skips
+          const { data: skipData, error: skipFetchError } = await supabaseAdmin
+              .from('battle_skips')
+              .select('skips_used')
+              .eq('user_id', user.id)
+              .eq('skip_date', today)
+              .maybeSingle();
+              
+          let currentSkips = skipData?.skips_used || 0;
+          const newSkips = currentSkips + 1;
+
+          const { error: skipUpsertError } = await supabaseAdmin
+              .from('battle_skips')
+              .upsert({
+                  user_id: user.id,
+                  skip_date: today,
+                  skips_used: newSkips,
+                  last_skip_time: new Date().toISOString()
+              }, { onConflict: 'user_id,skip_date' });
+
+          if (skipUpsertError) {
+              // If table doesn't exist, ignore (it might not be created yet)
+              console.warn('Could not update battle_skips', skipUpsertError);
+          }
+
+          result = { success: true, skips_used: newSkips };
+          break;
+      }
+
+      case "assign_battle_guests": {
+          const { battleId, isPlayer1, streamId } = params;
+          if (!battleId || !streamId) throw new Error("Missing params");
+
+          // Fetch top 3 viewers as "guests"
+          const { data: viewers } = await supabaseAdmin
+              .from('stream_viewers')
+              .select('user:user_profiles(id, username, avatar_url)')
+              .eq('stream_id', streamId)
+              .limit(3);
+          
+          const guests = viewers?.map((v: any) => ({
+              id: v.user?.id,
+              username: v.user?.username,
+              avatar_url: v.user?.avatar_url
+          })) || [];
+
+          // Update battle
+          const updateField = isPlayer1 ? 'host_guests' : 'challenger_guests';
+          
+          const { error } = await supabaseAdmin
+              .from('troll_battles')
+              .update({ [updateField]: guests })
+              .eq('id', battleId);
+
+          if (error) throw error;
+          result = { success: true, guests };
+          break;
+      }
+
+      case "finalize_troll_battle": {
+          const { battleId } = params;
+          if (!battleId) throw new Error("Missing battleId");
+
+          const { data: battle, error: fetchError } = await supabaseAdmin
+             .from('troll_battles')
+             .select('*')
+             .eq('id', battleId)
+             .single();
+          
+          if (fetchError || !battle) throw new Error("Battle not found");
+
+          // Determine winner
+          let winnerId = null;
+          if ((battle.host_score || 0) > (battle.challenger_score || 0)) {
+              winnerId = battle.host_id;
+          } else if ((battle.challenger_score || 0) > (battle.host_score || 0)) {
+              winnerId = battle.challenger_id;
+          }
+
+          // Update battle
+          const { error: updateError } = await supabaseAdmin
+             .from('troll_battles')
+             .update({
+                 status: 'completed',
+                 winner_id: winnerId,
+                 end_time: new Date().toISOString() // Ensure end time is set
+             })
+             .eq('id', battleId);
+
+          if (updateError) throw updateError;
+          result = { success: true, winnerId };
+          break;
+      }
+
+      case "get_stream_theme": {
+          const { streamId } = params;
+          if (!streamId) throw new Error("Missing streamId");
+
+          const { data: stream, error } = await supabaseAdmin
+             .from('streams')
+             .select('theme_config')
+             .eq('id', streamId)
+             .single();
+          
+          if (error) throw error;
+          result = { success: true, theme: stream?.theme_config || {} };
+          break;
+      }
+
+      case "get_stream_box_count": {
+          const { streamId } = params;
+          if (!streamId) throw new Error("Missing streamId");
+
+          const { data: stream, error } = await supabaseAdmin
+             .from('streams')
+             .select('layout_config')
+             .eq('id', streamId)
+             .single();
+          
+          if (error) throw error;
+          // Default to 1 if not set
+          const boxCount = stream?.layout_config?.box_count || 1;
+          result = { success: true, count: boxCount };
+          break;
+      }
+
+      case "get_battle": {
+          const { battleId } = params;
+          if (!battleId) throw new Error("Missing battleId");
+
+          const { data: battle, error } = await supabaseAdmin
+             .from('troll_battles')
+             .select('*, host:host_id(username, avatar_url), challenger:challenger_id(username, avatar_url)')
+             .eq('id', battleId)
+             .single();
+
+          if (error) throw error;
+          
+          if (battle) {
+             const player1 = {
+                 id: battle.host_id,
+                 username: battle.host?.username,
+                 avatar_url: battle.host?.avatar_url,
+                 score: battle.host_score
+             };
+             const player2 = {
+                 id: battle.challenger_id,
+                 username: battle.challenger?.username,
+                 avatar_url: battle.challenger?.avatar_url,
+                 score: battle.challenger_score
+             };
+
+             result = { 
+                 success: true, 
+                 battle, 
+                 player1,
+                 player2
+             };
+          } else {
+             throw new Error("Battle not found");
+          }
+          break;
+      }
+
       case "get_active_battle": {
           const { broadcasterId } = params;
           if (!broadcasterId) throw new Error("Missing broadcasterId");
 
           const { data: battle, error } = await supabaseAdmin
              .from('troll_battles')
-             .select('*')
-             .or(`player1_id.eq.${broadcasterId},player2_id.eq.${broadcasterId}`)
+             .select('*, host:host_id(username, avatar_url), challenger:challenger_id(username, avatar_url)')
+             .or(`host_id.eq.${broadcasterId},challenger_id.eq.${broadcasterId}`)
              .eq('status', 'active')
              .maybeSingle();
 
           if (error) throw error;
           
           if (battle) {
-             result = { success: true, battle, active: true };
+             // Map to player1/player2 format expected by frontend
+             const player1 = {
+                 id: battle.host_id,
+                 username: battle.host?.username,
+                 avatar_url: battle.host?.avatar_url,
+                 score: battle.host_troll_coins || 0
+             };
+             const player2 = {
+                 id: battle.challenger_id,
+                 username: battle.challenger?.username,
+                 avatar_url: battle.challenger?.avatar_url,
+                 score: battle.challenger_troll_coins || 0
+             };
+
+             result = { 
+                 success: true, 
+                 battle, 
+                 active: true,
+                 player1,
+                 player2
+             };
           } else {
              result = { success: true, active: false };
           }

@@ -55,7 +55,7 @@ const TrollBattleOverlay: React.FC<TrollBattleOverlayProps> = ({
     };
 
     fetchBattleData();
-  }, [battleId, battle]);
+  }, [battleId]);
 
   // Realtime subscription
   useEffect(() => {
@@ -73,8 +73,8 @@ const TrollBattleOverlay: React.FC<TrollBattleOverlayProps> = ({
           const newBattle = payload.new;
           setBattle(newBattle);
           
-          setPlayer1(prev => prev ? ({ ...prev, score: newBattle.player1_score }) : null);
-          setPlayer2(prev => prev ? ({ ...prev, score: newBattle.player2_score }) : null);
+          setPlayer1(prev => prev ? ({ ...prev, score: newBattle.host_score }) : null);
+          setPlayer2(prev => prev ? ({ ...prev, score: newBattle.challenger_score }) : null);
 
           if (newBattle.status === 'completed' && onBattleEnd) {
              onBattleEnd(newBattle.winner_id);

@@ -708,7 +708,7 @@ export default function LivePage() {
 
   const [joinPrice, setJoinPrice] = useState(0);
   const [showTrollBattles, setShowTrollBattles] = useState(false);
-  const [activeBattle, setActiveBattle] = useState<{id: string, player1_id: string, player2_id: string, status: string} | null>(null);
+  const [activeBattle, setActiveBattle] = useState<{id: string, host_id: string, challenger_id: string, status: string} | null>(null);
   const [boxCount, setBoxCount] = useState(0);
   const [seatBans, setSeatBans] = useState<SeatBan[]>([]);
   const [cameraOn, setCameraOn] = useState(false);
@@ -3327,7 +3327,25 @@ export default function LivePage() {
           event: '*',
           schema: 'public',
           table: 'troll_battles',
-          filter: `player1_id=eq.${stream.broadcaster_id}` 
+          filter: `host_id=eq.${stream.broadcaster_id}` 
+        },
+        (payload) => {
+             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                 if (payload.new.status === 'active' || payload.new.status === 'matched') {
+                    setActiveBattle(payload.new as any);
+                } else if (payload.new.status === 'completed') {
+                    setActiveBattle(payload.new as any);
+                }
+             }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'troll_battles',
+          filter: `challenger_id=eq.${stream.broadcaster_id}` 
         },
         (payload) => {
              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -3819,8 +3837,8 @@ export default function LivePage() {
 
                   setActiveBattle({ 
                     id: battleId, 
-                    player1_id: user?.id, 
-                    player2_id: opponent.id, 
+                    host_id: user?.id, 
+                    challenger_id: opponent.id, 
                     status: 'active' 
                   });
                   setShowTrollBattles(false);
