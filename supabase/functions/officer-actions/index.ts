@@ -163,7 +163,9 @@ Deno.serve(async (req) => {
       'get_quick_gifts',
       'get_stream_box_count',
       'get_stream_theme',
-      'ensure_dm_conversation'
+      'ensure_dm_conversation',
+      'get_stream_viewers',
+      'get_active_battle'
     ];
     
     // Moderator privileges
@@ -628,6 +630,65 @@ Deno.serve(async (req) => {
             
           if (error) throw error;
           result = { success: true, shifts: data };
+          break;
+      }
+
+      case "get_stream_viewers": {
+        const { streamId } = params;
+        if (!streamId) throw new Error("Missing streamId");
+
+        // Get count
+        const { count, error: countError } = await supabaseAdmin
+            .from('stream_viewers')
+            .select('*', { count: 'exact', head: true })
+            .eq('stream_id', streamId);
+
+        if (countError) throw countError;
+
+        // Get recent viewers (limit 50)
+        const { data: viewers, error: viewersError } = await supabaseAdmin
+            .from('stream_viewers')
+            .select('user_id, last_seen, user:user_profiles(id, username, avatar_url)')
+            .eq('stream_id', streamId)
+            .order('last_seen', { ascending: false })
+            .limit(50);
+
+        if (viewersError) throw viewersError;
+
+        // Map to expected format
+        const mappedViewers = viewers?.map((v: any) => ({
+            userId: v.user_id,
+            username: v.user?.username,
+            avatarUrl: v.user?.avatar_url,
+            lastSeen: v.last_seen
+        })) || [];
+
+        result = { 
+            success: true, 
+            count: count || 0, 
+            viewers: mappedViewers 
+        };
+        break;
+      }
+
+      case "get_active_battle": {
+          const { broadcasterId } = params;
+          if (!broadcasterId) throw new Error("Missing broadcasterId");
+
+          const { data: battle, error } = await supabaseAdmin
+             .from('troll_battles')
+             .select('*')
+             .or(`player1_id.eq.${broadcasterId},player2_id.eq.${broadcasterId}`)
+             .eq('status', 'active')
+             .maybeSingle();
+
+          if (error) throw error;
+          
+          if (battle) {
+             result = { success: true, battle, active: true };
+          } else {
+             result = { success: true, active: false };
+          }
           break;
       }
 

@@ -14,10 +14,10 @@ const initialCatalogs: Record<TableKey, any[]> = {
 
 const fallbackCatalogs: Record<TableKey, any[]> = {
   coin_packages: [
-    { id: 'baby_troll', name: 'Baby Troll', coin_amount: 500, currency: 'USD', price: 6.49, description: 'Perfect for getting started' },
-    { id: 'little_troll', name: 'Little Troll', coin_amount: 1100, currency: 'USD', price: 12.99, description: 'Great for casual streams' },
-    { id: 'mischief_troll', name: 'Mischief Troll', coin_amount: 2500, currency: 'USD', price: 24.99, description: 'Popular mid tier' },
-    { id: 'empire_troll', name: 'Empire Troll', coin_amount: 12000, currency: 'USD', price: 99.99, description: 'Top-tier bundle' },
+    { id: 'baby_troll', name: 'Baby Troll', coins: 500, currency: 'USD', price: 6.49, description: 'Perfect for getting started' },
+    { id: 'little_troll', name: 'Little Troll', coins: 1100, currency: 'USD', price: 12.99, description: 'Great for casual streams' },
+    { id: 'mischief_troll', name: 'Mischief Troll', coins: 2500, currency: 'USD', price: 24.99, description: 'Popular mid tier' },
+    { id: 'empire_troll', name: 'Empire Troll', coins: 12000, currency: 'USD', price: 99.99, description: 'Top-tier bundle' },
   ],
   entrance_effects: [
     { id: 'effect_confetti_pop', name: 'Confetti Pop', coin_cost: 1000, rarity: 'Common', animation_type: 'confetti' },
@@ -63,7 +63,7 @@ const sections: SectionDefinition[] = [
     field: 'price',
     fieldLabel: 'USD Price',
     helper: (item) =>
-      `${item.coin_amount?.toLocaleString() || '0'} coins · ${item.currency || 'USD'}`,
+      `${(item.coins || item.coin_amount)?.toLocaleString() || '0'} coins · ${item.currency || 'USD'}`,
     inputProps: { step: '0.01', min: '0', placeholder: 'USD' },
   },
   {

@@ -39,8 +39,6 @@ export default function VideoTile({
   onClick,
   frameMode = 'none',
 }: VideoTileProps) {
-  if (!participant) return null;
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [speaking, setSpeaking] = useState(false);
