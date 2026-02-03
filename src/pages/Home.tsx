@@ -1,4 +1,4 @@
-import BroadcastLockdownControl from './admin/components/BroadcastLockdownControl';
+
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/lib/store';
 import { useEffect } from 'react';
@@ -7,16 +7,16 @@ import {
   Gamepad2, 
   Users, 
   ShoppingCart, 
-  Video, 
   Coins,
   Shield,
   Zap,
   Star,
   ArrowRight,
-  Play,
-  Sparkles
+  Sparkles,
+  Play
 } from 'lucide-react';
-import HomeLiveGrid from '@/components/HomeLiveGrid';
+import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
+import BroadcastLockdownControl from '@/components/admin/BroadcastLockdownControl';
 
 // Animated gradient background
 const AnimatedGradient = () => {
@@ -120,12 +120,6 @@ export default function Home() {
 
   const features = [
     {
-      icon: <Video className="w-8 h-8 text-purple-400" />,
-      title: "Live Streaming",
-      description: "Go live and connect with your audience in real-time. Stream games, music, or just hang out with friends.",
-      gradient: "from-purple-600/20 to-pink-600/20",
-    },
-    {
       icon: <Users className="w-8 h-8 text-cyan-400" />,
       title: "Join Families",
       description: "Create or join families to build your community. Compete for top rankings and exclusive rewards.",
@@ -207,7 +201,7 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => navigate('/go-live')}
-                      className="group relative px-8 py-4 rounded-2xl font-semibold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 shadow-[0_10px_40px_rgba(236,72,153,0.4)] hover:shadow-[0_15px_50px_rgba(251,146,60,0.35)] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-2"
+                      className="md:hidden group relative px-8 py-4 rounded-2xl font-semibold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 shadow-[0_10px_40px_rgba(236,72,153,0.4)] hover:shadow-[0_15px_50px_rgba(251,146,60,0.35)] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-2"
                     >
                       <Play className="w-5 h-5" />
                       Go Live Now

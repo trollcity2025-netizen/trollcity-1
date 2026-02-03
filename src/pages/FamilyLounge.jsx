@@ -248,7 +248,7 @@ const FamilyLounge = () => {
             .from('family_activity_log')
             .select(`
               *,
-              profiles:user_profiles!family_activity_log_user_id_fkey (username)
+              profiles:user_profiles!family_activity_log_user_id_fkey (username, created_at)
             `)
             .eq('family_id', familyId)
             .order('created_at', { ascending: false })
@@ -536,9 +536,20 @@ const FamilyLounge = () => {
                   {getEventIcon(activity.event_type)}
                   <div className="flex-1">
                     <p className="text-sm text-gray-300">{activity.event_message}</p>
-                    <p className="text-xs text-gray-500">
-                      {activity.profiles?.username || 'System'} • {formatTimeAgo(activity.created_at)}
-                    </p>
+                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                      {activity.profiles ? (
+                        <UserNameWithAge
+                          user={{
+                            username: activity.profiles.username,
+                            id: activity.user_id,
+                            created_at: activity.profiles.created_at
+                          }}
+                        />
+                      ) : (
+                        'System'
+                      )}
+                      <span>• {formatTimeAgo(activity.created_at)}</span>
+                    </div>
                   </div>
                 </div>
               ))

@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store';
 import api, { API_ENDPOINTS } from '../lib/api';
 import { toast } from 'sonner';
 import { Crown, Users, Clock, ArrowUpRight } from 'lucide-react';
+import UserNameWithAge from '../components/UserNameWithAge';
 
 interface OfficerVoteCycle {
   id: string;
@@ -63,7 +64,7 @@ export default function OfficerVote() {
         const [{ data: broadcasterRows }, { data: voteRows }] = await Promise.all([
           supabase
             .from('user_profiles')
-            .select('id, username, avatar_url, is_broadcaster, is_banned')
+            .select('id, username, avatar_url, is_broadcaster, is_banned, created_at')
             .eq('is_broadcaster', true)
             .eq('is_banned', false)
             .order('username', { ascending: true })
@@ -220,7 +221,14 @@ export default function OfficerVote() {
                             )}
                           </div>
                           <div>
-                            <div className="text-sm font-semibold">{b.username}</div>
+                            <UserNameWithAge 
+                              user={{
+                                username: b.username,
+                                id: b.id,
+                                created_at: (b as any).created_at
+                              }}
+                              className="text-sm font-semibold"
+                            />
                             <div className="text-[11px] text-gray-400">
                               {isSelf
                                 ? 'You cannot vote for yourself'

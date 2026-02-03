@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Trophy, Coins, Video, Users } from 'lucide-react'
-import ClickableUsername from '../components/ClickableUsername'
+import UserNameWithAge from '../components/UserNameWithAge'
 
 export default function Leaderboard() {
   const [topUsers, setTopUsers] = useState<any[]>([])
@@ -14,7 +14,7 @@ export default function Leaderboard() {
       try {
         const { data: users } = await supabase
           .from('user_profiles')
-          .select('id, username, total_earned_coins, troll_coins, rgb_username_expires_at')
+          .select('id, username, total_earned_coins, troll_coins, rgb_username_expires_at, created_at')
           .order('total_earned_coins', { ascending: false })
           .limit(50) // Get more to filter
 
@@ -35,7 +35,7 @@ export default function Leaderboard() {
         setTopUsers(realUsers.slice(0, 20)) // Take top 20 real users
         const { data: streams } = await supabase
           .from('streams')
-          .select('id, title, total_gifts_coins, current_viewers, broadcaster_id, user_profiles(username)')
+          .select('id, title, total_gifts_coins, current_viewers, broadcaster_id, user_profiles(username, created_at, rgb_username_expires_at)')
           .order('total_gifts_coins', { ascending: false })
           .limit(50) // Get more to filter
 
@@ -81,10 +81,13 @@ export default function Leaderboard() {
                   <div key={u.id} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-400">{i+1}.</span>
-                      <ClickableUsername 
-                        username={u.username} 
-                        userId={u.id} 
-                        profile={u}
+                      <UserNameWithAge 
+                        user={{
+                          username: u.username,
+                          id: u.id,
+                          rgb_username_expires_at: u.rgb_username_expires_at,
+                          created_at: u.created_at
+                        }}
                         className="text-white" 
                       />
                     </div>
@@ -98,7 +101,19 @@ export default function Leaderboard() {
               <div className="space-y-2">
                 {topStreams.map((s, i) => (
                   <div key={s.id} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2"><span className="text-gray-400">{i+1}.</span> {s.title || 'Untitled'}</div>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2"><span className="text-gray-400">{i+1}.</span> {s.title || 'Untitled'}</div>
+                      <div className="text-xs text-gray-500 ml-5">
+                         by <UserNameWithAge 
+                              user={{
+                                username: s.user_profiles?.username || 'Unknown',
+                                created_at: s.user_profiles?.created_at,
+                                rgb_username_expires_at: s.user_profiles?.rgb_username_expires_at
+                              }}
+                              className="text-gray-400"
+                            />
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1 text-yellow-300"><Coins className="w-4 h-4" /> {s.total_gifts_coins || 0}</div>
                   </div>
                 ))}

@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { toast } from 'sonner'
 import { CheckCircle, XCircle, Award, User, Clock, FileText, Calendar, Crown, LayoutDashboard } from 'lucide-react'
-import ClickableUsername from '../../components/ClickableUsername'
+import UserNameWithAge from '../../components/UserNameWithAge'
 import WeeklyReportForm from '../../components/WeeklyReportForm'
 import WeeklyReportsList from '../../components/WeeklyReportsList'
 import OfficerStreamGrid from '../../components/officer/OfficerStreamGrid'
@@ -17,6 +17,7 @@ type Applicant = {
   username: string
   email?: string
   role?: string
+  created_at?: string
 }
 
 type Officer = {
@@ -25,6 +26,7 @@ type Officer = {
   email?: string
   is_lead_officer: boolean
   is_troll_officer: boolean
+  created_at?: string
 }
 
 type ActionLog = {
@@ -46,6 +48,7 @@ type AutoClockoutSession = {
   hours_worked: number
   auto_clocked_out: boolean
   username?: string
+  created_at?: string
 }
 
 
@@ -192,7 +195,7 @@ export function LeadOfficerDashboard() {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, email, is_lead_officer, is_troll_officer')
+        .select('id, username, email, is_lead_officer, is_troll_officer, created_at')
         .or('is_troll_officer.eq.true,is_lead_officer.eq.true')
         .eq('is_officer_active', true)
         .neq('role', 'admin') // Exclude admin users from officer list
@@ -261,7 +264,8 @@ export function LeadOfficerDashboard() {
           *,
           user:user_profiles!user_id (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `)
         .eq('status', 'pending')
@@ -679,7 +683,13 @@ export function LeadOfficerDashboard() {
                     className="border-b border-red-900/50 hover:bg-red-900/10"
                   >
                     <td className="py-2">
-                      <ClickableUsername userId={s.officer_id} username={s.username || s.officer_id} />
+                      <UserNameWithAge 
+                        user={{
+                            username: s.username || s.officer_id,
+                            id: s.officer_id,
+                            created_at: s.created_at
+                        }}
+                      />
                     </td>
                     <td className="py-2">
                       {new Date(s.clock_in).toLocaleString()}
@@ -793,7 +803,13 @@ export function LeadOfficerDashboard() {
                     className="border-b border-purple-900/50 hover:bg-purple-900/10"
                   >
                     <td className="py-2">
-                      <ClickableUsername userId={o.id} username={o.username} />
+                      <UserNameWithAge 
+                        user={{
+                            username: o.username,
+                            id: o.id,
+                            created_at: o.created_at
+                        }}
+                      />
                     </td>
                     <td className="text-center">
                       {o.is_lead_officer ? (
@@ -1083,7 +1099,13 @@ function PendingApplicationsList({ onApprove, onReject }: {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-white font-semibold">
-                  {app.user_profiles?.username || "Unknown User"}
+                  <UserNameWithAge 
+                    user={{
+                        username: app.user_profiles?.username || "Unknown User",
+                        id: app.user_id,
+                        created_at: app.user_profiles?.created_at
+                    }}
+                  />
                 </span>
                 <span className="text-xs bg-blue-900 text-blue-300 px-2 py-1 rounded">
                   {app.type.toUpperCase().replace("_", " ")}

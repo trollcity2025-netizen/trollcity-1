@@ -84,7 +84,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
 
       // Handle effects
       if (effectsRes.data) {
-        setEntranceEffects(effectsRes.data)
+        const enrichedEffects = effectsRes.data.map((e: any) => ({
+          ...e,
+          config: ENTRANCE_EFFECTS_MAP[e.effect_id] || null
+        }));
+        setEntranceEffects(enrichedEffects)
       }
 
       // Handle perks
@@ -993,9 +997,21 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {entranceEffects.map((effect) => {
-                    const isActive = activeItems.has(effect.effect_id)
+                    const isActive = activeItems.has(effect.effect_id);
+                    const config = effect.config || {};
+                    
+                    const rarityColor = (() => {
+                      switch (config.rarity?.toLowerCase()) {
+                        case 'legendary': return 'border-yellow-500/50 hover:border-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.15)]';
+                        case 'epic': return 'border-purple-500/50 hover:border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]';
+                        case 'rare': return 'border-blue-500/50 hover:border-blue-400';
+                        case 'uncommon': return 'border-green-500/50 hover:border-green-400';
+                        default: return 'border-zinc-700 hover:border-zinc-500';
+                      }
+                    })();
+
                     return (
-                      <div key={effect.id} className="relative bg-zinc-900 rounded-xl p-6 border border-yellow-500/20 hover:border-yellow-500/40 transition-all group">
+                      <div key={effect.id} className={`relative bg-zinc-900 rounded-xl p-6 border transition-all group ${rarityColor}`}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1010,30 +1026,47 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                         </button>
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
-                            <Zap className="w-5 h-5 text-yellow-400" />
-                            <span className="text-sm text-gray-400">Entrance Effect</span>
+                            <span className="text-2xl">{config.icon || <Zap className="w-5 h-5 text-yellow-400" />}</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                              config.rarity === 'Legendary' ? 'text-yellow-400' :
+                              config.rarity === 'Epic' ? 'text-purple-400' :
+                              config.rarity === 'Rare' ? 'text-blue-400' :
+                              config.rarity === 'Uncommon' ? 'text-green-400' :
+                              'text-gray-400'
+                            }`}>
+                              {config.rarity || 'Common'} Effect
+                            </span>
                             {isActive && (
-                              <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">
+                              <span className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
                                 ACTIVE
                               </span>
                             )}
                           </div>
                           <h3 className="text-xl font-bold text-white mb-1">
-                            {effect.config?.name || effect.effect_id}
+                            {config.name || effect.effect_id}
                           </h3>
-                          <p className="text-gray-400 text-sm mb-2">
-                            {effect.config?.description || 'No description available'}
+                          <p className="text-gray-400 text-sm mb-3 min-h-[40px] line-clamp-2">
+                            {config.description || 'No description available'}
                           </p>
+                          
+                          {config.category && (
+                             <div className="mb-3">
+                                <span className="inline-block bg-black/40 text-zinc-400 text-[10px] uppercase font-bold px-2 py-1 rounded border border-zinc-800">
+                                  {config.category.replace(/_/g, ' ')}
+                                </span>
+                             </div>
+                          )}
+
                           <p className="text-xs text-gray-500">
-                            Acquired: {new Date(effect.acquired_at).toLocaleDateString()}
+                            Acquired: {new Date(effect.purchased_at || effect.acquired_at).toLocaleDateString()}
                           </p>
                         </div>
                         <button
                           onClick={() => toggleEntranceEffect(effect.effect_id, isActive)}
                           className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                             isActive
-                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-green-600 hover:bg-green-700 text-white'
+                              ? 'bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-600/50'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
                           }`}
                         >
                           {isActive ? (

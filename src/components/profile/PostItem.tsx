@@ -4,7 +4,7 @@ import { useAuthStore } from '../../lib/store';
 import { Heart, MessageCircle, Gift, Share2, Trash2, Smile } from 'lucide-react';
 
 import { toast } from 'sonner';
-import ClickableUsername from '../ClickableUsername';
+import UserNameWithAge from '../UserNameWithAge';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import GiftModal from '../trollWall/GiftModal';
 
@@ -18,6 +18,7 @@ interface Comment {
   user_profiles: {
     username: string;
     avatar_url: string | null;
+    created_at?: string;
   };
   replies?: Comment[];
   likes_count?: number; // Future proofing
@@ -125,7 +126,7 @@ export default function PostItem({ post, onDelete }: PostItemProps) {
         .from('troll_post_comments')
         .select(`
           *,
-          user_profiles (username, avatar_url)
+          user_profiles (username, avatar_url, created_at)
         `)
         .eq('post_id', post.id)
         .order('created_at', { ascending: true });
@@ -181,7 +182,7 @@ export default function PostItem({ post, onDelete }: PostItemProps) {
         })
         .select(`
           *,
-          user_profiles (username, avatar_url)
+          user_profiles (username, avatar_url, created_at)
         `)
         .single();
 
@@ -256,7 +257,15 @@ export default function PostItem({ post, onDelete }: PostItemProps) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="bg-white/5 rounded-2xl px-4 py-2 inline-block max-w-full">
-            <ClickableUsername username={comment.user_profiles?.username} className="font-bold text-sm text-white hover:underline block" />
+            <div className="font-bold text-sm text-white block">
+              <UserNameWithAge 
+                user={{
+                  username: comment.user_profiles?.username,
+                  id: comment.user_id,
+                  ...comment.user_profiles
+                }}
+              />
+            </div>
             <p className="text-sm text-gray-200 break-words">{comment.content}</p>
         </div>
         <div className="flex items-center gap-4 mt-1 ml-2 text-xs text-gray-400 font-medium">
@@ -305,7 +314,14 @@ export default function PostItem({ post, onDelete }: PostItemProps) {
               )}
            </div>
            <div>
-              <ClickableUsername username={post.user_profiles?.username} className="font-bold text-white hover:text-purple-400" />
+              <UserNameWithAge 
+                user={{
+                  username: post.user_profiles?.username,
+                  id: post.user_id,
+                  ...post.user_profiles
+                }}
+                className="font-bold text-white hover:text-purple-400"
+              />
               <div className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString()}</div>
            </div>
         </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { Clock, CheckCircle, XCircle, AlertTriangle, Gavel, FileText, Trash2 } from 'lucide-react';
-import ClickableUsername from './ClickableUsername';
+import UserNameWithAge from './UserNameWithAge';
 
 interface DocketEntry {
   id: string;
@@ -44,7 +44,7 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
       if (allIds.length > 0) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at')
+          .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at, created_at')
           .in('id', allIds);
         
         const profileMap: Record<string, any> = {};
@@ -217,7 +217,15 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
               >
                 <div className="grid grid-cols-5 gap-4 items-center">
                   <div>
-                    <div className="font-semibold text-sm">{entry.username}</div>
+                    <div className="font-semibold text-sm">
+                      <UserNameWithAge 
+                        user={{
+                          username: entry.username,
+                          id: entry.user_id,
+                          created_at: profiles[entry.user_id]?.created_at
+                        }}
+                      />
+                    </div>
                     <div className="text-xs text-gray-400">ID: {entry.user_id.slice(0, 8)}</div>
                   </div>
 
@@ -298,10 +306,14 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
                   <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
                     Assigned: 
                     {profiles[entry.assigned_officer] ? (
-                      <ClickableUsername 
-                        username={profiles[entry.assigned_officer].username} 
-                        userId={entry.assigned_officer}
-                        profile={profiles[entry.assigned_officer]}
+                      <UserNameWithAge 
+                        user={{
+                          username: profiles[entry.assigned_officer].username, 
+                          id: entry.assigned_officer,
+                          created_at: profiles[entry.assigned_officer].created_at,
+                          is_admin: profiles[entry.assigned_officer].is_admin,
+                          is_troll_officer: profiles[entry.assigned_officer].is_troll_officer
+                        }}
                       />
                     ) : (
                       entry.officer_username || entry.assigned_officer

@@ -3,7 +3,7 @@ import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, MessageSquare }
 import { supabase } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
-import { toast } from 'sonner'
+import UserNameWithAge from '../../../components/UserNameWithAge'
 
 interface SidebarConversation {
   other_user_id: string
@@ -14,6 +14,7 @@ interface SidebarConversation {
   unread_count: number
   is_online?: boolean
   rgb_username_expires_at?: string | null
+  other_created_at?: string
 }
 
 interface InboxSidebarProps {
@@ -107,7 +108,7 @@ export default function InboxSidebar({
       // Fetch other members for these conversations
       const { data: otherMembers } = await supabase
         .from('conversation_members')
-        .select('conversation_id, user_id, user_profiles(username, avatar_url, rgb_username_expires_at)')
+        .select('conversation_id, user_id, user_profiles(username, avatar_url, rgb_username_expires_at, created_at)')
         .in('conversation_id', convIds)
         .neq('user_id', user.id)
 
@@ -143,6 +144,7 @@ export default function InboxSidebar({
            other_username: (other.user_profiles as any).username,
            other_avatar_url: (other.user_profiles as any).avatar_url,
            rgb_username_expires_at: (other.user_profiles as any).rgb_username_expires_at,
+           other_created_at: (other.user_profiles as any).created_at,
            last_message: lastMsg.body,
            last_timestamp: lastMsg.created_at,
            unread_count: 0 // TODO: Implement unread count
@@ -273,9 +275,16 @@ export default function InboxSidebar({
                   
                   <div className="flex-1 min-w-0 pointer-events-none">
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`font-medium truncate ${isActive ? 'text-purple-300' : 'text-gray-200'}`}>
-                        {conv.other_username}
-                      </span>
+                      <div className={`font-medium truncate ${isActive ? 'text-purple-300' : 'text-gray-200'}`}>
+                        <UserNameWithAge 
+                          user={{
+                            username: conv.other_username,
+                            id: conv.other_user_id,
+                            created_at: conv.other_created_at
+                          }}
+                          className="pointer-events-none" // Parent is button
+                        />
+                      </div>
                       {conv.last_timestamp && (
                         <span className="text-[10px] text-gray-500 flex-shrink-0">
                           {new Date(conv.last_timestamp).toLocaleDateString()}

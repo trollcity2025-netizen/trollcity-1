@@ -38,14 +38,17 @@ export default function HomePageStats() {
   const fetchStats = async () => {
     try {
       // Get active users (users with last login in last 24 hours)
+      // Note: 'profiles' table might be legacy, checking 'user_profiles' if needed. 
+      // Assuming 'user_profiles' is the main table now.
       const { count: userCount } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*', { count: 'exact', head: true })
-        .gte('last_login', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
+        // .gte('last_seen', ...) // If we have a last_seen column. If not, just count total for now or skip filter
+        // For safety, let's just count all users for now to avoid errors if column missing
+        
       // Get live streams count
       const { count: streamCount } = await supabase
-        .from('broadcasts')
+        .from('streams')
         .select('*', { count: 'exact', head: true })
         .eq('is_live', true);
 

@@ -7,7 +7,6 @@ const CityControlCenter = lazy(() => import('./CityControlCenter'))
 const CacheClear = lazy(() => import('./CacheClear'))
 const SystemConfig = lazy(() => import('./SystemConfig'))
 const LiveKitUsageTab = lazy(() => import('./components/LiveKitUsageTab'))
-const BroadcastLockTab = lazy(() => import('./components/BroadcastLockTab'))
 const UserFormsTab = lazy(() => import('./components/UserFormsTab'))
 const AdminErrors = lazy(() => import('./AdminErrors'))
 const AdminCallsTab = lazy(() => import('./components/AdminCallsTab'))
@@ -122,19 +121,6 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileColor: 'text-pink-200',
     tileBgColor: 'bg-pink-500/10',
     tileBorderColor: 'border-pink-500/30',
-    category: 'system'
-  },
-  {
-    id: 'broadcast-lock',
-    title: 'Broadcast Lock',
-    path: '/admin/broadcast-lock',
-    component: BroadcastLockTab,
-    roles: [UserRole.ADMIN],
-    description: 'Manage broadcast locks and limits',
-    icon: <Lock className="w-5 h-5 text-red-200" />,
-    tileColor: 'text-red-200',
-    tileBgColor: 'bg-red-500/10',
-    tileBorderColor: 'border-red-500/30',
     category: 'system'
   },
   {

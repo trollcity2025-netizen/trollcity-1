@@ -17,6 +17,7 @@ export interface WallPost {
   is_admin?: boolean
   is_troll_officer?: boolean
   is_og_user?: boolean
+  user_created_at?: string
   is_pinned?: boolean
   post_type: WallPostType
   content: string

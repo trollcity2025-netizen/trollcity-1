@@ -12,6 +12,7 @@ import CreatePostModal from '../components/trollWall/CreatePostModal'
 import GiftModal from '../components/trollWall/GiftModal'
 import DailyLoginWall from '../components/trollWall/DailyLoginWall'
 import ClickableUsername from '../components/ClickableUsername'
+import UserNameWithAge from '../components/UserNameWithAge'
 
 // Available reactions
 const REACTIONS = [
@@ -59,7 +60,7 @@ export default function TrollCityWall() {
     try {
       const { data, error } = await supabase
         .from('troll_wall_posts')
-        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user)')
+        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user, created_at)')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(100)
@@ -134,6 +135,7 @@ export default function TrollCityWall() {
             is_admin: profile.is_admin,
             is_troll_officer: profile.is_troll_officer,
             is_og_user: profile.is_og_user,
+            user_created_at: profile.created_at,
             user_liked: likedPostIds.has(post.id),
             user_reaction: userReactionTypes[post.id],
             reactions: reactionsSummary[post.id] || {},
@@ -499,7 +501,17 @@ export default function TrollCityWall() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       {post.username ? (
-                        <ClickableUsername username={post.username} userId={post.user_id} className="font-semibold text-white hover:text-purple-400" />
+                        <UserNameWithAge 
+                          user={{
+                            username: post.username, 
+                            id: post.user_id,
+                            is_admin: post.is_admin,
+                            is_troll_officer: post.is_troll_officer,
+                            is_og_user: post.is_og_user,
+                            created_at: post.user_created_at
+                          }}
+                          className="font-semibold text-white hover:text-purple-400" 
+                        />
                       ) : (
                         <span className="font-semibold text-gray-500">Deleted User</span>
                       )}

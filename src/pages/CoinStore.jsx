@@ -9,6 +9,7 @@ import { useAllCreditScores } from '../lib/hooks/useAllCreditScores';
 // import { toast } from 'sonner';
 import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatCoins, COIN_PACKAGES } from '../lib/coinMath';
+import { ENTRANCE_EFFECTS_DATA } from '../lib/entranceEffects';
 import { deductCoins } from '@/lib/coinTransactions';
 import { useLiveContextStore } from '../lib/liveContextStore';
 import { useCheckOfficerOnboarding } from '@/hooks/useCheckOfficerOnboarding';
@@ -23,15 +24,7 @@ const coinPackages = COIN_PACKAGES.map(p => ({
   price: p.priceDisplay // Map priceDisplay to price for backward compatibility with this component's expectations (string with $)
 }));
 
-const SAMPLE_EFFECTS = [
-  { id: 'effect_confetti_pop', name: 'Confetti Pop', description: 'Confetti burst', coin_cost: 1000 },
-  { id: 'effect_neon_flash', name: 'Neon Flash', description: 'Quick neon glow wave', coin_cost: 1500 },
-  { id: 'effect_smoke_drift', name: 'Smoke Drift', description: 'Soft fog trail', coin_cost: 2000 },
-  { id: 'effect_glitter_steps', name: 'Glitter Steps', description: 'Glitter trail follows', coin_cost: 2500 },
-  { id: 'effect_pixel_burst', name: 'Pixel Burst', description: 'Retro pixel explosion', coin_cost: 3000 },
-  { id: 'effect_bubble_bounce', name: 'Bubble Bounce', description: 'Floating bubble pops', coin_cost: 3500 },
-  { id: 'effect_snowfall_drop', name: 'Snowfall Drop', description: 'Snowflakes fall briefly', coin_cost: 4000 },
-];
+const SAMPLE_EFFECTS = ENTRANCE_EFFECTS_DATA;
 
 const SAMPLE_PERKS = [
   { id: 'perk_rgb_username', name: 'RGB Username (24h)', description: 'Rainbow glow visible to everyone', cost: 450, duration_minutes: 24 * 60, perk_type: 'cosmetic' },
@@ -183,6 +176,7 @@ export default function CoinStore() {
   const [loadingPay, setLoadingPay] = useState(false);
   const [durationMultiplier, setDurationMultiplier] = useState(1);
   const [effects, setEffects] = useState([]);
+  const [selectedEffectCategory, setSelectedEffectCategory] = useState('All');
   const [perks, setPerks] = useState([]);
   const [plans, setPlans] = useState([]);
   const [broadcastThemes, setBroadcastThemes] = useState([]);
@@ -1598,16 +1592,66 @@ export default function CoinStore() {
                      {effectsNote}
                    </div>
                 )}
+
+                {/* Category Filter */}
+                <div className="mb-6 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-purple-600 scrollbar-track-zinc-800">
+                  <div className="flex gap-2">
+                    {['All', ...new Set(effects.map(e => e.category || 'Other').filter(Boolean))].map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedEffectCategory(cat)}
+                        className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
+                          selectedEffectCategory === cat 
+                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
+                            : 'bg-zinc-800 text-gray-400 hover:bg-zinc-700 hover:text-gray-200'
+                        }`}
+                      >
+                        {cat === 'female_style' ? 'Female Style' :
+                         cat === 'male_style' ? 'Male Style' :
+                         cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {effects.map((effect) => (
-                    <div key={effect.id} className="bg-black/40 p-4 rounded-lg border border-purple-500/20">
-                      <div className="font-semibold text-lg">{effect.name}</div>
-                      <div className="text-sm text-gray-400 mb-2">{effect.description}</div>
-                      <div className="flex justify-between items-center mt-4">
-                        <span className="text-yellow-400 font-bold">{formatCoins(effect.price_troll_coins || effect.coin_cost)}</span>
+                  {effects
+                    .filter(e => selectedEffectCategory === 'All' || (e.category || 'Other') === selectedEffectCategory)
+                    .map((effect) => (
+                    <div key={effect.id} className={`bg-black/40 p-4 rounded-lg border ${
+                        effect.rarity === 'legendary' ? 'border-yellow-500/40 shadow-[0_0_15px_rgba(234,179,8,0.1)]' :
+                        effect.rarity === 'epic' ? 'border-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.1)]' :
+                        effect.rarity === 'rare' ? 'border-blue-500/40' :
+                        'border-purple-500/20'
+                    } hover:border-purple-500/60 transition-all`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-semibold text-lg flex items-center gap-2">
+                           {effect.icon && <span className="text-2xl">{effect.icon}</span>}
+                           {effect.name}
+                        </div>
+                        {effect.rarity && (
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                                effect.rarity === 'legendary' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+                                effect.rarity === 'epic' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' :
+                                effect.rarity === 'rare' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                                'bg-gray-500/20 text-gray-300 border border-gray-500/30'
+                            }`}>
+                                {effect.rarity}
+                            </span>
+                        )}
+                      </div>
+                      
+                      <div className="text-sm text-gray-400 mb-2 min-h-[40px]">{effect.description}</div>
+                      
+                      <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
+                        <span className="text-yellow-400 font-bold text-lg">{formatCoins(effect.price_troll_coins || effect.coin_cost)}</span>
                         <button
                           onClick={() => buyEffect(effect)}
-                          className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm font-semibold"
+                          className={`px-4 py-1.5 rounded text-sm font-bold shadow-lg transition-transform active:scale-95 ${
+                              effect.rarity === 'legendary' ? 'bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black' :
+                              effect.rarity === 'epic' ? 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white' :
+                              'bg-purple-600 hover:bg-purple-700 text-white'
+                          }`}
                         >
                           Buy
                         </button>

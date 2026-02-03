@@ -37,14 +37,14 @@ export function useGiftSystem(
       .replace(/^_+|_+$/g, '') || 'gift'
   }
 
-  const sendGift = async (gift: GiftItem): Promise<boolean | { success: boolean; bonus?: any }> => {
+  const sendGift = async (gift: GiftItem, overrideReceiverId?: string): Promise<boolean | { success: boolean; bonus?: any }> => {
     if (!user || !profile) { 
       toast.error('You must be logged in to send gifts.')
       return false 
     }
 
     // Use receiverId if provided, otherwise fallback to streamerId
-    const targetReceiverId = receiverId || streamerId
+    const targetReceiverId = overrideReceiverId || receiverId || streamerId
 
     // Validate balance based on gift type (paid or free)
     const balance = gift.type === 'paid' 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../lib/store";
 import { toast } from "sonner";
-import ClickableUsername from "../components/ClickableUsername";
+import UserNameWithAge from "../components/UserNameWithAge";
 
 interface Comment {
   id: string;
@@ -11,6 +11,7 @@ interface Comment {
   user_profiles?: {
     username: string;
     avatar_url: string | null;
+    created_at?: string;
   }[];
 }
 
@@ -36,7 +37,8 @@ const ReelComments: React.FC<ReelCommentsProps> = ({ postId, isVisible, onClose 
           created_at,
           user_profiles!user_id (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `)
         .eq("post_id", postId)
@@ -74,7 +76,8 @@ const ReelComments: React.FC<ReelCommentsProps> = ({ postId, isVisible, onClose 
           created_at,
           user_profiles!user_id (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `)
         .single();
@@ -126,8 +129,12 @@ const ReelComments: React.FC<ReelCommentsProps> = ({ postId, isVisible, onClose 
               />
               <div className="flex-1">
                 <div className="flex items-center space-x-2">
-                  <ClickableUsername
-                    username={comment.user_profiles?.[0]?.username || "Unknown"}
+                  <UserNameWithAge
+                    user={{
+                      username: comment.user_profiles?.[0]?.username || "Unknown",
+                      id: comment.user_profiles?.[0]?.username || "unknown", // Fallback ID if missing
+                      created_at: comment.user_profiles?.[0]?.created_at
+                    }}
                     className="font-semibold text-sm text-white"
                   />
                   <span className="text-xs text-gray-400">

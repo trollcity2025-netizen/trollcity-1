@@ -6,6 +6,7 @@ import { useAuthStore } from '../lib/store'
 import { supabase, searchUsers } from '../lib/supabase'
 import { toast } from 'sonner'
 import ClickableUsername from './ClickableUsername'
+import UserNameWithAge from './UserNameWithAge'
 import ProfileDropdown from './ui/ProfileDropdown'
 
 const Header = () => {
@@ -37,11 +38,15 @@ const Header = () => {
       if (query.length < 2) return // Wait for 2 chars
 
       try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url')
-            .ilike('username', `%${query}%`)
-            .limit(10)
+          // Search by first 4 characters of username
+          const searchQuery = query.substring(0, 4).toLowerCase()
+        
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('id, username, avatar_url, rgb_username_expires_at, created_at')
+            .ilike('username', `${searchQuery}%`)
+            .limit(20)
+            .order('created_at', { ascending: false })
           
           if (data) {
               setSearchResults(data)
@@ -333,10 +338,13 @@ const Header = () => {
                         alt={user.username}
                         className="w-10 h-10 rounded-full border border-purple-500"
                       />
-                      <ClickableUsername
-                        username={user.username}
-                        userId={user.id}
-                        profile={user}
+                      <UserNameWithAge
+                        user={{
+                          username: user.username,
+                          id: user.id,
+                          created_at: user.created_at,
+                          rgb_username_expires_at: user.rgb_username_expires_at
+                        }}
                         className="text-white hover:text-purple-400"
                       />
                     </div>

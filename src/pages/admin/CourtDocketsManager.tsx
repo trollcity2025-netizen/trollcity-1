@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { Gavel, Calendar, Users, AlertCircle, Plus, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../lib/store'
+import UserNameWithAge from '../../components/UserNameWithAge'
 
 export default function CourtDocketsManager() {
   const { user } = useAuthStore()
@@ -72,8 +73,8 @@ export default function CourtDocketsManager() {
       .from('court_cases')
       .select(`
         *,
-        defendant:defendant_id(username, avatar_url),
-        plaintiff:plaintiff_id(username)
+        defendant:defendant_id(id, username, avatar_url, created_at),
+        plaintiff:plaintiff_id(id, username, created_at)
       `)
       .eq('docket_id', docketId)
       .order('created_at', { ascending: false })
@@ -86,7 +87,7 @@ export default function CourtDocketsManager() {
       .from('court_cases')
       .select(`
         *,
-        defendant:defendant_id(username, avatar_url)
+        defendant:defendant_id(id, username, avatar_url, created_at)
       `)
       .eq('warrant_active', true)
       .order('created_at', { ascending: false })
@@ -174,7 +175,15 @@ export default function CourtDocketsManager() {
             {warrants.map(w => (
               <div key={w.id} className="bg-black/40 border border-red-500/20 rounded-lg p-4 flex items-center justify-between">
                 <div>
-                  <div className="font-bold text-white">{w.defendant?.username || 'Unknown'}</div>
+                  <div className="font-bold text-white">
+                    <UserNameWithAge 
+                      user={{
+                        username: w.defendant?.username || 'Unknown',
+                        created_at: w.defendant?.created_at,
+                        id: w.defendant?.id
+                      }}
+                    />
+                  </div>
                   <div className="text-xs text-red-300 mt-1">{w.reason}</div>
                   <div className="text-xs text-gray-500 mt-2">Issued: {new Date(w.created_at).toLocaleDateString()}</div>
                 </div>
@@ -268,8 +277,16 @@ export default function CourtDocketsManager() {
                            <img src={c.defendant?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.defendant?.username}`} alt="" />
                         </div>
                         <div>
-                          <div className="font-bold text-white">{c.defendant?.username}</div>
-                          <div className="text-xs text-gray-400">Summoned by {c.plaintiff?.username}</div>
+                          <div className="font-bold text-white">
+                            <UserNameWithAge 
+                              user={{
+                                username: c.defendant?.username,
+                                created_at: c.defendant?.created_at,
+                                id: c.defendant?.id
+                              }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-400">Summoned by <UserNameWithAge user={{ username: c.plaintiff?.username, created_at: c.plaintiff?.created_at, id: c.plaintiff?.id }} /></div>
                         </div>
                       </div>
                       <div className={`text-xs px-2 py-1 rounded font-bold uppercase ${

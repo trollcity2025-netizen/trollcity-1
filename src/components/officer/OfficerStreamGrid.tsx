@@ -36,8 +36,7 @@ export default function OfficerStreamGrid() {
           *,
           broadcaster:user_profiles!broadcaster_id(username, avatar_url)
         `)
-        .eq('is_live', true)
-        .eq('status', 'live')
+        .or('is_live.eq.true,status.eq.live')
         .order('current_viewers', { ascending: false });
 
       if (error) throw error;

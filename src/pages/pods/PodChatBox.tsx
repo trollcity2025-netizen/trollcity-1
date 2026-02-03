@@ -4,6 +4,8 @@ import { supabase } from "../../lib/supabase";
 import { toast } from "sonner";
 import { useAuthStore } from "../../lib/store";
 
+import UserNameWithAge from "../../components/UserNameWithAge";
+
 interface PodChatBoxProps {
   roomId: string;
   isHost: boolean;
@@ -18,6 +20,7 @@ interface Message {
   user?: {
     username: string;
     avatar_url: string;
+    created_at?: string;
   };
 }
 
@@ -44,7 +47,7 @@ export default function PodChatBox({ roomId, isHost, currentUserId }: PodChatBox
         const userIds = [...new Set(msgs.map(m => m.user_id))];
         const { data: profiles } = await supabase
           .from('user_profiles')
-          .select('id, username, avatar_url')
+          .select('id, username, avatar_url, created_at')
           .in('id', userIds);
 
         const msgsWithUsers = msgs.map(m => ({
@@ -105,7 +108,8 @@ export default function PodChatBox({ roomId, isHost, currentUserId }: PodChatBox
         created_at: new Date().toISOString(),
         user: profile ? {
             username: profile.username,
-            avatar_url: profile.avatar_url || ''
+            avatar_url: profile.avatar_url || '',
+            created_at: profile.created_at
         } : undefined
     };
 
@@ -193,9 +197,18 @@ export default function PodChatBox({ roomId, isHost, currentUserId }: PodChatBox
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-purple-300 truncate">
-                  {msg.user?.username || 'Unknown'}
-                </span>
+                {msg.user ? (
+                  <UserNameWithAge 
+                    user={{
+                      username: msg.user.username,
+                      id: msg.user_id,
+                      created_at: msg.user.created_at
+                    }}
+                    className="text-sm font-bold text-purple-300 truncate"
+                  />
+                ) : (
+                  <span className="text-sm font-bold text-purple-300 truncate">Unknown</span>
+                )}
                 <span className="text-[10px] text-white/30">
                   {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { X, Search } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
-import ClickableUsername from '../../../components/ClickableUsername'
+import UserNameWithAge from '../../../components/UserNameWithAge'
 
 interface NewMessageModalProps {
   isOpen: boolean
@@ -24,7 +24,7 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }: NewMe
       // For now, let's just fetch some random users or top users
       const { data } = await supabase
         .from('user_profiles')
-        .select('id, username, avatar_url, role')
+        .select('id, username, avatar_url, role, created_at')
         .neq('id', user.id)
         .limit(5)
       
@@ -47,7 +47,7 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }: NewMe
     try {
       const { data } = await supabase
         .from('user_profiles')
-        .select('id, username, avatar_url, role, rgb_username_expires_at')
+        .select('id, username, avatar_url, role, rgb_username_expires_at, created_at')
         .ilike('username', `%${query}%`)
         .neq('id', user?.id)
         .limit(10)
@@ -117,11 +117,13 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }: NewMe
                   />
                   <div>
                     <div className="font-medium text-white flex items-center gap-2">
-                      <ClickableUsername 
-                        username={result.username} 
-                        userId={result.id} 
-                        profile={{ rgb_username_expires_at: result.rgb_username_expires_at }}
+                      <UserNameWithAge 
+                        user={{
+                          ...result,
+                          username: result.username,
+                        }}
                         className="pointer-events-none" // Disable link since the whole row is clickable
+                        showBadges={true}
                       />
                       {result.role === 'admin' && (
                         <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30">
@@ -151,7 +153,16 @@ export default function NewMessageModal({ isOpen, onClose, onSelectUser }: NewMe
                     alt={result.username}
                     className="w-10 h-10 rounded-full border border-purple-500/20"
                   />
-                  <span className="font-medium text-white">{result.username}</span>
+                  <UserNameWithAge 
+                    user={{
+                        username: result.username,
+                        id: result.id,
+                        created_at: result.created_at,
+                        role: result.role
+                    }}
+                    className="font-medium text-white pointer-events-none"
+                    showBadges={true}
+                  />
                 </button>
               ))}
             </div>

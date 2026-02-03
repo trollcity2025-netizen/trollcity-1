@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../lib/store";
 import { toast } from "sonner";
 import { X, Send } from "lucide-react";
-import ClickableUsername from "./ClickableUsername";
+import UserNameWithAge from "./UserNameWithAge";
 
 interface TrollComment {
   id: string;
@@ -14,6 +14,7 @@ interface TrollComment {
   user_profiles?: {
     username: string;
     avatar_url: string | null;
+    created_at?: string;
   }[];
 }
 
@@ -47,7 +48,8 @@ const ReelCommentsOverlay: React.FC<ReelCommentsOverlayProps> = ({
           created_at,
           user_profiles!user_id (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `
         )
@@ -172,8 +174,12 @@ const ReelCommentsOverlay: React.FC<ReelCommentsOverlayProps> = ({
             />
             <div className="flex-1">
               <div className="flex items-center space-x-1">
-                <ClickableUsername
-                  username={c.user_profiles?.[0]?.username || "Unknown"}
+                <UserNameWithAge
+                  user={{
+                    username: c.user_profiles?.[0]?.username || "Unknown",
+                    id: c.user_id,
+                    created_at: c.user_profiles?.[0]?.created_at
+                  }}
                   className="font-semibold text-[11px] text-troll-purple"
                 />
                 <span className="text-[10px] text-gray-500">

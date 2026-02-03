@@ -33,7 +33,8 @@ export default function ParticipantsList({ tournamentId }: ParticipantsListProps
           *,
           user_profiles:user_id (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `)
         .eq('tournament_id', tournamentId)
@@ -108,7 +109,14 @@ export default function ParticipantsList({ tournamentId }: ParticipantsListProps
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-white truncate text-lg group-hover:text-purple-300 transition-colors">{p.user_profile?.username || 'Unknown User'}</div>
+                  <UserNameWithAge 
+                    user={{
+                      username: p.user_profile?.username || 'Unknown User',
+                      id: p.user_id,
+                      created_at: (p.user_profile as any)?.created_at
+                    }}
+                    className="font-bold text-white truncate text-lg group-hover:text-purple-300 transition-colors"
+                  />
                   <div className="text-xs text-gray-400 flex gap-2 items-center mt-1">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${p.status === 'active' ? 'bg-green-500/10 text-green-400 border border-green-500/20 shadow-[0_0_5px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                       {(p.status || 'Active')}

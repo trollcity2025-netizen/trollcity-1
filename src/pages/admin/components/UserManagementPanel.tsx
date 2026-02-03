@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { toast } from 'sonner'
 import { User, Coins, Award, Shield, Save, X, Search } from 'lucide-react'
-import ClickableUsername from '../../../components/ClickableUsername'
+import UserNameWithAge from '../../../components/UserNameWithAge'
 import UserDetailsModal from '../../../components/admin/UserDetailsModal'
 
 interface UserProfile {
@@ -297,18 +297,17 @@ export default function UserManagementPanel({
                 >
                   <td className="py-3">
                     {canViewDetails ? (
-                      <button
-                        onClick={() => setViewingUser({ id: user.id, username: user.username })}
+                      <UserNameWithAge
+                        user={user}
                         className="text-white hover:text-purple-400 font-medium underline transition-colors"
-                      >
-                        {user.username}
-                      </button>
+                        onClick={() => setViewingUser({ id: user.id, username: user.username })}
+                        showBadges={false}
+                      />
                     ) : (
-                      <ClickableUsername
-                        username={user.username}
-                        userId={user.id}
-                        profile={user}
+                      <UserNameWithAge
+                        user={user}
                         className="text-white hover:text-purple-400"
+                        showBadges={false}
                       />
                     )}
                   </td>

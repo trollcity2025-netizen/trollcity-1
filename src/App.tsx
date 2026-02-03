@@ -44,6 +44,10 @@ import ExitPage from "./pages/ExitPage";
 
 import TrollBank from "./pages/TrollBank";
 import CityHall from "./pages/CityHall";
+const SetupPage = lazy(() => import("./pages/broadcast/SetupPage"));
+const BroadcastPage = lazy(() => import("./pages/broadcast/BroadcastPage"));
+const StreamSummary = lazy(() => import("./pages/broadcast/StreamSummary"));
+const BattlePreview = lazy(() => import("./pages/dev/BattlePreview"));
 const LivingPage = lazy(() => import("./pages/LivingPage"));
 const ChurchPage = lazy(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazy(() => import("./pages/church/PastorDashboard"));
@@ -116,18 +120,14 @@ const PayoutStatus = lazy(() => import("./pages/PayoutStatus"));
 const FoundingOfficerTrial = lazy(() => import("./pages/FoundingOfficerTrial"));
 const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
 
-const GoLive = lazy(() => import("./pages/GoLive"));
+
 const JoinPage = lazy(() => import("./pages/Join"));
-const LazyLivePage = lazy(() => import("./pages/LivePage"));
-const BroadcastSummary = lazy(() => import("./pages/BroadcastSummary"));
+const KickFeePage = lazy(() => import("./pages/broadcast/KickFeePage"));
 const KickFee = lazy(() => import("./pages/KickFee"));
 const BanFee = lazy(() => import("./pages/BanFee"));
 const MobileShell = lazy(() => import("./pages/MobileShell"));
 const TrollCourtSession = lazy(() => import("./pages/TrollCourtSession"));
 const TromodyShow = lazy(() => import("./pages/TromodyShow"));
-const TromodyShowBroadcast = lazy(() => import("./pages/TromodyShowBroadcast"));
-const OfficerLoungeStream = lazy(() => import("./pages/OfficerLoungeStream"));
-const StreamPicture = lazy(() => import("./pages/StreamPicture"));
 const Call = lazy(() => import("./pages/Call"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Trollifications = lazy(() => import("./pages/Trollifications"));
@@ -196,9 +196,8 @@ const AdminTrollTownDeeds = lazy(() => import("./pages/admin/AdminTrollTownDeeds
 const LeadOfficerReview = lazy(() => import("./pages/lead-officer/Review"));
 const LeadOfficerDashboard = lazy(() => import("./pages/lead-officer/LeadOfficerDashboard").then(module => ({ default: module.LeadOfficerDashboard })));
 const ShopPartnerPage = lazy(() => import("./pages/ShopPartnerPage"));
-const CommandBattleGoLive = lazy(() => import("./pages/CommandBattleGoLive"));
 const UniverseEventPage = lazy(() => import("./pages/UniverseEventPage"));
-const TrollBattleSetup = lazy(() => import("./pages/TrollBattleSetup"));
+
 const ShopView = lazy(() => import("./pages/ShopView"));
 const CourtRoom = lazy(() => import("./pages/CourtRoom"));
 const InterviewRoom = lazy(() => import("./pages/InterviewRoom"));
@@ -215,7 +214,6 @@ const MediaLibrary = lazy(() => import("./pages/admin/MediaLibrary"));
 const ChatModeration = lazy(() => import("./pages/admin/ChatModeration"));
 const Announcements = lazy(() => import("./pages/admin/Announcements"));
 const SendNotifications = lazy(() => import("./pages/admin/SendNotifications"));
-const BroadcastLockDashboard = lazy(() => import("./pages/admin/components/BroadcastLockDashboard"));
 const ExportData = lazy(() => import("./pages/admin/ExportData"));
 const UserSearch = lazy(() => import("./pages/admin/UserSearch"));
 const ReportsQueue = lazy(() => import("./pages/admin/ReportsQueue"));
@@ -789,6 +787,13 @@ function AppContent() {
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
+                  {/* Broadcast Routes */}
+                  <Route path="/broadcast/setup" element={<SetupPage />} />
+                  <Route path="/broadcast/:id" element={<BroadcastPage />} />
+                  <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
+                  <Route path="/broadcast/summary" element={<StreamSummary />} />
+                  <Route path="/dev/battle" element={<BattlePreview />} />
+
                   <Route path="/mobile" element={<MobileShell />} />
                   <Route path="/live" element={<LandingHome />} />
                   <Route path="/messages" element={<Navigate to="/tcps" replace />} />
@@ -832,34 +837,25 @@ function AppContent() {
                   <Route path="/dev/xp" element={<XPSimulatorPage />} />
                   
                   {/* 🎥 Streaming */}
-                  <Route path="/go-live" element={<GoLive />} />
-                  <Route path="/live/:streamId" element={<LazyLivePage />} />
-                  <Route path="/broadcast/:streamId" element={<Navigate to={`/live/${location.pathname.split('/').pop()}`} replace />} />
-                  <Route path="/watch/:streamId" element={<Navigate to={`/live/${location.pathname.split('/').pop()}`} replace />} />
+
                   <Route path="/join" element={<JoinPage />} />
-                  <Route path="/broadcast" element={<Navigate to="/go-live" replace />} />
-                  <Route path="/broadcast-summary" element={<BroadcastSummary />} />
-                  <Route path="/stream-summary/:streamId" element={<BroadcastSummary />} />
                   <Route path="/kick-fee" element={<KickFee />} />
                   <Route path="/ban-fee" element={<BanFee />} />
                   <Route path="/troll-court/session" element={<TrollCourtSession />} />
                   <Route path="/tromody" element={<TromodyShow />} />
-                  <Route path="/tromody-show/broadcast" element={<TromodyShowBroadcast />} />
                   <Route path="/live/:streamId" element={<Navigate to="/live" replace />} />
                   <Route path="/interview/:sessionId" element={<InterviewRoom />} />
                   <Route path="/stream/:id" element={<Navigate to="/live" replace />} />
                   <Route path="/stream/:streamId" element={<Navigate to="/live" replace />} />
                   <Route path="/stream/:id/summary" element={<Navigate to="/live" replace />} />
                   <Route path="/stream-ended" element={<Navigate to="/live" replace />} />
-                  <Route path="/stream-picture/:streamId" element={<StreamPicture />} />
 
                   {/* ⚖️ Court */}
                   <Route path="/troll-court" element={<TrollCourt />} />
                   <Route path="/court/:courtId" element={<CourtRoom />} />
                    
                   {/* 🎮 Multi-Box Streaming */}
-                  <Route path="/command-battle-go-live" element={<CommandBattleGoLive />} />
-                  <Route path="/troll-battle-setup" element={<TrollBattleSetup />} />
+
                    
                   {/* 👥 Empire Partner Program */}
                   <Route path="/empire-partner" element={<EmpirePartnerDashboard />} />
@@ -964,16 +960,6 @@ function AppContent() {
                     element={
                       <RequireRole roles={[UserRole.TROLL_OFFICER, UserRole.ADMIN]}>
                         <OfficerScheduling />
-                      </RequireRole>
-                    }
-                  />
-                  <Route
-                    path="/officer/stream"
-                    element={
-                      <RequireRole
-                        roles={[UserRole.ADMIN, UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER]}
-                      >
-                        <OfficerLoungeStream />
                       </RequireRole>
                     }
                   />
@@ -1326,14 +1312,7 @@ function AppContent() {
                         </RequireRole>
                       }
                     />
-                    <Route
-                      path="/admin/broadcast-lock"
-                      element={
-                        <RequireRole roles={[UserRole.ADMIN]}>
-                          <BroadcastLockDashboard />
-                        </RequireRole>
-                      }
-                    />
+
                     <Route
                       path="/admin/export-data"
                       element={
@@ -1550,6 +1529,9 @@ function AppContent() {
 function App() {
   useEffect(() => {
     initTelemetry();
+    // Initialize global time updater for account age calculations
+    const cleanup = initTimeUpdater();
+    return cleanup;
   }, []);
 
   return <AppContent />;

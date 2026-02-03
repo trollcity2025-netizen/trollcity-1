@@ -2,7 +2,7 @@ import React from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import DnaProfileCard from '../components/DnaProfileCard'
-import ClickableUsername from '../components/ClickableUsername'
+import UserNameWithAge from '../components/UserNameWithAge'
 import '../styles/dnaEffects.css'
 
 export default function TrollIdentityLab() {
@@ -33,7 +33,7 @@ export default function TrollIdentityLab() {
                 {events.map(e => (
                   <div key={e.id} className="flex items-center justify-between text-sm">
                     <div>
-                      <ClickableUsername username={profile?.username || 'Unknown'} className="text-white" />
+                      <UserNameWithAge user={profile || { username: 'Unknown' }} className="text-white" />
                       {' '}{e.event_type}
                     </div>
                     <div className="text-xs text-gray-400">{new Date(e.created_at).toLocaleString()}</div>

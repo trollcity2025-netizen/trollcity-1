@@ -67,7 +67,7 @@ export default function MobileShell() {
   const profilePath = profile.username ? `/profile/${profile.username}` : '/profile/setup'
 
   return (
-    <div className="min-h-dvh flex flex-col bg-gradient-to-b from-[#05010a] via-[#080316] to-[#05010a] pb-safe">
+    <div className="h-dvh flex flex-col bg-gradient-to-b from-[#05010a] via-[#080316] to-[#05010a] pb-safe">
       <div className="px-4 pt-safe pt-4 pb-3 border-b border-white/10 bg-black/40 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div>

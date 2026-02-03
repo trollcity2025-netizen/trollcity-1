@@ -59,7 +59,7 @@ export default function PublicPool() {
         
         const { data: profiles } = await supabase
           .from('user_profiles')
-          .select('id, username, avatar_url')
+          .select('id, username, avatar_url, created_at')
           .in('id', userIds)
           
         const profileMap = new Map()
@@ -71,7 +71,8 @@ export default function PublicPool() {
         const mappedDonations = donationData.map((d: any) => ({
           ...d,
           username: profileMap.get(d.user_id)?.username,
-          avatar_url: profileMap.get(d.user_id)?.avatar_url
+          avatar_url: profileMap.get(d.user_id)?.avatar_url,
+          user_created_at: profileMap.get(d.user_id)?.created_at
         }))
         donationsTotal = mappedDonations.reduce(
           (sum, d) => sum + Number(d.amount || 0),
@@ -398,9 +399,12 @@ export default function PublicPool() {
                         </div>
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center justify-between">
-                             <ClickableUsername 
-                               userId={d.user_id} 
-                               username={d.username || 'Unknown'} 
+                             <UserNameWithAge
+                               user={{
+                                 username: d.username || 'Unknown',
+                                 created_at: d.user_created_at,
+                                 id: d.user_id
+                               }}
                                className="font-semibold text-sm text-cyan-200" 
                              />
                              <span className="text-yellow-400 font-mono text-sm">+{d.amount.toLocaleString()}</span>

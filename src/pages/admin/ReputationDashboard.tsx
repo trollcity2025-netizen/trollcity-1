@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Star, TrendingUp, TrendingDown, AlertTriangle, Shield, ShoppingBag, Search } from 'lucide-react';
 import { supabase, UserRole } from '../../lib/supabase';
 import RequireRole from '../../components/RequireRole';
-import ClickableUsername from '../../components/ClickableUsername';
+import UserNameWithAge from '../../components/UserNameWithAge';
 
 interface ReputationRecord {
   id: string;
   user_id: string;
-  user?: { username: string; rgb_username_expires_at?: string };
+  user?: { username: string; rgb_username_expires_at?: string; created_at?: string };
   current_score: number;
   lifetime_score: number;
   reputation_tier: string;
@@ -19,7 +19,7 @@ interface ReputationRecord {
 interface OfficerRecord {
   id: string;
   officer_id: string;
-  officer?: { username: string; rgb_username_expires_at?: string };
+  officer?: { username: string; rgb_username_expires_at?: string; created_at?: string };
   current_score: number;
   performance_rating: string;
   cases_handled: number;
@@ -30,7 +30,7 @@ interface OfficerRecord {
 interface SellerRecord {
   id: string;
   seller_id: string;
-  seller?: { username: string; rgb_username_expires_at?: string };
+  seller?: { username: string; rgb_username_expires_at?: string; created_at?: string };
   current_score: number;
   reliability_tier: string;
   orders_fulfilled: number;
@@ -56,7 +56,7 @@ export default function ReputationDashboard() {
           .from('user_reputation')
           .select(`
             *,
-            user:user_profiles(username, rgb_username_expires_at)
+            user:user_profiles(username, rgb_username_expires_at, created_at)
           `)
           .order('current_score', { ascending: false });
 
@@ -66,7 +66,7 @@ export default function ReputationDashboard() {
           .from('officer_performance')
           .select(`
             *,
-            officer:user_profiles(username, rgb_username_expires_at)
+            officer:user_profiles(username, rgb_username_expires_at, created_at)
           `)
           .order('current_score', { ascending: false });
 
@@ -76,7 +76,7 @@ export default function ReputationDashboard() {
           .from('seller_reliability')
           .select(`
             *,
-            seller:user_profiles(username, rgb_username_expires_at)
+            seller:user_profiles(username, rgb_username_expires_at, created_at)
           `)
           .order('current_score', { ascending: false });
 
@@ -264,10 +264,12 @@ export default function ReputationDashboard() {
                   {filteredUsers.map((user) => (
                     <tr key={user.id} className="border-t border-zinc-700">
                       <td className="px-4 py-3">
-                        <ClickableUsername 
-                          username={user.user?.username || 'Unknown'} 
-                          userId={user.user_id} 
-                          profile={user.user ? { id: user.user_id, ...user.user } : undefined}
+                        <UserNameWithAge 
+                          user={{
+                            username: user.user?.username || 'Unknown',
+                            id: user.user_id,
+                            ...user.user
+                          }}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -329,10 +331,13 @@ export default function ReputationDashboard() {
                   {filteredOfficers.map((officer) => (
                     <tr key={officer.id} className="border-t border-zinc-700">
                       <td className="px-4 py-3">
-                        <ClickableUsername 
-                          username={officer.officer?.username || 'Unknown'} 
-                          userId={officer.officer_id}
-                          profile={officer.officer ? { id: officer.officer_id, ...officer.officer } : undefined}
+                        <UserNameWithAge 
+                          user={{
+                            username: officer.officer?.username || 'Unknown',
+                            id: officer.officer_id,
+                            ...officer.officer
+                          }}
+                          showBadges={true}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -377,7 +382,16 @@ export default function ReputationDashboard() {
                 <tbody>
                   {filteredSellers.map((seller) => (
                     <tr key={seller.id} className="border-t border-zinc-700">
-                      <td className="px-4 py-3">{seller.seller?.username || 'Unknown'}</td>
+                      <td className="px-4 py-3">
+                        <UserNameWithAge 
+                          user={{
+                            username: seller.seller?.username || 'Unknown',
+                            id: seller.seller_id,
+                            ...seller.seller
+                          }}
+                          showBadges={true}
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`font-bold ${getScoreColor(seller.current_score)}`}>
                           {seller.current_score}

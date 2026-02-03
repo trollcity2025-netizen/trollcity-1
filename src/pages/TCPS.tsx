@@ -33,6 +33,7 @@ export default function TCPS() {
     id: string
     username: string
     avatar_url: string | null
+    created_at?: string
     is_online?: boolean
   } | null>(null)
   
@@ -54,7 +55,7 @@ export default function TCPS() {
     // Here param is a UUID, not a username
     supabase
       .from('user_profiles')
-      .select('id, username, avatar_url')
+      .select('id, username, avatar_url, created_at')
       .eq('id', param)
       .single()
       .then(({ data }) => {
@@ -64,6 +65,7 @@ export default function TCPS() {
             id: data.id,
             username: data.username,
             avatar_url: data.avatar_url,
+            created_at: data.created_at,
             is_online: onlineUsers[data.id] || false
           })
         }
@@ -169,7 +171,7 @@ export default function TCPS() {
 
     supabase
       .from('user_profiles')
-      .select('id, username, avatar_url')
+      .select('id, username, avatar_url, created_at')
       .eq('id', activeConversation)
       .single()
       .then(({ data }) => {
@@ -178,6 +180,7 @@ export default function TCPS() {
             id: data.id,
             username: data.username,
             avatar_url: data.avatar_url,
+            created_at: data.created_at,
             is_online: onlineUsers[data.id] || false
           })
         }

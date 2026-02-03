@@ -108,7 +108,6 @@ type TabId =
   | 'agreements'
   | 'reports'
   | 'send_notifications'
-  | 'broadcast_lock'
 
 interface CoinTransaction {
   amount: number | null;
@@ -890,9 +889,29 @@ export default function AdminDashboard() {
   }
 
   // New dashboard handlers
-  const handleEmergencyStop = () => {
-    toast.warning('Emergency stop initiated - stopping all streams')
-    // Implement emergency stop logic
+  const handleEmergencyStop = async () => {
+    if (!window.confirm("⚠️ EMERGENCY STOP: This will immediately END ALL active broadcasts.\n\nAre you sure you want to proceed?")) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('streams')
+        .update({
+          status: 'ended',
+          is_live: false,
+          ended_at: new Date().toISOString()
+        })
+        .or('is_live.eq.true,status.eq.live')
+
+      if (error) throw error
+
+      toast.success('Emergency stop executed - All streams ended')
+      loadLiveStreams() // Refresh local state
+    } catch (error) {
+      console.error('Error executing emergency stop:', error)
+      toast.error('Failed to stop streams')
+    }
   }
 
   const handleBroadcastMessage = () => {
@@ -975,7 +994,6 @@ export default function AdminDashboard() {
         export_data: '/admin/export-data',
         support_tickets: '/admin/support-tickets',
         send_notifications: '/admin/send-notifications',
-        broadcast_lock: '/admin/broadcast-lock',
       } as Record<TabId, string>),
     []
   )

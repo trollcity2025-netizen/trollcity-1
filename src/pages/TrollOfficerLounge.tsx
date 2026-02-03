@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { downloadPayrollPDF } from '../lib/officerPayrollPDF'
-import ChatWindow from '../components/stream/ChatWindow'
 import OfficerStreamGrid from '../components/officer/OfficerStreamGrid'
 import {
   Eye,
@@ -680,7 +679,10 @@ export default function TrollOfficerLounge() {
                         <div className="h-40 overflow-y-auto bg-black/50 rounded border border-white/5 p-2 text-xs space-y-1">
                           <div className="text-gray-500 italic">Connecting to chat stream...</div>
                           {selectedStream && (
-                            <ChatWindow streamId={selectedStream.id} />
+                            <div className="text-gray-400 text-xs italic">
+                              Chat history monitoring for {selectedStream.title}
+                              <p className="mt-2 text-[10px] text-gray-500">Live chat integration pending...</p>
+                            </div>
                           )}
                         </div>
                       </div>

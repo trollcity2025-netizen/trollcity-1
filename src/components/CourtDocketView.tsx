@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Gavel } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import ClickableUsername from './ClickableUsername';
+import UserNameWithAge from './UserNameWithAge';
 
 interface DocketEntry {
   id: string;
@@ -41,7 +41,7 @@ const CourtDocketView: React.FC = () => {
       if (officerIds.length > 0) {
          const { data: profileData } = await supabase
            .from('profiles')
-           .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at')
+           .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at, created_at')
            .in('id', officerIds);
          
          const profileMap: Record<string, any> = {};
@@ -172,10 +172,8 @@ const CourtDocketView: React.FC = () => {
                           <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                             Assigned Officer: 
                             {officerProfiles[entry.assigned_officer] ? (
-                              <ClickableUsername 
-                                username={officerProfiles[entry.assigned_officer].username} 
-                                userId={entry.assigned_officer}
-                                profile={officerProfiles[entry.assigned_officer]}
+                              <UserNameWithAge
+                                user={officerProfiles[entry.assigned_officer]}
                               />
                             ) : (
                               entry.assigned_officer

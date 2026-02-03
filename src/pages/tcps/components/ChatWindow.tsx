@@ -3,7 +3,7 @@ import { MoreVertical, Phone, Video, ArrowLeft, Ban, EyeOff, MessageCircle, Chec
 import { supabase, createConversation, getConversationMessages, markConversationRead } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
-import ClickableUsername from '../../../components/ClickableUsername'
+import UserNameWithAge from '../../../components/UserNameWithAge'
 import { toast } from 'sonner'
 import MessageInput from './MessageInput'
 
@@ -13,6 +13,7 @@ interface ChatWindowProps {
     id: string
     username: string
     avatar_url: string | null
+    created_at?: string
     is_online?: boolean
   } | null
   isOnline?: boolean
@@ -29,6 +30,7 @@ interface Message {
   sender_username?: string
   sender_avatar_url?: string | null
   sender_rgb_expires_at?: string | null
+  sender_created_at?: string
   isPending?: boolean
 }
 
@@ -166,7 +168,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
     if (senderIds.length > 0) {
       const { data: usersData } = await supabase
         .from('user_profiles')
-        .select('id,username,avatar_url,rgb_username_expires_at')
+        .select('id,username,avatar_url,rgb_username_expires_at,created_at')
         .in('id', senderIds)
       
       usersData?.forEach(u => {
@@ -183,7 +185,8 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
       read_at: m.read_at,
       sender_username: senderMap[m.sender_id]?.username,
       sender_avatar_url: senderMap[m.sender_id]?.avatar_url,
-      sender_rgb_expires_at: senderMap[m.sender_id]?.rgb_username_expires_at
+      sender_rgb_expires_at: senderMap[m.sender_id]?.rgb_username_expires_at,
+      sender_created_at: senderMap[m.sender_id]?.created_at
     })).reverse()
   }, [])
 
@@ -235,10 +238,11 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
              senderInfo = {
                username: profile?.username || 'You',
                avatar_url: profile?.avatar_url || null,
-               rgb_username_expires_at: profile?.rgb_username_expires_at || null
+               rgb_username_expires_at: profile?.rgb_username_expires_at || null,
+               created_at: profile?.created_at
              }
           } else {
-             const { data } = await supabase.from('user_profiles').select('username,avatar_url,rgb_username_expires_at').eq('id', newMsgRaw.sender_id).single()
+             const { data } = await supabase.from('user_profiles').select('username,avatar_url,rgb_username_expires_at,created_at').eq('id', newMsgRaw.sender_id).single()
              if (data) senderInfo = data as any
           }
 
@@ -251,7 +255,8 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
             read_at: newMsgRaw.read_at,
             sender_username: senderInfo.username,
             sender_avatar_url: senderInfo.avatar_url,
-            sender_rgb_expires_at: senderInfo.rgb_username_expires_at
+            sender_rgb_expires_at: senderInfo.rgb_username_expires_at,
+            sender_created_at: senderInfo.created_at
           }
 
           setMessages(prev => {
@@ -355,6 +360,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
       sender_username: profile?.username,
       sender_avatar_url: profile?.avatar_url,
       sender_rgb_expires_at: profile?.rgb_username_expires_at,
+      sender_created_at: profile?.created_at,
       isPending: true
     }
     setMessages(prev => [...prev, pendingMsg])
@@ -386,8 +392,12 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
           </div>
           
           <div>
-            <ClickableUsername 
-              username={otherUserInfo.username} 
+            <UserNameWithAge 
+              user={{
+                username: otherUserInfo.username,
+                id: otherUserInfo.id,
+                created_at: otherUserInfo.created_at
+              }}
               className="font-bold text-white leading-none hover:text-purple-400 transition-colors block"
             />
             <span className="text-xs text-gray-400">
@@ -473,10 +483,14 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
               
               <div className={`max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                 {!isMe && showAvatar && (
-                   <ClickableUsername 
-                     username={msg.sender_username || ''}
+                   <UserNameWithAge 
+                     user={{
+                       username: msg.sender_username || '',
+                       id: msg.sender_id,
+                       rgb_username_expires_at: msg.sender_rgb_expires_at || undefined,
+                       created_at: msg.sender_created_at
+                     }}
                      className="text-xs text-gray-400 ml-1 hover:text-purple-400"
-                     profile={{ rgb_username_expires_at: msg.sender_rgb_expires_at || undefined }}
                    />
                 )}
                 <div 

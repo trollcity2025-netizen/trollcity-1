@@ -76,7 +76,7 @@ export default function ProfileFeed({ userId }: ProfileFeedProps) {
         .from('troll_posts')
         .select(`
             *,
-            user_profiles (username, avatar_url),
+            user_profiles (username, avatar_url, created_at),
             likes_count: troll_post_reactions(count),
             comments_count: troll_post_comments(count)
         `)

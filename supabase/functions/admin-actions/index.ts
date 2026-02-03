@@ -676,7 +676,9 @@ serve(async (req) => {
             *,
             user_profiles!user_id (
               username,
-              email
+              email,
+              created_at,
+              rgb_username_expires_at
             )
           `)
           .neq('status', 'deleted')
@@ -813,7 +815,7 @@ serve(async (req) => {
         if (officerIds.length > 0) {
             const { data: officers } = await supabaseAdmin
                 .from('user_profiles')
-                .select('id, username, email')
+                .select('id, username, email, created_at')
                 .in('id', officerIds);
             
             officers?.forEach((o: any) => { officerMap[o.id] = o; });

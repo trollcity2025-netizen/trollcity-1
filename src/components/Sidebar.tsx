@@ -296,6 +296,26 @@ export default function Sidebar() {
         {/* Top Broadcasters */}
         <SidebarTopBroadcasters isCollapsed={isSidebarCollapsed} />
 
+        {/* Premium Gold Go Live Button */}
+        <div className={`px-4 mb-2 mt-2 ${isSidebarCollapsed ? 'flex justify-center' : ''}`}>
+          <Link
+            to="/broadcast/setup"
+            className={`
+              relative group flex items-center justify-center gap-2
+              bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600
+              hover:from-yellow-500 hover:via-yellow-300 hover:to-yellow-500
+              text-black font-bold rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.5)]
+              transition-all duration-300 hover:scale-[1.02] border border-yellow-200/50
+              ${isSidebarCollapsed ? 'w-10 h-10 p-0' : 'w-full py-3 px-4'}
+            `}
+          >
+            <Video size={isSidebarCollapsed ? 20 : 20} className="text-black" />
+            {!isSidebarCollapsed && (
+              <span className="uppercase tracking-wide text-sm">Go Live</span>
+            )}
+          </Link>
+        </div>
+
         {/* Main Group */}
         <SidebarGroup title={isSidebarCollapsed ? '' : "City Center"} isCollapsed={isSidebarCollapsed} highlight={isAnyUpdated(mainPaths)}>
           <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} highlight={isUpdated('/')} onClick={() => markAsViewed('/')} />

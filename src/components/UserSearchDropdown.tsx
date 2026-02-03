@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
-import ClickableUsername from './ClickableUsername'
+import UserNameWithAge from './UserNameWithAge'
 
 interface UserSearchDropdownProps {
   query: string
@@ -97,11 +97,10 @@ export default function UserSearchDropdown({ query, onSelect, onClose, disableNa
             alt={user.username}
             className="w-10 h-10 rounded-full border border-purple-500"
           />
-          <ClickableUsername
-            username={user.username}
-            userId={user.id}
-            profile={user}
+          <UserNameWithAge
+            user={user}
             className="text-white hover:text-purple-400"
+            showBadges={true}
           />
         </div>
       ))}

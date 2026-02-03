@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { Users, Crown, UploadCloud, Star } from 'lucide-react'
-import ClickableUsername from '../components/ClickableUsername'
+import UserNameWithAge from '../components/UserNameWithAge'
 
 interface Family {
   id: string
@@ -24,6 +24,7 @@ interface FamilyMember {
     username: string
     avatar_url: string | null
     has_crown_badge: boolean
+    created_at: string
   }
 }
 
@@ -70,10 +71,11 @@ export default function FamilyProfilePage() {
           user_id,
           role,
           contribution_points,
-          user_profiles:user_id (
+          profiles:user_id (
             username,
             avatar_url,
-            has_crown_badge
+            has_crown_badge,
+            created_at
           )
         `
         )
@@ -273,8 +275,13 @@ export default function FamilyProfilePage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2 text-sm">
-                      <ClickableUsername
-                        username={m.profiles?.username || 'Unknown'}
+                      <UserNameWithAge
+                        user={{
+                          username: m.profiles?.username || 'Unknown',
+                          id: m.user_id,
+                          ...m.profiles
+                        }}
+                        showBadges={true}
                         className="font-semibold text-purple-200"
                       />
                       {m.role === 'leader' && (

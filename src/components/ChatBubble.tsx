@@ -3,7 +3,7 @@ import { X, Minus, Check, CheckCheck } from 'lucide-react'
 import { supabase, createConversation, getConversationMessages, markConversationRead } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useChatStore } from '../lib/chatStore'
-import ClickableUsername from './ClickableUsername'
+import UserNameWithAge from './UserNameWithAge'
 import MessageInput from '../pages/tcps/components/MessageInput'
 import { toast } from 'sonner'
 
@@ -17,6 +17,7 @@ interface Message {
   sender_username?: string
   sender_avatar_url?: string | null
   sender_rgb_expires_at?: string | null
+  sender_created_at?: string
   isPending?: boolean
 }
 
@@ -30,6 +31,7 @@ export default function ChatBubble() {
   const [actualConversationId, setActualConversationId] = useState<string | null>(null)
   const [isMinimized, setIsMinimized] = useState(false)
   const [isTyping, _setIsTyping] = useState(false)
+  const [activeUserCreatedAt, setActiveUserCreatedAt] = useState<string | undefined>(undefined)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Audio ref for message sounds
@@ -45,6 +47,18 @@ export default function ChatBubble() {
     if (!isOpen || !user?.id || !activeUserId) return
 
     const initChat = async () => {
+      // Fetch active user's created_at
+      if (activeUserId) {
+        supabase
+          .from('user_profiles')
+          .select('created_at')
+          .eq('id', activeUserId)
+          .single()
+          .then(({ data }) => {
+            if (data) setActiveUserCreatedAt(data.created_at)
+          })
+      }
+
       // Try to find existing conversation
       const { data: existingConvs } = await supabase
         .from('conversation_members')
@@ -101,7 +115,7 @@ export default function ChatBubble() {
     if (senderIds.length > 0) {
       const { data: usersData } = await supabase
         .from('user_profiles')
-        .select('id,username,avatar_url,rgb_username_expires_at')
+        .select('id,username,avatar_url,rgb_username_expires_at,created_at')
         .in('id', senderIds)
       
       usersData?.forEach(u => {
@@ -118,7 +132,8 @@ export default function ChatBubble() {
       read_at: m.read_at,
       sender_username: senderMap[m.sender_id]?.username,
       sender_avatar_url: senderMap[m.sender_id]?.avatar_url,
-      sender_rgb_expires_at: senderMap[m.sender_id]?.rgb_username_expires_at
+      sender_rgb_expires_at: senderMap[m.sender_id]?.rgb_username_expires_at,
+      sender_created_at: senderMap[m.sender_id]?.created_at
     })).reverse()
   }, [])
 
@@ -183,7 +198,7 @@ export default function ChatBubble() {
              // Optional: Background refresh if we really need updated data (e.g. RGB)
              // But for chat bubble speed, this is sufficient.
           } else {
-             const { data } = await supabase.from('user_profiles').select('username,avatar_url,rgb_username_expires_at').eq('id', newMsgRaw.sender_id).single()
+             const { data } = await supabase.from('user_profiles').select('username,avatar_url,rgb_username_expires_at,created_at').eq('id', newMsgRaw.sender_id).single()
              if (data) senderInfo = data as any
           }
 
@@ -347,8 +362,11 @@ export default function ChatBubble() {
           </div>
           <div>
             {activeUsername && (
-              <ClickableUsername 
-                username={activeUsername} 
+              <UserNameWithAge
+                user={{
+                  username: activeUsername,
+                  created_at: activeUserCreatedAt
+                }}
                 className="font-bold text-white hover:text-purple-400 transition-colors text-sm"
               />
             )}
@@ -406,10 +424,14 @@ export default function ChatBubble() {
                 <div className={`max-w-[75%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                   <div className="flex items-center gap-2">
                     {!isMe && msg.sender_username && (
-                       <ClickableUsername 
-                         username={msg.sender_username}
+                       <UserNameWithAge 
+                         user={{
+                           username: msg.sender_username,
+                           id: msg.sender_id,
+                           rgb_username_expires_at: msg.sender_rgb_expires_at || undefined,
+                           created_at: msg.sender_created_at
+                         }}
                          className="text-xs font-bold text-gray-400 hover:text-purple-400"
-                         profile={{ rgb_username_expires_at: msg.sender_rgb_expires_at || undefined }}
                        />
                     )}
                     <span className="text-[10px] text-gray-600">

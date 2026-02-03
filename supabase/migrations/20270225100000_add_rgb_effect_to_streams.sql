@@ -1,0 +1,3 @@
+
+ALTER TABLE public.streams 
+ADD COLUMN IF NOT EXISTS has_rgb_effect BOOLEAN DEFAULT FALSE;

@@ -34,6 +34,7 @@ interface ClickableUsernameProps {
   } | null
   userId?: string // Optional: if provided, will fetch profile
   isBroadcaster?: boolean
+  isModerator?: boolean // Stream moderator
   streamId?: string
 }
 
@@ -46,6 +47,7 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
   royalTitle,
   userId,
   isBroadcaster,
+  isModerator,
   streamId
 }) => {
   const navigate = useNavigate()
@@ -64,7 +66,7 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
                  currentUserProfile?.role === 'admin' || 
                  currentUserProfile?.role === 'troll_officer'
 
-  const canModerate = (isStaff || (isBroadcaster && streamId)) && currentUser?.id !== targetUserId
+  const canModerate = (isStaff || ((isBroadcaster || isModerator) && streamId)) && currentUser?.id !== targetUserId
 
   useEffect(() => {
     if (!targetUserId || !usernameRef.current) {
@@ -188,15 +190,23 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
 
        case 'stream_kick': {
             if (!streamId) return;
-            try {
-                const { error } = await supabase
-                   .from('streams_participants')
-                   .update({ is_active: false })
-                   .eq('stream_id', streamId)
-                   .eq('user_id', targetUserId);
+            if (!confirm("Kick this user for 100 coins? They will be removed for 24h unless they pay the fee.")) return;
 
-                if (error) throw error
-                toast.success(`User ${username} kicked from stream`)
+            try {
+                // Use the new paid kick RPC
+                const { data, error } = await supabase.rpc('kick_user_paid', { 
+                    p_stream_id: streamId, 
+                    p_target_user_id: targetUserId,
+                    p_kicker_id: currentUser?.id 
+                });
+
+                if (error) throw error;
+                
+                if (data && !data.success) {
+                    toast.error(data.message || "Failed to kick user");
+                } else {
+                    toast.success("User kicked (100 coins deducted)");
+                }
             } catch (err: any) {
                 console.error('Error kicking user from stream:', err)
                 toast.error('Failed to kick user')

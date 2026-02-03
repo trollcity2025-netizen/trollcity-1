@@ -9,8 +9,8 @@ import {
   X, 
   AlertTriangle
 } from 'lucide-react'
-import ClickableUsername from '../../../components/ClickableUsername'
-import BroadcastLockdownToggle from '../../../components/admin/BroadcastLockdownToggle'
+import UserNameWithAge from '../../../components/UserNameWithAge'
+
 
 export default function AdminControlPanel() {
   const { user, profile, refreshProfile } = useAuthStore()
@@ -22,6 +22,7 @@ export default function AdminControlPanel() {
     troll_coins?: number
     role?: string
     rgb_username_expires_at?: string
+    created_at?: string
   }>>([])
   const [selectedUser, setSelectedUser] = useState<{ 
     id: string
@@ -30,6 +31,7 @@ export default function AdminControlPanel() {
     troll_coins?: number
     role?: string
     rgb_username_expires_at?: string
+    created_at?: string
   } | null>(null)
   const [level, setLevel] = useState(1)
   const [message, setMessage] = useState('')
@@ -51,7 +53,7 @@ export default function AdminControlPanel() {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, username, email, troll_coins, role, rgb_username_expires_at')
+        .select('id, username, email, troll_coins, role, rgb_username_expires_at, created_at')
         .ilike('username', `%${searchTerm}%`)
         .limit(20)
         .order('username', { ascending: true })
@@ -269,7 +271,13 @@ export default function AdminControlPanel() {
                 <User className="w-5 h-5 text-purple-400" />
                 <div>
                   <div className="font-semibold flex items-center gap-2">
-                    <ClickableUsername userId={selectedUser.id} username={selectedUser.username} />
+                    <UserNameWithAge 
+                      user={{
+                        id: selectedUser.id,
+                        username: selectedUser.username,
+                        created_at: selectedUser.created_at
+                      }}
+                    />
                     {selectedUser.role && (
                       <span className="text-xs px-2 py-0.5 bg-purple-500/30 rounded text-purple-300">
                         {selectedUser.role}
@@ -321,7 +329,8 @@ export default function AdminControlPanel() {
                           email: u.email,
                           troll_coins: u.troll_coins || 0,
                           role: u.role,
-                          rgb_username_expires_at: u.rgb_username_expires_at
+                          rgb_username_expires_at: u.rgb_username_expires_at,
+                          created_at: u.created_at
                         })
                         setSearchResults([])
                         setSearchUsername('')
@@ -333,9 +342,13 @@ export default function AdminControlPanel() {
                           <User className="w-4 h-4 text-gray-400" />
                           <div>
                             <div className="font-semibold flex items-center gap-2">
-                              <span className={u.rgb_username_expires_at && new Date(u.rgb_username_expires_at) > new Date() ? 'rgb-username' : ''}>
-                                {u.username}
-                              </span>
+                              <UserNameWithAge 
+                                user={{
+                                  username: u.username,
+                                  created_at: u.created_at
+                                }}
+                                className={u.rgb_username_expires_at && new Date(u.rgb_username_expires_at) > new Date() ? 'rgb-username' : ''}
+                              />
                               {u.role && (
                                 <span className="text-xs px-1.5 py-0.5 bg-purple-500/30 rounded text-purple-300">
                                   {u.role}

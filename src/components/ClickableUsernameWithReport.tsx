@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import ClickableUsername from './ClickableUsername'
+import UserNameWithAge from './UserNameWithAge'
 import ReportModal from './ReportModal'
 import { useAuthStore } from '../lib/store'
 
@@ -18,6 +18,7 @@ interface ClickableUsernameWithReportProps {
     officer_level?: number
     troller_level?: number
     role?: string
+    created_at?: string
   }
 }
 
@@ -35,15 +36,19 @@ const ClickableUsernameWithReport: React.FC<ClickableUsernameWithReportProps> = 
   // Don't show report button if user is reporting themselves
   const canReport = user && userId && user.id !== userId
 
+  // Construct user object for UserNameWithAge
+  const userForAge = {
+    username,
+    ...profile
+  }
+
   return (
     <>
       <div className="relative inline-block">
-        <ClickableUsername
-          username={username}
-          userId={userId}
+        <UserNameWithAge
+          user={userForAge}
           className={className}
           prefix={prefix}
-          profile={profile}
           onClick={() => setShowMenu(!showMenu)}
         />
         {canReport && showMenu && (

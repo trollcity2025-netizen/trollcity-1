@@ -24,7 +24,8 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
           *,
           user_profiles:user_id (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `)
         .eq('tournament_id', tournamentId)
@@ -109,9 +110,14 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
 
                 <div className="flex-1 min-w-0 relative z-10">
                   <div className="flex items-center gap-2">
-                    <span className={`font-bold truncate text-lg ${isMe ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-white' : 'text-gray-200 group-hover:text-white transition-colors'}`}>
-                      {p.user_profile?.username || 'Unknown User'}
-                    </span>
+                    <UserNameWithAge 
+                      user={{
+                         username: p.user_profile?.username || 'Unknown User',
+                         id: p.user_id,
+                         created_at: p.user_profile?.created_at
+                      }}
+                      className={`font-bold truncate text-lg ${isMe ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-white' : 'text-gray-200 group-hover:text-white transition-colors'}`}
+                    />
                     {isMe && (
                       <span className="text-[10px] bg-purple-500 text-white px-2 py-0.5 rounded-full font-bold shadow-[0_0_10px_rgba(168,85,247,0.4)] tracking-wider">
                         YOU

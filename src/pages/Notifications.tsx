@@ -147,12 +147,12 @@ export default function Notifications() {
     try {
       await supabase
         .from('notifications')
-        .update({ is_dismissed: true, dismissed_at: new Date().toISOString() })
+        .delete()
         .eq('id', id)
       setNotifications(prev => prev.filter(n => n.id !== id))
-      toast.success('Notification dismissed')
+      toast.success('Notification deleted')
     } catch {
-      toast.error('Failed to dismiss notification')
+      toast.error('Failed to delete notification')
     }
   }
   
@@ -163,9 +163,8 @@ export default function Notifications() {
       
       const { error } = await supabase
         .from('notifications')
-        .update({ is_dismissed: true, dismissed_at: new Date().toISOString() })
+        .delete()
         .eq('user_id', profile.id)
-        .eq('is_dismissed', false)
 
       if (error) throw error
 

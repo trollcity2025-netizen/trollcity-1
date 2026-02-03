@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { trollCityTheme } from '../styles/trollCityTheme';
-import { Play, Users, Eye, Radio } from 'lucide-react';
+import UserNameWithAge from '../components/UserNameWithAge';
 import { toast } from 'sonner';
 
 interface Broadcast {
@@ -17,6 +17,7 @@ interface Broadcast {
     username: string;
     avatar_url?: string;
     level?: number;
+    created_at?: string;
   };
 }
 
@@ -48,7 +49,8 @@ export default function ExploreFeed() {
           user_profiles:broadcaster_id (
             username,
             avatar_url,
-            level
+            level,
+            created_at
           )
         `, { count: 'exact' })
         .eq('is_live', true)
@@ -264,7 +266,13 @@ export default function ExploreFeed() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`font-semibold ${trollCityTheme.text.primary} truncate`}>
-                        {broadcast.user_profiles?.username || 'Unknown'}
+                        <UserNameWithAge 
+                          user={{
+                            username: broadcast.user_profiles?.username || 'Unknown',
+                            id: broadcast.broadcaster_id,
+                            ...broadcast.user_profiles
+                          }}
+                        />
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         {broadcast.user_profiles?.level && (

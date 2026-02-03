@@ -64,20 +64,28 @@ export default function GovernmentStreams() {
   const [summonModalOpen, setSummonModalOpen] = useState(false);
   const [summonTargetStream, setSummonTargetStream] = useState<StreamRow | null>(null);
 
+  const [showAllStreams, setShowAllStreams] = useState(false);
+
   const fetchStreams = async () => {
     try {
       setLoading(true);
       
-      // Fetch active streams
-      const { data: streamsData, error } = await supabase
+      let query = supabase
         .from('streams')
         .select(`
           *,
           broadcaster:user_profiles!broadcaster_id(username, avatar_url)
         `)
-        .eq('is_live', true)
-        .eq('status', 'live')
-        .order('current_viewers', { ascending: false });
+        .order('created_at', { ascending: false }); // Show newest first
+
+      // Apply filters if not showing all
+      if (!showAllStreams) {
+        query = query
+          .or('is_live.eq.true,status.eq.live')
+          .order('current_viewers', { ascending: false });
+      }
+
+      const { data: streamsData, error } = await query;
 
       if (error) throw error;
 
@@ -90,7 +98,7 @@ export default function GovernmentStreams() {
           officer_id,
           actions_taken,
           joined_at,
-          officer:user_profiles!officer_id(username, avatar_url)
+          officer:user_profiles!officer_id(username, avatar_url, created_at)
         `)
         .in('stream_id', streamIds)
         .is('left_at', null);
@@ -114,7 +122,7 @@ export default function GovernmentStreams() {
     fetchStreams();
     const interval = setInterval(fetchStreams, 10000); // Refresh every 10s
     return () => clearInterval(interval);
-  }, []);
+  }, [showAllStreams]);
 
   const handleEndLive = async (streamId: string) => {
     if (!confirm('Are you sure you want to FORCE END this stream?')) return;
@@ -194,6 +202,18 @@ export default function GovernmentStreams() {
             </h1>
             <p className="text-gray-400 mt-2">Monitor, Moderate, and Enforce Troll City Laws</p>
           </div>
+          <button 
+            onClick={() => setShowAllStreams(!showAllStreams)}
+            className={`px-4 py-2 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              showAllStreams 
+                ? 'bg-purple-500/20 border-purple-500 text-purple-300 hover:bg-purple-500/30' 
+                : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-400'
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            {showAllStreams ? 'Showing History' : 'Live Only'}
+          </button>
+          
           <button 
             onClick={fetchStreams}
             className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -306,7 +326,14 @@ function StreamCard({
             {stream.active_officers.map(log => (
               <div key={log.officer_id} className="flex items-center gap-1.5 bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
                 <img src={log.officer.avatar_url} className="w-4 h-4 rounded-full" />
-                <span className="text-[10px] text-emerald-300 font-medium">{log.officer.username}</span>
+                <UserNameWithAge
+                  user={{
+                    username: log.officer.username,
+                    id: log.officer_id,
+                    created_at: log.officer.created_at
+                  }}
+                  className="text-[10px] text-emerald-300 font-medium"
+                />
                 {log.actions_taken > 0 && (
                   <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 rounded-full">{log.actions_taken} acts</span>
                 )}

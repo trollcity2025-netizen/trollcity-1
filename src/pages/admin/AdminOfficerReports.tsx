@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import { FileText, Calendar, ChevronDown, ChevronUp, AlertTriangle, User } from 'lucide-react'
-import ClickableUsername from '../../components/ClickableUsername'
+import UserNameWithAge from '../../components/UserNameWithAge'
 import '../../styles/LeadOfficerDashboard.css'
 
 interface WeeklyReport {
@@ -18,6 +18,7 @@ interface WeeklyReport {
   lead_officer: {
     username: string
     avatar_url: string | null
+    created_at?: string
   }
 }
 
@@ -75,7 +76,8 @@ export default function AdminOfficerReports() {
           *,
           lead_officer:user_profiles!weekly_officer_reports_lead_officer_id_fkey (
             username,
-            avatar_url
+            avatar_url,
+            created_at
           )
         `)
         .order('created_at', { ascending: false })
@@ -198,8 +200,8 @@ export default function AdminOfficerReports() {
                       />
                       <div>
                         <div className="flex items-center gap-2">
-                          <ClickableUsername 
-                            username={report.lead_officer?.username || 'Unknown'}
+                          <UserNameWithAge 
+                            user={report.lead_officer || { username: 'Unknown' }}
                             className="font-semibold text-purple-200"
                           />
                         </div>

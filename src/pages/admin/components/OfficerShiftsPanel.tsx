@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { toast } from 'sonner'
 import { Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
-import ClickableUsername from '../../../components/ClickableUsername'
+import UserNameWithAge from '../../../components/UserNameWithAge'
 import { format12hr, formatFullDateTime12hr } from '../../../utils/timeFormat'
 
 interface ShiftLog {
@@ -19,6 +19,7 @@ interface ShiftLog {
   officer?: {
     username: string
     email?: string
+    created_at?: string
   }
 }
 
@@ -67,7 +68,30 @@ export default function OfficerShiftsPanel() {
       })
 
       if (error) throw error
-      setSlots((data?.slots as ScheduledSlot[]) || [])
+
+      // Fetch created_at for officers
+      const rawSlots = (data?.slots as ScheduledSlot[]) || []
+      const officerIds = Array.from(new Set(rawSlots.map((s: any) => s.officer_id).filter(Boolean))) as string[]
+
+      let profileMap = new Map<string, any>()
+      if (officerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, created_at')
+          .in('id', officerIds)
+        
+        profiles?.forEach((p: any) => profileMap.set(p.id, p))
+      }
+
+      const mappedSlots = rawSlots.map((s: any) => ({
+        ...s,
+        officer: s.officer ? {
+          ...s.officer,
+          created_at: profileMap.get(s.officer_id)?.created_at
+        } : undefined
+      }))
+
+      setSlots(mappedSlots)
     } catch (err: any) {
       console.error('Error loading scheduled slots:', err)
       toast.error('Failed to load scheduled shifts')
@@ -294,7 +318,13 @@ export default function OfficerShiftsPanel() {
                     >
                       <td className="p-4">
                         {shift.officer ? (
-                          <ClickableUsername userId={shift.officer_id} username={shift.officer.username} />
+                          <UserNameWithAge 
+                            user={{
+                                username: shift.officer.username,
+                                id: shift.officer_id,
+                                created_at: shift.officer.created_at
+                            }}
+                          />
                         ) : (
                           <span className="text-gray-400">Unknown</span>
                         )}

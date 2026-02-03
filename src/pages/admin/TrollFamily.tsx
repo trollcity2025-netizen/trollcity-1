@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import UserNameWithAge from '../../components/UserNameWithAge'
 import { toast } from 'sonner'
 import {
   Crown,
@@ -27,6 +28,7 @@ interface LeaderboardEntry {
   gender: string
   last_gift_at: string
   rank: number
+  age_days?: number
 }
 
 export default function TrollFamily() {
@@ -37,6 +39,7 @@ export default function TrollFamily() {
   const [showAddMember, setShowAddMember] = useState(false)
   const [newMemberUsername, setNewMemberUsername] = useState('')
   const [newMemberTitle, setNewMemberTitle] = useState('Honorary Family Member')
+  const [usersCreatedAt, setUsersCreatedAt] = useState<Record<string, string>>({})
 
   const loadFamilyData = React.useCallback(async () => {
     try {
@@ -61,10 +64,33 @@ export default function TrollFamily() {
         .select('*')
         .limit(20)
 
+      let currentLeaderboard = []
       if (leaderboardError) {
         console.warn('Leaderboard not available yet:', leaderboardError)
       } else {
-        setLeaderboard(leaderboardData || [])
+        currentLeaderboard = leaderboardData || []
+        setLeaderboard(currentLeaderboard)
+      }
+
+      // Fetch created_at for all relevant users
+      const userIds = new Set<string>()
+      if (adminStatus?.current_wife?.user_id) userIds.add(adminStatus.current_wife.user_id)
+      if (adminStatus?.current_husband?.user_id) userIds.add(adminStatus.current_husband.user_id)
+      currentLeaderboard.forEach((entry: LeaderboardEntry) => userIds.add(entry.user_id))
+      
+      if (userIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, created_at')
+          .in('id', Array.from(userIds))
+        
+        if (profiles) {
+          const ageMap: Record<string, string> = {}
+          profiles.forEach(p => {
+            if (p.created_at) ageMap[p.id] = p.created_at
+          })
+          setUsersCreatedAt(ageMap)
+        }
       }
 
     } catch (error) {
@@ -227,7 +253,17 @@ export default function TrollFamily() {
                     <h3 className="text-lg font-bold text-yellow-400">
                       Admin&apos;s Wife
                     </h3>
-                    <p className="text-white font-semibold">@{familyStatus.current_wife.username}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400">@</span>
+                      <UserNameWithAge
+                        user={{
+                          username: familyStatus.current_wife.username,
+                          id: familyStatus.current_wife.user_id,
+                          created_at: usersCreatedAt[familyStatus.current_wife.user_id]
+                        }}
+                        className="text-white font-semibold"
+                      />
+                    </div>
                     <p className="text-sm text-gray-400">
                       {familyStatus.current_wife.total_coins?.toLocaleString()} family tokens gifted
                     </p>
@@ -357,7 +393,16 @@ export default function TrollFamily() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">@{entry.username}</span>
+                        <span className="text-gray-400">@</span>
+                        <UserNameWithAge
+                          user={{
+                            username: entry.username,
+                            id: entry.user_id,
+                            created_at: usersCreatedAt[entry.user_id],
+                            age_days: entry.age_days
+                          }}
+                          className="font-semibold"
+                        />
                         {isConsort && <Crown className="w-4 h-4 text-yellow-400" />}
                       </div>
                       <div className="text-sm text-gray-400">
@@ -405,7 +450,14 @@ export default function TrollFamily() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">@{member.username}</span>
+                      <UserNameWithAge
+                        user={{
+                          username: member.username,
+                          id: member.user_id,
+                          age_days: member.age_days
+                        }}
+                        className="font-semibold"
+                      />
                       <Star className="w-4 h-4 text-purple-400" />
                     </div>
                     <div className="text-sm text-gray-400">{member.title}</div>

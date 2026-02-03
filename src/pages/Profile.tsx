@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import CreditScoreBadge from '../components/CreditScoreBadge';
 import BadgesGrid from '../components/badges/BadgesGrid';
-import { UserBadge } from '../components/UserBadge';
+import UserNameWithAge from '../components/UserNameWithAge';
 import { useCreditScore } from '../lib/hooks/useCreditScore';
 import { useProfileViewPayment } from '../hooks/useProfileViewPayment';
 import { getLevelName } from '../lib/xp';
@@ -558,9 +558,19 @@ function ProfileInner() {
             filter: userId ? `id=eq.${userId}` : `username=eq.${username}`
           },
           (payload) => {
-            console.log('Profile updated in real-time:', payload.new)
-            // Refetch profile to get latest data
-            fetchProfile()
+            // Only refetch if coin balance or critical info changed
+            // This prevents loops when updating last_seen or other minor fields
+            const newP = payload.new as any;
+            const oldP = payload.old as any;
+            
+            if (
+                newP.coins !== oldP.coins || 
+                newP.troll_coins !== oldP.troll_coins ||
+                newP.level !== oldP.level
+            ) {
+                console.log('Profile balance/level updated in real-time:', newP);
+                fetchProfile();
+            }
           }
         )
         .subscribe()

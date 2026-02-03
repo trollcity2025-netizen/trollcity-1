@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '../../../lib/store';
 import { FileText, AlertCircle, Bell, Check, Search, Clock } from 'lucide-react';
 import { toast } from 'sonner';
-import UserDetailsModal from '../../../components/admin/UserDetailsModal';
+import UserNameWithAge from '../../../components/UserNameWithAge';
 
 interface UserFormStatus {
   id: string;
@@ -208,10 +208,12 @@ export default function UserFormsTab() {
                           onClick={() => setViewingUser({ id: user.id, username: user.username })}
                           className="font-medium text-white hover:text-purple-400 underline transition-colors"
                         >
-                          {user.username}
+                          <UserNameWithAge user={user} />
                         </button>
                       ) : (
-                        <span className="font-medium text-white">{user.username}</span>
+                        <span className="font-medium text-white">
+                          <UserNameWithAge user={user} />
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4">

@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { sendNotification } from '../../../lib/sendNotification'
 import { toast } from 'sonner'
 import { Calendar, Clock, Plus, Trash2, CheckCircle } from 'lucide-react'
-import ClickableUsername from '../../../components/ClickableUsername'
+import UserNameWithAge from '../../../components/UserNameWithAge'
 import { useAuthStore } from '../../../lib/store'
 import { format12hr } from '../../../utils/timeFormat'
 
@@ -97,8 +97,10 @@ export default function CreateSchedulePanel() {
           officer:user_profiles!officer_shift_slots_officer_id_fkey(
             id,
             username,
+            created_at,
             email,
-            is_troll_officer
+            is_troll_officer,
+            created_at
           )
         `)
         .order('shift_date', { ascending: true })
@@ -595,7 +597,15 @@ export default function CreateSchedulePanel() {
                           <div>
                             <div className="font-semibold text-white">
                               {schedule.officer ? (
-                              <ClickableUsername username={schedule.officer.username} />
+                              <UserNameWithAge 
+                                user={{
+                                  username: schedule.officer.username,
+                                  id: schedule.officer.id,
+                                  created_at: schedule.officer.created_at,
+                                  is_troll_officer: schedule.officer.is_troll_officer,
+                                  is_admin: schedule.officer.is_admin
+                                }}
+                              />
                               ) : (
                               <span className="text-gray-400">Unknown Officer</span>
                               )}

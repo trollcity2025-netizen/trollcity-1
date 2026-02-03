@@ -4,6 +4,8 @@ import { useAuthStore } from '../../../lib/store'
 import { toast } from 'sonner'
 import { Check, X, Shield, RefreshCw, AlertTriangle } from 'lucide-react'
 
+import UserNameWithAge from '../../../components/UserNameWithAge'
+
 interface Application {
   id: string
   user_id: string
@@ -22,6 +24,8 @@ interface Application {
   user_profiles?: {
     username: string
     email?: string
+    created_at?: string
+    rgb_username_expires_at?: string
   }
 }
 
@@ -373,9 +377,14 @@ export default function AdminApplications() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-white font-semibold">
-                          {app.user_profiles?.username || "Unknown User"}
-                        </span>
+                        <UserNameWithAge
+                          user={{
+                            username: app.user_profiles?.username || "Unknown User",
+                            created_at: app.user_profiles?.created_at,
+                            rgb_username_expires_at: app.user_profiles?.rgb_username_expires_at
+                          }}
+                          className="text-white font-semibold"
+                        />
                         <span className={`text-xs px-2 py-1 rounded ${
                           isSeller
                             ? 'bg-orange-900 text-orange-300'

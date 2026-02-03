@@ -4,7 +4,7 @@ import { useAuthStore } from '../../lib/store'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Home, Filter, Activity, AlertTriangle, Eye, Gavel, Search, ChevronDown, ChevronUp } from 'lucide-react'
-import ClickableUsername from '../../components/ClickableUsername'
+import UserNameWithAge from '../../components/UserNameWithAge'
 
 type DeedTransferRow = {
   id: string
@@ -18,6 +18,8 @@ type DeedTransferRow = {
   created_at: string
   seller_username?: string
   buyer_username?: string
+  seller_created_at?: string
+  buyer_created_at?: string
 }
 
 type UserDeed = {
@@ -28,6 +30,7 @@ type UserDeed = {
 type UserDeedGroup = {
   user_id: string
   username?: string
+  user_created_at?: string
   deeds: UserDeed[]
 }
 
@@ -41,9 +44,14 @@ const UserDeedCard = ({ group, onSelectDeed }: { group: UserDeedGroup, onSelectD
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="font-semibold text-slate-100 text-sm flex items-center gap-2">
-          <span className={group.deeds.length > 5 ? 'text-amber-400' : ''}>
-             {group.username || group.user_id.slice(0, 6)}
-          </span>
+          <UserNameWithAge 
+            user={{
+                username: group.username || group.user_id.slice(0, 6),
+                id: group.user_id,
+                created_at: group.user_created_at
+            }}
+            className={group.deeds.length > 5 ? 'text-amber-400' : ''}
+          />
         </div>
         <div className="flex items-center gap-2">
             <div className="text-[11px] text-slate-400">
@@ -532,11 +540,13 @@ export default function AdminTrollTownDeeds() {
                         </td>
                         <td className="px-3 py-2 text-slate-300">
                           {row.seller_username ? (
-                            <ClickableUsername
-                              username={row.seller_username}
-                              userId={row.seller_user_id}
+                            <UserNameWithAge
+                              user={{
+                                  username: row.seller_username,
+                                  id: row.seller_user_id,
+                                  created_at: row.seller_created_at
+                              }}
                               className="text-emerald-200"
-                              prefix=""
                             />
                           ) : (
                             row.seller_user_id.slice(0, 6)
@@ -544,11 +554,13 @@ export default function AdminTrollTownDeeds() {
                         </td>
                         <td className="px-3 py-2 text-slate-300">
                           {row.buyer_username ? (
-                            <ClickableUsername
-                              username={row.buyer_username}
-                              userId={row.buyer_user_id}
+                            <UserNameWithAge
+                              user={{
+                                  username: row.buyer_username,
+                                  id: row.buyer_user_id,
+                                  created_at: row.buyer_created_at
+                              }}
                               className="text-emerald-200"
-                              prefix=""
                             />
                           ) : (
                             row.buyer_user_id.slice(0, 6)

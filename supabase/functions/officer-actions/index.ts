@@ -839,13 +839,13 @@ Deno.serve(async (req) => {
                  id: battle.host_id,
                  username: battle.host?.username,
                  avatar_url: battle.host?.avatar_url,
-                 score: battle.host_score
+                 score: battle.host_troll_coins
              };
              const player2 = {
                  id: battle.challenger_id,
                  username: battle.challenger?.username,
                  avatar_url: battle.challenger?.avatar_url,
-                 score: battle.challenger_score
+                 score: battle.challenger_troll_coins
              };
 
              result = { 

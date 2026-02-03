@@ -16,6 +16,9 @@ export function useLiveStreams() {
   return useQuery({
     queryKey: queryKeys.liveStreams,
     queryFn: async () => {
+      // NOTE: Cache disabled to ensure immediate removal of ended streams (Emergency Stop support)
+      // To re-enable 30m caching, uncomment the RPC block below.
+      /*
       // Try cached rankings first
       const { data: ranked, error: rankedError } = await supabase.rpc('get_cached_home_rankings_30m')
       if (!rankedError && Array.isArray(ranked) && ranked.length > 0) {
@@ -69,8 +72,9 @@ export function useLiveStreams() {
           return 0
         })
       }
+      */
 
-      // Fallback to direct query
+      // Fallback to direct query (Real-time)
       const { data, error } = await supabase
         .from('streams')
         .select(`

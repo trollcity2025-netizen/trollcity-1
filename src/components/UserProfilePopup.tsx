@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { isAdmin } from '../lib/adminCoins'
 import ReportModal from './ReportModal'
-import ClickableUsername from './ClickableUsername'
+import UserNameWithAge from './UserNameWithAge'
 import AdminProfilePanel from './AdminProfilePanel'
 
 interface UserProfilePopupProps {
@@ -75,7 +75,10 @@ export default function UserProfilePopup({ userId, username, onClose }: UserProf
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white">
-                  <ClickableUsername username={username} profile={profile} />
+                  <UserNameWithAge 
+                    user={profile || { username, id: userId }} 
+                    className="text-white"
+                  />
                 </h3>
                 {profile?.is_officer && (
                   <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-900 text-purple-300 rounded text-xs font-semibold mt-1">

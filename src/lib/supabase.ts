@@ -94,6 +94,9 @@ export interface UserProfile {
   is_trolltract?: boolean
   trolltract_activated_at?: string | null
 
+  // Age system
+  age_days?: number
+
   // Troller fields
   is_troller?: boolean
 

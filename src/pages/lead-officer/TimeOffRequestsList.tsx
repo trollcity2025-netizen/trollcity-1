@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { sendNotification } from '../../lib/sendNotification'
 import { toast } from 'sonner'
 import { CheckCircle, XCircle, Clock } from 'lucide-react'
-import ClickableUsername from '../../components/ClickableUsername'
+import UserNameWithAge from '../../components/UserNameWithAge'
 
 interface TimeOffRequest {
   id: string
@@ -15,6 +15,7 @@ interface TimeOffRequest {
   officer: {
     username: string
     avatar_url: string | null
+    created_at?: string
   }
 }
 
@@ -29,7 +30,7 @@ export default function TimeOffRequestsList() {
         .from('officer_time_off_requests')
         .select(`
           *,
-          officer:user_profiles!officer_time_off_requests_officer_id_fkey(username, avatar_url)
+          officer:user_profiles!officer_time_off_requests_officer_id_fkey(username, avatar_url, created_at)
         `)
         .eq('status', 'pending')
         .order('created_at', { ascending: true })
@@ -117,7 +118,13 @@ export default function TimeOffRequestsList() {
             <div key={req.id} className="bg-black/40 border border-orange-500/20 hover:border-orange-500/40 transition rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                    <ClickableUsername userId={req.officer_id} username={req.officer?.username || 'Unknown'} />
+                    <UserNameWithAge 
+                      user={{
+                        id: req.officer_id, 
+                        username: req.officer?.username || 'Unknown',
+                        created_at: req.officer?.created_at
+                      }} 
+                    />
                     <span className="text-gray-400 text-sm">requested off for</span>
                     <span className="text-orange-200 font-bold bg-orange-500/10 px-2 py-0.5 rounded">{req.date}</span>
                 </div>
