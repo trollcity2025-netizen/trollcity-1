@@ -78,59 +78,6 @@ export async function syncCarPurchase(userId: string) {
   }
 }
 
-/**
- * Listens for purchase broadcasts from other tabs
- */
-export function listenForPurchaseBroadcasts(callback: (event: any) => void) {
-  if (typeof window === 'undefined' || !('BroadcastChannel' in window)) {
-    return () => {};
-  }
-  
-  try {
-    const channel = new BroadcastChannel('trollcity_purchases');
-    
-    const handler = (event: MessageEvent) => {
-      if (event.data && (event.data.type === 'CAR_PURCHASED' || event.data.type === 'property_purchased')) {
-         callback(event.data);
-      }
-    };
-
-    channel.addEventListener('message', handler);
-    
-    return () => {
-      channel.removeEventListener('message', handler);
-      channel.close();
-    };
-  } catch (e) {
-    console.warn('BroadcastChannel error:', e);
-    return () => {};
-  }
-}
-
-/**
- * Subscribes to real-time property updates
- */
-export function subscribeToProperties(userId: string, onUpdate: () => void) {
-  const channel = supabase
-    .channel(`properties_sync:${userId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'user_properties',
-        filter: `owner_user_id=eq.${userId}`
-      },
-      () => {
-        onUpdate();
-      }
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}
 
 /**
  * After a property purchase, syncs data across all platforms
