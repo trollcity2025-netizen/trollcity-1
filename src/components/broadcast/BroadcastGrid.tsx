@@ -131,7 +131,17 @@ export default function BroadcastGrid({
             <div key={seatIndex} className={boxClass}>
                 {/* Render Video if Participant Exists and Track is active */}
                 {track && isCamOn && (
-                    <VideoTrack trackRef={track} className="w-full h-full object-cover" />
+                    <VideoTrack 
+                        trackRef={track} 
+                        className={cn(
+                            "w-full h-full object-cover",
+                            // Mirror local video for natural feel (or un-mirror if user prefers)
+                            // Standard behavior: Local is mirrored. 
+                            // If user says "flipped", we might need to adjust.
+                            // We enforce mirroring for local participant here.
+                            track.participant.isLocal && "scale-x-[-1]"
+                        )} 
+                    />
                 )}
 
                 {/* Video Off / Audio Only State */}

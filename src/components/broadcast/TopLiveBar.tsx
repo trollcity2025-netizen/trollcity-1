@@ -2,6 +2,7 @@ import React from 'react';
 import { Stream } from '../../types/broadcast';
 import { User, Plus, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import BroadcastLevelBar from './BroadcastLevelBar';
 
 interface TopLiveBarProps {
   stream: Stream;
@@ -59,6 +60,11 @@ export default function TopLiveBar({
             <Plus size={14} />
           </button>
         )}
+      </div>
+
+      {/* Center: Level Bar */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-14 pointer-events-auto">
+        <BroadcastLevelBar broadcasterId={stream.user_id} />
       </div>
 
       {/* Right: Close / Viewer List */}

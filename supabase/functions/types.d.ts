@@ -27,6 +27,43 @@ declare module 'livekit-server-sdk' {
     CAMERA = 'camera',
     MICROPHONE = 'microphone'
   }
+  
+  // EgressClient for HLS/Recording egress
+  export class EgressClient {
+    constructor(url: string, apiKey: string, apiSecret: string);
+    startRoomCompositeEgress(
+      roomName: string,
+      options: {
+        segments?: {
+          protocol?: number;
+          filenamePrefix?: string;
+          playlistName?: string;
+          segmentDuration?: number;
+          s3?: {
+            accessKey: string;
+            secret: string;
+            bucket: string;
+            endpoint?: string;
+            region?: string;
+          };
+        };
+      },
+      egressOptions?: {
+        layout?: string;
+        audioOnly?: boolean;
+        videoOnly?: boolean;
+      }
+    ): Promise<{ egressId: string }>;
+  }
+
+  // RoomServiceClient for room management
+  export class RoomServiceClient {
+    constructor(url: string, apiKey: string, apiSecret: string);
+    createRoom(room: { name: string; emptyTimeout?: number; metadata?: string }): Promise<{ name: string }>;
+    deleteRoom(roomName: string): Promise<void>;
+    listRooms(): Promise<{ name: string }[]>;
+    getRoom(roomName: string): Promise<{ name: string; metadata?: string }>;
+  }
 }
 
 declare module 'https://deno.land/std@0.177.0/http/server.ts' {

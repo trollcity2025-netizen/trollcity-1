@@ -27,6 +27,13 @@ export default function HLSPlayer({ src, className, autoPlay = true, muted = fal
 
     let hls: Hls | null = null;
 
+    // 1. Validate URL extension
+    if (!src.endsWith('.m3u8')) {
+        console.error("Invalid HLS URL (must end in .m3u8):", src);
+        setError("Invalid stream configuration");
+        return;
+    }
+
     if (Hls.isSupported()) {
       hls = new Hls({
         enableWorker: true,
@@ -36,6 +43,65 @@ export default function HLSPlayer({ src, className, autoPlay = true, muted = fal
         manifestLoadingTimeOut: 10000,
         manifestLoadingMaxRetry: 5,
         manifestLoadingRetryDelay: 1000,
+        // Custom loader or check? hls.js doesn't easily expose pre-check without custom loader.
+        // But we can check response headers in the error handler if possible, or trust the extension check + error handler.
+      });
+
+      // 5. Detailed Error Logging
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+          console.error("HLS ERROR", { 
+            type: data.type, 
+            details: data.details, 
+            fatal: data.fatal, 
+            url: (data as any).url || src, 
+            response: (data as any).response 
+          });
+
+          // 3. Hard-fail if HTML is returned or Manifest Parsing fails
+          if (data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
+              console.warn("HLS Playback Warning: Manifest parsing failed. Likely receiving HTML (404 fallback) instead of m3u8.");
+              hls?.destroy();
+              setError("Stream Offline (Waiting for Broadcast)"); 
+              return;
+          }
+
+          if (data.response && data.response.code === 200) {
+              const contentType = data.response.headers ? (data.response.headers['content-type'] || '') : '';
+              // Sometimes headers aren't available in the error object depending on the error type,
+              // but if it parsed successfully as HTML and failed manifest parsing, it usually triggers PARSING_ERROR.
+              // If it's a network load that returned 200 but was HTML, hls.js might try to parse it.
+              if (contentType.includes('text/html') || (data as any).response.text?.includes('<!DOCTYPE html>')) {
+                  console.error("CRITICAL: Received HTML instead of HLS playlist. Check hosting rewrites.");
+                  hls?.destroy();
+                  setError("Stream configuration error (Hosting)");
+                  return;
+              }
+          }
+
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.log('fatal network error encountered, try to recover');
+                
+                if (retryCount.current < maxRetries) {
+                    setIsRetrying(true);
+                    retryCount.current++;
+                    hls?.startLoad();
+                } else {
+                    setError("Stream offline or unreachable");
+                    setIsRetrying(false);
+                }
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.log('fatal media error encountered, try to recover');
+                hls?.recoverMediaError();
+                break;
+              default:
+                hls?.destroy();
+                setError("Playback error");
+                break;
+            }
+          }
       });
 
       const attach = () => {
@@ -51,33 +117,6 @@ export default function HLSPlayer({ src, className, autoPlay = true, muted = fal
         setIsRetrying(false);
         if (autoPlay) {
           video.play().catch(e => console.error("Auto-play failed:", e));
-        }
-      });
-
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('fatal network error encountered, try to recover');
-              
-              if (retryCount.current < maxRetries) {
-                  setIsRetrying(true);
-                  retryCount.current++;
-                  hls?.startLoad();
-              } else {
-                  setError("Stream offline or unreachable");
-                  setIsRetrying(false);
-              }
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('fatal media error encountered, try to recover');
-              hls?.recoverMediaError();
-              break;
-            default:
-              hls?.destroy();
-              setError("Playback error");
-              break;
-          }
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {

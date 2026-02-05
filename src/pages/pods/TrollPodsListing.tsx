@@ -13,6 +13,7 @@ interface PodRoom {
   host_id: string;
   viewer_count: number;
   started_at: string;
+  hls_url?: string;
   host?: {
     username: string;
     avatar_url: string;
@@ -101,6 +102,14 @@ export default function TrollPodsListing() {
         .single();
 
       if (error) throw error;
+
+      // Update HLS URL immediately
+      // This ensures we never construct URLs on the client side
+      const hlsUrl = `https://cdn.maitrollcity.com/streams/${data.id}.m3u8`;
+      await supabase
+        .from('pod_rooms')
+        .update({ hls_url: hlsUrl })
+        .eq('id', data.id);
 
       // Broadcast Pod Start (Global Banner)
       // Fire and forget

@@ -146,7 +146,12 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      // Create stream record
+      // Create stream record with HLS URL pre-populated
+      // Note: We use the ID returned by insert, so we do this in two steps or use client-generated ID.
+      // Since we rely on Supabase ID generation usually, we insert first then update, OR we assume a pattern.
+      // But actually, we can't know the ID before insert unless we generate it. 
+      // Supabase insert returns the data. So we can update immediately after.
+      
       const { data, error } = await supabase
         .from('streams')
         .insert({
@@ -163,6 +168,18 @@ export default function SetupPage() {
         .single();
 
       if (error) throw error;
+
+      // Update with HLS URL
+      const hlsUrl = `https://cdn.maitrollcity.com/streams/${data.id}.m3u8`;
+      const { error: updateError } = await supabase
+        .from('streams')
+        .update({ hls_url: hlsUrl })
+        .eq('id', data.id);
+
+      if (updateError) {
+          console.error("Failed to save HLS URL:", updateError);
+          // Non-fatal, but logged
+      }
 
       toast.success('Stream created! Going live...');
       navigate(`/broadcast/${data.id}`);

@@ -17,6 +17,7 @@ export interface CourtSessionData {
   created_at: string
   startedAt: string
   defendantId?: string
+  hls_url?: string
 }
 
 export async function startCourtSession(params: StartCourtSessionParams): Promise<{ data: CourtSessionData | null, error: any }> {
@@ -67,6 +68,8 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
       return { data: null, error: waitingError }
     }
 
+    const targetId = waitingSession ? waitingSession.id : sessionId
+
     const payload = {
       status: 'active',
       started_by: userId,
@@ -74,7 +77,8 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
       updated_at: now,
       max_boxes: maxBoxes,
       room_name: roomName,
-      defendant_id: safeDefendantId
+      defendant_id: safeDefendantId,
+      hls_url: `https://cdn.maitrollcity.com/streams/${targetId}.m3u8`
     }
 
     const updateOrInsert = waitingSession
@@ -110,7 +114,8 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
         status: data.status,
         created_at: data.created_at,
         startedAt: data.started_at,
-        defendantId: data.defendant_id
+        defendantId: data.defendant_id,
+        hls_url: data.hls_url
       },
       error: null
     }

@@ -19,6 +19,7 @@ interface Room {
   host_id: string;
   is_live: boolean;
   viewer_count: number;
+  hls_url?: string;
 }
 
 interface PodParticipant {
@@ -53,7 +54,7 @@ const PodListenerView = ({
   const isHandRaised = myRecord?.is_hand_raised;
   
   // Construct HLS URL based on room ID (assuming standard convention)
-  const hlsUrl = `https://cdn.maitrollcity.com/streams/${room.id}.m3u8`;
+  const hlsUrl = room.hls_url || `https://cdn.maitrollcity.com/streams/${room.id}.m3u8`;
 
   // Get Speakers for display list
   const speakers = participantsData.filter(p => p.role === 'host' || p.role === 'speaker');

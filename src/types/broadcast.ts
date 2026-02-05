@@ -19,6 +19,7 @@ export interface Stream {
   has_rgb_effect: boolean;
   rgb_purchased?: boolean;
   active_theme_url?: string;
+  hls_url?: string;
 }
 
 export interface StreamGuest {

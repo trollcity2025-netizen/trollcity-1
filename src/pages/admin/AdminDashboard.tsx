@@ -1,6 +1,7 @@
 // src/pages/admin/AdminDashboard.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import './admin.css'
+import { trollCityTheme } from '../../styles/trollCityTheme'
 import { useAuthStore } from '../../lib/store'
 import { supabase, isAdminEmail } from '../../lib/supabase'
 import { sendNotification } from '../../lib/sendNotification'
