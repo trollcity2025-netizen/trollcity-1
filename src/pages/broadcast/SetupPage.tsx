@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
+import { PreflightStore } from '@/lib/preflightStore';
 import { Video, Mic, MicOff, VideoOff, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -12,6 +13,9 @@ export default function SetupPage() {
   const [category, setCategory] = useState('general');
   const [loading, setLoading] = useState(false);
   const [restrictionCheck, setRestrictionCheck] = useState<{ allowed: boolean; waitTime?: string; reason?: string; message?: string } | null>(null);
+
+  // Track if we are navigating to broadcast to prevent cleanup
+  const isStartingStream = useRef(false);
 
   useEffect(() => {
     async function checkRestriction() {
@@ -89,6 +93,38 @@ export default function SetupPage() {
 
     // Request camera access on mount
     async function getMedia() {
+      // Check for getUserMedia support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        // Try to explain WHY it failed
+        console.error('[SetupPage] getUserMedia not supported in this browser/context');
+        
+        const isSecure = window.isSecureContext;
+        const protocol = window.location.protocol;
+        
+        if (!isSecure) {
+           toast.error(
+             <div className="flex flex-col gap-1">
+               <span className="font-bold">Camera Blocked by Browser Security</span>
+               <span className="text-xs">
+                 Browsers block camera access on HTTP (http://{window.location.host}).
+                 <br/><br/>
+                 <strong>FIX for Chrome/Edge:</strong>
+                 <br/>
+                 1. Go to <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>
+                 <br/>
+                 2. Add <code>http://{window.location.hostname}:5176</code>
+                 <br/>
+                 3. Enable & Relaunch
+               </span>
+             </div>,
+             { duration: 10000 }
+           );
+        } else {
+           toast.error('Camera access is not supported in this browser.');
+        }
+        return;
+      }
+
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({ 
           video: true, 
@@ -116,9 +152,13 @@ export default function SetupPage() {
     getMedia();
 
     return () => {
-      // Cleanup stream
-      if (localStream) {
+      // Cleanup stream only if NOT starting stream
+      if (localStream && !isStartingStream.current) {
+        console.log('[SetupPage] Cleaning up media stream');
         localStream.getTracks().forEach(track => track.stop());
+      } else if (isStartingStream.current && localStream) {
+        console.log('[SetupPage] Preserving media stream for broadcast');
+        PreflightStore.setStream(localStream);
       }
     };
   }, []);
@@ -183,6 +223,7 @@ export default function SetupPage() {
       }
 
       toast.success('Stream created! Going live...');
+      isStartingStream.current = true;
       navigate(`/broadcast/${data.id}`);
     } catch (err: any) {
       console.error('Error creating stream:', err);
@@ -299,21 +340,19 @@ export default function SetupPage() {
                 <option value="debate">Debate / Battle</option>
               </select>
             </div>
-          </div>
 
-          <div className="pt-4">
             <button
               onClick={handleStartStream}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 hover:from-yellow-500 hover:via-yellow-400 hover:to-yellow-500 text-black font-bold py-4 rounded-xl shadow-lg shadow-yellow-500/20 transform transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={loading || !title.trim()}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-lg hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-500/20"
             >
               {loading ? (
-                <>Starting...</>
+                <span className="flex items-center justify-center gap-2">
+                  <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></span>
+                  Starting Stream...
+                </span>
               ) : (
-                <>
-                  <Video size={20} />
-                  START BROADCAST
-                </>
+                'Start Broadcast'
               )}
             </button>
           </div>

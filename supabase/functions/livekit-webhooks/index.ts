@@ -103,20 +103,18 @@ Deno.serve(async (req: Request) => {
                     segmentDuration: 4,
                 } as any;
 
-                // Add S3 config if available in env
-                const s3Bucket = Deno.env.get("S3_BUCKET");
-                const s3Key = Deno.env.get("S3_ACCESS_KEY");
-                const s3Secret = Deno.env.get("S3_SECRET_KEY");
-                const s3Endpoint = Deno.env.get("S3_ENDPOINT");
-                const s3Region = Deno.env.get("S3_REGION");
+                // Add S3 config if available in env (Support generic S3 or Bunny specific)
+                const s3Bucket = Deno.env.get("S3_BUCKET") || Deno.env.get("BUNNY_STORAGE_ZONE");
+                const s3Key = Deno.env.get("S3_ACCESS_KEY") || Deno.env.get("BUNNY_STORAGE_ZONE"); // Bunny uses Zone Name as Access Key
+                const s3Secret = Deno.env.get("S3_SECRET_KEY") || Deno.env.get("BUNNY_STORAGE_PASSWORD") || Deno.env.get("BUNNY_STORAGE_KEY");
+                const s3Endpoint = Deno.env.get("S3_ENDPOINT") || Deno.env.get("BUNNY_STORAGE_ENDPOINT") || "https://storage.bunnycdn.com";
+                const s3Region = Deno.env.get("S3_REGION") || "us-east-1"; // Bunny ignores region but some clients need it
 
-                console.log('S3 Env Check:', {
+                console.log('S3/Bunny Env Check:', {
                     hasBucket: !!s3Bucket,
                     hasKey: !!s3Key,
                     hasSecret: !!s3Secret,
-                    hasEndpoint: !!s3Endpoint,
-                    hasRegion: !!s3Region,
-                    bucketName: s3Bucket
+                    endpoint: s3Endpoint
                 });
 
                 if (s3Bucket && s3Key && s3Secret) {
@@ -153,25 +151,31 @@ Deno.serve(async (req: Request) => {
                 // Construct full HLS URL
                 const hlsBaseUrl = Deno.env.get("VITE_HLS_BASE_URL");
                 const supabaseUrl = Deno.env.get("SUPABASE_URL");
+                
+                // Clean path storage
+                const hlsPath = `/streams/${room.name}/master.m3u8`;
                 let hlsUrl = '';
 
                 if (hlsBaseUrl) {
-                    hlsUrl = `${hlsBaseUrl}/streams/${room.name}/master.m3u8`;
+                    hlsUrl = `${hlsBaseUrl}${hlsPath}`;
                 } else if (supabaseUrl) {
-                    hlsUrl = `${supabaseUrl}/storage/v1/object/public/hls/streams/${room.name}/master.m3u8`;
+                    hlsUrl = `${supabaseUrl}/storage/v1/object/public/hls${hlsPath}`;
                 } else {
-                    // Fallback to relative if no base URL found (unlikely)
-                    hlsUrl = `/streams/${room.name}/master.m3u8`;
+                    hlsUrl = hlsPath;
                 }
 
-                // Update ALL possible tables with the HLS URL
+                // Update ALL possible tables with the HLS URL and Path
                 await Promise.all([
-                    supabase.from('streams').update({ hls_url: hlsUrl }).eq('id', room.name),
+                    supabase.from('streams').update({ 
+                        hls_url: hlsUrl,
+                        hls_path: hlsPath,
+                        room_name: room.name
+                    }).eq('id', room.name),
                     supabase.from('pod_rooms').update({ hls_url: hlsUrl }).eq('id', room.name),
                     supabase.from('court_sessions').update({ hls_url: hlsUrl }).eq('id', room.name)
                 ]);
 
-                console.log('Updated hls_url for all matching tables:', hlsUrl);
+                console.log('Updated hls_path and hls_url for all matching tables:', hlsPath);
             } else {
                 console.warn('Missing LiveKit credentials, skipping Egress trigger');
             }

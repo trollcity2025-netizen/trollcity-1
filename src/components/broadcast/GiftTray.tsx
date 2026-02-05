@@ -22,27 +22,32 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
 
   useEffect(() => {
     const fetchGifts = async () => {
-      const { data, error } = await supabase
-        .from('gifts')
-        .select('*')
-        .order('cost', { ascending: true });
+      try {
+          const { data, error } = await supabase
+            .from('gifts')
+            .select('*')
+            .order('cost', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching gifts:', error);
-        toast.error('Failed to load gifts');
-      } else {
-        // Map DB gifts to GiftItem interface
-        const mappedGifts: GiftItem[] = data.map((g: any) => ({
-          id: g.id,
-          name: g.name,
-          icon: g.icon_url, // DB uses icon_url
-          coinCost: g.cost,
-          type: 'paid', // All DB gifts are paid for now
-          slug: g.name.toLowerCase().replace(/\s+/g, '_')
-        }));
-        setGifts(mappedGifts);
+          if (error) {
+            console.error('Error fetching gifts:', error);
+            // Don't toast here, just show empty
+          } else {
+            // Map DB gifts to GiftItem interface
+            const mappedGifts: GiftItem[] = data.map((g: any) => ({
+              id: g.id,
+              name: g.name,
+              icon: g.icon_url, // DB uses icon_url
+              coinCost: g.cost,
+              type: 'paid', // All DB gifts are paid for now
+              slug: g.name.toLowerCase().replace(/\s+/g, '_')
+            }));
+            setGifts(mappedGifts);
+          }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchGifts();

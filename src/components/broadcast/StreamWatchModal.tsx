@@ -7,6 +7,7 @@ export interface WatchableStream {
   room_name?: string;
   agora_channel?: string;
   hls_url?: string;
+  hls_path?: string;
   title?: string;
 }
 
@@ -16,6 +17,9 @@ interface StreamWatchModalProps {
 }
 
 export default function StreamWatchModal({ stream, onClose }: StreamWatchModalProps) {
+  // Prefer hls_path, then hls_url, then fallback to ID (HLSPlayer handles ID->URL conversion)
+  const playbackSrc = stream.hls_path || stream.hls_url || stream.id;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
@@ -26,9 +30,9 @@ export default function StreamWatchModal({ stream, onClose }: StreamWatchModalPr
           <X className="w-6 h-6" />
         </button>
         
-        {stream.hls_url ? (
+        {playbackSrc ? (
            <HLSPlayer 
-             src={stream.hls_url} 
+             src={playbackSrc} 
              className="w-full h-full object-contain"
              autoPlay={true}
            />
@@ -36,7 +40,7 @@ export default function StreamWatchModal({ stream, onClose }: StreamWatchModalPr
           <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
             <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
             <h3 className="text-xl font-bold mb-2">Stream Feed Not Available</h3>
-            <p className="text-gray-400">HLS URL is missing for this stream.</p>
+            <p className="text-gray-400">Stream ID is missing.</p>
           </div>
         )}
       </div>

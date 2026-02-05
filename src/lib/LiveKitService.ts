@@ -911,9 +911,19 @@ export class LiveKitService {
       
       console.log("🔥 LiveKit tokenUrl selected:", tokenUrl);
 
+      // ✅ REFRESH SESSION FORCEFULLY
+      // We use refreshSession() to guarantee a valid, server-signed token
+      // getSession() might return a stale token that looks valid locally but is rejected by server
+      const { data: { session: freshSession }, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError) {
+         console.warn("⚠️ Refresh session failed, falling back to local session", refreshError);
+      }
+      
+      let accessToken: string | undefined = freshSession?.access_token || session?.access_token;
+
       // ✅ CRITICAL: Ensure accessToken is a string, not an object
       // Handle both direct access and nested structure
-      let accessToken: string | undefined = session?.access_token
       
       // If access_token is an object (shouldn't happen, but defensive check)
       if (accessToken && typeof accessToken === 'object') {

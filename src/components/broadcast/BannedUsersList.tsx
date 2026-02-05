@@ -27,13 +27,18 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
 
     const fetchBannedUsers = useCallback(async () => {
         setLoading(true);
+        // Add timeout to prevent infinite spinning
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 5000));
+        
         try {
             // Manual join to avoid relationship errors
-            const { data: bans, error } = await supabase
+            const fetchPromise = supabase
                 .from('stream_bans')
                 .select('user_id, reason, banned_at, expires_at')
                 .eq('stream_id', streamId)
                 .order('banned_at', { ascending: false });
+
+            const { data: bans, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
             
             if (error) throw error;
 
@@ -44,7 +49,7 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
             }
 
             // Fetch user profiles manually
-            const userIds = bans.map(b => b.user_id);
+            const userIds = bans.map((b: any) => b.user_id);
             const { data: profiles, error: profilesError } = await supabase
                 .from('user_profiles')
                 .select('id, username, avatar_url, created_at')
@@ -54,15 +59,23 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
 
             const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-            const enrichedBans = bans.map(ban => ({
+            const enrichedBans = bans.map((ban: any) => ({
                 ...ban,
                 user: profileMap.get(ban.user_id) || { username: 'Unknown User', avatar_url: null, created_at: '' }
             }));
 
-            setBannedUsers(enrichedBans as any);
-        } catch (error) {
+            setBannedUsers(enrichedBans);
+        } catch (error: any) {
             console.error(error);
-            toast.error("Failed to load banned users");
+            // Don't show toast for empty lists or simple errors to avoid spam, just stop loading
+            if (error.message !== 'Request timed out') {
+                 // Check if table exists error
+                 if (error.code === '42P01') { // undefined_table
+                     console.warn('stream_bans table missing');
+                 } else {
+                     toast.error("Failed to load banned users");
+                 }
+            }
         } finally {
             setLoading(false);
         }

@@ -20,6 +20,8 @@ import { useStreamSeats, SeatSession } from '../../hooks/useStreamSeats';
 import { useStreamEndListener } from '../../hooks/useStreamEndListener';
 import HLSPlayer from '../../components/broadcast/HLSPlayer';
 import BattleControlsList from '../../components/broadcast/BattleControlsList';
+import { PreflightStore } from '../../lib/preflightStore';
+import PreflightPublisher from '../../components/broadcast/PreflightPublisher';
 
 import BroadcastHeader from '../../components/broadcast/BroadcastHeader';
 
@@ -67,6 +69,15 @@ export default function BroadcastPage() {
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showBattleManager, setShowBattleManager] = useState(false);
+  const [preflightStream, setPreflightStream] = useState<MediaStream | null>(null);
+
+  useEffect(() => {
+      const stream = PreflightStore.getStream();
+      if (stream) {
+          console.log('[BroadcastPage] Found preflight stream');
+          setPreflightStream(stream);
+      }
+  }, []);
   
   const { isMobile } = useMobileBreakpoint();
   const { messages, sendMessage } = useStreamChat(id || '');
@@ -80,7 +91,7 @@ export default function BroadcastPage() {
 
   // Host Check
   const isHost = stream?.user_id === user?.id;
-
+  
   // Seat System Hook
   const { seats, mySession, joinSeat, leaveSeat, kickParticipant } = useStreamSeats(id);
 
@@ -89,19 +100,49 @@ export default function BroadcastPage() {
   // 'viewer' = Passive Viewer -> Subscribes only (Low Latency WebRTC)
   const mode = (isHost || (mySession?.status === 'active')) ? 'stage' : 'viewer';
 
-  const isStreamOffline = stream?.status === 'ended';
-
-  // LiveKit Token
-  // Only enable LiveKit for Stage participants (Host or Guest on Seat).
-  // Viewers use HLS for scalability.
-  const { token, serverUrl } = useLiveKitToken({
+  const { token, serverUrl, error: tokenError, isLoading: tokenLoading } = useLiveKitToken({
     streamId: id,
     isHost,
     userId: user?.id,
     roomName: id,
-    canPublish: mode === 'stage', 
-    enabled: !!stream && mode === 'stage'
+    canPublish: true, // Force permission request to be explicit
+    enabled: !!stream && !!user && mode === 'stage' // Only enable if stream and user are loaded AND user is on stage
   });
+
+  useEffect(() => {
+    if (tokenError) {
+        console.error('[BroadcastPage] Token Error:', tokenError);
+        toast.error(`Connection Error: ${tokenError}`);
+    }
+  }, [tokenError]);
+
+  useEffect(() => {
+      if (stream && user) {
+          console.log('[BroadcastPage] Host Check:', {
+              isHost,
+              streamUserId: stream.user_id,
+              userId: user.id,
+              mode,
+              hasPreflight: !!preflightStream
+          });
+      }
+  }, [stream, user, isHost, mode, preflightStream]);
+
+  const isStreamOffline = stream?.status === 'ended';
+
+  useEffect(() => {
+      if (token) {
+          try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              console.log('[BroadcastPage] Token Payload:', payload);
+              if (payload.video) {
+                  console.log('[BroadcastPage] Token has video permission:', payload.video);
+              }
+          } catch (e) {
+              console.error('[BroadcastPage] Failed to decode token:', e);
+          }
+      }
+  }, [token]);
 
   // Viewer Tracking
   useViewerTracking(id || '', isHost);
@@ -234,9 +275,11 @@ export default function BroadcastPage() {
                     onJoinSeat={handleJoinRequest}
                 >
                     <HLSPlayer 
-                        src={stream.hls_url || `/streams/${stream.id}/master.m3u8`}
-                        className="w-full h-full object-contain"
+                        src={stream.hls_path || stream.hls_url || stream.id}
+                        className="w-full h-full object-cover"
+                        autoPlay={true}
                     />
+                    {/* Gradient Overlay for Controls Visibility */}
                 </MobileBroadcastLayout>
                 
                 {/* Gift Tray Logic for Mobile Viewer */}
@@ -254,9 +297,30 @@ export default function BroadcastPage() {
       }
 
       if (!token || !serverUrl) {
+          if (tokenError) {
+              return (
+                  <div className="h-screen w-full flex flex-col items-center justify-center bg-black text-white p-4">
+                      <div className="text-red-500 font-bold mb-2">Connection Error</div>
+                      <div className="text-center text-zinc-400">{tokenError}</div>
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="mt-4 px-4 py-2 bg-zinc-800 rounded hover:bg-zinc-700"
+                      >
+                        Retry
+                      </button>
+                  </div>
+              );
+          }
           return (
-              <div className="h-screen w-full flex items-center justify-center bg-black text-white">
+              <div className="h-screen w-full flex flex-col items-center justify-center bg-black text-white gap-4">
                   <Loader2 className="animate-spin text-green-500" size={48} />
+                  <div className="text-zinc-500 text-sm animate-pulse">
+                        {!stream ? 'Loading stream info...' :
+                        !user ? 'Identifying user...' :
+                        !token ? 'Requesting LiveKit token...' :
+                        !serverUrl ? 'Connecting to server...' :
+                        'Initializing studio...'}
+                  </div>
               </div>
           );
       }
@@ -267,10 +331,16 @@ export default function BroadcastPage() {
                 token={token}
                 serverUrl={serverUrl}
                 connect={true}
-                video={true}
-                audio={true}
+                video={!preflightStream}
+                audio={!preflightStream}
                 className="h-full w-full"
             >
+                {preflightStream && (
+                    <PreflightPublisher 
+                        stream={preflightStream} 
+                        onPublished={() => PreflightStore.clear()} 
+                    />
+                )}
                 <MobileStageInner
                     stream={stream}
                     isHost={isHost}
@@ -338,7 +408,7 @@ export default function BroadcastPage() {
                 <div className="w-full h-full bg-black relative">
                     <BroadcastHeader stream={stream} isHost={isHost} onStartBattle={() => setShowBattleManager(true)} />
                     <HLSPlayer 
-                        src={stream.hls_url || `/streams/${stream.id}/master.m3u8`}
+                        src={stream.hls_path || stream.hls_url || stream.id}
                         className="w-full h-full object-contain"
                     />
                     {/* Optional: Add Overlay for Seat Joining here if needed */}
@@ -348,10 +418,16 @@ export default function BroadcastPage() {
                     token={token}
                     serverUrl={serverUrl}
                     connect={true}
-                    video={true}
-                    audio={true}
+                    video={!preflightStream}
+                    audio={!preflightStream}
                     className="flex-1 relative"
                 >
+                    {preflightStream && (
+                        <PreflightPublisher 
+                            stream={preflightStream} 
+                            onPublished={() => PreflightStore.clear()} 
+                        />
+                    )}
                     <BroadcastHeader stream={stream} isHost={isHost} onStartBattle={() => setShowBattleManager(true)} />
                     <BroadcastGrid
                         stream={stream}
@@ -385,8 +461,27 @@ export default function BroadcastPage() {
                     <StartAudio label="Click to allow audio" />
                 </LiveKitRoom>
             ) : (
-                <div className="flex-1 flex items-center justify-center">
-                    <Loader2 className="animate-spin text-green-500" size={48} />
+                <div className="flex-1 flex items-center justify-center flex-col gap-4">
+                    {tokenError ? (
+                        <>
+                            <div className="text-red-500 font-bold">Connection Failed</div>
+                            <div className="text-zinc-400 max-w-md text-center">{tokenError}</div>
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="animate-spin text-green-500" size={48} />
+                            <div className="text-zinc-500 text-sm animate-pulse">
+                                {!stream ? 'Loading stream info...' :
+                                 !user ? 'Identifying user...' :
+                                 !token ? 'Requesting LiveKit token...' :
+                                 !serverUrl ? 'Connecting to server...' :
+                                 'Initializing studio...'}
+                            </div>
+                            <div className="text-xs text-zinc-700 font-mono">
+                                ID: {id} | U: {user?.id?.slice(0,6)} | T: {!!token}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
             

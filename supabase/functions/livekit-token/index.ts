@@ -125,7 +125,10 @@ serve(async (req: Request) => {
     const allowPublish =
       params.allowPublish === true ||
       params.allowPublish === "true" ||
-      params.allowPublish === "1";
+      params.allowPublish === "1" ||
+      // @ts-ignore
+      params.canPublish === true; // Also accept canPublish
+
 
     const level = params.level;
 
@@ -155,6 +158,9 @@ serve(async (req: Request) => {
       canPublish = true;
     }
     if (profile?.is_broadcaster || profile?.is_admin) canPublish = true;
+
+    // ✅ FORCE CAN PUBLISH IF REQUESTED
+    if (allowPublish) canPublish = true;
 
     console.log("[livekit-token] params:", {
       room,

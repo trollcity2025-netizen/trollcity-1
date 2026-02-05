@@ -162,7 +162,8 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
   
   const updateBoxCount = async (increment: boolean) => {
     if (!canManageStream) return;
-    const newCount = increment ? stream.box_count + 1 : stream.box_count - 1;
+    const currentCount = stream.box_count || 1;
+    const newCount = increment ? currentCount + 1 : currentCount - 1;
     if (newCount < 1 || newCount > 6) return;
 
     await supabase
@@ -185,12 +186,16 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
         });
 
         if (error) throw error;
-        if (!data.success) throw new Error(data.error || "Failed to update RGB");
+        
+        // Handle array or object return
+        const result = Array.isArray(data) ? data[0] : data;
+        
+        if (!result || !result.success) throw new Error(result?.error || "Failed to update RGB");
         
         // Update local state based on success
         setHasRgb(enabling);
         
-        if (data.message === 'Purchased and Enabled') {
+        if (result.message === 'Purchased and Enabled') {
              toast.success("RGB Unlocked! (-10 Coins)");
         } else {
              toast.success(enabling ? "RGB Effect Enabled" : "RGB Effect Disabled");
@@ -205,10 +210,13 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
   const handleEndStream = async () => {
     // if (!confirm("Are you sure you want to END the broadcast?")) return; // Removed confirmation as requested
     try {
-        const { data, error } = await supabase.rpc('end_stream', { stream_id: stream.id });
+        // Use p_stream_id to match RPC parameter name
+        const { data, error } = await supabase.rpc('end_stream', { p_stream_id: stream.id });
         
         if (error) throw error;
-        if (data && !data.success) throw new Error(data.message || "Failed to end stream");
+        // Check if data is array or object
+        const result = Array.isArray(data) ? data[0] : data;
+        if (result && result.success === false) throw new Error(result.message || "Failed to end stream");
 
         toast.success("Broadcast ended");
     } catch (e: any) {

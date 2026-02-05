@@ -170,19 +170,28 @@ async function startEgress(roomId: string) {
     console.log(`egressId: ${info.egressId}`);
     console.log(`status: ${info.status}`);
 
-    // Update HLS URL
+    // Update HLS Path (Clean DB storage)
+    const hlsPath = `/streams/${roomId}/master.m3u8`;
+    
+    // Construct full URL for legacy/client support if needed, 
+    // but prefer client-side construction using VITE_HLS_BASE_URL
     const hlsBaseUrl = process.env.VITE_HLS_BASE_URL; 
     let hlsUrl = '';
 
     if (hlsBaseUrl) {
-      hlsUrl = `${hlsBaseUrl}/streams/${roomId}/master.m3u8`;
+      hlsUrl = `${hlsBaseUrl}${hlsPath}`;
     } else {
        // Fallback to Bunny CDN if base URL not set
-       hlsUrl = `https://${bunnyZone}.b-cdn.net/streams/${roomId}/master.m3u8`;
+       hlsUrl = `https://${bunnyZone}.b-cdn.net${hlsPath}`;
     }
 
-    await supabase.from('streams').update({ hls_url: hlsUrl }).eq('id', roomId);
-    console.log(`HLS URL updated: ${hlsUrl}`);
+    await supabase.from('streams').update({ 
+        hls_path: hlsPath,
+        hls_url: hlsUrl, // Keep for backward compatibility
+        room_name: roomId // Ensure room_name is set
+    }).eq('id', roomId);
+    
+    console.log(`HLS Path updated: ${hlsPath}`);
 
   } catch (error) {
     console.error('Failed to start egress:', error);

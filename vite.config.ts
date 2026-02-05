@@ -18,7 +18,7 @@ export default defineConfig({
   plugins: [
     react(),
     tsconfigPaths(),
-    mkcert(),
+    // mkcert(), // DISABLED for HTTP-only mode
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png"],
@@ -66,6 +66,7 @@ export default defineConfig({
     port: 5176,
     strictPort: false,
     hmr: disableHmr ? false : { overlay: false },
+    // https: false, // Force HTTP (Default is false, explicit false causes TS error)
     proxy: {
       '/api': {
         target: `http://localhost:${process.env.PORT || 3001}`,

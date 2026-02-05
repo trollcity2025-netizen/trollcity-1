@@ -153,12 +153,12 @@ const isValidUuid = (value?: string | null) =>
 
 // --- HLS / Listener View for Court ---
 const CourtListenerView = ({ courtSession }: { courtSession: any }) => {
-  const hlsUrl = courtSession?.hls_url || `https://cdn.maitrollcity.com/streams/${courtSession?.id}/master.m3u8`;
+  const playbackSrc = courtSession?.hls_path || courtSession?.hls_url || courtSession?.id;
 
   return (
     <div className="aspect-video bg-black relative w-full h-full">
       <HLSPlayer
-        src={hlsUrl}
+        src={playbackSrc}
         className="w-full h-full object-contain"
       />
       <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
