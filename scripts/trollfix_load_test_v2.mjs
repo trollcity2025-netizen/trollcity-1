@@ -86,7 +86,7 @@ async function runTests() {
   // D) HLS Test
   // ---------------------------------------------------------
   console.log('\n--- D) HLS TEST ---');
-  const hlsUrl = `https://cdn.maitrollcity.com/streams/${streamId}.m3u8`;
+  const hlsUrl = `https://cdn.maitrollcity.com/streams/${streamId}/master.m3u8`;
   try {
       const res = await fetch(hlsUrl);
       console.log(`URL: ${hlsUrl} -> Status: ${res.status}`);

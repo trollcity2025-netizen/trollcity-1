@@ -469,19 +469,53 @@ function AppContent() {
     }
   }, [profile, location.pathname, navigate, user]);
 
-  // Global keyboard shortcut: 'g' opens District Tour
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Only trigger if 'g' is pressed and not in an input/textarea
+      const target = event.target as HTMLElement
+      // Ignore if user is typing in an input/textarea/contentEditable
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return
+      }
+
+      // 'g' -> District Tour
       if (event.key === 'g' || event.key === 'G') {
-        const target = event.target as HTMLElement
-        if (
-          target.tagName !== 'INPUT' &&
-          target.tagName !== 'TEXTAREA' &&
-          !target.isContentEditable
-        ) {
-          navigate('/district/main_plaza', { replace: true })
+        navigate('/district/main_plaza', { replace: true })
+        return
+      }
+
+      // 'a' -> Admin Dashboard
+      if ((event.key === 'a' || event.key === 'A') && (profile?.role === 'admin' || profile?.is_admin)) {
+        navigate('/admin', { replace: true })
+        return
+      }
+
+      // 't' -> Troll Officer / Lead Officer Dashboard
+      if (event.key === 't' || event.key === 'T') {
+        if (profile?.is_lead_officer) {
+          navigate('/lead-officer', { replace: true })
+          return
         }
+        if (profile?.is_troll_officer) {
+          navigate('/officer/dashboard', { replace: true })
+          return
+        }
+      }
+
+      // 's' -> Secretary Dashboard
+      if ((event.key === 's' || event.key === 'S') && profile?.role === 'secretary') {
+        navigate('/secretary', { replace: true })
+        return
+      }
+
+      // 'p' -> Pastor Dashboard
+      if ((event.key === 'p' || event.key === 'P') && profile?.is_pastor) {
+        navigate('/church/pastor', { replace: true })
+        return
       }
     }
 
@@ -489,7 +523,7 @@ function AppContent() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [navigate])
+  }, [navigate, profile])
 
   // 🔹 Check if user is kicked or banned and route to fee pages
   useEffect(() => {

@@ -78,7 +78,7 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
       max_boxes: maxBoxes,
       room_name: roomName,
       defendant_id: safeDefendantId,
-      hls_url: `https://cdn.maitrollcity.com/streams/${targetId}.m3u8`
+      hls_url: `https://cdn.maitrollcity.com/streams/${targetId}/master.m3u8`
     }
 
     const updateOrInsert = waitingSession

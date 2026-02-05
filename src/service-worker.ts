@@ -4,7 +4,7 @@ declare const self: any;
 
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-const CACHE_NAME = 'trollcity-cache-v2';
+const CACHE_NAME = 'trollcity-cache-v3';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('message', (event: any) => {
@@ -29,6 +29,16 @@ self.addEventListener('activate', (event: any) => {
       try {
         // Claim clients so the SW takes control immediately
         await (self as any).clients.claim();
+        
+        // Cleanup old caches
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames.map((name) => {
+            if (name !== CACHE_NAME) {
+              return caches.delete(name);
+            }
+          })
+        );
       } catch {
         // ignore
       }
@@ -50,6 +60,20 @@ self.addEventListener('activate', (event: any) => {
 
 self.addEventListener('fetch', (event: any) => {
   const req = event.request;
+  const url = new URL(req.url);
+
+  // CRITICAL: Bypass Service Worker for all streaming and large asset requests
+  // This ensures HLS streams are never intercepted or cached by the SW
+  // NetworkOnly explicitly
+  if (
+    url.pathname.startsWith('/streams/') ||
+    url.pathname.includes('.m3u8') ||
+    url.pathname.includes('.ts') ||
+    url.pathname.endsWith('.mp4') ||
+    url.pathname.startsWith('/assets/')
+  ) {
+    return;
+  }
 
   // Navigation requests: network-first with offline fallback
   if (req.mode === 'navigate') {
@@ -76,7 +100,6 @@ self.addEventListener('fetch', (event: any) => {
   }
 
   // For other requests: network-only for API, network-first for assets
-  const url = new URL(req.url);
   
   // API requests should never be cached by SW
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) {

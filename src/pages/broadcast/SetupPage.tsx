@@ -169,8 +169,9 @@ export default function SetupPage() {
 
       if (error) throw error;
 
-      // Update with HLS URL
-      const hlsUrl = `https://cdn.maitrollcity.com/streams/${data.id}.m3u8`;
+      // Update with HLS URL (Match Webhook: streams/<id>/master.m3u8)
+      // Use relative path to leverage Vercel rewrites and avoid CORS/domain issues
+      const hlsUrl = `/streams/${data.id}/master.m3u8`;
       const { error: updateError } = await supabase
         .from('streams')
         .update({ hls_url: hlsUrl })

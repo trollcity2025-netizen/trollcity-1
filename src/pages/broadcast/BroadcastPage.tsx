@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { useStreamSeats, SeatSession } from '../../hooks/useStreamSeats';
 import { useStreamEndListener } from '../../hooks/useStreamEndListener';
 import HLSPlayer from '../../components/broadcast/HLSPlayer';
-import BattleControlsList from '../../components/broadcast/BattleControls';
+import BattleControlsList from '../../components/broadcast/BattleControlsList';
 
 import BroadcastHeader from '../../components/broadcast/BroadcastHeader';
 
@@ -234,8 +234,8 @@ export default function BroadcastPage() {
                     onJoinSeat={handleJoinRequest}
                 >
                     <HLSPlayer 
-                        src={stream.hls_url || `https://cdn.maitrollcity.com/streams/${stream.id}.m3u8`}
-                        className="w-full h-full object-cover"
+                        src={stream.hls_url || `/streams/${stream.id}/master.m3u8`}
+                        className="w-full h-full object-contain"
                     />
                 </MobileBroadcastLayout>
                 
@@ -338,7 +338,7 @@ export default function BroadcastPage() {
                 <div className="w-full h-full bg-black relative">
                     <BroadcastHeader stream={stream} isHost={isHost} onStartBattle={() => setShowBattleManager(true)} />
                     <HLSPlayer 
-                        src={stream.hls_url || `https://cdn.maitrollcity.com/streams/${stream.id}.m3u8`}
+                        src={stream.hls_url || `/streams/${stream.id}/master.m3u8`}
                         className="w-full h-full object-contain"
                     />
                     {/* Optional: Add Overlay for Seat Joining here if needed */}

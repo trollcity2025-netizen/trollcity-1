@@ -63,7 +63,7 @@ export default defineConfig({
   base: '/',
   server: {
     host: true,
-    port: 5173,
+    port: 5176,
     strictPort: false,
     hmr: disableHmr ? false : { overlay: false },
     proxy: {
@@ -85,6 +85,21 @@ export default defineConfig({
               req.url
             )
           })
+        },
+      },
+      '/streams': {
+        target: 'https://cdn.maitrollcity.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path,
+        configure: (proxy, _options) => {
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            if (req.url && req.url.includes('.m3u8') && proxyRes.headers['content-type']?.includes('text/html')) {
+              proxyRes.destroy(); 
+              res.writeHead(404, { 'Content-Type': 'text/plain' });
+              res.end('Not Found (Blocked HTML response for m3u8)');
+            }
+          });
         },
       },
     },

@@ -105,7 +105,9 @@ export default function TrollPodsListing() {
 
       // Update HLS URL immediately
       // This ensures we never construct URLs on the client side
-      const hlsUrl = `https://cdn.maitrollcity.com/streams/${data.id}.m3u8`;
+      // MATCHING WEBHOOK CONFIG: streams/<id>/master.m3u8
+      // Use relative path for Vercel Proxy
+      const hlsUrl = `/streams/${data.id}/master.m3u8`;
       await supabase
         .from('pod_rooms')
         .update({ hls_url: hlsUrl })
