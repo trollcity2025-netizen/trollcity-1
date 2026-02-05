@@ -92,8 +92,33 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
 
             toast.success("User unbanned");
             fetchBannedUsers();
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
+            
+            // Fallback if RPC missing
+            const msg = (e?.message || JSON.stringify(e) || '').toLowerCase();
+            if (
+                msg.includes('function') || 
+                msg.includes('schema cache') || 
+                msg.includes('could not find') ||
+                e?.code === '42883' ||
+                e?.code === 'PGRST202'
+            ) {
+                 const { error: delError } = await supabase
+                    .from('stream_bans')
+                    .delete()
+                    .eq('stream_id', streamId)
+                    .eq('user_id', userId);
+                 
+                 if (delError) {
+                     toast.error("Failed to unban user (DB Error)");
+                 } else {
+                     toast.success("User unbanned");
+                     fetchBannedUsers();
+                     return;
+                 }
+            }
+
             toast.error("Failed to unban user");
         }
     };

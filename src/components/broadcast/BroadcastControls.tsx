@@ -212,13 +212,18 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
 
         toast.success("Broadcast ended");
     } catch (e: any) {
-        console.error(e);
+        console.error("End Stream RPC Error:", e);
+        
         // Fallback for legacy support if RPC fails or doesn't exist yet
         // Covers: "function end_stream does not exist", "Could not find the function... in the schema cache"
+        const msg = (e?.message || JSON.stringify(e) || '').toLowerCase();
+        
         if (
-            e.message?.includes('function') || 
-            e.message?.includes('schema cache') || 
-            e.code === '42883'
+            msg.includes('function') || 
+            msg.includes('schema cache') || 
+            msg.includes('could not find') ||
+            e?.code === '42883' || // Undefined function
+            e?.code === 'PGRST202' // Function not found
         ) {
              const { error: updateError } = await supabase
                 .from('streams')
@@ -235,7 +240,7 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                  toast.success("Broadcast ended");
              }
         } else {
-             toast.error(e.message || "Failed to end broadcast");
+             toast.error(e?.message || "Failed to end broadcast");
         }
     }
   };
