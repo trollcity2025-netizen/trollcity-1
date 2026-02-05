@@ -1408,6 +1408,29 @@ const TrollsTownPage: React.FC = () => {
 
     setCompletingUpgradeId(upgradeRow.id)
     try {
+      // Deduct coins for task completion
+      const result = await deductCoins({
+        userId: user!.id,
+        amount: upgradeRow.cost,
+        type: 'troll_town_upgrade_task',
+        coinType: 'troll_coins',
+        description: `Task completion: ${def.name}`,
+        metadata: {
+          upgrade_id: upgradeRow.id,
+          property_id: myProperty.id
+        }
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Insufficient funds to complete task')
+        return
+      }
+
+      if (result.transaction) {
+        setTransactions(prev => [result.transaction, ...prev].slice(0, 20))
+        await refreshCoins()
+      }
+
       const { data: updatedUpgrade, error: updateError } = await supabase
         .from('property_upgrades')
         .update({
