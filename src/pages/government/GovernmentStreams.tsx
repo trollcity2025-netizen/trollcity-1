@@ -636,7 +636,7 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
                     />
                     <div className="text-left">
                       <div className="font-bold text-sm">{p.username}</div>
-                      <div className="text-[10px] text-gray-400">{p.user_id.slice(0, 8)}...</div>
+                      <div className="text-[10px] text-gray-400">{p.user_id?.slice(0, 8)}...</div>
                     </div>
                     {selectedUserId === p.user_id && (
                       <div className="ml-auto w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.8)]" />
