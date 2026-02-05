@@ -16,7 +16,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function test() {
-  const { data, error } = await supabase.rpc('exec_sql', { sql_query: 'SELECT 1' });
+  const { data: _data, error } = await supabase.rpc('exec_sql', { sql_query: 'SELECT 1' });
   if (error) {
     console.error('exec_sql failed:', error);
   } else {

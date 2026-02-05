@@ -14,8 +14,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function inspectFunction() {
-  const { data, error } = await supabase
+async function _inspectFunction() {
+  const { data: _data, error: _error } = await supabase
     .rpc('get_function_def', { func_name: 'log_paypal_email_change' });
 
   // Since we probably don't have a helper rpc for this, let's query pg_proc directly if we can, 

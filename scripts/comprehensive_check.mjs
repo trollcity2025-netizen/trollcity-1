@@ -115,7 +115,7 @@ async function runTest() {
         // --- ECONOMY ---
         console.log('\n--- PHASE 2: Economy & Gifting ---');
         // Check Balance
-        const { data: balance } = await userClient.rpc('get_user_balances', { p_user_id: user.id });
+        const { data: _balance } = await userClient.rpc('get_user_balances', { p_user_id: user.id });
         // Depending on implementation, might return array or object. Assuming empty or default.
         logResult('economy', true, 'Balance check executed');
 
@@ -213,7 +213,7 @@ async function runTest() {
                 .single();
              court = res.data;
              courtError = res.error;
-        } catch (e) {
+        } catch {
              // likely ignored, but let's see
         }
 

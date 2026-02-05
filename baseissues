@@ -1,0 +1,146 @@
+You are working in our Supabase/Postgres project. We must fully fix Supabase DB Linter findings WITHOUT breaking existing app functionality, RPC calls, or performance. Deliver as a single DB migration (or a small ordered set of migrations) that can be applied safely.
+
+## Findings to fix
+A) WARN: function_search_path_mutable for MANY public functions (example: public.update_stream_viewer_count, is_moderator, kick_user, mute_user, unmute_user, assign_broadofficer, remove_broadofficer, spend_coins, try_pay_coins, join_paid_seat, join_seat_atomic, create_battle_challenge, accept_battle, end_battle, finalize_battle, find_opponent, register_battle_score, notify_troll_battle_complete, ensure_broadcaster_badge, award_badge_db, create_president_election, finalize_president_election, remove_president, appoint_vice_president, remove_vice_president, signup_president_candidate, approve_president_candidate, reject_president_candidate, vote_for_president_candidate, vote_candidate_with_coins, set_president_vote_week_key, president_raise_payouts, spend_president_treasury, post_president_announcement, create_president_proposal, log_president_action, president_flag_user, admin_soft_delete_user, ban_user, unban_user, get_banned_users, notify_payout_request, notify_stream_report, trigger_notify_admin_ticket, get_active_streams_paged, get_active_battle, refresh_broadcaster_stats, update_stream_viewer_count, increment_stream_likes, send_gift, send_premium_gift, send_gift_ledger, process_gift_ledger_batch, purchase_rgb_broadcast, purchase_house, purchase_house_upgrade, get_house_stats, create_rental_listing, create_rental_listing_v2, rent_property, purchase_landlord_license, process_daily_asset_upkeep, pay_house_dues, purchase_vehicle, purchase_car, pay_car_dues, generate_license_plate, pay_vehicle_insurance, renew_vehicle_insurance, apply_vehicle_upgrade, get_broadcast_vehicle_status, purchase_from_ktauto, log_paypal_email_change, check_instant_loan_eligibility, buy_property_with_loan, get_user_asset_flags, get_credit_tier, clamp_credit_score, can_start_broadcast, etc.)
+Goal: set safe fixed search_path for each function to prevent role-mutable search_path risk.
+
+B) ERROR: security_definer_view
+- View public.broadcaster_stats_public is defined with SECURITY DEFINER. Remove this risk.
+
+C) ERROR: rls_disabled_in_public
+Enable RLS (and correct policies) on these public tables:
+- public.gift_ledger
+- public.battles
+- public.districts
+- public.house_upgrades
+- public.user_house_upgrades
+- public.auction_bids
+- public.stream_seat_sessions
+
+## Non-negotiables
+1) DO NOT change function names, args, or return types.
+2) DO NOT break existing client calls (RPC names must remain).
+3) Keep performance: add/confirm appropriate indexes for new policy predicates.
+4) Keep permissions correct: authenticated users should be able to do what they currently can; service_role keeps full access.
+5) Provide a “verification script” (SQL + quick test plan) to confirm everything still works.
+
+---
+
+## Part 1 — Fix function_search_path_mutable (all flagged functions)
+Implement a safe search_path on every flagged function using one of these patterns:
+- Preferred: `CREATE OR REPLACE FUNCTION ... SET search_path = pg_catalog, public AS $$ ... $$;`
+- If using ALTER: `ALTER FUNCTION schema.fn(argtypes...) SET search_path = pg_catalog, public;`
+
+Rules:
+- Always include pg_catalog first.
+- Only include schemas actually needed (usually public).
+- If any function references extensions (e.g., net/http, pgjwt, etc.), add that schema explicitly (but ONLY if required).
+
+Deliverable:
+- A migration that iterates all flagged functions and sets search_path.
+- Include a query to list any remaining functions with missing search_path after migration.
+
+---
+
+## Part 2 — Fix SECURITY DEFINER view (broadcaster_stats_public)
+We must remove SECURITY DEFINER behavior from public.broadcaster_stats_public.
+
+Steps:
+1) Inspect current definition of `public.broadcaster_stats_public` (pg_get_viewdef).
+2) Determine WHY it was security definer (likely to bypass RLS or read protected tables).
+3) Replace it with a safe approach:
+   Option A (preferred): Recreate as a normal view WITHOUT security definer, and enforce access via RLS on underlying tables + explicit GRANTs.
+   Option B: Replace the view with a SECURITY INVOKER function (RPC) that returns the same shape and is RLS-safe; BUT keep the view name working if the app depends on it (can create a view that selects from the function if needed).
+4) Ensure the app’s existing reads still work.
+
+Deliverable:
+- Updated view (or view + function) with no SECURITY DEFINER risk.
+- Confirm least privilege: only necessary columns exposed.
+
+---
+
+## Part 3 — Enable RLS on listed tables + create safe policies
+Enable RLS:
+- ALTER TABLE public.gift_ledger ENABLE ROW LEVEL SECURITY;
+- ALTER TABLE public.battles ENABLE ROW LEVEL SECURITY;
+- ALTER TABLE public.districts ENABLE ROW LEVEL SECURITY;
+- ALTER TABLE public.house_upgrades ENABLE ROW LEVEL SECURITY;
+- ALTER TABLE public.user_house_upgrades ENABLE ROW LEVEL SECURITY;
+- ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
+- ALTER TABLE public.stream_seat_sessions ENABLE ROW LEVEL SECURITY;
+
+Then create policies that match existing intended behavior (do not over-restrict compared to current app needs). Use these baseline rules unless the schema indicates otherwise:
+
+### gift_ledger
+- SELECT: authenticated can read rows where (uid = sender_user_id OR uid = receiver_user_id) OR (user is staff/admin and needs moderation visibility if such roles exist).
+- INSERT: authenticated can insert only when uid = sender_user_id and sender_user_id = auth.uid() (or whichever is correct in schema).
+- UPDATE/DELETE: generally deny for normal users; allow service_role; allow admin if you have an admin role claim.
+
+### auction_bids
+- INSERT: authenticated only when bidder_user_id = auth.uid()
+- SELECT: authenticated can see bids for auctions they are participating in OR if auctions are public; if uncertain, default to “bidder can see own bids” + “auction owner can see bids on own auction”.
+- UPDATE/DELETE: deny unless admin/service_role.
+
+### stream_seat_sessions
+- INSERT/UPDATE/SELECT: user can access rows where user_id = auth.uid(); broadcaster (stream owner) can access rows for their stream_id; admin/service_role full.
+
+### house_upgrades
+- Likely lookup table (static). Policy:
+  - SELECT: authenticated can read all.
+  - INSERT/UPDATE/DELETE: service_role only (or admin only).
+
+### user_house_upgrades
+- SELECT/INSERT: authenticated where user_id = auth.uid()
+- UPDATE/DELETE: deny unless admin/service_role (or allow user to update only specific fields if app needs it).
+
+### battles
+- SELECT: authenticated can read battles they are in OR active/public battles.
+- INSERT: authenticated for battles they create (creator_user_id = auth.uid()).
+- UPDATE: only battle participants / broadcaster owners for battle state changes (or force state updates via RPC only).
+- DELETE: admin/service_role only.
+
+### districts
+- If districts is a lookup/static table:
+  - SELECT: authenticated can read all.
+  - Writes: service_role/admin only.
+If districts is user-owned:
+  - SELECT/INSERT: owner_id = auth.uid()
+  - UPDATE/DELETE: owner or admin
+
+IMPORTANT:
+- Before writing policies, inspect actual columns and existing app queries/RPCs to align predicates (owner_id vs uid vs user_id).
+- Prefer routing sensitive state changes through RPCs rather than allowing broad UPDATE from client.
+
+Indexes:
+- Add indexes needed by RLS predicates (e.g., gift_ledger(sender_user_id), gift_ledger(receiver_user_id), stream_seat_sessions(user_id), stream_seat_sessions(stream_id), user_house_upgrades(user_id), auction_bids(bidder_user_id), battles(creator_user_id), battles(user_a_id, user_b_id), etc.) ONLY if missing.
+
+Grants:
+- Ensure PostgREST roles still have required permissions: typically GRANT SELECT/INSERT on tables to authenticated where appropriate.
+- RLS will enforce row filtering.
+
+---
+
+## Part 4 — Regression safety & verification
+Provide:
+1) A SQL verification script that:
+   - Confirms RLS enabled on all listed tables
+   - Lists policies created
+   - Confirms broadcaster_stats_public is no longer SECURITY DEFINER
+   - Confirms all flagged functions now have fixed search_path
+2) A minimal runtime test plan:
+   - As authenticated user A: send gift to user B; verify gift_ledger row visible to A and B only.
+   - Place auction bid; verify bidder sees own bid; verify non-bidder cannot see.
+   - Join stream seat; verify session row visible to user and stream owner.
+   - Read house_upgrades and districts (if meant to be public lookup).
+   - Confirm battles UI reads still work.
+   - Ensure all RPCs still execute without permission errors.
+3) Ensure no performance regression:
+   - EXPLAIN ANALYZE on key queries if you change predicates.
+   - Confirm indexes exist for common policy filters.
+
+Output expectations:
+- Commit the migration(s)
+- Include a concise summary of changes and any assumptions about column names/policy logic
+- If any policy choice is ambiguous due to missing schema context, choose the safest option that preserves current app behavior and add a TODO comment + rationale.
+
+Do all of this now.

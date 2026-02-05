@@ -23,7 +23,7 @@ async function execSql(sql) {
   }
 }
 
-async function tableHasData(tableName) {
+async function _tableHasData(_tableName) {
   // We will handle it in SQL
   return false;
 }
@@ -52,15 +52,6 @@ function sanitizeSql(filename, sql) {
     
     // And replace "ON CONFLICT DO NOTHING;" with:
     // ON CONFLICT DO NOTHING; END IF; END $$;
-    
-    let newSql = sql.replace(
-      'INSERT INTO public.houses_catalog', 
-      'DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM public.houses_catalog) THEN INSERT INTO public.houses_catalog'
-    );
-    newSql = newSql.replace(
-      'ON CONFLICT DO NOTHING;', 
-      'ON CONFLICT DO NOTHING; END IF; END $$;'
-    );
     
     // Same for cars_catalog
     // The cars INSERT ends with "ON CONFLICT DO NOTHING;" as well.

@@ -33,7 +33,7 @@ async function cleanup() {
     console.log('\nCleaning up...');
     const userIds = Object.values(USERS).map(u => u.id).filter(Boolean);
     if (userIds.length > 0) {
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(userIds[0]); // Delete one by one or batch if supported? Supabase deleteUser is one by one.
+        const { error: _error } = await supabaseAdmin.auth.admin.deleteUser(userIds[0]); // Delete one by one or batch if supported? Supabase deleteUser is one by one.
         for (const uid of userIds) {
             await supabaseAdmin.auth.admin.deleteUser(uid);
         }

@@ -82,8 +82,9 @@ export function useStreamSeats(streamId: string | undefined) {
           fetchSeats();
           
           // Realtime Revocation Check
-          if (user && payload.new && payload.new.user_id === user.id) {
-             const newStatus = payload.new.status;
+          const newRecord = payload.new as any;
+          if (user && newRecord && newRecord.user_id === user.id) {
+             const newStatus = newRecord.status;
              if (newStatus !== 'active') {
                  // Force disconnect is handled by BroadcastPage reacting to mySession changing to null/kicked
                  // fetchSeats will update mySession, which triggers the effect in BroadcastPage

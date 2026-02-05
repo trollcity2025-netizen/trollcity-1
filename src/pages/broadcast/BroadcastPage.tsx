@@ -406,6 +406,7 @@ export default function BroadcastPage() {
         <div className="w-80 md:w-96 flex flex-col border-l border-white/10 bg-zinc-950/90 backdrop-blur-md z-40">
             <BroadcastChat 
                 streamId={stream.id} 
+                hostId={stream.user_id}
                 isHost={isHost} 
                 isModerator={false} // TODO: Add mod logic
             />

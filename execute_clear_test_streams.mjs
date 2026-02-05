@@ -58,7 +58,7 @@ async function executeSQLFile() {
     
     console.log(`\n📝 Found ${statements.length} SQL statements\n`)
     
-    let totalDeleted = {
+    let _totalDeleted = {
       streams: 0,
       seat_sessions: 0,
       messages: 0,

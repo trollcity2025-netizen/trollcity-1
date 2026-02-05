@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function test() {
   console.log('Testing with param "query"...');
-  const { data: d1, error: e1 } = await supabase.rpc('exec_sql', { query: 'SELECT 1' });
+  const { data: _d1, error: e1 } = await supabase.rpc('exec_sql', { query: 'SELECT 1' });
   if (!e1) {
     console.log('Success with "query"!');
     return;
@@ -25,7 +25,7 @@ async function test() {
   console.log('Failed with "query":', e1.message);
 
   console.log('Testing with param "sql"...');
-  const { data: d2, error: e2 } = await supabase.rpc('exec_sql', { sql: 'SELECT 1' });
+  const { data: _d2, error: e2 } = await supabase.rpc('exec_sql', { sql: 'SELECT 1' });
   if (!e2) {
     console.log('Success with "sql"!');
     return;
@@ -33,7 +33,7 @@ async function test() {
   console.log('Failed with "sql":', e2.message);
   
   console.log('Testing with param "sql_query"...');
-  const { data: d3, error: e3 } = await supabase.rpc('exec_sql', { sql_query: 'SELECT 1' });
+  const { data: _d3, error: e3 } = await supabase.rpc('exec_sql', { sql_query: 'SELECT 1' });
   if (!e3) {
     console.log('Success with "sql_query"!');
     return;
