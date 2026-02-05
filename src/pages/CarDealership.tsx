@@ -22,7 +22,7 @@ export default function CarDealership() {
   const [catalog, setCatalog] = useState<CarCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
-  const { user } = useAuthStore();
+  const { user, refreshProfile } = useAuthStore();
 
   useEffect(() => {
     fetchCatalog();
@@ -57,6 +57,7 @@ export default function CarDealership() {
 
       if (data.success) {
         toast.success(`Congratulations! You purchased a ${car.name}.`);
+        await refreshProfile();
         navigate('/active-assets'); // Redirect to garage
       } else {
         toast.error(data.error || 'Purchase failed');
@@ -80,21 +81,25 @@ export default function CarDealership() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-gray-400">Loading showroom...</div>;
+  if (loading) return <div className={`p-8 text-center ${trollCityTheme.text.muted}`}>Loading showroom...</div>;
 
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white p-6 pb-24">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className={`min-h-screen p-6 pb-24 ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary}`}>
+      {/* Background Overlays */}
+      <div className={`fixed inset-0 pointer-events-none ${trollCityTheme.overlays.radialPurple}`} />
+      <div className={`fixed inset-0 pointer-events-none ${trollCityTheme.overlays.radialPink}`} />
+      
+      <div className="relative max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/active-assets')} className="p-2 hover:bg-white/10 rounded-full transition">
+          <button onClick={() => navigate('/active-assets')} className={`p-2 rounded-full transition ${trollCityTheme.interactive.hover} hover:bg-white/10`}>
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            <h1 className={`text-3xl font-bold ${trollCityTheme.gradients.text}`}>
               Exotic Imports Dealership
             </h1>
-            <p className="text-gray-400">High-performance machines for the discerning Troller.</p>
+            <p className={trollCityTheme.text.secondary}>High-performance machines for the discerning Troller.</p>
           </div>
         </div>
 
@@ -102,22 +107,22 @@ export default function CarDealership() {
           {catalog.map((car) => {
             const exposure = getExposureLabel(car.exposure_level);
             return (
-              <div key={car.id} className="bg-[#151520] border border-[#2C2C2C] rounded-xl overflow-hidden hover:border-purple-500/50 transition group">
+              <div key={car.id} className={`${trollCityTheme.components.card} group !p-0 overflow-hidden`}>
                 {/* Image Placeholder */}
-                <div className="h-48 bg-[#1A1A25] flex items-center justify-center relative">
+                <div className={`h-48 ${trollCityTheme.backgrounds.card} flex items-center justify-center relative border-b ${trollCityTheme.borders.glass}`}>
                    {car.image_url ? (
                      <img src={car.image_url} alt={car.name} className="w-full h-full object-cover" />
                    ) : (
-                     <Car className="w-16 h-16 text-gray-600 group-hover:text-purple-500 transition" />
+                     <Car className={`w-16 h-16 ${trollCityTheme.text.muted} group-hover:text-purple-500 transition`} />
                    )}
-                   <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-xs border border-white/10">
+                   <div className={`absolute top-2 right-2 ${trollCityTheme.backgrounds.card} px-2 py-1 rounded text-xs border ${trollCityTheme.borders.glass} backdrop-blur-sm`}>
                      Tier {car.tier}
                    </div>
                 </div>
 
                 <div className="p-5 space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold">{car.name}</h3>
+                    <h3 className={`text-xl font-bold ${trollCityTheme.text.primary}`}>{car.name}</h3>
                     <div className="flex items-center gap-2 text-sm mt-1">
                       <span className={`${exposure.color} font-medium flex items-center gap-1`}>
                          <AlertTriangle className="w-3 h-3" /> {exposure.text}
@@ -125,7 +130,7 @@ export default function CarDealership() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 text-sm text-gray-400 bg-black/20 p-3 rounded-lg">
+                  <div className={`space-y-2 text-sm ${trollCityTheme.text.muted} bg-black/20 p-3 rounded-lg border ${trollCityTheme.borders.glass}`}>
                     <div className="flex justify-between">
                       <span>Base Price</span>
                       <span className="text-white font-mono">{car.base_price.toLocaleString()} 🪙</span>
@@ -143,7 +148,7 @@ export default function CarDealership() {
                   <button
                     onClick={() => handlePurchase(car)}
                     disabled={purchasing === car.id}
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-bold transition flex items-center justify-center gap-2"
+                    className={`w-full py-3 ${trollCityTheme.gradients.button} rounded-lg font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5`}
                   >
                     {purchasing === car.id ? (
                       <span className="animate-pulse">Processing...</span>

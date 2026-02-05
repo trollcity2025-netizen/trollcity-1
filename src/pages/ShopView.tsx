@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { deductCoins } from '../lib/coinTransactions'
 import { Store, ShoppingCart, Coins, ArrowLeft, Package, Receipt, X } from 'lucide-react'
+import { trollCityTheme } from '../styles/trollCityTheme'
 
 export default function ShopView() {
   const { username } = useParams<{ username: string }>()
@@ -240,6 +241,9 @@ export default function ShopView() {
       setPurchaseReceipt(receipt)
       setShowReceipt(true)
 
+      // Refresh profile to ensure coin balance is synced
+      useAuthStore.getState().refreshProfile()
+
       toast.success(`Purchased ${item.name}!`)
 
     } catch (err: any) {
@@ -254,7 +258,7 @@ export default function ShopView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.app} text-white p-6`}>
         <div className="max-w-4xl mx-auto">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-700 rounded w-1/3 mb-6"></div>
@@ -263,7 +267,7 @@ export default function ShopView() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1,2,3,4,5,6].map(i => (
-                <div key={i} className="bg-zinc-900 rounded-xl p-6 border border-[#2C2C2C]">
+                <div key={i} className={`${trollCityTheme.components.card} rounded-xl p-6`}>
                   <div className="h-4 bg-gray-700 rounded w-1/2 mb-2"></div>
                   <div className="h-8 bg-gray-700 rounded w-3/4"></div>
                 </div>
@@ -277,17 +281,17 @@ export default function ShopView() {
 
   if (!shop) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.app} text-white p-6`}>
         <div className="max-w-4xl mx-auto text-center py-12">
-          <Store className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+          <Store className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">Shop Not Found</h2>
-          <p className="text-gray-400 mb-6">This shop may have been removed or is no longer available.</p>
+          <p className={`${trollCityTheme.text.muted} mb-6`}>This shop may have been removed or is no longer available.</p>
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-300 mb-6">
             All sales are final. Illegal items or sales are strictly prohibited and will result in enforcement actions.
           </div>
           <button
             onClick={() => navigate('/marketplace')}
-            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
+            className={`px-6 py-3 ${trollCityTheme.buttons.primary} rounded-lg font-semibold`}
           >
             Back to Marketplace
           </button>
@@ -297,35 +301,35 @@ export default function ShopView() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.app} text-white p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/marketplace')}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+              className={`p-2 ${trollCityTheme.buttons.secondary} rounded-lg transition-colors`}
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-3">
-                <Store className="w-8 h-8 text-purple-400" />
+                <Store className={`w-8 h-8 ${trollCityTheme.text.accent}`} />
                 {shop.name}
               </h1>
-              <p className="text-gray-400">Browse and purchase items from this shop</p>
+              <p className={trollCityTheme.text.secondary}>Browse and purchase items from this shop</p>
             </div>
           </div>
         </div>
 
         {/* Shop Info */}
-        <div className="bg-zinc-900 rounded-xl p-6 border border-purple-500/20">
+        <div className={`${trollCityTheme.components.card} rounded-xl p-6`}>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-purple-300">{shop.name}</h2>
+              <h2 className={`text-xl font-semibold ${trollCityTheme.text.accent}`}>{shop.name}</h2>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-400">Items Available</p>
+              <p className={`text-sm ${trollCityTheme.text.secondary}`}>Items Available</p>
               <p className="text-2xl font-bold text-green-400">{items.length}</p>
             </div>
           </div>
@@ -334,14 +338,14 @@ export default function ShopView() {
         {/* Items Grid */}
         {items.length === 0 ? (
           <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+            <Package className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">No Items Available</h2>
-            <p className="text-gray-400">This shop doesn&apos;t have any items listed yet.</p>
+            <p className={trollCityTheme.text.secondary}>This shop doesn&apos;t have any items listed yet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {items.map((item) => (
-              <div key={item.id} className="bg-zinc-900 rounded-xl p-6 border border-purple-500/20 hover:border-purple-500/40 transition-all">
+              <div key={item.id} className={`${trollCityTheme.components.card} rounded-xl p-6 hover:border-cyan-500/40 transition-all`}>
                 {item.image_url && (
                   <img
                     src={item.image_url}
@@ -354,18 +358,18 @@ export default function ShopView() {
                 )}
 
                 <div className="mb-4">
-                  <h3 className="text-lg font-bold text-purple-300 mb-2">{item.name}</h3>
+                  <h3 className={`text-lg font-bold ${trollCityTheme.text.accent} mb-2`}>{item.name}</h3>
                   {item.description && (
-                    <p className="text-sm text-gray-400 mb-3">{item.description}</p>
+                    <p className={`text-sm ${trollCityTheme.text.secondary} mb-3`}>{item.description}</p>
                   )}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Coins className="w-4 h-4 text-yellow-400" />
                       <span className="text-xl font-bold text-yellow-400">{item.price.toLocaleString()}</span>
-                      <span className="text-sm text-gray-400">Troll Coins</span>
+                      <span className={`text-sm ${trollCityTheme.text.secondary}`}>Troll Coins</span>
                     </div>
                     {item.stock_quantity !== null && (
-                      <div className="text-xs text-gray-400">
+                      <div className={`text-xs ${trollCityTheme.text.secondary}`}>
                         {item.item_type === 'broadcast_consumable' ? '' : (item.stock_quantity > 0 ? `${item.stock_quantity} left` : 'Out of stock')}
                       </div>
                     )}
@@ -375,7 +379,7 @@ export default function ShopView() {
                 <button
                   onClick={() => purchaseItem(item)}
                   disabled={purchasing === item.id || (item.stock_quantity !== null && item.stock_quantity <= 0)}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className={`w-full px-4 py-3 ${trollCityTheme.buttons.primary} rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                 >
                   {purchasing === item.id ? (
                     <>Processing...</>
@@ -396,7 +400,7 @@ export default function ShopView() {
         {/* Purchase Receipt Modal */}
         {showReceipt && purchaseReceipt && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-zinc-900 rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className={`${trollCityTheme.components.card} rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-green-400" />
@@ -408,7 +412,7 @@ export default function ShopView() {
                     setPurchaseReceipt(null)
                     navigate('/inventory')
                   }}
-                  className="p-1 hover:bg-zinc-700 rounded"
+                  className={`p-1 ${trollCityTheme.buttons.secondary} rounded`}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -416,7 +420,7 @@ export default function ShopView() {
 
               <div className="space-y-4">
                 {/* Item Details */}
-                <div className="bg-zinc-800 rounded-lg p-4">
+                <div className={`${trollCityTheme.backgrounds.input} rounded-lg p-4 border border-white/5`}>
                   <div className="flex items-center gap-3 mb-3">
                     {purchaseReceipt.item.image_url && (
                       <img
@@ -426,18 +430,18 @@ export default function ShopView() {
                       />
                     )}
                     <div>
-                      <h4 className="font-semibold text-purple-300">{purchaseReceipt.item.name}</h4>
-                      <p className="text-sm text-gray-400">from {purchaseReceipt.shop.name}</p>
+                      <h4 className={`font-semibold ${trollCityTheme.text.accent}`}>{purchaseReceipt.item.name}</h4>
+                      <p className={`text-sm ${trollCityTheme.text.secondary}`}>from {purchaseReceipt.shop.name}</p>
                     </div>
                   </div>
 
                   {purchaseReceipt.item.description && (
-                    <p className="text-sm text-gray-300 mb-3">{purchaseReceipt.item.description}</p>
+                    <p className={`text-sm ${trollCityTheme.text.secondary} mb-3`}>{purchaseReceipt.item.description}</p>
                   )}
                 </div>
 
                 {/* Transaction Details */}
-                <div className="bg-zinc-800 rounded-lg p-4 space-y-2">
+                <div className={`${trollCityTheme.backgrounds.input} rounded-lg p-4 space-y-2 border border-white/5`}>
                   <div className="flex justify-between text-sm">
                     <span>Item Price:</span>
                     <span className="text-yellow-400">{purchaseReceipt.price.toLocaleString()} coins</span>
@@ -457,18 +461,18 @@ export default function ShopView() {
                 </div>
 
                 {/* Receipt Info */}
-                <div className="bg-zinc-800 rounded-lg p-4 space-y-2 text-sm">
+                <div className={`${trollCityTheme.backgrounds.input} rounded-lg p-4 space-y-2 text-sm border border-white/5`}>
                   <div className="flex justify-between">
                     <span>Receipt ID:</span>
-                    <span className="font-mono text-xs">{purchaseReceipt.id.slice(0, 8)}...</span>
+                    <span className="font-mono text-xs text-gray-400">{purchaseReceipt.id.slice(0, 8)}...</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Purchase Date:</span>
-                    <span>{new Date(purchaseReceipt.purchaseDate).toLocaleString()}</span>
+                    <span className="text-gray-400">{new Date(purchaseReceipt.purchaseDate).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Buyer ID:</span>
-                    <span className="font-mono text-xs">{purchaseReceipt.buyerId.slice(0, 8)}...</span>
+                    <span className="font-mono text-xs text-gray-400">{purchaseReceipt.buyerId.slice(0, 8)}...</span>
                   </div>
                 </div>
 
@@ -494,7 +498,7 @@ export default function ShopView() {
                     setPurchaseReceipt(null)
                     navigate('/inventory')
                   }}
-                  className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 rounded font-semibold transition-colors"
+                  className={`flex-1 py-2 ${trollCityTheme.buttons.primary} rounded font-semibold transition-colors`}
                 >
                   View in Inventory
                 </button>
@@ -503,7 +507,7 @@ export default function ShopView() {
                     setShowReceipt(false)
                     setPurchaseReceipt(null)
                   }}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded font-semibold transition-colors"
+                  className={`px-4 py-2 ${trollCityTheme.buttons.secondary} rounded font-semibold transition-colors`}
                 >
                   Close
                 </button>

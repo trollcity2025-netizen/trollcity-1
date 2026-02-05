@@ -5,6 +5,7 @@ import MoneyRain from '../components/MoneyRain';
 import LandingHero from '../components/LandingHero';
 import { Play, Users, Coins, Trophy, Sparkles, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { trollCityTheme } from '../styles/trollCityTheme';
 
 interface PlatformStats {
   totalUsers: number;
@@ -109,7 +110,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen w-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-x-hidden relative font-sans">
+    <div className={`min-h-screen w-screen ${trollCityTheme.backgrounds.primary} overflow-x-hidden relative font-sans`}>
       {/* Money Rain Effect */}
       {isEntering && <MoneyRain />}
 
@@ -240,7 +241,7 @@ export default function LandingPage() {
               {features.map((feature, idx) => (
                 <div
                   key={idx}
-                  className="group p-6 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl hover:border-purple-500/30 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+                  className={`group ${trollCityTheme.components.card}`}
                   style={{
                     animation: `fade-in-up 0.6s ease-out forwards`,
                     animationDelay: `${idx * 0.1}s`,

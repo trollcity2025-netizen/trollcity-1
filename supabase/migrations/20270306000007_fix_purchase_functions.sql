@@ -193,4 +193,4 @@ BEGIN
         'cost', v_total_cost
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;

@@ -214,7 +214,12 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
     } catch (e: any) {
         console.error(e);
         // Fallback for legacy support if RPC fails or doesn't exist yet
-        if (e.message?.includes('function end_stream does not exist')) {
+        // Covers: "function end_stream does not exist", "Could not find the function... in the schema cache"
+        if (
+            e.message?.includes('function') || 
+            e.message?.includes('schema cache') || 
+            e.code === '42883'
+        ) {
              const { error: updateError } = await supabase
                 .from('streams')
                 .update({ 

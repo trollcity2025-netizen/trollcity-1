@@ -4,6 +4,7 @@
 export const trollCityTheme = {
   // Background Gradients
   backgrounds: {
+    app: 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950',
     primary: 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950',
     card: 'bg-slate-900/60 backdrop-blur-xl',
     glass: 'bg-white/5 backdrop-blur-xl',
@@ -59,6 +60,13 @@ export const trollCityTheme = {
     hover: 'hover:-translate-y-0.5 transition-all duration-300',
     hoverScale: 'hover:scale-105 transition-transform duration-300',
     active: 'bg-slate-800/70',
+  },
+
+  // Button Styles (lighter version without padding/rounding)
+  buttons: {
+    primary: 'bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_10px_40px_rgba(147,51,234,0.4)] hover:shadow-[0_15px_50px_rgba(236,72,153,0.5)]',
+    secondary: 'bg-slate-900/60 backdrop-blur-xl border border-white/10 text-slate-50 hover:border-cyan-400/40 hover:bg-slate-800/70',
+    danger: 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-lg hover:shadow-red-500/50',
   },
   
   // Component Specific

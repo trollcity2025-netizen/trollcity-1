@@ -15,6 +15,7 @@ import { deductCoins } from '@/lib/coinTransactions';
 import { PERK_CONFIG } from '@/lib/perkSystem';
 import { canMessageAdmin } from '@/lib/perkEffects';
 import { cars } from '../data/vehicles';
+import { trollCityTheme } from '../styles/trollCityTheme';
 import TMVTab from '../components/tmv/TMVTab';
 import ProfileFeed from '../components/profile/ProfileFeed';
 
@@ -787,7 +788,7 @@ function ProfileInner() {
 
   if (loading || (profile && !isOwnProfile && (paymentChecking || !canView))) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0A0814]">
+      <div className={`flex items-center justify-center min-h-screen ${trollCityTheme.backgrounds.primary}`}>
         <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
       </div>
     );
@@ -795,13 +796,13 @@ function ProfileInner() {
 
   if (!profile) {
     return (
-       <div className="min-h-screen bg-[#0A0814] text-white p-8 flex items-center justify-center">
+       <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-8 flex items-center justify-center`}>
          <div className="text-center">
            <h2 className="text-xl font-bold mb-2">User not found</h2>
-           <p className="text-gray-400">The user you are looking for does not exist.</p>
+           <p className={trollCityTheme.text.muted}>The user you are looking for does not exist.</p>
            <button 
              onClick={() => navigate('/')}
-             className="mt-4 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition"
+             className={`mt-4 ${trollCityTheme.components.buttonPrimary} rounded-lg`}
            >
              Go Home
            </button>
@@ -811,7 +812,7 @@ function ProfileInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white pb-20">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white pb-20`}>
       {/* Banner / Cover Photo */}
       <div className="h-48 md:h-64 bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900 relative overflow-hidden">
         {profile.banner_url ? (
@@ -839,7 +840,7 @@ function ProfileInner() {
              <img
                src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
                alt={profile.username}
-               className={`w-32 h-32 rounded-full border-4 border-[#0A0814] bg-[#0A0814] object-cover ${isProfileLive ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+               className={`w-32 h-32 rounded-full border-4 border-slate-950 bg-slate-950 object-cover ${isProfileLive ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
                onError={(e) => {
                  e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
                }}
@@ -850,7 +851,7 @@ function ProfileInner() {
                }}
              />
              {isProfileLive && (
-               <div className="absolute bottom-0 right-0 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-[#0A0814]">
+               <div className="absolute bottom-0 right-0 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-slate-950">
                  LIVE
                </div>
              )}
@@ -861,7 +862,7 @@ function ProfileInner() {
               {isOwnProfile ? (
                 <button 
                   onClick={() => navigate('/profile/setup')}
-                  className="px-4 py-2 bg-[#1A1A24] border border-gray-700 rounded-lg hover:bg-[#2A2A35] transition flex items-center gap-2"
+                  className={`${trollCityTheme.components.buttonSecondary} py-2 px-4 flex items-center gap-2`}
                 >
                   <Settings size={18} />
                   <span>Edit Profile</span>
@@ -870,14 +871,14 @@ function ProfileInner() {
                 <>
                   <button 
                     onClick={handleFollow}
-                    className={`px-4 py-2 rounded-lg transition flex items-center gap-2 font-medium ${isFollowing ? 'bg-gray-700 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'}`}
+                    className={`px-4 py-2 rounded-lg transition flex items-center gap-2 font-medium ${isFollowing ? 'bg-slate-800 hover:bg-slate-700' : trollCityTheme.gradients.button} shadow-lg`}
                   >
                     <UserPlus size={18} />
                     <span>{isFollowing ? 'Following' : 'Follow'}</span>
                   </button>
                   <button 
                     onClick={handleMessage}
-                    className="px-4 py-2 bg-[#1A1A24] border border-gray-700 rounded-lg hover:bg-[#2A2A35] transition flex items-center gap-2"
+                    className={`${trollCityTheme.components.buttonSecondary} py-2 px-4 flex items-center gap-2`}
                   >
                     <MessageCircle size={18} />
                     <span>Message</span>
@@ -915,7 +916,7 @@ function ProfileInner() {
               </button>
             )}
           </h1>
-          <p className={`text-gray-400 ${profile.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > new Date() ? 'rgb-username font-bold' : ''}`}>@{profile.username}</p>
+          <p className={`${trollCityTheme.text.muted} ${profile.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > new Date() ? 'rgb-username font-bold' : ''}`}>@{profile.username}</p>
           {profile.level !== undefined && (
             <p className="text-sm text-purple-400 font-semibold mt-1">
               Level {profile.level} · {getLevelName(profile.level)}
@@ -937,7 +938,7 @@ function ProfileInner() {
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-400">
+        <div className={`flex flex-wrap gap-4 mt-4 text-sm ${trollCityTheme.text.muted}`}>
           {profile.location && (
             <div className="flex items-center gap-1">
               <MapPin size={14} />
@@ -971,18 +972,18 @@ function ProfileInner() {
         </div>
         
         {/* Stats */}
-        <div className="flex gap-6 mt-6 border-b border-gray-800 pb-4 text-sm">
+        <div className={`flex gap-6 mt-6 border-b border-white/10 pb-4 text-sm`}>
            <div className="flex gap-1 cursor-pointer hover:text-purple-400 transition" onClick={() => navigate(`/following/${profile.id}`)}>
              <span className="font-bold text-white">{followingCount}</span>
-             <span className="text-gray-400">Following</span>
+             <span className={trollCityTheme.text.muted}>Following</span>
            </div>
            <div className="flex gap-1 cursor-pointer hover:text-purple-400 transition" onClick={() => navigate(`/following/${profile.id}`)}>
              <span className="font-bold text-white">{followersCount}</span>
-             <span className="text-gray-400">Followers</span>
+             <span className={trollCityTheme.text.muted}>Followers</span>
            </div>
            <div className="flex gap-1">
              <span className="font-bold text-white">{postsCount}</span>
-             <span className="text-gray-400">Posts</span>
+             <span className={trollCityTheme.text.muted}>Posts</span>
            </div>
         </div>
         
@@ -992,13 +993,13 @@ function ProfileInner() {
           <button
             type="button"
             onClick={() => setIsTabDropdownOpen((prev) => !prev)}
-            className="w-full max-w-xs flex items-center justify-between px-4 py-2 bg-[#0f0f15] border border-gray-800 rounded-2xl text-sm font-medium text-white hover:border-purple-500 transition-colors"
+            className={`w-full max-w-xs flex items-center justify-between px-4 py-2 ${trollCityTheme.components.input} rounded-2xl text-sm font-medium text-white hover:border-purple-500 transition-colors`}
           >
             <span>{activeTabLabel}</span>
             <ChevronDown size={16} className={`text-gray-400 transition-transform ${isTabDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isTabDropdownOpen && (
-            <div className="absolute left-0 right-0 mt-2 max-w-xs bg-[#05050a] border border-gray-800 rounded-2xl shadow-lg z-20 overflow-hidden">
+            <div className={`absolute left-0 right-0 mt-2 max-w-xs ${trollCityTheme.backgrounds.card} border border-white/10 rounded-2xl shadow-lg z-20 overflow-hidden`}>
               {tabOptions.filter((option) => option.show).map((option) => (
                 <button
                   key={option.key}
@@ -1019,18 +1020,18 @@ function ProfileInner() {
              <div className="space-y-6">
                
                {/* Badges Toggle */}
-               <div className="flex justify-end mb-2">
-                 <details className="relative group">
-                   <summary className="list-none cursor-pointer px-4 py-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors">
-                     <Shield className="w-4 h-4 text-yellow-400"/>
-                     View Badges
-                     <ChevronDown size={16} className="text-gray-400 group-open:rotate-180 transition-transform"/>
-                   </summary>
-                   <div className="absolute right-0 top-full mt-2 w-[90vw] md:w-[600px] bg-[#0A0814] border border-zinc-700 rounded-xl shadow-2xl z-50 p-6 max-h-[60vh] overflow-y-auto backdrop-blur-sm">
-                       <BadgesGrid userId={profile.id} showViewAllLink={false} />
-                    </div>
-                 </details>
-               </div>
+              <div className="flex justify-end mb-2">
+                <details className="relative group">
+                  <summary className={`list-none cursor-pointer px-4 py-2 ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} hover:bg-white/5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors`}>
+                    <Shield className="w-4 h-4 text-yellow-400"/>
+                    View Badges
+                    <ChevronDown size={16} className="text-gray-400 group-open:rotate-180 transition-transform"/>
+                  </summary>
+                  <div className={`absolute right-0 top-full mt-2 w-[90vw] md:w-[600px] ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl shadow-2xl z-50 p-6 max-h-[60vh] overflow-y-auto backdrop-blur-xl`}>
+                      <BadgesGrid userId={profile.id} showViewAllLink={false} />
+                   </div>
+                </details>
+              </div>
 
                <ProfileFeed userId={profile.id} />
              </div>
@@ -1046,15 +1047,15 @@ function ProfileInner() {
                       const isExpired = new Date(perk.expires_at) < new Date();
                       const config = PERK_CONFIG[perk.perk_id as keyof typeof PERK_CONFIG];
                       return (
-                        <div key={perk.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                        <div key={perk.id} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-4 rounded-xl`}>
                           <div className="flex justify-between items-start mb-2">
                              <h4 className="font-bold text-white">{config?.name || perk.metadata?.perk_name || 'Unknown Perk'}</h4>
                              <span className={`px-2 py-0.5 rounded text-xs ${isExpired ? 'bg-red-900 text-red-200' : perk.is_active ? 'bg-green-900 text-green-200' : 'bg-gray-800 text-gray-400'}`}>
                                {isExpired ? 'EXPIRED' : perk.is_active ? 'ACTIVE' : 'INACTIVE'}
                              </span>
                           </div>
-                          <p className="text-sm text-gray-400 mb-3">{config?.description || perk.metadata?.description}</p>
-                          <p className="text-sm text-gray-400 mb-3">Expires: {new Date(perk.expires_at).toLocaleString()}</p>
+                          <p className={`text-sm ${trollCityTheme.text.muted} mb-3`}>{config?.description || perk.metadata?.description}</p>
+                          <p className={`text-sm ${trollCityTheme.text.muted} mb-3`}>Expires: {new Date(perk.expires_at).toLocaleString()}</p>
                           <div className="flex gap-2">
                             {!isExpired && isOwnProfile && (
                               <button onClick={() => togglePerk(perk.id, perk.is_active)} className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs">
@@ -1070,7 +1071,7 @@ function ProfileInner() {
                         </div>
                       )
                     })}
-                    {inventory.perks.length === 0 && <p className="text-gray-500 text-sm">No perks found.</p>}
+                    {inventory.perks.length === 0 && <p className={trollCityTheme.text.muted}>No perks found.</p>}
                   </div>
                </div>
 
@@ -1079,7 +1080,7 @@ function ProfileInner() {
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><FileText className="w-5 h-5 text-yellow-500"/> Titles & Deeds</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {inventory.titlesAndDeeds.map((item: any) => (
-                      <div key={item.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex items-start gap-4">
+                      <div key={item.id} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-4 rounded-xl flex items-start gap-4`}>
                          <div className="bg-zinc-800 p-2 rounded-lg">
                            {item.marketplace_item?.image_url ? (
                              <img src={item.marketplace_item.image_url} alt={item.marketplace_item.title} className="w-10 h-10 object-cover rounded" />
@@ -1089,28 +1090,28 @@ function ProfileInner() {
                          </div>
                          <div>
                            <h4 className="font-bold text-white">{item.marketplace_item?.title || 'Unknown Item'}</h4>
-                           <p className="text-sm text-gray-400">{item.marketplace_item?.description || 'No description'}</p>
+                           <p className={`text-sm ${trollCityTheme.text.muted}`}>{item.marketplace_item?.description || 'No description'}</p>
                            <span className={`text-[10px] px-2 py-0.5 rounded uppercase mt-2 inline-block ${item.marketplace_item?.type === 'title' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30' : 'bg-blue-900/30 text-blue-400 border border-blue-500/30'}`}>
                              {item.marketplace_item?.type || 'item'}
                            </span>
                          </div>
                       </div>
                     ))}
-                    {inventory.titlesAndDeeds.length === 0 && <p className="text-gray-500 text-sm">No titles or deeds found.</p>}
+                    {inventory.titlesAndDeeds.length === 0 && <p className={trollCityTheme.text.muted}>No titles or deeds found.</p>}
                   </div>
                </div>
 
                {/* Call Minutes */}
                <div>
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Phone className="w-5 h-5 text-green-400"/> Call Minutes</h3>
-                  <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-4 rounded-xl`}>
                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                           <p className="text-gray-400 text-sm">Audio Minutes</p>
+                           <p className={`text-sm ${trollCityTheme.text.muted}`}>Audio Minutes</p>
                            <p className="text-2xl font-bold text-white">{inventory.callMinutes?.audio_minutes || 0}</p>
                         </div>
                         <div>
-                           <p className="text-gray-400 text-sm">Video Minutes</p>
+                           <p className={`text-sm ${trollCityTheme.text.muted}`}>Video Minutes</p>
                            <p className="text-2xl font-bold text-white">{inventory.callMinutes?.video_minutes || 0}</p>
                         </div>
                      </div>
@@ -1126,12 +1127,12 @@ function ProfileInner() {
                        const isActive = profile.active_entrance_effect === effect.effect_id;
                        
                        return (
-                         <div key={effect.id} className={`bg-zinc-900 p-4 rounded-xl border ${isActive ? 'border-blue-500 bg-blue-500/10' : 'border-zinc-800'} flex justify-between items-center`}>
+                         <div key={effect.id} className={`${trollCityTheme.backgrounds.card} p-4 rounded-xl border ${isActive ? 'border-blue-500 bg-blue-500/10' : 'border-white/10'} flex justify-between items-center`}>
                             <div className="flex items-center gap-3">
                               <span className="text-2xl">{effectData.icon || '✨'}</span>
                               <div className="flex flex-col">
                                 <span className="font-medium text-white">{effectData.name || effect.effect_id}</span>
-                                {effectData.description && <span className="text-xs text-gray-400">{effectData.description}</span>}
+                                {effectData.description && <span className={`text-xs ${trollCityTheme.text.muted}`}>{effectData.description}</span>}
                               </div>
                             </div>
                             
@@ -1156,7 +1157,7 @@ function ProfileInner() {
                          </div>
                        );
                     })}
-                    {inventory.effects.length === 0 && <p className="text-gray-500 text-sm">No effects found.</p>}
+                    {inventory.effects.length === 0 && <p className={trollCityTheme.text.muted}>No effects found.</p>}
                   </div>
                </div>
                
@@ -1165,12 +1166,12 @@ function ProfileInner() {
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-green-400"/> Troll Protection</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {inventory.insurance.map(plan => (
-                       <div key={plan.id} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                       <div key={plan.id} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-4 rounded-xl`}>
                           <h4 className="font-bold">{plan.metadata?.package_name || plan.metadata?.insurance_name || plan.metadata?.plan_name || 'Protection Plan'}</h4>
-                          <p className="text-sm text-gray-400">Expires: {new Date(plan.expires_at).toLocaleString()}</p>
+                          <p className={`text-sm ${trollCityTheme.text.muted}`}>Expires: {new Date(plan.expires_at).toLocaleString()}</p>
                        </div>
                     ))}
-                    {inventory.insurance.length === 0 && <p className="text-gray-500 text-sm">No protection plans active.</p>}
+                    {inventory.insurance.length === 0 && <p className={trollCityTheme.text.muted}>No protection plans active.</p>}
                </div>
              </div>
 
@@ -1202,9 +1203,9 @@ function ProfileInner() {
                       const isActive = String(profile.active_vehicle) === String(v.id);
 
                       return (
-                        <div key={v.id} className={`bg-zinc-900 p-4 rounded-xl border ${isActive ? 'border-emerald-500/50 bg-emerald-900/10' : 'border-zinc-800'} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+                        <div key={v.id} className={`${trollCityTheme.backgrounds.card} p-4 rounded-xl border ${isActive ? 'border-emerald-500/50 bg-emerald-900/10' : 'border-white/10'} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
                            <div className="flex items-center gap-4">
-                             <div className="w-24 h-14 flex-shrink-0 flex items-center justify-center bg-zinc-950 rounded-lg border border-zinc-700 overflow-hidden p-1 relative">
+                             <div className="w-24 h-14 flex-shrink-0 flex items-center justify-center bg-black/40 rounded-lg border border-white/10 overflow-hidden p-1 relative">
                                 {displayImage ? (
                                   <img 
                                     src={displayImage} 
@@ -1225,14 +1226,14 @@ function ProfileInner() {
                                  <p className="font-bold text-white">{displayName}</p>
                                  {isActive && <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30">EQUIPPED</span>}
                                </div>
-                               {displayTier && <p className="text-xs text-gray-400">{displayTier} Class</p>}
+                               {displayTier && <p className={`text-xs ${trollCityTheme.text.muted}`}>{displayTier} Class</p>}
                                <div className="mt-1 flex items-center gap-2">
                                   {isInsured ? (
                                     <span className="flex items-center gap-1 text-xs text-green-400 font-medium bg-green-900/20 px-2 py-0.5 rounded border border-green-500/20">
                                       <Shield size={10} /> Insured
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-zinc-500 flex items-center gap-1">
+                                    <span className={`text-xs ${trollCityTheme.text.muted} flex items-center gap-1`}>
                                       <Shield size={10} /> No Insurance
                                     </span>
                                   )}
@@ -1257,7 +1258,7 @@ function ProfileInner() {
                                 <button
                                   type="button"
                                   onClick={() => navigate('/dealership')}
-                                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-medium transition-colors"
+                                  className={`${trollCityTheme.components.buttonSecondary} px-3 py-1.5 text-xs font-medium transition-colors`}
                                 >
                                   Manage
                                 </button>
@@ -1267,13 +1268,13 @@ function ProfileInner() {
                       );
                     })
                   ) : (
-                    <div className="bg-zinc-900 p-8 rounded-xl border border-zinc-800 text-center">
-                      <Car className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                      <p className="text-gray-400 mb-4">No vehicles found in garage.</p>
+                    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-8 rounded-xl text-center`}>
+                      <Car className={`w-12 h-12 ${trollCityTheme.text.muted} mx-auto mb-3`} />
+                      <p className={`${trollCityTheme.text.muted} mb-4`}>No vehicles found in garage.</p>
                       {isOwnProfile && (
                          <button
                            onClick={() => navigate('/dealership')}
-                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium"
+                           className={`${trollCityTheme.components.buttonPrimary} px-4 py-2 font-medium`}
                          >
                            Visit Dealership
                          </button>
@@ -1293,7 +1294,7 @@ function ProfileInner() {
                     {inventory.homeListings.map((home: any) => (
                       <div
                         key={home.id}
-                        className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex items-center justify-between gap-4"
+                        className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-4 rounded-xl flex items-center justify-between gap-4`}
                       >
                         <div>
                           <p className="text-sm font-semibold text-white">
@@ -1301,7 +1302,7 @@ function ProfileInner() {
                             {home.is_starter ? ' • Starter' : ''}
                           </p>
                           {home.ask_price && (
-                            <p className="text-xs text-gray-400">
+                            <p className={`text-xs ${trollCityTheme.text.muted}`}>
                               Listed for {Number(home.ask_price).toLocaleString()} TrollCoins
                             </p>
                           )}
@@ -1340,16 +1341,16 @@ function ProfileInner() {
                       return (
                         <div
                           key={listing.id}
-                          className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex items-center justify-between gap-4"
+                          className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-4 rounded-xl flex items-center justify-between gap-4`}
                         >
                           <div>
                             <p className="text-sm font-semibold text-white">{name}</p>
-                            <p className="text-xs text-gray-400">
+                            <p className={`text-xs ${trollCityTheme.text.muted}`}>
                               {listing.listing_type === 'auction' ? 'Auction starting at ' : 'Listed for '}
                               {Number(listing.price).toLocaleString()} TrollCoins
                             </p>
                             {tier && (
-                              <p className="text-xs text-gray-500">
+                              <p className={`text-xs ${trollCityTheme.text.muted}`}>
                                 Tier: {tier}
                               </p>
                             )}
@@ -1383,39 +1384,39 @@ function ProfileInner() {
 
            {activeTab === 'earnings' && (
              <div className="space-y-6">
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 flex items-center justify-between">
+                <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl flex items-center justify-between`}>
                    <div>
-                      <p className="text-gray-400">Total Earned</p>
+                      <p className={trollCityTheme.text.muted}>Total Earned</p>
                       <h3 className="text-3xl font-bold text-yellow-400 flex items-center gap-2">
                         <Coins className="w-6 h-6"/> {profile.total_earned_coins?.toLocaleString() || 0}
                       </h3>
                    </div>
                    <div className="text-right">
-                      <p className="text-gray-400">Current Balance</p>
+                      <p className={trollCityTheme.text.muted}>Current Balance</p>
                       <p className="text-xl font-bold text-white">{profile.troll_coins?.toLocaleString() || 0}</p>
                    </div>
                 </div>
 
-                <div className="bg-[#12121A] rounded-xl border border-gray-800 overflow-hidden">
-                   <div className="p-4 border-b border-gray-800">
+                <div className={`${trollCityTheme.backgrounds.card} rounded-xl border border-white/5 overflow-hidden`}>
+                   <div className="p-4 border-b border-white/10">
                       <h4 className="font-bold">Recent Earnings</h4>
                    </div>
                    {earningsLoading ? (
-                      <div className="p-8 text-center text-gray-500">Loading...</div>
+                      <div className={`p-8 text-center ${trollCityTheme.text.muted}`}>Loading...</div>
                    ) : earnings.length > 0 ? (
-                      <div className="divide-y divide-gray-800">
+                      <div className="divide-y divide-white/10">
                          {earnings.map(tx => (
                             <div key={tx.id} className="p-4 flex justify-between items-center">
                                <div>
                                   <p className="font-medium text-white capitalize">{tx.type.replace('_', ' ')}</p>
-                                  <p className="text-xs text-gray-500">{new Date(tx.created_at).toLocaleString()}</p>
+                                  <p className={`text-xs ${trollCityTheme.text.muted}`}>{new Date(tx.created_at).toLocaleString()}</p>
                                </div>
                                <span className="font-bold text-green-400">+{tx.amount.toLocaleString()} TC</span>
                             </div>
                          ))}
                       </div>
                    ) : (
-                      <div className="p-8 text-center text-gray-500">No recent earnings found.</div>
+                      <div className={`p-8 text-center ${trollCityTheme.text.muted}`}>No recent earnings found.</div>
                    )}
                 </div>
              </div>
@@ -1423,41 +1424,41 @@ function ProfileInner() {
 
            {activeTab === 'purchases' && (
              <div className="space-y-6">
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 flex items-center justify-between">
+                <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl flex items-center justify-between`}>
                    <div>
-                      <p className="text-gray-400">Total Spent</p>
+                      <p className={trollCityTheme.text.muted}>Total Spent</p>
                       <h3 className="text-3xl font-bold text-red-400 flex items-center gap-2">
                         <Coins className="w-6 h-6"/> {profile.total_spent_coins?.toLocaleString() || 0}
                       </h3>
                    </div>
                    <div className="text-right">
-                      <p className="text-gray-400">Current Balance</p>
+                      <p className={trollCityTheme.text.muted}>Current Balance</p>
                       <p className="text-xl font-bold text-white">{profile.troll_coins?.toLocaleString() || 0}</p>
                    </div>
                 </div>
 
-                <div className="bg-[#12121A] rounded-xl border border-gray-800 overflow-hidden">
-                   <div className="p-4 border-b border-gray-800">
+                <div className={`${trollCityTheme.backgrounds.card} rounded-xl border border-white/5 overflow-hidden`}>
+                   <div className="p-4 border-b border-white/10">
                       <h4 className="font-bold">Recent Purchases</h4>
                    </div>
                    {purchasesLoading ? (
-                      <div className="p-8 text-center text-gray-500">Loading...</div>
+                      <div className={`p-8 text-center ${trollCityTheme.text.muted}`}>Loading...</div>
                    ) : purchases.length > 0 ? (
-                      <div className="divide-y divide-gray-800">
+                      <div className="divide-y divide-white/10">
                          {purchases.map(tx => (
                             <div key={tx.id} className="p-4 flex justify-between items-center">
                                <div>
                                   <p className="font-medium text-white capitalize">
                                     {tx.metadata?.perk_name || tx.type.replace('_', ' ')}
                                   </p>
-                                  <p className="text-xs text-gray-500">{new Date(tx.created_at).toLocaleString()}</p>
+                                  <p className={`text-xs ${trollCityTheme.text.muted}`}>{new Date(tx.created_at).toLocaleString()}</p>
                                </div>
                                <span className="font-bold text-red-400">{tx.amount.toLocaleString()} TC</span>
                             </div>
                          ))}
                       </div>
                    ) : (
-                      <div className="p-8 text-center text-gray-500">No recent purchases found.</div>
+                      <div className={`p-8 text-center ${trollCityTheme.text.muted}`}>No recent purchases found.</div>
                    )}
                 </div>
              </div>
@@ -1465,9 +1466,9 @@ function ProfileInner() {
 
            {activeTab === 'admin_titles' && canSeeFullProfile && isAdminViewer && (
              <div className="space-y-6">
-               <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
+               <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl`}>
                  <h3 className="text-lg font-bold mb-4">Admin Titles</h3>
-                 <div className="space-y-3 text-sm text-gray-300">
+                 <div className={`space-y-3 text-sm ${trollCityTheme.text.muted}`}>
                    <div className="flex items-center justify-between">
                      <span>System role</span>
                      <span className="px-3 py-1 rounded-full border border-purple-500/40 bg-purple-500/10 text-xs font-semibold uppercase tracking-wide">
@@ -1496,34 +1497,34 @@ function ProfileInner() {
                <h3 className="text-lg font-bold mb-4">Notification Settings</h3>
 
                {/* Profile Costs */}
-               <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 space-y-4">
+               <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl space-y-4`}>
                  <div className="flex items-center gap-3 mb-2">
                    <Coins className="w-6 h-6 text-yellow-400" />
                    <div>
                      <h4 className="font-medium text-white">Profile Costs</h4>
-                     <p className="text-sm text-gray-400">Set prices for interactions (0 = Free)</p>
+                     <p className={`text-sm ${trollCityTheme.text.muted}`}>Set prices for interactions (0 = Free)</p>
                    </div>
                  </div>
                  
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div>
-                     <label className="block text-xs font-medium text-gray-400 mb-1">Message Cost (TC)</label>
+                     <label className={`block text-xs font-medium ${trollCityTheme.text.muted} mb-1`}>Message Cost (TC)</label>
                      <input 
                        type="number" 
                        min="0"
                        value={messageCost}
                        onChange={(e) => setMessageCost(Number(e.target.value))}
-                       className="w-full bg-black/50 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                       className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500"
                      />
                    </div>
                    <div>
-                     <label className="block text-xs font-medium text-gray-400 mb-1">Profile View Cost (TC)</label>
+                     <label className={`block text-xs font-medium ${trollCityTheme.text.muted} mb-1`}>Profile View Cost (TC)</label>
                      <input 
                        type="number" 
                        min="0"
                        value={viewCost}
                        onChange={(e) => setViewCost(Number(e.target.value))}
-                       className="w-full bg-black/50 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                       className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500"
                      />
                    </div>
                  </div>
@@ -1532,7 +1533,7 @@ function ProfileInner() {
                    <button
                      onClick={handleUpdateCosts}
                      disabled={savingPreferences}
-                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+                     className={`${trollCityTheme.components.buttonPrimary} px-4 py-2 font-medium text-sm transition-colors disabled:opacity-50`}
                    >
                      {savingPreferences ? 'Saving...' : 'Save Costs'}
                    </button>
@@ -1540,24 +1541,24 @@ function ProfileInner() {
                </div>
                
                {/* Announcements Toggle */}
-              <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
+              <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {announcementsEnabled ? (
                       <Bell className="w-6 h-6 text-green-400" />
                     ) : (
-                      <BellOff className="w-6 h-6 text-gray-400" />
+                      <BellOff className={`w-6 h-6 ${trollCityTheme.text.muted}`} />
                     )}
                     <div>
                       <h4 className="font-medium text-white">Admin Announcements</h4>
-                      <p className="text-sm text-gray-400">Receive notifications from administrators</p>
+                      <p className={`text-sm ${trollCityTheme.text.muted}`}>Receive notifications from administrators</p>
                     </div>
                   </div>
                   <button
                     onClick={toggleAnnouncements}
                     disabled={savingPreferences}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      announcementsEnabled ? 'bg-green-500' : 'bg-gray-600'
+                      announcementsEnabled ? 'bg-green-500' : 'bg-white/10'
                     }`}
                   >
                     <span
@@ -1570,24 +1571,24 @@ function ProfileInner() {
               </div>
 
               {/* Banner Notifications Toggle */}
-              <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
+              <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {bannerNotificationsEnabled ? (
                       <Zap className="w-6 h-6 text-green-400" />
                     ) : (
-                      <Zap className="w-6 h-6 text-gray-400" />
+                      <Zap className={`w-6 h-6 ${trollCityTheme.text.muted}`} />
                     )}
                     <div>
                       <h4 className="font-medium text-white">Live Banners</h4>
-                      <p className="text-sm text-gray-400">Receive notifications when pods go live</p>
+                      <p className={`text-sm ${trollCityTheme.text.muted}`}>Receive notifications when pods go live</p>
                     </div>
                   </div>
                   <button
                     onClick={toggleBannerNotifications}
                     disabled={savingPreferences}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      bannerNotificationsEnabled ? 'bg-green-500' : 'bg-gray-600'
+                      bannerNotificationsEnabled ? 'bg-green-500' : 'bg-white/10'
                     }`}
                   >
                     <span
@@ -1599,13 +1600,13 @@ function ProfileInner() {
                 </div>
               </div>
              
-             <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
+             <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-xl`}>
                <div className="flex items-center justify-between">
                  <div className="flex items-center gap-3">
                    <LogOut className="w-6 h-6 text-red-400" />
                    <div>
                      <h4 className="font-medium text-white">Log out</h4>
-                     <p className="text-sm text-gray-400">Sign out of your account on this device</p>
+                     <p className={`text-sm ${trollCityTheme.text.muted}`}>Sign out of your account on this device</p>
                    </div>
                  </div>
                  <button

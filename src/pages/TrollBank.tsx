@@ -171,7 +171,7 @@ export default function TrollBank() {
 
 
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white p-6 pb-24">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6 pb-24`}>
       <div className="max-w-4xl mx-auto space-y-8">
         
         {/* Header */}
@@ -180,22 +180,22 @@ export default function TrollBank() {
             <Landmark className="w-8 h-8 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+            <h1 className={`text-3xl font-bold ${trollCityTheme.text.heading}`}>
               Troll Bank
             </h1>
-            <p className="text-gray-400">Secure Coin Storage & Lending Services</p>
+            <p className={trollCityTheme.text.secondary}>Secure Coin Storage & Lending Services</p>
           </div>
         </div>
 
         {/* Balance Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Main Balance */}
-          <div className="bg-[#13111C] border border-white/5 rounded-2xl p-6 relative overflow-hidden group">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6 relative overflow-hidden group`}>
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Coins className="w-32 h-32" />
             </div>
             <div className="relative z-10">
-              <p className="text-gray-400 text-sm font-medium mb-1">Available Balance</p>
+              <p className={`${trollCityTheme.text.secondary} text-sm font-medium mb-1`}>Available Balance</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-yellow-400">{balances.troll_coins.toLocaleString()}</span>
                 <span className="text-sm text-yellow-400/70">coins</span>
@@ -208,12 +208,12 @@ export default function TrollBank() {
           </div>
 
           {/* Bank Reserves */}
-          <div className="bg-[#13111C] border border-white/5 rounded-2xl p-6 relative overflow-hidden group">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6 relative overflow-hidden group`}>
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Landmark className="w-32 h-32" />
             </div>
             <div className="relative z-10">
-              <p className="text-gray-400 text-sm font-medium mb-1">Bank Reserves</p>
+              <p className={`${trollCityTheme.text.secondary} text-sm font-medium mb-1`}>Bank Reserves</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-emerald-400">
                   {bankBalance !== null ? bankBalance.toLocaleString() : '---'}
@@ -228,12 +228,12 @@ export default function TrollBank() {
           </div>
 
           {/* Loan Status */}
-          <div className="bg-[#13111C] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6 relative overflow-hidden`}>
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <CreditCard className="w-32 h-32" />
             </div>
             <div className="relative z-10">
-              <p className="text-gray-400 text-sm font-medium mb-1">Active Loan</p>
+              <p className={`${trollCityTheme.text.secondary} text-sm font-medium mb-1`}>Active Loan</p>
               {activeLoan ? (
                 <div>
                   <div className="flex items-baseline gap-2">
@@ -251,7 +251,7 @@ export default function TrollBank() {
                   <div className="flex items-baseline gap-2">
                     <span className="text-4xl font-bold text-green-400">None</span>
                   </div>
-                  <p className="mt-2 text-sm text-gray-400">You are debt free!</p>
+                  <p className={`mt-2 text-sm ${trollCityTheme.text.secondary}`}>You are debt free!</p>
                 </div>
               )}
             </div>
@@ -259,7 +259,7 @@ export default function TrollBank() {
         </div>
 
         {/* Loan Application / Management */}
-        <div className="bg-[#13111C] border border-white/5 rounded-2xl p-6">
+        <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6`}>
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-purple-400" />
             Loan Services
@@ -269,7 +269,7 @@ export default function TrollBank() {
             <div className="space-y-4">
               <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
                 <h3 className="font-semibold text-emerald-400 mb-2">Manual Repayment</h3>
-                <p className="text-sm text-gray-300 mb-4">
+                <p className={`text-sm ${trollCityTheme.text.secondary} mb-4`}>
                   Pay off your loan manually. Fully paying off a loan increases your credit score by 5% of the loan amount!
                 </p>
                 <div className="flex gap-2">
@@ -278,7 +278,7 @@ export default function TrollBank() {
                     value={payAmount}
                     onChange={(e) => setPayAmount(e.target.value)}
                     placeholder="Amount to pay"
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    className={`${trollCityTheme.components.input} flex-1`}
                   />
                   <button
                     onClick={handlePayLoan}
@@ -289,7 +289,7 @@ export default function TrollBank() {
                   </button>
                   <button
                     onClick={() => setPayAmount(activeLoan.balance.toString())}
-                    className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-lg font-medium transition-colors"
+                    className={`${trollCityTheme.buttons.secondary} px-3 py-2 rounded-lg font-medium transition-colors`}
                   >
                     Max
                   </button>
@@ -300,7 +300,7 @@ export default function TrollBank() {
                 <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-blue-400">Repayment Information</h3>
-                  <p className="text-sm text-gray-300 mt-1">
+                  <p className={`text-sm ${trollCityTheme.text.secondary} mt-1`}>
                     Loans are repaid automatically when you purchase or receive paid coins. 
                     There is no interest if paid within 30 days (currently indefinite).
                   </p>
@@ -312,20 +312,20 @@ export default function TrollBank() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   <h3 className="font-semibold text-white mb-2">Apply for a Loan</h3>
-                  <p className="text-sm text-gray-400 mb-4">
+                  <p className={`text-sm ${trollCityTheme.text.muted} mb-4`}>
                     Get coins instantly and pay them back later automatically.
                   </p>
                   
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">
+                      <label className={`block text-xs font-medium ${trollCityTheme.text.muted} mb-1`}>
                         Amount (Coins) - Max: {eligibility.maxAmount}
                       </label>
                       <input 
                         type="number"
                         value={requestedAmount}
                         onChange={(e) => setRequestedAmount(Number(e.target.value))}
-                        className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        className={`${trollCityTheme.components.input}`}
                         min={100}
                         max={eligibility.maxAmount || 100}
                       />
@@ -334,14 +334,14 @@ export default function TrollBank() {
                     <button
                       onClick={handleApply}
                       disabled={!eligibility.canApply || applying}
-                      className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                      className={`w-full ${trollCityTheme.components.buttonPrimary}`}
                     >
                       {applying ? 'Processing...' : 'Apply for Loan'}
                     </button>
                   </div>
                 </div>
 
-                <div className="bg-black/20 rounded-xl p-4">
+                <div className={`${trollCityTheme.backgrounds.glass} rounded-xl p-4`}>
                   <h3 className="font-semibold text-white mb-3">Eligibility Requirements</h3>
                   <ul className="space-y-2">
                     <Requirement 
@@ -396,7 +396,7 @@ export default function TrollBank() {
         </div>
 
         {/* Ledger / History */}
-        <div className="bg-[#13111C] border border-white/5 rounded-2xl p-6">
+        <div className={`${trollCityTheme.components.card}`}>
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <History className="w-5 h-5 text-gray-400" />
             Recent Transactions

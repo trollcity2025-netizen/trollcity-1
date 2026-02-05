@@ -152,10 +152,10 @@ export default function DistrictTour() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary} flex items-center justify-center`}>
         <div className="animate-pulse text-center">
           <div className="text-2xl font-bold mb-2">Loading District Tour...</div>
-          <div className="text-gray-400">Preparing your guided experience</div>
+          <div className={`${trollCityTheme.text.muted}`}>Preparing your guided experience</div>
         </div>
       </div>
     )
@@ -171,15 +171,15 @@ export default function DistrictTour() {
       />
 
       {/* Background content while tour loads */}
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary} flex items-center justify-center`}>
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">
             Welcome to {district?.display_name || 'Troll City'}
           </h1>
-          <p className="text-xl text-gray-300 mb-8">
+          <p className={`text-xl ${trollCityTheme.text.muted} mb-8`}>
             {district?.description || 'Exploring the districts of Troll City'}
           </p>
-          <div className="animate-pulse text-gray-400">
+          <div className={`animate-pulse ${trollCityTheme.text.muted}`}>
             Starting your guided tour...
           </div>
         </div>

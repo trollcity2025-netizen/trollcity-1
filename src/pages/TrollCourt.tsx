@@ -328,7 +328,7 @@ export default function TrollCourt() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary} p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -336,13 +336,13 @@ export default function TrollCourt() {
             <Scale className="w-12 h-12 text-purple-400" />
             <div>
               <h1 className="text-4xl font-bold">Troll Court</h1>
-              <p className="text-gray-400">Justice, drama, and official rulings for Troll City</p>
+              <p className={trollCityTheme.text.muted}>Justice, drama, and official rulings for Troll City</p>
             </div>
           </div>
         </div>
 
         {/* Court Status */}
-        <div className="bg-zinc-900 rounded-xl border border-purple-500/20 p-6">
+        <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Gavel className="w-6 h-6 text-purple-400" />
@@ -370,10 +370,10 @@ export default function TrollCourt() {
                   <CheckCircle className="w-5 h-5 text-green-400" />
                   <span className="font-semibold text-green-400">Court is in Session</span>
                 </div>
-                <p className="text-sm text-gray-300">
+                <p className={`text-sm ${trollCityTheme.text.muted}`}>
                   Session started by authorized personnel. Official rulings and judgments may be issued.
                 </p>
-                <div className="mt-3 text-xs text-gray-400">
+                <div className={`mt-3 text-xs ${trollCityTheme.text.muted}`}>
                   Started: {new Date(courtSession.created_at || courtSession.startedAt).toLocaleString()}
                 </div>
               </div>
@@ -389,7 +389,7 @@ export default function TrollCourt() {
               <div className="space-y-3">
                 <button
                   onClick={() => navigate(`/court/${courtSession.id}`)}
-                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                  className={`w-full py-3 ${trollCityTheme.gradients.button} text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2`}
                 >
                   <Users className="w-4 h-4" />
                   Enter Court Room
@@ -398,14 +398,14 @@ export default function TrollCourt() {
                   <>
                     <button
                       onClick={openCreateModal}
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-cyan-600/40 hover:bg-cyan-600/60 border border-cyan-500/50 text-cyan-100 rounded-lg font-semibold transition-all hover:shadow-[0_0_20px_rgba(8,145,178,0.4)] flex items-center justify-center gap-2"
                     >
                       <Gavel className="w-4 h-4" />
                       Summon User
                     </button>
                     <button
                       onClick={handleEndCourtSession}
-                      className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors"
+                      className="w-full py-3 bg-red-600/40 hover:bg-red-600/60 border border-red-500/50 text-red-100 rounded-lg font-semibold transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.4)]"
                     >
                       End Court Session
                     </button>
@@ -421,7 +421,7 @@ export default function TrollCourt() {
                     <AlertTriangle className="w-5 h-5 text-yellow-400" />
                     <span className="font-semibold text-yellow-300">You have a court summon</span>
                   </div>
-                  <div className="text-sm text-gray-300">
+                  <div className={`text-sm ${trollCityTheme.text.muted}`}>
                     {pendingSummons[0]?.reason ? pendingSummons[0].reason : 'You have been summoned to Troll Court.'}
                   </div>
                 </div>
@@ -431,7 +431,7 @@ export default function TrollCourt() {
                   <Clock className="w-5 h-5 text-gray-400" />
                   <span className="font-semibold text-gray-400">Court is Adjourned</span>
                 </div>
-                <p className="text-sm text-gray-300">
+                <p className={`text-sm ${trollCityTheme.text.muted}`}>
                   No active court session. Troll Court is available for viewing official rulings and case history.
                 </p>
                 
@@ -456,7 +456,7 @@ export default function TrollCourt() {
                   <button
                     onClick={openCreateModal}
                     disabled={isStartingSession}
-                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                    className={`w-full py-3 ${trollCityTheme.gradients.button} text-white disabled:opacity-50 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2`}
                   >
                     {isStartingSession ? (
                       <>
@@ -476,7 +476,7 @@ export default function TrollCourt() {
                       <AlertTriangle className="w-5 h-5 text-red-400" />
                       <span className="font-semibold text-red-400">Access Restricted</span>
                     </div>
-                    <p className="text-sm text-gray-300">
+                    <p className={`text-sm ${trollCityTheme.text.muted}`}>
                       You are not authorized to start a court session. Only Troll Officers and administrators may initiate official court proceedings.
                     </p>
                   </div>
@@ -488,12 +488,12 @@ export default function TrollCourt() {
 
         {/* Court Rules */}
         <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-zinc-900 rounded-xl border border-purple-500/20 p-6">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Scale className="w-5 h-5 text-purple-400" />
               Court Rules
             </h3>
-            <div className="space-y-3 text-sm text-gray-300">
+            <div className={`space-y-3 text-sm ${trollCityTheme.text.muted}`}>
               <div className="flex items-start gap-2">
                 <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
                 <p>All rulings must be issued by authorized Troll Court officials</p>
@@ -513,7 +513,7 @@ export default function TrollCourt() {
             </div>
           </div>
 
-          <div className="bg-zinc-900 rounded-xl border border-purple-500/20 p-6">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Users className="w-5 h-5 text-purple-400" />
               Court Officials
@@ -541,7 +541,7 @@ export default function TrollCourt() {
 
         {/* Assigned Cases (Judge View) */}
         {assignedCases.length > 0 && (
-          <div className="bg-zinc-900 rounded-xl border border-purple-500/50 p-6 shadow-lg shadow-purple-900/10">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6 shadow-lg shadow-purple-900/10`}>
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Gavel className="w-5 h-5 text-purple-400" />
               Court Docket (Assigned to You)
@@ -557,11 +557,11 @@ export default function TrollCourt() {
                       ACTION REQUIRED
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm text-gray-300 mb-2">
+                  <div className={`flex justify-between text-sm ${trollCityTheme.text.muted} mb-2`}>
                     <span>Plaintiff: {c.plaintiff?.username}</span>
                     <span>Defendant: {c.defendant?.username}</span>
                   </div>
-                  <div className="text-sm text-gray-400 italic">&quot;{c.description}&quot;</div>
+                  <div className={`text-sm ${trollCityTheme.text.muted} italic`}>&quot;{c.description}&quot;</div>
                   
                   <div className="mt-3 flex gap-2">
                       <button 
@@ -579,7 +579,7 @@ export default function TrollCourt() {
 
         {/* My Civil Cases */}
         {myCivilCases.length > 0 && (
-          <div className="bg-zinc-900 rounded-xl border border-red-500/20 p-6">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Scale className="w-5 h-5 text-red-400" />
               My Civil Lawsuits
@@ -587,7 +587,7 @@ export default function TrollCourt() {
 
             <div className="space-y-3">
               {myCivilCases.map((c) => (
-                <div key={c.id} className="bg-gray-900/50 rounded-lg p-4 border border-red-500/10">
+                <div key={c.id} className={`${trollCityTheme.backgrounds.card} rounded-lg p-4 border ${trollCityTheme.borders.glass}`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-red-200">
                       {c.category} 
@@ -600,7 +600,7 @@ export default function TrollCourt() {
                       {c.status.toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm text-gray-300">
+                  <div className={`flex justify-between text-sm ${trollCityTheme.text.muted}`}>
                     <span>vs {c.defendant_id === user?.id ? c.plaintiff?.username : c.defendant?.username}</span>
                     <span>Claim: {c.claim_amount} coins</span>
                   </div>
@@ -617,7 +617,7 @@ export default function TrollCourt() {
         )}
 
         {/* Recent Cases */}
-        <div className="bg-zinc-900 rounded-xl border border-purple-500/20 p-6">
+        <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Gavel className="w-5 h-5 text-purple-400" />
             Recent Court Cases
@@ -626,7 +626,7 @@ export default function TrollCourt() {
           <div className="space-y-3">
             {recentCases.length > 0 ? (
               recentCases.map((c) => (
-                <div key={c.id} className="bg-gray-900/50 rounded-lg p-4">
+                <div key={c.id} className={`${trollCityTheme.backgrounds.card} rounded-lg p-4`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold">{c.title || `Case #${c.id.slice(0, 8)}`}</span>
                     <span className={`text-xs px-2 py-1 rounded-full ${
@@ -637,7 +637,7 @@ export default function TrollCourt() {
                        c.status === 'resolved' ? 'Resolved' : 'Pending'}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-300">{c.description || 'No description provided'}</p>
+                  <p className={`text-sm ${trollCityTheme.text.muted}`}>{c.description || 'No description provided'}</p>
                   <div className="text-xs text-gray-500 mt-1 flex justify-between">
                     <span>
                       {c.defendant?.username ? `Defendant: ${c.defendant.username}` : ''}
@@ -658,7 +658,7 @@ export default function TrollCourt() {
       {/* Create Session Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#171427] border border-purple-500/30 rounded-xl p-6 max-w-md w-full shadow-2xl">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6 max-w-md w-full shadow-2xl`}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Gavel className="w-5 h-5 text-purple-400" />
@@ -675,13 +675,13 @@ export default function TrollCourt() {
             <div className="space-y-4">
               {/* Case Type Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className={`block text-sm font-medium ${trollCityTheme.text.muted} mb-2`}>
                   Case Type (Required for Summoning)
                 </label>
                 <select
                   value={selectedCaseType}
                   onChange={(e) => setSelectedCaseType(e.target.value)}
-                  className="w-full bg-[#0E0A1A] border border-purple-500/30 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
+                  className={`w-full ${trollCityTheme.backgrounds.input} border ${trollCityTheme.borders.glass} rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer`}
                 >
                   <option value="">-- Select Case Reason --</option>
                   {CASE_TYPES.map((type) => (
@@ -693,7 +693,7 @@ export default function TrollCourt() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className={`block text-sm font-medium ${trollCityTheme.text.muted} mb-2`}>
                   Select Defendant (Optional)
                 </label>
                 <div className="relative">
@@ -709,7 +709,7 @@ export default function TrollCourt() {
                     onFocus={() => setShowDropdown(true)}
                     onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                     placeholder="Search username (min 3 chars)..."
-                    className="w-full bg-[#0E0A1A] border border-purple-500/30 rounded-lg pl-10 pr-4 py-2.5 text-white focus:outline-none focus:border-purple-500"
+                    className={`w-full ${trollCityTheme.backgrounds.input} border ${trollCityTheme.borders.glass} rounded-lg pl-10 pr-4 py-2.5 text-white focus:outline-none focus:border-purple-500`}
                   />
                   {showDropdown && (
                     <UserSearchDropdown
@@ -743,7 +743,7 @@ export default function TrollCourt() {
                 <button
                   onClick={handleSummonOrStart}
                   disabled={isStartingSession}
-                  className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                  className={`flex-1 py-2.5 ${trollCityTheme.gradients.button} text-white disabled:opacity-50 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2`}
                 >
                   {isStartingSession ? 'Processing...' : (courtSession ? 'Summon User' : 'Start Session')}
                 </button>

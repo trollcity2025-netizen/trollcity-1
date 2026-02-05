@@ -7,7 +7,9 @@ import { syncPropertyPurchase, subscribeToProperties, listenForPurchaseBroadcast
 import { toast } from 'sonner'
 import { useCoins } from '../lib/hooks/useCoins'
 import { recordCoinTransaction, deductCoins } from '../lib/coinTransactions'
+import { trollCityTheme } from '../styles/trollCityTheme'
 import KTAuto from '../components/ktauto/KTAuto'
+import MyGarage from '../components/trollstown/MyGarage'
 
 type PropertyRow = {
   id: string
@@ -349,7 +351,7 @@ const TrollsTownPage: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const [sellingToBank, setSellingToBank] = useState(false)
   const [sellingAllToBank, setSellingAllToBank] = useState(false)
-  const [activeTab, setActiveTab] = useState<'real_estate' | 'ktauto'>('real_estate')
+  const [activeTab, setActiveTab] = useState<'real_estate' | 'ktauto' | 'my_garage'>('real_estate')
 
   const effectiveBalance = useMemo(() => {
     // Prefer the hook balance as it's more frequently updated
@@ -1502,15 +1504,15 @@ const TrollsTownPage: React.FC = () => {
 
   if (!user || !profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center">
-        <div className="bg-black/40 border border-purple-500/40 rounded-xl p-8 text-center max-w-md mx-auto">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white flex items-center justify-center`}>
+        <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} border rounded-xl p-8 text-center max-w-md mx-auto`}>
           <h1 className="text-2xl font-bold mb-3">Troll Town</h1>
-          <p className="text-gray-300 mb-4">
+          <p className={`${trollCityTheme.text.muted} mb-4`}>
             You need to be logged in to manage your home in Troll Town.
           </p>
           <button
             onClick={() => navigate('/auth')}
-            className="px-6 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 font-semibold"
+            className={`px-6 py-3 rounded-lg ${trollCityTheme.gradients.button} hover:opacity-90 font-semibold`}
           >
             Log In
           </button>
@@ -1520,22 +1522,22 @@ const TrollsTownPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-600 to-emerald-500 flex items-center justify-center">
+            <div className={`w-12 h-12 rounded-xl ${trollCityTheme.gradients.button} flex items-center justify-center`}>
               <Home className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-3xl font-bold">Troll Town</h1>
-              <p className="text-sm text-gray-400">
+              <p className={`text-sm ${trollCityTheme.text.muted}`}>
                 Every citizen gets one free starter home. Upgrade, maintain, and trade fairly.
               </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <span className="text-xs uppercase tracking-widest text-gray-400">TrollCoins</span>
+            <span className={`text-xs uppercase tracking-widest ${trollCityTheme.text.muted}`}>TrollCoins</span>
             <div className="flex items-center gap-2">
               <Coins className="w-4 h-4 text-yellow-400" />
               <span className="text-lg font-semibold text-yellow-300">
@@ -1546,11 +1548,11 @@ const TrollsTownPage: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex gap-4 mb-6 border-b border-white/10">
+      <div className={`flex gap-4 mb-6 border-b ${trollCityTheme.borders.glass}`}>
         <button
           onClick={() => setActiveTab('real_estate')}
           className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'real_estate' ? 'text-emerald-400' : 'text-gray-400 hover:text-white'
+            activeTab === 'real_estate' ? 'text-emerald-400' : `${trollCityTheme.text.muted} hover:text-white`
           }`}
         >
           Real Estate
@@ -1561,7 +1563,7 @@ const TrollsTownPage: React.FC = () => {
         <button
           onClick={() => setActiveTab('ktauto')}
           className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'ktauto' ? 'text-blue-400' : 'text-gray-400 hover:text-white'
+            activeTab === 'ktauto' ? 'text-blue-400' : `${trollCityTheme.text.muted} hover:text-white`
           }`}
         >
           KTAuto Dealership
@@ -1569,17 +1571,29 @@ const TrollsTownPage: React.FC = () => {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('my_garage')}
+          className={`pb-3 text-sm font-medium transition-colors relative ${
+            activeTab === 'my_garage' ? 'text-purple-400' : `${trollCityTheme.text.muted} hover:text-white`
+          }`}
+        >
+          My Garage
+          {activeTab === 'my_garage' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400" />
+          )}
+        </button>
       </div>
 
       {activeTab === 'ktauto' && <KTAuto />}
+      {activeTab === 'my_garage' && <MyGarage />}
 
-      <div className={`grid grid-cols-1 xl:grid-cols-3 gap-6 ${activeTab === 'ktauto' ? 'hidden' : ''}`}>
+      <div className={`grid grid-cols-1 xl:grid-cols-3 gap-6 ${activeTab === 'ktauto' || activeTab === 'my_garage' ? 'hidden' : ''}`}>
         <div className="xl:col-span-2 space-y-6">
-          <div className="bg-black/40 border border-emerald-500/40 rounded-2xl p-6">
+          <div className={`${trollCityTheme.backgrounds.card} border ${trollCityTheme.borders.glass} rounded-2xl p-6`}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold">Marketplace</h2>
-                <p className="text-xs text-gray-400">
+                <p className={`text-xs ${trollCityTheme.text.muted}`}>
                   Spend TrollCoins to add more homes to your portfolio.
                 </p>
               </div>
@@ -1964,47 +1978,47 @@ const TrollsTownPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="border border-white/10 rounded-xl p-4 mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className={`border ${trollCityTheme.borders.glass} rounded-xl p-4 mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3`}>
                     <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-widest">
+                      <p className={`text-xs ${trollCityTheme.text.muted} uppercase tracking-widest`}>
                         Sell Home To Bank
                       </p>
-                      <p className="text-[11px] text-gray-500">
+                      <p className={`text-[11px] ${trollCityTheme.text.muted}`}>
                         Bank buys at system value and routes most coins to the stability pool.
                       </p>
                     </div>
                     <button
                       disabled={sellingToBank}
                       onClick={handleSellHomeToBank}
-                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold disabled:opacity-60"
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold disabled:opacity-60 text-white"
                     >
                       {sellingToBank ? 'Selling...' : 'Sell Home For Coins'}
                     </button>
                   </div>
 
-                  <div className="border border-white/10 rounded-xl p-4 mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className={`border ${trollCityTheme.borders.glass} rounded-xl p-4 mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3`}>
                     <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-widest">
+                      <p className={`text-xs ${trollCityTheme.text.muted} uppercase tracking-widest`}>
                         Sell All Homes To Bank
                       </p>
-                      <p className="text-[11px] text-gray-500">
+                      <p className={`text-[11px] ${trollCityTheme.text.muted}`}>
                         Bank buys all eligible homes at system value in one transaction.
                       </p>
                     </div>
                     <button
                       disabled={sellingAllToBank}
                       onClick={handleSellAllHomesToBank}
-                      className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold disabled:opacity-60"
+                      className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold disabled:opacity-60 text-white"
                     >
                       {sellingAllToBank ? 'Selling All...' : 'Sell All Homes For Coins'}
                     </button>
                   </div>
 
-                  <div className="border border-white/10 rounded-xl p-4 space-y-4">
+                  <div className={`border ${trollCityTheme.borders.glass} rounded-xl p-4 space-y-4`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-sm font-semibold">Upgrades & Tasks</h3>
-                        <p className="text-xs text-gray-500">
+                        <p className={`text-xs ${trollCityTheme.text.muted}`}>
                           Pay coins to start upgrades, complete tasks to activate them.
                         </p>
                       </div>
@@ -2012,26 +2026,26 @@ const TrollsTownPage: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-3">
-                        <p className="text-[11px] text-gray-400 uppercase tracking-widest">
+                        <p className={`text-[11px] ${trollCityTheme.text.muted} uppercase tracking-widest`}>
                           Available Upgrades
                         </p>
                         {availableUpgrades.length === 0 && (
-                          <p className="text-xs text-gray-500">
+                          <p className={`text-xs ${trollCityTheme.text.muted}`}>
                             You have installed all available upgrades for now.
                           </p>
                         )}
                         {availableUpgrades.map(up => (
                           <div
                             key={up.id}
-                            className="border border-white/10 rounded-lg p-3 flex flex-col gap-2 bg-black/30"
+                            className={`border ${trollCityTheme.borders.glass} rounded-lg p-3 flex flex-col gap-2 ${trollCityTheme.backgrounds.card}`}
                           >
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-sm font-semibold">{up.name}</p>
-                                <p className="text-[11px] text-gray-500">{up.description}</p>
+                                <p className={`text-[11px] ${trollCityTheme.text.muted}`}>{up.description}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-xs text-gray-400">{up.category}</p>
+                                <p className={`text-xs ${trollCityTheme.text.muted}`}>{up.category}</p>
                                 <p className="text-sm font-semibold text-yellow-300">
                                   {formatCompactNumber(up.cost)} TC
                                 </p>
@@ -2040,7 +2054,7 @@ const TrollsTownPage: React.FC = () => {
                             <button
                               disabled={startingUpgradeId === up.id}
                               onClick={() => handleStartUpgrade(up)}
-                              className="mt-1 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-semibold disabled:opacity-60"
+                              className={`mt-1 px-3 py-1.5 rounded-lg ${trollCityTheme.components.buttonPrimary} text-xs font-semibold disabled:opacity-60 text-white`}
                             >
                               {startingUpgradeId === up.id ? 'Processing...' : 'Start Upgrade'}
                             </button>
@@ -2049,11 +2063,11 @@ const TrollsTownPage: React.FC = () => {
                       </div>
 
                       <div className="space-y-3">
-                        <p className="text-[11px] text-gray-400 uppercase tracking-widest">
+                        <p className={`text-[11px] ${trollCityTheme.text.muted} uppercase tracking-widest`}>
                           Active Tasks
                         </p>
                     {upgrades.length === 0 && (
-                          <p className="text-xs text-gray-500">
+                          <p className={`text-xs ${trollCityTheme.text.muted}`}>
                             No upgrades in progress yet. Start one to see tasks here.
                           </p>
                         )}
@@ -2068,24 +2082,24 @@ const TrollsTownPage: React.FC = () => {
                           return (
                             <div
                               key={up.id}
-                              className="border border-white/10 rounded-lg p-3 bg-black/30 space-y-2"
+                              className={`border ${trollCityTheme.borders.glass} rounded-lg p-3 ${trollCityTheme.backgrounds.card} space-y-2`}
                             >
                               <div className="flex items-center justify-between">
                                 <div>
                                   <p className="text-sm font-semibold">
                                     {def?.name || up.upgrade_type}
                                   </p>
-                                  <p className="text-[11px] text-gray-500">
+                                  <p className={`text-[11px] ${trollCityTheme.text.muted}`}>
                                     {up.status === 'installed'
                                       ? 'Installed'
                                       : 'Pending installation'}
                                   </p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-xs text-gray-400">
+                                  <p className={`text-xs ${trollCityTheme.text.muted}`}>
                                     {up.tasks_completed}/{up.tasks_required_total} tasks
                                   </p>
-                                  <p className="text-[11px] text-gray-500">
+                                  <p className={`text-[11px] ${trollCityTheme.text.muted}`}>
                                     Cost {up.cost.toLocaleString()} TC
                                   </p>
                                 </div>
@@ -2104,7 +2118,7 @@ const TrollsTownPage: React.FC = () => {
                                 <button
                                   disabled={completingUpgradeId === up.id}
                                   onClick={() => handleCompleteUpgradeTask(up)}
-                                  className="mt-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60"
+                                  className="mt-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60 text-white"
                                 >
                                   {completingUpgradeId === up.id
                                     ? 'Completing task...'
@@ -2123,11 +2137,11 @@ const TrollsTownPage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <div className="bg-black/40 border border-emerald-500/40 rounded-2xl p-5">
+            <div className={`${trollCityTheme.backgrounds.card} border ${trollCityTheme.borders.glass} rounded-2xl p-5`}>
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h2 className="text-lg font-semibold">Market Listings</h2>
-                  <p className="text-xs text-gray-500">
+                  <p className={`text-xs ${trollCityTheme.text.muted}`}>
                     Buy homes from other users, with system-controlled pricing caps.
                   </p>
                 </div>
@@ -2139,7 +2153,7 @@ const TrollsTownPage: React.FC = () => {
                 </button>
               </div>
               {listings.length === 0 ? (
-                <p className="text-xs text-gray-500">
+                <p className={`text-xs ${trollCityTheme.text.muted}`}>
                   No homes are listed for sale right now. Check back soon.
                 </p>
               ) : (
@@ -2150,11 +2164,11 @@ const TrollsTownPage: React.FC = () => {
                     return (
                       <div
                         key={row.id}
-                        className="border border-white/10 rounded-lg p-3 bg-black/30 space-y-2"
+                        className={`border ${trollCityTheme.borders.glass} rounded-lg p-3 ${trollCityTheme.backgrounds.card} space-y-2`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-20 h-24 rounded-lg overflow-hidden border border-white/10">
+                            <div className={`w-20 h-24 rounded-lg overflow-hidden border ${trollCityTheme.borders.glass}`}>
                               <img
                                 src={getTierImageForValue(row.base_value, row.is_starter)}
                                 alt="Property"
@@ -2165,25 +2179,25 @@ const TrollsTownPage: React.FC = () => {
                               <p className="text-sm font-semibold">
                                 Home {row.id.slice(0, 6).toUpperCase()}
                               </p>
-                              <p className="text-[11px] text-gray-500">
+                              <p className={`text-[11px] ${trollCityTheme.text.muted}`}>
                                 Starter: {row.is_starter ? 'Yes' : 'No'} • Created{' '}
                                 {new Date(row.created_at).toLocaleDateString()}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-gray-400">Ask Price</p>
+                            <p className={`text-xs ${trollCityTheme.text.muted}`}>Ask Price</p>
                             <p className="text-sm font-semibold text-yellow-300">
                               {(row.ask_price || 0).toLocaleString()} TC
                             </p>
-                            <p className="text-[10px] text-gray-500">
+                            <p className={`text-[10px] ${trollCityTheme.text.muted}`}>
                               System cap {cap.toLocaleString()} TC
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-xs text-gray-400">System Value</p>
+                            <p className={`text-xs ${trollCityTheme.text.muted}`}>System Value</p>
                             <p className="text-sm font-semibold text-emerald-300">
                               {value.toLocaleString()} TC
                             </p>
@@ -2191,7 +2205,7 @@ const TrollsTownPage: React.FC = () => {
                           <button
                             disabled={buyingId === row.id}
                             onClick={() => handleBuyProperty(row)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60 text-white"
                           >
                             {buyingId === row.id ? 'Processing...' : 'Buy Home'}
                           </button>
@@ -2203,7 +2217,7 @@ const TrollsTownPage: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-black/30 border border-white/10 rounded-2xl p-4 text-xs text-gray-400 space-y-2">
+            <div className={`${trollCityTheme.backgrounds.card} border ${trollCityTheme.borders.glass} rounded-2xl p-4 text-xs ${trollCityTheme.text.muted} space-y-2`}>
               <h3 className="text-sm font-semibold text-white">Non-Gambling Rules</h3>
               <ul className="list-disc list-inside space-y-1">
                 <li>No randomness or chance-based payouts in Troll Town.</li>
@@ -2214,7 +2228,7 @@ const TrollsTownPage: React.FC = () => {
               </ul>
             </div>
 
-            <div className="bg-black/30 border border-white/10 rounded-2xl p-4 text-xs text-gray-300 space-y-3">
+            <div className={`${trollCityTheme.backgrounds.card} border ${trollCityTheme.borders.glass} rounded-2xl p-4 text-xs ${trollCityTheme.text.secondary} space-y-3`}>
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-emerald-400" />
@@ -2222,9 +2236,9 @@ const TrollsTownPage: React.FC = () => {
                 </div>
               </div>
               {loadingTransactions ? (
-                <div className="text-gray-500 text-xs">Loading transactions...</div>
+                <div className={`${trollCityTheme.text.muted} text-xs`}>Loading transactions...</div>
               ) : transactions.length === 0 ? (
-                <div className="text-gray-500 text-xs">
+                <div className={`${trollCityTheme.text.muted} text-xs`}>
                   No recent Troll Town coin activity yet.
                 </div>
               ) : (
@@ -2244,13 +2258,13 @@ const TrollsTownPage: React.FC = () => {
                     return (
                       <div
                         key={tx.id}
-                        className="flex items-center justify-between border border-white/5 rounded-lg px-2 py-1.5 bg-black/40"
+                        className={`flex items-center justify-between border ${trollCityTheme.borders.glass} rounded-lg px-2 py-1.5 ${trollCityTheme.backgrounds.card}`}
                       >
                         <div className="flex flex-col">
                           <span className="text-[11px] font-semibold text-white">
                             {label}
                           </span>
-                          <span className="text-[10px] text-gray-500">
+                          <span className={`text-[10px] ${trollCityTheme.text.muted}`}>
                             {new Date(tx.created_at).toLocaleString()}
                           </span>
                         </div>
@@ -2264,7 +2278,7 @@ const TrollsTownPage: React.FC = () => {
                             {Math.abs(tx.amount).toLocaleString()} TC
                           </div>
                           {typeof tx.balance_after === 'number' && (
-                            <div className="text-[10px] text-gray-500">
+                            <div className={`text-[10px] ${trollCityTheme.text.muted}`}>
                               Balance: {tx.balance_after.toLocaleString()} TC
                             </div>
                           )}

@@ -8,6 +8,7 @@ import { paymentProviders } from '../lib/payments'
 import { toast } from 'sonner'
 import AdminForWeekModal from '../components/AdminForWeekModal'
 import { COIN_PACKAGES } from '../lib/coinMath'
+import { trollCityTheme } from '@/styles/trollCityTheme'
 
 const coinPackages = COIN_PACKAGES.map(p => ({
   id: String(p.id),
@@ -57,7 +58,7 @@ export default function CoinStoreProd() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6 flex items-center justify-center">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary} p-6 flex items-center justify-center`}>
         <div className="text-center">
           <AlertCircle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
           <p>Please sign in to access the Coin Store</p>
@@ -67,7 +68,7 @@ export default function CoinStoreProd() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary} p-6`}>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex justify-between items-end">
@@ -76,7 +77,7 @@ export default function CoinStoreProd() {
                 <Coins className="w-8 h-8 text-purple-500" />
                 Troll Bank Coin Store
             </h1>
-            <p className="text-gray-400">
+            <p className={trollCityTheme.text.muted}>
                 Current balance: <span className="text-purple-400 font-semibold">{(profile?.troll_coins || 0).toLocaleString()}</span> coins
             </p>
           </div>
@@ -98,8 +99,8 @@ export default function CoinStoreProd() {
                 onClick={() => setSelectedProviderId(p.id)}
                 className={`group relative px-5 py-2.5 rounded-full font-semibold flex items-center gap-2 border transition-all duration-200 ${
                   selectedProviderId === p.id
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-transparent shadow-lg shadow-purple-500/40 scale-105'
-                    : 'bg-[#11111b] text-gray-300 border-[#2C2C2C] hover:border-purple-500/70 hover:bg-[#181825] hover:shadow-md hover:-translate-y-0.5'
+                    ? `${trollCityTheme.gradients.button} text-white border-transparent shadow-lg shadow-purple-500/40 scale-105`
+                    : `${trollCityTheme.backgrounds.card} ${trollCityTheme.text.muted} ${trollCityTheme.borders.glass} hover:border-purple-500/70 hover:bg-white/10 hover:shadow-md hover:-translate-y-0.5`
                 }`}
               >
                 {p.logoUrl && <img src={p.logoUrl} alt={p.displayName} className="h-5 w-5" />}
@@ -120,7 +121,7 @@ export default function CoinStoreProd() {
                 className={`group relative p-6 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-200 font-semibold ${
                   selectedPackage.id === pkg.id
                     ? 'bg-gradient-to-b from-purple-700/90 via-purple-600/80 to-indigo-700/80 border-purple-400/80 text-white shadow-xl shadow-purple-500/40 scale-105'
-                    : 'bg-[#11111b]/90 border-[#2C2C2C] text-gray-200 hover:border-purple-500/60 hover:bg-[#181825] hover:shadow-lg hover:-translate-y-1'
+                    : `${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} ${trollCityTheme.text.muted} hover:border-purple-500/60 hover:bg-white/10 hover:shadow-lg hover:-translate-y-1`
                 }`}
               >
                 <span className="text-3xl">💰</span>
@@ -139,17 +140,17 @@ export default function CoinStoreProd() {
           <button
             onClick={handleBuy}
             disabled={loading}
-            className="px-8 py-4 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-lg shadow-lg transition-all flex items-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
+            className={`px-8 py-4 rounded-full ${trollCityTheme.gradients.button} text-white font-bold text-lg shadow-lg transition-all flex items-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed`}
           >
             {loading ? 'Processing...' : `Buy with ${provider?.displayName}`}
           </button>
         </div>
 
         {/* Troll Bank Loan Promo */}
-        <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-500/30 rounded-xl p-8 text-center mb-12">
+        <div className={`bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-500/30 rounded-xl p-8 text-center mb-12`}>
           <Wallet className="w-16 h-16 text-purple-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">Need more coins?</h2>
-          <p className="text-gray-300 mb-6 max-w-lg mx-auto">
+          <p className={`${trollCityTheme.text.muted} mb-6 max-w-lg mx-auto`}>
             Apply for a Troll Bank Loan instantly! No external payments required.
             Repay automatically as you earn.
           </p>

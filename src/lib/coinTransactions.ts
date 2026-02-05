@@ -62,6 +62,7 @@ export type CoinTransactionType =
   | 'troll_town_purchase'
   | 'troll_town_sale'
   | 'troll_town_upgrade'
+  | 'troll_town_upgrade_task'
 
 export type CoinType = 'troll_coins'
 
@@ -257,88 +258,74 @@ export async function deductCoins(params: {
     const metadataPayload = sanitizeMetadata(metadata)
 
     if (coinType === 'troll_coins' || !coinType) {
-      // Use Troll Bank centralized spending
-      console.log('[deductCoins] Calling troll_bank_spend_coins_secure:', { userId, amount: normalizedAmount, type })
-      const { data: bankResult, error: bankError } = await sb.rpc('troll_bank_spend_coins_secure', {
-        p_user_id: userId,
+      // Use Troll Bank centralized spending (v2 via try_pay_coins_secure)
+      // This ensures we use the same logic as house/car purchases and fix the "flashing" bug
+      console.log('[deductCoins] Calling try_pay_coins_secure:', { userId, amount: normalizedAmount, type })
+      
+      const { data: paySuccess, error: payError } = await sb.rpc('try_pay_coins_secure', {
         p_amount: normalizedAmount,
-        p_bucket: 'paid', // Spending is usually from 'paid' (or fungible balance)
-        p_source: type,
-        p_ref_id: null,
+        p_reason: type,
         p_metadata: metadataPayload || {}
       })
-      console.log('[deductCoins] RPC result:', { bankResult, bankError })
 
-      if (bankError) {
-             console.error('[deductCoins] Troll Bank error:', bankError)
-             // Fallback: use legacy RPC if bank fails due to schema drift (e.g., missing columns)
-             const msg = (bankError.message || '').toLowerCase()
-             if (msg.includes('column') && msg.includes('coins') && msg.includes('does not exist')) {
-               try {
-                 const amountParam = normalizedAmount.toString()
-                 const { data: rpcBalance, error: legacyErr } = await sb.rpc('deduct_user_troll_coins', {
-                   p_user_id: userId,
-                   p_amount: amountParam,
-                   p_coin_type: 'troll_coins'
-                 })
-
-                 if (legacyErr) {
-                   console.error('deductCoins legacy fallback failed:', legacyErr)
-                   return { success: false, newBalance: null, transaction: null, error: legacyErr.message }
-                 }
-
-                 const parsedBalance = safeNumber(rpcBalance)
-                 let newBalance: number | string | null = parsedBalance
-                 if (newBalance === null && rpcBalance !== null && rpcBalance !== undefined) {
-                   newBalance = typeof rpcBalance === 'string' ? rpcBalance : String(rpcBalance)
-                 }
-
-                 // Update store
-                 try {
-                   const { profile, setProfile } = useAuthStore.getState()
-                   if (profile && profile.id === userId && newBalance !== null) {
-                     const numericBalance = Number(newBalance)
-                     if (!isNaN(numericBalance)) {
-                       setProfile({ ...profile, troll_coins: numericBalance })
-                     }
-                   }
-                 } catch (e) {
-                   console.warn('deductCoins fallback: Failed to update local store', e)
-                 }
-
-                 return { success: true, newBalance, transaction: null, error: null }
-               } catch (fallbackErr: any) {
-                 console.error('deductCoins fallback exception:', fallbackErr)
-                 return { success: false, newBalance: null, transaction: null, error: fallbackErr.message }
-               }
+      if (payError) {
+        console.error('[deductCoins] try_pay_coins_secure error:', payError)
+        // If RPC not found (migration issue), try legacy fallback
+        const errMsg = payError.message || ''
+        if (
+          (errMsg.includes('function') && errMsg.includes('not found')) ||
+          errMsg.includes('Could not find the function')
+        ) {
+             console.log('[deductCoins] Fallback to legacy troll_bank_spend_coins_secure')
+             const { data: bankResult, error: bankError } = await sb.rpc('troll_bank_spend_coins_secure', {
+                p_user_id: userId,
+                p_amount: normalizedAmount,
+                p_bucket: 'paid',
+                p_source: type,
+                p_ref_id: null,
+                p_metadata: metadataPayload || {}
+             })
+             
+             if (bankError || (bankResult && !bankResult.success)) {
+                 return { success: false, newBalance: null, transaction: null, error: bankError?.message || bankResult?.error || 'Payment failed' }
              }
-
-             return { success: false, newBalance: null, transaction: null, error: bankError.message }
-      } else {
-        // Success
-        if (!bankResult.success) {
-           console.error('[deductCoins] RPC returned success=false:', bankResult)
-           return { success: false, newBalance: null, transaction: null, error: bankResult.error || 'Failed to spend coins' }
+             
+             // Success via legacy
+             const newBalance = bankResult.new_balance
+             return { success: true, newBalance, transaction: { id: bankResult.ledger_id } }
         }
-
-        const newBalance = bankResult.new_balance
-        console.log('[deductCoins] Coins deducted successfully, new balance:', newBalance)
         
-        // Update global store
-        try {
-          const { profile, setProfile } = useAuthStore.getState()
-          if (profile && profile.id === userId) {
-             setProfile({ ...profile, troll_coins: newBalance })
-          }
-        } catch (e) {
-          console.warn('deductCoins: Failed to update local store', e)
-        }
+        return { success: false, newBalance: null, transaction: null, error: payError.message }
+      }
 
-        return {
-          success: true,
-          newBalance,
-          transaction: null, // Handled by ledger
-          error: null
+      if (!paySuccess) {
+         return { success: false, newBalance: null, transaction: null, error: 'Insufficient funds' }
+      }
+
+      // Success! Fetch new balance for UI
+      const { data: profileData } = await sb.from('user_profiles').select('troll_coins').eq('id', userId).single()
+      const newBalance = profileData?.troll_coins || 0
+
+      // Update store immediately to prevent flashing
+      try {
+        const { profile, setProfile, refreshProfile } = useAuthStore.getState()
+        if (profile && profile.id === userId) {
+          // Update local state first for instant feedback
+          setProfile({ ...profile, troll_coins: newBalance })
+          // Then refresh full profile to ensure consistency
+          refreshProfile()
+        }
+      } catch (e) { console.warn('Store update failed', e) }
+
+      return {
+        success: true,
+        newBalance: newBalance,
+        transaction: { 
+            id: `tx_${Date.now()}`, 
+            user_id: userId,
+            amount: -normalizedAmount,
+            type: type,
+            created_at: new Date().toISOString()
         }
       }
     }

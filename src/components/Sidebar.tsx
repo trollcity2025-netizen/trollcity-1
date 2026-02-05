@@ -556,7 +556,7 @@ function SidebarItem({
         sidebar-item-rgb
         ${active ? 'active-rgb' : ''}
         ${highlight && !active ? 'text-white bg-gradient-to-r from-red-500/20 via-green-500/20 to-blue-500/20 border border-white/30 shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse' : ''}
-        ${!active && !highlight ? 'text-gray-300 border border-transparent' : ''}
+        ${!active && !highlight ? 'text-slate-300' : ''}
         ${collapsed ? 'justify-center px-2' : ''}
         ${className}
       `}

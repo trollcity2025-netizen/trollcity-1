@@ -1,3 +1,5 @@
+import colors from 'tailwindcss/colors';
+
 /** @type {import('tailwindcss').Config} */
 
 export default {
@@ -9,6 +11,10 @@ export default {
     },
     extend: {
       colors: {
+        gray: colors.slate,
+        neutral: colors.slate,
+        zinc: colors.slate,
+        stone: colors.slate,
         'troll-neon-blue': 'var(--troll-blue-neon)',
         'troll-neon-pink': 'var(--troll-pink-neon)',
         'troll-neon-purple': 'var(--troll-purple-300)',

@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 import InstallButton from '../components/InstallButton';
+import { trollCityTheme } from '../styles/trollCityTheme';
 
 const Auth = () => {
   const [loading, setLoading] = useState(false)
@@ -376,12 +377,12 @@ const Auth = () => {
 
   return (
     <>
-    <div className="auth-container flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-x-hidden relative font-sans">
+    <div className={`auth-container flex items-center justify-center min-h-screen ${trollCityTheme.backgrounds.primary} text-white overflow-x-hidden relative font-sans`}>
       {/* Animated Background Gradients */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(147,51,234,0.15),transparent)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,rgba(236,72,153,0.12),transparent)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(56,189,248,0.1),transparent)]" />
+        <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPurple}`} />
+        <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPink}`} />
+        <div className={`absolute inset-0 ${trollCityTheme.overlays.radialCyan}`} />
       </div>
 
       {/* Floating Particles */}
@@ -417,13 +418,13 @@ const Auth = () => {
 
           {/* Tab Navigation */}
           <div className="flex justify-center mb-8">
-            <div className="flex bg-slate-800/50 border border-white/5 rounded-xl p-1">
+            <div className="grid grid-cols-2 w-full max-w-xs bg-slate-800/50 border border-white/5 rounded-xl p-1 gap-1">
               <button
                 onClick={() => setIsLogin(true)}
                 className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
                   isLogin 
-                    ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg' 
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                 }`}
               >
                 Sign In
@@ -432,8 +433,8 @@ const Auth = () => {
                 onClick={() => setIsLogin(false)}
                 className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
                   !isLogin 
-                    ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg' 
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                 }`}
               >
                 Sign Up

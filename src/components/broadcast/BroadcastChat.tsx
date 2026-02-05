@@ -48,6 +48,7 @@ interface BroadcastChatProps {
 export default function BroadcastChat({ streamId, hostId, isModerator, isHost }: BroadcastChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
   const scrollRef = useRef<HTMLDivElement>(null);

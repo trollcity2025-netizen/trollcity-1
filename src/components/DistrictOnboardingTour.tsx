@@ -116,7 +116,7 @@ export default function DistrictOnboardingTour({
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-[#0A0A14] rounded-xl p-6 border border-purple-500/30">
+        <div className={`${trollCityTheme.backgrounds.card} rounded-xl p-6 ${trollCityTheme.borders.glass}`}>
           <div className="animate-pulse space-y-4">
             <div className="h-6 bg-gray-700 rounded w-48"></div>
             <div className="h-16 bg-gray-700 rounded"></div>
@@ -130,10 +130,10 @@ export default function DistrictOnboardingTour({
   if (completed) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-[#0A0A14] rounded-xl p-8 border border-green-500/30 text-center">
+        <div className={`${trollCityTheme.backgrounds.card} rounded-xl p-8 border border-green-500/30 text-center`}>
           <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Tour Completed!</h2>
-          <p className="text-gray-400">You&apos;ve successfully explored this district.</p>
+          <h2 className={`text-2xl font-bold ${trollCityTheme.text.primary} mb-2`}>Tour Completed!</h2>
+          <p className={`${trollCityTheme.text.muted}`}>You&apos;ve successfully explored this district.</p>
         </div>
       </div>
     )
@@ -144,21 +144,21 @@ export default function DistrictOnboardingTour({
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0A0A14] rounded-xl border border-purple-500/30 max-w-2xl w-full max-h-[90vh] overflow-hidden">
+      <div className={`${trollCityTheme.backgrounds.card} rounded-xl ${trollCityTheme.borders.glass} max-w-2xl w-full max-h-[90vh] overflow-hidden`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#2C2C2C]">
+        <div className={`flex items-center justify-between p-6 border-b ${trollCityTheme.borders.glass}`}>
           <div className="flex items-center gap-3">
             <Sparkles className="w-6 h-6 text-purple-400" />
             <div>
-              <h2 className="text-xl font-bold text-white">District Tour</h2>
-              <p className="text-sm text-gray-400">
+              <h2 className={`text-xl font-bold ${trollCityTheme.text.primary}`}>District Tour</h2>
+              <p className={`text-sm ${trollCityTheme.text.muted}`}>
                 Step {currentStep + 1} of {tourSteps.length}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-[#1F1F2E] rounded-lg transition-colors"
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-gray-400" />
           </button>
@@ -166,7 +166,7 @@ export default function DistrictOnboardingTour({
 
         {/* Progress Bar */}
         <div className="px-6 py-3">
-          <div className="w-full bg-[#1F1F2E] rounded-full h-2">
+          <div className="w-full bg-white/5 rounded-full h-2">
             <div
               className="bg-purple-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -179,16 +179,16 @@ export default function DistrictOnboardingTour({
           {currentStepData && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-2xl font-bold text-white mb-3">
+                <h3 className={`text-2xl font-bold ${trollCityTheme.text.primary} mb-3`}>
                   {currentStepData.title}
                 </h3>
-                <p className="text-gray-300 text-lg leading-relaxed">
+                <p className={`${trollCityTheme.text.muted} text-lg leading-relaxed`}>
                   {currentStepData.description}
                 </p>
               </div>
 
               {currentStepData.target_feature && (
-                <div className="bg-[#1F1F2E] rounded-lg p-4 border border-purple-500/20">
+                <div className={`bg-white/5 rounded-lg p-4 border ${trollCityTheme.borders.glass}`}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
                     <span className="font-semibold text-purple-300">
@@ -196,7 +196,7 @@ export default function DistrictOnboardingTour({
                     </span>
                   </div>
                   {currentStepData.route_path && (
-                    <p className="text-sm text-gray-400">
+                    <p className={`text-sm ${trollCityTheme.text.muted}`}>
                       Navigate to: {currentStepData.route_path}
                     </p>
                   )}

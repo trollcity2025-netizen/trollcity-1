@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Trophy, Coins, Video, Users } from 'lucide-react'
 import UserNameWithAge from '../components/UserNameWithAge'
+import { trollCityTheme } from '../styles/trollCityTheme'
 
 export default function Leaderboard() {
   const [topUsers, setTopUsers] = useState<any[]>([])
@@ -82,23 +83,23 @@ export default function Leaderboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white`}>
       <div className="max-w-5xl mx-auto p-8">
         <div className="flex items-center gap-2 mb-4">
           <Trophy className="w-6 h-6 text-yellow-300" />
           <h1 className="text-2xl font-extrabold">Leaderboard</h1>
         </div>
         {loading ? (
-          <div className="text-gray-400">Loading…</div>
+          <div className={`${trollCityTheme.text.muted}`}>Loading…</div>
         ) : (
           <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-[#1A1A1A] rounded-xl p-6 border border-[#2C2C2C]">
+            <div className={`${trollCityTheme.components.card}`}>
               <h2 className="font-semibold mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-purple-300" /> Top Earners</h2>
               <div className="space-y-2">
                 {topUsers.map((u, i) => (
                   <div key={u.id} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400">{i+1}.</span>
+                      <span className={`${trollCityTheme.text.muted}`}>{i+1}.</span>
                       <UserNameWithAge 
                         user={{
                           username: u.username,
@@ -114,21 +115,21 @@ export default function Leaderboard() {
                 ))}
               </div>
             </div>
-            <div className="bg-[#1A1A1A] rounded-xl p-6 border border-[#2C2C2C]">
+            <div className={`${trollCityTheme.components.card}`}>
               <h2 className="font-semibold mb-3 flex items-center gap-2"><Video className="w-5 h-5 text-green-300" /> Top Streams (Gift Coins)</h2>
               <div className="space-y-2">
                 {topStreams.map((s, i) => (
                   <div key={s.id} className="flex items-center justify-between text-sm">
                     <div className="flex flex-col">
-                      <div className="flex items-center gap-2"><span className="text-gray-400">{i+1}.</span> {s.title || 'Untitled'}</div>
-                      <div className="text-xs text-gray-500 ml-5">
+                      <div className="flex items-center gap-2"><span className={`${trollCityTheme.text.muted}`}>{i+1}.</span> {s.title || 'Untitled'}</div>
+                      <div className={`text-xs ${trollCityTheme.text.muted} ml-5`}>
                          by <UserNameWithAge 
                               user={{
                                 username: s.user_profiles?.username || 'Unknown',
                                 created_at: s.user_profiles?.created_at,
                                 rgb_username_expires_at: s.user_profiles?.rgb_username_expires_at
                               }}
-                              className="text-gray-400"
+                              className={`${trollCityTheme.text.muted}`}
                             />
                       </div>
                     </div>

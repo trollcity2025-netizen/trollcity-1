@@ -965,13 +965,13 @@ export default function CoinStore() {
 
   return (
       showPurchaseComplete ? (
-        <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white flex items-center justify-center p-6">
+        <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white flex items-center justify-center p-6`}>
           <div className="text-center">
             <div className="text-xl font-semibold">Order submitted</div>
           </div>
         </div>
       ) : loading ? (
-        <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+        <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6`}>
           <div className="max-w-6xl mx-auto">
             <div className="flex items-center justify-between mb-8">
               <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -981,7 +981,7 @@ export default function CoinStore() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="bg-zinc-900 rounded-xl p-6 border border-[#2C2C2C] animate-pulse">
+                <div key={i} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6 animate-pulse`}>
                   <div className="h-4 bg-gray-700 rounded w-1/2 mb-2"></div>
                   <div className="h-8 bg-gray-700 rounded w-3/4"></div>
                   <div className="h-4 bg-gray-700 rounded w-1/3 mt-2"></div>
@@ -991,7 +991,7 @@ export default function CoinStore() {
           </div>
         </div>
       ) : (
-        <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6 overflow-x-hidden">
+        <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6 overflow-x-hidden`}>
         <div className="max-w-6xl mx-auto space-y-6 w-full">
           {/* Bank Info Banner */}
           <div className="bg-blue-500/10 border border-blue-500/50 rounded-xl p-4 flex items-start gap-3">
@@ -1010,23 +1010,23 @@ export default function CoinStore() {
               Troll City Store
             </h1>
             <div className="flex gap-2 hidden md:flex">
-              <button type="button" className={`px-3 py-2 rounded ${tab==='coins'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('coins')}>Coins</button>
-              <button type="button" className={`px-3 py-2 rounded ${tab==='bank'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('bank')}>Bank</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='coins'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('coins')}>Coins</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='bank'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('bank')}>Bank</button>
               {/* Only show Make a Payment as a separate tab if needed; My Loan and Credit Report will be inside Bank tab */}
-              <button type="button" className={`px-3 py-2 rounded ${tab==='effects'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('effects')}>Entrance Effects</button>
-              <button type="button" className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('perks')}>Perks</button>
-              <button type="button" className={`px-3 py-2 rounded ${tab==='calls'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('calls')}>Call Minutes</button>
-              <button type="button" className={`px-3 py-2 rounded ${tab==='insurance'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('insurance')}>Insurance</button>
-              <button type="button" className={`px-3 py-2 rounded ${tab==='broadcast_themes'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('broadcast_themes')}>Broadcast Themes</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='effects'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('effects')}>Entrance Effects</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='perks'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('perks')}>Perks</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='calls'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('calls')}>Call Minutes</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='insurance'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('insurance')}>Insurance</button>
+              <button type="button" className={`px-3 py-2 rounded ${tab==='broadcast_themes'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('broadcast_themes')}>Broadcast Themes</button>
               {showLiveSnacks && (
-                <button type="button" className={`px-3 py-2 rounded ${tab==='live_snacks'?'bg-purple-600':'bg-zinc-800'}`} onClick={() => setTab('live_snacks')}>LIVE SNACKS</button>
+                <button type="button" className={`px-3 py-2 rounded ${tab==='live_snacks'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('live_snacks')}>LIVE SNACKS</button>
               )}
             </div>
             <div className="md:hidden w-full">
               <select
                 value={tab}
                 onChange={(e) => setTab(e.target.value)}
-                className="w-full bg-zinc-900 text-white border border-purple-500/30 rounded-lg p-2 text-sm focus:outline-none focus:border-purple-500"
+                className={`w-full ${trollCityTheme.backgrounds.card} text-white ${trollCityTheme.borders.glass} rounded-lg p-2 text-sm focus:outline-none focus:border-purple-500`}
               >
                 <option value="coins">Coins</option>
                 <option value="bank">Troll Bank & Loans</option>
@@ -1155,7 +1155,9 @@ export default function CoinStore() {
                                            </div>
                                            <div>
                                              <div className="text-gray-400 text-xs">Credit Score</div>
-                                             <div className="text-lg font-bold text-yellow-400">---</div>
+                                            <div className="text-lg font-bold text-yellow-400">
+                                              {allCreditScores?.find(s => s.user_id === user?.id)?.score ?? 400}
+                                            </div>
                                            </div>
                                          </div>
                                        </div>

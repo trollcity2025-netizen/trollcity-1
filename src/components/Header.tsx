@@ -314,9 +314,9 @@ const Header = () => {
             className="w-full pl-12 pr-6 py-3 bg-troll-dark-card/50 border border-troll-neon-pink/30 rounded-xl text-white placeholder-troll-neon-blue/50 focus:outline-none focus:ring-2 focus:ring-troll-neon-pink focus:border-troll-neon-pink transition-all duration-300 shadow-lg focus:shadow-troll-neon-pink/30"
           />
           {isSearchFocused && showUserDropdown && (
-            <div className="absolute top-full mt-2 w-full bg-[#1A1A1A] border border-purple-600 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+            <div className="absolute top-full mt-2 w-full bg-slate-950 border border-purple-600 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
               {searchResults.length === 0 ? (
-                <div className="p-4 text-gray-400 text-center">No users found</div>
+                <div className="p-4 text-purple-300 text-center">No users found</div>
               ) : (
                 <div>
                   {searchResults.map((user) => (
@@ -327,7 +327,7 @@ const Header = () => {
                         setSearchQuery('')
                         setShowUserDropdown(false)
                       }}
-                      className="p-3 hover:bg-purple-600/20 cursor-pointer flex items-center gap-3 border-b border-[#2C2C2C] last:border-b-0"
+                      className="p-3 hover:bg-purple-600/20 cursor-pointer flex items-center gap-3 border-b border-purple-500/20 last:border-b-0"
                     >
                       <img
                         src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}

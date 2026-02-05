@@ -71,16 +71,16 @@ export const usePresidentSystem = () => {
         .from('president_elections')
         .select(`
           *,
-          candidates:president_candidates(
+          candidates:president_candidates!president_candidates_election_id_fkey(
             *,
             user:user_profiles(username, avatar_url)
           )
         `)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       
       if (data) {
         // Transform candidates to flatten user info
@@ -131,14 +131,14 @@ export const usePresidentSystem = () => {
                .from('president_candidates')
                .select('user_id')
                .eq('id', election.winner_candidate_id)
-               .single();
+               .maybeSingle();
                
              if (candidate) {
                 const { data: user } = await supabase
                   .from('user_profiles')
                   .select('id, username, avatar_url')
                   .eq('id', candidate.user_id)
-                  .single();
+                  .maybeSingle();
                   
                 if (user) {
                    setCurrentPresident({
@@ -157,22 +157,24 @@ export const usePresidentSystem = () => {
 
   const fetchVicePresident = useCallback(async () => {
       try {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('president_appointments')
             .select(`
                 *,
                 appointee:user_profiles!president_appointments_vice_president_user_id_fkey(username, avatar_url)
             `)
             .eq('status', 'active')
-            .single();
+            .maybeSingle();
+          
+          if (error) throw error;
             
           if (data) {
               setCurrentVP(data as any);
           } else {
               setCurrentVP(null);
           }
-      } catch {
-          // It's okay if no VP
+      } catch (err) {
+          console.error('Error fetching VP:', err);
       }
   }, []);
   

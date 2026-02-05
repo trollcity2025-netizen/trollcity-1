@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/lib/store';
 import { useEffect } from 'react';
 import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe';
+import { trollCityTheme } from '@/styles/trollCityTheme';
 import { 
   Gamepad2, 
   Users, 
@@ -88,7 +89,7 @@ interface FeatureCardProps {
 const FeatureCard = ({ icon, title, description, gradient, delay }: FeatureCardProps) => {
   return (
     <div 
-      className="group relative p-6 bg-slate-900/50 backdrop-blur-md rounded-2xl border border-purple-500/20 hover:border-cyan-400/50 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/20 animate-fade-in-up"
+      className={`group relative p-6 ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl hover:border-cyan-400/50 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/20 animate-fade-in-up`}
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl bg-gradient-to-br ${gradient} blur-xl`} />
@@ -99,7 +100,7 @@ const FeatureCard = ({ icon, title, description, gradient, delay }: FeatureCardP
         <h3 className="text-xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
           {title}
         </h3>
-        <p className="text-slate-300 text-sm leading-relaxed">
+        <p className={`${trollCityTheme.text.muted} leading-relaxed`}>
           {description}
         </p>
       </div>
@@ -161,7 +162,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-slate-950">
+    <div className={`relative min-h-dvh overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
       {/* Animated Background */}
       <AnimatedGradient />
       <FloatingParticles />

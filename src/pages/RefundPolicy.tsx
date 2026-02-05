@@ -2,17 +2,19 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Shield } from 'lucide-react';
 
+import { trollCityTheme } from '../styles/trollCityTheme';
+
 export default function RefundPolicy() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.app} text-white`}>
       <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 rounded-lg bg-[#1A1A1A] border border-[#2C2C2C] hover:bg-[#2A2A2A] transition"
+            className={`p-2 rounded-lg ${trollCityTheme.components.buttonSecondary}`}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -23,7 +25,7 @@ export default function RefundPolicy() {
         </div>
 
         {/* Content */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] p-8 space-y-6">
+        <div className={`${trollCityTheme.components.card} p-8 space-y-6`}>
           <div>
             <h2 className="text-2xl font-bold text-white mb-4">1. Virtual Currency Purchases</h2>
             <p className="text-gray-300 leading-relaxed">

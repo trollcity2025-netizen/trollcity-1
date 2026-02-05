@@ -33,22 +33,45 @@ export default function ThemeSelector({ streamId, currentThemeUrl, onClose }: Th
         setLoading(true);
         try {
             // Fetch inventory items
-            const { data: inventory, error } = await supabase
+            const { data: inventory, error: inventoryError } = await supabase
                 .from('user_inventory')
-                .select('id, item_id, marketplace_item:marketplace_items(id, name, description, asset_url, type)')
+                .select('id, item_id')
                 .eq('user_id', user!.id);
 
-            if (error) throw error;
+            if (inventoryError) throw inventoryError;
 
-            // Filter for themes (client-side filtering as marketplace_item is joined)
-            // Assuming type is 'broadcast_theme' or similar. 
-            // If the join returns null (item not found), filter it out.
+            if (!inventory || inventory.length === 0) {
+                setThemes([]);
+                return;
+            }
+
+            // Extract item IDs
+            const itemIds = inventory.map(i => i.item_id).filter(Boolean);
+
+            // Fetch marketplace items manually to avoid relationship errors
+            const { data: items, error: itemsError } = await supabase
+                .from('marketplace_items')
+                .select('id, name, description, asset_url, type')
+                .in('id', itemIds)
+                .eq('type', 'broadcast_theme');
+
+            if (itemsError) throw itemsError;
+
+            if (!items) {
+                setThemes([]);
+                return;
+            }
+
+            // Create a map for quick lookup
+            const itemMap = new Map(items.map(i => [i.id, i]));
+
+            // Combine inventory with marketplace items
             const themes: ThemeItem[] = inventory
-                .filter((item: any) => item.marketplace_item && item.marketplace_item.type === 'broadcast_theme')
-                .map((item: any) => ({
-                    id: item.id,
-                    item_id: item.item_id,
-                    marketplace_item: item.marketplace_item
+                .filter(inv => itemMap.has(inv.item_id))
+                .map(inv => ({
+                    id: inv.id,
+                    item_id: inv.item_id,
+                    marketplace_item: itemMap.get(inv.item_id)!
                 }));
 
             setThemes(themes);

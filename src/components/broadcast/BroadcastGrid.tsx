@@ -30,7 +30,7 @@ export default function BroadcastGrid({
     onGiftAll: _onGiftAll,
     mode: _mode = 'stage', // Default to stage (legacy behavior)
     seats = {},
-    onJoinSeat: _onJoinSeat,
+    onJoinSeat,
     onKick,
     broadcasterProfile
 }: BroadcastGridProps) {

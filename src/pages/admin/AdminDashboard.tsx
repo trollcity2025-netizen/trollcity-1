@@ -1106,8 +1106,8 @@ export default function AdminDashboard() {
 
   if (adminCheckLoading || !profile) {
     return (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
-        <div className="px-6 py-3 rounded bg-[#121212] border border-[#2C2C2C]">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white flex items-center justify-center`}>
+        <div className={`px-6 py-3 rounded ${trollCityTheme.backgrounds.card} border border-[#2C2C2C]`}>
           Loading admin dashboard
         </div>
       </div>
@@ -1116,7 +1116,7 @@ export default function AdminDashboard() {
 
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen bg-[#0A0814] text-white flex items-center justify-center">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white flex items-center justify-center`}>
         <div className="px-6 py-3 rounded bg-red-950 border border-red-500 text-center">
           <p className="font-bold mb-1">Access Restricted</p>
           <p className="text-sm text-red-200">
@@ -1128,7 +1128,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white`}>
       {/* Quick Actions Bar */}
       <QuickActionsBar
         onEmergencyStop={handleEmergencyStop}

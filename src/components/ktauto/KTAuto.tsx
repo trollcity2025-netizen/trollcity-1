@@ -91,6 +91,11 @@ export default function KTAuto() {
       return;
     }
 
+    if (!licenseStatus || licenseStatus === 'none') {
+      toast.error("You need a valid driver's license to purchase a vehicle. Please visit the DMV.");
+      return;
+    }
+
     const regFee = selectedCar.registration_fee + (plateType === 'hard' ? 2000 : 200);
     const totalCost = selectedCar.base_price + regFee;
 
@@ -247,12 +252,18 @@ export default function KTAuto() {
               <div className="flex-1 space-y-6">
                 
                 {/* License Warning */}
-                {(licenseStatus === 'suspended' || licenseStatus === 'revoked') && (
+                {(!licenseStatus || licenseStatus === 'none' || licenseStatus === 'suspended' || licenseStatus === 'revoked') && (
                    <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 flex items-start gap-3">
                       <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                       <div>
-                        <h4 className="text-sm font-bold text-red-200">License {licenseStatus}</h4>
-                        <p className="text-xs text-red-200/70">You cannot purchase vehicles until your license is restored.</p>
+                        <h4 className="text-sm font-bold text-red-200">
+                          {(!licenseStatus || licenseStatus === 'none') ? 'No License' : `License ${licenseStatus}`}
+                        </h4>
+                        <p className="text-xs text-red-200/70">
+                          {(!licenseStatus || licenseStatus === 'none') 
+                            ? 'You must pass the drivers test at the DMV before purchasing a vehicle.' 
+                            : 'You cannot purchase vehicles until your license is restored.'}
+                        </p>
                       </div>
                    </div>
                 )}

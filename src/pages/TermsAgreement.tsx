@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { CheckCircle, XCircle, FileText } from 'lucide-react'
+import { trollCityTheme } from '../styles/trollCityTheme'
 
 export default function TermsAgreement() {
   const { profile, session, refreshProfile, setProfile } = useAuthStore()
@@ -150,7 +151,7 @@ export default function TermsAgreement() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100000] overflow-y-auto bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white pointer-events-auto">
+    <div className={`fixed inset-0 z-[100000] overflow-y-auto ${trollCityTheme.backgrounds.app} text-white pointer-events-auto`}>
       <div className="max-w-5xl mx-auto p-6 pb-20">
         {/* Header */}
         <div className="text-center mb-8">
@@ -158,22 +159,22 @@ export default function TermsAgreement() {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-green-400 bg-clip-text text-transparent mb-2">
             Welcome to Troll City
           </h1>
-          <p className="text-gray-400">Please read and agree to our platform terms before continuing</p>
+          <p className={`${trollCityTheme.text.muted}`}>Please read and agree to our platform terms before continuing</p>
         </div>
 
         {/* Pros Section */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-green-500/30 p-6 mb-6">
+        <div className={`${trollCityTheme.backgrounds.card} rounded-xl border border-green-500/30 p-6 mb-6`}>
           <h2 className="text-2xl font-bold text-green-400 mb-4 flex items-center gap-2">
             <CheckCircle className="w-6 h-6" />
             Platform Benefits
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {terms.pros.map((pro, i) => (
-              <div key={i} className="flex gap-3 p-4 bg-[#0D0D1A] rounded-lg border border-[#2C2C2C]">
+              <div key={i} className={`flex gap-3 p-4 ${trollCityTheme.backgrounds.input} rounded-lg ${trollCityTheme.borders.glass}`}>
                 <span className="text-3xl">{pro.icon}</span>
                 <div>
                   <h3 className="font-semibold text-green-300">{pro.title}</h3>
-                  <p className="text-sm text-gray-400">{pro.desc}</p>
+                  <p className={`text-sm ${trollCityTheme.text.muted}`}>{pro.desc}</p>
                 </div>
               </div>
             ))}
@@ -181,18 +182,18 @@ export default function TermsAgreement() {
         </div>
 
         {/* Rules Section */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-red-500/30 p-6 mb-6">
+        <div className={`${trollCityTheme.backgrounds.card} rounded-xl border border-red-500/30 p-6 mb-6`}>
           <h2 className="text-2xl font-bold text-red-400 mb-4 flex items-center gap-2">
             <XCircle className="w-6 h-6" />
             Platform Rules & Consequences
           </h2>
           <div className="grid grid-cols-1 gap-4">
             {terms.rules.map((rule, i) => (
-              <div key={i} className="flex gap-3 p-4 bg-[#0D0D1A] rounded-lg border border-[#2C2C2C]">
+              <div key={i} className={`flex gap-3 p-4 ${trollCityTheme.backgrounds.input} rounded-lg ${trollCityTheme.borders.glass}`}>
                 <span className="text-3xl">{rule.icon}</span>
                 <div>
                   <h3 className="font-semibold text-red-300">{rule.title}</h3>
-                  <p className="text-sm text-gray-400">{rule.desc}</p>
+                  <p className={`text-sm ${trollCityTheme.text.muted}`}>{rule.desc}</p>
                 </div>
               </div>
             ))}
@@ -218,8 +219,8 @@ export default function TermsAgreement() {
         </div>
 
         {/* Agreement Text */}
-        <div className="relative z-[9999] bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] p-6 mb-6 space-y-4 pointer-events-auto" style={{ zIndex: 99999 }}>
-          <div className="space-y-4 text-gray-300">
+        <div className={`relative z-[9999] ${trollCityTheme.backgrounds.card} rounded-xl ${trollCityTheme.borders.glass} p-6 mb-6 space-y-4 pointer-events-auto`} style={{ zIndex: 99999 }}>
+          <div className={`space-y-4 ${trollCityTheme.text.muted}`}>
             <p className="font-semibold text-white">By clicking &quot;Agree & Continue&quot; below, you acknowledge and agree to the following:</p>
             
             <ul className="list-disc list-inside space-y-2 ml-2">
@@ -260,22 +261,22 @@ export default function TermsAgreement() {
                 navigate('/auth')
               }
             }}
-            className="px-8 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 transition"
+            className={`px-8 py-3 rounded-lg ${trollCityTheme.components.buttonSecondary}`}
           >
             Decline & Sign Out
           </button>
           <button
             onClick={handleAgree}
             disabled={submitting}
-            className="px-8 py-3 rounded-lg bg-gradient-to-r from-troll-purple to-troll-neon-blue
-                     disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition font-bold"
+            className={`px-8 py-3 rounded-lg ${trollCityTheme.components.buttonPrimary}
+                     disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition font-bold`}
           >
             {submitting ? 'Processing...' : 'Agree & Continue'}
           </button>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-gray-500 text-sm mt-8">
+        <p className={`text-center ${trollCityTheme.text.muted} text-sm mt-8`}>
           Questions? Contact support at trollcity2025@gmail.com
         </p>
       </div>

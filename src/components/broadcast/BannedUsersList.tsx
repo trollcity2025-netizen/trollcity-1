@@ -27,22 +27,45 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
 
     const fetchBannedUsers = useCallback(async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('stream_bans')
-            .select(`
-                user_id, reason, banned_at, expires_at,
-                user:user_profiles(username, avatar_url, created_at)
-            `)
-            .eq('stream_id', streamId)
-            .order('banned_at', { ascending: false });
-        
-        if (error) {
+        try {
+            // Manual join to avoid relationship errors
+            const { data: bans, error } = await supabase
+                .from('stream_bans')
+                .select('user_id, reason, banned_at, expires_at')
+                .eq('stream_id', streamId)
+                .order('banned_at', { ascending: false });
+            
+            if (error) throw error;
+
+            if (!bans || bans.length === 0) {
+                setBannedUsers([]);
+                setLoading(false);
+                return;
+            }
+
+            // Fetch user profiles manually
+            const userIds = bans.map(b => b.user_id);
+            const { data: profiles, error: profilesError } = await supabase
+                .from('user_profiles')
+                .select('id, username, avatar_url, created_at')
+                .in('id', userIds);
+
+            if (profilesError) throw profilesError;
+
+            const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+            const enrichedBans = bans.map(ban => ({
+                ...ban,
+                user: profileMap.get(ban.user_id) || { username: 'Unknown User', avatar_url: null, created_at: '' }
+            }));
+
+            setBannedUsers(enrichedBans as any);
+        } catch (error) {
             console.error(error);
             toast.error("Failed to load banned users");
-        } else {
-            setBannedUsers(data as any || []);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, [streamId]);
 
     useEffect(() => {

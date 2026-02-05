@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Home } from 'lucide-react';
+import { trollCityTheme } from '../styles/trollCityTheme';
 
 export default function ExitPage() {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export default function ExitPage() {
   }, [countdown, navigate]);
 
   return (
-    <div className="min-h-screen w-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center overflow-hidden relative">
+    <div className={`min-h-screen w-screen ${trollCityTheme.backgrounds.app} flex items-center justify-center overflow-hidden relative`}>
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(147,51,234,0.15),transparent)]" />
@@ -47,17 +48,17 @@ export default function ExitPage() {
         <h1 className="text-4xl md:text-6xl font-black mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
           Come Back Soon!
         </h1>
-        <p className="text-xl md:text-2xl text-slate-300 mb-6">
+        <p className={`text-xl md:text-2xl ${trollCityTheme.text.muted} mb-6`}>
           You&apos;ve successfully logged out
         </p>
-        <p className="text-lg text-slate-400 mb-8">
+        <p className={`text-lg ${trollCityTheme.text.muted} mb-8`}>
           Thanks for visiting Troll City
         </p>
 
         {/* Countdown */}
         <div className="mb-8">
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/5 backdrop-blur-sm rounded-full border border-white/10">
-            <span className="text-slate-300">Redirecting in</span>
+          <div className={`inline-flex items-center gap-3 px-6 py-3 ${trollCityTheme.backgrounds.glass} backdrop-blur-sm rounded-full ${trollCityTheme.borders.glass}`}>
+            <span className={`${trollCityTheme.text.muted}`}>Redirecting in</span>
             <span className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
               {countdown}
             </span>
@@ -68,14 +69,14 @@ export default function ExitPage() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button
             onClick={() => navigate('/')}
-            className="group px-8 py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 rounded-2xl font-semibold text-lg text-white shadow-[0_10px_40px_rgba(147,51,234,0.35)] hover:shadow-[0_15px_50px_rgba(236,72,153,0.4)] transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+            className={`group px-8 py-4 ${trollCityTheme.components.buttonPrimary} rounded-2xl font-semibold text-lg text-white shadow-[0_10px_40px_rgba(147,51,234,0.35)] hover:shadow-[0_15px_50px_rgba(236,72,153,0.4)] transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center gap-2`}
           >
             <Home className="w-5 h-5" />
             Back to Landing
           </button>
           <button
             onClick={() => navigate('/auth')}
-            className="px-8 py-4 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl font-semibold text-lg text-slate-50 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+            className={`px-8 py-4 ${trollCityTheme.backgrounds.glass} backdrop-blur-xl ${trollCityTheme.borders.glass} rounded-2xl font-semibold text-lg text-slate-50 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]`}
           >
             Sign In Again
           </button>

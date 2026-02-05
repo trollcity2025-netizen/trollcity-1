@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { Coins, Send, Waves, Trophy, User } from 'lucide-react'
 import UserNameWithAge from '../components/UserNameWithAge'
+import { trollCityTheme } from '../styles/trollCityTheme'
 
 type Donation = {
   id: string
@@ -275,7 +276,7 @@ export default function PublicPool() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden relative">
+    <div className={`flex flex-col h-screen ${trollCityTheme.backgrounds.primary} text-white overflow-hidden relative`}>
       {/* Background Visualizer */}
       <div className="absolute inset-0 z-0">
         <canvas ref={canvasRef} className="w-full h-full" />
@@ -314,7 +315,7 @@ export default function PublicPool() {
           
           {/* Left: Donation Form */}
           <div className="lg:col-span-1 flex flex-col justify-end pb-12 pointer-events-auto">
-             <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-2xl">
+             <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 rounded-3xl shadow-2xl`}>
                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                  <Coins className="text-yellow-400" />
                  Make a Splash
@@ -322,13 +323,13 @@ export default function PublicPool() {
                
                <form onSubmit={handleDonate} className="space-y-4">
                  <div>
-                   <label className="text-xs text-slate-400 ml-1">Amount</label>
+                   <label className={`text-xs ${trollCityTheme.text.muted} ml-1`}>Amount</label>
                    <div className="relative mt-1">
                      <input 
                        type="number" 
                        value={amount}
                        onChange={e => setAmount(e.target.value)}
-                       className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-3 pl-10 text-lg font-mono focus:border-cyan-500 outline-none transition-colors"
+                       className={`w-full ${trollCityTheme.backgrounds.input} border ${trollCityTheme.borders.glass} rounded-xl px-4 py-3 pl-10 text-lg font-mono focus:border-cyan-500 outline-none transition-colors text-white`}
                        placeholder="0"
                      />
                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-yellow-500 font-bold">$</div>
@@ -336,12 +337,12 @@ export default function PublicPool() {
                  </div>
 
                  <div>
-                    <label className="text-xs text-slate-400 ml-1">Message (Optional)</label>
+                    <label className={`text-xs ${trollCityTheme.text.muted} ml-1`}>Message (Optional)</label>
                     <input 
                       type="text" 
                       value={message}
                       onChange={e => setMessage(e.target.value)}
-                      className="w-full mt-1 bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2 text-sm focus:border-cyan-500 outline-none transition-colors"
+                      className={`w-full mt-1 ${trollCityTheme.backgrounds.input} border ${trollCityTheme.borders.glass} rounded-xl px-4 py-2 text-sm focus:border-cyan-500 outline-none transition-colors text-white`}
                       placeholder="Shoutout to..."
                       maxLength={50}
                     />
@@ -349,7 +350,7 @@ export default function PublicPool() {
 
                  <button 
                    disabled={loading}
-                   className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                   className={`w-full ${trollCityTheme.buttons.primary} py-3 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
                  >
                    {loading ? (
                      <span className="animate-spin">⏳</span> 
@@ -359,7 +360,7 @@ export default function PublicPool() {
                    Donate to Pool
                  </button>
                  
-                 <div className="text-center text-xs text-slate-500 mt-2">
+                 <div className={`text-center text-xs ${trollCityTheme.text.muted} mt-2`}>
                    Your balance: {profile?.troll_coins?.toLocaleString() || 0}
                  </div>
                </form>
@@ -371,29 +372,29 @@ export default function PublicPool() {
 
           {/* Right: Feed */}
           <div className="lg:col-span-1 pointer-events-auto h-full overflow-hidden flex flex-col">
-             <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col h-[600px]">
-                <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                  <h3 className="font-bold flex items-center gap-2">
+             <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-3xl shadow-2xl flex flex-col h-[600px]`}>
+                <div className={`p-4 border-b ${trollCityTheme.borders.glass} flex items-center justify-between`}>
+                  <h3 className="font-bold flex items-center gap-2 text-white">
                     <Trophy className="w-4 h-4 text-purple-400" />
                     Recent Donors
                   </h3>
-                  <div className="text-xs text-slate-500">Live Feed</div>
+                  <div className={`text-xs ${trollCityTheme.text.muted}`}>Live Feed</div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                   {donations.length === 0 ? (
-                    <div className="text-center text-slate-500 py-10">
+                    <div className={`text-center ${trollCityTheme.text.muted} py-10`}>
                       No donations yet. Be the first!
                     </div>
                   ) : (
                     donations.map((d) => (
-                      <div key={d.id} className="bg-slate-950/50 border border-white/5 rounded-xl p-3 flex items-start gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                      <div key={d.id} className={`${trollCityTheme.backgrounds.input} border ${trollCityTheme.borders.glass} rounded-xl p-3 flex items-start gap-3 animate-in fade-in slide-in-from-right-4 duration-300`}>
                         <div className="mt-1">
                           {d.avatar_url ? (
-                             <img src={d.avatar_url} className="w-8 h-8 rounded-full border border-white/10" />
+                             <img src={d.avatar_url} className={`w-8 h-8 rounded-full border ${trollCityTheme.borders.glass}`} />
                           ) : (
-                             <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
-                               <User className="w-4 h-4 text-slate-400" />
+                             <div className={`w-8 h-8 rounded-full ${trollCityTheme.backgrounds.input} flex items-center justify-center`}>
+                               <User className={`w-4 h-4 ${trollCityTheme.text.muted}`} />
                              </div>
                           )}
                         </div>

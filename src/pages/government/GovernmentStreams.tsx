@@ -326,12 +326,12 @@ function StreamCard({
             <Shield className="w-3 h-3 text-emerald-400 shrink-0" />
             {stream.active_officers.map(log => (
               <div key={log.officer_id} className="flex items-center gap-1.5 bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
-                <img src={log.officer.avatar_url} className="w-4 h-4 rounded-full" />
+                <img src={log.officer?.avatar_url} className="w-4 h-4 rounded-full" />
                 <UserNameWithAge
                   user={{
-                    username: log.officer.username,
+                    username: log.officer?.username || 'Unknown',
                     id: log.officer_id,
-                    created_at: log.officer.created_at
+                    created_at: log.officer?.created_at
                   }}
                   className="text-[10px] text-emerald-300 font-medium"
                 />
@@ -541,8 +541,8 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
           if (!merged.find(p => p.user_id === stream.broadcaster_id)) {
             merged.unshift({
               user_id: stream.broadcaster_id,
-              username: stream.broadcaster.username,
-              avatar_url: stream.broadcaster.avatar_url,
+              username: stream.broadcaster?.username || 'Unknown Broadcaster',
+              avatar_url: stream.broadcaster?.avatar_url,
               is_active: true
             });
           }

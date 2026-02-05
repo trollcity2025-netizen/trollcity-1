@@ -3,6 +3,7 @@ import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Building2, Crown, Users, Clock, ArrowRight } from 'lucide-react';
+import { trollCityTheme } from '../styles/trollCityTheme';
 // import { useNavigate } from 'react-router-dom';
 
 interface AdminQueueItem {
@@ -71,19 +72,19 @@ export default function CityHall() {
     };
 
     return (
-        <div className="min-h-screen bg-[#0A0814] text-white p-4 pb-20 md:pb-4 md:ml-64">
+        <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-4 pb-20 md:pb-4 md:ml-64`}>
             <div className="max-w-4xl mx-auto space-y-8">
                 
                 {/* Header */}
-                <div className="flex items-center gap-4 border-b border-white/10 pb-6">
-                    <div className="p-4 bg-purple-500/20 rounded-2xl">
+                <div className={`flex items-center gap-4 border-b ${trollCityTheme.borders.glass} pb-6`}>
+                    <div className={`p-4 ${trollCityTheme.backgrounds.card} rounded-2xl border ${trollCityTheme.borders.glass}`}>
                         <Building2 className="w-10 h-10 text-purple-400" />
                     </div>
                     <div>
                         <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                             Troll City Hall
                         </h1>
-                        <p className="text-gray-400 mt-1">
+                        <p className={`${trollCityTheme.text.muted} mt-1`}>
                             The seat of temporary power. Rule the city for a week.
                         </p>
                     </div>
@@ -91,7 +92,7 @@ export default function CityHall() {
 
                 {/* Current Admin Section */}
                 <div className="grid md:grid-cols-2 gap-6">
-                    <div className="bg-gradient-to-br from-yellow-900/20 to-yellow-900/5 border border-yellow-500/30 rounded-2xl p-6 relative overflow-hidden">
+                    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 relative overflow-hidden rounded-2xl`}>
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                             <Crown className="w-32 h-32" />
                         </div>
@@ -125,12 +126,12 @@ export default function CityHall() {
                     </div>
 
                     {/* Join Queue CTA */}
-                    <div className="bg-gradient-to-br from-purple-900/20 to-purple-900/5 border border-purple-500/30 rounded-2xl p-6 flex flex-col justify-between">
+                    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 flex flex-col justify-between rounded-2xl`}>
                         <div>
                             <h2 className="text-purple-400 font-bold uppercase tracking-wider text-sm mb-2 flex items-center gap-2">
                                 <Users className="w-4 h-4" /> Join the Queue
                             </h2>
-                            <p className="text-gray-400 text-sm mb-4">
+                            <p className={`${trollCityTheme.text.muted} text-sm mb-4`}>
                                 Become an Admin for 7 days. Gain special moderation powers and a badge.
                             </p>
                             <div className="text-3xl font-bold text-white mb-1">
@@ -141,7 +142,7 @@ export default function CityHall() {
                         <button 
                             onClick={handleJoinQueue}
                             disabled={joining || loading}
-                            className="w-full mt-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                            className={`w-full mt-4 ${trollCityTheme.buttons.primary} py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             {joining ? 'Processing...' : 'Join Queue'}
                             <ArrowRight className="w-4 h-4" />
@@ -150,15 +151,15 @@ export default function CityHall() {
                 </div>
 
                 {/* Queue List */}
-                <div className="bg-[#121212] border border-white/5 rounded-2xl overflow-hidden">
-                    <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl overflow-hidden`}>
+                    <div className={`p-4 border-b ${trollCityTheme.borders.glass} flex items-center justify-between`}>
                         <h3 className="font-bold text-white flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-gray-400" /> Waiting List
+                            <Clock className={`w-4 h-4 ${trollCityTheme.text.muted}`} /> Waiting List
                         </h3>
-                        <span className="text-xs text-gray-500">{queue.length} in line</span>
+                        <span className={`text-xs ${trollCityTheme.text.muted}`}>{queue.length} in line</span>
                     </div>
 
-                    <div className="divide-y divide-white/5">
+                    <div className={`divide-y ${trollCityTheme.borders.glass}`}>
                         {loading ? (
                             [1,2,3].map(i => (
                                 <div key={i} className="p-4 animate-pulse flex items-center gap-4">
@@ -167,19 +168,19 @@ export default function CityHall() {
                                 </div>
                             ))
                         ) : queue.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">
+                            <div className={`p-8 text-center ${trollCityTheme.text.muted}`}>
                                 The queue is empty. Be the next Admin!
                             </div>
                         ) : (
                             queue.map((item) => (
                                 <div key={item.user_id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-xs font-bold text-gray-400">
+                                        <div className={`w-8 h-8 ${trollCityTheme.backgrounds.input} rounded-full flex items-center justify-center text-xs font-bold ${trollCityTheme.text.muted}`}>
                                             #{item.position}
                                         </div>
                                         <div>
                                             <div className="font-medium text-white">{item.username}</div>
-                                            <div className="text-xs text-gray-500">Joined {new Date(item.joined_at).toLocaleDateString()}</div>
+                                            <div className={`text-xs ${trollCityTheme.text.muted}`}>Joined {new Date(item.joined_at).toLocaleDateString()}</div>
                                         </div>
                                     </div>
                                     {item.user_id === user?.id && (
@@ -194,16 +195,16 @@ export default function CityHall() {
                 </div>
 
                 {/* Info Section */}
-                <div className="grid md:grid-cols-3 gap-4 text-sm text-gray-400">
-                    <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                <div className={`grid md:grid-cols-3 gap-4 text-sm ${trollCityTheme.text.muted}`}>
+                    <div className={`p-4 ${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass}`}>
                         <h4 className="font-bold text-white mb-2">Duration</h4>
                         <p>Each term lasts exactly 7 days. If the current admin is removed early, the next person in line takes over immediately.</p>
                     </div>
-                    <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div className={`p-4 ${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass}`}>
                         <h4 className="font-bold text-white mb-2">Powers</h4>
                         <p>Access to kick, mute, and ban (24h) controls. You can also host city-wide events.</p>
                     </div>
-                    <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div className={`p-4 ${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass}`}>
                         <h4 className="font-bold text-white mb-2">Rules</h4>
                         <p>Abuse of power will result in immediate removal and a permanent ban from the Admin Queue. No refunds.</p>
                     </div>

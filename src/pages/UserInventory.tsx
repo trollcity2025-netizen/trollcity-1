@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shield, Phone, X, Car, Home } from 'lucide-react'
+import { trollCityTheme } from '../styles/trollCityTheme'
 // import { PERK_CONFIG } from '../lib/perkSystem'
 import { ENTRANCE_EFFECTS_MAP, ROLE_BASED_ENTRANCE_EFFECTS, USER_SPECIFIC_ENTRANCE_EFFECTS } from '../lib/entranceEffects'
 import { GlowingUsernameColorPicker } from '../components/GlowingUsernameColorPicker'
@@ -656,7 +657,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
         <div className="flex justify-end mb-4">
           <button
             onClick={deleteAllExpiredPurchases}
-            className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-semibold shadow transition-colors"
+            className="px-5 py-2 bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30 rounded-lg font-semibold shadow transition-colors backdrop-blur-sm"
           >
             Delete All Expired Purchases
           </button>
@@ -668,18 +669,18 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
             <Package className="w-8 h-8 text-purple-400" />
             My Inventory
           </h1>
-          <p className="text-gray-400">Manage your purchased items and activate digital effects</p>
+          <p className={trollCityTheme.text.muted}>Manage your purchased items and activate digital effects</p>
         </div>
       )}
 
         <div className="flex items-center justify-center">
-          <div className="inline-flex bg-black/40 border border-[#2C2C2C] rounded-full p-1">
+          <div className={`${trollCityTheme.backgrounds.glass} ${trollCityTheme.borders.glass} border rounded-full p-1`}>
             <button
               onClick={() => setActiveTab('items')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 activeTab === 'items'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? `${trollCityTheme.interactive.active} ${trollCityTheme.text.highlight}`
+                  : `${trollCityTheme.text.muted} ${trollCityTheme.interactive.hover}`
               }`}
             >
               Items
@@ -688,8 +689,8 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
               onClick={() => setActiveTab('titles')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 activeTab === 'titles'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? `${trollCityTheme.interactive.active} ${trollCityTheme.text.highlight}`
+                  : `${trollCityTheme.text.muted} ${trollCityTheme.interactive.hover}`
               }`}
             >
               Titles
@@ -698,8 +699,8 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
               onClick={() => setActiveTab('deeds')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 activeTab === 'deeds'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? `${trollCityTheme.interactive.active} ${trollCityTheme.text.highlight}`
+                  : `${trollCityTheme.text.muted} ${trollCityTheme.interactive.hover}`
               }`}
             >
               Deeds
@@ -708,8 +709,8 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
               onClick={() => setActiveTab('shop')}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 activeTab === 'shop'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? `${trollCityTheme.interactive.active} ${trollCityTheme.text.highlight}`
+                  : `${trollCityTheme.text.muted} ${trollCityTheme.interactive.hover}`
               }`}
             >
               Shop
@@ -720,9 +721,9 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
     {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="bg-zinc-900 rounded-xl p-6 border border-[#2C2C2C] animate-pulse">
-                <div className="h-4 bg-gray-700 rounded w-1/2 mb-2"></div>
-                <div className="h-8 bg-gray-700 rounded w-3/4"></div>
+              <div key={i} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6 border animate-pulse`}>
+                <div className="h-4 bg-white/10 rounded w-1/2 mb-2"></div>
+                <div className="h-8 bg-white/10 rounded w-3/4"></div>
               </div>
             ))}
           </div>
@@ -732,12 +733,12 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {userTitles.length === 0 ? (
               <div className="col-span-full text-center py-12">
-                <Car className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <Car className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold mb-2">No Vehicle Titles</h2>
-                <p className="text-gray-400 mb-6">Visit the Dealership to buy vehicles.</p>
+                <p className={`${trollCityTheme.text.muted} mb-6`}>Visit the Dealership to buy vehicles.</p>
                 <button
                   onClick={() => navigate('/dealership')}
-                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold"
+                  className={`px-6 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold`}
                 >
                   Go to Dealership
                 </button>
@@ -746,22 +747,22 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
               userTitles.map((title) => {
                 const car = title.vehicles_catalog;
                 return (
-                  <div key={title.id} className="bg-zinc-900 rounded-xl p-6 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer" onClick={() => setSelectedTitleDeed({ type: 'title', ...title })}>
+                  <div key={title.id} className={`${trollCityTheme.components.card} border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer`} onClick={() => setSelectedTitleDeed({ type: 'title', ...title })}>
                     <div className="flex items-center gap-2 mb-4">
                       <Car className="w-5 h-5 text-emerald-400" />
                       <span className="text-sm text-emerald-400 font-bold uppercase tracking-wider">Title</span>
                     </div>
-                    <div className="mb-4 aspect-video rounded-lg overflow-hidden bg-black/50">
+                    <div className={`mb-4 aspect-video rounded-lg overflow-hidden ${trollCityTheme.backgrounds.input}`}>
                         <img src={car?.image} alt={car?.name} className="w-full h-full object-cover" />
                     </div>
                     <h3 className="text-xl font-bold text-white mb-1">
                       {car?.name || `Vehicle #${title.catalog_id || title.id.slice(0,8)}`}
                     </h3>
-                    <p className="text-gray-400 text-sm mb-4">
+                    <p className={`${trollCityTheme.text.muted} text-sm mb-4`}>
                       Purchased: {new Date(title.purchased_at).toLocaleDateString()}
                     </p>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-500">Value</span>
+                      <span className={`${trollCityTheme.text.muted}`}>Value</span>
                       <span className="text-white font-mono">
                         {(car?.price || 0).toLocaleString()} coins
                       </span>
@@ -775,19 +776,19 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {userDeeds.length === 0 ? (
               <div className="col-span-full text-center py-12">
-                <Home className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <Home className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold mb-2">No Property Deeds</h2>
-                <p className="text-gray-400 mb-6">Visit the Living section to buy properties.</p>
+                <p className={`${trollCityTheme.text.muted} mb-6`}>Visit the Living section to buy properties.</p>
                 <button
                   onClick={() => navigate('/living')}
-                  className="px-6 py-3 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold"
+                  className={`px-6 py-3 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold`}
                 >
                   Find a Home
                 </button>
               </div>
             ) : (
               userDeeds.map((deed) => (
-                <div key={deed.id} className="bg-zinc-900 rounded-xl p-6 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer" onClick={() => navigate('/living')}>
+                <div key={deed.id} className={`${trollCityTheme.components.card} border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer`} onClick={() => navigate('/living')}>
                   <div className="flex items-center gap-2 mb-4">
                     <Home className="w-5 h-5 text-amber-400" />
                     <span className="text-sm text-amber-400 font-bold uppercase tracking-wider">Deed</span>
@@ -795,11 +796,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                   <h3 className="text-xl font-bold text-white mb-1">
                     {deed.name || `Property #${deed.id.slice(0, 8)}`}
                   </h3>
-                  <p className="text-gray-400 text-sm mb-4">
+                  <p className={`${trollCityTheme.text.muted} text-sm mb-4`}>
                     {deed.address || 'No address'}
                   </p>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500">Rent Income</span>
+                    <span className={`${trollCityTheme.text.muted}`}>Rent Income</span>
                     <span className="text-white font-mono">
                       {(deed.rent_amount || 0).toLocaleString()} coins/week
                     </span>
@@ -810,12 +811,12 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
           </div>
         ) : (inventory.length === 0 && entranceEffects.length === 0 && perks.length === 0 && insurances.length === 0 && callSounds.length === 0) ? (
           <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+            <Package className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Your Inventory is Empty</h2>
-            <p className="text-gray-400 mb-6">Purchase items from the store to see them here</p>
+            <p className={`${trollCityTheme.text.muted} mb-6`}>Purchase items from the store to see them here</p>
             <button
               onClick={() => navigate('/marketplace')}
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
+              className={`px-6 py-3 ${trollCityTheme.gradients.button} rounded-lg font-semibold text-white`}
             >
               Browse Store
             </button>
@@ -835,11 +836,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     const isExpired = perk.expires_at && new Date(perk.expires_at) < new Date()
                     
                     return (
-                      <div key={perk.id} className="bg-zinc-900 rounded-xl p-6 border border-pink-500/20 hover:border-pink-500/40 transition-all">
+                      <div key={perk.id} className={`${trollCityTheme.components.card} border-pink-500/20 hover:border-pink-500/40 transition-all`}>
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
                             <Star className="w-5 h-5 text-pink-400" />
-                            <span className="text-sm text-gray-400">Perk</span>
+                            <span className={`text-sm ${trollCityTheme.text.muted}`}>Perk</span>
                             {isActive && !isExpired && (
                               <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">ACTIVE</span>
                             )}
@@ -850,11 +851,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                           <h3 className="text-xl font-bold text-white mb-1">
                             {perk.config?.name || 'Unknown Perk'}
                           </h3>
-                          <p className="text-gray-400 text-sm mb-2">
+                          <p className={`${trollCityTheme.text.muted} text-sm mb-2`}>
                             {perk.config?.description || 'No description'}
                           </p>
                           {perk.expires_at && (
-                            <p className="text-xs text-gray-500">
+                            <p className={`text-xs ${trollCityTheme.text.secondary}`}>
                               Expires: {new Date(perk.expires_at).toLocaleString()}
                             </p>
                           )}
@@ -865,7 +866,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                             disabled={isExpired}
                             className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                               isExpired 
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                ? `${trollCityTheme.interactive.disabled} cursor-not-allowed`
                                 : isActive
                                   ? 'bg-red-600 hover:bg-red-700 text-white'
                                   : 'bg-green-600 hover:bg-green-700 text-white'
@@ -906,11 +907,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     const isExpired = ins.expires_at && new Date(ins.expires_at) < new Date()
                     
                     return (
-                      <div key={ins.id} className="bg-zinc-900 rounded-xl p-6 border border-blue-500/20 hover:border-blue-500/40 transition-all">
+                      <div key={ins.id} className={`${trollCityTheme.components.card} border-blue-500/20 hover:border-blue-500/40 transition-all`}>
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
                             <Shield className="w-5 h-5 text-blue-400" />
-                            <span className="text-sm text-gray-400">Insurance</span>
+                            <span className={`text-sm ${trollCityTheme.text.muted}`}>Insurance</span>
                             {isActive && !isExpired && (
                               <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">ACTIVE</span>
                             )}
@@ -921,16 +922,16 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                           <h3 className="text-xl font-bold text-white mb-1">
                             {ins.plan?.name || 'Insurance Plan'}
                           </h3>
-                          <p className="text-gray-400 text-sm mb-2">
+                          <p className={`${trollCityTheme.text.muted} text-sm mb-2`}>
                             {ins.plan?.description || 'Protection plan'}
                           </p>
                           {ins.expires_at && (
-                            <p className="text-xs text-gray-500">
+                            <p className={`text-xs ${trollCityTheme.text.secondary}`}>
                               Expires: {new Date(ins.expires_at).toLocaleString()}
                             </p>
                           )}
                         </div>
-                        <div className="text-center py-2 bg-zinc-800 rounded text-xs text-gray-400">
+                        <div className={`text-center py-2 bg-white/5 rounded text-xs ${trollCityTheme.text.muted}`}>
                           {isActive ? 'Protection Active' : 'Protection Inactive'}
                         </div>
                       </div>
@@ -947,7 +948,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                   <Crown className="w-6 h-6 text-yellow-400" />
                   Role Bonus
                 </h2>
-                <div className="bg-gradient-to-r from-yellow-900/40 to-black rounded-xl p-6 border border-yellow-500/40">
+                <div className={`${trollCityTheme.components.card} border-yellow-500/40 bg-gradient-to-r from-yellow-900/20 to-transparent`}>
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-yellow-500/20 rounded-lg">
                       <Sparkles className="w-8 h-8 text-yellow-400" />
@@ -962,7 +963,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                              <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">ACTIVE</span>
                         )}
                       </div>
-                      <p className="text-gray-300 mb-2">{roleEffect.description}</p>
+                      <p className={`${trollCityTheme.text.muted} mb-2`}>{roleEffect.description}</p>
                       <div className="flex items-center gap-4 mt-4">
                         <button
                           onClick={() => toggleRoleEffect(activeItems.has(`role_effect_${roleEffectKey || 'default'}`))}
@@ -1009,12 +1010,12 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                         case 'epic': return 'border-purple-500/50 hover:border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]';
                         case 'rare': return 'border-blue-500/50 hover:border-blue-400';
                         case 'uncommon': return 'border-green-500/50 hover:border-green-400';
-                        default: return 'border-zinc-700 hover:border-zinc-500';
+                        default: return `${trollCityTheme.borders.glass} hover:border-white/30`;
                       }
                     })();
 
                     return (
-                      <div key={effect.id} className={`relative bg-zinc-900 rounded-xl p-6 border transition-all group ${rarityColor}`}>
+                      <div key={effect.id} className={`relative ${trollCityTheme.backgrounds.card} rounded-xl p-6 border transition-all group ${rarityColor}`}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1035,7 +1036,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                               config.rarity === 'Epic' ? 'text-purple-400' :
                               config.rarity === 'Rare' ? 'text-blue-400' :
                               config.rarity === 'Uncommon' ? 'text-green-400' :
-                              'text-gray-400'
+                              trollCityTheme.text.muted
                             }`}>
                               {config.rarity || 'Common'} Effect
                             </span>
@@ -1048,19 +1049,19 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                           <h3 className="text-xl font-bold text-white mb-1">
                             {config.name || effect.effect_id}
                           </h3>
-                          <p className="text-gray-400 text-sm mb-3 min-h-[40px] line-clamp-2">
+                          <p className={`${trollCityTheme.text.muted} text-sm mb-3 min-h-[40px] line-clamp-2`}>
                             {config.description || 'No description available'}
                           </p>
                           
                           {config.category && (
                              <div className="mb-3">
-                                <span className="inline-block bg-black/40 text-zinc-400 text-[10px] uppercase font-bold px-2 py-1 rounded border border-zinc-800">
+                                <span className={`inline-block ${trollCityTheme.backgrounds.input} ${trollCityTheme.text.muted} text-[10px] uppercase font-bold px-2 py-1 rounded ${trollCityTheme.borders.glass} border`}>
                                   {config.category.replace(/_/g, ' ')}
                                 </span>
                              </div>
                           )}
 
-                          <p className="text-xs text-gray-500">
+                          <p className={`text-xs ${trollCityTheme.text.secondary}`}>
                             Acquired: {new Date(effect.purchased_at || effect.acquired_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -1103,11 +1104,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     const isActive = sound.is_active;
                     const catalog = sound.catalog || {};
                     return (
-                      <div key={sound.sound_id} className="bg-zinc-900 rounded-xl p-6 border border-cyan-500/20 hover:border-cyan-500/40 transition-all">
+                      <div key={sound.sound_id} className={`${trollCityTheme.components.card} rounded-xl p-6 border border-cyan-500/20 hover:border-cyan-500/40 transition-all`}>
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
                             <Phone className="w-5 h-5 text-cyan-300" />
-                            <span className="text-sm text-gray-400">{catalog.sound_type || 'call sound'}</span>
+                            <span className={`text-sm ${trollCityTheme.text.muted}`}>{catalog.sound_type || 'call sound'}</span>
                             {isActive && (
                               <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">
                                 ACTIVE
@@ -1117,7 +1118,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                           <h3 className="text-xl font-bold text-white mb-1">
                             {catalog.name || 'Call Sound'}
                           </h3>
-                          <p className="text-gray-400 text-sm mb-2">
+                          <p className={`${trollCityTheme.text.muted} text-sm mb-2`}>
                             {catalog.asset_url}
                           </p>
                         </div>
@@ -1162,11 +1163,11 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     const isExpired = item.expires_at && new Date(item.expires_at) < new Date()
 
                     return (
-                      <div key={item.id} className="relative bg-zinc-900 rounded-xl p-6 border border-purple-500/20 hover:border-purple-500/40 transition-all group">
+                      <div key={item.id} className={`relative ${trollCityTheme.components.card} rounded-xl p-6 border border-purple-500/20 hover:border-purple-500/40 transition-all group`}>
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
                             {getItemIcon(item.marketplace_item?.type)}
-                            <span className="text-sm text-gray-400">
+                            <span className={`text-sm ${trollCityTheme.text.muted}`}>
                               {getItemTypeLabel(item.marketplace_item?.type)}
                             </span>
                             {isActive && (
@@ -1185,20 +1186,19 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                             {item.marketplace_item?.title}
                           </h3>
 
-                          <p className="text-gray-400 text-sm mb-2">
+                          <p className={`${trollCityTheme.text.muted} text-sm mb-2`}>
                             {item.marketplace_item?.description}
                           </p>
 
-                          <p className="text-xs text-gray-500">
+                          <p className={`text-xs ${trollCityTheme.text.secondary}`}>
                             Acquired: {new Date(item.acquired_at).toLocaleDateString()}
                           </p>
                           {item.expires_at && (
-                            <p className="text-xs text-gray-500">
+                            <p className={`text-xs ${trollCityTheme.text.secondary}`}>
                               Expires: {new Date(item.expires_at).toLocaleString()}
                             </p>
                           )}
                         </div>
-
                         {isDigital ? (
                           <div className="space-y-2">
                             <button
@@ -1260,7 +1260,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
         )}
 
         {/* Digital Items Info */}
-        <div className="bg-zinc-900 rounded-xl p-6 border border-[#2C2C2C]">
+        <div className={`${trollCityTheme.components.card} rounded-xl p-6 ${trollCityTheme.borders.glass} border`}>
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <Zap className="w-5 h-5 text-purple-400" />
             Digital Item Effects
@@ -1269,7 +1269,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <h3 className="font-semibold text-purple-400">Available Effects:</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
+              <ul className={`space-y-2 text-sm ${trollCityTheme.text.muted}`}>
                 <li>• Entrance animations when joining streams</li>
                 <li>• Special profile borders and frames</li>
                 <li>• Animated badges and titles</li>
@@ -1280,7 +1280,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
 
             <div className="space-y-3">
               <h3 className="font-semibold text-purple-400">How to Use:</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
+              <ul className={`space-y-2 text-sm ${trollCityTheme.text.muted}`}>
                 <li>• Click &quot;Activate&quot; on digital items</li>
                 <li>• Effects apply automatically across the app</li>
                 <li>• Multiple effects can be active simultaneously</li>
@@ -1299,7 +1299,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.app} text-white p-6`}>
         {content}
       </div>
       

@@ -9,6 +9,7 @@ import { updateUserAvatarConfig } from '../lib/purchases'
 import CropPhotoModal from '../components/CropPhotoModal'
 import { KeyRound } from 'lucide-react'
 import { setResetPin } from '@/services/passwordManager'
+import { trollCityTheme } from '../styles/trollCityTheme'
 
 const ProfileSetup = () => {
   const navigate = useNavigate()
@@ -440,7 +441,7 @@ const ProfileSetup = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f17] text-white p-6">
+    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6`}>
       {/* Crop Photo Modal */}
       <CropPhotoModal
         isOpen={coverCropModalOpen}
@@ -479,7 +480,7 @@ const ProfileSetup = () => {
             type="button"
             onClick={() => coverInputRef.current?.click()}
             disabled={uploadingCover}
-            className="absolute top-3 right-3 px-3 py-1 text-xs font-semibold rounded-full bg-black/50 text-white border border-white/20 hover:bg-black/60 transition"
+            className={`absolute top-3 right-3 px-3 py-1 text-xs font-semibold rounded-full ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} text-white hover:bg-black/60 transition`}
           >
             {uploadingCover ? 'Uploading...' : 'Change Cover Photo'}
           </button>
@@ -538,7 +539,7 @@ const ProfileSetup = () => {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
+                  className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                   placeholder="e.g. John Doe"
                 />
               </div>
@@ -551,7 +552,7 @@ const ProfileSetup = () => {
                   type="text"
                   value={username}
                   onChange={(e) => handleUsernameChange(e.target.value)}
-                  className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
+                  className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                 />
                 {usernameError && (
                   <p className="text-red-400 text-xs mt-1">{usernameError}</p>
@@ -565,7 +566,7 @@ const ProfileSetup = () => {
                   name="gender"
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
+                  className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                   required
                 >
                   <option value="">Select gender</option>
@@ -581,7 +582,7 @@ const ProfileSetup = () => {
                   name="bio"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
+                  className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                   rows={4}
                 />
               </div>
@@ -594,7 +595,7 @@ const ProfileSetup = () => {
                     min="0"
                     value={messageCost}
                     onChange={(e) => setMessageCost(Number(e.target.value))}
-                    className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
+                    className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                     placeholder="0"
                   />
                   <p className="text-xs text-gray-400 mt-1">Cost for users to message you (0 = Free)</p>
@@ -606,7 +607,7 @@ const ProfileSetup = () => {
                     min="0"
                     value={viewCost}
                     onChange={(e) => setViewCost(Number(e.target.value))}
-                    className="w-full px-4 py-2 rounded bg-[#23232b] text-white border border-gray-600 focus:outline-none"
+                    className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                     placeholder="0"
                   />
                   <p className="text-xs text-gray-400 mt-1">Cost to view your full profile (0 = Free)</p>
@@ -616,7 +617,7 @@ const ProfileSetup = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2 bg-gradient-to-r from-[#7C3AED] to-[#A78BFA] text-white rounded"
+                className={`w-full py-2 ${trollCityTheme.gradients.button} text-white rounded`}
               >
                 {loading ? 'Saving…' : 'Save Profile'}
               </button>
@@ -626,10 +627,10 @@ const ProfileSetup = () => {
 
 
 
-        <details className="bg-[#1A1A1A] rounded-lg border border-[#2C2C2C] mt-6" open>
+        <details className={`${trollCityTheme.backgrounds.card} rounded-lg border ${trollCityTheme.borders.glass} mt-6`} open>
           <summary className="cursor-pointer px-6 py-4 flex items-center justify-between">
             <span className="font-semibold">Payout Settings</span>
-            <span className="text-sm bg-[#7C3AED] text-white px-3 py-1 rounded">PayPal</span>
+            <span className={`text-sm ${trollCityTheme.gradients.button} text-white px-3 py-1 rounded`}>PayPal</span>
           </summary>
 
           <div className="px-6 pb-6 space-y-3">
@@ -639,7 +640,7 @@ const ProfileSetup = () => {
             <button
               type="button"
               onClick={() => navigate('/payouts/setup')}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold text-sm"
+              className={`px-4 py-2 ${trollCityTheme.gradients.button} rounded-lg font-semibold text-sm text-white`}
             >
               Open Payout Settings
             </button>
@@ -649,7 +650,7 @@ const ProfileSetup = () => {
           </div>
         </details>
 
-        <details className="bg-[#1A1A1A] rounded-lg border border-[#2C2C2C] mt-6">
+        <details className={`${trollCityTheme.backgrounds.card} rounded-lg border ${trollCityTheme.borders.glass} mt-6`}>
           <summary className="cursor-pointer px-6 py-4 flex items-center justify-between">
             <span className="font-semibold flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-emerald-400" />
@@ -724,7 +725,7 @@ const ProfileSetup = () => {
                 <label className="block text-sm text-gray-300 mb-1">
                   Upload Government ID (Driver&apos;s License, Passport, or State ID)
                 </label>
-                <div className="bg-[#23232b] border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-400 transition-colors">
+                <div className={`${trollCityTheme.components.input} border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-400 transition-colors`}>
                   <input
                     type="file"
                     accept="image/*,application/pdf"

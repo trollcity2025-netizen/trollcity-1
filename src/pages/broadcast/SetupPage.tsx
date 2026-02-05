@@ -11,22 +11,46 @@ export default function SetupPage() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('general');
   const [loading, setLoading] = useState(false);
-  const [restrictionCheck, setRestrictionCheck] = useState<{ allowed: boolean; waitTime?: string } | null>(null);
+  const [restrictionCheck, setRestrictionCheck] = useState<{ allowed: boolean; waitTime?: string; reason?: string; message?: string } | null>(null);
 
   useEffect(() => {
     async function checkRestriction() {
       if (!user) return;
       
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('created_at, bypass_broadcast_restriction')
-        .eq('id', user.id)
-        .single();
-        
+      console.log('[SetupPage] Checking restrictions for user:', user.id);
+
+      // 1. Check Driver's License Status (Source: user_profiles)
+    // We strictly enforce this for ALL users, including Admins.
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('created_at, bypass_broadcast_restriction, drivers_license_status')
+      .eq('id', user.id)
+      .single();
+    
+    if (profileError) console.error('[SetupPage] Profile fetch error:', profileError);
+
+    const profileStatus = profile?.drivers_license_status?.toLowerCase();
+    
+    console.log('[SetupPage] License Status:', profileStatus);
+
+    const validStatuses = ['valid', 'active', 'approved'];
+    const isLicenseValid = profileStatus && validStatuses.includes(profileStatus);
+
+    if (!isLicenseValid) {
+      setRestrictionCheck({
+        allowed: false,
+        reason: 'license',
+        message: `You must have a valid Driver's License to broadcast (Admins included). Current Status: ${profileStatus || 'None'}`
+      });
+      return;
+    }
+
+      // Check Bypass (Admins/VIPs) - Only bypasses account age, NOT license
       if (profile?.bypass_broadcast_restriction) {
         setRestrictionCheck({ allowed: true });
         return;
       }
+
         
       if (profile?.created_at) {
         const created = new Date(profile.created_at);
@@ -191,17 +215,36 @@ export default function SetupPage() {
                 <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
                   <AlertTriangle className="w-8 h-8 text-red-500" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Account in Cooldown</h2>
-                <p className="text-gray-400 mb-6">
-                  New accounts must wait 24 hours before starting a broadcast to ensure community safety.
-                </p>
-                <div className="bg-slate-950 rounded-lg p-4 border border-white/5 inline-block mx-auto">
-                  <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Time Remaining</div>
-                  <div className="text-2xl font-mono text-red-400 font-bold">{restrictionCheck.waitTime}</div>
-                </div>
+                
+                {restrictionCheck.reason === 'license' ? (
+                  <>
+                    <h2 className="text-2xl font-bold text-white mb-2">Driver's License Required</h2>
+                    <p className="text-gray-400 mb-6">
+                      {restrictionCheck.message || "You need a valid driver's license to start a broadcast."}
+                    </p>
+                    <button 
+                      onClick={() => navigate('/tmv')}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold"
+                    >
+                      Go to DMV
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-bold text-white mb-2">Account in Cooldown</h2>
+                    <p className="text-gray-400 mb-6">
+                      New accounts must wait 24 hours before starting a broadcast to ensure community safety.
+                    </p>
+                    <div className="bg-slate-950 rounded-lg p-4 border border-white/5 inline-block mx-auto">
+                      <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Time Remaining</div>
+                      <div className="text-2xl font-mono text-red-400 font-bold">{restrictionCheck.waitTime}</div>
+                    </div>
+                  </>
+                )}
+
                 <button 
                   onClick={() => navigate('/')}
-                  className="mt-8 w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-gray-300 hover:text-white"
+                  className="mt-4 w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-gray-300 hover:text-white"
                 >
                   Return to Home
                 </button>

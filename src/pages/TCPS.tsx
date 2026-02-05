@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { trollCityTheme } from '../styles/trollCityTheme'
 import InboxSidebar from './tcps/components/InboxSidebar'
 import ChatWindow from './tcps/components/ChatWindow'
 import NewMessageModal from './tcps/components/NewMessageModal'
@@ -207,10 +208,10 @@ export default function TCPS() {
   }, [activeConversation, navigate])
 
   return (
-    <div className="w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-[#0b0b12] via-[#0d0d1a] to-[#14061a] flex justify-center items-stretch px-3 py-4 md:py-8 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-8">
-      <div className="relative flex w-full max-w-6xl bg-[#0b0b12] rounded-2xl md:rounded-3xl border border-white/10 overflow-hidden flex-col md:flex-row h-full">
+    <div className={`w-full h-[100dvh] overflow-hidden ${trollCityTheme.backgrounds.primary} flex justify-center items-stretch px-3 py-4 md:py-8 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-8`}>
+      <div className={`relative flex w-full max-w-6xl ${trollCityTheme.backgrounds.card} rounded-2xl md:rounded-3xl border border-white/10 overflow-hidden flex-col md:flex-row h-full`}>
         {/* Column 1: Sidebar with Conversations */}
-        <div className={`flex-col border-r border-white/5 bg-[#0b0b12] w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`flex-col border-r border-white/5 ${trollCityTheme.backgrounds.glass} w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
           <InboxSidebar
             activeConversation={activeConversation}
             onSelectConversation={handleSelectConversation}
@@ -223,7 +224,7 @@ export default function TCPS() {
         </div>
 
         {/* Column 2: Chat Window */}
-        <div className={`flex-1 flex-col min-w-0 bg-[#0d0d1a] ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
+        <div className={`flex-1 flex-col min-w-0 bg-transparent ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
           <ChatWindow
             conversationId={null} // It will be derived from users or we can pass it if we have it
             otherUserInfo={otherUserInfo}
