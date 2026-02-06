@@ -41,23 +41,42 @@ const PodListenerView = ({
   currentUser,
   participantsData,
   onRequestSpeak,
-  onCancelRequest
+  onCancelRequest,
+  isStaff
 }: {
   room: Room,
   currentUser: any,
   participantsData: PodParticipant[],
   onRequestSpeak: () => void,
-  onCancelRequest: () => void
+  onCancelRequest: () => void,
+  isStaff: boolean
 }) => {
   const [showChat, setShowChat] = useState(true);
   const myRecord = participantsData.find(p => p.user_id === currentUser?.id);
   const isHandRaised = myRecord?.is_hand_raised;
+  const navigate = useNavigate();
   
   // Construct HLS URL based on room ID (assuming standard convention)
   const playbackSrc = room.hls_url || room.id;
 
   // Get Speakers for display list
   const speakers = participantsData.filter(p => p.role === 'host' || p.role === 'speaker');
+
+  const handleEndPod = async () => {
+     if (confirm('Are you sure you want to FORCE END this pod?')) {
+        try {
+            await supabase
+                .from('pod_rooms')
+                .update({ is_live: false, ended_at: new Date().toISOString() })
+                .eq('id', room.id);
+            toast.success('Pod ended');
+            navigate('/pods');
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to end pod');
+        }
+     }
+  };
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden font-sans">
@@ -77,12 +96,22 @@ const PodListenerView = ({
             >
               <MessageSquare className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => window.history.back()}
-              className="px-4 py-1.5 bg-red-600/90 hover:bg-red-600 rounded-lg text-sm font-bold transition-colors"
-            >
-              Leave
-            </button>
+            
+            {isStaff ? (
+                <button 
+                  onClick={handleEndPod}
+                  className="px-4 py-1.5 bg-red-600/90 hover:bg-red-600 rounded-lg text-sm font-bold transition-colors"
+                >
+                  End Pod (Staff)
+                </button>
+            ) : (
+                <button 
+                  onClick={() => window.history.back()}
+                  className="px-4 py-1.5 bg-red-600/90 hover:bg-red-600 rounded-lg text-sm font-bold transition-colors"
+                >
+                  Leave
+                </button>
+            )}
           </div>
         </div>
 
@@ -149,7 +178,8 @@ const PodRoomContent = ({
   onRequestSpeak,
   onApproveRequest,
   onRemoveSpeaker,
-  onCancelRequest
+  onCancelRequest,
+  isStaff
 }: { 
   room: Room, 
   currentUser: any, 
@@ -159,12 +189,14 @@ const PodRoomContent = ({
   onRequestSpeak: () => void,
   onApproveRequest: (userId: string) => void,
   onRemoveSpeaker: (userId: string) => void,
-  onCancelRequest: () => void
+  onCancelRequest: () => void,
+  isStaff: boolean
 }) => {
   const participants = useParticipants();
   const liveKitRoom = useRoomContext();
   const [showChat, setShowChat] = useState(true);
   const [showRequests, setShowRequests] = useState(false);
+  const navigate = useNavigate();
 
   // Derived state
   const myRecord = participantsData.find(p => p.user_id === currentUser?.id);
@@ -220,22 +252,49 @@ const PodRoomContent = ({
     if (isHost) {
         // Host leaving ends the pod
         if (confirm('Ending the pod will disconnect all users. Continue?')) {
+            try {
+                await supabase
+                    .from('pod_rooms')
+                    .update({ is_live: false, ended_at: new Date().toISOString() })
+                    .eq('id', room.id);
+                
+                liveKitRoom.disconnect();
+                setTimeout(() => navigate('/pods'), 500);
+            } catch (err) {
+                console.error(err);
+                toast.error('Failed to end pod');
+            }
+        }
+    } else {
+        // Regular user (or Staff) leaving
+        try {
+            await supabase.from('pod_room_participants')
+                .delete()
+                .eq('room_id', room.id)
+                .eq('user_id', currentUser.id);
+        } catch (e) { console.error(e); }
+        
+        liveKitRoom.disconnect();
+    }
+  };
+
+  const handleForceEnd = async () => {
+     if (!isStaff) return;
+     if (confirm('FORCE END this pod (Staff Action)?')) {
+        try {
             await supabase
                 .from('pod_rooms')
                 .update({ is_live: false, ended_at: new Date().toISOString() })
                 .eq('id', room.id);
             
             liveKitRoom.disconnect();
+            setTimeout(() => navigate('/pods'), 500);
+            toast.success('Pod ended by Staff');
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to end pod');
         }
-    } else {
-        // Regular user leaving
-        await supabase.from('pod_room_participants')
-            .delete()
-            .eq('room_id', room.id)
-            .eq('user_id', currentUser.id);
-        
-        liveKitRoom.disconnect();
-    }
+     }
   };
 
   // Requests List (for Host)
@@ -283,6 +342,15 @@ const PodRoomContent = ({
             >
               {isHost ? 'End Pod' : 'Leave'}
             </button>
+            
+            {isStaff && !isHost && (
+                 <button 
+                   onClick={handleForceEnd}
+                   className="ml-2 px-4 py-1.5 bg-red-900/90 hover:bg-red-800 rounded-lg text-sm font-bold transition-colors border border-red-500/50"
+                 >
+                   End (Staff)
+                 </button>
+            )}
           </div>
         </div>
 
@@ -406,7 +474,7 @@ export default function TrollPodRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const [room, setRoom] = useState<Room | null>(null);
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, profile } = useAuthStore();
   const [participantsData, setParticipantsData] = useState<PodParticipant[]>([]);
   const [participantCount, setParticipantCount] = useState(0);
   
@@ -650,6 +718,7 @@ export default function TrollPodRoom() {
   const isHost = currentUser?.id === room?.host_id;
   const myRole = participantsData.find(p => p.user_id === currentUser?.id)?.role;
   const canPublish = isHost || myRole === 'speaker';
+  const isStaff = profile?.role === 'admin' || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.is_admin || profile?.is_troll_officer || false;
 
   const { token, serverUrl, isLoading, error } = useLiveKitToken({
     streamId: roomId,
@@ -671,6 +740,7 @@ export default function TrollPodRoom() {
             participantsData={participantsData}
             onRequestSpeak={handleRequestSpeak}
             onCancelRequest={handleCancelRequest}
+            isStaff={isStaff}
         />
      );
   }
@@ -699,6 +769,7 @@ export default function TrollPodRoom() {
         onApproveRequest={handleApproveRequest}
         onRemoveSpeaker={handleRemoveSpeaker}
         onCancelRequest={handleCancelRequest}
+        isStaff={isStaff}
       />
     </LiveKitRoom>
   );

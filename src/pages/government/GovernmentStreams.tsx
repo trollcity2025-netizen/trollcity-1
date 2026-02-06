@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { 
   Users, 
@@ -53,6 +54,20 @@ interface StreamRow {
   active_officers?: OfficerLog[];
 }
 
+interface PodRow {
+  id: string;
+  host_id: string;
+  title: string;
+  is_live: boolean;
+  viewer_count: number;
+  started_at: string;
+  hls_url?: string;
+  host?: {
+      username: string;
+      avatar_url: string;
+  };
+}
+
 interface StreamParticipant {
   user_id: string;
   username: string;
@@ -61,6 +76,9 @@ interface StreamParticipant {
 }
 
 export default function GovernmentStreams() {
+  const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState<'streams' | 'pods'>('streams');
+  const [pods, setPods] = useState<PodRow[]>([]);
   const [streams, setStreams] = useState<StreamRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStream, setSelectedStream] = useState<StreamRow | null>(null);
@@ -131,11 +149,62 @@ export default function GovernmentStreams() {
     }
   }, [showAllStreams]);
 
+  const fetchPods = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      let query = supabase
+        .from('pod_rooms')
+        .select(`
+            id,
+            host_id,
+            title,
+            is_live,
+            viewer_count,
+            started_at,
+            hls_url,
+            host:user_profiles!host_id(username, avatar_url)
+        `)
+        .order('started_at', { ascending: false });
+
+      if (!showAllStreams) {
+          query = query.eq('is_live', true);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setPods(data as any); 
+    } catch (err) {
+        console.error(err);
+        toast.error('Failed to load pods');
+    } finally {
+        setLoading(false);
+    }
+  }, [showAllStreams]);
+
   useEffect(() => {
-    fetchStreams();
-    const interval = setInterval(fetchStreams, 10000); // Refresh every 10s
+    if (viewMode === 'streams') {
+        fetchStreams();
+    } else {
+        fetchPods();
+    }
+    const interval = setInterval(() => {
+        if (viewMode === 'streams') fetchStreams();
+        else fetchPods();
+    }, 10000); 
     return () => clearInterval(interval);
-  }, [fetchStreams]);
+  }, [fetchStreams, fetchPods, viewMode]);
+
+  const handleEndPod = async (podId: string) => {
+    if (!confirm('FORCE END this pod?')) return;
+    try {
+        await supabase.from('pod_rooms').update({ is_live: false, ended_at: new Date().toISOString() }).eq('id', podId);
+        toast.success('Pod ended');
+        fetchPods();
+    } catch (e) {
+        console.error(e);
+        toast.error('Failed to end pod');
+    }
+  };
 
   const handleEndLive = async (streamId: string) => {
     if (!confirm('Are you sure you want to FORCE END this stream?')) return;
@@ -211,46 +280,64 @@ export default function GovernmentStreams() {
           <div>
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400 flex items-center gap-3">
               <Shield className="w-8 h-8 text-purple-400" />
-              Government Streams
+              Government Control
             </h1>
             <p className="text-gray-400 mt-2">Monitor, Moderate, and Enforce Troll City Laws</p>
           </div>
-          <button 
-            onClick={() => setShowAllStreams(!showAllStreams)}
-            className={`px-4 py-2 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-              showAllStreams 
-                ? 'bg-purple-500/20 border-purple-500 text-purple-300 hover:bg-purple-500/30' 
-                : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-400'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            {showAllStreams ? 'Showing History' : 'Live Only'}
-          </button>
-          
-          <button 
-            onClick={fetchStreams}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-          >
-            <Activity className="w-4 h-4" />
-            Refresh Feed
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex bg-white/5 rounded-lg p-1 mr-2">
+                <button
+                    onClick={() => setViewMode('streams')}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${viewMode === 'streams' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Streams
+                </button>
+                <button
+                    onClick={() => setViewMode('pods')}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${viewMode === 'pods' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Pods
+                </button>
+            </div>
+
+            <button 
+                onClick={() => setShowAllStreams(!showAllStreams)}
+                className={`px-4 py-2 border rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                showAllStreams 
+                    ? 'bg-purple-500/20 border-purple-500 text-purple-300 hover:bg-purple-500/30' 
+                    : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-400'
+                }`}
+            >
+                <Activity className="w-4 h-4" />
+                {showAllStreams ? 'History' : 'Live'}
+            </button>
+            
+            <button 
+                onClick={viewMode === 'streams' ? fetchStreams : fetchPods}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+                <Activity className="w-4 h-4" />
+                Refresh
+            </button>
+          </div>
         </div>
 
         {/* Grid */}
-        {loading && streams.length === 0 ? (
+        {loading && ((viewMode === 'streams' && streams.length === 0) || (viewMode === 'pods' && pods.length === 0)) ? (
           <div className="text-center py-20">
             <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
             <p className="text-gray-500">Scanning frequencies...</p>
           </div>
-        ) : streams.length === 0 ? (
+        ) : (viewMode === 'streams' && streams.length === 0) || (viewMode === 'pods' && pods.length === 0) ? (
           <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/10">
             <Radio className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-300">No Active Broadcasts</h3>
+            <h3 className="text-xl font-bold text-gray-300">No Active {viewMode === 'streams' ? 'Broadcasts' : 'Pods'}</h3>
             <p className="text-gray-500 mt-2">The city is currently quiet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {streams.map(stream => (
+            {viewMode === 'streams' ? streams.map(stream => (
               <StreamCard 
                 key={stream.id} 
                 stream={stream} 
@@ -260,6 +347,13 @@ export default function GovernmentStreams() {
                 onDisableChats={() => handleDisableAllChats(stream.id)}
                 onSummon={() => handleSummonClick(stream)}
               />
+            )) : pods.map(pod => (
+                <PodCard 
+                    key={pod.id}
+                    pod={pod}
+                    onWatch={() => navigate(`/pods/${pod.id}`)}
+                    onEndPod={() => handleEndPod(pod.id)}
+                />
             ))}
           </div>
         )}
@@ -283,6 +377,49 @@ export default function GovernmentStreams() {
           }} 
         />
       )}
+    </div>
+  );
+}
+
+function PodCard({ pod, onWatch, onEndPod }: { pod: PodRow, onWatch: () => void, onEndPod: () => void }) {
+  return (
+    <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden group hover:border-purple-500/50 transition-colors">
+      <div className="p-4 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-[2px]">
+             <img src={pod.host?.avatar_url || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'} className="w-full h-full rounded-full object-cover" />
+          </div>
+          <div>
+             <h3 className="font-bold text-white group-hover:text-purple-400 transition-colors">{pod.title || 'Untitled Pod'}</h3>
+             <p className="text-xs text-gray-400">Host: {pod.host?.username || 'Unknown'}</p>
+          </div>
+        </div>
+        <div className={`px-2 py-1 rounded text-xs font-bold uppercase ${pod.is_live ? 'bg-red-500/20 text-red-400 animate-pulse' : 'bg-gray-500/20 text-gray-400'}`}>
+           {pod.is_live ? 'LIVE' : 'ENDED'}
+        </div>
+      </div>
+      
+      <div className="p-4 space-y-4">
+         <div className="flex items-center justify-between text-sm text-gray-400">
+            <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                <span>{pod.viewer_count || 0} Viewers</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4" />
+                <span>{new Date(pod.started_at).toLocaleTimeString()}</span>
+            </div>
+         </div>
+
+         <div className="flex gap-2 pt-2">
+            <button onClick={onWatch} className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                <Eye className="w-4 h-4" /> Watch
+            </button>
+            <button onClick={onEndPod} className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-colors" title="Force End Pod">
+                <StopCircle className="w-4 h-4" />
+            </button>
+         </div>
+      </div>
     </div>
   );
 }

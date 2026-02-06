@@ -113,14 +113,18 @@ export default function PodChatBox({ roomId, isHost, currentUserId }: PodChatBox
         } : undefined
     };
 
-    // 1. Broadcast immediately
+    // 1. Optimistically update local state
+    setMessages(prev => [...prev, newMessage]);
+    scrollToBottom();
+
+    // 2. Broadcast immediately
     await supabase.channel(`pod_chat:${roomId}`).send({
         type: 'broadcast',
         event: 'chat_message',
         payload: newMessage
     });
 
-    // 2. Persist to DB (background)
+    // 3. Persist to DB (background)
     const { error } = await supabase
       .from('pod_chat_messages')
       .insert({
