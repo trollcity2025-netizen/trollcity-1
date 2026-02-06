@@ -22,8 +22,6 @@ interface QuickActionsBarProps {
   onSystemMaintenance: () => void
   onViewAnalytics: () => void
   onExportData: () => void
-  onToggleMaintenanceMode: () => void
-  maintenanceMode: boolean
 }
 
 interface QuickAction {
@@ -44,8 +42,6 @@ export default function QuickActionsBar({
   onSystemMaintenance,
   onViewAnalytics,
   onExportData,
-  onToggleMaintenanceMode,
-  maintenanceMode,
 }: QuickActionsBarProps) {
   const quickActions: QuickAction[] = [
     {
@@ -101,15 +97,6 @@ export default function QuickActionsBar({
       color: 'text-blue-400',
       bgColor: 'bg-blue-500/20',
       borderColor: 'border-blue-500/30'
-    },
-    {
-      icon: maintenanceMode ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />,
-      label: maintenanceMode ? 'Exit Maintenance' : 'Maintenance Mode',
-      description: maintenanceMode ? 'Disable maintenance' : 'Enable maintenance',
-      action: onToggleMaintenanceMode,
-      color: maintenanceMode ? 'text-red-400' : 'text-gray-400',
-      bgColor: maintenanceMode ? 'bg-red-500/20' : 'bg-gray-500/20',
-      borderColor: maintenanceMode ? 'border-red-500/30' : 'border-gray-500/30'
     }
   ]
 
@@ -122,12 +109,6 @@ export default function QuickActionsBar({
             Quick Actions
           </h4>
           <div className="flex items-center gap-2">
-            {maintenanceMode && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
-                <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-                <span className="text-xs text-red-400 font-medium">MAINTENANCE MODE</span>
-              </div>
-            )}
             <div className="text-xs text-gray-400">
               {new Date().toLocaleTimeString()}
             </div>

@@ -158,19 +158,8 @@ const Auth = () => {
       profileData = fetchedProfile
 
       if (profileData) {
-        // 🚧 MAINTENANCE CHECK 🚧
-        // Strict enforcement: Only admins can proceed past this point
-        const isMaintenanceMode = false;
-        const isAdmin = profileData.role === 'admin' || profileData.is_admin === true;
-        
-        if (isMaintenanceMode && !isAdmin) {
-          console.warn('Login blocked: Maintenance mode active and user is not admin', profileData.role);
-          await supabase.auth.signOut();
-          setAuth(null, null);
-          throw new Error('MAINTENANCE MODE: Login is currently restricted to Administrators only.');
-        }
-
         // Check if admin BEFORE setting profile
+        const isAdmin = profileData.role === 'admin' || profileData.is_admin === true;
         if (isAdminEmail(data.user.email) && profileData.role !== 'admin') {
           try {
             const now = new Date().toISOString()

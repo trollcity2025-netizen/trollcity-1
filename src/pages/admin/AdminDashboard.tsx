@@ -195,7 +195,6 @@ export default function AdminDashboard() {
   const [streamsLoading, setStreamsLoading] = useState(false)
 
   // New dashboard state
-  const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [taskCounts, setTaskCounts] = useState({
     taxReviews: 0,
     supportTickets: 0,
@@ -896,11 +895,6 @@ export default function AdminDashboard() {
     navigate('/admin/export-data')
   }
 
-  const handleToggleMaintenanceMode = () => {
-    setMaintenanceMode(!maintenanceMode)
-    toast.success(maintenanceMode ? 'Maintenance mode disabled' : 'Maintenance mode enabled')
-  }
-
   const _handleSelectTab = (tabId: string) => {
     setActiveTab(tabId as TabId)
   }
@@ -1097,8 +1091,6 @@ export default function AdminDashboard() {
         onSystemMaintenance={handleSystemMaintenance}
         onViewAnalytics={handleViewAnalytics}
         onExportData={handleExportData}
-        onToggleMaintenanceMode={handleToggleMaintenanceMode}
-        maintenanceMode={maintenanceMode}
       />
 
       <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-5">

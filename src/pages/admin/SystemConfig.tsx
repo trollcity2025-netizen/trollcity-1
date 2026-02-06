@@ -77,40 +77,6 @@ const SystemConfig: React.FC = () => {
   const renderSettingInput = (setting: AppSetting) => {
     const { setting_key, setting_value } = setting;
 
-    // Special handling for Maintenance Mode
-    if (setting_key === 'maintenance_mode') {
-      const isEnabled = setting_value?.enabled || false;
-      const message = setting_value?.message || '';
-
-      return (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <label className="switch">
-              <input 
-                type="checkbox" 
-                checked={isEnabled}
-                onChange={(e) => handleUpdate(setting_key, { ...setting_value, enabled: e.target.checked })}
-              />
-              <span className="slider round"></span>
-            </label>
-            <span className={isEnabled ? 'text-red-400 font-bold' : 'text-green-400'}>
-              {isEnabled ? 'MAINTENANCE ON' : 'MAINTENANCE OFF'}
-            </span>
-          </div>
-          <input
-            type="text"
-            className="w-full bg-black/40 border border-purple-500/30 rounded px-3 py-2 text-white"
-            value={message}
-            onChange={() => {
-              // Defer update or handle blur? For now, let's just show input and add a save button for text
-            }}
-            onBlur={(e) => handleUpdate(setting_key, { ...setting_value, message: e.target.value })}
-            placeholder="Maintenance message..."
-          />
-        </div>
-      );
-    }
-
     // Special handling for Global Announcement
     if (setting_key === 'global_announcement') {
       const isActive = setting_value?.active || false;

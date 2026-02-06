@@ -244,39 +244,11 @@ const LoadingScreen = () => (
   );
 
   // 🔐 Route Guard
-  const RequireAuth = () => {
+    const RequireAuth = () => {
     const user = useAuthStore((s) => s.user);
     const profile = useAuthStore((s) => s.profile);
     const isLoading = useAuthStore((s) => s.isLoading);
     const location = useLocation();
-
-    // 🚧 MAINTENANCE MODE CHECK 🚧
-    // Allow access to auth page, but block everything else for non-admins
-    const isMaintenanceMode = true;
-    if (isMaintenanceMode && user && profile && !isLoading) {
-       const isAdmin = profile.role === 'admin' || profile.is_admin === true;
-       if (!isAdmin && location.pathname !== '/auth') {
-          return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-4 text-center z-[9999] relative">
-              <h1 className="text-4xl font-bold text-red-500 mb-4">🚧 MAINTENANCE MODE 🚧</h1>
-              <p className="text-xl text-gray-300 max-w-md">
-                Troll City is currently unavailable for maintenance. 
-                <br/><br/>
-                Only administrators can access the system at this time.
-              </p>
-              <button 
-                onClick={() => {
-                  useAuthStore.getState().logout();
-                  window.location.href = '/auth';
-                }}
-                className="mt-8 px-6 py-2 bg-red-600 hover:bg-red-700 rounded text-white font-bold"
-              >
-                Sign Out
-              </button>
-            </div>
-          );
-       }
-    }
 
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
