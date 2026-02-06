@@ -7,20 +7,26 @@ This document serves as a centralized reference for all financial constants, fee
 ## 💰 Financial Overview
 
 ### Coin Value
-*   **Exchange Rate:** 100 Coins = $1.00 USD
+*   **Exchange Rate:** 150 Coins = $1.00 USD
 *   **Currency:** `troll_coins` (Internal virtual currency)
 
 ### Coin Purchase Packages
-| Package | Coins | Price (USD) | Cost per 1k Coins |
-| :--- | :--- | :--- | :--- |
-| **Bronze** | 1,000 | $4.49 | $4.49 |
-| **Silver** | 5,000 | $20.99 | $4.20 |
-| **Gold** | 12,000 | $49.99 | $4.17 |
-| **Platinum** | 25,000 | $99.99 | $4.00 |
-| **Diamond** | 60,000 | $239.99 | $4.00 |
-| **Legendary** | 120,000 | $459.99 | $3.83 |
-
----
+| New Troll Coin Packages (Cleaned + Optimized)
+🟢 Entry / Impulse
+Package	Coins	Price
+Starter	300	$1.99
+Small Boost	500	$3.49
+Casual	1,000	$6.99
+🔵 Core Spend (Most Users)
+Package	Coins	Price	Tag
+Bronze	2,500	$16.99	Popular
+Silver	5,000	$33.99	Popular
+Gold	10,000	$64.99	Best Value
+🟣 Power Users / Whales
+Package	Coins	Price	Bonus
+Platinum	15,000	$89.99	+5%
+Diamond	25,000	$149.99	+10%
+Legendary	50,000	$279.99	+15%
 
 ## 💸 Platform Fees & Commissions
 
@@ -41,7 +47,7 @@ This document serves as a centralized reference for all financial constants, fee
 ## 🏦 User Earnings & Payout Rules
 
 ### Withdrawal Limits
-*   **Minimum Payout:** 12,000 Coins (≈ $120.00 value, though one source mentioned ≈$36, the 150 coins = $1 rule implies 12,000 = $120. *Correction: If 100 coins = $1, then 12,000 coins = $120. If the code says 12,000 is ~$36, there may be a legacy rate or typo in the UI text, but 100:1 is the standard.*)
+*   
 *   **Age Requirement:** Users must enable "18+ Age Restriction" to be eligible for payouts.
 
 ### Earning Mechanics

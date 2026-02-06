@@ -8,16 +8,16 @@ export const STORE_USD_PER_COIN = 1.99 / 300;
 
 // Coin Packages (Source of Truth)
 export const COIN_PACKAGES = [
-  { id: 'pkg-1000-promo', coins: 1000, price: 0.10, priceDisplay: "$0.10", emoji: "💎", popular: true, promo: true, expiresAt: new Date('2026-01-28T00:51:27Z').getTime() },
-  { id: 1, coins: 300, price: 1.99, priceDisplay: "$1.99", emoji: "💰", popular: true },
-  { id: 2, coins: 500, price: 4.99, priceDisplay: "$4.99", emoji: "💰", popular: true },
-  { id: 3, coins: 1000, price: 9.99, priceDisplay: "$9.99", emoji: "💎" },
-  { id: 4, coins: 2500, price: 19.99, priceDisplay: "$19.99", emoji: "👑" },
-  { id: 5, coins: 5000, price: 39.99, priceDisplay: "$39.99", emoji: "🚀" },
-  { id: 6, coins: 10000, price: 69.99, priceDisplay: "$69.99", emoji: "⭐", bestValue: true },
-  { id: 7, coins: 13000, price: 89.99, priceDisplay: "$89.99", emoji: "🌟" },
-  { id: 8, coins: 20000, price: 129.00, priceDisplay: "$129.00", emoji: "🏆" },
-].filter(p => !p.expiresAt || Date.now() < p.expiresAt);
+  { id: 'pkg-300', coins: 300, price: 1.99, priceDisplay: "$1.99", emoji: "🟢", name: "Starter" },
+  { id: 'pkg-500', coins: 500, price: 3.49, priceDisplay: "$3.49", emoji: "🟢", name: "Small Boost" },
+  { id: 'pkg-1000', coins: 1000, price: 6.99, priceDisplay: "$6.99", emoji: "🟢", name: "Casual" },
+  { id: 'pkg-2500', coins: 2500, price: 16.99, priceDisplay: "$16.99", emoji: "🔵", popular: true, name: "Bronze" },
+  { id: 'pkg-5000', coins: 5000, price: 33.99, priceDisplay: "$33.99", emoji: "🔵", popular: true, name: "Silver" },
+  { id: 'pkg-10000', coins: 10000, price: 64.99, priceDisplay: "$64.99", emoji: "🔵", bestValue: true, name: "Gold" },
+  { id: 'pkg-15000', coins: 15000, price: 89.99, priceDisplay: "$89.99", emoji: "🟣", bonus: "+5%", name: "Platinum" },
+  { id: 'pkg-25000', coins: 25000, price: 149.99, priceDisplay: "$149.99", emoji: "🟣", bonus: "+10%", name: "Diamond" },
+  { id: 'pkg-50000', coins: 50000, price: 279.99, priceDisplay: "$279.99", emoji: "🟣", bonus: "+15%", name: "Legendary" },
+];
 
 // Legacy export for backward compatibility (if needed) or can be removed if unused
 export const coinPackages = COIN_PACKAGES;

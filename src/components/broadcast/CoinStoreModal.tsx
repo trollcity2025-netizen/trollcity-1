@@ -10,10 +10,15 @@ interface CoinPackage {
 }
 
 const PACKAGES: CoinPackage[] = [
-  { id: 'pack_1', coins: 100, price: '$0.99' },
-  { id: 'pack_2', coins: 550, price: '$4.99', popular: true },
-  { id: 'pack_3', coins: 1200, price: '$9.99' },
-  { id: 'pack_4', coins: 3000, price: '$24.99' },
+  { id: 'pkg-300', coins: 300, price: '$1.99' },
+  { id: 'pkg-500', coins: 500, price: '$3.49' },
+  { id: 'pkg-1000', coins: 1000, price: '$6.99' },
+  { id: 'pkg-2500', coins: 2500, price: '$16.99', popular: true },
+  { id: 'pkg-5000', coins: 5000, price: '$33.99', popular: true },
+  { id: 'pkg-10000', coins: 10000, price: '$64.99', popular: true }, // Using popular for Best Value
+  { id: 'pkg-15000', coins: 15000, price: '$89.99' },
+  { id: 'pkg-25000', coins: 25000, price: '$149.99' },
+  { id: 'pkg-50000', coins: 50000, price: '$279.99' },
 ];
 
 interface CoinStoreModalProps {

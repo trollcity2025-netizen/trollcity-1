@@ -54,7 +54,7 @@ const PodListenerView = ({
   const isHandRaised = myRecord?.is_hand_raised;
   
   // Construct HLS URL based on room ID (assuming standard convention)
-  const playbackSrc = room.hls_path || room.hls_url || room.id;
+  const playbackSrc = room.hls_url || room.id;
 
   // Get Speakers for display list
   const speakers = participantsData.filter(p => p.role === 'host' || p.role === 'speaker');
@@ -89,7 +89,7 @@ const PodListenerView = ({
         {/* Video Area */}
         <div className="flex-1 bg-zinc-900 relative">
            <HLSPlayer 
-             src={hlsUrl} 
+             src={playbackSrc} 
              className="w-full h-full object-contain"
            />
            
