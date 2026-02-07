@@ -1,12 +1,11 @@
 // src/components/levels/ProfileLevelWidget.jsx
 import React, { useEffect, useRef, useState } from "react";
-import { useUserLevels } from "@/hooks/useUserLevels";
+import { useXPStore } from "@/stores/useXPStore";
 import LevelBadge from "./LevelBadge";
 import LevelUpModal from "./LevelUpModal";
 
-
 export default function ProfileLevelWidget() {
-  const { levels, loading } = useUserLevels();
+  const { level, buyerLevel, streamLevel, isLoading } = useXPStore();
   const prevBuyerLevel = useRef(null);
   const prevStreamLevel = useRef(null);
   const prevMainLevel = useRef(null);
@@ -15,38 +14,34 @@ export default function ProfileLevelWidget() {
   const [showMainModal, setShowMainModal] = useState(false);
 
   useEffect(() => {
-    if (!levels) return;
+    if (isLoading) return;
 
     if (
       prevBuyerLevel.current !== null &&
-      levels.buyer_level > prevBuyerLevel.current
+      buyerLevel > prevBuyerLevel.current
     ) {
       setShowBuyerModal(true);
     }
     if (
       prevStreamLevel.current !== null &&
-      levels.stream_level > prevStreamLevel.current
+      streamLevel > prevStreamLevel.current
     ) {
       setShowStreamModal(true);
     }
-    // Main level check (levels.level or levels.current_level)
-    const currentMain = levels.level || levels.current_level || 1;
+    
     if (
       prevMainLevel.current !== null &&
-      currentMain > prevMainLevel.current
+      level > prevMainLevel.current
     ) {
       setShowMainModal(true);
     }
 
-    prevBuyerLevel.current = levels.buyer_level;
-    prevStreamLevel.current = levels.stream_level;
-    prevMainLevel.current = currentMain;
-  }, [levels]);
+    prevBuyerLevel.current = buyerLevel;
+    prevStreamLevel.current = streamLevel;
+    prevMainLevel.current = level;
+  }, [level, buyerLevel, streamLevel, isLoading]);
 
-  if (loading) return null;
-  if (!levels) return null;
-
-  const mainLevel = levels.level || levels.current_level || 1;
+  if (isLoading) return null;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
@@ -54,24 +49,24 @@ export default function ProfileLevelWidget() {
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-gray-400">Troll Level</span>
-        <LevelBadge type="main" level={mainLevel} />
+        <LevelBadge type="main" level={level} />
       </div>
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-gray-400">Supporter Level</span>
-        <LevelBadge type="buyer" level={levels.buyer_level} />
+        <LevelBadge type="buyer" level={buyerLevel} />
       </div>
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-gray-400">Broadcast Level</span>
-        <LevelBadge type="stream" level={levels.stream_level} />
+        <LevelBadge type="stream" level={streamLevel} />
       </div>
 
       {showMainModal && (
         <LevelUpModal
           type="main"
           oldLevel={prevMainLevel.current}
-          newLevel={mainLevel}
+          newLevel={level}
           onClose={() => setShowMainModal(false)}
         />
       )}
@@ -79,7 +74,7 @@ export default function ProfileLevelWidget() {
         <LevelUpModal
           type="buyer"
           oldLevel={prevBuyerLevel.current}
-          newLevel={levels.buyer_level}
+          newLevel={buyerLevel}
           onClose={() => setShowBuyerModal(false)}
         />
       )}
@@ -87,7 +82,7 @@ export default function ProfileLevelWidget() {
         <LevelUpModal
           type="stream"
           oldLevel={prevStreamLevel.current}
-          newLevel={levels.stream_level}
+          newLevel={streamLevel}
           onClose={() => setShowStreamModal(false)}
         />
       )}

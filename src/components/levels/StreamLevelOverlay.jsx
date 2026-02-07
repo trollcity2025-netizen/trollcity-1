@@ -1,12 +1,12 @@
 // src/components/levels/StreamLevelOverlay.jsx
 import React from "react";
-import { useUserLevels } from "@/hooks/useUserLevels";
+import { useXPStore } from "@/stores/useXPStore";
 import LevelBadge from "./LevelBadge";
 
 export default function StreamLevelOverlay() {
-  const { levels } = useUserLevels();
+  const { buyerLevel, streamLevel, isLoading } = useXPStore();
 
-  if (!levels) return null;
+  if (isLoading) return null;
 
   return (
     <div className="pointer-events-none absolute top-2 right-2 z-30 flex flex-col items-end gap-1">
@@ -14,13 +14,13 @@ export default function StreamLevelOverlay() {
         <span className="text-[10px] text-gray-300 uppercase tracking-wide">
           Supporter
         </span>
-        <LevelBadge type="buyer" level={levels.buyer_level} />
+        <LevelBadge type="buyer" level={buyerLevel} />
       </div>
       <div className="pointer-events-auto bg-black/70 border border-green-600 rounded-full px-3 py-1 flex items-center gap-2">
         <span className="text-[10px] text-gray-300 uppercase tracking-wide">
           Broadcast
         </span>
-        <LevelBadge type="stream" level={levels.stream_level} />
+        <LevelBadge type="stream" level={streamLevel} />
       </div>
     </div>
   );

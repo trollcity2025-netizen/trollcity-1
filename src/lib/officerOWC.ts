@@ -15,50 +15,50 @@ export const OFFICER_LEVELS: Record<number, OfficerLevelConfig> = {
   1: {
     level: 1,
     title: 'Junior Officer',
-    owcPerHour: 1_000_000,
-    conversionRate: 0.005, // 0.5%
-    basetroll_coinsPerHour: 5_000,
-    finaltroll_coinsPerHour: 5_500, // with 10% bonus
+    owcPerHour: 0,
+    conversionRate: 0,
+    basetroll_coinsPerHour: 0,
+    finaltroll_coinsPerHour: 0,
     badgeColor: 'blue',
     badgeEmoji: '🟦'
   },
   2: {
     level: 2,
     title: 'Senior Officer',
-    owcPerHour: 1_500_000,
-    conversionRate: 0.007, // 0.7%
-    basetroll_coinsPerHour: 10_500,
-    finaltroll_coinsPerHour: 11_550, // with 10% bonus
+    owcPerHour: 0,
+    conversionRate: 0,
+    basetroll_coinsPerHour: 0,
+    finaltroll_coinsPerHour: 0,
     badgeColor: 'orange',
     badgeEmoji: '🟧'
   },
   3: {
     level: 3,
     title: 'Commander',
-    owcPerHour: 1_800_000,
-    conversionRate: 0.008, // 0.8%
-    basetroll_coinsPerHour: 14_400,
-    finaltroll_coinsPerHour: 15_840, // with 10% bonus
+    owcPerHour: 0,
+    conversionRate: 0,
+    basetroll_coinsPerHour: 0,
+    finaltroll_coinsPerHour: 0,
     badgeColor: 'red',
     badgeEmoji: '🟥'
   },
   4: {
     level: 4,
     title: 'Elite Commander',
-    owcPerHour: 2_200_000,
-    conversionRate: 0.009, // 0.9%
-    basetroll_coinsPerHour: 19_800,
-    finaltroll_coinsPerHour: 21_780, // with 10% bonus
+    owcPerHour: 0,
+    conversionRate: 0,
+    basetroll_coinsPerHour: 0,
+    finaltroll_coinsPerHour: 0,
     badgeColor: 'purple',
     badgeEmoji: '🟪'
   },
   5: {
     level: 5,
     title: 'HQ Master Officer',
-    owcPerHour: 2_600_000,
-    conversionRate: 0.011, // 1.1%
-    basetroll_coinsPerHour: 28_600,
-    finaltroll_coinsPerHour: 31_460, // with 10% bonus
+    owcPerHour: 0,
+    conversionRate: 0,
+    basetroll_coinsPerHour: 0,
+    finaltroll_coinsPerHour: 0,
     badgeColor: 'gold',
     badgeEmoji: '🟨'
   }

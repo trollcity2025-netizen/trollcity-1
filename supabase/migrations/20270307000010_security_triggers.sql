@@ -27,9 +27,6 @@ BEGIN
         END IF;
         
         -- Prevent currency manipulation
-        IF NEW.coins IS DISTINCT FROM OLD.coins THEN
-            RAISE EXCEPTION 'Cannot update restricted column: coins';
-        END IF;
         IF NEW.troll_coins IS DISTINCT FROM OLD.troll_coins THEN
             RAISE EXCEPTION 'Cannot update restricted column: troll_coins';
         END IF;

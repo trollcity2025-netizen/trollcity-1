@@ -71,8 +71,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
 
-    const { event, room, egress } = eventData;
+    const { event, room, egress, participant } = eventData;
     console.log('LiveKit webhook received (Vercel):', { event, room });
+
+    // Helper to trigger egress safely
+    const triggerEgressSafe = async (roomName: string) => {
+        console.log("🔥 CHECKING EGRESS STATUS", roomName);
+        
+        // 1. Idempotency Check
+        const { data: stream } = await supabase
+            .from('streams')
+            .select('egress_id, hls_started_at')
+            .eq('id', roomName)
+            .single();
+
+        if (stream?.egress_id) {
+            console.log(`Egress already active for stream ${roomName} (ID: ${stream.egress_id}). Skipping.`);
+            return;
+        }
+
+        console.log("🔥 STARTING HLS EGRESS", roomName);
+        await startEgress(roomName, supabase); // Pass supabase client
+    };
 
     if (event === 'room_started') {
       const roomId = room.name;
@@ -90,8 +110,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         supabase.from('court_sessions').update({ status: 'live', started_at: new Date().toISOString() }).eq('id', roomId),
       ]).catch(err => console.error('Error updating pod/court:', err));
 
-      // 3. Trigger HLS Egress (Bunny Storage)
-      await startEgress(roomId);
+      // EGRESS TRIGGER MOVED TO participant_joined
+
+    } else if (event === 'participant_joined') {
+        // Trigger egress when a publisher joins
+        if (participant?.permission?.canPublish) {
+            console.log(`Publisher joined room ${room.name} (${participant.identity}). Triggering egress check.`);
+            await triggerEgressSafe(room.name);
+        }
 
     } else if (event === 'room_finished') {
       const roomId = room.name;
@@ -125,7 +151,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-async function startEgress(roomId: string) {
+async function startEgress(roomId: string, supabaseClient?: any) {
+  const sb = supabaseClient || supabase;
   const livekitUrl = process.env.VITE_LIVEKIT_URL || process.env.LIVEKIT_URL;
   const apiKey = process.env.LIVEKIT_API_KEY;
   const apiSecret = process.env.LIVEKIT_API_SECRET;
@@ -199,11 +226,26 @@ async function startEgress(roomId: string) {
         hlsUrl = `https://${bunnyZone}.b-cdn.net${hlsPath}`;
     }
 
-    await supabase.from('streams').update({ 
-        hls_path: hlsPath,
-        hls_url: hlsUrl, // Keep for backward compatibility
-        room_name: roomId // Ensure room_name is set
-    }).eq('id', roomId);
+    // Update ALL possible tables with the HLS URL and Path
+    await Promise.all([
+        sb.from('streams').update({ 
+            hls_url: hlsUrl,
+            hls_path: hlsPath,
+            room_name: roomId, // Ensure room_name is set
+            egress_id: info.egressId,
+            hls_started_at: new Date().toISOString()
+        }).eq('id', roomId),
+        sb.from('pod_rooms').update({ 
+            hls_url: hlsUrl,
+            egress_id: info.egressId,
+            hls_started_at: new Date().toISOString()
+        }).eq('id', roomId),
+        sb.from('court_sessions').update({ 
+            hls_url: hlsUrl,
+            egress_id: info.egressId,
+            hls_started_at: new Date().toISOString()
+        }).eq('id', roomId)
+    ]);
     
     console.log(`HLS Path updated: ${hlsPath}`);
 

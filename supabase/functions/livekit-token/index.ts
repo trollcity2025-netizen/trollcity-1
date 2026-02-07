@@ -105,12 +105,56 @@ serve(async (req: Request) => {
       });
     }
 
-    const profile = await authorizeUser(req);
-
+    // Parse params first to determine intent
     const params: TokenRequestParams =
       req.method === "POST"
         ? await req.json() as TokenRequestParams
         : Object.fromEntries(new URL(req.url).searchParams) as TokenRequestParams;
+
+    let profile: AuthorizedProfile;
+    
+    try {
+        profile = await authorizeUser(req);
+    } catch (e: any) {
+        // Guest Access Logic
+        const isAuthError = e.message === "Missing authorization header" || e.message === "No active session. Please sign in again.";
+        
+        if (isAuthError) {
+             // Validate Guest Intent (Cannot publish)
+             const allowPublish = 
+                params.allowPublish === true || 
+                params.allowPublish === "true" || 
+                params.allowPublish === "1" ||
+                // @ts-expect-error - canPublish might be passed
+                params.canPublish === true;
+
+             if (allowPublish) {
+                 return new Response(JSON.stringify({ error: "Guests cannot publish. Please log in." }), {
+                    status: 403,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                 });
+             }
+             
+             // Create Guest Profile
+             const guestId = params.identity && String(params.identity).startsWith("guest-") 
+                ? String(params.identity) 
+                : `guest-${crypto.randomUUID()}`;
+                
+             profile = {
+                id: guestId,
+                username: "Guest",
+                role: "guest",
+                avatar_url: null,
+                is_broadcaster: false,
+                is_admin: false,
+                is_lead_officer: false,
+                is_troll_officer: false
+             };
+             console.log(`[livekit-token] Guest access granted: ${guestId}`);
+        } else {
+            throw e; // Rethrow genuine server errors
+        }
+    }
 
     const room = params.room || params.roomName;
 
@@ -126,7 +170,7 @@ serve(async (req: Request) => {
       params.allowPublish === true ||
       params.allowPublish === "true" ||
       params.allowPublish === "1" ||
-      // @ts-ignore
+      // @ts-expect-error - canPublish is not in the type definition but used
       params.canPublish === true; // Also accept canPublish
 
 
@@ -148,6 +192,32 @@ serve(async (req: Request) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const { AccessToken, TrackSource, RoomServiceClient } = await getLivekit();
+
+    // ✅ Enforce 100 User Limit (Broadcasters + Viewers)
+    try {
+      const svc = new RoomServiceClient(livekitUrl, apiKey, apiSecret);
+      const rooms = await svc.listRooms();
+      let totalParticipants = 0;
+      
+      for (const r of rooms) {
+        totalParticipants += r.numParticipants;
+      }
+      
+      console.log(`[livekit-token] Current total participants: ${totalParticipants}`);
+      
+      if (totalParticipants >= 100) {
+        console.warn("[livekit-token] Server full (>= 100 participants), denying access");
+        return new Response(JSON.stringify({ error: "Server is full" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } catch (svcError) {
+      console.error("[livekit-token] Failed to check participant count:", svcError);
+      // Proceeding despite error to avoid blocking users on API hiccups
     }
 
     // ✅ FIX role matching — allow publisher as well
@@ -179,7 +249,7 @@ serve(async (req: Request) => {
       level: Number(level ?? 1),
     };
 
-    const { AccessToken, TrackSource } = await getLivekit();
+    // Reusing AccessToken and TrackSource from earlier import
 
     const token = new AccessToken(apiKey, apiSecret, {
       identity: String(identity),

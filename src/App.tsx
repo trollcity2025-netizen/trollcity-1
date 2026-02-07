@@ -21,11 +21,15 @@ import { initTimeUpdater } from "./hooks/useGlobalTime";
 import { APP_DATA_REFETCH_EVENT_NAME } from "./lib/appEvents";
 import { autoUnlockPayouts } from "./lib/supabase";
 import { initTelemetry } from "./lib/telemetry";
+import GlobalPresenceTracker from "./components/GlobalPresenceTracker";
 
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
 import TrollsTownControl from "./components/TrollsTownControl";
+import { useVersionCheck } from "./hooks/useVersionCheck";
+import { usePwaAutoUpdateSafeReload } from "./hooks/usePwaAutoUpdateSafeReload";
+import GlobalUserCounter from "./components/admin/GlobalUserCounter";
 
 import AdminErrors from "./pages/admin/AdminErrors";
 import ProfileSetupModal from "./components/ProfileSetupModal";
@@ -34,6 +38,8 @@ import { RequireLeadOrOwner } from "./components/auth/RequireLeadOrOwner";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 import AppLayout from "./components/layout/AppLayout";
+
+import { lazyWithRetry } from "./utils/lazyImport";
 
 // Static pages (fast load)
 import LandingHome from "./pages/Home";
@@ -63,6 +69,7 @@ const TrollPodsListing = lazy(() => import("./pages/pods/TrollPodsListing"));
 const TrollPodRoom = lazy(() => import("./pages/pods/TrollPodRoom"));
 
 // Lazy-loaded pages
+const MobileShell = lazyWithRetry(() => import("./pages/MobileShell"));
 const Following = lazy(() => import("./pages/Following"));
 const ExploreFeed = lazy(() => import("./pages/ExploreFeed"));
 const CoinStore = lazy(() => import("./pages/CoinStore"));
@@ -110,7 +117,7 @@ const ReferralBonusPanel = lazy(() => import("./pages/admin/ReferralBonusPanel")
 const SecretaryConsole = lazy(() => import("./pages/secretary/SecretaryConsole"));
 import { systemManagementRoutes } from "./pages/admin/adminRoutes";
 
-const LandingPage = lazy(() => import("./pages/LandingPage"));
+const LandingPage = lazyWithRetry(() => import("./pages/LandingPage"));
 const TaxOnboarding = lazy(() => import("./pages/TaxOnboarding"));
 const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 const EarningsPage = lazy(() => import("./pages/EarningsPage"));
@@ -120,11 +127,10 @@ const PayoutStatus = lazy(() => import("./pages/PayoutStatus"));
 const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
 
 
-const JoinPage = lazy(() => import("./pages/Join"));
+const JoinPage = lazyWithRetry(() => import("./pages/Join"));
 const KickFeePage = lazy(() => import("./pages/broadcast/KickFeePage"));
 const KickFee = lazy(() => import("./pages/KickFee"));
 const BanFee = lazy(() => import("./pages/BanFee"));
-const MobileShell = lazy(() => import("./pages/MobileShell"));
 const TrollCourtSession = lazy(() => import("./pages/TrollCourtSession"));
 const TromodyShow = lazy(() => import("./pages/TromodyShow"));
 const Call = lazy(() => import("./pages/Call"));
@@ -224,6 +230,9 @@ const AdminFinanceDashboard = lazy(() => import("./pages/admin/AdminFinanceDashb
 const CreateSchedule = lazy(() => import("./pages/admin/CreateSchedule"));
 const OfficerShifts = lazy(() => import("./pages/admin/OfficerShifts"));
 const EmpireApplicationsPage = lazy(() => import("./pages/admin/EmpireApplicationsPage"));
+import { useGasSystem } from "./lib/hooks/useGasSystem";
+import GasHUD from "./components/tmv/GasHUD";
+
 const ReferralBonuses = lazy(() => import("./pages/admin/ReferralBonuses"));
 const ControlPanel = lazy(() => import("./pages/admin/ControlPanel"));
 const TestDiagnosticsPage = lazy(() => import("./pages/admin/TestDiagnosticsPage"));
@@ -249,9 +258,16 @@ const LoadingScreen = () => (
     const profile = useAuthStore((s) => s.profile);
     const isLoading = useAuthStore((s) => s.isLoading);
     const location = useLocation();
+    
+    useGasSystem(); // Enable Gas System
 
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
+    
+    // Prevent flash of main content while profile is loading
+    if (!profile && location.pathname !== "/profile/setup") {
+      return <LoadingScreen />;
+    }
     
     if (
       profile &&
@@ -279,7 +295,12 @@ const LoadingScreen = () => (
     ) {
       return <Navigate to="/application" replace />;
     }
-    return <Outlet />;
+    return (
+      <>
+        <GasHUD />
+        <Outlet />
+      </>
+    );
   };
 
 import ChatBubble from "./components/ChatBubble";
@@ -323,6 +344,24 @@ function AppContent() {
     isReconnecting,
     reconnectMessage,
   } = useGlobalApp();
+
+  useVersionCheck();
+  usePwaAutoUpdateSafeReload();
+
+  // Handle Service Worker navigation requests (e.g. from push notifications)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NAVIGATE' && event.data.url) {
+        console.log('[App] Received NAVIGATE from SW:', event.data.url);
+        navigate(event.data.url);
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+  }, [navigate]);
 
   // Global unhandled rejection handler for AuthApiError
   useEffect(() => {
@@ -478,8 +517,8 @@ function AppContent() {
         return
       }
 
-      // 'g' -> District Tour
-      if (event.key === 'g' || event.key === 'G') {
+      // 'd' -> District Tour
+      if (event.key === 'd' || event.key === 'D') {
         navigate('/district/main_plaza', { replace: true })
         return
       }
@@ -718,6 +757,7 @@ function AppContent() {
   return (
     <>
       <SessionMonitor />
+      <GlobalUserCounter />
       {updateAvailable && (
         <div className="fixed bottom-0 inset-x-0 z-[60] flex items-center justify-between bg-purple-900 text-white px-4 py-3">
           <span className="text-sm">A new version of Troll City is available.</span>
@@ -769,7 +809,8 @@ function AppContent() {
       />
 
 
-      <AppLayout showSidebar={!!user} showHeader={!!user} showBottomNav={!!user}>
+      <AppLayout showSidebar={true} showHeader={true} showBottomNav={true}>
+        <GlobalPresenceTracker />
         {user && <AdminOfficerQuickMenu />}
         {user && (
           <Suspense fallback={null}>
@@ -782,7 +823,7 @@ function AppContent() {
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
                 {/* 🚪 Public Routes */}
-                <Route path="/" element={user ? <LandingHome /> : <LandingPage />} />
+                <Route path="/" element={<LandingHome />} />
               <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/exit" element={<ExitPage />} />
@@ -813,6 +854,10 @@ function AppContent() {
                 <Route path="/legal/gambling-disclosure" element={<GamblingDisclosure />} />
                 <Route path="/legal/partner-program" element={<PartnerProgram />} />
                  
+                {/* 🔓 Public Discover & Watch */}
+                <Route path="/explore" element={<ExploreFeed />} />
+                <Route path="/watch/:id" element={<BroadcastPage />} />
+
                 <Route path="/badges" element={<BadgesPage />} />
                 <Route path="/badges/:userId" element={<BadgesPage />} />
 
@@ -821,6 +866,10 @@ function AppContent() {
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
+                  <Route path="/" element={<LandingHome />} />
+                  <Route path="/explore" element={<ExploreFeed />} />
+                  <Route path="/watch/:id" element={<BroadcastPage />} />
+
                   {/* President Routes */}
                   <Route path="/president" element={<PresidentPage />} />
                   <Route path="/president/dashboard" element={
@@ -852,7 +901,6 @@ function AppContent() {
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
                   <Route path="/following/:userId" element={<Following />} />
-                  <Route path="/explore" element={<ExploreFeed />} />
                   <Route path="/trollifications" element={<Trollifications />} />
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/pool" element={<PublicPool />} />
@@ -873,7 +921,6 @@ function AppContent() {
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="/trollstown" element={<TrollsTownPage />} />
                   <Route path="/district/:districtName" element={<DistrictTour />} />
-                  <Route path="/g" element={<Navigate to="/district/main_plaza" replace />} />
                   <Route path="/living" element={<LivingPage />} />
                   
                   <Route path="/pods" element={<TrollPodsListing />} />
@@ -1043,6 +1090,14 @@ function AppContent() {
                     element={
                       <RequireRole roles={[UserRole.ADMIN]}>
                         <AdminDashboard />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/admin/interviews"
+                    element={
+                      <RequireRole roles={[UserRole.ADMIN, UserRole.LEAD_TROLL_OFFICER]}>
+                        <AdminInterviewDashboard />
                       </RequireRole>
                     }
                   />

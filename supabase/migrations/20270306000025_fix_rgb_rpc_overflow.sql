@@ -1,5 +1,13 @@
 -- Fix integer overflow in purchase_rgb_broadcast by using BIGINT for balance check
 
+DO $$ 
+DECLARE r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature FROM pg_proc 
+             WHERE proname = 'purchase_rgb_broadcast' AND pronamespace = 'public'::regnamespace 
+    LOOP EXECUTE 'DROP FUNCTION ' || r.func_signature; END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION purchase_rgb_broadcast(p_stream_id UUID, p_enable BOOLEAN)
 RETURNS TABLE (success BOOLEAN, message TEXT, error TEXT)
 LANGUAGE plpgsql

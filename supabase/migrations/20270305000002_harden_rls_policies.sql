@@ -60,6 +60,7 @@ ALTER TABLE public.battles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public view battles" ON public.battles;
 DROP POLICY IF EXISTS "Authenticated view battles" ON public.battles;
 DROP POLICY IF EXISTS "Service Role Bypass" ON public.battles;
+DROP POLICY IF EXISTS "Participants view own battles" ON public.battles;
 
 -- Restrict base table to participants only (broadcasters of the streams)
 -- Note: Requires joining to streams table to verify ownership
@@ -120,6 +121,7 @@ ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public view auction bids" ON public.auction_bids;
 DROP POLICY IF EXISTS "Authenticated view auction bids" ON public.auction_bids;
 DROP POLICY IF EXISTS "Users insert own bids" ON public.auction_bids;
+DROP POLICY IF EXISTS "Users view own bids" ON public.auction_bids;
 
 -- Strict Owner Policies
 CREATE POLICY "Users view own bids" ON public.auction_bids
@@ -156,6 +158,7 @@ ALTER TABLE public.stream_seat_sessions ENABLE ROW LEVEL SECURITY;
 -- Drop existing policies
 DROP POLICY IF EXISTS "Public view stream seat sessions" ON public.stream_seat_sessions;
 DROP POLICY IF EXISTS "Authenticated view stream seat sessions" ON public.stream_seat_sessions;
+DROP POLICY IF EXISTS "Users view own seat session" ON public.stream_seat_sessions;
 
 -- Restrict base table to seat holder only
 CREATE POLICY "Users view own seat session" ON public.stream_seat_sessions

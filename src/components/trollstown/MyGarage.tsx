@@ -201,7 +201,7 @@ export default function MyGarage() {
         <div className="bg-black/40 border border-white/10 rounded-xl p-12 text-center">
           <Car className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h3 className="text-xl font-bold mb-2">Empty Garage</h3>
-          <p className="text-gray-400">You don't own any vehicles yet. Visit the Dealership to buy one!</p>
+          <p className="text-gray-400">You don&apos;t own any vehicles yet. Visit the Dealership to buy one!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

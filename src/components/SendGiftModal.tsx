@@ -197,7 +197,7 @@ export default function SendGiftModal({
     : GIFT_ITEMS.map(gift => ({ ...gift, category: 'Common' }))
 
   const modalContent = (
-    <div className={`${inline ? 'w-full' : 'bg-gray-900 p-6 w-96 rounded-xl shadow-lg'} text-white relative ${inline ? 'h-full' : ''}`}>
+    <div className={`${inline ? 'w-full h-full' : 'bg-gray-900 p-6 w-full max-w-sm rounded-xl shadow-lg max-h-[90vh] overflow-y-auto'} text-white relative`}>
       <button onClick={onClose} className="absolute top-3 right-3 z-10">
         <X size={20} />
       </button>

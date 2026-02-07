@@ -127,6 +127,28 @@ export async function purchaseGift({ userId, giftSlug, quantity = 1 }: { userId:
     return { success: false, error: deduction.error || 'Unable to deduct coins' };
   }
 
+  // Revenue Sync: Log purchase to ledger
+  try {
+    const { data: dbItem } = await supabase
+      .from('purchasable_items')
+      .select('id')
+      .eq('item_key', giftSlug)
+      .maybeSingle();
+
+    if (dbItem) {
+      await supabase.from('purchase_ledger').insert({
+        user_id: userId,
+        item_id: dbItem.id,
+        coin_amount: totalCost,
+        payment_method: 'coins',
+        source_context: 'purchaseGift',
+        metadata: { giftSlug, quantity }
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to log purchase ledger', err);
+  }
+
   const newQuantity = await upsertInventory(userId, giftSlug, quantity);
 
   return {

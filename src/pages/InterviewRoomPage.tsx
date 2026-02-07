@@ -8,7 +8,10 @@ import {
   Calendar,
   FileText,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Users,
+  Clock,
+  Play
 } from 'lucide-react'
 
 // Application type
@@ -51,12 +54,68 @@ export default function InterviewRoomPage() {
   const [scheduleTime, setScheduleTime] = useState('')
   const [scheduling, setScheduling] = useState(false)
 
+  // Admin state
+  const [adminInterviews, setAdminInterviews] = useState<any[]>([])
+  const [adminApplications, setAdminApplications] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<'interviews' | 'applications'>('interviews')
+
   // Check if user is admin (matching Sidebar.tsx logic)
   const isAdmin = profile?.role === 'admin' || 
     profile?.troll_role === 'admin' || 
     profile?.role === 'hr_admin' || 
     profile?.is_admin ||
     profile?.role === 'lead_troll_officer'
+
+  // Fetch admin data
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchAdminData = async () => {
+        // Fetch interviews
+        const { data: interviews } = await supabase
+          .from('interview_sessions')
+          .select(`
+            *,
+            application:applications!application_id (
+              type,
+              status
+            )
+          `)
+          .order('scheduled_at', { ascending: true })
+        
+        if (interviews) {
+             // Get user profiles
+            const userIds = [...new Set(interviews.map(i => i.user_id))]
+            const { data: profiles } = await supabase
+                .from('user_profiles')
+                .select('id, username, full_name')
+                .in('id', userIds)
+            
+            const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+            
+            const formatted = interviews.map(i => ({
+                ...i,
+                applicant_name: profileMap.get(i.user_id)?.full_name || profileMap.get(i.user_id)?.username || 'Unknown'
+            }))
+            setAdminInterviews(formatted)
+        }
+
+        // Fetch applications
+        const { data: apps } = await supabase
+          .from('applications')
+          .select(`
+            *,
+            user:user_profiles!user_id (
+              username,
+              full_name
+            )
+          `)
+          .order('created_at', { ascending: false })
+        
+        if (apps) setAdminApplications(apps)
+      }
+      fetchAdminData()
+    }
+  }, [isAdmin])
 
   // Roles that don't need interviews - appointed directly (only pastor remains)
   const appointedRoles = ['pastor']
@@ -189,6 +248,128 @@ export default function InterviewRoomPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto"></div>
           <p className="mt-4 text-gray-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Admin Dashboard
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#0A0814] p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-purple-500/20 rounded-lg">
+                <Video className="w-8 h-8 text-purple-400" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Admin Interview Dashboard</h1>
+                <p className="text-gray-400">Manage interviews and applications</p>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-4 mb-6 border-b border-[#2C2C2C] pb-4">
+               <button
+                  onClick={() => setActiveTab('interviews')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    activeTab === 'interviews' 
+                      ? 'bg-purple-500 text-white' 
+                      : 'bg-[#141414] text-gray-400 hover:bg-[#2C2C2C]'
+                  }`}
+                >
+                  Scheduled Interviews ({adminInterviews.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('applications')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    activeTab === 'applications' 
+                      ? 'bg-purple-500 text-white' 
+                      : 'bg-[#141414] text-gray-400 hover:bg-[#2C2C2C]'
+                  }`}
+                >
+                  All Applications ({adminApplications.length})
+                </button>
+            </div>
+
+            {activeTab === 'interviews' && (
+              <div className="space-y-4">
+                {adminInterviews.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8">No scheduled interviews found.</p>
+                ) : (
+                  adminInterviews.map((interview) => (
+                    <div key={interview.id} className="bg-[#141414] p-4 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                         <div className="p-2 bg-purple-500/10 rounded-lg">
+                           <Users className="w-5 h-5 text-purple-400" />
+                         </div>
+                         <div>
+                           <h3 className="font-bold text-white">{interview.applicant_name}</h3>
+                           <p className="text-sm text-gray-400">
+                             {new Date(interview.scheduled_at).toLocaleString()}
+                           </p>
+                           <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300">
+                                  {interview.application?.type.replace('_', ' ')}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                  interview.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                                  interview.status === 'completed' ? 'bg-blue-500/20 text-blue-400' :
+                                  'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                  {interview.status}
+                              </span>
+                           </div>
+                         </div>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/interview/${interview.id}`)}
+                        className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium flex items-center gap-2"
+                      >
+                        <Play className="w-4 h-4" />
+                        Start/Join
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'applications' && (
+              <div className="space-y-4">
+                  {adminApplications.length === 0 ? (
+                      <p className="text-gray-400 text-center py-8">No applications found.</p>
+                  ) : (
+                      adminApplications.map((app) => (
+                          <div key={app.id} className="bg-[#141414] p-4 rounded-lg flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                  <div className="p-2 bg-blue-500/10 rounded-lg">
+                                      <FileText className="w-5 h-5 text-blue-400" />
+                                  </div>
+                                  <div>
+                                      <h3 className="font-bold text-white">{app.user?.full_name || app.user?.username || 'Unknown User'}</h3>
+                                      <p className="text-sm text-gray-400">
+                                          Applied: {new Date(app.created_at).toLocaleDateString()}
+                                      </p>
+                                      <p className="text-xs text-gray-500 capitalize">{app.type.replace('_', ' ')}</p>
+                                  </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-1 rounded text-xs ${
+                                      app.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                                      app.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                                      'bg-yellow-500/20 text-yellow-400'
+                                  }`}>
+                                      {app.status}
+                                  </span>
+                              </div>
+                          </div>
+                      ))
+                  )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -338,13 +519,35 @@ export default function InterviewRoomPage() {
             </div>
 
             {existingInterview.status === 'active' && (
-              <button
-                onClick={() => navigate(`/interview/${existingInterview.id}`)}
-                className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-500 text-bold hover:shadow-lg hover:shadow-cyan-500/30-white rounded-lg font transition-all flex items-center justify-center gap-2"
-              >
-                <Video className="w-5 h-5" />
-                Join Interview Room
-              </button>
+              <>
+                {(() => {
+                  const scheduledTime = new Date(existingInterview.scheduled_at).getTime();
+                  const now = new Date().getTime();
+                  const tenMinutes = 10 * 60 * 1000;
+                  const isWithinWindow = now >= scheduledTime - tenMinutes;
+                  
+                  if (isWithinWindow) {
+                    return (
+                      <button
+                        onClick={() => navigate(`/interview/${existingInterview.id}`)}
+                        className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-bold hover:shadow-lg hover:shadow-cyan-500/30 transition-all flex items-center justify-center gap-2 rounded-lg"
+                      >
+                        <Video className="w-5 h-5" />
+                        Join Interview Room
+                      </button>
+                    );
+                  } else {
+                    const diff = scheduledTime - tenMinutes - now;
+                    const minutes = Math.ceil(diff / 60000);
+                    return (
+                      <div className="w-full py-4 bg-[#2C2C2C] text-gray-400 rounded-lg font-medium flex items-center justify-center gap-2 cursor-not-allowed">
+                        <Video className="w-5 h-5" />
+                        Room opens in {minutes} minute{minutes !== 1 ? 's' : ''}
+                      </div>
+                    );
+                  }
+                })()}
+              </>
             )}
           </div>
         </div>

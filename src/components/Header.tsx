@@ -212,7 +212,7 @@ const Header = () => {
   }
 
   return (
-    <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-8 backdrop-blur-lg relative overflow-hidden">
+    <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-8 backdrop-blur-lg relative z-50">
       <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5 pointer-events-none"></div>
       <div className="relative z-10 flex items-center space-x-6 flex-1">
         <div className="relative flex-1 max-w-lg">
@@ -278,57 +278,79 @@ const Header = () => {
       </div>
 
       <div className="relative z-10 flex items-center space-x-6">
-        <PresidentialToolsModal />
+        {!user && (
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => navigate('/auth?mode=login')}
+              className="px-4 py-2 text-sm font-semibold text-white/80 hover:text-white transition-colors"
+            >
+              Log In
+            </button>
+            <button 
+              onClick={() => navigate('/auth?mode=signup')}
+              className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 rounded-lg shadow-lg shadow-purple-500/20 transition-all hover:scale-105 active:scale-95"
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
+
+        {user && <PresidentialToolsModal />}
+
         <Link
-          to="/trollifications"
+          to={user ? "/trollifications" : "/auth?mode=signup"}
           className="relative p-3 text-purple-400 hover:text-purple-300 transition-all duration-300 group"
         >
           <Bell className="w-6 h-6" />
-          {unreadNotifications > 0 && (
+          {user && unreadNotifications > 0 && (
             <span className="absolute -top-1 -right-1 text-xs px-2 py-1 rounded-full min-w-[20px] text-center bg-red-500 text-white">
               {unreadNotifications > 99 ? '99+' : unreadNotifications}
             </span>
           )}
         </Link>
 
-        <button
-          onClick={handleClearCacheReload}
-          className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-400/30 shadow-lg shadow-cyan-500/20 active:scale-95 transition-all duration-300"
-          title="Clear cache and hard reload"
-          type="button"
-        >
-          <RefreshCw className="w-5 h-5" />
-        </button>
-        
-        <div className="hidden md:block">
-          <ProfileDropdown />
-        </div>
+        {user && (
+          <>
+            <button
+              onClick={handleClearCacheReload}
+              className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-400/30 shadow-lg shadow-cyan-500/20 active:scale-95 transition-all duration-300"
+              title="Clear cache and hard reload"
+              type="button"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+            
+            <div className="hidden md:block">
+              <ProfileDropdown />
+            </div>
 
-        <Link
-          to="/store"
-          className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 text-white shadow-lg shadow-yellow-500/20 active:scale-95 transition-all duration-300"
-        >
-          <Store className="w-5 h-5" />
-        </Link>
+            <Link
+              to="/store"
+              className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 text-white shadow-lg shadow-yellow-500/20 active:scale-95 transition-all duration-300"
+            >
+              <Store className="w-5 h-5" />
+            </Link>
 
-        <div className="hidden md:flex items-center gap-2">
-          <button
-            onClick={handleClearCacheReload}
-            className="px-3 py-2 text-xs font-semibold text-cyan-200/90 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-400/20"
-            title="Clear cache and hard reload"
-            type="button"
-          >
-            Clear cache
-          </button>
-          <button
-            onClick={handleLogout}
-            className="p-3 text-red-400 hover:text-red-300 transition-all duration-300 hover:bg-red-500/10 rounded-xl"
-            title="Logout"
-            type="button"
-          >
-            <LogOut className="w-6 h-6" />
-          </button>
-        </div>
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                onClick={handleClearCacheReload}
+                className="px-3 py-2 text-xs font-semibold text-cyan-200/90 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-400/20"
+                title="Clear cache and hard reload"
+                type="button"
+              >
+                Clear cache
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-3 text-red-400 hover:text-red-300 transition-all duration-300 hover:bg-red-500/10 rounded-xl"
+                title="Logout"
+                type="button"
+              >
+                <LogOut className="w-6 h-6" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </header>
   )

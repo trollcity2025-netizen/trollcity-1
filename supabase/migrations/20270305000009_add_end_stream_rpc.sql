@@ -1,4 +1,17 @@
 -- Function to end a stream safely
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'end_stream' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION public.end_stream(stream_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql

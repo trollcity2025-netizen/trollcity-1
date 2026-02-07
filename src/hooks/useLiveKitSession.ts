@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLiveKit } from "./useLiveKit";
 import { toast } from "sonner";
 import { createLocalTracks } from "livekit-client";
+import { useNavigate } from "react-router-dom";
 
 interface SessionOptions {
   roomName: string;
@@ -36,6 +37,7 @@ export function useLiveKitSession(options: SessionOptions) {
     getRoom,
   } = useLiveKit();
 
+  const navigate = useNavigate();
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const joinStartedRef = useRef(false);
@@ -158,6 +160,15 @@ export function useLiveKitSession(options: SessionOptions) {
             service?.getLastConnectionError?.() ||
             error ||
             "";
+
+          // ✅ Handle Server Full (LiveKit Limit)
+          if (String(serviceError).includes("Server is full")) {
+            console.warn("[useLiveKitSession] Server is full, redirecting home");
+            toast.error("Server is full (max 100 users). Redirecting to homepage...", { duration: 4000 });
+            navigate("/");
+            joinStartedRef.current = false;
+            return false;
+          }
 
           const errLower = String(serviceError).toLowerCase();
 
@@ -310,6 +321,7 @@ export function useLiveKitSession(options: SessionOptions) {
       error,
       service,
       getRoom,
+      navigate,
     ]
   );
 
@@ -364,7 +376,18 @@ export function useLiveKitSession(options: SessionOptions) {
         tokenOverride: options.token,
       } as any);
 
-      if (!connected) throw new Error("LiveKit connection failed");
+      if (!connected) {
+        const serviceError = service?.getLastConnectionError?.() || error || "";
+        
+        if (String(serviceError).includes("Server is full")) {
+          toast.error("Server is full (max 100 users). Redirecting to homepage...", { duration: 4000 });
+          navigate("/");
+          joinStartedRef.current = false;
+          return false;
+        }
+        
+        throw new Error("LiveKit connection failed");
+      }
 
       console.log("[useLiveKitSession] ✅ joinOnly connected");
       return true;
@@ -374,7 +397,7 @@ export function useLiveKitSession(options: SessionOptions) {
       joinStartedRef.current = false;
       return false;
     }
-  }, [connect, options.roomName, options.user, options.token, options.serverUrl]);
+  }, [connect, options.roomName, options.user, options.token, options.serverUrl, service, error, navigate]);
 
   const resetJoinGuard = () => {
     joinStartedRef.current = false;

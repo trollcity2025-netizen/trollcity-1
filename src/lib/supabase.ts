@@ -98,6 +98,11 @@ export interface UserProfile {
   trolltract_activated_at?: string | null
 
   // Profile Costs
+  
+  // TMV System
+  gas_balance?: number
+  drivers_license_status?: string
+  drivers_license_expiry?: string
   message_cost?: number
   profile_view_cost?: number
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { trollCityTheme } from '../styles/trollCityTheme'
 import { X, ChevronLeft, ChevronRight, CheckCircle, Sparkles } from 'lucide-react'
 
 interface TourStep {

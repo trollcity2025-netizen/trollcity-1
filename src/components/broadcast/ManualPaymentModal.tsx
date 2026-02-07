@@ -169,10 +169,16 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs text-yellow-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  You MUST include this note for automated processing.
-                </p>
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs text-yellow-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    You MUST include this note for automated processing.
+                  </p>
+                  <p className="text-xs text-blue-400 font-bold flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Send as &quot;Friend/Family&quot; transaction to avoid fees.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

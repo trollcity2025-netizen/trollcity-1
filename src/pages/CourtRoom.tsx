@@ -3,9 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../lib/store";
 import { supabase, UserRole } from "../lib/supabase";
 import { startCourtSession } from "../lib/courtSessions";
-import { LiveKitRoom, ParticipantTile, useTracks } from "@livekit/components-react";
+import { LiveKitRoom, ParticipantTile, useTracks, useParticipants } from "@livekit/components-react";
 import "@livekit/components-styles";
-import HLSPlayer from "../components/broadcast/HLSPlayer";
 import { toast } from "sonner";
 import RequireRole from "../components/RequireRole";
 import CourtAIAssistant from "../components/CourtAIAssistant";
@@ -153,33 +152,41 @@ const CourtTrackCounter = memo(({ onCount }: { onCount: (count: number) => void 
 });
 
 CourtTrackCounter.displayName = 'CourtTrackCounter';
+  
+  const CourtLimitEnforcer = ({ isJudge, isOfficer }: { isJudge: boolean, isOfficer: boolean }) => {
+    const participants = useParticipants();
+    const navigate = useNavigate();
+    
+    useEffect(() => {
+       if (isJudge || isOfficer) return;
 
-const isValidUuid = (value?: string | null) =>
+       // Filter for viewers (those who cannot publish)
+       const viewers = participants.filter(p => !p.permissions?.canPublish);
+       
+       // Sort by join time to identify who exceeded the limit
+       // We use a fallback to creationTime or just assume order if joinedAt is missing (though it shouldn't be)
+       const sortedViewers = [...viewers].sort((a, b) => {
+          const timeA = a.joinedAt?.getTime() || 0;
+          const timeB = b.joinedAt?.getTime() || 0;
+          return timeA - timeB;
+       });
+
+       const myIndex = sortedViewers.findIndex(p => p.isLocal);
+       
+       // If I am a viewer and I am the 11th or later (index 10+), I must leave
+       if (myIndex !== -1 && myIndex >= 10) {
+          toast.error('Viewer limit (10) reached.');
+          navigate('/troll-court');
+       }
+    }, [participants, isJudge, isOfficer, navigate]);
+    
+    return null;
+  };
+  
+  const isValidUuid = (value?: string | null) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value || ''
   );
-
-// --- HLS / Listener View for Court ---
-const CourtListenerView = ({ courtSession }: { courtSession: any }) => {
-  const playbackSrc = courtSession?.hls_path || courtSession?.hls_url || courtSession?.id;
-
-  return (
-    <div className="aspect-video bg-black relative w-full h-full">
-      <HLSPlayer
-        src={playbackSrc}
-        className="w-full h-full object-contain"
-      />
-      <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-        <div className="px-2 py-1 bg-red-600/90 backdrop-blur-sm text-white text-xs font-bold rounded animate-pulse shadow-lg shadow-red-900/20">
-          LIVE
-        </div>
-        <div className="px-2 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded border border-white/10">
-          Spectator Mode
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function CourtRoom() {
    const { user, profile } = useAuthStore();
@@ -318,17 +325,13 @@ export default function CourtRoom() {
       }
 
       setCourtSession(session);
-      setBoxCount(Math.min(6, Math.max(2, session.max_boxes || 2)));
+      setBoxCount(Math.min(4, Math.max(2, session.max_boxes || 2)));
 
-      // Logic to determine if we need a token (Speakers only)
+      // Always connect to LiveKit for all users (viewers and speakers)
       const isJudge = profile?.role === 'admin' || profile?.role === 'lead_troll_officer' || profile?.is_admin || profile?.is_lead_officer;
-      const shouldConnect = isJudge || ["defendant", "accuser", "witness", "attorney"].includes(profile?.role);
-
-      if (!shouldConnect) {
-        setLoading(false);
-        return; // Listeners don't need a token immediately
-      }
-
+      const isOfficer = profile?.role === 'troll_officer' || profile?.is_troll_officer;
+      const canPublishInitial = isJudge || isOfficer || ["defendant", "accuser", "witness", "attorney"].includes(profile?.role);
+      
       // Get token
       const vercelTokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL;
       const edgeBase = import.meta.env.VITE_EDGE_FUNCTIONS_URL;
@@ -349,6 +352,7 @@ export default function CourtRoom() {
           identity: user.id,
           user_id: user.id,
           role: profile?.role,
+          allowPublish: canPublishInitial
         }),
       });
 
@@ -522,7 +526,7 @@ export default function CourtRoom() {
           }
           if (typeof data.max_boxes === 'number') {
              setBoxCount((prev) => {
-               const newCount = Math.min(6, Math.max(2, data.max_boxes));
+               const newCount = Math.min(4, Math.max(2, data.max_boxes));
                return newCount !== prev ? newCount : prev;
              });
           }
@@ -552,7 +556,7 @@ export default function CourtRoom() {
             return;
           }
           if (typeof newData.max_boxes === 'number') {
-            const newBoxCount = Math.min(6, Math.max(2, newData.max_boxes));
+            const newBoxCount = Math.min(4, Math.max(2, newData.max_boxes));
             setBoxCount((prev) => {
               if (prev !== newBoxCount) {
                 console.log('[CourtRoom] BoxCount updated via Realtime:', newBoxCount);
@@ -577,6 +581,26 @@ export default function CourtRoom() {
     };
   }, [courtId]);
 
+  // Duration Limit (1 hour)
+  useEffect(() => {
+    if (courtSession?.created_at) {
+        const checkDuration = () => {
+            const startedAt = new Date(courtSession.created_at).getTime();
+            const duration = Date.now() - startedAt;
+            if (duration > 3600000) { // 1 hour
+                 // Only show toast once or periodically?
+                 // Since this runs every minute, it will toast every minute after 1 hour.
+                 // That's acceptable for now to annoy them into ending.
+                 if (isJudge) toast.error('Court session time limit (1 hour) reached.');
+                 else toast.warning('This court session has exceeded the 1-hour limit.');
+            }
+        };
+        checkDuration(); 
+        const interval = setInterval(checkDuration, 60000);
+        return () => clearInterval(interval);
+    }
+  }, [courtSession, isJudge]);
+
 
 
   // Check if user is a judge (admin or lead officer)
@@ -599,7 +623,8 @@ export default function CourtRoom() {
 
   // Server-side token enforces publish permissions; client mirrors as a UX hint.
   // Judges can always publish, and users with court roles can publish
-  const roleCanPublish = Boolean(isJudge) ||
+  const isOfficer = profile?.role === 'troll_officer' || profile?.is_troll_officer;
+  const roleCanPublish = Boolean(isJudge) || Boolean(isOfficer) ||
                          ["defendant", "accuser", "witness", "attorney"].includes(profile?.role);
   const canPublish = roleCanPublish || joinBoxRequested;
 
@@ -1243,10 +1268,10 @@ export default function CourtRoom() {
     );
   }
 
-  if ((!token || !serverUrl || token === '' || serverUrl === '') && canPublish) {
+  if ((!token || !serverUrl || token === '' || serverUrl === '')) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-10 text-center">
-        <div className="text-red-400">Failed to join court session (Speaker Mode). Please try again.</div>
+        <div className="text-red-400">Failed to join court session. Please try again.</div>
         <div className="text-xs text-gray-500 mt-2">
           Token: {token ? 'present' : 'missing'}, ServerUrl: {serverUrl ? 'present' : 'missing'}
         </div>
@@ -1300,14 +1325,14 @@ export default function CourtRoom() {
                     <button
                       type="button"
                       onClick={async () => {
-                        const next = Math.min(6, (boxCount || 2) + 1);
+                        const next = Math.min(4, (boxCount || 2) + 1);
                         setBoxCount(next);
                         try {
                           await supabase.rpc('set_court_boxes', { p_session_id: String(courtId), p_max_boxes: next });
                         } catch {}
                       }}
                       className="px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-sm"
-                      disabled={boxCount >= 6}
+                      disabled={boxCount >= 4}
                     >
                       +
                     </button>
@@ -1332,20 +1357,19 @@ export default function CourtRoom() {
                   </button>
                 </div>
               )}
-              {canPublish && token ? (
+              {token && (
                 <LiveKitRoom
                   token={token}
                   serverUrl={serverUrl}
                   connect={true}
-                  audio={canPublish}
-                  video={canPublish}
+                  audio={true}
+                  video={true}
                   className="w-full"
                 >
+                  <CourtLimitEnforcer isJudge={Boolean(isJudge)} isOfficer={Boolean(isOfficer)} />
                   <CourtTrackCounter onCount={setActiveBoxCount} />
                   <CourtVideoGrid maxTiles={boxCount} />
                 </LiveKitRoom>
-              ) : (
-                <CourtListenerView courtId={courtId} />
               )}
             </div>
 

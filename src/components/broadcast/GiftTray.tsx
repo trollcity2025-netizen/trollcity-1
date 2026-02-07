@@ -23,23 +23,26 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   useEffect(() => {
     const fetchGifts = async () => {
       try {
+          // TRAE: Updated to use centralized purchasable_items table
           const { data, error } = await supabase
-            .from('gifts')
+            .from('purchasable_items')
             .select('*')
-            .order('cost', { ascending: true });
+            .eq('category', 'gift')
+            .eq('is_active', true)
+            .order('coin_price', { ascending: true });
 
           if (error) {
             console.error('Error fetching gifts:', error);
-            // Don't toast here, just show empty
           } else {
             // Map DB gifts to GiftItem interface
             const mappedGifts: GiftItem[] = data.map((g: any) => ({
               id: g.id,
-              name: g.name,
-              icon: g.icon_url, // DB uses icon_url
-              coinCost: g.cost,
-              type: 'paid', // All DB gifts are paid for now
-              slug: g.name.toLowerCase().replace(/\s+/g, '_')
+              name: g.display_name,
+              icon: g.metadata?.icon || '🎁', // Use metadata icon or fallback
+              coinCost: g.coin_price || 0,
+              type: 'paid',
+              slug: g.item_key,
+              category: g.category
             }));
             setGifts(mappedGifts);
           }

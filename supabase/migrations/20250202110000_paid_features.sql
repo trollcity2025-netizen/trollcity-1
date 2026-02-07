@@ -131,6 +131,8 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RPC: Join Paid Seat
+DROP FUNCTION IF EXISTS public.join_paid_seat(uuid, integer);
+
 CREATE OR REPLACE FUNCTION public.join_paid_seat(
   p_stream_id UUID,
   p_seat_index INTEGER -- Not strictly used if just "joining" but good for future

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/store';
 import { Users, Video, Radio } from 'lucide-react';
 
 interface Stream {

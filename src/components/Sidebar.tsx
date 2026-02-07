@@ -195,7 +195,7 @@ export default function Sidebar() {
 
   const isAnyUpdated = (paths: string[]) => paths.some(path => isUpdated(path))
 
-  if (!profile) return null
+  // if (!profile) return null // Allow guests to see sidebar
 
   return (
     <div className={`flex flex-col h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl border-r border-white/10 shadow-[10px_0_40px_rgba(0,0,0,0.35)] transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
@@ -221,7 +221,7 @@ export default function Sidebar() {
       </div>
 
       {/* User Profile Summary (Level & XP) */}
-      {!isSidebarCollapsed && (
+      {!isSidebarCollapsed && profile && (
         <div className="p-4 mx-4 mt-4 rounded-2xl bg-gradient-to-br from-slate-900/95 via-slate-800/90 to-slate-900/95 shadow-[0_15px_40px_rgba(0,0,0,0.5),0_0_30px_rgba(139,92,246,0.15),inset_0_1px_0_rgba(255,255,255,0.1)] border border-white/10 relative overflow-hidden">
           {/* Shiny gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/5 via-cyan-500/5 to-pink-500/5 pointer-events-none"></div>

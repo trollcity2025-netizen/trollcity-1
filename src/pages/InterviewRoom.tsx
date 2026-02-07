@@ -1,12 +1,22 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Room, RoomEvent } from 'livekit-client'
+import { 
+  LiveKitRoom, 
+  RoomAudioRenderer, 
+  useTracks, 
+  VideoTrack,
+  useRoomContext,
+  useLocalParticipant,
+  useRemoteParticipants
+} from '@livekit/components-react'
+import { Track } from 'livekit-client'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { useLiveKitToken } from '../hooks/useLiveKitToken'
 import { 
-  Mic, MicOff, Video, VideoOff, Phone, MessageSquare, 
-  Users, Clock, CheckCircle, XCircle, Briefcase, Shield
+  Mic, MicOff, Video, VideoOff, MessageSquare, 
+  Users, Clock, XCircle, Briefcase, Shield
 } from 'lucide-react'
 
 // Interview session type
@@ -32,7 +42,6 @@ const fakeAvatars = [
 ]
 
 function getFakeAvatar(seed: string): string {
-  // Use deterministic seed to pick avatar
   let hash = 0
   for (let i = 0; i < seed.length; i++) {
     hash = ((hash << 5) - hash) + seed.charCodeAt(i)
@@ -43,13 +52,15 @@ function getFakeAvatar(seed: string): string {
 
 // Broadcast box component for showing video
 function BroadcastBox({ 
-  participant, 
+  trackRef,
+  participant,
   label, 
   isMuted, 
   isVideoOff,
   isInterviewer,
-  useFakeAvatar = false // Enable fake avatar for test mode
+  useFakeAvatar = false
 }: { 
+  trackRef?: any
   participant?: any
   label: string
   isMuted?: boolean
@@ -57,29 +68,6 @@ function BroadcastBox({
   isInterviewer?: boolean
   useFakeAvatar?: boolean
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  // const [avatarSeed] = useState(() => Math.random().toString(36).substring(7))
-
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (participant?.videoTrack?.track && videoElement && !useFakeAvatar) {
-      try {
-        participant.videoTrack.track.attach(videoElement)
-      } catch (e) {
-        console.warn('Video attach failed:', e)
-      }
-    }
-    return () => {
-      if (participant?.videoTrack?.track && videoElement) {
-        try {
-          participant.videoTrack.track.detach(videoElement)
-        } catch (e) {
-          console.warn('Video detach failed:', e)
-        }
-      }
-    }
-  }, [participant, useFakeAvatar])
-
   const fakeAvatarUrl = getFakeAvatar(label)
 
   return (
@@ -88,13 +76,10 @@ function BroadcastBox({
         isInterviewer ? 'border-purple-500' : 'border-cyan-500'
       }`}
     >
-      {/* Fake avatar mode - always show avatar */}
+      {/* Fake avatar mode */}
       {useFakeAvatar ? (
         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 relative">
-          {/* Animated avatar background */}
           <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-cyan-900/50 animate-pulse" />
-          
-          {/* Avatar image */}
           <div className="relative z-10 text-center">
             <div className="w-32 h-32 rounded-full bg-gray-800 p-2 mx-auto mb-4 shadow-2xl">
               <img 
@@ -106,20 +91,15 @@ function BroadcastBox({
             <p className="text-white font-bold text-xl">{label}</p>
             <p className="text-cyan-400 text-sm mt-1">🎭 Test Mode</p>
           </div>
-          
-          {/* Recording indicator */}
           <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/80 px-3 py-1 rounded-full">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
             <span className="text-white text-xs font-medium">REC</span>
           </div>
         </div>
-      ) : !isVideoOff && participant ? (
-        <video 
-          ref={videoRef}
+      ) : trackRef && !isVideoOff ? (
+        <VideoTrack 
+          trackRef={trackRef}
           className="w-full h-full object-cover"
-          playsInline
-          autoPlay
-          muted={!isInterviewer}
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
@@ -156,25 +136,260 @@ function BroadcastBox({
   )
 }
 
+function InterviewContent({ 
+  session, 
+  testMode, 
+  isAdminOrLead,
+  setTestMode,
+  showNotes,
+  setShowNotes,
+  notes,
+  setNotes,
+  hiring,
+  hireCandidate,
+  onLeave
+}: {
+  session: InterviewSession
+  testMode: boolean
+  isAdminOrLead: boolean
+  setTestMode: (val: boolean) => void
+  showNotes: boolean
+  setShowNotes: (val: boolean) => void
+  notes: string
+  setNotes: (val: string) => void
+  hiring: boolean
+  hireCandidate: () => void
+  onLeave: () => void
+}) {
+  const room = useRoomContext()
+  const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone])
+  const { localParticipant } = useLocalParticipant()
+  const remoteParticipants = useRemoteParticipants()
+  
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoOff, setIsVideoOff] = useState(false)
+
+  // Sync local mute/video state
+  useEffect(() => {
+    if (localParticipant) {
+      setIsMuted(!localParticipant.isMicrophoneEnabled)
+      setIsVideoOff(!localParticipant.isCameraEnabled)
+    }
+  }, [localParticipant?.isMicrophoneEnabled, localParticipant?.isCameraEnabled])
+
+  const toggleMute = async () => {
+    if (localParticipant) {
+      const newState = !isMuted
+      await localParticipant.setMicrophoneEnabled(!newState)
+      setIsMuted(newState)
+    }
+  }
+
+  const toggleVideo = async () => {
+    if (localParticipant) {
+      const newState = !isVideoOff
+      await localParticipant.setCameraEnabled(!newState)
+      setIsVideoOff(newState)
+    }
+  }
+
+  // Find tracks for interviewer and applicant
+  // We need to identify who is who.
+  // isAdminOrLead = true -> Local is Interviewer, Remote is Applicant
+  // isAdminOrLead = false -> Local is Applicant, Remote is Interviewer
+
+  const localTrack = tracks.find(t => t.participant.identity === localParticipant.identity && t.source === Track.Source.Camera)
+  
+  // For simplicity in a 2-person room, we take the first remote participant
+  const remoteParticipant = remoteParticipants[0]
+  const remoteTrack = tracks.find(t => t.participant.identity === remoteParticipant?.identity && t.source === Track.Source.Camera)
+
+  return (
+    <>
+      <div className="absolute inset-0 p-4 pt-20 pb-24">
+        <div className="grid grid-cols-2 gap-4 h-full">
+          {/* Interviewer Box */}
+          <BroadcastBox 
+            trackRef={isAdminOrLead ? localTrack : remoteTrack}
+            participant={isAdminOrLead ? localParticipant : remoteParticipant}
+            label={isAdminOrLead ? (localParticipant.name || 'Interviewer') : (remoteParticipant?.name || 'Interviewer')}
+            isMuted={isAdminOrLead ? isMuted : (remoteParticipant?.isMicrophoneEnabled === false)}
+            isVideoOff={isAdminOrLead ? isVideoOff : (remoteParticipant?.isCameraEnabled === false)}
+            isInterviewer={true}
+            useFakeAvatar={testMode && !isAdminOrLead}
+          />
+          
+          {/* Applicant Box */}
+          <BroadcastBox 
+            trackRef={isAdminOrLead ? remoteTrack : localTrack}
+            participant={isAdminOrLead ? remoteParticipant : localParticipant}
+            label={session.applicant_name}
+            isMuted={isAdminOrLead ? (remoteParticipant?.isMicrophoneEnabled === false) : isMuted}
+            isVideoOff={isAdminOrLead ? (remoteParticipant?.isCameraEnabled === false) : isVideoOff}
+            isInterviewer={false}
+            useFakeAvatar={testMode && isAdminOrLead}
+          />
+        </div>
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4">
+        <div className="flex items-center justify-center gap-4">
+          <button
+            onClick={toggleMute}
+            className={`p-4 rounded-full transition-colors ${
+              isMuted ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'
+            }`}
+          >
+            {isMuted ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
+          </button>
+
+          <button
+            onClick={toggleVideo}
+            className={`p-4 rounded-full transition-colors ${
+              isVideoOff ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'
+            }`}
+          >
+            {isVideoOff ? <VideoOff className="w-6 h-6 text-white" /> : <Video className="w-6 h-6 text-white" />}
+          </button>
+
+          <button
+            onClick={() => setShowNotes(!showNotes)}
+            className={`p-4 rounded-full transition-colors ${
+              showNotes ? 'bg-cyan-500' : 'bg-white/10 hover:bg-white/20'
+            }`}
+          >
+            <MessageSquare className="w-6 h-6 text-white" />
+          </button>
+
+          {isAdminOrLead && (
+            <button
+              onClick={() => setTestMode(!testMode)}
+              className={`p-4 rounded-full transition-colors ${
+                testMode ? 'bg-yellow-500' : 'bg-white/10 hover:bg-white/20'
+              }`}
+              title="Toggle Test Mode"
+            >
+              <span className="text-xl">🎭</span>
+            </button>
+          )}
+
+          <button
+            onClick={onLeave}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold transition-colors"
+          >
+            End Interview
+          </button>
+        </div>
+
+        {/* Notes & Actions Panel */}
+        {showNotes && (
+          <div className="absolute bottom-24 right-4 w-80 bg-gray-900/95 border border-white/10 rounded-xl p-4 backdrop-blur-sm overflow-y-auto max-h-[60vh]">
+            <h3 className="text-white font-bold mb-2">Interview Notes</h3>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full h-32 bg-black/50 border border-white/10 rounded-lg p-2 text-white text-sm mb-4 focus:outline-none focus:border-cyan-500"
+              placeholder="Take notes here..."
+              readOnly={!isAdminOrLead}
+            />
+            {isAdminOrLead && (
+              <div className="flex gap-2">
+                <button
+                  onClick={hireCandidate}
+                  disabled={hiring}
+                  className="flex-1 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg font-bold text-sm transition-all disabled:opacity-50"
+                >
+                  {hiring ? 'Processing...' : '✅ Hire Candidate'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Application Details Panel */}
+        {showApplication && application && (
+          <div className="absolute bottom-24 left-4 w-96 bg-gray-900/95 border border-white/10 rounded-xl p-6 backdrop-blur-sm overflow-y-auto max-h-[70vh]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-lg">Application Details</h3>
+              <button onClick={() => setShowApplication(false)} className="text-gray-400 hover:text-white">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wider">Position</label>
+                <p className="text-white font-medium capitalize">{application.type?.replace(/_/g, ' ')}</p>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wider">Status</label>
+                <div className="mt-1">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    application.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                    application.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                    'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {application.status?.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wider">Submitted</label>
+                <p className="text-white text-sm">{new Date(application.created_at).toLocaleDateString()}</p>
+              </div>
+
+              {/* Dynamic Answers Display */}
+              {application.answers && typeof application.answers === 'object' && (
+                <div className="border-t border-white/10 pt-4 mt-4">
+                  <h4 className="text-cyan-400 font-medium mb-3">Responses</h4>
+                  <div className="space-y-4">
+                    {Object.entries(application.answers).map(([question, answer]: [string, any]) => (
+                      <div key={question}>
+                        <p className="text-gray-400 text-xs mb-1">{question}</p>
+                        <p className="text-white text-sm bg-black/30 p-2 rounded border border-white/5">
+                          {typeof answer === 'string' ? answer : JSON.stringify(answer)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Fallback if no structured answers but other fields exist */}
+              {(!application.answers) && (
+                 <div className="border-t border-white/10 pt-4 mt-4">
+                   <pre className="text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                     {JSON.stringify(application, (key, value) => {
+                       if (['id', 'user_id', 'created_at', 'updated_at', 'status', 'type', 'reviewed_at'].includes(key)) return undefined;
+                       return value;
+                     }, 2)}
+                   </pre>
+                 </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 export default function InterviewRoom() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
   const { profile, user } = useAuthStore()
   
   const [session, setSession] = useState<InterviewSession | null>(null)
+  const [application, setApplication] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [connecting, setConnecting] = useState(false)
-  const [room, setRoom] = useState<Room | null>(null)
-  const [token, setToken] = useState<string | null>(null)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOff, setIsVideoOff] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [showNotes, setShowNotes] = useState(false)
+  const [showApplication, setShowApplication] = useState(false)
   const [notes, setNotes] = useState('')
   const [hiring, setHiring] = useState(false)
-  const [testMode, setTestMode] = useState(false) // Fake avatar mode for testing
-
-  const roomRef = useRef<Room | null>(null)
+  const [testMode, setTestMode] = useState(false)
 
   const isAdminOrLead = profile?.role === 'admin' || profile?.role === 'lead_troll_officer'
 
@@ -195,7 +410,6 @@ export default function InterviewRoom() {
 
         if (error) throw error
 
-        // Get user profile separately
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('username, full_name')
@@ -205,6 +419,15 @@ export default function InterviewRoom() {
         const applicantName = profile?.full_name || profile?.username || 'Applicant'
         setSession({ ...data, applicant_name: applicantName })
         setNotes(data.notes || '')
+
+        // Fetch application
+        const { data: appData } = await supabase
+          .from('applications')
+          .select('*')
+          .eq('id', data.application_id)
+          .single()
+        setApplication(appData)
+
       } catch (error) {
         console.error('Error fetching session:', error)
         toast.error('Failed to load interview session')
@@ -217,129 +440,16 @@ export default function InterviewRoom() {
     fetchSession()
   }, [sessionId, navigate])
 
-  useEffect(() => {
-    const getToken = async () => {
-      if (!session || !user) return
+  const { token, isLoading: tokenLoading } = useLiveKitToken({
+    streamId: sessionId,
+    roomName: `interview-${sessionId}`,
+    userId: profile?.username || user?.id,
+    isHost: isAdminOrLead,
+    canPublish: true,
+    enabled: !!session && !!user
+  })
 
-      try {
-        const livekitUrl = import.meta.env.VITE_LIVEKIT_URL
-        const functionsUrl = import.meta.env.VITE_EDGE_FUNCTIONS_URL ||
-          'https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1'
-
-        if (!livekitUrl) {
-          console.error('VITE_LIVEKIT_URL environment variable is not set')
-          toast.error('LiveKit server URL not configured')
-          return
-        }
-
-        // Validate LiveKit URL
-        try {
-          new URL(livekitUrl)
-        } catch {
-          console.error('Invalid VITE_LIVEKIT_URL:', livekitUrl)
-          toast.error('Invalid LiveKit server URL configuration')
-          return
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession()
-        const response = await fetch(`${functionsUrl}/livekit-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData?.session?.access_token}`
-          },
-          body: JSON.stringify({
-            room: `interview-${sessionId}`,
-            identity: profile?.username || user.id,
-            allowPublish: true,
-          })
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error('LiveKit token response:', response.status, errorText)
-          throw new Error(`Failed to get token: ${response.status}`)
-        }
-
-        const data = await response.json()
-        if (!data.token) {
-          console.error('No token in response:', data)
-          throw new Error('Invalid token response')
-        }
-
-        setToken(data.token)
-      } catch (error) {
-        console.error('Error getting LiveKit token:', error)
-        toast.error('Failed to connect to interview room')
-      }
-    }
-
-    getToken()
-  }, [session, user, profile, sessionId])
-
-  const connectToRoom = useCallback(async () => {
-    if (!token || !session) {
-      toast.error('Invalid room connection parameters')
-      return
-    }
-
-    // Validate token is a proper URL
-    let serverUrl: string
-    try {
-      // Handle token format: could be full URL or just token string
-      if (token.includes('?')) {
-        serverUrl = token.split('?')[0]
-      } else {
-        // Assume token is just the token string, use default LiveKit URL
-        serverUrl = import.meta.env.VITE_LIVEKIT_URL || 'wss://your-livekit-server.livekit.cloud'
-      }
-
-      // Validate the server URL
-      new URL(serverUrl)
-    } catch (urlError) {
-      console.error('Invalid URL:', urlError)
-      toast.error('Invalid server URL configuration')
-      return
-    }
-
-    try {
-      setConnecting(true)
-      const newRoom = new Room({
-        adaptiveStream: true,
-        dynacast: true,
-      })
-
-      newRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
-        if (state === 'connected') {
-          toast.success('Connected to interview room')
-          setRoom(newRoom)
-          roomRef.current = newRoom
-        } else if (state === 'disconnected') {
-          toast.info('Disconnected from interview room')
-          setRoom(null)
-          roomRef.current = null
-        }
-      })
-
-      await newRoom.connect(serverUrl, token)
-      roomRef.current = newRoom
-      setRoom(newRoom)
-
-      await supabase
-        .from('interview_sessions')
-        .update({ status: 'active' })
-        .eq('id', session.id)
-
-      setSession(prev => prev ? { ...prev, status: 'active' } : null)
-
-    } catch (error) {
-      console.error('Error connecting to room:', error)
-      toast.error('Failed to connect to interview room')
-    } finally {
-      setConnecting(false)
-    }
-  }, [token, session])
-
+  // Timer
   useEffect(() => {
     if (session?.status === 'active') {
       const interval = setInterval(() => {
@@ -349,34 +459,13 @@ export default function InterviewRoom() {
     }
   }, [session?.status])
 
-  const toggleMute = async () => {
-    if (room) {
-      await room.localParticipant.setMicrophoneEnabled(isMuted)
-      setIsMuted(!isMuted)
-    }
-  }
-
-  const toggleVideo = async () => {
-    if (room) {
-      await room.localParticipant.setCameraEnabled(isVideoOff)
-      setIsVideoOff(!isVideoOff)
-    }
-  }
-
   const endCall = async () => {
-    if (room) {
-      room.disconnect()
-      setRoom(null)
-      roomRef.current = null
-    }
-    
     if (session) {
       await supabase
         .from('interview_sessions')
         .update({ status: 'completed', notes })
         .eq('id', session.id)
     }
-    
     toast.success('Interview ended')
     navigate('/career')
   }
@@ -431,7 +520,7 @@ export default function InterviewRoom() {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  if (loading) {
+  if (loading || tokenLoading) {
     return (
       <div className="min-h-screen bg-[#0A0814] flex items-center justify-center">
         <div className="text-center">
@@ -442,26 +531,29 @@ export default function InterviewRoom() {
     )
   }
 
-  if (!session) {
+  if (!session || !token) {
     return (
       <div className="min-h-screen bg-[#0A0814] flex items-center justify-center">
         <div className="text-center">
           <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-white mb-2">Session Not Found</h1>
-          <p className="text-gray-400 mb-4">This interview session does not exist.</p>
+          <h1 className="text-2xl font-bold text-white mb-2">Session Error</h1>
+          <p className="text-gray-400 mb-4">Could not connect to interview session.</p>
           <button
             onClick={() => navigate('/career')}
             className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors"
           >
-            Go to Career Page
+            Return to Career Page
           </button>
         </div>
       </div>
     )
   }
 
+  const livekitUrl = import.meta.env.VITE_LIVEKIT_URL
+
   return (
     <div className="min-h-screen bg-[#0A0814] relative overflow-hidden">
+      {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -493,140 +585,39 @@ export default function InterviewRoom() {
         </div>
       </div>
 
-      <div className="absolute inset-0 pt-20 pb-24">
-        {!token ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-              <p className="text-gray-400">Connecting to interview room...</p>
-            </div>
-          </div>
-        ) : !room ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-md">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center mx-auto mb-6">
-                <Users className="w-12 h-12 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Ready to Start Interview</h2>
-              <p className="text-gray-400 mb-6">
-                You are about to interview <strong>{session.applicant_name}</strong>.
-              </p>
-              
-              <button
-                onClick={connectToRoom}
-                disabled={connecting}
-                className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-lg font-bold hover:shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50 transition-all"
-              >
-                {connecting ? 'Connecting...' : 'Join Interview Room'}
-              </button>
-              
-              {/* Test Mode Toggle */}
-              {isAdminOrLead && (
-                <button
-                  onClick={() => setTestMode(!testMode)}
-                  className={`mt-4 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    testMode 
-                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' 
-                      : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                  }`}
-                >
-                  {testMode ? '🎭 Test Mode ON' : '🎭 Enable Test Mode'}
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="absolute inset-0 p-4">
-            <div className="grid grid-cols-2 gap-4 h-full">
-              <BroadcastBox 
-                participant={isAdminOrLead ? room.localParticipant : Array.from(room.remoteParticipants.values())[0]}
-                label={isAdminOrLead ? (profile?.username || 'Interviewer') : 'Interviewer'}
-                isInterviewer={true}
-                useFakeAvatar={testMode && !isAdminOrLead}
-              />
-              <BroadcastBox 
-                participant={isAdminOrLead ? Array.from(room.remoteParticipants.values())[0] : room.localParticipant}
-                label={session.applicant_name}
-                isInterviewer={false}
-                useFakeAvatar={testMode && isAdminOrLead}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-4">
-        <div className="flex items-center justify-center gap-4">
-          <button
-            onClick={toggleMute}
-            className={`p-4 rounded-full transition-colors ${
-              isMuted ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'
-            }`}
-          >
-            {isMuted ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
-          </button>
-
-          <button
-            onClick={toggleVideo}
-            className={`p-4 rounded-full transition-colors ${
-              isVideoOff ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'
-            }`}
-          >
-            {isVideoOff ? <VideoOff className="w-6 h-6 text-white" /> : <Video className="w-6 h-6 text-white" />}
-          </button>
-
-          <button
-            onClick={() => setShowNotes(!showNotes)}
-            className={`p-4 rounded-full transition-colors ${
-              showNotes ? 'bg-cyan-500' : 'bg-white/10 hover:bg-white/20'
-            }`}
-          >
-            <MessageSquare className="w-6 h-6 text-white" />
-          </button>
-
-          {isAdminOrLead && (
-            <button
-              onClick={() => setTestMode(!testMode)}
-              className={`p-4 rounded-full transition-colors ${
-                testMode ? 'bg-yellow-500' : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              <span className="text-lg">{testMode ? '🎭' : '🎭'}</span>
-            </button>
-          )}
-
-          <button
-            onClick={endCall}
-            className="p-4 bg-red-500 hover:bg-red-600 rounded-full transition-colors"
-          >
-            <Phone className="w-6 h-6 text-white rotate-[135deg]" />
-          </button>
-
-          {isAdminOrLead && session.status === 'active' && (
-            <button
-              onClick={hireCandidate}
-              disabled={hiring}
-              className="px-6 py-4 bg-green-500 hover:bg-green-600 rounded-full transition-colors flex items-center gap-2"
-            >
-              <CheckCircle className="w-6 h-6 text-white" />
-              <span className="text-white font-bold">{hiring ? 'Hiring...' : 'Hire'}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {showNotes && (
-        <div className="absolute bottom-24 right-4 w-80 bg-[#1A1A1A] border border-[#2C2C2C] rounded-xl p-4 z-20">
-          <h3 className="text-lg font-semibold text-white mb-3">Interview Notes</h3>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add notes about this interview..."
-            className="w-full h-40 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg p-3 text-white resize-none focus:border-cyan-400 focus:outline-none"
-          />
-          <p className="text-gray-400 text-xs mt-2">Notes are saved automatically</p>
-        </div>
-      )}
+      <LiveKitRoom
+        token={token}
+        serverUrl={livekitUrl}
+        connect={true}
+        data-lk-theme="default"
+        className="h-full"
+        onConnected={async () => {
+          // Update status to active when connected
+          await supabase
+            .from('interview_sessions')
+            .update({ status: 'active' })
+            .eq('id', session.id)
+          setSession(prev => prev ? { ...prev, status: 'active' } : null)
+        }}
+      >
+        <InterviewContent 
+          session={session}
+          testMode={testMode}
+          isAdminOrLead={isAdminOrLead}
+          setTestMode={setTestMode}
+          showNotes={showNotes}
+          setShowNotes={setShowNotes}
+          notes={notes}
+          setNotes={setNotes}
+          hiring={hiring}
+          hireCandidate={hireCandidate}
+          onLeave={endCall}
+          showApplication={showApplication}
+          setShowApplication={setShowApplication}
+          application={application}
+        />
+        <RoomAudioRenderer />
+      </LiveKitRoom>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import DistrictOnboardingTour from '../components/DistrictOnboardingTour'
 import { useGameNavigate } from '../components/game/GameNavigation'
+import { trollCityTheme } from '../styles/trollCityTheme'
 
 // Hardcoded district data for tour - available to all users
 const DISTRICT_DATA: { [key: string]: { display_name: string; description: string } } = {

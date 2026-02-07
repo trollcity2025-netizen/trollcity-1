@@ -112,6 +112,19 @@ BEGIN
 END $$;
 
 -- 3. RPC: Atomic Join Seat
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'join_seat_atomic' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION public.join_seat_atomic(
     p_stream_id UUID,
     p_seat_index INTEGER,
@@ -216,6 +229,19 @@ END;
 $$;
 
 -- 4. RPC: Leave Seat
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'leave_seat_atomic' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION public.leave_seat_atomic(
     p_session_id UUID
 )
@@ -237,6 +263,19 @@ END;
 $$;
 
 -- 5. RPC: Kick Participant (Host Only)
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'kick_participant_atomic' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION public.kick_participant_atomic(
     p_stream_id UUID,
     p_target_user_id UUID,
@@ -274,6 +313,19 @@ END;
 $$;
 
 -- 6. RPC: File Lawsuit (The 2x Claim)
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'file_seat_lawsuit' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION public.file_seat_lawsuit(
     p_session_id UUID
 )

@@ -32,22 +32,22 @@ const DialogTrigger = ({ children }: { children: React.ReactNode }) => {
 
 const DialogContent = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => {
+  React.HTMLAttributes<HTMLDivElement> & { overlayClassName?: string }
+>(({ className, overlayClassName, children, ...props }, ref) => {
   const { open, onOpenChange } = React.useContext(DialogContext)
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center sm:items-center">
+    <div className={cn("fixed inset-0 z-[100] flex items-center justify-center", overlayClassName)}>
       <div 
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-all duration-100 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in"
+        className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm transition-all duration-100 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in"
         onClick={() => onOpenChange?.(false)}
       />
       <div
         ref={ref}
         className={cn(
-          "fixed z-50 grid w-full gap-4 rounded-b-lg border bg-background p-6 shadow-lg animate-in data-[state=open]:fade-in-90 data-[state=open]:slide-in-from-bottom-10 sm:max-w-lg sm:rounded-lg sm:zoom-in-90 data-[state=open]:sm:slide-in-from-bottom-0",
+          "relative z-[101] grid w-full gap-4 rounded-lg border bg-background p-6 shadow-lg animate-in data-[state=open]:fade-in-90 data-[state=open]:zoom-in-90 sm:max-w-lg",
           className
         )}
         {...props}

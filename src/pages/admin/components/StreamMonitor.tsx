@@ -32,7 +32,7 @@ const StreamMonitor = () => {
       // 2. Fetch DB streams
       const { data: dbData, error: dbError } = await supabase
         .from("streams")
-        .select("id, title, broadcaster_id, status, created_at, hls_url")
+        .select("id, title, broadcaster_id, status, created_at")
         .eq("status", "live");
 
       if (dbError) throw dbError;
@@ -198,7 +198,6 @@ const StreamMonitor = () => {
                         onClick={() => setViewingStream({
                             id: selectedStream.id,
                             room_name: selectedStream.roomName,
-                            hls_url: selectedStream.dbData?.hls_url,
                             title: selectedStream.dbData?.title
                         })}
                         className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded transition-colors"

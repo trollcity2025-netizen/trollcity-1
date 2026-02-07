@@ -30,6 +30,12 @@ self.addEventListener('activate', (event: any) => {
         // Claim clients so the SW takes control immediately
         await (self as any).clients.claim();
         
+        // Notify all clients about the update
+        const clients = await (self as any).clients.matchAll({ type: "window", includeUncontrolled: true });
+        for (const client of clients) {
+          client.postMessage({ type: "SW_UPDATED" });
+        }
+
         // Cleanup old caches
         const cacheNames = await caches.keys();
         await Promise.all(
@@ -69,8 +75,7 @@ self.addEventListener('fetch', (event: any) => {
     url.pathname.startsWith('/streams/') ||
     url.pathname.includes('.m3u8') ||
     url.pathname.includes('.ts') ||
-    url.pathname.endsWith('.mp4') ||
-    url.pathname.startsWith('/assets/')
+    url.pathname.endsWith('.mp4')
   ) {
     return;
   }
@@ -99,7 +104,7 @@ self.addEventListener('fetch', (event: any) => {
     return;
   }
 
-  // For other requests: network-only for API, network-first for assets
+  // For other requests: network-only for API, strict allowlist for assets
   
   // API requests should never be cached by SW
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) {
@@ -107,25 +112,39 @@ self.addEventListener('fetch', (event: any) => {
     return;
   }
 
-  // Static assets: Stale-while-revalidate or Network First
-  event.respondWith(
-    caches.match(req).then((cachedResponse) => {
-      const fetchPromise = fetch(req).then((networkResponse) => {
-        // Cache valid responses
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-           const resClone = networkResponse.clone();
-           caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone)).catch(() => {});
-        }
-        return networkResponse;
-      }).catch(() => {
-         // Network failed, return cached if available, else offline
-         return cachedResponse || caches.match(OFFLINE_URL);
-      });
-      
-      // Return cached response immediately if available, otherwise wait for network
-      return cachedResponse || fetchPromise;
-    })
-  );
+  // Strict allowlist for caching
+  // Only cache: scripts, styles, images, fonts
+  const isCacheableAsset = 
+    req.method === 'GET' && 
+    (req.destination === 'style' || 
+     req.destination === 'script' || 
+     req.destination === 'image' || 
+     req.destination === 'font');
+
+  if (isCacheableAsset) {
+     // Static assets: Stale-while-revalidate or Network First
+     event.respondWith(
+        caches.match(req).then((cachedResponse) => {
+          const fetchPromise = fetch(req).then((networkResponse) => {
+            // Cache valid responses
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+               const resClone = networkResponse.clone();
+               caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone)).catch(() => {});
+            }
+            return networkResponse;
+          }).catch(() => {
+             // Network failed, return cached if available
+             return cachedResponse;
+          });
+          
+          // Return cached response immediately if available, otherwise wait for network
+          return cachedResponse || fetchPromise;
+        })
+      );
+  } else {
+      // Everything else (non-nav, non-API, non-allowlist) → NetworkOnly
+      event.respondWith(fetch(req));
+  }
 });
 
 // Simple push handler
@@ -157,20 +176,28 @@ self.addEventListener('push', (event: any) => {
 
 self.addEventListener('notificationclick', (event: any) => {
   event.notification.close();
-  event.waitUntil(
-    (self as any).clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList: any[]) => {
-      for (const client of clientList) {
-        if ('focus' in client) return client.focus();
-      }
-      if ((self as any).clients.openWindow) {
-        return (self as any).clients.openWindow(event.notification.data || '/');
-      }
-    })
-  );
-});
+  const urlToOpen = event.notification.data || '/';
 
-self.addEventListener('message', (event: any) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    (self as any).skipWaiting?.();
-  }
+  event.waitUntil(
+    (async () => {
+        const clientList = await (self as any).clients.matchAll({ type: 'window', includeUncontrolled: true });
+        
+        let matchingClient = null;
+        for (const client of clientList) {
+             if ('focus' in client) {
+                 matchingClient = client;
+                 break;
+             }
+        }
+
+        if (matchingClient) {
+            await matchingClient.focus();
+            matchingClient.postMessage({ type: 'NAVIGATE', url: urlToOpen });
+        } else {
+            if ((self as any).clients.openWindow) {
+                await (self as any).clients.openWindow(urlToOpen);
+            }
+        }
+    })()
+  );
 });

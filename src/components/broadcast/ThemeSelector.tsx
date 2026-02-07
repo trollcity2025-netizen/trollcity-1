@@ -109,7 +109,7 @@ export default function ThemeSelector({ streamId, currentThemeUrl, onClose }: Th
     };
 
     return (
-        <div className="absolute bottom-full right-0 w-80 mb-4 bg-zinc-900 border border-purple-500/30 rounded-xl p-4 shadow-2xl z-50 animate-in slide-in-from-bottom-2">
+        <div className="absolute bottom-full right-0 w-80 mb-4 bg-zinc-900 border border-purple-500/30 rounded-xl p-4 shadow-2xl z-[100] animate-in slide-in-from-bottom-2">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-white flex items-center gap-2">
                     <Palette size={16} className="text-purple-400" />

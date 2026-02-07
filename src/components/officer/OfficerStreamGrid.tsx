@@ -10,7 +10,6 @@ interface StreamRow {
   broadcaster_id: string;
   status: string;
   is_live: boolean;
-  hls_url?: string;
   current_viewers?: number;
   total_gifts_coins?: number;
   total_likes?: number;

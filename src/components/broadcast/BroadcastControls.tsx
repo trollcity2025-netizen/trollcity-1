@@ -14,13 +14,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface BroadcastControlsProps {
   stream: Stream;
   isHost: boolean;
+  isOnStage: boolean;
   chatOpen: boolean;
   toggleChat: () => void;
   onGiftHost: () => void;
   onLeave?: () => void;
 }
 
-export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat, onGiftHost, onLeave }: BroadcastControlsProps) {
+export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave }: BroadcastControlsProps) {
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
@@ -149,7 +150,9 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
   }, [debouncedPrice, stream.seat_price, locked, updateStreamConfig]);
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value) || 0;
+    let val = parseInt(e.target.value) || 0;
+    // Cap at Postgres Integer Max to avoid "integer out of range"
+    if (val > 2147483647) val = 2147483647;
     setSeatPrice(val);
     setDebouncedPrice(val);
   };
@@ -162,14 +165,29 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
   
   const updateBoxCount = async (increment: boolean) => {
     if (!canManageStream) return;
-    const currentCount = stream.box_count || 1;
+    
+    // Ensure clean integer
+    const currentCount = typeof stream.box_count === 'number' 
+        ? Math.floor(stream.box_count) 
+        : parseInt(String(stream.box_count || 1), 10);
+
+    if (isNaN(currentCount)) return;
+
     const newCount = increment ? currentCount + 1 : currentCount - 1;
     if (newCount < 1 || newCount > 6) return;
 
-    await supabase
-      .from('streams')
-      .update({ box_count: newCount })
-      .eq('id', stream.id);
+    try {
+        const { error } = await supabase
+          .from('streams')
+          .update({ box_count: Math.floor(newCount) })
+          .eq('id', stream.id);
+
+        if (error) throw error;
+        // Optimistic update if needed, but the parent component usually re-renders with new stream data
+    } catch (err: any) {
+        console.error("Failed to update box count:", err);
+        toast.error("Failed to update box count");
+    }
   };
 
   const toggleStreamRgb = async () => {
@@ -313,7 +331,7 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="absolute bottom-full right-0 w-64 mb-4 bg-zinc-900 border border-white/10 rounded-xl p-4 shadow-2xl z-50"
+                className="absolute bottom-full right-0 w-64 mb-4 bg-zinc-900 border border-white/10 rounded-xl p-4 shadow-2xl z-[100]"
             >
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-white flex items-center gap-2">
@@ -400,16 +418,44 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                 </div>
 
                 {/* My Balance */}
-                <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5" title="My Troll Coins">
-                    <Coins size={16} className="text-yellow-500" />
-                    <span className="text-sm font-bold text-white">{(profile?.troll_coins || 0).toLocaleString()}</span>
-                </div>
+                {user && (
+                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5" title="My Troll Coins">
+                        <Coins size={16} className="text-yellow-500" />
+                        <span className="text-sm font-bold text-white">{(profile?.troll_coins || 0).toLocaleString()}</span>
+                    </div>
+                )}
             </div>
 
             <div className="flex items-center gap-2">
-                 {/* Gift Button */}
+                 {/* Mic & Cam Controls (Stage Only) */}
+                 {isOnStage && (
+                    <>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); toggleMic(); }}
+                            className={cn(
+                                "p-2 rounded-lg transition-colors group relative",
+                                isMicOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                            )}
+                            title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
+                        >
+                            {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); toggleCam(); }}
+                            className={cn(
+                                "p-2 rounded-lg transition-colors group relative mr-2",
+                                isCamOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                            )}
+                            title={isCamOn ? "Turn Camera Off" : "Turn Camera On"}
+                        >
+                            {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
+                        </button>
+                    </>
+                 )}
+
+                 {/* Gift Button - Show for EVERYONE (except host maybe, but usually everyone can open tray) */}
                  <button
-                    onClick={onGiftHost}
+                    onClick={(e) => { e.stopPropagation(); onGiftHost(); }}
                     className="p-2 hover:bg-yellow-500/20 rounded-lg transition-colors group"
                     title="Send Gift"
                  >
@@ -418,7 +464,7 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
 
                  {/* Like Button */}
                  <button
-                    onClick={handleLike}
+                    onClick={(e) => { e.stopPropagation(); handleLike(); }}
                     disabled={isLiking}
                     className="p-2 hover:bg-pink-500/20 rounded-lg transition-colors group"
                     title="Like Stream"
@@ -428,7 +474,7 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
 
                  {/* Chat Toggle */}
                  <button 
-                    onClick={toggleChat}
+                    onClick={(e) => { e.stopPropagation(); toggleChat(); }}
                     className={cn(
                         "p-2 rounded-lg transition-colors flex items-center gap-2",
                         chatOpen ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-zinc-400"
@@ -441,7 +487,8 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                  {canManageStream && (
                     <>
                     <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             setShowBannedList(!showBannedList);
                             setShowEffects(false);
                             setShowThemeSelector(false);
@@ -452,7 +499,8 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                         <UserX size={20} />
                     </button>
                     <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             setShowThemeSelector(!showThemeSelector);
                             setShowEffects(false);
                             setShowBannedList(false);
@@ -468,7 +516,8 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                  {/* Effects Toggle (Visible to all logged in users) */}
                  {user && (
                     <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             setShowEffects(!showEffects);
                             setShowThemeSelector(false);
                             setShowBannedList(false);
@@ -486,7 +535,7 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                  {/* End Stream (Host Only) */}
                  {isHost && (
                      <button 
-                        onClick={handleEndStream}
+                        onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
                         className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
                      >
                         <Power size={16} />
@@ -495,9 +544,9 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                  )}
 
                  {/* Leave Seat (Guest Only) */}
-                 {onLeave && !isHost && (
+                 {onLeave && isOnStage && !isHost && (
                      <button 
-                        onClick={onLeave}
+                        onClick={(e) => { e.stopPropagation(); onLeave(); }}
                         className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
                      >
                         <LogOut size={16} />
@@ -519,34 +568,6 @@ export default function BroadcastControls({ stream, isHost, chatOpen, toggleChat
                         Stream Controls
                     </h3>
                     <div className="flex items-center gap-4">
-                        {/* Media Controls - Host Only (Staff shouldn't control host's mic/cam) */}
-                        {isHost && (
-                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                <button 
-                                    onClick={toggleMic}
-                                    className={cn(
-                                        "p-2 rounded-lg text-white transition font-bold flex items-center gap-2",
-                                        isMicOn ? "bg-zinc-800 hover:bg-zinc-700" : "bg-red-500/20 text-red-400 border border-red-500/50"
-                                    )}
-                                    title={isMicOn ? "Mute Mic" : "Unmute Mic"}
-                                >
-                                    {isMicOn ? <Mic size={18} /> : <MicOff size={18} />}
-                                </button>
-                                <button 
-                                    onClick={toggleCam}
-                                    className={cn(
-                                        "p-2 rounded-lg text-white transition font-bold flex items-center gap-2",
-                                        isCamOn ? "bg-zinc-800 hover:bg-zinc-700" : "bg-red-500/20 text-red-400 border border-red-500/50"
-                                    )}
-                                    title={isCamOn ? "Turn Off Camera" : "Turn On Camera"}
-                                >
-                                    {isCamOn ? <Video size={18} /> : <VideoOff size={18} />}
-                                </button>
-
-                                <div className="w-px h-8 bg-white/10 mx-2" />
-                            </div>
-                        )}
-                        
                         <ChevronDown 
                             size={20} 
                             className={cn("text-zinc-400 transition-transform duration-200", showStreamControls && "rotate-180")} 

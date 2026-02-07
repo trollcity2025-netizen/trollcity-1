@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 import { SeatSession } from '../../hooks/useStreamSeats';
 import { getGlowingTextStyle } from '../../lib/perkEffects';
+import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 
 interface BroadcastGridProps {
   stream: Stream;
@@ -35,43 +36,19 @@ export default function BroadcastGrid({
     onKick,
     broadcasterProfile
 }: BroadcastGridProps) {
-  // Only use LiveKit hooks if in Stage Mode (or if we are blindly rendering)
-  // But hooks must be top-level.
-  // Ideally BroadcastGrid is ONLY used inside LiveKitRoom.
-  // But for Viewer Mode, we are NOT in LiveKitRoom.
-  // This causes a crash if we call useParticipants() outside.
-  
-  // SOLUTION: Split into two components? Or conditional hooks?
-  // We can't do conditional hooks.
-  // We should create `BroadcastGridStage` and `BroadcastGridViewer`.
-  // And `BroadcastGrid` is a wrapper?
-  // Or simply: `BroadcastGrid` assumes it is inside LiveKitRoom.
-  // And we create `BroadcastGridOverlay` for Viewer Mode.
-  
-  // Refactoring Plan:
-  // 1. Rename this file to BroadcastGridStage.tsx
-  // 2. Create BroadcastGridViewer.tsx
-  // 3. Create index.tsx that exports BroadcastGrid which switches?
-  
-  // Actually, I'll just create `BroadcastGridViewer.tsx` and use it in BroadcastPage when mode is 'viewer'.
-  // And keep this one for 'stage'.
-  
-  // BUT, to avoid code duplication, I'll modify THIS file to be Stage Only.
-  // And creating a new one for Viewer.
-  
-  // Wait, I can't rename easily without breaking imports.
-  // I will check if I am inside LiveKit context? No easy way.
-  // I will assume `BroadcastGrid` is for STAGE.
-  // I will create `BroadcastOverlay` for Viewer.
-  
-  // Let's stick to the current file for Stage.
-  // I will revert to just "Stage" logic here, but with "Seat" awareness.
-  
   const allParticipants = useParticipants();
   const cameraTracks = useTracks([Track.Source.Camera]);
   const audioTracks = useTracks([Track.Source.Microphone]); // Monitor audio tracks for mute state
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   
+  // Collect all relevant user IDs for attribute fetching
+  const userIds = [stream.user_id]; // Always include host
+  Object.values(seats).forEach(seat => {
+      if (seat.user_id) userIds.push(seat.user_id);
+  });
+  
+  const attributes = useParticipantAttributes(userIds, stream.id);
+
   // Map Seats to Participants
   // seats: { 0: {user_id: 'A'}, 1: {user_id: 'B'} }
   // We want to render 6 boxes fixed.
@@ -113,14 +90,19 @@ export default function BroadcastGrid({
           if (seatIndex === 0 && isStreamHost) {
               displayProfile = broadcasterProfile;
           }
+          
+          // Use real-time attributes if available
+          const userAttrs = userId ? attributes[userId] : null;
 
           let boxClass = "relative bg-black/50 rounded-xl overflow-hidden border border-white/10";
           
-          const hasGold = displayProfile?.is_gold;
-          const hasRgbProfile = displayProfile?.rgb_username_expires_at && new Date(displayProfile.rgb_username_expires_at) > new Date();
+          const hasGold = displayProfile?.is_gold || userAttrs?.activePerks?.includes('perk_gold_username' as any);
+          const hasRgbProfile = (displayProfile?.rgb_username_expires_at && new Date(displayProfile.rgb_username_expires_at) > new Date()) || 
+                                userAttrs?.activePerks?.includes('perk_rgb_username' as any);
           const hasStreamRgb = (seatIndex === 0 && stream.has_rgb_effect);
 
           if (hasGold) {
+
              // Gold Box - Highest Priority
              boxClass = "relative bg-black/50 rounded-xl overflow-hidden border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]";
           } else if (hasRgbProfile || hasStreamRgb) {

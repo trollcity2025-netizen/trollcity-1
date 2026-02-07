@@ -5,6 +5,8 @@ import { useAuthStore } from '../lib/store'
 interface XPState {
   xpTotal: number
   level: number
+  buyerLevel: number
+  streamLevel: number
   xpToNext: number
   progress: number
   isLoading: boolean
@@ -73,6 +75,8 @@ export const useXPStore = create<XPState>((set) => {
   return {
     xpTotal: 0,
     level: 1,
+    buyerLevel: 1,
+    streamLevel: 1,
     xpToNext: 100,
     progress: 0,
     isLoading: false,
@@ -102,6 +106,8 @@ export const useXPStore = create<XPState>((set) => {
           set({
             xpTotal,
             level,
+            buyerLevel: level,
+            streamLevel: level,
             xpToNext,
             progress,
             isLoading: false
@@ -122,6 +128,8 @@ export const useXPStore = create<XPState>((set) => {
                  set({
                     xpTotal: 0,
                     level: 1,
+                    buyerLevel: 1,
+                    streamLevel: 1,
                     xpToNext: 100,
                     progress: 0,
                     isLoading: false
@@ -171,6 +179,8 @@ export const useXPStore = create<XPState>((set) => {
                 set({
                     xpTotal: 0,
                     level: 1,
+                    buyerLevel: 1,
+                    streamLevel: 1,
                     xpToNext: 100,
                     progress: 0,
                     isLoading: false

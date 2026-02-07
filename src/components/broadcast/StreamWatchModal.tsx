@@ -1,13 +1,15 @@
 import React from 'react';
-import { X, AlertTriangle } from 'lucide-react';
-import HLSPlayer from '@/components/broadcast/HLSPlayer';
+import { X, AlertTriangle, Loader2 } from 'lucide-react';
+import { LiveKitRoom, VideoTrack, useTracks } from '@livekit/components-react';
+import '@livekit/components-styles';
+import { Track } from 'livekit-client';
+import { useLiveKitToken } from '../../hooks/useLiveKitToken';
+import { useAuthStore } from '../../lib/store';
 
 export interface WatchableStream {
   id: string;
   room_name?: string;
   agora_channel?: string;
-  hls_url?: string;
-  hls_path?: string;
   title?: string;
 }
 
@@ -16,9 +18,29 @@ interface StreamWatchModalProps {
   onClose: () => void;
 }
 
+const VideoViewer = () => {
+  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], { onlySubscribed: true });
+  // Show first video track
+  const videoTrack = tracks.find(t => t.source === Track.Source.Camera || t.source === Track.Source.ScreenShare);
+  
+  if (!videoTrack) {
+      return <div className="flex items-center justify-center h-full text-zinc-500">Waiting for video...</div>;
+  }
+  
+  return <VideoTrack trackRef={videoTrack} className="w-full h-full object-contain" />;
+};
+
 export default function StreamWatchModal({ stream, onClose }: StreamWatchModalProps) {
-  // Prefer hls_path, then hls_url, then fallback to ID (HLSPlayer handles ID->URL conversion)
-  const playbackSrc = stream.hls_path || stream.hls_url || stream.id;
+  const user = useAuthStore(s => s.user);
+  
+  const { token, serverUrl, isLoading, error } = useLiveKitToken({
+      streamId: stream.id,
+      roomName: stream.id,
+      userId: user?.id || `guest-${Math.random().toString(36).slice(2)}`,
+      isHost: false,
+      canPublish: false,
+      enabled: true
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -30,18 +52,27 @@ export default function StreamWatchModal({ stream, onClose }: StreamWatchModalPr
           <X className="w-6 h-6" />
         </button>
         
-        {playbackSrc ? (
-           <HLSPlayer 
-             src={playbackSrc} 
-             className="w-full h-full object-contain"
-             autoPlay={true}
-           />
+        {isLoading ? (
+            <div className="flex items-center justify-center h-full text-white gap-2">
+                <Loader2 className="animate-spin text-green-500" />
+                <span>Connecting to LiveKit...</span>
+            </div>
+        ) : error ? (
+             <div className="flex flex-col items-center justify-center h-full text-white gap-2">
+                <AlertTriangle className="text-red-500 w-8 h-8" />
+                <div className="text-red-400">{error}</div>
+             </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
-            <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
-            <h3 className="text-xl font-bold mb-2">Stream Feed Not Available</h3>
-            <p className="text-gray-400">Stream ID is missing.</p>
-          </div>
+            <LiveKitRoom
+                token={token}
+                serverUrl={serverUrl}
+                connect={true}
+                video={true}
+                audio={true}
+                className="w-full h-full"
+            >
+                <VideoViewer />
+            </LiveKitRoom>
         )}
       </div>
     </div>

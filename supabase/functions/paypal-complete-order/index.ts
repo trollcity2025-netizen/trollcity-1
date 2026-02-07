@@ -177,13 +177,25 @@ Deno.serve(async (req) => {
 
     // 2. Determine how many coins to credit
     let coinsToCredit = 0;
+    let dbItem = null;
 
     if (packageId) {
-      if (String(packageId) === 'troll_pass_bundle') {
-        coinsToCredit = 1500;
-      } else if (String(packageId) === 'pkg-1000-promo') {
-        coinsToCredit = 1000;
+      // Look up in purchasable_items (Centralized Inventory)
+      const { data: item, error: itemError } = await supabase
+        .from("purchasable_items")
+        .select("*")
+        .eq("id", packageId)
+        .maybeSingle();
+
+      if (itemError) {
+         console.error("purchasable_items lookup error:", itemError);
+      }
+      
+      if (item) {
+        dbItem = item;
+        coinsToCredit = item.metadata?.coins || 0;
       } else if (String(packageId).startsWith("custom_")) {
+        // Keep custom logic for manual/special flows if needed
         const parts = String(packageId).split("_");
         const raw = parts[1];
         const parsed = raw ? parseInt(raw, 10) : NaN;
@@ -191,31 +203,27 @@ Deno.serve(async (req) => {
           coinsToCredit = parsed;
         }
       } else {
-        const { data: pkg, error: pkgError } = await supabase
+        // Fallback to old table for backward compatibility if needed, 
+        // but ideally we should only use purchasable_items now.
+        // For safety during migration, we can check coin_packages.
+         const { data: pkg, error: pkgError } = await supabase
           .from("coin_packages")
           .select("coins")
           .eq("id", packageId)
           .maybeSingle();
-
-        if (pkgError) {
-          console.error("coin_packages lookup error:", pkgError);
-          throw new Error("Failed to load coin package");
-        }
-
-        if (!pkg?.coins || pkg.coins <= 0) {
-          console.error(`Invalid coin package ID: ${packageId}`);
-          throw new Error(`Invalid coin package: ${packageId}`);
-        }
-
-        coinsToCredit = pkg.coins;
+          
+         if (pkg?.coins) {
+           coinsToCredit = pkg.coins;
+         }
       }
     }
 
     if (!coinsToCredit || coinsToCredit <= 0) {
+      console.error(`Invalid package/coins for ID: ${packageId}`);
       throw new Error("Could not determine coin amount for package");
     }
 
-    // 2.5 Record successful capture
+    // 2.5 Record successful capture in paypal_transactions (Legacy/Audit)
     await supabase.from("paypal_transactions").upsert({
       user_id: userId,
       paypal_order_id: orderId,
@@ -225,6 +233,30 @@ Deno.serve(async (req) => {
       coins: coinsToCredit,
       status: "completed"
     });
+
+    // 2.6 Record in purchase_ledger (Revenue Sync - Single Source of Truth)
+    if (dbItem) {
+        await supabase.from("purchase_ledger").insert({
+          user_id: userId,
+          item_id: dbItem.id,
+          usd_amount: verifiedAmount,
+          coin_amount: coinsToCredit,
+          payment_method: 'card', // PayPal counts as 'card' or external
+          source_context: 'CoinStore',
+          metadata: { 
+             paypal_order_id: orderId,
+             paypal_capture_id: captureId,
+             paypal_status: status
+          }
+        });
+    } else {
+        // If it was a custom/legacy package not in purchasable_items, 
+        // we might skip ledger or insert with null item_id (if allowed) 
+        // or create a placeholder. For now, strict enforcement implies we skip 
+        // if not in inventory, but we don't want to lose revenue data.
+        // But the schema requires item_id.
+        console.warn(`Purchase ${orderId} has no purchasable_item match. Ledger skipped.`);
+    }
 
     // 3. Credit coins using Troll Bank (handles ledger + repayment)
     const refId = captureId || orderId;

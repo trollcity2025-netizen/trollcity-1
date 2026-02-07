@@ -81,10 +81,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 6. Determine Permissions
-    let allowPublish = 
+    const allowPublish = 
         params.allowPublish === true || 
         params.allowPublish === 'true' || 
         params.allowPublish === 1 ||
+        // @ts-expect-error - canPublish is not in the type definition but used
         params.canPublish === true;
 
     const roleParam = String(params.role || '').toLowerCase();

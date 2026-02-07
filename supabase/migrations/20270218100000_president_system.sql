@@ -282,6 +282,19 @@ end;
 $$;
 
 -- 3. Signup Candidate
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'signup_president_candidate' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 create or replace function signup_president_candidate(
   p_election_id uuid,
   p_banner_path text,
@@ -442,6 +455,19 @@ end;
 $$;
 
 -- 7. Appoint VP
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'appoint_vice_president' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 create or replace function appoint_vice_president(p_user_id uuid)
 returns void
 security definer

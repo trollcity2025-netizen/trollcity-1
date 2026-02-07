@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { BookOpen, Clock, Gift, Shield, Calendar, Info, Loader2 } from 'lucide-react';
+import { BookOpen, Clock, Gift, Shield, Calendar, Info, Loader2, XCircle } from 'lucide-react';
 import DailyPassage from '@/components/church/DailyPassage';
 import PrayerFeed from '@/components/church/PrayerFeed';
 // import { toast } from 'sonner';
@@ -13,9 +13,10 @@ export default function ChurchPage() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isSunday, setIsSunday] = useState(false);
+  const [isCancelled, setIsCancelled] = useState(false);
   const [timeUntilOpen, setTimeUntilOpen] = useState('');
   const [loading, setLoading] = useState(true);
-  const [_pastorId, setPastorId] = useState<string | null>(null);
+  const [pastorId, setPastorId] = useState<string | null>(null);
 
   // Hooks must be called unconditionally at the top level
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function ChurchPage() {
   }
 
   const fetchActivePastor = async () => {
+      setIsCancelled(false);
       // 1. Check sermon notes for today
       const today = new Date().toISOString().split('T')[0];
       const { data: notes } = await supabase.from('church_sermon_notes').select('pastor_id').eq('date', today).maybeSingle();
@@ -57,7 +59,13 @@ export default function ChurchPage() {
 
       // 3. Fallback: Any admin
       const { data: admin } = await supabase.from('user_profiles').select('id').eq('role', 'admin').limit(1).maybeSingle();
-      if (admin) setPastorId(admin.id);
+      if (admin) {
+        setPastorId(admin.id);
+      } else {
+        // No pastor and no admin found -> Cancelled
+        setIsCancelled(true);
+        setIsOpen(false); // Force close visually or handle as special state
+      }
   };
 
   /*
@@ -89,21 +97,39 @@ export default function ChurchPage() {
     const day = now.getDay(); // 0 is Sunday
     const hours = now.getHours();
     
-    // Church is open 1 PM (13:00) to 3 PM (15:00)
-    const isOpenNow = hours >= 13 && hours < 15;
+    // Church is open ONLY on Sunday 1 PM (13:00) to 3 PM (15:00)
+    const isSundayToday = day === 0;
+    const isOpenNow = isSundayToday && hours >= 13 && hours < 15;
     
     setIsOpen(isOpenNow);
-    setIsSunday(day === 0);
+    setIsSunday(isSundayToday);
     
     if (!isOpenNow) {
-       // Calculate time until next opening
-       const nextOpen = new Date();
+       // Calculate time until next Sunday 13:00
+       const nextOpen = new Date(now);
        nextOpen.setHours(13, 0, 0, 0);
+
+       // If today is Sunday but after 15:00, or if today is not Sunday
+       // We need to find the next Sunday
        
-       if (hours >= 15) {
-          // Already closed for today, open tomorrow
-          nextOpen.setDate(nextOpen.getDate() + 1);
+       let daysUntilSunday = (7 - day) % 7;
+       
+       // If it's Sunday (0)
+       if (day === 0) {
+          if (hours >= 15) {
+             // Passed, next Sunday is 7 days away
+             daysUntilSunday = 7;
+          } else if (hours < 13) {
+             // Before start, same day (0 days away)
+             daysUntilSunday = 0;
+          }
+       } else {
+          // If not Sunday, next Sunday is (7 - day) days away
+          // e.g. Monday (1) -> 6 days
+          // Saturday (6) -> 1 day
        }
+
+       nextOpen.setDate(now.getDate() + daysUntilSunday);
        
        const diff = nextOpen.getTime() - now.getTime();
        const daysLeft = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -138,13 +164,20 @@ export default function ChurchPage() {
             
             {/* Status Banner */}
             <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold border ${
-               isOpen 
+               isCancelled
+                 ? 'bg-red-900/20 border-red-500/50 text-red-400'
+                 : isOpen 
                  ? isSunday 
                     ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 animate-pulse'
                     : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
                  : 'bg-zinc-800 border-zinc-700 text-zinc-400'
             }`}>
-               {isOpen ? (
+               {isCancelled ? (
+                  <>
+                    <XCircle size={14} className="text-red-400" />
+                    <span>CHURCH IS CANCELLED</span>
+                  </>
+               ) : isOpen ? (
                   <>
                      <span className="relative flex h-2 w-2">
                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { X, Fuel, Users } from 'lucide-react';
+import { X, Fuel, Users, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import UserNameWithAge from '../UserNameWithAge';
 
 export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { profile, refreshProfile } = useAuthStore();
@@ -13,6 +14,9 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
   // New state for following list
   const [followingUsers, setFollowingUsers] = useState<any[]>([]);
   const [followingLoading, setFollowingLoading] = useState(false);
+  
+  // Active Car State for Registration Display
+  const [activeCar, setActiveCar] = useState<any>(null);
 
   useEffect(() => {
     const fetchFollowing = async () => {
@@ -21,7 +25,8 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
       try {
         const { data } = await supabase
           .from('user_follows')
-          .select('following:user_profiles!user_follows_following_id_fkey(id, username, avatar_url)')
+          // Added created_at to fix "actual days" display in user list
+          .select('following:user_profiles!user_follows_following_id_fkey(id, username, avatar_url, created_at)')
           .eq('follower_id', profile.id)
           .limit(50); // Limit to recent/top 50 for performance
   
@@ -41,6 +46,22 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
     }
   }, [isOpen, tab, profile]);
 
+  // Fetch Active Car Registration
+  useEffect(() => {
+    if (isOpen && profile) {
+      const fetchCar = async () => {
+         const { data } = await supabase
+           .from('user_cars')
+           .select('registration_expires_at')
+           .eq('user_id', profile.id)
+           .eq('is_active', true)
+           .maybeSingle();
+         if (data) setActiveCar(data);
+      };
+      fetchCar();
+    }
+  }, [isOpen, profile]);
+
   if (!isOpen || !profile) return null;
 
   const filteredUsers = followingUsers.filter(u => 
@@ -53,12 +74,51 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
   const handleRefill = async (amount: number) => {
     setLoading(true);
     try {
-      const { error } = await supabase.rpc('refill_gas', { p_amount_percent: amount });
-      if (error) throw error;
-      toast.success(`Refilled ${amount}% gas!`);
-      await refreshProfile();
-      // onClose(); // Keep open to see result? Or close.
+      // Manual Workaround: Call spend_coins then consume_gas (with negative amount to add)
+      // This bypasses the ambiguous/broken refill_gas RPC.
+      
+      const cost = Math.ceil((amount / 5) * 300);
+      
+      // 1. Spend Coins
+      const { data: spendData, error: spendError } = await supabase.rpc('troll_bank_spend_coins_secure', {
+        p_user_id: profile.id,
+        p_amount: cost,
+        p_bucket: 'paid',
+        p_source: 'gas_refill',
+        p_ref_id: null,
+        p_metadata: { amount_percent: amount }
+      });
+
+      if (spendError) {
+          // If secure rpc not found, try without secure suffix (older migration)
+          const { error: legacyError } = await supabase.rpc('troll_bank_spend_coins', {
+            p_user_id: profile.id,
+            p_amount: cost,
+            p_bucket: 'paid',
+            p_source: 'gas_refill',
+            p_ref_id: null,
+            p_metadata: { amount_percent: amount }
+          });
+          
+          if (legacyError) throw new Error(spendError.message || legacyError.message);
+      }
+
+      // 2. Add Gas (consume_gas with negative amount)
+      // consume_gas logic: gas = gas - p_amount. So passing -amount adds gas.
+      const { data: gasData, error: gasError } = await supabase.rpc('consume_gas', { p_amount: -amount });
+      
+      if (gasError) throw gasError;
+
+      // Update local state
+      if (gasData && gasData.success) {
+          useAuthStore.getState().setProfile({ ...profile, gas_balance: gasData.new_balance });
+          toast.success(`Refilled ${amount}% gas!`);
+      } else {
+          await refreshProfile();
+          toast.success(`Refilled ${amount}% gas!`);
+      }
     } catch (e: any) {
+      console.error('Refill error:', e);
       toast.error(e.message || 'Failed to refill');
     } finally {
       setLoading(false);
@@ -119,6 +179,22 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
 
            {tab === 'refill' && (
              <div className="space-y-4">
+                
+                {/* Registration Display */}
+                {activeCar && activeCar.registration_expires_at && (
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Calendar className="w-4 h-4" />
+                      <span className="text-sm">Vehicle Registration</span>
+                    </div>
+                    <span className={`font-mono font-bold ${
+                        new Date(activeCar.registration_expires_at) < new Date() ? 'text-red-500' : 'text-green-400'
+                    }`}>
+                      {Math.max(0, Math.ceil((new Date(activeCar.registration_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d Left
+                    </span>
+                  </div>
+                )}
+
                 <div className="text-center mb-4">
                    <p className="text-gray-400">Current Tank</p>
                    <div className="text-4xl font-bold text-white flex justify-center items-end gap-1">
@@ -128,14 +204,8 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
                 
                 <div className="grid grid-cols-2 gap-3">
                    {options.map(pct => {
-                     // Can't refill more than what's missing
-                     // But let's just cap it visually or logic-wise. 
-                     // The logic in RPC handles capping at 100.
-                     // But we shouldn't show +100% if we have 90%.
-                     
                      if (gas + pct > 100) {
-                         // Optional: Adjust to exact fill? 
-                         // "Fill Up" button might be better.
+                         // Optional: Handle overflow logic visually if needed
                      }
                      
                      const cost = Math.ceil((pct / 5) * 300);

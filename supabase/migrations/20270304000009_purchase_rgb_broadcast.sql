@@ -5,6 +5,19 @@ ALTER TABLE public.streams
 ADD COLUMN IF NOT EXISTS rgb_purchased BOOLEAN DEFAULT FALSE;
 
 -- 2. Create/Replace RPC
+DO $$ 
+DECLARE 
+    r RECORD; 
+BEGIN 
+    FOR r IN SELECT oid::regprocedure AS func_signature 
+             FROM pg_proc 
+             WHERE proname = 'purchase_rgb_broadcast' 
+             AND pronamespace = 'public'::regnamespace 
+    LOOP 
+        EXECUTE 'DROP FUNCTION ' || r.func_signature; 
+    END LOOP; 
+END $$;
+
 CREATE OR REPLACE FUNCTION public.purchase_rgb_broadcast(
   p_stream_id UUID,
   p_enable BOOLEAN DEFAULT TRUE

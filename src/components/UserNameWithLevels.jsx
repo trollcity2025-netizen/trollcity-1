@@ -1,19 +1,19 @@
 // src/components/UserNameWithLevels.jsx
 import React from "react";
-import { useUserLevels } from "@/hooks/useUserLevels";
+import { useXPStore } from "@/stores/useXPStore";
+import { useAuthStore } from "@/lib/store";
 import LevelBadge from "./levels/LevelBadge";
 
 export default function UserNameWithLevels({ userId, username, showBothLevels = false, className = "" }) {
-  const { levels, loading } = useUserLevels();
+  const { user } = useAuthStore();
+  const { buyerLevel, streamLevel, isLoading } = useXPStore();
 
   // If we're showing a different user's levels, we need to fetch their levels
-  // For now, we'll use the current user's levels, but you could extend this
-  // to fetch any user's levels by adding a userId parameter to the hook
+  // For now, we'll use the current user's levels if the ID matches
+  
+  const isCurrentUser = !userId || (user && userId === user.id);
 
-  const currentUserLevels = levels;
-  const isCurrentUser = !userId || userId === levels?.user_id;
-
-  if (loading) {
+  if (isLoading && isCurrentUser) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <span className="animate-pulse bg-gray-700 rounded px-3 py-1 text-transparent">{username || "Loading..."}</span>
@@ -27,10 +27,10 @@ export default function UserNameWithLevels({ userId, username, showBothLevels = 
 
       {/* Show level badges */}
       <div className="flex gap-1">
-        {isCurrentUser && currentUserLevels && (
+        {isCurrentUser && (
           <>
-            <LevelBadge type="buyer" level={currentUserLevels.buyer_level} />
-            {showBothLevels && <LevelBadge type="stream" level={currentUserLevels.stream_level} />}
+            <LevelBadge type="buyer" level={buyerLevel} />
+            {showBothLevels && <LevelBadge type="stream" level={streamLevel} />}
           </>
         )}
       </div>

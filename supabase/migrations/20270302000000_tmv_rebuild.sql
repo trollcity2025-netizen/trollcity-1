@@ -189,7 +189,7 @@ INSERT INTO public.vehicles_catalog (id, name, tier, style, price, speed, armor,
 (13, 'Driftline Pulse Bike', 'Mid', 'Drift-ready performance bike', 16000, 78, 20, '#06b6d4', '#3b82f6', '/assets/cars/vehicle_7_original.png', '/models/vehicles/driftline_pulse_bike.glb'),
 (14, 'Regal Meridian', 'Luxury', 'Executive luxury sedan', 85000, 88, 50, '#0f172a', '#334155', '/assets/cars/vehicle_8_original.png', '/models/vehicles/regal_meridian.glb'),
 (15, 'Luxe Voyager', 'Luxury', 'Luxury cruiser bike', 78000, 86, 32, '#1f2937', '#111827', '/assets/cars/vehicle_1_original.png', '/models/vehicles/luxe_voyager.glb'),
-(16, 'Eclipse Seraph', 'Super', 'Exotic supercar', 260000, 138, 42, '#312e81', '#9333ea', '/assets/cars/vehicle_2_original.png', '/models/vehicles/eclipse_seraph.glb')
+(16, 'Eclipse Seraph', 'Super', 'Exotic supercar', 260000, 138, 42, '#312e81', '#9333ea', '/assets/cars/vehicle_6_original.png', '/models/vehicles/eclipse_seraph.glb')
 ON CONFLICT (id) DO UPDATE SET
 name = EXCLUDED.name,
 price = EXCLUDED.price,

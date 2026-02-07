@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename)
 const MIGRATIONS_DIR = path.resolve(__dirname, '../supabase/migrations')
 // Start from this migration timestamp to avoid re-running very old ones
 // This matches the start of the previous hardcoded list
-const START_MIGRATION = '20270215000000'
+const START_MIGRATION = '20200101000000'
 
 async function run() {
   const databaseUrl = process.env.DATABASE_URL
@@ -60,6 +60,7 @@ async function run() {
           
           if (isDeadlock) {
             console.warn(`⚠️ Deadlock detected for ${file}. Retrying ${attempt}/${maxRetries} in 5s...`)
+            try { await client.query('ROLLBACK') } catch (rbErr) {}
             await new Promise(r => setTimeout(r, 5000))
             continue
           }
@@ -69,6 +70,9 @@ async function run() {
           console.error(err.message)
           
           if (err.message.includes('already exists') || err.message.includes('duplicate key')) {
+              console.log('  -> Rolling back transaction to clear state...')
+              try { await client.query('ROLLBACK') } catch (rbErr) { console.warn('Rollback warning:', rbErr.message) }
+              
               console.log('  -> Continuing despite error (assuming idempotent/already applied)')
               success = true
            } else {

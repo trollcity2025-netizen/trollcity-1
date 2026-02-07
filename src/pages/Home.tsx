@@ -188,52 +188,32 @@ export default function Home() {
               </div>
 
               {/* CTA Buttons */}
-              <div className="flex flex-wrap gap-4 items-center animate-fade-in-up" style={{ animationDelay: '180ms' }}>
-                {!user ? (
-                  <>
-                    <button
-                      onClick={() => navigate('/signup')}
-                      className="group relative px-8 py-4 rounded-2xl font-semibold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 shadow-[0_10px_40px_rgba(124,58,237,0.35)] hover:shadow-[0_15px_50px_rgba(56,189,248,0.35)] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-2"
-                    >
-                      <Sparkles className="w-5 h-5" />
-                      Join Troll City
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                      <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-600/0 via-white/6 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                    <button
-                      onClick={() => navigate('/login')}
-                      className="px-8 py-4 rounded-2xl font-semibold text-lg text-slate-50 bg-slate-900/60 backdrop-blur-xl border border-white/10 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
-                    >
-                      Sign In
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => navigate('/go-live')}
-                      className="md:hidden group relative px-8 py-4 rounded-2xl font-semibold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 shadow-[0_10px_40px_rgba(236,72,153,0.4)] hover:shadow-[0_15px_50px_rgba(251,146,60,0.35)] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-2"
-                    >
-                      <Play className="w-5 h-5" />
-                      Go Live Now
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                      <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-600/0 via-white/8 to-orange-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                    <button
-                      onClick={() => navigate('/explore')}
-                      className="px-8 py-4 rounded-2xl font-semibold text-lg text-slate-50 bg-slate-900/60 backdrop-blur-xl border border-white/10 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
-                    >
-                      Explore Feed
-                    </button>
-                    <button
-                      onClick={() => navigate('/president')}
-                      className="px-8 py-4 rounded-2xl font-semibold text-lg text-amber-100 bg-amber-900/40 backdrop-blur-xl border border-amber-500/30 hover:border-amber-400/60 hover:bg-amber-900/60 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(245,158,11,0.15)] flex items-center gap-2"
-                    >
-                      <Crown className="w-5 h-5 text-amber-400" />
-                      President&apos;s Office
-                    </button>
-                  </>
-                )}
-              </div>
+              {user && (
+                <div className="flex flex-wrap gap-4 items-center animate-fade-in-up" style={{ animationDelay: '180ms' }}>
+                  <button
+                    onClick={() => navigate('/go-live')}
+                    className="md:hidden group relative px-8 py-4 rounded-2xl font-semibold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 shadow-[0_10px_40px_rgba(236,72,153,0.4)] hover:shadow-[0_15px_50px_rgba(251,146,60,0.35)] transition-all duration-300 hover:-translate-y-0.5 flex items-center gap-2"
+                  >
+                    <Play className="w-5 h-5" />
+                    Go Live Now
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-600/0 via-white/8 to-orange-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                  <button
+                    onClick={() => navigate('/explore')}
+                    className="px-8 py-4 rounded-2xl font-semibold text-lg text-slate-50 bg-slate-900/60 backdrop-blur-xl border border-white/10 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+                  >
+                    Explore Feed
+                  </button>
+                  <button
+                    onClick={() => navigate('/president')}
+                    className="px-8 py-4 rounded-2xl font-semibold text-lg text-amber-100 bg-amber-900/40 backdrop-blur-xl border border-amber-500/30 hover:border-amber-400/60 hover:bg-amber-900/60 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(245,158,11,0.15)] flex items-center gap-2"
+                  >
+                    <Crown className="w-5 h-5 text-amber-400" />
+                    President&apos;s Office
+                  </button>
+                </div>
+              )}
 
               {/* Quick Features Preview */}
               <div className="flex flex-wrap gap-3 text-sm text-slate-300 animate-fade-in-up" style={{ animationDelay: '320ms' }}>

@@ -105,21 +105,15 @@ export default function ShopView() {
         return
       }
 
-      // Deduct coins using the coin transaction system
-      const deductResult = await deductCoins({
-        userId: user.id,
-        amount: item.price,
-        type: 'purchase',
-        description: `Purchase: ${item.name} from ${shop.name}`,
-        metadata: {
-          shop_id: shop.id,
-          item_id: item.id,
-          seller_id: shop.owner_id
-        }
+      // Deduct coins using the atomic purchase_item RPC
+      const { data: rpcData, error: rpcError } = await supabase.rpc('purchase_item', {
+        p_item_type: 'shop',
+        p_item_id: String(item.id),
+        p_cost: item.price
       })
 
-      if (!deductResult.success) {
-        toast.error('Failed to process payment')
+      if (rpcError) {
+        toast.error('Purchase failed: ' + rpcError.message)
         return
       }
 

@@ -667,7 +667,6 @@ export default function OfficerScheduling() {
                                     onClick={() => handleCashout(slot.shift_log_id!)}
                                     disabled={loading}
                                     className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                                    title="Cash out: 6,000 troll_coins = $60"
                                   >
                                     <DollarSign className="w-4 h-4" />
                                     Cash Out

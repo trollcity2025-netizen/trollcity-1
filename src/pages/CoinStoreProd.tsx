@@ -1,37 +1,51 @@
 // src/pages/CoinStoreProd.tsx
 // Production-ready PayPal coin purchase component with centralized fulfillment
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../lib/store'
-import { AlertCircle, Coins, Wallet, Crown } from 'lucide-react'
+import { AlertCircle, Coins, Wallet, Crown, RefreshCw } from 'lucide-react'
 import { paymentProviders } from '../lib/payments'
 import { toast } from 'sonner'
 import AdminForWeekModal from '../components/AdminForWeekModal'
-import { COIN_PACKAGES } from '../lib/coinMath'
+// import { COIN_PACKAGES } from '../lib/coinMath' // Deprecated
 import { trollCityTheme } from '@/styles/trollCityTheme'
-
-const coinPackages = COIN_PACKAGES.map(p => ({
-  id: String(p.id),
-  coins: p.coins,
-  price: p.price,
-  label: `${p.coins.toLocaleString()} Coins`,
-  popular: p.popular,
-  promo: p.promo,
-  bestValue: p.bestValue
-}))
+import { usePurchasableItems } from '../hooks/usePurchasableItems'
 
 export default function CoinStoreProd() {
   const { user, profile, refreshProfile: _refreshProfile } = useAuthStore()
+  const { items: purchasableItems, loading: itemsLoading } = usePurchasableItems('coin_pack')
+  
   const [selectedProviderId, setSelectedProviderId] = useState(paymentProviders[0]?.id || 'paypal')
-  const [selectedPackage, setSelectedPackage] = useState(coinPackages[0])
+  const [selectedPackage, setSelectedPackage] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [showAdminModal, setShowAdminModal] = useState(false)
+
+  const coinPackages = useMemo(() => {
+    return purchasableItems.map(p => ({
+      id: p.id, // DB UUID
+      coins: p.metadata?.coins || 0,
+      price: Number(p.usd_price || 0),
+      label: p.display_name,
+      popular: p.metadata?.popular,
+      promo: p.metadata?.promo,
+      bestValue: p.metadata?.bestValue
+    }))
+  }, [purchasableItems])
+
+  // Select first package by default when loaded
+  useEffect(() => {
+    if (coinPackages.length > 0 && !selectedPackage) {
+      setSelectedPackage(coinPackages[0])
+    }
+  }, [coinPackages, selectedPackage])
 
   const provider = paymentProviders.find(p => p.id === selectedProviderId)
 
   async function handleBuy() {
     if (!user) return toast.error('Please sign in')
     if (!provider) return toast.error('No payment provider selected')
+    if (!selectedPackage) return toast.error('No package selected')
+    
     setLoading(true)
     try {
       const paymentSession = await provider.createPayment({
@@ -40,7 +54,7 @@ export default function CoinStoreProd() {
         currency: 'USD',
         productType: 'coins',
         packageId: selectedPackage.id,
-        metadata: { coins: selectedPackage.coins }
+        metadata: { coins: selectedPackage.coins, item_id: selectedPackage.id }
       })
       if (provider.id === 'paypal' && paymentSession.approvalUrl) {
         window.location.href = paymentSession.approvalUrl
@@ -112,34 +126,46 @@ export default function CoinStoreProd() {
 
         {/* Coin Packages */}
         <div className="mb-10">
-          <h2 className="text-2xl font-bold mb-4 text-purple-300">Select Coin Package</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            {coinPackages.map(pkg => (
-              <button
-                key={pkg.id}
-                onClick={() => setSelectedPackage(pkg)}
-                className={`group relative p-6 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-200 font-semibold ${
-                  selectedPackage.id === pkg.id
-                    ? 'bg-gradient-to-b from-purple-700/90 via-purple-600/80 to-indigo-700/80 border-purple-400/80 text-white shadow-xl shadow-purple-500/40 scale-105'
-                    : `${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} ${trollCityTheme.text.muted} hover:border-purple-500/60 hover:bg-white/10 hover:shadow-lg hover:-translate-y-1`
-                }`}
-              >
-                <span className="text-3xl">💰</span>
-                <span className="text-lg font-bold text-white">{pkg.label}</span>
-                <span className="text-yellow-400 font-extrabold text-2xl">${pkg.price.toFixed(2)}</span>
-                {pkg.promo && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 animate-pulse">HOT DEAL</span>}
-                {pkg.popular && !pkg.promo && <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Popular</span>}
-                {pkg.bestValue && <span className="text-xs bg-green-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Best Value</span>}
-              </button>
-            ))}
-          </div>
+          <h2 className="text-2xl font-bold mb-4 text-purple-300 flex items-center gap-2">
+            Select Coin Package
+            {itemsLoading && <RefreshCw className="w-4 h-4 animate-spin text-zinc-500" />}
+          </h2>
+          
+          {itemsLoading && coinPackages.length === 0 ? (
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} className="h-48 rounded-2xl bg-zinc-800/50 animate-pulse border border-zinc-700"></div>
+                ))}
+             </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+              {coinPackages.map(pkg => (
+                <button
+                  key={pkg.id}
+                  onClick={() => setSelectedPackage(pkg)}
+                  className={`group relative p-6 rounded-2xl border flex flex-col items-center gap-3 transition-all duration-200 font-semibold ${
+                    selectedPackage?.id === pkg.id
+                      ? 'bg-gradient-to-b from-purple-700/90 via-purple-600/80 to-indigo-700/80 border-purple-400/80 text-white shadow-xl shadow-purple-500/40 scale-105'
+                      : `${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} ${trollCityTheme.text.muted} hover:border-purple-500/60 hover:bg-white/10 hover:shadow-lg hover:-translate-y-1`
+                  }`}
+                >
+                  <span className="text-3xl">💰</span>
+                  <span className="text-lg font-bold text-white">{pkg.label}</span>
+                  <span className="text-yellow-400 font-extrabold text-2xl">${pkg.price.toFixed(2)}</span>
+                  {pkg.promo && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold mt-1 animate-pulse">HOT DEAL</span>}
+                  {pkg.popular && !pkg.promo && <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Popular</span>}
+                  {pkg.bestValue && <span className="text-xs bg-green-400 text-black px-2 py-0.5 rounded-full font-bold mt-1">Best Value</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Buy Button */}
         <div className="mb-12 flex justify-center">
           <button
             onClick={handleBuy}
-            disabled={loading}
+            disabled={loading || !selectedPackage}
             className={`px-8 py-4 rounded-full ${trollCityTheme.gradients.button} text-white font-bold text-lg shadow-lg transition-all flex items-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed`}
           >
             {loading ? 'Processing...' : `Buy with ${provider?.displayName}`}

@@ -106,15 +106,15 @@ export default function KTAuto() {
 
     setPurchasing(true);
     try {
-      const { data, error } = await supabase.rpc('purchase_vehicle', {
-        p_car_catalog_id: selectedCar.id,
-        p_plate_type: plateType
+      // Use purchase_car (UUID support) instead of purchase_vehicle
+      const { data, error } = await supabase.rpc('purchase_car', {
+        p_car_catalog_id: selectedCar.id
       });
 
       if (error) throw error;
 
       if (data && !data.success) {
-        toast.error(data.message);
+        toast.error(data.error || data.message || 'Purchase failed');
         return;
       }
 

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import { DollarSign, Clock, TrendingUp, Calendar, Award, Target } from 'lucide-react'
 import { calculateOfficerBaseCoins, calculateTotalOfficerEarnings, OFFICER_BASE_HOURLY_COINS } from '../../lib/officerPay'
+import OfficerPoolPanel from './components/OfficerPoolPanel'
 
 interface WorkSession {
   id: string
@@ -65,6 +66,18 @@ export default function OfficerPayrollDashboard() {
         .order('clock_in', { ascending: false })
 
       const sessionsData = (sessions as any) || []
+
+      // Recalculate hours_worked from timestamps to ensure accuracy and fix any DB inconsistencies
+      sessionsData.forEach((s: any) => {
+        if (s.clock_in && s.clock_out) {
+          const start = new Date(s.clock_in).getTime()
+          const end = new Date(s.clock_out).getTime()
+          const hours = (end - start) / (1000 * 60 * 60)
+          s.hours_worked = Math.max(0, hours)
+        } else {
+          s.hours_worked = 0
+        }
+      })
 
       // Hydrate stream titles manually to avoid FK relationship issues
       const streamIds = Array.from(new Set(sessionsData.map((s: any) => s.stream_id).filter(Boolean)))
@@ -169,10 +182,13 @@ export default function OfficerPayrollDashboard() {
           <p className="text-gray-300">Track your earnings and work hours</p>
           {profile && (
             <p className="text-green-300 text-sm mt-2">
-              Officer: {profile.username} • Base Rate: {OFFICER_BASE_HOURLY_COINS.toLocaleString()} coins/hour
+              Officer: {profile.username}
             </p>
           )}
         </div>
+
+        {/* Officer Pool Panel */}
+        <OfficerPoolPanel />
 
         {/* Period Selector */}
         <div className="flex justify-center">
@@ -210,17 +226,6 @@ export default function OfficerPayrollDashboard() {
             <p className="text-xs text-gray-500 mt-1">hours worked</p>
           </div>
 
-          <div className="bg-zinc-900 rounded-xl p-4 border border-green-500/30">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-5 h-5 text-green-400" />
-              <span className="text-sm text-gray-400">Base Pay</span>
-            </div>
-            <p className="text-2xl font-bold text-green-400">
-              {earningsBreakdown.basePay.toLocaleString()}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">coins earned</p>
-          </div>
-
           <div className="bg-zinc-900 rounded-xl p-4 border border-purple-500/30">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-5 h-5 text-purple-400" />
@@ -251,10 +256,6 @@ export default function OfficerPayrollDashboard() {
             Earnings Breakdown
           </h2>
           <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-zinc-800">
-              <span className="text-gray-300">Base Pay (2,500 coins/hour)</span>
-              <span className="text-green-400 font-semibold">{earningsBreakdown.basePay.toLocaleString()} coins</span>
-            </div>
             <div className="flex justify-between items-center py-2 border-b border-zinc-800">
               <span className="text-gray-300">Live Streaming Earnings</span>
               <span className="text-purple-400 font-semibold">{earningsBreakdown.liveEarnings.toLocaleString()} coins</span>
@@ -287,14 +288,13 @@ export default function OfficerPayrollDashboard() {
                   <th className="text-left py-2">Date</th>
                   <th className="text-left py-2">Stream</th>
                   <th className="text-right py-2">Hours</th>
-                  <th className="text-right py-2">Base Pay</th>
                   <th className="text-center py-2">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {workSessions.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-zinc-400">
+                    <td colSpan={4} className="text-center py-8 text-zinc-400">
                       No work sessions found for this period
                     </td>
                   </tr>
@@ -309,9 +309,6 @@ export default function OfficerPayrollDashboard() {
                       </td>
                       <td className="text-right py-2 text-blue-400">
                         {session.hours_worked?.toFixed(2) || '0.00'}
-                      </td>
-                      <td className="text-right py-2 text-green-400">
-                        {session.coins_earned?.toLocaleString() || '0'}
                       </td>
                       <td className="text-center py-2">
                         {session.auto_clocked_out ? (
@@ -340,11 +337,9 @@ export default function OfficerPayrollDashboard() {
         <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-700">
           <h3 className="text-lg font-semibold mb-3 text-yellow-400">💰 Officer Compensation Structure</h3>
           <div className="space-y-2 text-zinc-300 text-sm">
-            <p>• <strong>Base Pay:</strong> 500 coins per hour clocked in</p>
             <p>• <strong>Live Earnings:</strong> Additional coins from live streaming activities</p>
             <p>• <strong>Court Bonuses:</strong> Rewards for court moderation and rulings</p>
             <p>• <strong>Other Bonuses:</strong> Special rewards for outstanding service</p>
-            <p>• <strong>Cashout Rate:</strong> 6,000 troll_coins = $60 USD</p>
           </div>
         </div>
       </div>

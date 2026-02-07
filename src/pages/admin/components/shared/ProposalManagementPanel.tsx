@@ -26,7 +26,11 @@ interface Proposal {
   reviewed_at?: string;
 }
 
-export default function ProposalManagementPanel() {
+interface ProposalManagementPanelProps {
+  viewMode: 'admin' | 'secretary';
+}
+
+export default function ProposalManagementPanel({ viewMode }: ProposalManagementPanelProps) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');

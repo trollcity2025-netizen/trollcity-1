@@ -9,12 +9,16 @@ interface BroadcastHeaderProps {
     stream: Stream;
     onStartBattle?: () => void;
     isHost: boolean;
+    liveViewerCount?: number;
 }
 
-export default function BroadcastHeader({ stream, onStartBattle, isHost }: BroadcastHeaderProps) {
+export default function BroadcastHeader({ stream, onStartBattle, isHost, liveViewerCount }: BroadcastHeaderProps) {
     const { profile } = useAuthStore();
     const [likes, setLikes] = React.useState(0);
     const [isLiking, setIsLiking] = React.useState(false);
+
+    // Prefer live count from presence, fallback to DB count
+    const displayViewerCount = liveViewerCount !== undefined ? liveViewerCount : (stream.viewer_count || 0);
 
     // Sync likes with stream object
     React.useEffect(() => {
@@ -60,7 +64,7 @@ export default function BroadcastHeader({ stream, onStartBattle, isHost }: Broad
                 {/* Viewers */}
                 <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-full px-3 py-1.5 flex items-center gap-2">
                     <Users size={14} className="text-blue-400" />
-                    <span className="text-white font-bold text-sm">{stream.viewer_count || 0}</span>
+                    <span className="text-white font-bold text-sm">{displayViewerCount}</span>
                 </div>
 
                 {/* Likes */}

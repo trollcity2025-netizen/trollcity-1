@@ -70,7 +70,7 @@ const GiftModal: React.FC<GiftModalProps> = ({ isOpen, onClose, recipientId, rec
   return (
     <>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-        <div className="bg-gray-800 rounded-xl max-w-md w-full p-6 relative">
+        <div className="bg-gray-800 rounded-xl max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-500/20 rounded-lg">

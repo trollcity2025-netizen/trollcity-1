@@ -15,6 +15,8 @@ export default function CriticalAlertsList({ viewMode: _viewMode }: CriticalAler
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!user) return; // Stop if not logged in
+
     fetchAlerts()
     
     // Converted to polling to reduce DB load
@@ -23,9 +25,10 @@ export default function CriticalAlertsList({ viewMode: _viewMode }: CriticalAler
     }, 30000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [user])
 
   const fetchAlerts = async () => {
+    if (!user) return;
     setLoading(true)
     try {
       const { data, error } = await supabase

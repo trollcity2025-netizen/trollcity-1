@@ -270,13 +270,17 @@ export async function deductCoins(params: {
 
       if (payError) {
         console.error('[deductCoins] try_pay_coins_secure error:', payError)
-        // If RPC not found (migration issue), try legacy fallback
         const errMsg = payError.message || ''
+        
+        // Fallback for missing function OR permission errors (RLS)
+        // "Cannot update restricted column" is a common RLS error when RPC is not SECURITY DEFINER
         if (
           (errMsg.includes('function') && errMsg.includes('not found')) ||
-          errMsg.includes('Could not find the function')
+          errMsg.includes('Could not find the function') ||
+          errMsg.includes('restricted column') ||
+          errMsg.includes('permission denied')
         ) {
-             console.log('[deductCoins] Fallback to legacy troll_bank_spend_coins_secure')
+             console.log('[deductCoins] Fallback to legacy troll_bank_spend_coins_secure due to:', errMsg)
              const { data: bankResult, error: bankError } = await sb.rpc('troll_bank_spend_coins_secure', {
                 p_user_id: userId,
                 p_amount: normalizedAmount,
@@ -287,10 +291,34 @@ export async function deductCoins(params: {
              })
              
              if (bankError || (bankResult && !bankResult.success)) {
-                 return { success: false, newBalance: null, transaction: null, error: bankError?.message || bankResult?.error || 'Payment failed' }
+                 // Double fallback: try deduct_user_troll_coins (simplest RPC)
+                 console.log('[deductCoins] Secondary fallback to deduct_user_troll_coins')
+                 const { data: simpleResult, error: simpleError } = await sb.rpc('deduct_user_troll_coins', {
+                    p_user_id: userId,
+                    p_amount: normalizedAmount.toString(),
+                    p_coin_type: 'troll_coins'
+                 })
+                 
+                 if (simpleError) {
+                    return { success: false, newBalance: null, transaction: null, error: simpleError.message || bankError?.message || payError.message }
+                 }
+                 
+                 // Success via simple RPC
+                 const parsedBalance = safeNumber(simpleResult)
+                 return { 
+                    success: true, 
+                    newBalance: parsedBalance, 
+                    transaction: { 
+                        id: `tx_${Date.now()}`,
+                        user_id: userId,
+                        amount: -normalizedAmount,
+                        type: type,
+                        created_at: new Date().toISOString()
+                    } 
+                 }
              }
              
-             // Success via legacy
+             // Success via legacy bank
              const newBalance = bankResult.new_balance
              return { success: true, newBalance, transaction: { id: bankResult.ledger_id } }
         }

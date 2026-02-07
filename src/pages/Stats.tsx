@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { useCoins } from '../lib/hooks/useCoins'
 import { supabase } from '../lib/supabase'
@@ -6,7 +7,7 @@ import { getFamilySeasonStats } from '../lib/familySeasons'
 import { useXPStore } from '../stores/useXPStore'
 import { useCreditScore } from '../lib/hooks/useCreditScore'
 import CreditScoreBadge from '../components/CreditScoreBadge'
-import { Crown, Sword, Trophy, Coins, Star, TrendingUp, Shield } from 'lucide-react'
+import { Crown, Sword, Trophy, Coins, Star, TrendingUp, Shield, Zap, ShoppingBag, Gavel, Store, Package, DollarSign } from 'lucide-react'
 import { STORE_USD_PER_COIN } from '../lib/coinMath'
 
 interface UserStats {
@@ -28,6 +29,7 @@ interface UserStats {
 }
 
 export default function Stats() {
+  const navigate = useNavigate()
   const { user, profile } = useAuthStore()
   const { balances, loading: coinsLoading } = useCoins()
   const { xpTotal, level, xpToNext, progress, fetchXP, subscribeToXP, unsubscribe } = useXPStore()
@@ -135,6 +137,55 @@ export default function Stats() {
             Player Stats
           </h1>
           <p className="text-gray-400">View your comprehensive game statistics and achievements</p>
+        </div>
+
+        {/* Quick Shortcuts Menu */}
+        <div className="bg-[#1A1A24] border border-purple-500/30 rounded-2xl p-6 mb-8">
+          <h3 className="text-purple-300 font-semibold mb-4 flex items-center gap-2 text-lg">
+            <Zap className="w-5 h-5" />
+            QUICK SHORTCUTS
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button
+              onClick={() => navigate('/store')}
+              className="flex flex-col items-center gap-2 p-4 bg-[#2A2A34] rounded-xl hover:bg-[#3A3A45] hover:scale-105 transition-all border border-transparent hover:border-purple-500/50 group"
+            >
+              <div className="p-3 bg-yellow-500/10 rounded-full group-hover:bg-yellow-500/20 transition-colors">
+                <ShoppingBag className="w-6 h-6 text-yellow-400" />
+              </div>
+              <span className="font-medium text-gray-200">Coin Store</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/marketplace')}
+              className="flex flex-col items-center gap-2 p-4 bg-[#2A2A34] rounded-xl hover:bg-[#3A3A45] hover:scale-105 transition-all border border-transparent hover:border-blue-500/50 group"
+            >
+              <div className="p-3 bg-blue-500/10 rounded-full group-hover:bg-blue-500/20 transition-colors">
+                <Store className="w-6 h-6 text-blue-400" />
+              </div>
+              <span className="font-medium text-gray-200">Shop</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/inventory')}
+              className="flex flex-col items-center gap-2 p-4 bg-[#2A2A34] rounded-xl hover:bg-[#3A3A45] hover:scale-105 transition-all border border-transparent hover:border-green-500/50 group"
+            >
+              <div className="p-3 bg-green-500/10 rounded-full group-hover:bg-green-500/20 transition-colors">
+                <Package className="w-6 h-6 text-green-400" />
+              </div>
+              <span className="font-medium text-gray-200">Inventory</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/my-earnings')}
+              className="flex flex-col items-center gap-2 p-4 bg-[#2A2A34] rounded-xl hover:bg-[#3A3A45] hover:scale-105 transition-all border border-transparent hover:border-emerald-500/50 group"
+            >
+              <div className="p-3 bg-emerald-500/10 rounded-full group-hover:bg-emerald-500/20 transition-colors">
+                <DollarSign className="w-6 h-6 text-emerald-400" />
+              </div>
+              <span className="font-medium text-gray-200">Earnings</span>
+            </button>
+          </div>
         </div>
 
         {loading || coinsLoading ? (

@@ -4,11 +4,13 @@ import { supabase } from '@/lib/supabase';
 import { Car, AlertTriangle, CheckCircle, Shield, XCircle, Gavel, Wrench, Key } from 'lucide-react';
 import { toast } from 'sonner';
 import DriversTest from './DriversTest';
+import TMVDrivingManual from './TMVDrivingManual';
 import CarUpgradesModal from '@/components/CarUpgradesModal';
 
 export default function TMVTab({ profile, isOwnProfile }: { profile: any, isOwnProfile: boolean }) {
    const { user, refreshProfile } = useAuthStore();
    const [takingTest, setTakingTest] = useState(false);
+   const [showingManual, setShowingManual] = useState(false);
    const [loading, setLoading] = useState(false);
 
    if (!profile) return null;
@@ -79,6 +81,10 @@ export default function TMVTab({ profile, isOwnProfile }: { profile: any, isOwnP
        }
    };
    
+   if (showingManual) {
+      return <TMVDrivingManual onAcknowledge={() => { setShowingManual(false); setTakingTest(true); }} />;
+   }
+
    if (takingTest && isOwnProfile) {
       return <DriversTest onComplete={() => { setTakingTest(false); refreshProfile(); }} />;
    }
@@ -148,13 +154,20 @@ export default function TMVTab({ profile, isOwnProfile }: { profile: any, isOwnP
               
               <div>
                  {isOwnProfile && (licenseStatus === 'none' || isExpired) && licenseStatus !== 'suspended' && (
-                    <button 
-                      onClick={() => setTakingTest(true)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition"
-                    >
-                      {licenseStatus === 'none' ? 'Take Driver Test' : 'Renew License'}
-                    </button>
-                 )}
+                  <button 
+                    onClick={() => {
+                      const seen = localStorage.getItem('tmv_driving_manual_acknowledged');
+                      if (!seen) {
+                        setShowingManual(true);
+                      } else {
+                        setTakingTest(true);
+                      }
+                    }}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition"
+                  >
+                    {licenseStatus === 'none' ? 'Take Driver Test' : 'Renew License'}
+                  </button>
+               )}
                  {licenseStatus === 'suspended' && (
                     <span className="text-red-400 text-sm font-medium px-3 py-1 bg-red-900/20 rounded-lg border border-red-500/20">
                        Suspended by Court

@@ -88,9 +88,9 @@ export default function GiftModal({ postId: _postId, onClose, onGiftSent }: Gift
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative z-10 bg-[#0B091F] rounded-xl p-6 w-full max-w-lg border border-purple-500/30 shadow-2xl">
+      <div className="relative z-10 bg-[#0B091F] rounded-xl w-full max-w-lg border border-purple-500/30 shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <Gift className="w-5 h-5 text-white" />
@@ -109,7 +109,7 @@ export default function GiftModal({ postId: _postId, onClose, onGiftSent }: Gift
         </div>
 
         {/* Gift Grid */}
-        <div className="grid grid-cols-5 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="grid grid-cols-5 gap-3 overflow-y-auto px-6 py-2 custom-scrollbar flex-1 min-h-0">
           {gifts.map((gift) => (
             <button
               key={gift.id}
@@ -131,7 +131,7 @@ export default function GiftModal({ postId: _postId, onClose, onGiftSent }: Gift
 
         {/* Selected Gift Info & Send Button */}
         {selectedGift && (
-          <div className="mt-6 pt-4 border-t border-white/10">
+          <div className="p-6 pt-4 border-t border-white/10 flex-shrink-0 bg-[#0B091F] rounded-b-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-4xl">{selectedGift.icon}</span>

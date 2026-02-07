@@ -525,7 +525,6 @@ export default function TrollCityWall() {
                       {post.post_type === 'announcement' && <span className="px-2 py-0.5 bg-amber-500 text-black text-xs font-bold rounded border border-amber-400">PRESIDENT</span>}
                       {post.is_admin && <span className="px-2 py-0.5 bg-red-600 text-white text-xs font-bold rounded">ADMIN</span>}
                       {post.is_troll_officer && <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded">OFFICER</span>}
-                      {post.is_og_user && <span className="px-2 py-0.5 bg-yellow-600 text-white text-xs font-bold rounded">OG</span>}
                       <span className="flex items-center gap-1 text-gray-400 text-xs">
                         {getPostIcon(post.post_type)}
                         {post.post_type.replace('_', ' ')}

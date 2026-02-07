@@ -28,7 +28,8 @@ import {
   Home,
   PieChart,
   Shuffle,
-  Vote
+  Vote,
+  Mic
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { systemManagementRoutes } from '../adminRoutes'
@@ -196,6 +197,14 @@ export default function AdditionalTasksGrid({
           action: pickTab('user_search'),
           color: 'text-blue-400',
           bgColor: 'bg-blue-500/20'
+        },
+        {
+          icon: <Mic className="w-5 h-5" />,
+          label: 'Interview Room',
+          description: 'Conduct interviews',
+          action: pickTab('interview'),
+          color: 'text-indigo-400',
+          bgColor: 'bg-indigo-500/20'
         },
         {
           icon: <Ban className="w-5 h-5" />,

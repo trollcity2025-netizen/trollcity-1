@@ -194,6 +194,8 @@ export default function Notifications() {
       case 'ban':
       case 'mute':
       case 'report':
+      case 'stream.kick':
+      case 'stream.ban':
         return <Gavel className="w-5 h-5 text-red-600" />
       case 'new_follower': return <User className="w-5 h-5 text-blue-500" />
       case 'gift_received': return <Gift className="w-5 h-5 text-purple-500" />
@@ -209,14 +211,24 @@ export default function Notifications() {
       case 'application_submitted': return <FileText className="w-5 h-5 text-green-400" />
       case 'property_purchased':
       case 'item_purchased':
+      case 'coins.fast_spend':
+      case 'coins.manual_purchase':
         return <DollarSign className="w-5 h-5 text-green-400" />
+      case 'security.alert':
+        return <Shield className="w-5 h-5 text-red-500" />
+      case 'system.warning':
+        return <Bell className="w-5 h-5 text-orange-500" />
       default: return <Bell className="w-5 h-5 text-gray-400" />
     }
   }
 
   const handleNotificationClick = (notification: Notification) => {
-    // If there's an action_url in metadata, navigate to it
-    if (notification.metadata?.action_url) {
+    // 1. Standardized routing (Staff & New System)
+    if (notification.metadata?.route) {
+      navigate(notification.metadata.route)
+    }
+    // 2. Legacy fallback
+    else if (notification.metadata?.action_url) {
       navigate(notification.metadata.action_url)
     } else if (notification.type === 'new_follower' && notification.metadata?.follower_username) {
        // Fallback for old follower notifications

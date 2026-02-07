@@ -62,7 +62,7 @@ export default defineConfig({
   ],
   base: '/',
   server: {
-    host: true,
+    host: '0.0.0.0',
     port: 5176,
     strictPort: false,
     hmr: disableHmr ? false : { overlay: false },

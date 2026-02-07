@@ -41,7 +41,6 @@ interface StreamRow {
   broadcaster_id: string;
   status: string;
   is_live: boolean;
-  hls_url?: string;
   current_viewers: number;
   title: string;
   room_name: string;
@@ -161,7 +160,6 @@ export default function GovernmentStreams() {
             is_live,
             viewer_count,
             started_at,
-            hls_url,
             host:user_profiles!host_id(username, avatar_url)
         `)
         .order('started_at', { ascending: false });
@@ -197,7 +195,17 @@ export default function GovernmentStreams() {
   const handleEndPod = async (podId: string) => {
     if (!confirm('FORCE END this pod?')) return;
     try {
-        await supabase.from('pod_rooms').update({ is_live: false, ended_at: new Date().toISOString() }).eq('id', podId);
+        const { error } = await supabase
+            .from('pod_rooms')
+            .update({ 
+                is_live: false, 
+                status: 'ended',
+                ended_at: new Date().toISOString() 
+            })
+            .eq('id', podId);
+
+        if (error) throw error;
+        
         toast.success('Pod ended');
         fetchPods();
     } catch (e) {

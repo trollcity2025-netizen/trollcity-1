@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../lib/store';
 import { X, Megaphone } from 'lucide-react';
 
 interface Broadcast {
@@ -10,6 +11,7 @@ interface Broadcast {
 }
 
 export default function BroadcastAnnouncement() {
+  const { user } = useAuthStore();
   const [broadcastQueue, setBroadcastQueue] = useState<Broadcast[]>([]);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -60,13 +62,13 @@ export default function BroadcastAnnouncement() {
 
     // Poll for new broadcasts (every 2 minutes)
     const interval = setInterval(() => {
-        fetchBroadcasts();
+        if (user) fetchBroadcasts();
     }, 120000);
 
     return () => {
       clearInterval(interval);
     };
-  }, []);
+  }, [user]);
 
   const handleClose = () => {
     setIsVisible(false);

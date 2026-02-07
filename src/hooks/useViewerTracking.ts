@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
+import { getUserEntranceEffect } from '../lib/entranceEffects'
 
 /**
  * Tracks viewer presence using Supabase Realtime.
@@ -56,13 +57,25 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          // Fetch entrance effect before tracking
+          let entranceEffect = null;
+          try {
+             const effectData = await getUserEntranceEffect(user.id);
+             if (effectData?.config) {
+                 entranceEffect = effectData.config;
+             }
+          } catch (e) {
+             console.error('Failed to load entrance effect:', e);
+          }
+
           await channel.track({
             user_id: user.id,
             username: profile?.username || 'User',
             avatar_url: profile?.avatar_url,
             role: profile?.role,
             troll_role: profile?.troll_role,
-            joined_at: new Date().toISOString()
+            joined_at: new Date().toISOString(),
+            entrance_effect: entranceEffect
           })
         }
       })

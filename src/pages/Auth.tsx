@@ -9,10 +9,18 @@ import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 import InstallButton from '../components/InstallButton';
 import { trollCityTheme } from '../styles/trollCityTheme';
 
-const Auth = () => {
+interface AuthProps {
+  embedded?: boolean;
+  onClose?: () => void;
+  initialMode?: 'login' | 'signup';
+}
+
+const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
-  const initialIsLogin = searchParams.get('mode') === 'signup' ? false : true
+  const initialIsLogin = initialMode 
+    ? initialMode === 'login'
+    : searchParams.get('mode') === 'signup' ? false : true
   const [isLogin, setIsLogin] = useState(initialIsLogin)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -378,15 +386,18 @@ const Auth = () => {
 
   return (
     <>
-    <div className={`auth-container flex items-center justify-center min-h-screen ${trollCityTheme.backgrounds.primary} text-white overflow-x-hidden relative font-sans`}>
+    <div className={embedded ? "w-full text-white font-sans" : `auth-container flex items-center justify-center min-h-screen ${trollCityTheme.backgrounds.primary} text-white overflow-x-hidden relative font-sans`}>
       {/* Animated Background Gradients */}
+      {!embedded && (
       <div className="absolute inset-0 overflow-hidden">
         <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPurple}`} />
         <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPink}`} />
         <div className={`absolute inset-0 ${trollCityTheme.overlays.radialCyan}`} />
       </div>
+      )}
 
       {/* Floating Particles */}
+      {!embedded && (
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 15 }).map((_, i) => (
           <div
@@ -401,10 +412,11 @@ const Auth = () => {
           />
         ))}
       </div>
+      )}
 
       {/* Auth Card */}
-      <div className="relative z-10 w-full max-w-md px-4 py-8">
-        <div className="backdrop-blur-xl bg-slate-900/60 border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.4)] p-8">
+      <div className={embedded ? "w-full p-6" : "relative z-10 w-full max-w-md px-4 py-8"}>
+        <div className={embedded ? "" : "backdrop-blur-xl bg-slate-900/60 border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.4)] p-8"}>
           {/* Header */}
           <div className="flex flex-col items-center mb-8">
             <h1 className="text-4xl md:text-5xl font-black">

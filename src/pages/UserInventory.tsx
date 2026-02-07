@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shield, Phone, X, Car, Home } from 'lucide-react'
+import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shield, Phone, X, Car, Home, ChevronDown, ChevronUp } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
 // import { PERK_CONFIG } from '../lib/perkSystem'
 import { ENTRANCE_EFFECTS_MAP, ROLE_BASED_ENTRANCE_EFFECTS, USER_SPECIFIC_ENTRANCE_EFFECTS } from '../lib/entranceEffects'
@@ -26,6 +26,21 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
   const [userTitles, setUserTitles] = useState<any[]>([])
   const [userDeeds, setUserDeeds] = useState<any[]>([])
   const [selectedTitleDeed, setSelectedTitleDeed] = useState<any>(null)
+  const [expandedSections, setExpandedSections] = useState({
+    perks: true,
+    insurance: true,
+    roleBonus: true,
+    entranceEffects: true,
+    callSounds: true,
+    items: true
+  });
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   const loadInventory = useCallback(async () => {
     try {
@@ -255,6 +270,20 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       // Delete expired perks
       if (expiredPerks.length > 0) {
         const ids = expiredPerks.map(perk => perk.id);
+        
+        // Check for cosmetic perks that need profile cleanup
+        const hasGlowPerk = expiredPerks.some(p => p.perk_id === 'perk_global_highlight');
+        const hasRgbPerk = expiredPerks.some(p => p.perk_id === 'perk_rgb_username');
+        
+        if (hasGlowPerk || hasRgbPerk) {
+            const updates: any = {};
+            if (hasGlowPerk) updates.glowing_username_color = null;
+            if (hasRgbPerk) updates.rgb_username_expires_at = null;
+            
+            await supabase.from('user_profiles').update(updates).eq('id', user.id);
+            await refreshProfile();
+        }
+
         const { error } = await supabase
           .from('user_perks')
           .delete()
@@ -557,6 +586,8 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       }
       
       const perkEntry = perks.find((p) => p.id === perkId)
+      
+      // Handle RGB Username Toggle
       if (perkEntry?.perk_id === 'perk_rgb_username') {
         const rgbValue = isActive ? null : perkEntry.expires_at
         const { error: rgbError } = await supabase
@@ -570,6 +601,37 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
           await refreshProfile()
         }
       }
+
+      // Handle Glowing Username Toggle
+      if (perkEntry?.perk_id === 'perk_global_highlight') {
+        // If turning OFF (isActive is true), clear the color
+        // If turning ON (isActive is false), set default Gold if no color exists
+        // However, we can just set it to Gold (or the user's last preference if we had it)
+        // For now, we'll default to Gold on activation to ensure it works immediately.
+        const colorValue = isActive ? null : '#FFD700'; 
+        
+        // Try to recover last used color from perk metadata if available
+        let finalColor = colorValue;
+        if (!isActive && perkEntry.metadata?.glowColor) {
+            finalColor = perkEntry.metadata.glowColor;
+        }
+
+        const { error: glowError } = await supabase
+          .from('user_profiles')
+          .update({ glowing_username_color: finalColor })
+          .eq('id', user?.id)
+
+        if (glowError) {
+          console.error('Failed to update glowing username status:', glowError)
+        } else {
+          await refreshProfile()
+        }
+      }
+
+      // Update local perks state
+      setPerks(prev => prev.map(p => 
+        p.id === perkId ? { ...p, is_active: !isActive } : p
+      ));
 
       setActiveItems(prev => {
         const newSet = new Set(prev);
@@ -826,13 +888,20 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
             {/* Perks Section */}
             {perks.length > 0 && (
               <div>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Zap className="w-6 h-6 text-pink-400" />
-                  Active Perks
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-4"
+                  onClick={() => toggleSection('perks')}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Zap className="w-6 h-6 text-pink-400" />
+                    Active Perks
+                  </h2>
+                  {expandedSections.perks ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                </div>
+                {expandedSections.perks && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   {perks.map((perk) => {
-                    const isActive = activeItems.has(perk.id)
+                    const isActive = activeItems.has(perk.id) || perk.is_active
                     const isExpired = perk.expires_at && new Date(perk.expires_at) < new Date()
                     
                     return (
@@ -891,19 +960,27 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </div>
+                  )}
               </div>
             )}
 
             {/* Insurance Section */}
             {insurances.length > 0 && (
               <div>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Shield className="w-6 h-6 text-blue-400" />
-                  Insurance Plans
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-4"
+                  onClick={() => toggleSection('insurance')}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Shield className="w-6 h-6 text-blue-400" />
+                    Insurance Plans
+                  </h2>
+                  {expandedSections.insurance ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                </div>
+                {expandedSections.insurance && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   {insurances.map((ins) => {
-                    const isActive = activeItems.has(ins.id)
+                    const isActive = activeItems.has(ins.id) || ins.is_active
                     const isExpired = ins.expires_at && new Date(ins.expires_at) < new Date()
                     
                     return (
@@ -938,17 +1015,25 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </div>
+                )}
               </div>
             )}
 
             {/* Role Bonus Section */}
             {roleEffect && (
               <div className="mb-8">
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Crown className="w-6 h-6 text-yellow-400" />
-                  Role Bonus
-                </h2>
-                <div className={`${trollCityTheme.components.card} border-yellow-500/40 bg-gradient-to-r from-yellow-900/20 to-transparent`}>
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-4"
+                  onClick={() => toggleSection('roleBonus')}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Crown className="w-6 h-6 text-yellow-400" />
+                    Role Bonus
+                  </h2>
+                  {expandedSections.roleBonus ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                </div>
+                {expandedSections.roleBonus && (
+                  <div className={`${trollCityTheme.components.card} border-yellow-500/40 bg-gradient-to-r from-yellow-900/20 to-transparent animate-in fade-in slide-in-from-top-2 duration-300`}>
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-yellow-500/20 rounded-lg">
                       <Sparkles className="w-8 h-8 text-yellow-400" />
@@ -988,18 +1073,26 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                       </div>
                     </div>
                   </div>
+                  </div>
+                  )}
                 </div>
-              </div>
             )}
 
             {/* Entrance Effects Section */}
             {entranceEffects.length > 0 && (
               <div>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Sparkles className="w-6 h-6 text-yellow-400" />
-                  Entrance Effects
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-4"
+                  onClick={() => toggleSection('entranceEffects')}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Sparkles className="w-6 h-6 text-yellow-400" />
+                    Entrance Effects
+                  </h2>
+                  {expandedSections.entranceEffects ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                </div>
+                {expandedSections.entranceEffects && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   {entranceEffects.map((effect) => {
                     const isActive = activeItems.has(effect.effect_id);
                     const config = effect.config || {};
@@ -1089,17 +1182,25 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </div>
+                )}
               </div>
             )}
 
             {/* Call Sounds Section */}
             {callSounds.length > 0 && (
               <div>
-                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Phone className="w-6 h-6 text-cyan-300" />
-                  Call Sounds
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-4"
+                  onClick={() => toggleSection('callSounds')}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Phone className="w-6 h-6 text-cyan-300" />
+                    Call Sounds
+                  </h2>
+                  {expandedSections.callSounds ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                </div>
+                {expandedSections.callSounds && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   {callSounds.map((sound) => {
                     const isActive = sound.is_active;
                     const catalog = sound.catalog || {};
@@ -1146,17 +1247,25 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     );
                   })}
                 </div>
+                )}
               </div>
             )}
 
             {/* General Inventory Section */}
             {inventory.length > 0 && (
               <div>
-                 <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                  <Package className="w-6 h-6 text-purple-400" />
-                  Items
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-4"
+                  onClick={() => toggleSection('items')}
+                >
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Package className="w-6 h-6 text-purple-400" />
+                    Items
+                  </h2>
+                  {expandedSections.items ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                </div>
+                {expandedSections.items && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                   {inventory.map((item) => {
                     const isActive = activeItems.has(item.item_id)
                     const isDigital = ['effect', 'badge', 'digital'].includes(item.marketplace_item?.type)
@@ -1254,6 +1363,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                     )
                   })}
                 </div>
+                )}
               </div>
             )}
           </div>

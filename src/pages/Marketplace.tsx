@@ -14,12 +14,8 @@ export default function Marketplace() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) {
-      navigate('/auth', { replace: true })
-      return
-    }
     loadShops()
-  }, [user, navigate])
+  }, [])
 
   const loadShops = async () => {
     setLoading(true)
@@ -72,8 +68,6 @@ export default function Marketplace() {
     }
   }
 
-  if (!user) return null
-
   return (
     <div className={`min-h-screen ${trollCityTheme.backgrounds.app} ${trollCityTheme.text.primary} p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
@@ -87,15 +81,17 @@ export default function Marketplace() {
             All sales are final. Illegal items or sales are strictly prohibited and will result in enforcement actions.
           </div>
         </div>
-        <div className="flex justify-center">
-          <button
-            onClick={() => navigate('/sell')}
-            className={`${trollCityTheme.gradients.button} px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity text-white`}
-          >
-            <Plus className="w-4 h-4" />
-            Create Your Shop
-          </button>
-        </div>
+        {shops.length > 0 && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => navigate('/sell')}
+              className={`${trollCityTheme.gradients.button} px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity text-white`}
+            >
+              <Plus className="w-4 h-4" />
+              Create Your Shop
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { 
   Briefcase, Calendar, Clock, Users, Shield, Video, 
   CheckCircle, FileText, Star, ArrowRight,
-  Cross, Music, Gamepad2
+  Cross, Music, Gamepad2, X
 } from 'lucide-react'
 
 // Job position type
@@ -28,6 +28,12 @@ interface Application {
   status: string
   created_at: string
   reviewed_at?: string
+  answers?: Record<string, any>
+  user?: {
+    username: string
+    full_name?: string
+    avatar_url?: string
+  }
 }
 
 // Interview session type
@@ -171,12 +177,13 @@ const jobPositions: JobPosition[] = [
 export default function Career() {
   const navigate = useNavigate()
   const { profile, user } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'positions' | 'my_applications' | 'interviews'>('positions')
-  const [applications, setApplications] = useState<Application[]>([])
+  const [activeTab, setActiveTab] = useState<'positions' | 'my_applications' | 'interviews' | 'all_applications'>('positions')
+  const [applications, setApplications] = useState<any[]>([])
   const [interviews, setInterviews] = useState<InterviewSession[]>([])
   const [loading, setLoading] = useState(false)
   // const [selectedPosition, setSelectedPosition] = useState<JobPosition | null>(null)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduleTime, setScheduleTime] = useState('')
@@ -190,29 +197,55 @@ export default function Career() {
     profile?.troll_role === 'lead_troll_officer' || 
     profile?.is_lead_officer
 
-  // Fetch user's applications
+  // Consolidated data fetching
   useEffect(() => {
-    const fetchApplications = async () => {
+    const fetchData = async () => {
       if (!user) return
 
       try {
-        const { data, error } = await supabase
-          .from('applications')
-          .select('id, type, status, created_at, reviewed_at')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
+        setLoading(true)
+        
+        if (activeTab === 'my_applications') {
+          const { data, error } = await supabase
+            .from('applications')
+            .select('id, type, status, created_at, reviewed_at')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
 
-        if (error) throw error
-        setApplications(data || [])
+          if (error) throw error
+          setApplications(data || [])
+        } 
+        else if (activeTab === 'all_applications' && isAdminOrLead) {
+          const { data, error } = await supabase
+            .from('applications')
+            .select(`
+              id,
+              type,
+              status,
+              created_at,
+              reviewed_at,
+              user:user_profiles!applications_user_id_fkey (
+                username,
+                full_name
+              )
+            `)
+            .order('created_at', { ascending: false })
+            .limit(50)
+
+          if (error) throw error
+          setApplications(data || [])
+        }
       } catch (error) {
-        console.error('Error fetching applications:', error)
+        console.error('Error fetching data:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
-    fetchApplications()
-  }, [user])
+    fetchData()
+  }, [activeTab, user, isAdminOrLead])
 
-  // Fetch interviews for admin/lead
+  // Fetch interviews for admin/lead (kept separate as it populates a different state)
   useEffect(() => {
     const fetchInterviews = async () => {
       if (!isAdminOrLead) return
@@ -253,12 +286,13 @@ export default function Career() {
     fetchInterviews()
   }, [isAdminOrLead])
 
-  // Fetch pending applications for admin/lead
+  // Fetch ALL applications for admin/lead
   useEffect(() => {
-    const fetchPendingApplications = async () => {
-      if (!isAdminOrLead) return
+    const fetchAllApplications = async () => {
+      if (!isAdminOrLead || activeTab !== 'all_applications') return
 
       try {
+        setLoading(true)
         const { data, error } = await supabase
           .from('applications')
           .select(`
@@ -266,24 +300,27 @@ export default function Career() {
             type,
             status,
             created_at,
+            reviewed_at,
+            answers,
             user:user_profiles!applications_user_id_fkey (
               username,
-              full_name
+              full_name,
+              avatar_url
             )
           `)
-          .eq('status', 'pending')
           .order('created_at', { ascending: false })
-          .limit(10)
 
         if (error) throw error
         setApplications(data || [])
       } catch (error) {
-        console.error('Error fetching pending applications:', error)
+        console.error('Error fetching all applications:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
-    fetchPendingApplications()
-  }, [isAdminOrLead])
+    fetchAllApplications()
+  }, [isAdminOrLead, activeTab])
 
   const handleApply = (position: JobPosition) => {
     if (!user) {
@@ -503,24 +540,32 @@ export default function Career() {
           </div>
         )}
 
-        {activeTab === 'my_applications' && (
+        {(activeTab === 'my_applications' || activeTab === 'all_applications') && (
           <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden">
             {applications.length === 0 ? (
               <div className="p-12 text-center">
                 <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">No Applications Yet</h3>
-                <p className="text-gray-400 mb-6">You haven&apos;t submitted any applications yet.</p>
-                <button
-                  onClick={() => setActiveTab('positions')}
-                  className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors"
-                >
-                  Browse Positions
-                </button>
+                <h3 className="text-xl font-bold text-white mb-2">No Applications Found</h3>
+                <p className="text-gray-400 mb-6">
+                  {activeTab === 'my_applications' 
+                    ? "You haven't submitted any applications yet." 
+                    : "No applications found in the system."}
+                </p>
+                {activeTab === 'my_applications' && (
+                  <button
+                    onClick={() => setActiveTab('positions')}
+                    className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors"
+                  >
+                    Browse Positions
+                  </button>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-[#2C2C2C]">
                 {applications.map((app) => {
                   const position = jobPositions.find(p => p.id === app.type)
+                  const applicantName = app.user?.full_name || app.user?.username || 'Unknown User'
+                  
                   return (
                     <div key={app.id} className="p-6 flex items-center justify-between hover:bg-[#252525] transition-colors">
                       <div className="flex items-center gap-4">
@@ -529,12 +574,24 @@ export default function Career() {
                         </div>
                         <div>
                           <h4 className="font-semibold text-white capitalize">{app.type.replace(/_/g, ' ')}</h4>
-                          <p className="text-gray-400 text-sm">Applied {formatDate(app.created_at)}</p>
+                          <div className="flex flex-col gap-1">
+                            <p className="text-gray-400 text-sm">
+                              {activeTab === 'all_applications' ? (
+                                <span className="text-cyan-400 font-medium">{applicantName}</span>
+                              ) : (
+                                <span>Applied</span>
+                              )}
+                              <span className="mx-2">•</span>
+                              {formatDate(app.created_at)}
+                            </p>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
                         {getStatusBadge(app.status)}
-                        {app.status === 'pending' && isAdminOrLead && (
+                        
+                        {/* Admin Actions */}
+                        {isAdminOrLead && app.status === 'pending' && (
                           <button
                             onClick={() => {
                               setSelectedApplication(app)
@@ -543,24 +600,107 @@ export default function Career() {
                             className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
                           >
                             <Calendar className="w-4 h-4" />
-                            Schedule Interview
+                            Schedule
                           </button>
                         )}
+                        
+                        {/* Join Interview Button (for both admins and users) */}
                         {app.status === 'interview_scheduled' && (
                           <button
                             onClick={() => {
                               // Find the interview session for this application
                               const interview = interviews.find(i => i.application_id === app.id)
+                              // Note: 'interviews' state is only populated for admins/leads in this component
+                              // For regular users, we might need to fetch their specific interview or just route them
                               if (interview) {
                                 navigate(`/interview/${interview.id}`)
+                              } else if (!isAdminOrLead) {
+                                // Fallback for regular users who don't have the full interviews list loaded
+                                // We should probably fetch it or just try to navigate if we had the ID.
+                                // But we don't have the interview ID on the application object here.
+                                // We can rely on the user checking their email or we could fetch the interview for this app.
+                                // For now, let's just show a toast if we can't find it.
+                                toast.error('Interview details not found. Please contact support.')
                               }
                             }}
                             className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
                           >
                             <Video className="w-4 h-4" />
-                            Join Interview
+                            Join
                           </button>
                         )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+{/* 
+        {activeTab === 'my_applications' && ( // Disabled old block
+          <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden">
+             
+          </div>
+        )} 
+*/}
+
+        {activeTab === 'all_applications' && isAdminOrLead && (
+          <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden">
+            {allApplications.length === 0 ? (
+              <div className="p-12 text-center">
+                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-white mb-2">No Applications Found</h3>
+                <p className="text-gray-400">There are no applications in the system yet.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#2C2C2C]">
+                {allApplications.map((app) => {
+                  const position = jobPositions.find(p => p.id === app.type)
+                  return (
+                    <div key={app.id} className="p-6 flex items-center justify-between hover:bg-[#252525] transition-colors">
+                      <div className="flex items-center gap-4">
+                        <img 
+                          src={app.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.user?.username}`} 
+                          alt={app.user?.username}
+                          className="w-10 h-10 rounded-full bg-gray-800"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-white">{app.user?.full_name || app.user?.username}</h4>
+                            <span className="text-gray-500 text-xs">•</span>
+                            <span className="text-gray-400 text-sm capitalize">{app.type.replace(/_/g, ' ')}</span>
+                          </div>
+                          <p className="text-gray-500 text-xs">Applied {formatDate(app.created_at)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {getStatusBadge(app.status)}
+                        {app.status === 'pending' && (
+                          <button
+                            onClick={() => {
+                              setSelectedApplication(app)
+                              setShowScheduleModal(true)
+                            }}
+                            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
+                          >
+                            <Calendar className="w-4 h-4" />
+                            Schedule
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedApplication(app)
+                            // Ideally show details modal, but for now we can just schedule or view status
+                            // If we had a view modal, we'd open it here.
+                            // For now, let's just show the schedule modal if pending, or nothing extra.
+                          }}
+                          className="p-2 text-gray-400 hover:text-white transition-colors"
+                          title="View Details"
+                        >
+                          <FileText className="w-5 h-5" />
+                        </button>
                       </div>
                     </div>
                   )
@@ -608,6 +748,69 @@ export default function Career() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Application Details Modal */}
+        {showDetailsModal && selectedApplication && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white">Application Details</h3>
+                <button
+                  onClick={() => {
+                    setShowDetailsModal(false)
+                    setSelectedApplication(null)
+                  }}
+                  className="p-2 hover:bg-[#2C2C2C] rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <img 
+                    src={selectedApplication.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedApplication.user?.username}`} 
+                    alt={selectedApplication.user?.username}
+                    className="w-16 h-16 rounded-full bg-gray-800"
+                  />
+                  <div>
+                    <h4 className="text-lg font-semibold text-white">{selectedApplication.user?.full_name || selectedApplication.user?.username}</h4>
+                    <p className="text-gray-400 capitalize">{selectedApplication.type.replace(/_/g, ' ')}</p>
+                    <p className="text-sm text-gray-500">Applied on {formatDate(selectedApplication.created_at)}</p>
+                  </div>
+                  <div className="ml-auto">
+                    {getStatusBadge(selectedApplication.status)}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-white font-medium border-b border-[#2C2C2C] pb-2">Responses</h4>
+                  {selectedApplication.answers && Object.entries(selectedApplication.answers).map(([question, answer], index) => (
+                    <div key={index} className="bg-[#252525] p-4 rounded-lg">
+                      <p className="text-gray-400 text-sm mb-1">{question}</p>
+                      <p className="text-white whitespace-pre-wrap">{String(answer)}</p>
+                    </div>
+                  ))}
+                  {(!selectedApplication.answers || Object.keys(selectedApplication.answers).length === 0) && (
+                    <p className="text-gray-500 italic">No responses recorded.</p>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-[#2C2C2C]">
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false)
+                      setSelectedApplication(null)
+                    }}
+                    className="px-4 py-2 bg-[#2C2C2C] text-white rounded-lg hover:bg-[#3D3D3D] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

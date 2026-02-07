@@ -1,4 +1,4 @@
-export const OFFICER_BASE_HOURLY_COINS = 2500
+export const OFFICER_BASE_HOURLY_COINS = 0
 
 export function calculateOfficerBaseCoins(hoursWorked: number): number {
   if (!Number.isFinite(hoursWorked) || hoursWorked <= 0) {

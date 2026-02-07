@@ -12,11 +12,13 @@ import { toast } from 'sonner'
 import CitySummaryBar from './components/CitySummaryBar'
 import CityControlsHealth from './components/CityControlsHealth'
 import FinanceEconomyCenter from './components/FinanceEconomyCenter'
+import RevenueInventoryDashboard from './components/RevenueInventoryDashboard'
 import OperationsControlDeck from './components/OperationsControlDeck'
 import AdditionalTasksGrid from './components/AdditionalTasksGrid'
 import QuickActionsBar from './components/QuickActionsBar'
 import PresidentialOversightPanel from './components/PresidentialOversightPanel'
 import ProposalManagementPanel from './components/shared/ProposalManagementPanel'
+import AdminInterviewDashboard from '@/pages/admin/components/AdminInterviewDashboard'
 import ErrorBoundary from '../../components/ErrorBoundary'
 
 type StatState = {
@@ -111,6 +113,7 @@ type TabId =
   | 'agreements'
   | 'reports'
   | 'send_notifications'
+  | 'interview'
 
 interface CoinTransaction {
   amount: number | null;
@@ -165,20 +168,19 @@ export default function AdminDashboard() {
   })
 
   const [activeTab, setActiveTab] = useState<TabId>('connections')
-    // Real-time toast and push notifications for tab changes
-    useEffect(() => {
+  // Real-time toast for tab changes
+  useEffect(() => {
+    // Only show toast for critical tabs
+    if ([
+      'payouts',
+      'payout_queue',
+      'purchases',
+      'stream_monitor',
+      'send_notifications',
+    ].includes(activeTab)) {
       toast.info(`Switched to tab: ${activeTab}`)
-      // Optionally notify admins via ntfy.sh for critical tabs
-      if ([
-        'payouts',
-        'payout_queue',
-        'purchases',
-        'stream_monitor',
-        'send_notifications',
-      ].includes(activeTab)) {
-        sendGlobalNotification('Admin Tab Change', `Admin switched to ${activeTab} tab`).catch(() => {})
-      }
-    }, [activeTab])
+    }
+  }, [activeTab])
   const [liveKitStatus, setLiveKitStatus] = useState<unknown | null>(null)
   const [supabaseStatus, setSupabaseStatus] = useState<unknown | null>(null)
   const [paypalStatus, setPaypalStatus] = useState<unknown | null>(null)
@@ -1201,6 +1203,11 @@ export default function AdminDashboard() {
             economyLoading={economyLoading}
             onLoadEconomySummary={loadEconomySummary}
           />
+        </ErrorBoundary>
+
+        {/* Revenue & Inventory Sync */}
+        <ErrorBoundary>
+          <RevenueInventoryDashboard />
         </ErrorBoundary>
 
         {/* Operations & Control Deck */}

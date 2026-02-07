@@ -11,7 +11,6 @@ import { useAuthStore } from '../../lib/store';
 import { emitEvent as triggerEvent } from '../../lib/events';
 import PodParticipantBox from './PodParticipantBox';
 import PodChatBox from './PodChatBox';
-import HLSPlayer from '../../components/broadcast/HLSPlayer';
 
 interface Room {
   id: string;
@@ -19,7 +18,7 @@ interface Room {
   host_id: string;
   is_live: boolean;
   viewer_count: number;
-  hls_url?: string;
+  started_at?: string;
 }
 
 interface PodParticipant {
@@ -34,139 +33,6 @@ interface PodParticipant {
     avatar_url: string;
   };
 }
-
-// --- HLS / Listener View ---
-const PodListenerView = ({
-  room,
-  currentUser,
-  participantsData,
-  onRequestSpeak,
-  onCancelRequest,
-  isStaff
-}: {
-  room: Room,
-  currentUser: any,
-  participantsData: PodParticipant[],
-  onRequestSpeak: () => void,
-  onCancelRequest: () => void,
-  isStaff: boolean
-}) => {
-  const [showChat, setShowChat] = useState(true);
-  const myRecord = participantsData.find(p => p.user_id === currentUser?.id);
-  const isHandRaised = myRecord?.is_hand_raised;
-  const navigate = useNavigate();
-  
-  // Construct HLS URL based on room ID (assuming standard convention)
-  const playbackSrc = room.hls_url || room.id;
-
-  // Get Speakers for display list
-  const speakers = participantsData.filter(p => p.role === 'host' || p.role === 'speaker');
-
-  const handleEndPod = async () => {
-     if (confirm('Are you sure you want to FORCE END this pod?')) {
-        try {
-            await supabase
-                .from('pod_rooms')
-                .update({ is_live: false, ended_at: new Date().toISOString() })
-                .eq('id', room.id);
-            toast.success('Pod ended');
-            navigate('/pods');
-        } catch (error) {
-            console.error(error);
-            toast.error('Failed to end pod');
-        }
-     }
-  };
-
-  return (
-    <div className="flex h-screen bg-black text-white overflow-hidden font-sans">
-      {/* Main Content (HLS Player) */}
-      <div className={`flex-1 flex flex-col relative transition-all duration-300 ${showChat ? 'mr-80' : 'mr-0'}`}>
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-20 h-16 flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-3">
-             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-             <h1 className="text-lg font-bold truncate text-white shadow-black drop-shadow-md">{room.title}</h1>
-          </div>
-          
-          <div className="pointer-events-auto flex items-center gap-3">
-             <button 
-              onClick={() => setShowChat(!showChat)}
-              className={`p-2 rounded-full transition-colors backdrop-blur-md ${showChat ? 'bg-purple-600 text-white' : 'bg-gray-800/50 text-gray-200 hover:bg-gray-700/50'}`}
-            >
-              <MessageSquare className="w-5 h-5" />
-            </button>
-            
-            {isStaff ? (
-                <button 
-                  onClick={handleEndPod}
-                  className="px-4 py-1.5 bg-red-600/90 hover:bg-red-600 rounded-lg text-sm font-bold transition-colors"
-                >
-                  End Pod (Staff)
-                </button>
-            ) : (
-                <button 
-                  onClick={() => window.history.back()}
-                  className="px-4 py-1.5 bg-red-600/90 hover:bg-red-600 rounded-lg text-sm font-bold transition-colors"
-                >
-                  Leave
-                </button>
-            )}
-          </div>
-        </div>
-
-        {/* Video Area */}
-        <div className="flex-1 bg-zinc-900 relative">
-           <HLSPlayer 
-             src={playbackSrc} 
-             className="w-full h-full object-contain"
-           />
-           
-           {/* Speakers Overlay (Bottom Left) */}
-           <div className="absolute bottom-24 left-4 z-10 max-w-md">
-              <h3 className="text-xs font-bold text-white/70 uppercase tracking-wider mb-2">On Stage</h3>
-              <div className="flex flex-wrap gap-2">
-                 {speakers.map(s => (
-                   <div key={s.user_id} className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full pr-3 pl-1 py-1 border border-white/10">
-                      <img 
-                        src={s.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.user_id}`} 
-                        className="w-6 h-6 rounded-full bg-zinc-800"
-                        alt={s.user?.username}
-                      />
-                      <span className="text-xs font-medium">{s.user?.username}</span>
-                   </div>
-                 ))}
-              </div>
-           </div>
-        </div>
-
-        {/* Controls Bar */}
-        <div className="h-20 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 flex items-center justify-center z-20">
-            <button 
-                onClick={isHandRaised ? onCancelRequest : onRequestSpeak}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all transform hover:scale-105 ${
-                    isHandRaised 
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                    : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30'
-                }`}
-            >
-                <Hand className={`w-5 h-5 ${isHandRaised ? '' : 'animate-bounce'}`} />
-                {isHandRaised ? 'Cancel Request' : 'Request to Speak'}
-            </button>
-        </div>
-      </div>
-
-      {/* Chat Sidebar */}
-      <div className={`fixed right-0 top-0 bottom-0 w-80 bg-gray-900 border-l border-gray-800 transform transition-transform duration-300 z-40 ${showChat ? 'translate-x-0' : 'translate-x-full'}`}>
-         <PodChatBox 
-           roomId={room.id} 
-           currentUserId={currentUser?.id} 
-           isHost={false} 
-         />
-      </div>
-    </div>
-  );
-};
 
 // --- Active Speaker / Host View (LiveKit) ---
 const PodRoomContent = ({ 
@@ -202,6 +68,46 @@ const PodRoomContent = ({
   const myRecord = participantsData.find(p => p.user_id === currentUser?.id);
   const isSpeaker = isHost || myRecord?.role === 'speaker';
   const isHandRaised = myRecord?.is_hand_raised;
+
+  // Limits Check
+  useEffect(() => {
+    // 1. Duration Limit (1 hour)
+    if (room.started_at) {
+      const checkDuration = () => {
+        const startedAt = new Date(room.started_at!).getTime();
+        const duration = Date.now() - startedAt;
+        if (duration > 3600000) { // 1 hour in ms
+          toast.error("Pod time limit (1 hour) reached.");
+          if (isHost) {
+             // Optional: Force end?
+          }
+        }
+      };
+      checkDuration();
+      const interval = setInterval(checkDuration, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [room.started_at, isHost]);
+
+  // 2. Viewer Limit Check (10 viewers)
+  useEffect(() => {
+    // If I am a listener (not host/speaker) and count > 10, warn or kick
+    // Note: participantCount includes host/speakers. 
+    // If strict 10 viewers + host + guests, limit might be higher.
+    // Assuming "10 viewers" means total people watching who are not speakers.
+    
+    if (!isSpeaker && !isHost && !isStaff) {
+       // Check how many listeners there are
+       // simple approximation: participantCount - speakers count
+       const speakerCount = participantsData.filter(p => p.role === 'host' || p.role === 'speaker').length;
+       const viewerCount = participantCount - speakerCount;
+       
+       if (viewerCount > 10) {
+          toast.error("Viewer limit (10) reached. You cannot join this pod.");
+          navigate('/pods');
+       }
+    }
+  }, [participantCount, isSpeaker, isHost, isStaff, participantsData, navigate]);
 
   // Task Tracking: Listen to Pod
   useEffect(() => {
@@ -253,10 +159,12 @@ const PodRoomContent = ({
         // Host leaving ends the pod
         if (confirm('Ending the pod will disconnect all users. Continue?')) {
             try {
-                await supabase
+                const { error } = await supabase
                     .from('pod_rooms')
-                    .update({ is_live: false, ended_at: new Date().toISOString() })
+                    .update({ is_live: false, status: 'ended', ended_at: new Date().toISOString() })
                     .eq('id', room.id);
+
+                if (error) throw error;
                 
                 liveKitRoom.disconnect();
                 setTimeout(() => navigate('/pods'), 500);
@@ -282,10 +190,12 @@ const PodRoomContent = ({
      if (!isStaff) return;
      if (confirm('FORCE END this pod (Staff Action)?')) {
         try {
-            await supabase
+            const { error } = await supabase
                 .from('pod_rooms')
-                .update({ is_live: false, ended_at: new Date().toISOString() })
+                .update({ is_live: false, status: 'ended', ended_at: new Date().toISOString() })
                 .eq('id', room.id);
+
+            if (error) throw error;
             
             liveKitRoom.disconnect();
             setTimeout(() => navigate('/pods'), 500);
@@ -676,10 +586,10 @@ export default function TrollPodRoom() {
   };
 
   const handleApproveRequest = async (userId: string) => {
-      // Check speaker limit (10 including host)
-      const currentSpeakers = participantsData.filter(p => p.role === 'host' || p.role === 'speaker');
-      if (currentSpeakers.length >= 10) {
-        toast.error('Speaker limit reached (10 max including host)');
+      // Check speaker limit (3 guests max)
+      const currentSpeakers = participantsData.filter(p => p.role === 'speaker');
+      if (currentSpeakers.length >= 3) {
+        toast.error('Guest limit reached (3 guests max)');
         return;
       }
 
@@ -726,26 +636,11 @@ export default function TrollPodRoom() {
     userId: currentUser?.id,
     isHost: isHost,
     canPublish: canPublish,
-    enabled: canPublish // Only fetch token if we are going to publish (Host/Speaker)
+    enabled: true // Always fetch token for everyone (LiveKit only)
   });
 
   if (!room) return <div className="flex items-center justify-center h-screen bg-black text-white">Loading room...</div>;
   
-  // --- LISTENER MODE (HLS) ---
-  if (!canPublish) {
-     return (
-        <PodListenerView 
-            room={room}
-            currentUser={currentUser}
-            participantsData={participantsData}
-            onRequestSpeak={handleRequestSpeak}
-            onCancelRequest={handleCancelRequest}
-            isStaff={isStaff}
-        />
-     );
-  }
-
-  // --- SPEAKER MODE (LiveKit) ---
   if (isLoading) return <div className="flex items-center justify-center h-screen bg-black text-white">Connecting to Pod...</div>;
   if (error) return <div className="flex items-center justify-center h-screen bg-black text-white">Error: {error}</div>;
   if (!token || !serverUrl) return <div className="flex items-center justify-center h-screen bg-black text-white">Initializing connection...</div>;
@@ -755,6 +650,8 @@ export default function TrollPodRoom() {
       token={token}
       serverUrl={serverUrl}
       connect={true}
+      video={true}
+      audio={true}
       data-lk-theme="default"
       style={{ height: '100vh' }}
       onDisconnected={() => navigate('/pods')}

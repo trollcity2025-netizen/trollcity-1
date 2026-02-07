@@ -10,7 +10,7 @@ DECLARE
 BEGIN
     -- Check if officer is active (not suspended)
     SELECT is_officer_active INTO v_is_active
-    FROM profiles
+    FROM user_profiles
     WHERE id = p_officer_id;
 
     -- If we want to enforce suspension preventing clock-in:
@@ -37,7 +37,7 @@ BEGIN
     VALUES (p_officer_id, now());
 
     -- Update last activity only
-    UPDATE profiles 
+    UPDATE user_profiles 
     SET last_activity_at = now()
     WHERE id = p_officer_id;
 
@@ -97,7 +97,7 @@ BEGIN
     WHERE id = p_session_id;
 
     -- Update last activity only, DO NOT set is_officer_active to false
-    UPDATE profiles 
+    UPDATE user_profiles 
     SET last_activity_at = now()
     WHERE id = v_officer_id;
 
@@ -112,7 +112,7 @@ $$;
 
 -- 3. Restore active status for officers who were accidentally suspended by the bug
 -- We assume anyone with a role of 'troll_officer' or 'lead_officer' should be active
-UPDATE profiles
+UPDATE user_profiles
 SET is_officer_active = true
 WHERE role IN ('troll_officer', 'lead_officer')
 AND is_officer_active = false;

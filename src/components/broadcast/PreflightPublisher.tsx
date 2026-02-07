@@ -14,12 +14,7 @@ export default function PreflightPublisher({ stream, onPublished }: PreflightPub
     useEffect(() => {
         if (!localParticipant || hasPublished.current || !stream) return;
 
-        // Strict requirement: Must be connected and have permissions object
-        if (localParticipant.state !== 'connected') {
-            console.log('[PreflightPublisher] Waiting for connection...', localParticipant.state);
-            return;
-        }
-
+        // Check permissions - these are available on localParticipant
         if (!localParticipant.permissions) {
             console.log('[PreflightPublisher] Waiting for permissions object...');
             return;
@@ -33,8 +28,7 @@ export default function PreflightPublisher({ stream, onPublished }: PreflightPub
         const publish = async () => {
             console.log('[PreflightPublisher] Publishing preflight stream tracks...', {
                 permissions: localParticipant.permissions,
-                identity: localParticipant.identity,
-                state: localParticipant.state
+                identity: localParticipant.identity
             });
 
             try {
@@ -50,12 +44,16 @@ export default function PreflightPublisher({ stream, onPublished }: PreflightPub
                 }
 
                 if (videoTrack && videoTrack.readyState === 'live') {
+                    // Force enable track to ensure it starts ON as requested
+                    videoTrack.enabled = true;
                     await localParticipant.publishTrack(videoTrack, { 
                         name: 'camera',
                         source: Track.Source.Camera 
                     });
                 }
                 if (audioTrack && audioTrack.readyState === 'live') {
+                    // Force enable track to ensure it starts ON as requested
+                    audioTrack.enabled = true;
                     await localParticipant.publishTrack(audioTrack, { 
                         name: 'microphone',
                         source: Track.Source.Microphone 
@@ -75,9 +73,7 @@ export default function PreflightPublisher({ stream, onPublished }: PreflightPub
     }, [
         localParticipant, 
         stream, 
-        onPublished, 
-        // We explicitly depend on state and permissions to re-trigger when they change
-        localParticipant?.state,
+        onPublished,
         localParticipant?.permissions
     ]);
 

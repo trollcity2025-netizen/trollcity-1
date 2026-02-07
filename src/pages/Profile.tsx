@@ -25,7 +25,7 @@ function ProfileInner() {
   const { username, userId } = useParams();
   const navigate = useNavigate();
   const { user: currentUser, profile: currentUserProfile, refreshProfile } = useAuthStore();
-  const { fetchXP, subscribeToXP, unsubscribe } = useXPStore();
+  const { fetchXP, subscribeToXP, unsubscribe, level: xpStoreLevel } = useXPStore();
   
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -469,7 +469,15 @@ function ProfileInner() {
       )) {
           // Use cached data immediately
           console.log('Using cached profile from store');
-          setProfile(currentUserProfile);
+          
+          const effectiveProfile = { ...currentUserProfile };
+          // If we have a fresher level in XP store, use it to prevent flicker
+          if (xpStoreLevel && xpStoreLevel > (effectiveProfile.level || 0)) {
+            console.log('Using fresher level from XP store:', xpStoreLevel);
+            effectiveProfile.level = xpStoreLevel;
+          }
+          
+          setProfile(effectiveProfile);
           setLoading(false);
           
           if (currentUser?.id === currentUserProfile.id) {
@@ -520,14 +528,13 @@ function ProfileInner() {
           console.log('Full banner URL with cache bust:', `${data.banner_url}${data.banner_url.includes('?') ? '&' : '?'}cb=${data.updated_at || Date.now()}`)
         }
         
-        setProfile(data);
         if (currentUser?.id === data.id) {
           setMessageCost(data.message_cost || 0);
           setViewCost(data.profile_view_cost || 0);
         }
 
-        // Fetch follower/following/posts counts in parallel for performance
-        const [followersRes, followingRes, postsRes] = await Promise.all([
+        // Fetch follower/following/posts counts and user stats in parallel for performance
+        const [followersRes, followingRes, postsRes, statsRes] = await Promise.all([
           supabase
             .from('user_follows')
             .select('*', { count: 'exact', head: true })
@@ -539,8 +546,21 @@ function ProfileInner() {
           supabase
             .from('troll_posts')
             .select('*', { count: 'exact', head: true })
+            .eq('user_id', data.id),
+          supabase
+            .from('user_stats')
+            .select('level')
             .eq('user_id', data.id)
+            .maybeSingle()
         ]);
+
+        // Override profile level with stats level if available (source of truth)
+        if (statsRes.data?.level) {
+          console.log('Overriding profile level with stats level:', statsRes.data.level);
+          data.level = statsRes.data.level;
+        }
+        
+        setProfile(data);
           
         setFollowersCount(followersRes.count || 0);
         setFollowingCount(followingRes.count || 0);
@@ -947,7 +967,7 @@ function ProfileInner() {
         
         <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="max-w-2xl prose prose-invert prose-sm">
-            <p>{profile.bio || "No bio provided."}</p>
+            <p>{(profile.bio || '').replace(/(https?:\/\/[^\s]+)/g, '').trim() || "No bio provided."}</p>
           </div>
           <div className="w-full max-w-sm md:max-w-xs">
             <CreditScoreBadge

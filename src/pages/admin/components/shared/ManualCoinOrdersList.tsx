@@ -13,8 +13,10 @@ interface ManualOrder {
   id: string
   user_id: string
   package_id: string
-  amount: number
-  price: string
+  coins: number
+  amount_usd: number
+  price?: string // legacy fallback
+  amount?: number // legacy fallback
   payment_method: string
   status: string
   purchase_type?: string
@@ -207,13 +209,13 @@ export default function ManualCoinOrdersList() {
                   <div className="text-xs text-slate-500">Amount</div>
                   <div className="text-sm text-yellow-400 font-bold flex items-center gap-1">
                     <img src="/assets/icons/coin.png" className="w-3 h-3" alt="coins" onError={(e) => e.currentTarget.style.display = 'none'} />
-                    {(order.amount || 0).toLocaleString()}
+                    {(order.coins || order.amount || 0).toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Price</div>
                   <div className="text-sm text-green-400 font-bold">
-                    {order.price}
+                    {order.amount_usd ? `$${order.amount_usd.toFixed(2)}` : (order.price || 'N/A')}
                   </div>
                 </div>
                 <div>
@@ -280,11 +282,11 @@ export default function ManualCoinOrdersList() {
                         </div>
                         <div className="flex justify-between">
                             <span className="text-slate-400">Amount</span>
-                            <span className="text-yellow-400 font-bold">{(confirmApproval.amount || 0).toLocaleString()} coins</span>
+                            <span className="text-yellow-400 font-bold">{(confirmApproval.coins || confirmApproval.amount || 0).toLocaleString()} coins</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-slate-400">Price</span>
-                            <span className="text-green-400 font-bold">{confirmApproval.price}</span>
+                            <span className="text-green-400 font-bold">{confirmApproval.amount_usd ? `$${confirmApproval.amount_usd.toFixed(2)}` : (confirmApproval.price || 'N/A')}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-slate-400">Method</span>

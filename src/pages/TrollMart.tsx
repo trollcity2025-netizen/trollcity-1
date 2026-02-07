@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
-import { deductCoins } from '../lib/coinTransactions'
+import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { ShoppingBag, Coins } from 'lucide-react'
 

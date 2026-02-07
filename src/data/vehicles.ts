@@ -207,7 +207,7 @@ export const cars: Car[] = [
     armor: 32,
     colorFrom: "#1f2937",
     colorTo: "#111827",
-    image: "/assets/cars/vehicle_1_original.png",
+    image: "/assets/cars/vanta_lx.png",
     modelUrl: "/models/vehicles/luxe_voyager.glb",
   },
   {
@@ -220,7 +220,7 @@ export const cars: Car[] = [
     armor: 42,
     colorFrom: "#312e81",
     colorTo: "#9333ea",
-    image: "/assets/cars/vehicle_2_original.png",
+    image: "/assets/cars/vehicle_6_original.png",
     modelUrl: "/models/vehicles/eclipse_seraph.glb",
   },
 ];

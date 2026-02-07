@@ -2,14 +2,56 @@ import React, { useState, useEffect } from 'react';
 
 const DRIVING_MANUAL_KEY = 'tmv_driving_manual_acknowledged';
 
-const manualText = `TROLL CITY™\nTMV OFFICIAL DRIVING MANUAL\n\nIMPORTANT NOTICE\nThis manual may only be read once. By proceeding, you acknowledge full responsibility for\nunderstanding Troll City transportation laws. Failure to comply may result in penalties, court summons,\nor loss of driving privileges.\n\nSpeed Regulations\nAll vehicles operating within Troll City are subject to a maximum speed regulation. Speed enforcement\nis automated and monitored continuously. Exceeding the legal limit is considered a serious offense and\nmay lead to immediate penalties or court review.\n\nLicense Validity\nEvery driver must maintain an active TMV-issued license. Driving with an expired license is a violation\nof Troll City law and automatically triggers a court summons. Ignorance of expiration status is not an\nacceptable defense.\n\nLicense Renewal Cycle\nTMV licenses are issued on a limited validity cycle. Drivers are required to renew their license every 30\ndays to retain driving privileges. Failure to renew on time results in automatic suspension.\n\nFuel Responsibility\nFuel expenses are the responsibility of all drivers except authorized staff. Gas usage is tracked per\ndriving action and deducted automatically from your fuel reserves.\n\nFuel Consumption\nEach vehicle action consumes fuel at a fixed rate. Operators are expected to monitor fuel levels and\nplan refills accordingly to avoid immobilization or penalties.\n\nSuspended Licenses\nDriving while your license is suspended is strictly prohibited. Any attempt to operate a vehicle under\nsuspension will result in immediate enforcement actions.\n\nFuel Refill Policy\nFuel refills are not free. Refills are purchased using Troll City coins and are priced incrementally. Abuse\nof fuel systems or attempts to bypass charges will be prosecuted.\n\nTMV Authority\nTMV stands for Troll Motor Vehicle. TMV is the sole authority governing vehicle registration, driver\nlicensing, fuel enforcement, and compliance monitoring within Troll City.\n\nVehicle Status Monitoring\nAll drivers are required to regularly review their vehicle status. License validity, fuel levels, and\nviolations are accessible through the official TMV Dashboard.\n\nTest Failure\nFailure to pass the TMV certification exam does not permanently bar access. Drivers may retest after\nreviewing all applicable regulations. Repeated failures may trigger review.\n\nACKNOWLEDGEMENT\nBy proceeding to the TMV examination, you confirm that you have read and understood this manual in\nits entirety. Troll City recognizes no appeals based on failure to read or misinterpretation of these rules.`;
+const manualText = `TROLL CITY™
+TMV OFFICIAL DRIVING MANUAL
+
+SECTION 1: SPEED REGULATIONS
+The absolute maximum speed limit in Troll City is 40 mph. Speeding is a violation of public safety.
+
+SECTION 2: LICENSING LAWS
+All drivers must maintain a valid license. You are required to renew your license Every 30 days.
+If you are caught driving with an expired license, the penalty is a Court Summons.
+Note: Admins are exempt and never need to renew.
+
+SECTION 3: FUEL ECONOMY
+Fuel is not free. Everyone except Staff is required to pay for their own gas.
+Each driving action consumes exactly 1% of your fuel tank.
+When refilling, the standard rate is 300 coins per 5% of fuel.
+
+SECTION 4: SUSPENSIONS & RESTRICTIONS
+Driving with a suspended license is generally prohibited. However, under specific Troll City statutes, you may drive with a suspended license Only at night.
+
+SECTION 5: GENERAL INFORMATION
+TMV stands for Troll Motor Vehicle.
+Always check your vehicle status, insurance, and license details at the TMV Dashboard.
+If you fail the written test, the procedure is simple: Try again.
+`;
 
 export default function TMVDrivingManual({ onAcknowledge }: { onAcknowledge?: () => void }) {
   const [acknowledged, setAcknowledged] = useState(false);
 
+  const [timeLeft, setTimeLeft] = useState(60);
+
   useEffect(() => {
     const seen = localStorage.getItem(DRIVING_MANUAL_KEY);
-    if (seen) setAcknowledged(true);
+    if (seen) {
+      setAcknowledged(true);
+      if (onAcknowledge) onAcknowledge();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleAcknowledge();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const handleAcknowledge = () => {
@@ -28,7 +70,7 @@ export default function TMVDrivingManual({ onAcknowledge }: { onAcknowledge?: ()
         className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-lg mt-4 shadow-lg"
         onClick={handleAcknowledge}
       >
-        I have read and understand the TMV Driving Manual
+        I have read and understand the TMV Driving Manual ({timeLeft}s)
       </button>
     </div>
   );

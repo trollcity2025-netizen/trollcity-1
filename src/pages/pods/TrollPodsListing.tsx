@@ -6,6 +6,7 @@ import { trollCityTheme } from '../../styles/trollCityTheme';
 import { Mic, Users, Plus, Radio, Headphones } from 'lucide-react';
 import { toast } from 'sonner';
 import { emitEvent } from '../../lib/events';
+// import { getHlsUrl } from '../../lib/hls'; // Removed as unused
 
 interface PodRoom {
   id: string;
@@ -84,6 +85,19 @@ export default function TrollPodsListing() {
     if (!newRoomTitle.trim()) return;
 
     try {
+      // Check active pods limit (Max 5)
+      const { count, error: countError } = await supabase
+        .from('pod_rooms')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_live', true);
+        
+      if (countError) throw countError;
+      
+      if (count !== null && count >= 5) {
+        toast.error('System Limit: Maximum of 5 active pods allowed.');
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('You must be logged in to start a pod');
@@ -106,8 +120,7 @@ export default function TrollPodsListing() {
       // Update HLS URL immediately
       // This ensures we never construct URLs on the client side
       // MATCHING WEBHOOK CONFIG: streams/<id>/master.m3u8
-      // Use relative path for Vercel Proxy
-      const hlsUrl = `/streams/${data.id}/master.m3u8`;
+      const hlsUrl = getHlsUrl(data.id);
       await supabase
         .from('pod_rooms')
         .update({ hls_url: hlsUrl })

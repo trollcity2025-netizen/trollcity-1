@@ -1,5 +1,3 @@
-
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -19,17 +17,17 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("Missing Authorization header");
+      return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
 
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -39,10 +37,11 @@ Deno.serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    
+
+    // Fetch Profile and Role
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("user_profiles")
-      .select("role, is_admin, is_lead_officer, is_troll_officer")
+      .select("*")
       .eq("id", user.id)
       .single();
 
@@ -53,1177 +52,216 @@ Deno.serve(async (req) => {
       });
     }
 
-    const isLeadOfficer = 
-      profile.role === 'lead_troll_officer' || 
-      profile.is_lead_officer === true || 
-      profile.is_admin === true || 
-      profile.role === 'admin';
+    const isOfficer = profile.role === 'officer' || profile.role === 'lead_troll_officer' || profile.role === 'admin' || profile.is_admin;
+    const isLeadOfficer = profile.role === 'lead_troll_officer' || profile.role === 'admin' || profile.is_lead_officer === true || profile.is_admin === true;
 
-    const isTrollOfficer = 
-      profile.role === 'troll_officer' || 
-      profile.is_troll_officer === true || 
-      isLeadOfficer;
-
-    let body;
-    try {
-      const text = await req.text();
-      body = text ? JSON.parse(text) : {};
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { action, ...params } = body;
-
-    if (!action) {
-      return new Response(JSON.stringify({ error: "Missing action parameter" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check if user is broadcaster for the relevant stream
-    let isBroadcaster = false;
-    let isModerator = false;
-    if (params.streamId) {
-      const { data: stream } = await supabaseAdmin
-        .from('streams')
-        .select('broadcaster_id')
-        .eq('id', params.streamId)
-        .single();
-      
-      if (stream && stream.broadcaster_id === user.id) {
-        isBroadcaster = true;
-      }
-
-      // Check for Moderator status
-      const { data: participant } = await supabaseAdmin
-        .from('streams_participants')
-        .select('is_moderator')
-        .eq('stream_id', params.streamId)
-        .eq('user_id', user.id)
-        .single();
-      
-      if (participant?.is_moderator) {
-        isModerator = true;
-      }
-    }
-
-    // Authorization Check
-    const allowedBroadcasterActions = [
-      'kick_participant', 
-      'assign_moderator', 
-      'remove_moderator', 
-      'mute_participant', 
-      'disable_chat', 
-      'clear_seat_ban',
-      'end_stream',
-      'mute_media',
-      'set_frame_mode',
-      'alert_officers',
-      'start_stream',
-      'troll_mic_mute',
-      'troll_mic_unmute',
-      'troll_immunity',
-      'troll_kick',
-      'notify_user',
-      'log_officer_action',
-      'log_theme_event',
-      'start_troll_battle',
-      'assign_battle_guests',
-      'assign_broadofficer',
-      'remove_broadofficer',
-      'update_box_count',
-      'clear_stage',
-      'set_price'
-    ];
-    
-    // Moderators can do subset? For now assume Moderators can do moderation stuff.
-    // Also allow "Troll Actions" for regular users (paid).
-    const paidActions = ['troll_mic_mute', 'troll_mic_unmute', 'troll_immunity', 'troll_kick'];
-    
-    // Check if action requires privilege or can be paid
-    const isPaidAction = paidActions.includes(action);
-
-    // Public actions (anyone can report or gift)
-    const publicActions = [
-      'report_user', 
-      'send_gift', 
-      'send_stream_message', 
-      'join_stream_box', 
-      'claim_watch_xp', 
-      'verify_stream_password', 
-      'check_broadofficer',
-      'find_opponent',
-      'skip_opponent',
-      'get_stream',
-      'get_stream_status',
-      'get_quick_gifts',
-      'get_stream_box_count',
-      'get_stream_theme',
-      'ensure_dm_conversation',
-      'get_stream_viewers',
-      'get_active_battle'
-    ];
-    
-    // Moderator privileges
-    const allowedModeratorActions = [
-        'kick_participant',
-        'mute_participant',
-        'disable_chat',
-        'troll_mic_mute',
-        'troll_mic_unmute',
-        'troll_kick',
-        'alert_officers', // Moderators should be able to alert officers
-        'log_officer_action'
-    ];
-
-    const isAuthorized = 
-        isTrollOfficer || 
-        (isBroadcaster && allowedBroadcasterActions.includes(action)) ||
-        (isModerator && allowedModeratorActions.includes(action)) ||
-        publicActions.includes(action) ||
-        isPaidAction; // Allow paid actions to proceed to case logic (where fee is enforced)
-
-    if (!isAuthorized) {
-      return new Response(JSON.stringify({ error: "Forbidden: Insufficient permissions" }), {
+    if (!isOfficer) {
+      return new Response(JSON.stringify({ error: "Forbidden: Officer access required" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const { action, ...params } = await req.json();
     let result;
 
     switch (action) {
-      case "get_moderation_context": {
-        result = {
-          success: true,
-          currentUser: user,
-          officerProfile: profile,
-          isPrivileged: isTrollOfficer || isBroadcaster || isModerator,
-          isBroadcaster,
-          isModerator,
-          isTrollOfficer
-        };
-        break;
-      }
-
-      case "block_user": {
-        const { targetUserId } = params;
-        if (!targetUserId) throw new Error("Missing targetUserId");
-        
-        // Check if already blocked to avoid error? Or upsert?
-        // Usually insert.
+      case "clock_in": {
         const { error } = await supabaseAdmin
-          .from('user_relationships')
+          .from('officer_timesheets')
           .insert({
-            follower_id: user.id,
-            following_id: targetUserId,
-            status: 'blocked'
+            officer_id: user.id,
+            clock_in: new Date().toISOString(),
+            status: 'active'
           });
-          
-        if (error) {
-             // If duplicate, maybe update?
-             if (error.code === '23505') { // Unique violation
-                  const { error: updateError } = await supabaseAdmin
-                    .from('user_relationships')
-                    .update({ status: 'blocked' })
-                    .eq('follower_id', user.id)
-                    .eq('following_id', targetUserId);
-                  if (updateError) throw updateError;
-             } else {
-                 throw error;
-             }
-        }
-        
-        result = { success: true };
-        break;
-      }
-
-      case "report_user": {
-        const { targetUserId, streamId, reason, description } = params;
-        if (!targetUserId || !reason) throw new Error("Missing required fields");
-
-        const { error } = await supabaseAdmin
-          .from('user_reports')
-          .insert({
-             reporter_id: user.id,
-             reported_id: targetUserId,
-             reason,
-             description: description || '',
-             stream_id: streamId || null,
-             status: 'pending'
-          });
-
         if (error) throw error;
         result = { success: true };
         break;
       }
 
-      case "join_stream_box": {
-        const { room, seatIndex, username, avatarUrl, role, metadata, joinPrice } = params;
-        if (!room || seatIndex === undefined) throw new Error("Missing required fields");
-
-        const safeSeatIndex = Number(seatIndex);
-        const userId = user.id;
-
-        // 1. Check for bans
-        const { data: banRow, error: _banError } = await supabaseAdmin
-          .from("broadcast_seat_bans")
-          .select("banned_until")
-          .eq("room", room)
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (banRow) {
-          const bannedUntil = banRow.banned_until ? new Date(banRow.banned_until) : null;
-          const now = new Date();
-          if (!bannedUntil || bannedUntil > now) {
-             throw new Error("You are temporarily restricted from joining the guest box.");
-          }
-        }
-
-        // 2. Deduct Coins if needed
-        if (joinPrice && joinPrice > 0) {
-           const { data: _deductData, error: deductError } = await supabaseAdmin.rpc('deduct_user_troll_coins', {
-              p_user_id: userId,
-              p_amount: String(joinPrice),
-              p_coin_type: 'troll_coins'
-           });
-
-           if (deductError) {
-              console.error("Deduction failed:", deductError);
-              throw new Error("Failed to process payment: " + deductError.message);
-           }
-           
-           // Log transaction
-           await supabaseAdmin.from('coin_transactions').insert({
-              user_id: userId,
-              amount: -joinPrice,
-              transaction_type: 'perk_purchase',
-              coin_type: 'troll_coins',
-              description: `Joined seat ${safeSeatIndex} in broadcast`,
-              metadata: {
-                 seatIndex: safeSeatIndex,
-                 room,
-                 ...metadata
-              }
-           });
-        }
-
-        // 3. Claim Seat
-        const { data, error } = await supabaseAdmin.rpc("claim_broadcast_seat", {
-          p_room: room,
-          p_seat_index: safeSeatIndex,
-          p_user_id: userId,
-          p_username: username ?? profile.username,
-          p_avatar_url: avatarUrl ?? profile.avatar_url ?? null,
-          p_role: role ?? profile.role,
-          p_metadata: metadata ?? {},
-        });
-
+      case "clock_out": {
+        const { error } = await supabaseAdmin
+          .from('officer_timesheets')
+          .update({
+            clock_out: new Date().toISOString(),
+            status: 'completed'
+          })
+          .eq('officer_id', user.id)
+          .eq('status', 'active');
         if (error) throw error;
-        result = { success: true, seat: data?.[0] };
+        result = { success: true };
         break;
       }
 
-      case "leave_stream_box": {
-        const { room, seatIndex, force, banMinutes, banPermanent } = params;
-        if (!room) throw new Error("Missing room");
-
-        // Permission check for force removal
-        if (force) {
-            // Re-verify authority just in case
-            if (!isTrollOfficer && !isBroadcaster && !isModerator) {
-                throw new Error("Unauthorized to force remove users");
-            }
-        }
-
-        const { data, error } = await supabaseAdmin.rpc("release_broadcast_seat", {
-            p_room: room,
-            p_seat_index: seatIndex ? Number(seatIndex) : null,
-            p_user_id: user.id, 
-            p_force: Boolean(force)
-        });
-
+      case "create_warrant": {
+        const { targetUserId, reason, fineAmount } = params;
+        const { error } = await supabaseAdmin
+          .from('officer_warrants')
+          .insert({
+            officer_id: user.id,
+            target_user_id: targetUserId,
+            reason,
+            fine_amount: fineAmount,
+            status: 'active'
+          });
         if (error) throw error;
-
-        // Handle banning if requested and authorized
-        if ((banMinutes || banPermanent) && (isTrollOfficer || isBroadcaster || isModerator)) {
-             const bannedUntil = banPermanent
-              ? null
-              : new Date(Date.now() + (Number(banMinutes) * 60 * 1000)).toISOString();
-
-             await supabaseAdmin
-                .from("broadcast_seat_bans")
-                .upsert(
-                  {
-                    room,
-                    user_id: data?.[0]?.user_id, // We need the user_id of the person who was removed. 
-                    banned_until: bannedUntil,
-                    created_by: user.id,
-                  },
-                  { onConflict: "room,user_id" }
-                );
-        }
-
-        result = { success: true, seat: data?.[0] };
-        break;
-      }
-
-      case "list_stream_seats": {
-         const { room } = params;
-         if (!room) throw new Error("Missing room");
-         
-         const { data: seats, error } = await supabaseAdmin
-            .from("broadcast_seats")
-            .select("*")
-            .eq("room", room);
-            
-         if (error) throw error;
-         result = { success: true, seats: seats || [] };
-         break;
-      }
-
-      case "get_seat_bans": {
-        const { room } = params;
-        if (!room) throw new Error("Missing room");
-
-        if (!isTrollOfficer && !isBroadcaster && !isModerator) {
-           throw new Error("Unauthorized to view ban list");
-        }
-
-        const { data, error } = await supabaseAdmin
-          .from('broadcast_seat_bans')
-          .select('id,user_id,banned_until,created_at,reason')
-          .eq('room', room)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        result = { success: true, bans: data };
+        result = { success: true };
         break;
       }
       
-      case "get_stream": {
-        const { streamId } = params;
-        if (!streamId) throw new Error("Missing streamId");
-
-        const { data, error } = await supabaseAdmin
-            .from('streams')
-            .select('*')
-            .eq('id', streamId)
-            .single();
-
-        if (error) throw error;
-        result = { success: true, stream: data };
-        break;
-      }
-
-      case "get_stream_status": {
-        const { streamId } = params;
-        if (!streamId) throw new Error("Missing streamId");
-
-        const { data, error } = await supabaseAdmin
-            .from('streams')
-            .select('status, is_live')
-            .eq('id', streamId)
-            .single();
-
-        if (error) throw error;
-        result = { success: true, status: data };
-        break;
-      }
-
-      case "get_quick_gifts": {
-        const { data, error } = await supabaseAdmin
-            .from('gift_items')
-            .select('*')
-            .order('value', { ascending: true });
-            
-        if (error) throw error;
-        result = { success: true, gifts: data || [] };
-        break;
-      }
-
-      case "send_stream_message": {
-        const { streamId, content, type } = params;
-        if (!streamId || !content) throw new Error("Missing content");
-
+      case "resolve_warrant": {
+        const { warrantId, resolution } = params;
         const { error } = await supabaseAdmin
-            .from('stream_chat_messages')
-            .insert({
-                stream_id: streamId,
-                user_id: user.id,
-                content,
-                type: type || 'chat',
-                is_visible: true
-            });
-
+          .from('officer_warrants')
+          .update({
+             status: 'resolved',
+             resolution_notes: resolution,
+             resolved_at: new Date().toISOString(),
+             resolved_by: user.id
+          })
+          .eq('id', warrantId);
         if (error) throw error;
         result = { success: true };
         break;
       }
 
-      case "alert_officers": {
-        const { streamId, reason } = params;
-        if (!streamId) throw new Error("Missing streamId");
+      case "kick_user": {
+         const { targetUsername, streamId } = params;
+         if (!targetUsername || !streamId) throw new Error("Missing params");
+ 
+         const { data: targetUser, error: userError } = await supabaseAdmin
+           .from('user_profiles')
+           .select('id, kick_count')
+           .eq('username', targetUsername)
+           .single();
+ 
+         if (userError || !targetUser) throw new Error("User not found");
+         
+         const newKickCount = (targetUser.kick_count || 0) + 1;
+         const shouldBan = newKickCount >= 3;
 
-        // Create a panic alert
-        const { error } = await supabaseAdmin
-            .from('creator_panic_alerts')
-            .insert({
-                stream_id: streamId,
-                creator_id: user.id,
-                reason: reason || 'Help requested',
-                status: 'active'
-            });
+         // Update kick count
+         await supabaseAdmin.from('user_profiles').update({
+             is_kicked: true,
+             kick_count: newKickCount,
+             is_banned: shouldBan
+         }).eq('id', targetUser.id);
 
-        if (error) throw error;
-        result = { success: true, message: 'Officers alerted' };
-        break;
-      }
-
-      case "mute_participant": {
-          const { streamId, targetUserId, duration } = params;
-          if (!streamId || !targetUserId) throw new Error("Missing params");
-
-          // Insert into mutes table (assuming one exists or handle via chat permissions)
-          // For now, let's assume we just log it as a moderation action which triggers triggers
-          const { error } = await supabaseAdmin.rpc('mute_user_in_stream', {
-              p_stream_id: streamId,
-              p_user_id: targetUserId,
-              p_duration_minutes: duration || 5
+         // Remove from stream
+         const { error } = await supabaseAdmin
+              .from('streams_participants')
+              .delete()
+              .eq('stream_id', streamId)
+              .eq('user_id', targetUser.id);
+              
+         if (error) throw error;
+         result = { success: true, kicked: true, banned: shouldBan };
+         break;
+       }
+ 
+       case "ban_user": {
+          const { targetUsername, reason } = params;
+          if (!targetUsername) throw new Error("Missing params");
+          
+          const { data: targetUser, error: userError } = await supabaseAdmin
+           .from('user_profiles')
+           .select('id')
+           .eq('username', targetUsername)
+           .single();
+ 
+          if (userError || !targetUser) throw new Error("User not found");
+          
+          await supabaseAdmin.from('user_profiles').update({
+             is_banned: true,
+             banned_at: new Date().toISOString(),
+             banned_by: user.id,
+             ban_reason: reason
+          }).eq('id', targetUser.id);
+          
+          // Log to audit
+          await supabaseAdmin.from('admin_audit_logs').insert({
+              admin_id: user.id,
+              action: 'ban_user',
+              target_user_id: targetUser.id,
+              details: { reason }
           });
-
-          if (error) throw error;
+          
           result = { success: true };
           break;
-      }
-
-      case "kick_participant": {
-          const { streamId, targetUserId } = params;
-           if (!streamId || !targetUserId) throw new Error("Missing params");
-           
-           // Remove from participants
-           const { error } = await supabaseAdmin
-             .from('streams_participants')
-             .delete()
-             .eq('stream_id', streamId)
-             .eq('user_id', targetUserId);
-             
-           if (error) throw error;
-           result = { success: true };
-           break;
-      }
-
-      case "disable_chat": {
-          const { streamId, disabled } = params;
-           if (!streamId) throw new Error("Missing params");
-           
-           const { error } = await supabaseAdmin
-             .from('streams')
-             .update({ chat_disabled: disabled })
-             .eq('id', streamId);
-             
-           if (error) throw error;
-           result = { success: true };
-           break;
-      }
-      
-      case "end_stream": {
-           const { streamId } = params;
-           if (!streamId) throw new Error("Missing params");
-           
-           const { error } = await supabaseAdmin
-             .from('streams')
-             .update({ status: 'ended', ended_at: new Date().toISOString() })
-             .eq('id', streamId);
-             
-           if (error) throw error;
-           result = { success: true };
-           break;
-      }
-
-      case "log_officer_action": {
-        // Just a logger pass-through, since logic is in the officer_actions table trigger usually
-        // But we can insert manually too
-        const { actionType, details, targetUserId, streamId } = params;
-        
-        const { error } = await supabaseAdmin
-            .from('officer_actions')
-            .insert({
-                officer_id: user.id,
-                action_type: actionType,
-                target_user_id: targetUserId,
-                stream_id: streamId,
-                details: details || {}
-            });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-      
-      case "approve_officer_application": {
-        if (!isLeadOfficer) throw new Error("Unauthorized: Lead Officer only");
-        const { userId } = params;
-        if (!userId) throw new Error("Missing userId");
-
-        // 1. Call RPC to approve application
-        const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('approve_officer_application', {
-            p_user_id: userId
-        });
-
-        if (rpcError) throw rpcError;
-        if (!rpcData?.success) {
-             throw new Error(rpcData?.error || 'Failed to approve officer application via RPC');
-        }
-
-        // 2. Activate officer in profiles
-        const { data, error } = await supabaseAdmin
-          .from('user_profiles')
-          .update({
-            is_officer_active: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId)
-          .select()
-          .single();
-
-        if (error) throw error;
-        result = data;
-        break;
-      }
-
-      case "approve_lead_application": {
-        if (!isLeadOfficer) throw new Error("Unauthorized: Lead Officer only");
-        const { applicationId } = params;
-        if (!applicationId) throw new Error("Missing applicationId");
-
-        const { data, error } = await supabaseAdmin
-          .from('applications')
-          .update({
-            lead_officer_approved: true,
-            lead_officer_reviewed_by: user.id,
-            lead_officer_reviewed_at: new Date().toISOString()
-          })
-          .eq('id', applicationId)
-          .select()
-          .single();
-
-        if (error) throw error;
-        result = data;
-        break;
-      }
-      
-      case "get_officer_shifts": {
-          // This should probably be in officer-actions or admin-actions
-          // But if we are here...
-          const { limit } = params;
-          const { data, error } = await supabaseAdmin
-            .from('officer_work_sessions')
-            .select('*, officer:officer_id(username, avatar_url)')
-            .order('clock_in', { ascending: false })
-            .limit(limit || 20);
-            
-          if (error) throw error;
-          result = { success: true, shifts: data };
-          break;
-      }
-
-      case "get_stream_viewers": {
-        const { streamId } = params;
-        if (!streamId) throw new Error("Missing streamId");
-
-        // Get count
-        const { count, error: countError } = await supabaseAdmin
-            .from('stream_viewers')
-            .select('*', { count: 'exact', head: true })
-            .eq('stream_id', streamId);
-
-        if (countError) throw countError;
-        result = { success: true, count };
-        break;
-      }
+       }
 
       case "request_time_off": {
         const { date, reason } = params;
         if (!date) throw new Error("Missing date");
-
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .insert({
-            user_id: user.id,
-            requested_date: date,
-            reason: reason || '',
-            status: 'pending',
-            created_at: new Date().toISOString()
-          });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-        result = { success: true, viewers: count };
-        break;
-      }
-
-      case "send_officer_chat": {
-        const { message, username } = params;
-        if (!message) throw new Error("Missing message");
-        
-        const { error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .insert({
-            user_id: user.id,
-            message,
-            username: username || profile.username || 'Officer',
-            role: profile.role
-          });
-          
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "request_time_off": {
-        const { date, reason } = params;
-        if (!date) throw new Error("Missing date");
-        
         const { error } = await supabaseAdmin
           .from('officer_time_off_requests')
           .insert({
             officer_id: user.id,
             date,
-            reason,
+            reason: reason || '',
             status: 'pending'
           });
-          
         if (error) throw error;
         result = { success: true };
         break;
       }
 
       case "approve_time_off": {
-         if (!isLeadOfficer && !profile.is_admin) throw new Error("Unauthorized");
-         const { requestId } = params;
-         
-         const { error } = await supabaseAdmin
-           .from('officer_time_off_requests')
-           .update({ status: 'approved', approved_by: user.id })
-           .eq('id', requestId);
-           
-         if (error) throw error;
-         result = { success: true };
-         break;
-      }
-
-      case "reject_time_off": {
-         if (!isLeadOfficer && !profile.is_admin) throw new Error("Unauthorized");
-         const { requestId } = params;
-         
-         const { error } = await supabaseAdmin
-           .from('officer_time_off_requests')
-           .update({ status: 'denied', approved_by: user.id })
-           .eq('id', requestId);
-           
-         if (error) throw error;
-         result = { success: true };
-         break;
-      }
-        result = { success: true, count };
+        if (!isLeadOfficer) throw new Error("Unauthorized");
+        const { requestId } = params;
+        const { error } = await supabaseAdmin
+          .from('officer_time_off_requests')
+          .update({ 
+            status: 'approved', 
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString()
+          })
+          .eq('id', requestId);
+        if (error) throw error;
+        result = { success: true };
         break;
       }
 
+      case "reject_time_off": {
+        if (!isLeadOfficer) throw new Error("Unauthorized");
+        const { requestId, reason } = params;
+        const { error } = await supabaseAdmin
+          .from('officer_time_off_requests')
+          .update({ 
+            status: 'rejected', 
+            rejection_reason: reason,
+            reviewed_by: user.id,
+            reviewed_at: new Date().toISOString()
+          })
+          .eq('id', requestId);
+        if (error) throw error;
+        result = { success: true };
+        break;
+      }
+      
       case "send_officer_chat": {
-        const { message, username } = params;
+        const { message } = params;
         if (!message) throw new Error("Missing message");
-
         const { error } = await supabaseAdmin
           .from('officer_chat_messages')
           .insert({
-            user_id: user.id,
-            message,
-            username: username || 'Officer',
-            role: profile.role
+            sender_id: user.id,
+            content: message,
+            priority: 'normal'
           });
-
         if (error) throw error;
         result = { success: true };
         break;
       }
-
-      case "request_time_off": {
-        const { date, reason } = params;
-        if (!date || !reason) throw new Error("Missing fields");
-
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .insert({
-            officer_id: user.id,
-            request_date: date,
-            reason,
-            status: 'pending'
-          });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "approve_time_off": {
-        if (!isLeadOfficer) throw new Error("Unauthorized");
-        const { requestId } = params;
-        
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .update({ status: 'approved', reviewed_by: user.id })
-          .eq('id', requestId);
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "reject_time_off": {
-        if (!isLeadOfficer) throw new Error("Unauthorized");
-        const { requestId } = params;
-        
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .update({ status: 'rejected', reviewed_by: user.id })
-          .eq('id', requestId);
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "kick_user": {
-        const { targetUsername, streamId } = params;
-        if (!targetUsername || !streamId) throw new Error("Missing params");
-
-        const { data: targetUser, error: userError } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id')
-          .eq('username', targetUsername)
-          .single();
-
-        if (userError || !targetUser) throw new Error("User not found");
-
-        const { error } = await supabaseAdmin
-             .from('streams_participants')
-             .delete()
-             .eq('stream_id', streamId)
-             .eq('user_id', targetUser.id);
-             
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "ban_user": {
-         const { targetUsername, reason } = params;
-         if (!targetUsername) throw new Error("Missing params");
-         
-         const { data: targetUser, error: userError } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id')
-          .eq('username', targetUsername)
-          .single();
-
-         if (userError || !targetUser) throw new Error("User not found");
-         
-         await supabaseAdmin.from('officer_warrants').insert({
-             officer_id: user.id,
-             target_user_id: targetUser.id,
-             reason: reason || 'Officer Ban',
-             status: 'active'
-         });
-         
-         result = { success: true };
-         break;
-      }
-        result = { success: true, count };
-        break;
-      }
-
-      case "send_officer_chat": {
-        const { message, username } = params;
-        if (!message) throw new Error("Missing message");
-
-        const { error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .insert({
-            user_id: user.id,
-            message,
-            username: username || 'Officer',
-            role: profile.role
-          });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "request_time_off": {
-        const { date, reason } = params;
-        if (!date || !reason) throw new Error("Missing fields");
-
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .insert({
-            officer_id: user.id,
-            request_date: date,
-            reason,
-            status: 'pending'
-          });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "approve_time_off": {
-        if (!isLeadOfficer) throw new Error("Unauthorized");
-        const { requestId } = params;
-        
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .update({ status: 'approved', reviewed_by: user.id })
-          .eq('id', requestId);
-
-        if (error) throw error;
-        
-        // Also remove any shifts for that day? 
-        // Logic specific to implementation, for now just approve.
-        
-        result = { success: true };
-        break;
-      }
-
-      case "reject_time_off": {
-        if (!isLeadOfficer) throw new Error("Unauthorized");
-        const { requestId } = params;
-        
-        const { error } = await supabaseAdmin
-          .from('officer_time_off_requests')
-          .update({ status: 'rejected', reviewed_by: user.id })
-          .eq('id', requestId);
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "kick_user": {
-        // Wrapper for kick_participant that looks up ID by username
-        const { targetUsername, streamId } = params;
-        if (!targetUsername || !streamId) throw new Error("Missing params");
-
-        const { data: targetUser, error: userError } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id')
-          .eq('username', targetUsername)
-          .single();
-
-        if (userError || !targetUser) throw new Error("User not found");
-
-        const { error } = await supabaseAdmin
-             .from('streams_participants')
-             .delete()
-             .eq('stream_id', streamId)
-             .eq('user_id', targetUser.id);
-             
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "ban_user": {
-         // This seems to be a "warrant" or platform ban? 
-         // Or just a stream ban? TrollOfficerLounge says "Warrant issued... Access restricted!"
-         // Let's assume it blocks them from the platform or something serious.
-         // For now, let's implement as a "ban from stream" + "log warrant"
-         const { targetUsername, reason } = params;
-         if (!targetUsername) throw new Error("Missing params");
-         
-         const { data: targetUser, error: userError } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id')
-          .eq('username', targetUsername)
-          .single();
-
-         if (userError || !targetUser) throw new Error("User not found");
-         
-         // Log Warrant
-         await supabaseAdmin.from('officer_warrants').insert({
-             officer_id: user.id,
-             target_user_id: targetUser.id,
-             reason: reason || 'Officer Ban',
-             status: 'active'
-         });
-         
-         result = { success: true };
-         break;
-      }
-
-        // Get recent viewers (limit 50)
-        const { data: viewers, error: viewersError } = await supabaseAdmin
-            .from('stream_viewers')
-            .select('user_id, last_seen, user:user_profiles(id, username, avatar_url)')
-            .eq('stream_id', streamId)
-            .order('last_seen', { ascending: false })
-            .limit(50);
-
-        if (viewersError) throw viewersError;
-
-        // Map to expected format
-        const mappedViewers = viewers?.map((v: any) => ({
-            userId: v.user_id,
-            username: v.user?.username,
-            avatarUrl: v.user?.avatar_url,
-            lastSeen: v.last_seen
-        })) || [];
-
-        result = { 
-            success: true, 
-            count: count || 0, 
-            viewers: mappedViewers 
-        };
-        break;
-      }
-
+      
       case "find_opponent": {
-          const { data, error } = await supabaseAdmin.rpc('find_opponent', {
-              p_user_id: user.id
-          });
-          
-          if (error) throw error;
-          result = data;
-          break;
-      }
-
-      case "skip_opponent": {
-          const { battleId } = params;
-          if (!battleId) throw new Error("Missing battleId");
-
-          // 1. Mark current battle as cancelled
-          const { error: updateError } = await supabaseAdmin
-              .from('troll_battles')
-              .update({ status: 'cancelled' })
-              .eq('id', battleId);
-
-          if (updateError) throw updateError;
-
-          // 2. Increment skips (upsert)
-          const today = new Date().toISOString().split('T')[0];
-          
-          // Check existing skips
-          const { data: skipData } = await supabaseAdmin
-              .from('battle_skips')
-              .select('skips_used')
-              .eq('user_id', user.id)
-              .eq('skip_date', today)
-              .maybeSingle();
-              
-          const currentSkips = skipData?.skips_used || 0;
-          const newSkips = currentSkips + 1;
-
-          const { error: skipUpsertError } = await supabaseAdmin
-              .from('battle_skips')
-              .upsert({
-                  user_id: user.id,
-                  skip_date: today,
-                  skips_used: newSkips,
-                  last_skip_time: new Date().toISOString()
-              }, { onConflict: 'user_id,skip_date' });
-
-          if (skipUpsertError) {
-              // If table doesn't exist, ignore (it might not be created yet)
-              console.warn('Could not update battle_skips', skipUpsertError);
-          }
-
-          result = { success: true, skips_used: newSkips };
-          break;
-      }
-
-      case "assign_battle_guests": {
-          const { battleId, isPlayer1, streamId } = params;
-          if (!battleId || !streamId) throw new Error("Missing params");
-
-          // Fetch top 3 viewers as "guests"
-          const { data: viewers } = await supabaseAdmin
-              .from('stream_viewers')
-              .select('user:user_profiles(id, username, avatar_url)')
-              .eq('stream_id', streamId)
-              .limit(3);
-          
-          const guests = viewers?.map((v: any) => ({
-              id: v.user?.id,
-              username: v.user?.username,
-              avatar_url: v.user?.avatar_url
-          })) || [];
-
-          // Update battle
-          const updateField = isPlayer1 ? 'host_guests' : 'challenger_guests';
-          
-          const { error } = await supabaseAdmin
-              .from('troll_battles')
-              .update({ [updateField]: guests })
-              .eq('id', battleId);
-
-          if (error) throw error;
-          result = { success: true, guests };
-          break;
-      }
-
-      case "finalize_troll_battle": {
-          const { battleId } = params;
-          if (!battleId) throw new Error("Missing battleId");
-
-          const { data: battle, error: fetchError } = await supabaseAdmin
-             .from('troll_battles')
-             .select('*')
-             .eq('id', battleId)
-             .single();
-          
-          if (fetchError || !battle) throw new Error("Battle not found");
-
-          // Determine winner
-          let winnerId = null;
-          if ((battle.host_score || 0) > (battle.challenger_score || 0)) {
-              winnerId = battle.host_id;
-          } else if ((battle.challenger_score || 0) > (battle.host_score || 0)) {
-              winnerId = battle.challenger_id;
-          }
-
-          // Update battle
-          const { error: updateError } = await supabaseAdmin
-             .from('troll_battles')
-             .update({
-                 status: 'completed',
-                 winner_id: winnerId,
-                 end_time: new Date().toISOString() // Ensure end time is set
-             })
-             .eq('id', battleId);
-
-          if (updateError) throw updateError;
-          result = { success: true, winnerId };
-          break;
-      }
-
-      case "get_stream_theme": {
-          const { streamId } = params;
-          if (!streamId) throw new Error("Missing streamId");
-
-          const { data: stream, error } = await supabaseAdmin
-             .from('streams')
-             .select('theme_config')
-             .eq('id', streamId)
-             .single();
-          
-          if (error) throw error;
-          result = { success: true, theme: stream?.theme_config || {} };
-          break;
-      }
-
-      case "get_stream_box_count": {
-          const { streamId } = params;
-          if (!streamId) throw new Error("Missing streamId");
-
-          const { data: stream, error } = await supabaseAdmin
-             .from('streams')
-             .select('layout_config')
-             .eq('id', streamId)
-             .single();
-          
-          if (error) throw error;
-          // Default to 1 if not set
-          const boxCount = stream?.layout_config?.box_count || 1;
-          result = { success: true, count: boxCount };
-          break;
-      }
-
-      case "get_battle": {
-          const { battleId } = params;
-          if (!battleId) throw new Error("Missing battleId");
-
-          const { data: battle, error } = await supabaseAdmin
-             .from('troll_battles')
-             .select('*, host:host_id(username, avatar_url), challenger:challenger_id(username, avatar_url)')
-             .eq('id', battleId)
-             .single();
-
-          if (error) throw error;
-          
-          if (battle) {
-             const player1 = {
-                 id: battle.host_id,
-                 username: battle.host?.username,
-                 avatar_url: battle.host?.avatar_url,
-                 score: battle.host_troll_coins
-             };
-             const player2 = {
-                 id: battle.challenger_id,
-                 username: battle.challenger?.username,
-                 avatar_url: battle.challenger?.avatar_url,
-                 score: battle.challenger_troll_coins
-             };
-
-             result = { 
-                 success: true, 
-                 battle, 
-                 player1,
-                 player2
-             };
-          } else {
-             throw new Error("Battle not found");
-          }
-          break;
-      }
-
-      case "get_active_battle": {
-          const { broadcasterId } = params;
-          if (!broadcasterId) throw new Error("Missing broadcasterId");
-
-          const { data: battle, error } = await supabaseAdmin
-             .from('troll_battles')
-             .select('*, host:host_id(username, avatar_url), challenger:challenger_id(username, avatar_url)')
-             .or(`host_id.eq.${broadcasterId},challenger_id.eq.${broadcasterId}`)
-             .eq('status', 'active')
-             .maybeSingle();
-
-          if (error) throw error;
-          
-          if (battle) {
-             // Map to player1/player2 format expected by frontend
-             const player1 = {
-                 id: battle.host_id,
-                 username: battle.host?.username,
-                 avatar_url: battle.host?.avatar_url,
-                 score: battle.host_troll_coins || 0
-             };
-             const player2 = {
-                 id: battle.challenger_id,
-                 username: battle.challenger?.username,
-                 avatar_url: battle.challenger?.avatar_url,
-                 score: battle.challenger_troll_coins || 0
-             };
-
-             result = { 
-                 success: true, 
-                 battle, 
-                 active: true,
-                 player1,
-                 player2
-             };
-          } else {
-             result = { success: true, active: false };
-          }
-          break;
+         const { data, error } = await supabaseAdmin.rpc('find_opponent', {
+             p_user_id: params.userId || user.id, 
+             p_strategy: params.strategy || 'random'
+         });
+         if (error) throw error;
+         result = { opponent: data };
+         break;
       }
 
       default:
@@ -1234,8 +272,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (error: any) {
-    console.error("Error in officer-actions:", error);
+  } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

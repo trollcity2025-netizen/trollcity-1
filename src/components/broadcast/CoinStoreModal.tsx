@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Coins } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 interface CoinPackage {
   id: string;
@@ -9,18 +10,6 @@ interface CoinPackage {
   popular?: boolean;
 }
 
-const PACKAGES: CoinPackage[] = [
-  { id: 'pkg-300', coins: 300, price: '$1.99' },
-  { id: 'pkg-500', coins: 500, price: '$3.49' },
-  { id: 'pkg-1000', coins: 1000, price: '$6.99' },
-  { id: 'pkg-2500', coins: 2500, price: '$16.99', popular: true },
-  { id: 'pkg-5000', coins: 5000, price: '$33.99', popular: true },
-  { id: 'pkg-10000', coins: 10000, price: '$64.99', popular: true }, // Using popular for Best Value
-  { id: 'pkg-15000', coins: 15000, price: '$89.99' },
-  { id: 'pkg-25000', coins: 25000, price: '$149.99' },
-  { id: 'pkg-50000', coins: 50000, price: '$279.99' },
-];
-
 interface CoinStoreModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -28,6 +17,39 @@ interface CoinStoreModalProps {
 
 export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps) {
   const [selectedPack, setSelectedPack] = useState<string | null>(null);
+  const [packages, setPackages] = useState<CoinPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchCoinPacks();
+    }
+  }, [isOpen]);
+
+  const fetchCoinPacks = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('purchasable_items')
+      .select('*')
+      .eq('category', 'coin_pack')
+      .eq('is_active', true)
+      .order('coin_price', { ascending: true }); // coin_price usually null for packs, maybe order by usd_price or display_name?
+      
+    if (error) {
+      console.error('Error fetching coin packs:', error);
+      // Fallback to static if db fails? Or just empty.
+    } else if (data) {
+       // Transform to CoinPackage format
+       const mapped: CoinPackage[] = data.map(item => ({
+          id: item.id,
+          coins: parseInt(item.display_name.replace(/[^0-9]/g, '')) || 0, // Extract number from name e.g. "1000 Coins"
+          price: item.usd_price ? `$${item.usd_price}` : 'Free',
+          popular: item.display_name.includes('Best Value') || item.display_name.includes('Popular')
+       })).sort((a, b) => a.coins - b.coins);
+       setPackages(mapped);
+    }
+    setLoading(false);
+  };
 
   if (!isOpen) return null;
 
@@ -60,8 +82,11 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
 
         {/* Content */}
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          {loading ? (
+             <div className="text-center py-8 text-zinc-400">Loading packs...</div>
+          ) : (
           <div className="grid grid-cols-1 gap-3">
-            {PACKAGES.map((pkg) => (
+            {packages.map((pkg) => (
               <button
                 key={pkg.id}
                 onClick={() => handlePurchase(pkg)}
@@ -95,7 +120,11 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                 </div>
               </button>
             ))}
+            {packages.length === 0 && (
+               <div className="text-center py-4 text-zinc-500">No coin packs available at the moment.</div>
+            )}
           </div>
+          )}
           
           <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-blue-200 text-center">
             Secure payments processed by Stripe. Coins are non-refundable.

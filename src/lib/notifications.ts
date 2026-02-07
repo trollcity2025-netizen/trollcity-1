@@ -246,7 +246,7 @@ export async function notifyAdmins(
     const { data: admins, error } = await supabase
       .from('user_profiles')
       .select('id')
-      .eq('role', 'admin')
+      .or('role.eq.admin,is_admin.eq.true')
 
     if (error) throw error
 
@@ -268,6 +268,21 @@ export async function notifyAdmins(
       .insert(notifications)
 
     if (insertError) throw insertError
+
+    // Send push notification via Edge Function
+    try {
+      await supabase.functions.invoke('send-push-notification', {
+        body: {
+          user_ids: admins.map(a => a.id),
+          title,
+          body: message,
+          data: metadata,
+          type
+        }
+      })
+    } catch (pushError) {
+      console.error('Failed to send push to admins:', pushError)
+    }
 
     return { success: true, count: admins.length }
   } catch (err: any) {

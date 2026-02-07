@@ -138,7 +138,14 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 } as Message;
             }));
             
-            setMessages(processedMessages);
+            setMessages(prev => {
+                // Merge with existing messages (which might be system messages or realtime messages received while fetching)
+                // processedMessages are historical (older).
+                // Filter out duplicates based on ID
+                const existingIds = new Set(prev.map(p => p.id));
+                const newHistory = processedMessages.filter(m => !existingIds.has(m.id));
+                return [...newHistory, ...prev];
+            });
         }
     };
     fetchMessages();
@@ -332,7 +339,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700">
             {messages.length === 0 && (
                 <div className="text-center text-zinc-500 text-sm mt-10 italic">
-                    Messages disappear after 25 seconds...
+                    No messages yet...
                 </div>
             )}
             {messages.map(msg => {
@@ -411,39 +418,57 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         </div>
 
         <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-zinc-900/80 relative">
+            {isGuest ? (
+                <div className="flex items-center justify-between gap-2 bg-zinc-800/50 rounded-full p-2 pl-4 border border-white/5">
+                    <span className="text-zinc-400 text-sm">Sign up to chat</span>
+                    <button 
+                        type="button"
+                        onClick={() => navigate('?mode=signup')}
+                        className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-xs font-bold hover:shadow-lg transition-all text-white"
+                    >
+                        Sign Up
+                    </button>
+                </div>
+            ) : (
+                <>
             {showEmojiPicker && (
                 <div className="absolute bottom-full right-0 mb-2 z-[9999] shadow-2xl rounded-xl overflow-hidden border border-white/10">
-                    <EmojiPicker 
-                        onEmojiClick={(data) => setInput(prev => prev + data.emoji)}
-                        theme={Theme.DARK}
-                        width={300}
-                        height={400}
+                            <EmojiPicker 
+                                onEmojiClick={(data) => setInput(prev => prev + data.emoji)}
+                                theme={Theme.DARK}
+                                width={300}
+                                height={400}
+                            />
+                        </div>
+                    )}
+
+                <div className="relative w-full">
+                    <input 
+                        type="text" 
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        placeholder="Chat..."
+                        className="w-full bg-zinc-800 border-none rounded-full pl-10 pr-10 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
                     />
+                    
+                    <button 
+                        type="button"
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-yellow-400 transition-colors z-10"
+                    >
+                        <Smile size={18} />
+                    </button>
+
+                    <button 
+                        type="submit" 
+                        disabled={!input.trim()}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
+                    >
+                        <Send size={16} />
+                    </button>
                 </div>
+                </>
             )}
-            <div className="relative">
-                <button 
-                    type="button"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-yellow-400 transition-colors z-10"
-                >
-                    <Smile size={18} />
-                </button>
-                <input 
-                    type="text" 
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    placeholder="Chat..."
-                    className="w-full bg-zinc-800 border-none rounded-full pl-10 pr-10 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
-                />
-                <button 
-                    type="submit" 
-                    disabled={!input.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
-                >
-                    <Send size={16} />
-                </button>
-            </div>
         </form>
     </div>
   );

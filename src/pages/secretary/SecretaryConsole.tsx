@@ -26,6 +26,7 @@ import StaffManagement from '../admin/components/StaffManagement'
 import AutomatedPayouts from '../admin/components/AutomatedPayouts'
 import SecretaryDashboard from '../president/SecretaryDashboard'
 import ProposalManagementPanel from '../admin/components/shared/ProposalManagementPanel'
+import CashoutForecastPanel from './components/CashoutForecastPanel'
 
 type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals'
 
@@ -287,6 +288,11 @@ export default function SecretaryConsole() {
                   <h2 className="text-2xl font-bold text-white mb-2">Cashout Management</h2>
                   <p className="text-slate-400">Review and process user cashout requests.</p>
                 </div>
+                
+                <div className="mb-8">
+                  <CashoutForecastPanel />
+                </div>
+
                 <CashoutRequestsList viewMode="secretary" />
               </div>
             )}

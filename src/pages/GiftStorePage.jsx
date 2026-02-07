@@ -3,7 +3,8 @@ import { Search, Filter, Gift, Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '../lib/store'
 import { purchaseGift } from '../lib/giftEngine'
-import giftCatalog, { giftCategories, giftTiers, tierPriority } from '../lib/giftCatalog'
+import { giftCategories, giftTiers, tierPriority } from '../lib/giftCatalog'
+import { usePurchasableItems } from '../hooks/usePurchasableItems'
 
 const priceFilters = [
   { label: 'Any price', value: 'any' },
@@ -21,6 +22,8 @@ const sortOptions = [
 
 export default function GiftStorePage() {
   const { profile, refreshProfile } = useAuthStore()
+  const { items: purchasableItems, loading } = usePurchasableItems('gift')
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedTier, setSelectedTier] = useState('all')
@@ -29,6 +32,20 @@ export default function GiftStorePage() {
   const [purchasingGiftSlug, setPurchasingGiftSlug] = useState(null)
 
   const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  const giftCatalog = useMemo(() => {
+    return purchasableItems.map(item => ({
+      ...item.metadata,
+      gift_slug: item.item_key,
+      name: item.display_name,
+      coinCost: item.coin_price || 0,
+      category: item.metadata?.category || 'Other',
+      imageUrl: item.metadata?.imageUrl,
+      icon: item.metadata?.icon,
+      tier: item.metadata?.tier || 'Common',
+      description: item.metadata?.description || ''
+    }))
+  }, [purchasableItems])
 
   const filteredGifts = useMemo(() => {
     return giftCatalog
@@ -200,75 +217,81 @@ export default function GiftStorePage() {
         </div>
 
         <section className="space-y-6">
-          <div className="flex items-center justify-between text-sm text-gray-400">
-            <span>{totalMatches} gifts aligned with your filters</span>
-            <span className="italic text-xs text-yellow-300">Buy now, send later via the broadcast Gift Tray</span>
-          </div>
-          {filteredGifts.length === 0 ? (
-            <div className="border border-yellow-500/20 rounded-3xl p-6 text-center text-gray-400">
-              <p>No gifts match those filters yet.</p>
-              <p>Try a different tier, lower the price, or broaden your search.</p>
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-yellow-400" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredGifts.map((gift) => {
-                const isPurchasing = purchasingGiftSlug === gift.gift_slug
-                return (
-                  <article
-                    key={gift.gift_slug}
-                    className="relative rounded-3xl border border-yellow-500/20 bg-gradient-to-br from-[#05030a] to-[#090714] p-0 shadow-[0_0_35px_rgba(255,201,60,0.2)] transition hover:-translate-y-1"
-                  >
-                    <div className="relative h-44 rounded-t-3xl overflow-hidden border-b border-yellow-500/10">
-                      <img
-                        src={gift.imageUrl}
-                        alt={gift.name}
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-[#030207] to-transparent" />
-                      <div className="absolute inset-0 flex items-start justify-between px-4 pt-3">
-                        <span className="text-4xl drop-shadow text-yellow-100">{gift.icon || '🎁'}</span>
-                        <span className="px-3 py-1 rounded-full border border-yellow-500/40 bg-black/60 text-[11px] uppercase tracking-[0.3em] text-yellow-200">
-                          {gift.tier}
-                        </span>
-                      </div>
-                      <div className="absolute bottom-3 left-3 text-[11px] tracking-[0.3em] text-yellow-100 bg-black/50 px-3 py-1 rounded-2xl border border-yellow-500/20">
-                        {gift.category}
-                      </div>
-                    </div>
-                    <div className="p-5 space-y-3">
-                      <div>
-                        <h3 className="text-xl font-semibold text-white">{gift.name}</h3>
-                        <p className="text-sm text-gray-300 h-16 overflow-hidden">{gift.description}</p>
-                      </div>
-                      <div className="flex items-center justify-between text-sm text-gray-200">
-                        <span className="uppercase tracking-[0.3em] text-yellow-300 text-[11px]">
-                          {gift.category}
-                        </span>
-            <span className="text-yellow-300 font-bold text-lg">
-              {gift.coinCost.toLocaleString()} <span className="text-[11px] tracking-[0.3em]">T</span>
-            </span>
-                      </div>
-                      <button
-                        onClick={() => handlePurchase(gift)}
-                        disabled={isPurchasing}
-                        className={`w-full text-sm font-semibold uppercase tracking-[0.3em] py-3 rounded-2xl transition ${isPurchasing
-                          ? 'bg-yellow-500/30 text-black cursor-wait'
-                          : 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black hover:scale-[1.01]'}`}
+            <>
+              <div className="flex items-center justify-between text-sm text-gray-400">
+                <span>{totalMatches} gifts aligned with your filters</span>
+                <span className="italic text-xs text-yellow-300">Buy now, send later via the broadcast Gift Tray</span>
+              </div>
+              {filteredGifts.length === 0 ? (
+                <div className="border border-yellow-500/20 rounded-3xl p-6 text-center text-gray-400">
+                  <p>No gifts match those filters yet.</p>
+                  <p>Try a different tier, lower the price, or broaden your search.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {filteredGifts.map((gift) => {
+                    const isPurchasing = purchasingGiftSlug === gift.gift_slug
+                    return (
+                      <article
+                        key={gift.gift_slug}
+                        className="relative rounded-3xl border border-yellow-500/20 bg-gradient-to-br from-[#05030a] to-[#090714] p-0 shadow-[0_0_35px_rgba(255,201,60,0.2)] transition hover:-translate-y-1"
                       >
-                        {isPurchasing ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Purchasing
-                          </span>
-                        ) : (
-                          'Buy Gift'
-                        )}
-                      </button>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
+                        <div className="relative h-44 rounded-t-3xl overflow-hidden border-b border-yellow-500/10">
+                          <img
+                            src={gift.imageUrl}
+                            alt={gift.name}
+                            className="absolute inset-0 h-full w-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-[#030207] to-transparent" />
+                          <div className="absolute inset-0 flex items-start justify-between px-4 pt-3">
+                            <span className="text-4xl drop-shadow text-yellow-100">{gift.icon || '🎁'}</span>
+                            <span className="px-3 py-1 rounded-full border border-yellow-500/40 bg-black/60 text-[11px] uppercase tracking-[0.3em] text-yellow-200">
+                              {gift.tier}
+                            </span>
+                          </div>
+                          <div className="absolute bottom-3 left-4 right-4 text-center">
+                            <h3 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500 drop-shadow-sm truncate">
+                              {gift.name}
+                            </h3>
+                          </div>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                          <p className="text-sm text-gray-400 leading-relaxed min-h-[3rem] line-clamp-2">
+                            {gift.description}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 bg-yellow-500/10 px-3 py-1.5 rounded-xl border border-yellow-500/20">
+                              <span className="text-yellow-400 font-bold">{gift.coinCost.toLocaleString()}</span>
+                              <span className="text-[10px] text-yellow-200 uppercase tracking-wider">Coins</span>
+                            </div>
+                            <button
+                              onClick={() => handlePurchase(gift)}
+                              disabled={isPurchasing}
+                              className="group relative px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black font-black uppercase text-xs tracking-wider rounded-xl transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                            >
+                              {isPurchasing ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span>Buy</span>
+                                  <Gift className="w-3 h-3 group-hover:rotate-12 transition-transform" />
+                                </div>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
         </section>
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
-import { Video, Mic, MicOff, VideoOff, AlertTriangle } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SetupPage() {
@@ -186,6 +186,20 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
+      // 0. Check global broadcast limit (Max 5)
+      const { count, error: countError } = await supabase
+        .from('streams')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'live');
+
+      if (countError) throw countError;
+
+      if (count !== null && count >= 5) {
+        toast.error('System Limit: Maximum of 5 concurrent broadcasts allowed.');
+        setLoading(false);
+        return;
+      }
+
       // Create stream record with HLS URL pre-populated
       // Note: We use the ID returned by insert, so we do this in two steps or use client-generated ID.
       // Since we rely on Supabase ID generation usually, we insert first then update, OR we assume a pattern.
@@ -209,18 +223,7 @@ export default function SetupPage() {
 
       if (error) throw error;
 
-      // Update with HLS URL (Match Webhook: streams/<id>/master.m3u8)
-      // Use relative path to leverage Vercel rewrites and avoid CORS/domain issues
-      const hlsUrl = `/streams/${data.id}/master.m3u8`;
-      const { error: updateError } = await supabase
-        .from('streams')
-        .update({ hls_url: hlsUrl })
-        .eq('id', data.id);
-
-      if (updateError) {
-          console.error("Failed to save HLS URL:", updateError);
-          // Non-fatal, but logged
-      }
+      // Removed HLS Path update logic as we are LiveKit-only
 
       toast.success('Stream created! Going live...');
       isStartingStream.current = true;
@@ -277,12 +280,12 @@ export default function SetupPage() {
                 
                 {restrictionCheck.reason === 'license' ? (
                   <>
-                    <h2 className="text-2xl font-bold text-white mb-2">Driver's License Required</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">Driver&apos;s License Required</h2>
                     <p className="text-gray-400 mb-6">
-                      {restrictionCheck.message || "You need a valid driver's license to start a broadcast."}
+                      {restrictionCheck.message || "You need a valid Driver&apos;s License to start a broadcast."}
                     </p>
                     <button 
-                      onClick={() => navigate('/tmv')}
+                      onClick={() => navigate('/dmv')}
                       className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold"
                     >
                       Go to DMV
