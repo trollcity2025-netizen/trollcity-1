@@ -326,6 +326,7 @@ function AppContent() {
   // Some legacy logic needs the full profile object in several effects
   const profile = useAuthStore((s) => s.profile);
 
+
   const location = useLocation();
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement | null>(null);
@@ -349,7 +350,6 @@ function AppContent() {
     reconnectMessage,
   } = useGlobalApp();
 
-  useVersionCheck();
   usePwaAutoUpdateSafeReload();
 
   // Handle Service Worker navigation requests (e.g. from push notifications)

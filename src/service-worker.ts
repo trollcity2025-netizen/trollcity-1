@@ -2,7 +2,31 @@ import { precacheAndRoute } from 'workbox-precaching';
 
 declare const self: any;
 
-precacheAndRoute(self.__WB_MANIFEST || []);
+// Filter manifest to only precache critical app shell assets
+// This prevents downloading hundreds of lazy-loaded chunks on every update
+const manifest = self.__WB_MANIFEST || [];
+const criticalAssets = manifest.filter((entry: any) => {
+  const url = entry.url;
+  
+  // Always keep HTML, CSS, JSON
+  if (url.endsWith('.html') || url.endsWith('.css') || url.endsWith('.json')) return true;
+  
+  // Keep main entry and vendor chunks
+  // Based on vite.config.ts manualChunks
+  if (url.includes('vendor-') || 
+      url.includes('ui-') || 
+      url.includes('supabase-') || 
+      url.includes('livekit-') ||
+      url.includes('index-')) {
+    return true;
+  }
+
+  // Exclude everything else (lazy loaded pages) from precache
+  // They will be cached at runtime when visited
+  return false;
+});
+
+precacheAndRoute(criticalAssets);
 
 const CACHE_NAME = 'trollcity-cache-v3';
 const OFFLINE_URL = '/offline.html';
