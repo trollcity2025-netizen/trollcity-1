@@ -26,8 +26,6 @@ import GlobalPresenceTracker from "./components/GlobalPresenceTracker";
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
-import { useVersionCheck } from "./hooks/useVersionCheck";
-import { usePwaAutoUpdateSafeReload } from "./hooks/usePwaAutoUpdateSafeReload";
 import GlobalUserCounter from "./components/admin/GlobalUserCounter";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
@@ -320,9 +318,6 @@ function AppContent() {
   // Narrow selectors to avoid returning a fresh object from the selector
   const user = useAuthStore((s) => s.user);
 
-  // Enable version checking
-  useVersionCheck();
-
   // Some legacy logic needs the full profile object in several effects
   const profile = useAuthStore((s) => s.profile);
 
@@ -349,8 +344,6 @@ function AppContent() {
     isReconnecting,
     reconnectMessage,
   } = useGlobalApp();
-
-  usePwaAutoUpdateSafeReload();
 
   // Handle Service Worker navigation requests (e.g. from push notifications)
   useEffect(() => {
