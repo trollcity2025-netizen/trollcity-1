@@ -47,7 +47,7 @@ SET
     level = 1,
     total_xp = 0,
     -- next_level_xp = 100, -- REMOVED: Column does not exist
-    prestige_level = 0,
+    -- prestige_level = 0, -- REMOVED: Column does not exist
     
     -- Inventory / Perks
     has_insurance = false,
