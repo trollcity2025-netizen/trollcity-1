@@ -22,7 +22,6 @@ import {
   Shuffle,
   Star,
   Building2,
-  RefreshCw,
   Vote,
   TrendingUp,
   Mars,
@@ -61,27 +60,6 @@ export default function Sidebar() {
   const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
   const [canSeeSecretary, setCanSeeSecretary] = useState(false)
 
-  const handleClearCacheReload = () => {
-    try {
-      if (profile?.id) {
-        const keysToRemove = [
-          `tc-profile-${profile.id}`,
-          `trollcity_car_${profile.id}`,
-          `trollcity_owned_vehicles_${profile.id}`,
-          `trollcity_car_insurance_${profile.id}`,
-          `trollcity_vehicle_condition_${profile.id}`,
-          `trollcity_home_owned_${profile.id}`
-        ]
-
-        keysToRemove.forEach((key) => localStorage.removeItem(key))
-      }
-
-      localStorage.removeItem('pwa-installed')
-      sessionStorage.clear()
-    } catch {}
-
-    window.location.reload()
-  }
   const [showCourtModal, setShowCourtModal] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
@@ -247,14 +225,6 @@ export default function Sidebar() {
                 {(profile as any).gender === 'female' && (
                   <Venus size={14} className="text-pink-400" />
                 )}
-                <button
-                  onClick={handleClearCacheReload}
-                  className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-gray-200"
-                  aria-label="Clear cache and reload"
-                  title="Clear cache and reload"
-                >
-                  <RefreshCw size={12} />
-                </button>
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span className="px-2 py-0.5 rounded-full bg-white/5 text-purple-200 border border-white/10">{profile.role === 'admin' ? 'Admin' : (profile.title || 'Citizen')}</span>

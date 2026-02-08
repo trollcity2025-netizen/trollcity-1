@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Bell, LogOut, Store, RefreshCw, ArrowLeft } from 'lucide-react'
+import { Search, Bell, LogOut, Store, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase, searchUsers } from '../lib/supabase'
@@ -173,37 +173,6 @@ const Header = () => {
     }
   }
 
-  const handleClearCacheReload = async () => {
-    try {
-      localStorage.clear()
-      sessionStorage.clear()
-    } catch (e) {
-      console.warn('Error clearing storage:', e)
-    }
-
-    try {
-      if (window.indexedDB) {
-        const dbs = await window.indexedDB.databases()
-        dbs.forEach((db: any) => {
-          if (db.name) window.indexedDB.deleteDatabase(db.name)
-        })
-      }
-    } catch (e) {
-      console.warn('Error clearing IndexedDB:', e)
-    }
-
-    try {
-      if ('caches' in window) {
-        const cacheNames = await caches.keys()
-        await Promise.all(cacheNames.map((name) => caches.delete(name)))
-      }
-    } catch (e) {
-      console.warn('Error clearing caches:', e)
-    }
-
-    window.location.reload()
-  }
-
   const _handleProfileClick = () => {
     if (profile?.username) {
       navigate(`/profile/${profile.username}`)
@@ -319,12 +288,12 @@ const Header = () => {
         {user && (
           <>
             <button
-              onClick={handleClearCacheReload}
-              className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-400/30 shadow-lg shadow-cyan-500/20 active:scale-95 transition-all duration-300"
-              title="Clear cache and hard reload"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-slate-800/80 text-white border border-white/10 shadow-lg active:scale-95 transition-all duration-300"
+              aria-label="Toggle menu"
               type="button"
             >
-              <RefreshCw className="w-5 h-5" />
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
             </button>
             
             <div className="hidden md:block">
@@ -339,14 +308,6 @@ const Header = () => {
             </Link>
 
             <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={handleClearCacheReload}
-                className="px-3 py-2 text-xs font-semibold text-cyan-200/90 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg border border-cyan-400/20"
-                title="Clear cache and hard reload"
-                type="button"
-              >
-                Clear cache
-              </button>
               <button
                 onClick={handleLogout}
                 className="p-3 text-red-400 hover:text-red-300 transition-all duration-300 hover:bg-red-500/10 rounded-xl"
