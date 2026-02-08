@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno";
 import webpush from "https://esm.sh/web-push@3.6.7";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -39,24 +39,39 @@ interface WebPushSubscription {
   is_active: boolean;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders });
+    return new Response("ok", { 
+      status: 200, 
+      headers: {
+        ...corsHeaders,
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-requested-with, accept, origin, content-length",
+      }
+    });
   }
 
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error("Supabase keys not set");
-      return new Response(JSON.stringify({ error: "Server configuration error: Supabase keys missing" }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Server configuration error: Supabase keys missing" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       console.error("VAPID keys not set");
-      return new Response(JSON.stringify({ error: "Server configuration error: VAPID keys missing" }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Server configuration error: VAPID keys missing" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const bodyJson = await req.json();
+    
+    // Parse body carefully
+    let bodyJson;
+    try {
+      bodyJson = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const { 
       user_ids, 
       broadcast_followers_id, 
@@ -102,7 +117,7 @@ serve(async (req: Request) => {
     }
 
     if ((!user_id && (!user_ids || user_ids.length === 0) && !broadcast_followers_id && !conversation_id) || !title || !body) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let targetUserIds: string[] = [];
@@ -120,7 +135,7 @@ serve(async (req: Request) => {
       
       if (followersError) {
         console.error("Error fetching followers:", followersError);
-        return new Response(JSON.stringify({ error: "Database error fetching followers" }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: "Database error fetching followers" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       targetUserIds = (followers as UserFollow[]).map((f: UserFollow) => f.follower_id);
     } else if (conversation_id) {
@@ -132,14 +147,14 @@ serve(async (req: Request) => {
         
       if (membersError) {
         console.error("Error fetching conversation members:", membersError);
-        return new Response(JSON.stringify({ error: "Database error fetching members" }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: "Database error fetching members" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       // Filter out sender if provided
       targetUserIds = (members as ConversationMember[]).map((m: ConversationMember) => m.user_id).filter((id: string) => id !== sender_id);
     }
 
     if (targetUserIds.length === 0) {
-      return new Response(JSON.stringify({ message: "No targets found", success: true, count: 0 }), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify({ message: "No targets found", success: true, count: 0 }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Optional: Create DB notifications
@@ -157,7 +172,7 @@ serve(async (req: Request) => {
       const { error: insertError } = await supabase.from('notifications').insert(notifications);
       if (insertError) {
         console.error("Error inserting notifications:", insertError);
-        // Continue to send push even if DB insert fails (or maybe not? strictly speaking we want both)
+        // Continue to send push even if DB insert fails
       }
     }
 
@@ -170,13 +185,13 @@ serve(async (req: Request) => {
 
     if (subError) {
       console.error("Error fetching subscriptions:", subError);
-      return new Response(JSON.stringify({ error: "Database error" }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Database error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const subscriptions = subscriptionsData as WebPushSubscription[] | null;
 
     if (!subscriptions || subscriptions.length === 0) {
-      return new Response(JSON.stringify({ message: "No active subscriptions found", success: true, count: 0 }), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify({ message: "No active subscriptions found", success: true, count: 0 }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // 2. Send push to all subscriptions
@@ -213,6 +228,7 @@ serve(async (req: Request) => {
           
           return { status: "fulfilled", endpoint: sub.endpoint };
         } catch (error: any) {
+          console.error("WebPush send error:", error);
           if (error.statusCode === 410 || error.statusCode === 404) {
             // Subscription is gone, delete it
             await supabase
