@@ -6,17 +6,15 @@ import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe';
 import { trollCityTheme } from '@/styles/trollCityTheme';
 import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import { 
-  Gamepad2, 
+  Play, 
   Users, 
   ShoppingCart, 
+  Gamepad2, 
+  Star, 
+  ArrowRight,
   Coins,
   Shield,
-  Zap,
-  Star,
-  ArrowRight,
-  Sparkles,
-  Play,
-  Crown
+  Zap
 } from 'lucide-react';
 import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
 import BroadcastLockdownControl from '@/components/admin/BroadcastLockdownControl';
@@ -126,10 +124,10 @@ export default function Home() {
 
   const features = [
     {
-      icon: <Crown className="w-8 h-8 text-amber-400" />,
-      title: "Presidential Office",
-      description: "Vote for the Troll City President! The elected President manages the treasury and boosts payouts for everyone.",
-      gradient: "from-amber-600/20 to-orange-600/20",
+      icon: <Star className="w-8 h-8 text-purple-400" />,
+      title: "Mai Talent",
+      description: "Showcase your skills, compete in live talent shows, and win massive prizes in our premier talent competition.",
+      gradient: "from-purple-600/20 to-pink-600/20",
     },
     {
       icon: <Users className="w-8 h-8 text-cyan-400" />,
@@ -223,11 +221,11 @@ export default function Home() {
                     Explore Feed
                   </button>
                   <button
-                    onClick={() => navigate('/president')}
-                    className="px-8 py-4 rounded-2xl font-semibold text-lg text-amber-100 bg-amber-900/40 backdrop-blur-xl border border-amber-500/30 hover:border-amber-400/60 hover:bg-amber-900/60 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(245,158,11,0.15)] flex items-center gap-2"
+                    onClick={() => navigate('/mai-talent')}
+                    className="px-8 py-4 rounded-2xl font-semibold text-lg text-purple-100 bg-purple-900/40 backdrop-blur-xl border border-purple-500/30 hover:border-purple-400/60 hover:bg-purple-900/60 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(168,85,247,0.15)] flex items-center gap-2"
                   >
-                    <Crown className="w-5 h-5 text-amber-400" />
-                    President&apos;s Office
+                    <Star className="w-5 h-5 text-purple-400" />
+                    Mai Talent
                   </button>
                 </div>
               )}

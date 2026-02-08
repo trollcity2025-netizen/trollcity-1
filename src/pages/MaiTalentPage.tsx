@@ -30,8 +30,10 @@ export default function MaiTalentPage() {
   const { spendCoins } = useCoins();
   const [auditions, setAuditions] = useState<Audition[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'watch' | 'audition' | 'leaderboard'>('watch');
+  const [activeTab, setActiveTab] = useState<'watch' | 'audition' | 'leaderboard' | 'dashboard'>('watch');
   const [isJudge, setIsJudge] = useState(false);
+
+  const [isStaff, setIsStaff] = useState(false);
 
   // Form State
   const [talentName, setTalentName] = useState('');
@@ -41,11 +43,29 @@ export default function MaiTalentPage() {
   const [streamUrl, setStreamUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [featureUnavailable, setFeatureUnavailable] = useState(false);
+  const [showActive, setShowActive] = useState(false);
 
   // Access Control: Under Construction for non-admins
   const isAdmin = profile?.role === 'admin' || profile?.is_admin === true;
 
   // Function definitions must come before useEffect
+  const checkStaffStatus = async () => {
+    if (!profile) return;
+    if (profile.role === 'admin' || profile.role === 'moderator' || profile.role === 'troll_officer' || profile.role === 'lead_troll_officer' || profile.is_admin) {
+      setIsStaff(true);
+      setIsJudge(true);
+      return;
+    }
+    
+    const { data } = await supabase
+      .from('mai_talent_judges')
+      .select('id')
+      .eq('user_id', profile.id)
+      .maybeSingle();
+      
+    setIsJudge(!!data);
+  };
+
   const fetchAuditions = async () => {
     setLoading(true);
     try {
@@ -107,26 +127,10 @@ export default function MaiTalentPage() {
     }
   };
 
-  const checkJudgeStatus = async () => {
-    if (!profile) return;
-    if (profile.role === 'admin' || profile.role === 'moderator') {
-      setIsJudge(true);
-      return;
-    }
-    
-    const { data } = await supabase
-      .from('mai_talent_judges')
-      .select('id')
-      .eq('user_id', profile.id)
-      .maybeSingle();
-      
-    setIsJudge(!!data);
-  };
-
   // Hooks must be called unconditionally at the top level
   useEffect(() => {
     fetchAuditions();
-    checkJudgeStatus();
+    checkStaffStatus();
 
     // Polling instead of Realtime for leaderboard to reduce DB load
     const interval = setInterval(() => {
@@ -324,6 +328,14 @@ export default function MaiTalentPage() {
           >
             Leaderboard
           </button>
+          {isStaff && (
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-gradient-to-r from-yellow-600 to-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            >
+              Staff Dashboard
+            </button>
+          )}
         </div>
 
         {/* WATCH SECTION */}
@@ -562,6 +574,60 @@ export default function MaiTalentPage() {
             </div>
           </div>
         )}
+        {/* STAFF DASHBOARD */}
+        {activeTab === 'dashboard' && isStaff && (
+          <div className="max-w-4xl mx-auto space-y-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="bg-slate-900/80 border-white/10">
+                   <CardHeader>
+                     <CardTitle className="text-white">Live Show Control</CardTitle>
+                     <CardDescription>Manage the active talent show state</CardDescription>
+                   </CardHeader>
+                   <CardContent>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-slate-300">Show Status:</span>
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${showActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                           {showActive ? 'LIVE' : 'OFFLINE'}
+                        </span>
+                      </div>
+                      <Button 
+                        onClick={() => setShowActive(!showActive)}
+                        className={`w-full font-bold ${showActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                      >
+                        {showActive ? 'End Show' : 'Start Live Show'}
+                      </Button>
+                   </CardContent>
+                </Card>
+                
+                <Card className="bg-slate-900/80 border-white/10">
+                   <CardHeader>
+                     <CardTitle className="text-white">Quick Actions</CardTitle>
+                     <CardDescription>Manage auditions and users</CardDescription>
+                   </CardHeader>
+                   <CardContent className="space-y-2">
+                      <Button variant="outline" className="w-full border-white/10 text-white hover:bg-white/5 justify-start">
+                         <Star className="w-4 h-4 mr-2 text-yellow-400" /> Review Pending Auditions
+                      </Button>
+                      <Button variant="outline" className="w-full border-white/10 text-white hover:bg-white/5 justify-start">
+                         <Trophy className="w-4 h-4 mr-2 text-purple-400" /> Reset Leaderboard
+                      </Button>
+                   </CardContent>
+                </Card>
+             </div>
+
+             <Card className="bg-slate-900/80 border-white/10">
+               <CardHeader>
+                 <CardTitle className="text-white">Pending Auditions</CardTitle>
+               </CardHeader>
+               <CardContent>
+                 <div className="text-center py-8 text-slate-500">
+                   No pending auditions found.
+                 </div>
+               </CardContent>
+             </Card>
+          </div>
+        )}
+
       </div>
     </div>
   );
