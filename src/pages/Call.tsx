@@ -323,19 +323,48 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
           room: roomId,
           identity: user.email || user.id,
           isHost: true,
+          canPublish: true, // Explicitly request publish permission
         });
 
-        if (tokenResponse.error || !tokenResponse.token) {
-          throw new Error(tokenResponse.error || 'Failed to get LiveKit token');
+        console.log('[Call] Token response:', { 
+          success: tokenResponse.success,
+          hasToken: !!tokenResponse.token,
+          hasDataToken: !!tokenResponse.data?.token,
+          keys: Object.keys(tokenResponse)
+        });
+
+        if (tokenResponse.error) {
+          throw new Error(tokenResponse.error);
         }
 
-        const serverUrl = tokenResponse.livekitUrl || tokenResponse.serverUrl;
+        // Handle both flat and nested structure
+        let tokenVal = tokenResponse.token || tokenResponse.data?.token;
+        
+        if (!tokenVal || typeof tokenVal !== 'string') {
+          console.error('[Call] Invalid token received:', tokenResponse);
+          throw new Error('Invalid token format received from server');
+        }
+
+        // Clean up token - remove whitespace and potential double quotes
+        tokenVal = tokenVal.trim();
+        if (tokenVal.startsWith('"') && tokenVal.endsWith('"')) {
+            tokenVal = tokenVal.slice(1, -1);
+        }
+
+        const serverUrl = tokenResponse.livekitUrl || tokenResponse.serverUrl || tokenResponse.url || tokenResponse.data?.livekitUrl;
+        
         if (!serverUrl) {
           throw new Error('LiveKit server URL not found');
         }
 
+        console.log('[Call] Token received successfully', { 
+          tokenLen: tokenVal.length, 
+          tokenPreview: tokenVal.substring(0, 10) + '...',
+          serverUrl 
+        });
+
         setLivekitUrl(serverUrl);
-        setToken(tokenResponse.token);
+        setToken(tokenVal);
       } catch (err: any) {
         console.error('Token error:', err);
         toast.error('Failed to initialize call');

@@ -135,13 +135,19 @@ export class LiveKitService {
    * Pre-fetches the LiveKit token and caches it.
    * Call this when you anticipate a connection (e.g., in a setup screen).
    */
-  public async prepareToken(): Promise<void> {
+  public async prepareToken(): Promise<string> {
     try {
       this.log('🚀 Pre-fetching token...');
-      await this.getToken();
+      const result = await this.getToken();
+      
+      if (!result?.token) {
+        throw new Error('No token returned from getToken');
+      }
+      
+      return result.token;
     } catch (error) {
       this.log('⚠️ Failed to pre-fetch token', { error });
-      // We don't throw here, as the actual connect() call will try again and handle errors properly
+      throw error;
     }
   }
 
@@ -1084,7 +1090,12 @@ export class LiveKitService {
       }
 
       // Trim whitespace
-      const trimmedToken = token.trim()
+      let trimmedToken = token.trim()
+
+      // Remove double quotes if present
+      if (trimmedToken.startsWith('"') && trimmedToken.endsWith('"')) {
+        trimmedToken = trimmedToken.slice(1, -1);
+      }
 
       // ✅ Gold Standard: Cache the new token
       try {

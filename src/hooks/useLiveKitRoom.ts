@@ -164,6 +164,14 @@ export function useLiveKitRoom(config: LiveKitRoomOptions) {
         throw new Error(`Invalid token response: ${JSON.stringify(errorDetails)}`)
       }
 
+      // Trim token to prevent decoding errors
+      data.token = data.token.trim()
+      
+      // Remove double quotes if present
+      if (data.token.startsWith('"') && data.token.endsWith('"')) {
+        data.token = data.token.slice(1, -1);
+      }
+
       // Decode and log JWT payload for debugging
       const decodedPayload = decodeJWTPayload(data.token)
       if (decodedPayload) {

@@ -63,8 +63,30 @@ export function useLiveKitToken({
     }
 
     let mounted = true;
+    
+    // Sanitize room name to match SetupPage logic (remove dashes)
+    const safeRoomName = roomName.replace(/-/g, "");
 
-    const cacheKey = `${roomName}:${userId || 'guest'}:${isHost ? 'host' : 'viewer'}:${canPublish ? 'pub' : 'sub'}`;
+    // 🚀 Check PreflightStore first (Sync check for Go Live flow)
+    try {
+        // Safety check for circular dependency issues
+        if (PreflightStore) {
+            const preflight = PreflightStore.getToken();
+            if (preflight.token && preflight.roomName === safeRoomName) {
+                console.log('[useLiveKitToken] 💎 Using preflight token for room:', safeRoomName);
+                setToken(preflight.token);
+                setRoom(safeRoomName);
+                // Use default URL or fallback as PreflightStore doesn't persist URL
+                setServerUrl(import.meta.env.VITE_LIVEKIT_URL || import.meta.env.VITE_LIVEKIT_TOKEN_URL?.replace('/token', '') || "");
+                setIdentity(userId || 'host');
+                return;
+            }
+        }
+    } catch (err) {
+        console.warn('[useLiveKitToken] PreflightStore access failed:', err);
+    }
+
+    const cacheKey = `${safeRoomName}:${userId || 'guest'}:${isHost ? 'host' : 'viewer'}:${canPublish ? 'pub' : 'sub'}`;
 
     const fetchToken = async () => {
       try {
@@ -175,7 +197,7 @@ export function useLiveKitToken({
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
-                roomName,
+                roomName: safeRoomName,
                 streamId, // Guest endpoint expects streamId sometimes
                 identity: userId,
                 user_id: userId,
@@ -202,7 +224,14 @@ export function useLiveKitToken({
             const data = await response.json();
             // ... (rest of logic)
             
-            const tokenValue = data.token || data.data?.token;
+            // Handle both structure types (direct or nested)
+            let tokenValue = (data.token || data.data?.token)?.trim();
+            
+            // Remove double quotes if present (some JSON parsers/stringifiers leave them)
+            if (tokenValue && tokenValue.startsWith('"') && tokenValue.endsWith('"')) {
+                tokenValue = tokenValue.slice(1, -1);
+            }
+
             const urlValue = data.url || data.livekitUrl || data.ws_url || import.meta.env.VITE_LIVEKIT_URL || null;
             const identityValue = data.identity || data.data?.identity || null;
             const roomValue = data.room || data.roomName || data.data?.room || null;

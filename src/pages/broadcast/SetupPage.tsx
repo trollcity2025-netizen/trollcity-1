@@ -108,14 +108,24 @@ export default function SetupPage() {
   // Optimize: Pre-fetch LiveKit token as soon as restrictions are passed
   useEffect(() => {
     if (user && restrictionCheck?.allowed && streamId) {
-      console.log('[SetupPage] Pre-fetching LiveKit token for stream:', streamId);
+      const safeRoom = streamId.replace(/-/g, "");
+      console.log('[SetupPage] Pre-fetching LiveKit token for stream:', streamId, 'Room:', safeRoom);
       const service = new LiveKitService({
-        roomName: streamId,
+        roomName: safeRoom,
         identity: user.id,
         role: 'broadcaster',
         allowPublish: true,
       });
-      service.prepareToken();
+      
+      service.prepareToken()
+        .then(token => {
+          console.log('[SetupPage] Token pre-fetched successfully');
+          PreflightStore.setToken(token, safeRoom);
+        })
+        .catch(err => {
+          console.error('[SetupPage] Token pre-fetch failed:', err);
+          // We don't block UI here, but we'll retry on start
+        });
     }
   }, [user, restrictionCheck, streamId]);
 
@@ -264,6 +274,29 @@ export default function SetupPage() {
         return;
       }
 
+      // Ensure token is ready
+      const safeRoom = streamId.replace(/-/g, "");
+      const preflight = PreflightStore.getToken();
+      
+      if (!preflight.token || preflight.roomName !== safeRoom) {
+        try {
+          console.log('[SetupPage] Token missing/mismatch, fetching before start...');
+          const service = new LiveKitService({
+            roomName: safeRoom,
+            identity: user.id,
+            role: 'broadcaster',
+            allowPublish: true,
+          });
+          const token = await service.prepareToken();
+          PreflightStore.setToken(token, safeRoom);
+        } catch (err: any) {
+          console.error('[SetupPage] Critical: Failed to prepare token', err);
+          toast.error(`Stream setup failed: ${err.message}`);
+          setLoading(false);
+          return;
+        }
+      }
+
       // Create stream record with HLS URL pre-populated
       // Note: We use the ID returned by insert, so we do this in two steps or use client-generated ID.
       // Since we rely on Supabase ID generation usually, we insert first then update, OR we assume a pattern.
@@ -277,7 +310,7 @@ export default function SetupPage() {
           user_id: user.id,
           title,
           category,
-          status: 'live',
+          status: 'starting', // Wait for LiveKit connection
           is_live: true,
           started_at: new Date().toISOString(),
           box_count: 1, // Default to just host

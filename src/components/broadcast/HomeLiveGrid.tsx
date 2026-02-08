@@ -33,7 +33,7 @@ export default function HomeLiveGrid() {
           viewer_count,
           thumbnail_url,
           user_id,
-          user_profiles:user_id (
+          user_profiles:user_profiles!streams_user_id_fkey (
             username,
             avatar_url
           )

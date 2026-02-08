@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
-import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants } from '@livekit/components-react';
+import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
@@ -30,8 +30,27 @@ import BroadcastEffectsLayer from '../../components/broadcast/BroadcastEffectsLa
 import ErrorBoundary from '../../components/ErrorBoundary';
 
 // Helper component to sync Room state with Mode (force publish/unpublish)
-const RoomStateSync = ({ mode, isHost }: { mode: 'stage' | 'viewer'; isHost: boolean }) => {
+const RoomStateSync = ({ mode, isHost, streamId }: { mode: 'stage' | 'viewer'; isHost: boolean; streamId: string }) => {
     const { localParticipant } = useLocalParticipant();
+    const room = useRoomContext();
+    
+    // ✅ Fix D: Update status to 'live' after successful connection
+    useEffect(() => {
+        if (isHost && room.state === 'connected') {
+            console.log('[RoomStateSync] Host connected, updating stream status to live...');
+            supabase.from('streams')
+                .update({ 
+                    status: 'live', 
+                    is_live: true,
+                    // Ensure started_at is set if it wasn't
+                })
+                .eq('id', streamId)
+                .then(({ error }) => {
+                    if (error) console.error('[RoomStateSync] Failed to update stream status:', error);
+                    else console.log('[RoomStateSync] Stream marked as live');
+                });
+        }
+    }, [isHost, room.state, streamId]);
     
     useEffect(() => {
         if (!localParticipant) return;
@@ -776,7 +795,7 @@ export default function BroadcastPage() {
                     audio={mode === 'stage'}
                 className="flex-1 relative"
             >
-                <RoomStateSync mode={mode} isHost={isHost} />
+                <RoomStateSync mode={mode} isHost={isHost} streamId={id || ''} />
                 <BroadcastLimitEnforcer 
                     isHost={isHost} 
                     mode={mode} 
