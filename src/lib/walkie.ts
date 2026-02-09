@@ -143,13 +143,16 @@ export const walkieApi = {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.access_token) throw new Error('Not authenticated')
 
-    const res = await fetch('/api/walkie-token', {
+    const res = await fetch('/api/livekit-token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`
       },
-      body: JSON.stringify({ channelId })
+      body: JSON.stringify({ 
+        room: channelId,
+        allowPublish: true
+      })
     })
 
     if (!res.ok) {
