@@ -12,12 +12,14 @@ export function useListenerEntranceEffect({
   isHost,
   isGuest,
   canPublish,
+  username,
 }: {
   streamId: string | null | undefined;
   userId: string | null | undefined;
   isHost: boolean;
   isGuest: boolean;
   canPublish: boolean;
+  username?: string;
 }) {
   const connectionState = useConnectionState();
   const isConnected = connectionState === "connected";
@@ -103,12 +105,14 @@ export function ListenerEntranceEffect({
   isGuest,
   canPublish,
   userId,
+  username,
 }: {
   streamId: string | null | undefined;
   isHost: boolean;
   isGuest: boolean;
   canPublish: boolean;
   userId: string | null | undefined;
+  username?: string;
 }) {
   useListenerEntranceEffect({
     streamId,
@@ -116,6 +120,7 @@ export function ListenerEntranceEffect({
     isGuest,
     canPublish,
     userId,
+    username,
   });
 
   return null;
