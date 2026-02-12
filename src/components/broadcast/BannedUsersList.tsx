@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Loader2, UserX, Unlock, RefreshCcw } from 'lucide-react';
+import { Loader2, UserX, Unlock, RefreshCcw, User, Eye, Shield, UserMinus, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
+import { useAuthStore } from '../../lib/store';
+import { cn } from '../../lib/utils';
 
 interface BannedUser {
     user_id: string;
@@ -16,6 +18,16 @@ interface BannedUser {
     };
 }
 
+interface ActiveViewer {
+    user_id: string;
+    username: string;
+    avatar_url: string | null;
+    role?: string;
+    troll_role?: string;
+    created_at: string;
+    joined_at: string;
+}
+
 interface BannedUsersListProps {
     streamId: string;
     onClose: () => void;
@@ -23,7 +35,54 @@ interface BannedUsersListProps {
 
 export default function BannedUsersList({ streamId, onClose }: BannedUsersListProps) {
     const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
+    const [activeViewers, setActiveViewers] = useState<ActiveViewer[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'banned' | 'active'>('banned');
+    const { user } = useAuthStore();
+
+    const fetchActiveViewers = useCallback(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('stream_viewers')
+                .select('user_id, joined_at')
+                .eq('stream_id', streamId);
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                setActiveViewers([]);
+                return;
+            }
+
+            // Fetch user profiles for all viewers
+            const userIds = data.map(v => v.user_id);
+            const { data: profiles, error: profileError } = await supabase
+                .from('user_profiles')
+                .select('id, username, avatar_url, role, troll_role, created_at')
+                .in('id', userIds);
+
+            if (profileError) throw profileError;
+
+            const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+            const viewers = data.map(v => {
+                const profile = profileMap.get(v.user_id);
+                return {
+                    user_id: v.user_id,
+                    username: profile?.username || 'Unknown',
+                    avatar_url: profile?.avatar_url || null,
+                    role: profile?.role,
+                    troll_role: profile?.troll_role,
+                    created_at: profile?.created_at || '',
+                    joined_at: v.joined_at
+                };
+            });
+
+            setActiveViewers(viewers);
+        } catch (err) {
+            console.error('Failed to fetch active viewers:', err);
+        }
+    }, [streamId]);
 
     const fetchBannedUsers = useCallback(async () => {
         setLoading(true);
@@ -82,8 +141,13 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
     }, [streamId]);
 
     useEffect(() => {
-        fetchBannedUsers();
-    }, [fetchBannedUsers]);
+        const fetchAllData = async () => {
+            setLoading(true);
+            await Promise.all([fetchBannedUsers(), fetchActiveViewers()]);
+            setLoading(false);
+        };
+        fetchAllData();
+    }, [fetchBannedUsers, fetchActiveViewers]);
 
     const handleUnban = async (userId: string) => {
         try {
@@ -140,20 +204,53 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
         <div className="absolute bottom-full left-0 w-80 mb-4 bg-zinc-900 border border-red-900/50 rounded-xl p-4 shadow-2xl z-50 animate-in slide-in-from-bottom-2">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-white flex items-center gap-2">
-                    <UserX size={16} className="text-red-500" />
-                    Banned/Kicked Users
+                    <Eye size={16} className="text-purple-400" />
+                    Room Users
                 </h3>
                 <button onClick={onClose} className="text-sm text-zinc-400 hover:text-white">Close</button>
             </div>
 
+            {/* Tab Switcher */}
+            <div className="flex gap-2 mb-4">
+                <button
+                    onClick={() => setActiveTab('banned')}
+                    className={cn(
+                        "flex-1 py-2 rounded-lg font-medium text-sm transition-colors",
+                        activeTab === 'banned' 
+                            ? "bg-red-600 text-white" 
+                            : "bg-black/40 text-zinc-400 hover:bg-black/60"
+                    )}
+                >
+                    <div className="flex items-center justify-center gap-2">
+                        <UserX size={14} />
+                        Banned ({bannedUsers.length})
+                    </div>
+                </button>
+                <button
+                    onClick={() => setActiveTab('active')}
+                    className={cn(
+                        "flex-1 py-2 rounded-lg font-medium text-sm transition-colors",
+                        activeTab === 'active' 
+                            ? "bg-green-600 text-white" 
+                            : "bg-black/40 text-zinc-400 hover:bg-black/60"
+                    )}
+                >
+                    <div className="flex items-center justify-center gap-2">
+                        <User size={14} />
+                        Active ({activeViewers.length})
+                    </div>
+                </button>
+            </div>
+
             {loading ? (
                 <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
-            ) : bannedUsers.length === 0 ? (
-                <div className="text-center py-8 text-zinc-500 text-sm">
-                    No banned users
-                </div>
-            ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            ) : activeTab === 'banned' ? (
+                bannedUsers.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-500 text-sm">
+                        No banned users
+                    </div>
+                ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                     {bannedUsers.map((ban) => (
                         <div key={ban.user_id} className="bg-black/40 p-2 rounded-lg border border-white/5 flex items-center justify-between">
                             <div className="flex items-center gap-2 overflow-hidden">
@@ -190,10 +287,55 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
                             </button>
                         </div>
                     ))}
-                </div>
+                    </div>
+                )
+            ) : (
+                activeViewers.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-500 text-sm">
+                        No active viewers
+                    </div>
+                ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        {activeViewers.map((viewer) => (
+                            <div key={viewer.user_id} className="bg-black/40 p-2 rounded-lg border border-white/5 flex items-center justify-between">
+                                <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                    <div className="w-8 h-8 rounded-full bg-zinc-800 overflow-hidden flex-shrink-0">
+                                        {viewer.avatar_url ? (
+                                            <img src={viewer.avatar_url} alt={viewer.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">
+                                                {viewer.username?.[0]?.toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-bold text-white truncate flex items-center gap-1">
+                                            <UserNameWithAge 
+                                                user={{
+                                                    username: viewer.username,
+                                                    created_at: viewer.created_at
+                                                }}
+                                                showBadges={false}
+                                            />
+                                            {(viewer.role === 'admin' || viewer.troll_role === 'admin') && (
+                                                <Crown size={12} className="text-red-500" title="Admin" />
+                                            )}
+                                            {(viewer.role === 'moderator' || viewer.troll_role === 'troll_officer') && (
+                                                <Shield size={12} className="text-blue-400" title="Officer" />
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-green-400 truncate">
+                                            {viewer.role || viewer.troll_role || 'Viewer'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )
             )}
              <div className="mt-3 pt-3 border-t border-white/5 flex justify-center">
-                <button onClick={fetchBannedUsers} className="text-xs text-zinc-500 flex items-center gap-1 hover:text-zinc-300">
+                <button onClick={async () => { setLoading(true); await Promise.all([fetchBannedUsers(), fetchActiveViewers()]); setLoading(false); }} className="text-xs text-zinc-500 flex items-center gap-1 hover:text-zinc-300">
                     <RefreshCcw size={12} /> Refresh List
                 </button>
             </div>

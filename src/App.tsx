@@ -29,7 +29,6 @@ import GlobalPresenceTracker from "./components/GlobalPresenceTracker";
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
 import GlobalUserCounter from "./components/admin/GlobalUserCounter";
-import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 import AdminErrors from "./pages/admin/AdminErrors";
 import ProfileSetupModal from "./components/ProfileSetupModal";
@@ -574,6 +573,25 @@ function AppContent() {
         navigate('/church/pastor', { replace: true })
         return
       }
+
+      // 'v' -> Toggle Voice Notifications (Admin Only)
+      if ((event.key === 'v' || event.key === 'V') && (profile?.role === 'admin' || profile?.is_admin)) {
+        const currentState = localStorage.getItem('voiceNotificationsEnabled') === 'true';
+        const newState = !currentState;
+        localStorage.setItem('voiceNotificationsEnabled', String(newState));
+        
+        // Dispatch event for hook to listen
+        const event_toggle = new CustomEvent('toggleVoiceNotifications', {
+          detail: { enabled: newState }
+        });
+        window.dispatchEvent(event_toggle);
+        
+        // Show feedback
+        toast[newState ? 'success' : 'info'](
+          newState ? '🔊 Voice Notifications: ACTIVE' : '🔇 Voice Notifications: INACTIVE'
+        );
+        return
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -768,8 +786,34 @@ function AppContent() {
   useEffect(() => {
     if (!user?.id) return
  
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (!document.hidden) {
+        // BATTLE PROTECTION: Don't refresh data if user is in an active battle
+        // Check current URL for battle routes
+        const currentPath = window.location.pathname;
+        if (currentPath.includes('/battle/')) {
+          console.log('⚔️ Battle mode detected - skipping visibility refresh to prevent disruption');
+          return;
+        }
+        
+        // Also check if user has any active battles in the database
+        try {
+          const { data: activeBattles } = await supabase
+            .from('battles')
+            .select('id, status')
+            .or(`challenger_stream_id.in.(select id from streams where user_id.eq.${user.id}),opponent_stream_id.in.(select id from streams where user_id.eq.${user.id})`)
+            .eq('status', 'active')
+            .limit(1);
+            
+          if (activeBattles && activeBattles.length > 0) {
+            console.log('⚔️ User has active battle - skipping visibility refresh');
+            return;
+          }
+        } catch (e) {
+          console.error('Failed to check battle status:', e);
+          // Continue with refresh if check fails
+        }
+        
         // Tab became visible, refresh data
         console.log('Tab became visible, refreshing data...')
         refreshProfile()
@@ -825,9 +869,6 @@ function AppContent() {
               
               {/* Global Gift Banner */}
       <GlobalGiftBanner />
-
-      {/* PWA Install Prompt */}
-      <PWAInstallPrompt />
 
       {/* Broadcast Announcement */}
       <BroadcastAnnouncement />

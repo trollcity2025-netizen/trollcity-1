@@ -51,12 +51,28 @@ export const handler = async (req: Request): Promise<Response> => {
         // Verify user is broadcaster or admin
         const { data: stream } = await supabase
           .from("streams")
-          .select("broadcaster_id")
+          .select("broadcaster_id, battle_id")
           .eq("id", stream_id)
           .single();
 
         if (!stream) {
           return withCors({ error: "Stream not found" }, 404);
+        }
+
+        // BATTLE PROTECTION: Check if stream is in active battle
+        if (stream.battle_id) {
+          const { data: battleData } = await supabase
+            .from("battles")
+            .select("status")
+            .eq("id", stream.battle_id)
+            .single();
+            
+          if (battleData?.status === 'active') {
+            return withCors({ 
+              error: "Cannot end stream during active battle. End the battle first.",
+              battle_id: stream.battle_id
+            }, 400);
+          }
         }
 
         const { data: profile } = await supabase

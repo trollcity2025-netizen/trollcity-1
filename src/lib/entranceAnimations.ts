@@ -1,7 +1,7 @@
 // Entrance Effects Animation Engine
 // Real-time animations for stream entrances
 
-import { getEntranceEffectConfig, getRoleBasedEffectConfig, type EntranceEffectKey } from './entranceEffects';
+import { getEntranceEffectConfig, type EntranceEffectKey } from './entranceEffects';
 
 /**
  * Main entrance animation trigger
@@ -22,13 +22,7 @@ export async function playEntranceAnimation(userId: string, effectKey: string, t
     }
   }
   
-  // Try role-based effect first
-  let effectConfig = getRoleBasedEffectConfig(effectKey);
-
-  // If not role-based, try regular effect
-  if (!effectConfig) {
-    effectConfig = getEntranceEffectConfig(effectKey as EntranceEffectKey);
-  }
+  const effectConfig = getEntranceEffectConfig(effectKey as EntranceEffectKey);
 
   if (!effectConfig) {
     console.error('Invalid entrance effect:', effectKey);

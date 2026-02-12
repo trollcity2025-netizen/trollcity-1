@@ -25,12 +25,30 @@ SECTION 5: GENERAL INFORMATION
 TMV stands for Troll Motor Vehicle.
 Always check your vehicle status, insurance, and license details at the TMV Dashboard.
 If you fail the written test, the procedure is simple: Try again.
+
+SECTION 6: WRITTEN TEST ANSWER KEY (UPDATED)
+1) A
+2) B
+3) B
+4) C
+5) A
+6) D
+7) C
+8) A
+9) B
+10) B
 `;
 
 export default function TMVDrivingManual({ onAcknowledge }: { onAcknowledge?: () => void }) {
   const [acknowledged, setAcknowledged] = useState(false);
 
   const [timeLeft, setTimeLeft] = useState(60);
+
+  const handleAcknowledge = React.useCallback(() => {
+    localStorage.setItem(DRIVING_MANUAL_KEY, '1');
+    setAcknowledged(true);
+    if (onAcknowledge) onAcknowledge();
+  }, [onAcknowledge]);
 
   useEffect(() => {
     const seen = localStorage.getItem(DRIVING_MANUAL_KEY);
@@ -52,13 +70,7 @@ export default function TMVDrivingManual({ onAcknowledge }: { onAcknowledge?: ()
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
-
-  const handleAcknowledge = () => {
-    localStorage.setItem(DRIVING_MANUAL_KEY, '1');
-    setAcknowledged(true);
-    if (onAcknowledge) onAcknowledge();
-  };
+  }, [handleAcknowledge, onAcknowledge]);
 
   if (acknowledged) return null;
 

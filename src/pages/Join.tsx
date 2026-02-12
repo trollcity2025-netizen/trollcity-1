@@ -75,7 +75,7 @@ export default function JoinPage() {
 
         toast.success('Joined as host — you can publish now')
         // Navigate to broadcast page for the room
-        navigate(`/broadcast/${room}`)
+        navigate(`/watch/${room}`)
       } catch (err) {
         console.error('Join error', err)
         toast.error('Unable to join')

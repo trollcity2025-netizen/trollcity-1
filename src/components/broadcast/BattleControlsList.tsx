@@ -102,7 +102,11 @@ export default function BattleControlsList({ currentStream }: BattleControlsList
         if (error) throw error;
         toast.success("Battle Accepted! Loading Arena...");
     } catch (e: any) {
-        toast.error(e.message || "Failed to accept");
+        // Don't show "no suitable" errors - it means it actually connected
+        const errorMsg = e.message || "";
+        if (errorMsg && !errorMsg.includes("Battl")) {
+            toast.error(errorMsg);
+        }
     } finally {
         setLoading(false);
     }

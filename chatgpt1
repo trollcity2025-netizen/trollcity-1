@@ -1,0 +1,299 @@
+FINAL “FIX-ALL TODAY” PROMPT FOR TRAE (matches your code)
+Objective
+
+Make gifting 100% reliable today across:
+
+normal broadcasts (BroadcastPage → GiftTray → useGiftSystem)
+
+battles (BattleView merged room) where you gift a participant and the gift credits the correct battle side via p_stream_id
+
+…and ensure gifting does not break coin purchases or any other system.
+
+Hard Requirements (must follow)
+
+Do not use public.gifts as a catalog. It’s already used as a gift transaction log by spend_coins.
+
+The canonical gift catalog used by gifting must match your UI:
+
+primary: purchasable_items where category='gift' and is_active=true
+
+fallback: gift_items
+
+Keep ONE sending path in frontend:
+
+useGiftSystem.ts continues calling only send_gift_in_stream
+
+Fix gifting atomics:
+
+lock sender row (FOR UPDATE)
+
+ensure sufficient funds before deduction
+
+add idempotency key so client retries don’t double-charge
+
+Step 1 — DB migration: add idempotency + safe atomic gifting
+
+Create a migration (additive only, no drops):
+
+1A) Add txn_key to coin_transactions (since you already write there)
+ALTER TABLE public.coin_transactions
+ADD COLUMN IF NOT EXISTS txn_key text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS coin_transactions_txn_key_uq
+ON public.coin_transactions (txn_key)
+WHERE txn_key IS NOT NULL;
+
+1B) Replace send_gift_in_stream with a version that:
+
+looks up gifts from purchasable_items then fallback to gift_items
+
+locks sender balance row
+
+applies 95% receiver share exactly like you coded
+
+writes coin_transactions with txn_key
+
+is idempotent (if the txn_key already exists → return success and do nothing)
+
+Replace the function with this exact logic (same name to avoid breaking UI):
+
+CREATE OR REPLACE FUNCTION public.send_gift_in_stream(
+  p_sender_id UUID,
+  p_receiver_id UUID,
+  p_stream_id UUID,
+  p_gift_id TEXT,
+  p_quantity INTEGER,
+  p_txn_key TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_sender_balance BIGINT;
+  v_gift_cost BIGINT;
+  v_total_cost BIGINT;
+  v_receiver_credit BIGINT;
+  v_battle_id UUID;
+  v_is_challenger BOOLEAN;
+  v_effective_txn_key TEXT;
+BEGIN
+  -- Basic validation
+  IF p_quantity IS NULL OR p_quantity <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Invalid quantity');
+  END IF;
+
+  IF p_sender_id IS NULL OR p_receiver_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Missing sender or receiver');
+  END IF;
+
+  IF p_sender_id = p_receiver_id THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Cannot gift yourself');
+  END IF;
+
+  -- Auth guard (prevents spoofed sender_id from client)
+  IF auth.uid() IS NULL OR auth.uid() <> p_sender_id THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Unauthorized');
+  END IF;
+
+  -- Idempotency key (client should pass; if null we still proceed but no idempotency)
+  v_effective_txn_key := p_txn_key;
+
+  IF v_effective_txn_key IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.coin_transactions
+      WHERE txn_key = v_effective_txn_key
+      LIMIT 1
+    ) THEN
+      RETURN jsonb_build_object('success', true, 'message', 'Duplicate ignored', 'txn_key', v_effective_txn_key);
+    END IF;
+  END IF;
+
+  -- 1) Gift cost lookup: FIRST purchasable_items (matches GiftTray)
+  SELECT pi.coin_price
+    INTO v_gift_cost
+  FROM public.purchasable_items pi
+  WHERE pi.category = 'gift'
+    AND pi.is_active = true
+    AND (
+      pi.id::text = p_gift_id OR
+      pi.item_key = p_gift_id
+    )
+  LIMIT 1;
+
+  -- Fallback: gift_items (legacy)
+  IF v_gift_cost IS NULL THEN
+    SELECT gi.value
+      INTO v_gift_cost
+    FROM public.gift_items gi
+    WHERE (gi.id::text = p_gift_id)
+       OR (gi.gift_slug = p_gift_id)
+       OR (gi.name = p_gift_id)
+    LIMIT 1;
+  END IF;
+
+  IF v_gift_cost IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Gift not found');
+  END IF;
+
+  v_total_cost := v_gift_cost * p_quantity;
+  v_receiver_credit := FLOOR(v_total_cost * 0.95);
+
+  -- 2) Lock sender balance row to prevent race conditions
+  SELECT troll_coins
+    INTO v_sender_balance
+  FROM public.user_profiles
+  WHERE id = p_sender_id
+  FOR UPDATE;
+
+  IF COALESCE(v_sender_balance, 0) < v_total_cost THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Insufficient funds');
+  END IF;
+
+  -- 3) Apply balance updates
+  UPDATE public.user_profiles
+  SET troll_coins = troll_coins - v_total_cost,
+      updated_at = NOW()
+  WHERE id = p_sender_id;
+
+  UPDATE public.user_profiles
+  SET troll_coins = troll_coins + v_receiver_credit,
+      updated_at = NOW()
+  WHERE id = p_receiver_id;
+
+  -- 4) Record coin transactions (sender + receiver) with metadata
+  INSERT INTO public.coin_transactions (user_id, amount, type, txn_key, metadata)
+  VALUES
+    (
+      p_sender_id,
+      -v_total_cost,
+      'gift_sent',
+      v_effective_txn_key,
+      jsonb_build_object('gift_id', p_gift_id, 'receiver_id', p_receiver_id, 'stream_id', p_stream_id, 'quantity', p_quantity)
+    ),
+    (
+      p_receiver_id,
+      v_receiver_credit,
+      'gift_received',
+      v_effective_txn_key,
+      jsonb_build_object('gift_id', p_gift_id, 'sender_id', p_sender_id, 'stream_id', p_stream_id, 'quantity', p_quantity)
+    );
+
+  -- 5) Battle scoring (your existing design: battle determined from stream_id)
+  SELECT id, (challenger_stream_id = p_stream_id)
+    INTO v_battle_id, v_is_challenger
+  FROM public.battles
+  WHERE (challenger_stream_id = p_stream_id OR opponent_stream_id = p_stream_id)
+    AND status = 'active'
+  LIMIT 1;
+
+  IF v_battle_id IS NOT NULL THEN
+    IF v_is_challenger THEN
+      UPDATE public.battles
+      SET score_challenger = COALESCE(score_challenger, 0) + v_total_cost,
+          pot_challenger   = COALESCE(pot_challenger, 0) + v_total_cost
+      WHERE id = v_battle_id;
+    ELSE
+      UPDATE public.battles
+      SET score_opponent = COALESCE(score_opponent, 0) + v_total_cost,
+          pot_opponent   = COALESCE(pot_opponent, 0) + v_total_cost
+      WHERE id = v_battle_id;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'Gift sent successfully',
+    'debited', v_total_cost,
+    'credited', v_receiver_credit,
+    'txn_key', v_effective_txn_key
+  );
+END;
+$$;
+
+
+✅ This keeps your exact frontend call working (same name), adds a safe optional p_txn_key, and aligns gift lookup with your GiftTray.
+
+Step 2 — Frontend: add idempotency key + fix GiftTray import path mismatch
+
+Your GiftTray.tsx imports useGiftSystem from the wrong path in the pasted file:
+
+import { useGiftSystem } from '../../lib/hooks/useGiftSystem';
+
+
+…but the actual hook file you showed is:
+src/hooks/useGiftSystem.ts
+
+So Trae must fix the import to:
+
+import { useGiftSystem, GiftItem } from '../../hooks/useGiftSystem';
+
+2A) Pass a txn_key every send (prevents double charge on retry)
+
+In useGiftSystem.ts, modify the RPC call to include p_txn_key.
+
+You already import generateUUID. Use it:
+
+const txnKey = generateUUID();
+
+const { data, error } = await supabase.rpc('send_gift_in_stream', {
+  p_sender_id: user.id,
+  p_receiver_id: finalRecipientId,
+  p_stream_id: streamId || null,
+  p_gift_id: gift.id,
+  p_quantity: quantity,
+  p_txn_key: txnKey,
+});
+
+2B) IMPORTANT: for battle gifting, keep using sourceStreamId
+
+Your BattleView already does the right concept:
+
+it sets giftStreamId to meta.sourceStreamId
+That’s perfect because send_gift_in_stream uses p_stream_id to decide challenger/opponent scoring.
+
+So Trae must ensure when clicking a participant in battle, the GiftTray receives:
+
+recipientId = participant.identity
+
+streamId = meta.sourceStreamId ✅ required for correct battle side scoring
+
+battleId is optional (not required by the RPC)
+
+Step 3 — Ensure we don’t break your purchase system
+
+No changes to purchases are required.
+
+GiftTray continues to load items from purchasable_items (gift catalog).
+
+The RPC now also reads from purchasable_items.
+
+That makes gifting consistent with your store model without touching coin store.
+
+Step 4 — Quick verification checklist (Trae must run)
+
+In a broadcast (not battle):
+
+Send gift → sender coins decrease by full cost, receiver increases by 95%
+
+coin_transactions has 2 rows with same txn_key
+
+Retry spam click / network retry:
+
+same txn_key must not double charge (should return “Duplicate ignored”)
+
+In a battle:
+
+send gift to a challenger participant with sourceStreamId = challenger_stream_id
+
+battles.score_challenger increases by full v_total_cost
+
+pot_challenger increases by full v_total_cost
+
+repeat for opponent side
+
+Step 5 — Do NOT use public.spend_coins for gifting anymore
+
+It conflicts with the above and writes into public.gifts (log table).
+If any UI still calls it, Trae should route those calls to send_gift_in_stream instead.

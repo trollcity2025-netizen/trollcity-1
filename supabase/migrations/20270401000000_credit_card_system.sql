@@ -180,9 +180,12 @@ SECURITY DEFINER
 AS $$
 DECLARE
     v_user_id UUID := auth.uid();
+    v_admin_id UUID := '8dff9f37-21b5-4b8e-adc2-b9286874be1a'::uuid;
     v_profile RECORD;
     v_pay_amount BIGINT;
+    v_interest_amount BIGINT;
     v_new_credit_used BIGINT;
+    v_new_credit_score INTEGER;
 BEGIN
     IF v_user_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'Not authenticated');
@@ -206,14 +209,28 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Insufficient Troll Coins');
     END IF;
 
-    -- Execute Payment
+    -- Calculate 8% interest/fee on the payment amount
+    v_interest_amount := CEIL(v_pay_amount * 0.08);
+
+    -- Execute Payment (deduct from user's coins)
     UPDATE public.user_profiles
     SET troll_coins = troll_coins - v_pay_amount,
         credit_used = credit_used - v_pay_amount
     WHERE id = v_user_id
     RETURNING credit_used INTO v_new_credit_used;
 
-    -- Log Ledger
+    -- Increase user's credit score (up to 800)
+    UPDATE public.user_profiles
+    SET credit_score = LEAST(credit_score + 5, 800)
+    WHERE id = v_user_id
+    RETURNING credit_score INTO v_new_credit_score;
+
+    -- Send 8% interest to admin account
+    UPDATE public.user_profiles
+    SET troll_coins = troll_coins + v_interest_amount
+    WHERE id = v_admin_id;
+
+    -- Log Ledger for user's payment
     INSERT INTO public.coin_ledger (user_id, delta, bucket, source, reason, metadata)
     VALUES (
         v_user_id, 
@@ -221,13 +238,26 @@ BEGIN
         'repayment', 
         'credit_card_repay', 
         'Credit Card Repayment', 
-        jsonb_build_object('remaining_debt', v_new_credit_used)
+        jsonb_build_object('remaining_debt', v_new_credit_used, 'interest_paid', v_interest_amount)
+    );
+
+    -- Log Ledger for admin's interest income
+    INSERT INTO public.coin_ledger (user_id, delta, bucket, source, reason, metadata)
+    VALUES (
+        v_admin_id, 
+        v_interest_amount, 
+        'revenue', 
+        'credit_card_interest', 
+        'Credit Card Interest from User Payment', 
+        jsonb_build_object('payer', v_user_id, 'original_payment', v_pay_amount)
     );
 
     RETURN jsonb_build_object(
         'success', true, 
         'paid', v_pay_amount, 
+        'interest_to_admin', v_interest_amount,
         'remaining_debt', v_new_credit_used,
+        'new_credit_score', v_new_credit_score,
         'remaining_coins', v_profile.troll_coins - v_pay_amount
     );
 END;

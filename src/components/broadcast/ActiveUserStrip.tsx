@@ -31,6 +31,7 @@ export default function ActiveUserStrip({ streamId, isHost, isModerator, onGift 
   // Entrance Effect Queue
   const [effectQueue, setEffectQueue] = useState<Array<{ effectId: string, username: string, avatarUrl?: string }>>([]);
   const [currentEffect, setCurrentEffect] = useState<{ effectId: string, username: string, avatarUrl?: string } | null>(null);
+  const shownEffectsRef = useRef<Set<string>>(new Set()); // Track users who have shown entrance effects
 
   useEffect(() => {
     const fetchViewers = async () => {
@@ -51,18 +52,20 @@ export default function ActiveUserStrip({ streamId, isHost, isModerator, onGift 
         const currentIds = new Set(newViewers.map(v => v.user_id));
         
         // Find users who are in newViewers but were NOT in prevIds
-        // We also need to make sure we don't trigger for initial load if we want (or maybe we do?)
-        // Let's trigger for initial load only if it's not the VERY first load? 
-        // Actually, preventing initial load flood is good.
+        // AND haven't already shown their entrance effect
         if (prevIds.size > 0) {
             newViewers.forEach(v => {
-                if (!prevIds.has(v.user_id) && v.user.active_entrance_effect) {
+                if (!prevIds.has(v.user_id) && 
+                    v.user.active_entrance_effect && 
+                    !shownEffectsRef.current.has(v.user_id)) {
                     // New user with effect!
                     setEffectQueue(prev => [...prev, {
                         effectId: v.user.active_entrance_effect!,
                         username: v.user.username,
                         avatarUrl: v.user.avatar_url || undefined
                     }]);
+                    // Mark this user as having shown their entrance effect
+                    shownEffectsRef.current.add(v.user_id);
                 }
             });
         }
@@ -76,22 +79,12 @@ export default function ActiveUserStrip({ streamId, isHost, isModerator, onGift 
     fetchViewers();
     const interval = setInterval(fetchViewers, 30000); // Refresh every 30s
 
-    // Realtime subscription for immediate updates
-    const channel = supabase
-      .channel(`active_viewers:${streamId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'stream_viewers',
-        filter: `stream_id=eq.${streamId}`
-      }, () => {
-        fetchViewers();
-      })
-      .subscribe();
+    // Note: We don't subscribe to realtime stream_viewers changes here because
+    // it causes entrance effects to retrigger when users join guest seats.
+    // The 30s polling interval is sufficient for viewer list updates.
 
     return () => {
       clearInterval(interval);
-      supabase.removeChannel(channel);
     };
   }, [streamId]);
 

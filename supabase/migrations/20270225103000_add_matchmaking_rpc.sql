@@ -58,7 +58,7 @@ BEGIN
 
     -- 3. Return a random stream meeting criteria
     RETURN QUERY
-    SELECT s.id, s.user_id, s.title, s.viewer_count
+    SELECT s.id::UUID, s.user_id::UUID, s.title::TEXT, s.viewer_count::INTEGER
     FROM streams s
     WHERE s.is_live = TRUE
       AND s.is_battle = FALSE

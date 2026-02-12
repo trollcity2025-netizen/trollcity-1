@@ -79,7 +79,7 @@ export default function PresidentInaugurationCard() {
         {/* Thumbnail / Click Area */}
         <div 
           className="relative aspect-video group cursor-pointer"
-          onClick={() => navigate(`/broadcast/${presidentStream.id}`)}
+          onClick={() => navigate(`/watch/${presidentStream.id}`)}
         >
           {presidentStream.thumbnail_url ? (
             <img 

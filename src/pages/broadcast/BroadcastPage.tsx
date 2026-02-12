@@ -89,14 +89,18 @@ const RoomStateSync = ({ mode, isHost, streamId }: { mode: 'stage' | 'viewer'; i
                             }
                         }
 
-                        if (!localParticipant.isCameraEnabled) {
-                            console.log('[RoomStateSync] Joining stage: Enabling Camera');
-                            try {
-                                await localParticipant.setCameraEnabled(true);
-                            } catch (e) {
-                                console.warn('[RoomStateSync] Failed to enable camera (likely not connected yet):', e);
+                        // Enable camera with a small delay to ensure connection is ready
+                        setTimeout(async () => {
+                            if (!localParticipant.isCameraEnabled) {
+                                console.log('[RoomStateSync] Joining stage: Enabling Camera');
+                                try {
+                                    await localParticipant.setCameraEnabled(true);
+                                } catch (e) {
+                                    console.warn('[RoomStateSync] Failed to enable camera (likely not connected yet):', e);
+                                }
                             }
-                        }
+                        }, 500);
+
                         if (!localParticipant.isMicrophoneEnabled) {
                             console.log('[RoomStateSync] Joining stage: Enabling Mic');
                             try {
@@ -308,6 +312,15 @@ export default function BroadcastPage() {
   const effectiveUserId = user?.id || guestId;
   const guestUserObj = React.useMemo(() => (!user ? { id: guestId, username: guestId } : null), [user, guestId]);
 
+    const seatPaidKey = id && effectiveUserId ? `seat_paid_${id}_${effectiveUserId}` : null;
+    const [hasPaidSeat, setHasPaidSeat] = useState(false);
+
+    useEffect(() => {
+        if (seatPaidKey) {
+            setHasPaidSeat(!!sessionStorage.getItem(seatPaidKey));
+        }
+    }, [seatPaidKey]);
+
   const [guestTimeLeft, setGuestTimeLeft] = useState<number | null>(null);
   const [hostTimeLimit, setHostTimeLimit] = useState(3600000); // Default 1 hour
 
@@ -384,8 +397,9 @@ export default function BroadcastPage() {
   const [accessDenied, setAccessDenied] = useState(false);
   const [showBattleManager, setShowBattleManager] = useState(false);
   const [preflightStream, setPreflightStream] = useState<MediaStream | null>(null);
-  const handleBoxCountUpdate = async (newCount: number) => {
-    if (!stream || !isHost) return;
+    const handleBoxCountUpdate = async (newCount: number) => {
+        const canEditBoxes = isHost || isStaffMember(profile);
+        if (!stream || !canEditBoxes) return;
 
     const currentCount = stream.box_count || 1;
     const requiredBoxes = Object.values(seats).filter(s => s.status === 'active').length;
@@ -573,6 +587,11 @@ export default function BroadcastPage() {
         setBroadcasterProfile(data.broadcaster);
       }
       setLoading(false);
+
+      // 🚀 Initial Battle Check
+      if (data.battle_id && data.is_battle) {
+          console.log('[BroadcastPage] Already in battle! Rendering BattleView in-place:', data.battle_id);
+      }
     };
 
     fetchStream();
@@ -594,9 +613,15 @@ export default function BroadcastPage() {
         )
         .subscribe();
 
+    // Polling fallback to ensure viewers receive box count updates
+    const pollInterval = setInterval(() => {
+      fetchStream();
+    }, 5000);
+
     return () => {
         mounted = false;
         supabase.removeChannel(channel);
+        clearInterval(pollInterval);
     };
   }, [id, navigate, profile]);
 
@@ -695,11 +720,6 @@ export default function BroadcastPage() {
   };
 
   const handleJoinRequest = async (seatIndex: number) => {
-      if (!user) {
-          toast.error("Login required to join stage");
-          return;
-      }
-
       // Guest Limit Check (Max 3 Guests)
       const occupiedSeats = Object.values(seats).filter(s => s.status === 'active').length;
       if (occupiedSeats >= 3) {
@@ -707,7 +727,10 @@ export default function BroadcastPage() {
           return;
       }
       
-      const price = stream?.seat_price || 0;
+      let price = stream?.seat_price || 0;
+      if (price > 0 && hasPaidSeat) {
+          price = 0;
+      }
       let success = false;
 
       if (price > 0) {
@@ -721,6 +744,10 @@ export default function BroadcastPage() {
 
       if (success && id) {
           sessionStorage.setItem(`seat_session_${id}`, 'true');
+          if (seatPaidKey && (stream?.seat_price || 0) > 0) {
+              sessionStorage.setItem(seatPaidKey, 'true');
+              setHasPaidSeat(true);
+          }
       }
   };
 
@@ -781,7 +808,7 @@ export default function BroadcastPage() {
   // If the stream is in a battle, render the BattleView immediately.
   // This solves the "Battle system hangs" issue by ensuring we switch views when battle_id is present.
   if (stream.battle_id) {
-      return <BattleView battleId={stream.battle_id} currentStreamId={id || ''} />;
+      return <BattleView battleId={stream.battle_id} currentStreamId={id || ''} viewerId={effectiveUserId} />;
   }
 
   // Viewer Limit Check
@@ -821,7 +848,7 @@ export default function BroadcastPage() {
   */
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-black text-white overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-[100dvh] bg-black text-white overflow-hidden font-sans">
         
         {/* Main Stage / Video Area */}
         <div 
@@ -851,7 +878,7 @@ export default function BroadcastPage() {
                             <div className="text-zinc-500 text-sm animate-pulse">
                                 {!stream ? 'Loading stream info...' :
                                  !user ? 'Identifying user...' :
-                                 !token ? 'Requesting LiveKit token...' :
+                                 !token ? (mode === 'stage' && !isHost ? 'Joining seat...' : 'Requesting LiveKit token...') :
                                  !serverUrl ? 'Connecting to server...' :
                                  'Initializing studio...'}
                             </div>
@@ -932,6 +959,7 @@ export default function BroadcastPage() {
                             onJoinSeat={handleJoinRequest} 
                             onKick={kickParticipant}
                             broadcasterProfile={isHost ? profile : broadcasterProfile}
+                            seatPriceOverride={hasPaidSeat ? 0 : stream.seat_price}
                         />
                     </ErrorBoundary>
                     
@@ -945,9 +973,11 @@ export default function BroadcastPage() {
                                 chatOpen={true}
                                 toggleChat={() => {}}
                                 onGiftHost={() => setGiftRecipientId(stream.user_id)}
-                                onLeave={isHost ? undefined : handleLeave}
+                                onLeave={mode === 'stage' && !isHost ? handleLeave : undefined}
                                 onShare={handleShare}
+                                requiredBoxes={Object.values(seats).filter(s => s.status === 'active').length}
                                 onBoxCountUpdate={handleBoxCountUpdate}
+                                liveViewerCount={viewerCount}
                             />
                         </div>
                     </div>

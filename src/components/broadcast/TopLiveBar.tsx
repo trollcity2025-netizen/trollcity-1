@@ -42,9 +42,6 @@ export default function TopLiveBar({
                 <User size={14} className="text-zinc-400" />
               </div>
             )}
-            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 bg-pink-600 text-[9px] font-bold px-1 rounded-sm leading-tight text-white">
-              LIVE
-            </div>
           </div>
           <span 
             className="text-xs font-bold text-white truncate max-w-[80px]"
@@ -73,9 +70,6 @@ export default function TopLiveBar({
               <User size={16} className="text-zinc-400" />
             </div>
           )}
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-pink-600 text-[10px] font-bold px-1.5 rounded-sm leading-tight text-white">
-            LIVE
-          </div>
         </div>
         
         <div className="flex flex-col">

@@ -157,7 +157,7 @@ export default function ExploreFeed() {
   };
 
   const handleBroadcastClick = (broadcast: Broadcast) => {
-    navigate(`/broadcast/${broadcast.id}`, { state: { fromExplore: true } });
+    navigate(`/watch/${broadcast.id}`, { state: { fromExplore: true } });
   };
 
   return (

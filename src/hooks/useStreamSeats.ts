@@ -85,7 +85,7 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
           joined_at: s.joined_at,
         };
 
-        if (uid && s.user_id === uid) {
+        if (uid && (s.user_id === uid || s.guest_id === uid)) {
           mySess = seatMap[idx];
         }
       });
@@ -152,12 +152,16 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
     }
 
     try {
-      const { data: result, error } = await supabase.rpc('join_seat_atomic', {
+      const isGuest = effectiveUserId.startsWith('TC-');
+      const payload = {
         p_stream_id: streamId,
         p_seat_index: seatIndex,
         p_price: price,
-        p_user_id: effectiveUserId
-      });
+        p_user_id: isGuest ? null : effectiveUserId,
+        p_guest_id: isGuest ? effectiveUserId : null
+      };
+
+      const { data: result, error } = await supabase.rpc('join_seat_atomic', payload);
 
       if (error) throw error;
 

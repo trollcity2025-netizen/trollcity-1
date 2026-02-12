@@ -21,6 +21,7 @@ interface TokenRequestParams {
   allowPublish?: boolean | string;
   level?: string | number;
   role?: string;
+  attributes?: Record<string, any>;
 }
 
 // ✅ Lazy imports so OPTIONS is instant
@@ -228,6 +229,54 @@ serve(async (req: Request) => {
       canPublish = true;
     }
 
+    // Battle room override: allow host/stage participants to publish
+    // Validate against battle_participants in DB to prevent spoofing
+    if (!canPublish && room && room.startsWith('battle-') && !String(profile.id).startsWith('guest-')) {
+      try {
+        const battleId = room.replace('battle-', '');
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+        if (supabaseUrl && supabaseServiceKey) {
+          const { createClient } = await getSupabase();
+          const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+          const { data: participant, error: participantError } = await supabaseAdmin
+            .from('battle_participants')
+            .select('role')
+            .eq('battle_id', battleId)
+            .eq('user_id', profile.id)
+            .single();
+
+          if (!participantError && participant?.role && (participant.role === 'host' || participant.role === 'stage')) {
+            canPublish = true;
+          }
+
+          // Fallback: allow stream owners in battle if participant rows are missing
+          if (!canPublish) {
+            const { data: battle, error: battleError } = await supabaseAdmin
+              .from('battles')
+              .select('challenger_stream_id, opponent_stream_id')
+              .eq('id', battleId)
+              .single();
+
+            if (!battleError && battle) {
+              const { data: streams, error: streamsError } = await supabaseAdmin
+                .from('streams')
+                .select('id, user_id')
+                .in('id', [battle.challenger_stream_id, battle.opponent_stream_id]);
+
+              if (!streamsError && streams?.some((s) => s.user_id === profile.id)) {
+                canPublish = true;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[livekit-token] Battle publish validation failed:', e);
+      }
+    }
+
     // Guest check is handled above in the catch block (guests are denied publish)
 
     console.log("[livekit-token] params:", {
@@ -243,6 +292,7 @@ serve(async (req: Request) => {
       role: profile.role,
       avatar_url: profile.avatar_url,
       level: Number(level ?? 1),
+      ...(params.attributes || {})
     };
 
     // Reusing AccessToken and TrackSource from earlier import

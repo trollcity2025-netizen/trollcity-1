@@ -1,127 +1,100 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useConnectionState } from '@livekit/components-react';
-import { getUserEntranceEffect } from '../lib/entranceEffects';
+import { useEffect, useRef, useCallback } from "react";
+import { useLocation } from "react-router-dom";
+import { useConnectionState } from "@livekit/components-react";
+import { getUserEntranceEffect } from "../lib/entranceEffects";
 
-/**
- * Hook to trigger entrance effect for listeners only.
- * 
- * Requirements:
- * - Only trigger for listeners (non-host, non-guest, non-broadcaster)
- * - Trigger only after connection is confirmed (LiveKit Connected OR Mux onPlaying/onCanPlay)
- * - Play once per streamId per session using sessionStorage
- * - Never trigger on Home or other pages (only broadcast watch routes)
- * - Idempotent: play once per streamId, not on rerenders
- */
+// ✅ Survives component remounts within the same tab session
+const playedInMemory = new Set<string>();
+
 export function useListenerEntranceEffect({
   streamId,
+  userId,      // still used to fetch their effect, but NOT for dedupe key
   isHost,
   isGuest,
   canPublish,
-  userId,
-  username,
 }: {
   streamId: string | null | undefined;
+  userId: string | null | undefined;
   isHost: boolean;
   isGuest: boolean;
   canPublish: boolean;
-  userId: string | null | undefined;
-  username?: string;
 }) {
   const connectionState = useConnectionState();
-  const isConnected = connectionState === 'connected';
-  const hasPlayedRef = useRef(false);
-  
-  // Session storage key format: entrancePlayed:{streamId}
-  const getStorageKey = (sid: string) => `entrancePlayed:${sid}`;
-
-  // Initialize play state from sessionStorage on mount and streamId change
-  useEffect(() => {
-    if (streamId) {
-      const key = getStorageKey(streamId);
-      const alreadyPlayed = sessionStorage.getItem(key);
-      hasPlayedRef.current = !!alreadyPlayed;
-      console.log(`[ListenerEntrance] Stream ${streamId}, alreadyPlayed: ${!!alreadyPlayed}`);
-    } else {
-      hasPlayedRef.current = false;
-    }
-  }, [streamId]);
-
+  const isConnected = connectionState === "connected";
   const location = useLocation();
 
-  // Guard: Only trigger inside broadcast/watch routes
-  const isBroadcastPage = 
-    location.pathname.includes('/broadcast/') ||
-    location.pathname.includes('/watch/') ||
-    location.pathname.includes('/stream/');
+  const isBroadcastPage =
+    location.pathname.includes("/broadcast/") ||
+    location.pathname.includes("/watch/") ||
+    location.pathname.includes("/stream/");
 
-  const triggerEntrance = useCallback(async () => {
-    // Guard: Not on broadcast page
-    if (!isBroadcastPage) {
-      console.log('[ListenerEntrance] Not triggering - not on broadcast page');
-      return;
-    }
+  const getKey = (sid: string) => `entrancePlayed:${sid}`;
 
-    if (!streamId || !userId || hasPlayedRef.current) {
-      console.log('[ListenerEntrance] Not triggering:', { hasStreamId: !!streamId, hasUserId: !!userId, hasPlayed: hasPlayedRef.current });
-      return;
-    }
+  // Prevent duplicate calls within a single mount
+  const firedThisMountRef = useRef(false);
 
-    // Listener-only gating:
-    // - NOT a host
-    // - NOT a guest
-    // - CANNOT publish (not on stage)
-    if (isHost) {
-      console.log('[ListenerEntrance] Not triggering - not a listener (host/guest/publisher)');
-      return;
-    }
+  const trigger = useCallback(async () => {
+    if (!isBroadcastPage) return;
+    if (!isConnected) return;
+    if (!streamId) return;
+    if (!userId) return;
 
-    const key = getStorageKey(streamId);
-    
-    // Double-check sessionStorage before proceeding
+    // If you truly want it only for listeners, keep this.
+    // If you want it for everyone, delete this block.
+    if (isHost || isGuest || canPublish) return;
+
+    const key = getKey(streamId);
+
+    // ✅ Hard dedupe: memory + sessionStorage
+    if (firedThisMountRef.current) return;
+    if (playedInMemory.has(key)) return;
     if (sessionStorage.getItem(key)) {
-      hasPlayedRef.current = true;
-      console.log('[ListenerEntrance] Already played this stream, skipping');
+      playedInMemory.add(key);
+      firedThisMountRef.current = true;
       return;
     }
 
-    // Mark as played immediately to prevent duplicate triggers from any source
-    sessionStorage.setItem(key, '1');
-    hasPlayedRef.current = true;
-    console.log(`[ListenerEntrance] Marked as played for stream ${streamId}`);
+    // Mark immediately to prevent races
+    playedInMemory.add(key);
+    sessionStorage.setItem(key, "1");
+    firedThisMountRef.current = true;
 
     try {
       const { effectKey } = await getUserEntranceEffect(userId);
-      if (effectKey) {
-        // Import the animation function dynamically to avoid circular imports
-        const { playEntranceAnimation } = await import('../lib/entranceAnimations');
-        await playEntranceAnimation(userId, effectKey);
-        console.log(`🎪 Listener entrance effect triggered for user ${userId} in stream ${streamId}`);
-      } else {
-        console.log('[ListenerEntrance] No entrance effect found for user');
-      }
-    } catch (err) {
-      console.error('Error triggering listener entrance effect:', err);
-    }
-  }, [streamId, userId, isHost, isGuest, canPublish, isBroadcastPage]);
+      if (!effectKey) return;
 
-  // Trigger when connection is confirmed and all conditions are met
+      const { playEntranceAnimation } = await import("../lib/entranceAnimations");
+      await playEntranceAnimation(userId, effectKey);
+    } catch (e) {
+      console.error("Entrance effect error:", e);
+      // keep it marked; requirement is “once and done”
+    }
+  }, [isBroadcastPage, isConnected, streamId, userId, isHost, isGuest, canPublish]);
+
   useEffect(() => {
-    if (isConnected && streamId && !hasPlayedRef.current) {
-      console.log(`[ListenerEntrance] Connected, triggering entrance for stream ${streamId}`);
-      triggerEntrance();
-    }
-  }, [isConnected, streamId, triggerEntrance]);
+    if (!isBroadcastPage) return;
+    if (!streamId) return;
 
-  return {
-    connectionState,
-    isConnected,
-    hasPlayed: hasPlayedRef.current,
-  };
+    // IMPORTANT: do NOT reset to false on streamId null flaps.
+    // Reset only when entering a DIFFERENT stream.
+    firedThisMountRef.current = false;
+
+    // If we already played for this stream in this tab, lock it immediately.
+    const key = getKey(streamId);
+    if (sessionStorage.getItem(key)) {
+      playedInMemory.add(key);
+      firedThisMountRef.current = true;
+      return;
+    }
+
+    if (isConnected) trigger();
+  }, [isBroadcastPage, streamId, isConnected, trigger]);
+
+  return { connectionState, isConnected };
 }
 
 /**
- * Component that triggers listener entrance effect inside LiveKitRoom context.
+ * Component wrapper for useListenerEntranceEffect hook.
  * Must be rendered inside <LiveKitRoom> to have access to connection state.
  */
 export function ListenerEntranceEffect({
@@ -130,14 +103,12 @@ export function ListenerEntranceEffect({
   isGuest,
   canPublish,
   userId,
-  username,
 }: {
   streamId: string | null | undefined;
   isHost: boolean;
   isGuest: boolean;
   canPublish: boolean;
   userId: string | null | undefined;
-  username?: string;
 }) {
   useListenerEntranceEffect({
     streamId,
@@ -145,7 +116,6 @@ export function ListenerEntranceEffect({
     isGuest,
     canPublish,
     userId,
-    username,
   });
 
   return null;

@@ -76,7 +76,7 @@ export default function KickFeePage() {
             if (data === true) {
                 toast.success("Fee paid! You can now re-enter.");
                 await refreshProfile(); // Update balance
-                navigate(`/broadcast/${streamId}`);
+                navigate(`/watch/${streamId}`);
             } else {
                 toast.error("Failed to process payment");
             }

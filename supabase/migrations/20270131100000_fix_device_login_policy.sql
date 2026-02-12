@@ -52,9 +52,10 @@ WITH
     WHERE type = 'store_purchase' AND status = 'completed'
   ),
   circulation_stats AS (
-    SELECT 
-      COALESCE(SUM(coin_balance + free_coin_balance), 0) as total_coins_in_circulation
+    SELECT
+      COALESCE(SUM(coin_balance + free_coin_balance), 0) as total_coins_in_circulation    
     FROM user_profiles
+    WHERE (role IS DISTINCT FROM 'admin') AND (is_admin IS DISTINCT FROM true)
   ),
   gift_stats AS (
     SELECT 

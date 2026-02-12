@@ -3,9 +3,17 @@
 -- Timestamp: 20270701000002
 
 -- ============================================================================
--- 1. send_guest_gift - Guest/guest gift sending (anonymous/guest users)
+-- 1. send_guest_gift - Guest/gift sending (anonymous/guest users)
 -- ============================================================================
-DROP FUNCTION IF EXISTS public.send_guest_gift(UUID, UUID, UUID, TEXT, NUMERIC);
+-- Drop all possible signatures to ensure clean slate
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (SELECT oid FROM pg_proc WHERE proname = 'send_guest_gift' AND pronamespace = 'public'::regnamespace) LOOP
+        EXECUTE 'DROP FUNCTION public.send_guest_gift(' || pg_get_function_identity_arguments(r.oid) || ')';
+    END LOOP;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.send_guest_gift(
     p_sender_id UUID,
@@ -118,14 +126,22 @@ $$;
 GRANT EXECUTE ON FUNCTION public.send_guest_gift(UUID, UUID, UUID, TEXT, NUMERIC) TO authenticated;
 
 -- ============================================================================
--- 2. issue_warrant - Court warrant issuance (legacy wrapper for compatibility)
+-- 2. issue_warrant - Officer/Admin ability to issue warrants
 -- ============================================================================
-DROP FUNCTION IF EXISTS public.issue_warrant(UUID, UUID, TEXT);
+-- Drop all possible signatures to ensure clean slate
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (SELECT oid FROM pg_proc WHERE proname = 'issue_warrant' AND pronamespace = 'public'::regnamespace) LOOP
+        EXECUTE 'DROP FUNCTION public.issue_warrant(' || pg_get_function_identity_arguments(r.oid) || ')';
+    END LOOP;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.issue_warrant(
-    p_defendant_id UUID,
-    p_officer_id UUID,
-    p_reason TEXT
+    p_target_id UUID,
+    p_reason TEXT,
+    p_notes TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -133,13 +149,15 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_warrant_id UUID;
+    v_officer_id UUID;
     v_case_id UUID;
 BEGIN
+    v_officer_id := auth.uid();
+
     -- Check if officer has authority
     IF NOT EXISTS (
         SELECT 1 FROM public.user_profiles
-        WHERE id = p_officer_id AND authority_level >= 3
+        WHERE id = v_officer_id AND authority_level >= 3
     ) THEN
         RETURN jsonb_build_object('success', false, 'message', 'Insufficient authority level');
     END IF;
@@ -153,18 +171,18 @@ BEGIN
         status,
         filed_by
     ) VALUES (
-        p_defendant_id,
+        p_target_id,
         'warrant',
         'Arrest Warrant',
         p_reason,
         'pending',
-        p_officer_id
+        v_officer_id
     ) RETURNING id INTO v_case_id;
 
     -- Mark defendant as having active warrant
     UPDATE public.user_profiles
     SET has_active_warrant = true
-    WHERE id = p_defendant_id;
+    WHERE id = p_target_id;
 
     RETURN jsonb_build_object(
         'success', true,
@@ -174,7 +192,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.issue_warrant(UUID, UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.issue_warrant(UUID, TEXT, TEXT) TO authenticated;
 
 -- ============================================================================
 -- 3. reset_troll_coins - Admin function to reset user coin balances
@@ -267,7 +285,13 @@ GRANT EXECUTE ON FUNCTION public.create_atomic_battle_challenge(UUID, UUID) TO a
 -- ============================================================================
 
 -- Drop any existing alias and create new one
-DROP FUNCTION IF EXISTS public.send_guest_gift(UUID, UUID, UUID, TEXT, INTEGER);
+DO $$
+BEGIN
+    DROP FUNCTION IF EXISTS public.send_guest_gift(UUID, UUID, UUID, TEXT, INTEGER);
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
+END $$;
 
 COMMENT ON FUNCTION public.send_guest_gift IS 'Sends a gift from a guest (anonymous user) to a broadcaster. Credits sender coins to receiver minus platform fee.';
 COMMENT ON FUNCTION public.issue_warrant IS 'Issues an arrest warrant for a defendant by an authorized officer.';

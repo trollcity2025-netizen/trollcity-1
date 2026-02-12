@@ -5,13 +5,16 @@ import { supabase } from '../lib/supabase'
 import { Bell, Check, Trash2, Gift, Trophy, AlertCircle, Shield, DollarSign, Sword, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { Notification, NotificationType } from '../types/notifications'
+import { useAdminVoiceNotifications } from '../hooks/useAdminVoiceNotifications'
 
 export default function Trollifications() {
-  const { user } = useAuthStore()
+  const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [latestNotification, setLatestNotification] = useState<Notification | null>(null)
+  const { announceNotification, enabled } = useAdminVoiceNotifications()
 
   const loadNotifications = useCallback(async () => {
     if (!user?.id) return
@@ -54,6 +57,7 @@ export default function Trollifications() {
         (payload) => {
           const newNotif = payload.new as Notification
           setNotifications((prev) => [newNotif, ...prev])
+          setLatestNotification(newNotif)
           setLoading(false)
         }
       )
@@ -95,6 +99,34 @@ export default function Trollifications() {
       supabase.removeChannel(channel)
     }
   }, [user?.id, loadNotifications])
+
+  // Handle voice announcements for important admin notifications
+  useEffect(() => {
+    if (!latestNotification || !profile?.is_admin || !enabled) return
+
+    // Announce priority notifications for admins
+    const priorityTypes = [
+      'moderation_alert',
+      'officer_update',
+      'support_ticket',
+      'report_filed',
+      'payout_request',
+      'system_announcement',
+      'pod_live',
+      'stream_live',
+    ]
+
+    if (priorityTypes.includes(latestNotification.type)) {
+      // Create proper VoiceNotification object
+      const voiceNotification = {
+        id: latestNotification.id || Date.now().toString(),
+        message: `${latestNotification.title}: ${latestNotification.message}`,
+        type: 'alert' as const,
+        timestamp: new Date(),
+      }
+      announceNotification(voiceNotification)
+    }
+  }, [latestNotification, profile?.is_admin, enabled, announceNotification])
 
   // Refresh notifications periodically to catch any missed updates
   useEffect(() => {

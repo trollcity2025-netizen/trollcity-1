@@ -25,6 +25,7 @@ interface BroadcastGridProps {
   onKick?: (userId: string) => void;
   broadcasterProfile?: any;
   hideEmptySeats?: boolean;
+  seatPriceOverride?: number;
 }
 
 export default function BroadcastGrid({
@@ -40,6 +41,7 @@ export default function BroadcastGrid({
   onKick,
   broadcasterProfile,
   hideEmptySeats = false,
+  seatPriceOverride,
 }: BroadcastGridProps) {
   const allParticipants = useParticipants();
   const cameraTracks = useTracks([Track.Source.Camera]);
@@ -249,11 +251,11 @@ export default function BroadcastGrid({
                       <Plus size={24} />
                     </div>
                     <span className="text-xs font-medium">Join Stage</span>
-                    {stream.seat_price > 0 && (
+                    {(typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price) > 0 && (
                       <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30">
                         <Coins size={12} className="text-yellow-500" />
                         <span className="text-xs font-bold text-yellow-400">
-                          {stream.seat_price}
+                          {typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price}
                         </span>
                       </div>
                     )}
@@ -317,11 +319,11 @@ export default function BroadcastGrid({
                     </div>
                   </div>
                   
-                  {/* Coins in Bubble */}
-                  <div className="flex items-center gap-1 text-yellow-500 text-xs border-l border-white/10 pl-2 ml-1">
+                  {/* Coins in Bubble - REMOVED as per request (duplicate of header) */}
+                  {/* <div className="flex items-center gap-1 text-yellow-500 text-xs border-l border-white/10 pl-2 ml-1">
                     <Coins size={10} />
                     <span>{(displayProfile?.troll_coins || 0).toLocaleString()}</span>
-                  </div>
+                  </div> */}
                 </div>
 
                 {/* Mic Status Indicator (Outside Bubble) */}

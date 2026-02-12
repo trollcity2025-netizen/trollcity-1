@@ -70,6 +70,15 @@ const SAMPLE_CHAT_SOUNDS = [
   { id: 'sound_10', name: 'Magic Wand', cost: 250, sound_type: 'chat', file_path: '/sounds/wand.mp3' },
 ];
 
+const SAMPLE_BROADCAST_THEMES = [
+  { id: 'classic', slug: 'classic', name: 'Classic Dark', description: 'The classic Troll City look.', price_coins: 0, preview_url: '/assets/themes/theme_purple.svg' },
+  { id: 'neon', slug: 'neon', name: 'Neon Night', description: 'High contrast neon styling.', price_coins: 100, preview_url: '/assets/themes/theme_neon.svg' },
+  { id: 'cyber', slug: 'cyber', name: 'Cyberpunk', description: 'Futuristic cyber styling.', price_coins: 250, preview_url: '/assets/themes/theme_cyber.svg' },
+  { id: 'rgb', slug: 'rgb', name: 'Gamer RGB', description: 'Animated RGB flow for true gamers.', price_coins: 500, preview_url: '/assets/themes/theme_rgb.svg' },
+  { id: 'ocean', slug: 'ocean', name: 'Ocean Breeze', description: 'Calming blue gradients.', price_coins: 750, preview_url: '/assets/themes/theme_ocean.svg' },
+  { id: 'sunset', slug: 'sunset', name: 'Sunset Gold', description: 'Warm golden tones.', price_coins: 1000, preview_url: '/assets/themes/theme_sunset.svg' }
+];
+
 const isMissingTableError = (error) =>
   Boolean(
     error?.message?.includes('schema cache') ||
@@ -341,7 +350,7 @@ export default function CoinStore() {
       await refreshCoins();
 
       const [effRes, perkRes, planRes, themeRes, themeOwnedRes, entitlementsRes, callSoundOwnedRes] = await Promise.all([
-        supabase.from('entrance_effects').select('*').order('created_at', { ascending: false }),
+        supabase.from('entrance_effects').select('*').neq('category', 'gift').order('created_at', { ascending: false }),
         supabase.from('perks').select('*').order('created_at', { ascending: false }),
         supabase.from('insurance_options').select('*').order('created_at', { ascending: false }),
         supabase.from('broadcast_background_themes').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
@@ -412,7 +421,7 @@ export default function CoinStore() {
 
       const loadedThemes = applyCatalogData(
         themeRes,
-        [],
+        SAMPLE_BROADCAST_THEMES,
         setBroadcastThemes,
         setThemesNote,
         'broadcast themes',
@@ -776,7 +785,7 @@ export default function CoinStore() {
     try {
       // Get theme price (assume theme.price_coins is available on theme object)
       const price = theme.price_coins || theme.price || 0;
-      if (price <= 0) {
+      if (price < 0) {
         toast.error('Invalid theme price');
         setThemePurchasing(null);
         return;
@@ -792,33 +801,20 @@ export default function CoinStore() {
         return;
       }
 
-      // Deduct coins first
-      const { error: deductErr } = await deductCoins({
-        userId: user.id,
-        amount: price,
-        type: 'purchase',
-        description: `Purchased broadcast theme: ${theme.name}`,
-        metadata: { theme_id: theme.id, theme_name: theme.name },
-        useCredit,
-        supabaseClient: supabase,
-      });
-      if (deductErr) {
-        console.error('Coin deduction error:', deductErr);
-        toast.error('Failed to deduct coins: ' + (deductErr.message || deductErr));
-        setThemePurchasing(null);
-        return;
-      }
-
-      // Now record the purchase
-      const { error } = await supabase.from('user_broadcast_theme_purchases').insert({
-        user_id: user.id,
-        theme_id: String(theme.id),
-        purchased_at: new Date().toISOString(),
-        cost: price
+      // Use RPC function to handle purchase (handles both coin deduction and recording)
+      const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
+        p_user_id: user.id,
+        p_theme_id: theme.id,
+        p_set_active: false
       });
 
       if (error) {
+        console.error('Purchase RPC error:', error);
         throw new Error(error.message || 'Theme purchase failed');
+      }
+
+      if (data && !data.success) {
+        throw new Error(data.error || 'Theme purchase failed');
       }
 
       setOwnedThemeIds((prev) => new Set([...Array.from(prev), theme.id]));
@@ -1917,205 +1913,11 @@ export default function CoinStore() {
                   <ShoppingCart className="w-5 h-5 text-purple-400" />
                   Broadcast Themes
                 </h2>
-                {themesNote && (
-                   <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm text-blue-200">
-                     {themesNote}
-                   </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {broadcastThemes.map((theme) => {
-                    const owned = ownedThemeIds.has(theme.id);
-                    const eligibility = getEligibility(theme);
-                    
-                    return (
-                    <div key={theme.id} className={`bg-black/40 p-4 rounded-lg border ${owned ? 'border-green-500/30' : 'border-purple-500/20'} relative overflow-hidden`}>
-                      {owned && <div className="absolute top-2 right-2 bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded">Owned</div>}
-                      
-                      <div className="h-24 mb-3 rounded w-full overflow-hidden relative">
-                        {theme.image_url ? (
-                          <img src={theme.image_url} alt={theme.name} className="w-full h-full object-cover" />
-                        ) : (
-                          (() => {
-                            // Custom preview by theme name
-                            const name = (theme.name || '').toLowerCase();
-                            if (name.includes('royal purple')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-800 via-purple-600 to-purple-900">
-                                  <span className="text-yellow-200 text-xs font-bold drop-shadow">Royal Purple</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('cyber neon')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-blue-900 animate-pulse">
-                                  <span className="text-cyan-100 text-xs font-bold drop-shadow">Cyber Neon</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('gamer rgb')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center rgb-frame">
-                                  <span className="text-white text-xs font-bold drop-shadow">Gamer RGB</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('neon purple haze')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-700 via-fuchsia-500 to-pink-700 blur-[1px]">
-                                  <span className="text-pink-100 text-xs font-bold drop-shadow">Neon Purple Haze</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('neon aurora')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-300 via-pink-400 to-purple-900 animate-pulse">
-                                  <span className="text-cyan-50 text-xs font-bold drop-shadow">Neon Aurora</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('pink velocity')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-500 via-pink-700 to-fuchsia-900 animate-pulse">
-                                  <span className="text-white text-xs font-bold drop-shadow">Pink Velocity</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('troll city grid')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-cyan-900">
-                                  <span className="text-cyan-200 text-xs font-bold drop-shadow">Troll City Grid</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('golden crown')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-yellow-400 via-yellow-600 to-yellow-900">
-                                  <span className="text-yellow-100 text-xs font-bold drop-shadow">Golden Crown</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('cyan fog')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-200 via-cyan-400 to-cyan-900">
-                                  <span className="text-cyan-900 text-xs font-bold drop-shadow">Cyan Fog</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('midnight violet')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-900 via-violet-700 to-violet-950">
-                                  <span className="text-violet-200 text-xs font-bold drop-shadow">Midnight Violet</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('neon circuit')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-400 via-blue-700 to-fuchsia-700 animate-pulse">
-                                  <span className="text-cyan-50 text-xs font-bold drop-shadow">Neon Circuit</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('pink haze')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-200 via-pink-400 to-pink-900">
-                                  <span className="text-pink-900 text-xs font-bold drop-shadow">Pink Haze</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('aurora wave')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-cyan-200 via-pink-200 to-purple-900 animate-pulse">
-                                  <span className="text-cyan-900 text-xs font-bold drop-shadow">Aurora Wave</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('lava room')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-yellow-900 via-red-700 to-orange-900 animate-pulse">
-                                  <span className="text-orange-100 text-xs font-bold drop-shadow">Lava Room</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('galaxy warp')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-black animate-pulse">
-                                  <span className="text-white text-xs font-bold drop-shadow">Galaxy Warp</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('diamond night')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900 to-white animate-pulse">
-                                  <span className="text-blue-200 text-xs font-bold drop-shadow">Diamond Night</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('cyber rose')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-400 via-fuchsia-700 to-black animate-pulse">
-                                  <span className="text-pink-100 text-xs font-bold drop-shadow">Cyber Rose</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('royal velvet')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 via-purple-700 to-black animate-pulse">
-                                  <span className="text-purple-100 text-xs font-bold drop-shadow">Royal Velvet</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('stormlight')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-200 via-blue-400 to-blue-900 animate-pulse">
-                                  <span className="text-blue-900 text-xs font-bold drop-shadow">Stormlight</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('midnight surge')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-900 via-blue-900 to-black animate-pulse">
-                                  <span className="text-violet-100 text-xs font-bold drop-shadow">Midnight Surge</span>
-                                </div>
-                              );
-                            }
-                            if (name.includes('pink static')) {
-                              return (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-200 via-pink-500 to-pink-900 animate-pulse">
-                                  <span className="text-pink-900 text-xs font-bold drop-shadow">Pink Static</span>
-                                </div>
-                              );
-                            }
-                            // Default fallback
-                            return (
-                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 via-zinc-800 to-pink-900">
-                                <span className="text-white/70 text-xs font-bold drop-shadow">{theme.name || 'No Preview'}</span>
-                              </div>
-                            );
-                          })()
-                        )}
-                      </div>
-                      
-                      <div className="font-semibold text-lg">{theme.name}</div>
-                      <div className="text-sm text-gray-400 mb-2 line-clamp-2">{theme.description}</div>
-                      
-                      {!eligibility.isEligible && (
-                        <div className="text-xs text-red-400 mb-2">
-                           {eligibility.seasonalState || 'Requirements not met'}
-                        </div>
-                      )}
-                      
-                      <div className="flex justify-between items-center mt-4">
-                        <span className="text-yellow-400 font-bold">{formatCoins(theme.price_coins || 0)}</span>
-                        <button
-                          onClick={() => buyBroadcastTheme(theme)}
-                          disabled={owned || !eligibility.isEligible || themePurchasing === theme.id}
-                          className={`px-3 py-1 rounded text-sm font-semibold ${owned ? 'bg-zinc-700 text-gray-400 cursor-default' : 'bg-purple-600 hover:bg-purple-700'}`}
-                        >
-                          {owned ? 'Owned' : themePurchasing === theme.id ? '...' : 'Buy'}
-                        </button>
-                      </div>
-                    </div>
-                  )})}
+                <div className="bg-black/40 p-8 rounded-lg border border-purple-500/30 text-center">
+                  <div className="text-6xl mb-4">🎨</div>
+                  <h3 className="text-2xl font-bold mb-2 text-yellow-400">Coming Soon</h3>
+                  <p className="text-zinc-400 mb-4">Broadcast themes are coming soon!</p>
+                  <p className="text-sm text-zinc-500">Stay tuned for amazing new theme options to customize your broadcast background.</p>
                 </div>
               </>
             )}

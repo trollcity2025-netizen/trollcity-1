@@ -26,37 +26,81 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   useEffect(() => {
     const fetchGifts = async () => {
       try {
-        const { data, error } = await supabase
-          .from('purchasable_items')
-          .select('*')
-          .eq('category', 'gift')
-          .eq('is_active', true)
-          .order('coin_price', { ascending: true });
+        let mappedGifts: GiftItem[] = [];
 
-        if (error) {
-          console.error('Error fetching gifts:', error);
-        } else {
-          const mappedGifts: GiftItem[] = data.map((g: any) => ({
+        // Prefer gift_items to align with send_gift RPC expectations
+        const { data: giftItems, error: giftItemsError } = await supabase
+          .from('gift_items')
+          .select('*')
+          .order('value', { ascending: true });
+
+        if (giftItemsError) {
+          throw giftItemsError;
+        }
+
+        if (giftItems && giftItems.length > 0) {
+          mappedGifts = giftItems.map((g: any) => ({
             id: g.id,
-            name: g.display_name,
-            icon: g.metadata?.icon || '🎁',
-            coinCost: g.coin_price || 0,
-            type: 'paid',
-            slug: g.item_key,
-            category: g.category,
-            subcategory: g.metadata?.subcategory || 'Misc'
+            name: g.name,
+            icon: g.icon || '🎁',
+            coinCost: g.value || 0,
+            type: 'paid' as const,
+            slug: g.gift_slug || g.name,
+            category: 'gift',
+            subcategory: g.category || 'Misc'
           }));
-          setGifts(mappedGifts);
-          
-          if (mappedGifts.length > 0) {
-            const firstCat = mappedGifts[0].subcategory;
-            if (firstCat && firstCat !== 'Misc') {
-              setActiveCategory('All');
-            }
+        } else {
+          // Fallback to purchasable_items if gift_items is empty
+          const { data: purchasableItems } = await supabase
+            .from('purchasable_items')
+            .select('*')
+            .eq('category', 'gift')
+            .eq('is_active', true)
+            .order('coin_price', { ascending: true });
+
+          if (purchasableItems && purchasableItems.length > 0) {
+            mappedGifts = purchasableItems.map((g: any) => ({
+              id: g.id,
+              name: g.display_name,
+              icon: g.metadata?.icon || '🎁',
+              coinCost: g.coin_price || 0,
+              type: 'paid' as const,
+              slug: g.item_key,
+              category: g.category,
+              subcategory: g.metadata?.subcategory || 'Misc'
+            }));
+          }
+        }
+
+        setGifts(mappedGifts);
+        
+        if (mappedGifts.length > 0) {
+          const firstCat = mappedGifts[0].subcategory;
+          if (firstCat && firstCat !== 'Misc') {
+            setActiveCategory('All');
           }
         }
       } catch (e) {
         console.error(e);
+        // Fallback if error occurs
+        const { data: giftItems } = await supabase
+          .from('gift_items')
+          .select('*')
+          .order('value', { ascending: true });
+        
+        if (giftItems && giftItems.length > 0) {
+          const mappedGifts = giftItems.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            icon: g.icon || '🎁',
+            coinCost: g.value || 0,
+            type: 'paid' as const,
+            slug: g.gift_slug || g.name,
+            category: 'gift',
+            subcategory: g.category || 'Misc'
+          }));
+          setGifts(mappedGifts);
+        }
       } finally {
         setLoading(false);
       }

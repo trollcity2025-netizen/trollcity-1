@@ -267,8 +267,41 @@ Deno.serve(async (req: Request) => {
 
     } else if (event === 'room_finished') {
       // TRAE FIX: Check if stream is in battle mode before ending
-      // When switching to BattleView, the host briefly disconnects, which might trigger room_finished.
-      // We must ignore this event if the stream is in a battle.
+      // CRITICAL BATTLE PROTECTION:
+      // Battle rooms use format: "battle-{battleId}", NOT the stream ID
+      // We must check if this is a battle room and prevent ending the actual streams
+      
+      console.log(`🔍 room_finished event for room: ${room.name}`);
+      
+      // Check if this is a battle room (format: battle-<uuid>)
+      if (room.name && room.name.startsWith('battle-')) {
+        const battleId = room.name.replace('battle-', '');
+        console.log(`🛡️ BATTLE ROOM DETECTED: ${room.name} (battleId: ${battleId})`);
+        
+        // Query battles table to check if battle is still active
+        const { data: battleData, error: battleError } = await supabase
+          .from('battles')
+          .select('id, status, challenger_stream_id, opponent_stream_id')
+          .eq('id', battleId)
+          .single();
+          
+        if (!battleError && battleData) {
+          console.log(`🛡️ Battle found. Status: ${battleData.status}. Challenger: ${battleData.challenger_stream_id}, Opponent: ${battleData.opponent_stream_id}`);
+          console.log(`🛡️ IGNORING room_finished for battle room. Streams must stay live!`);
+          return new Response(JSON.stringify({ 
+            success: true, 
+            ignored: true, 
+            reason: 'battle_room',
+            battleId: battleId,
+            battleStatus: battleData.status 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+      
+      // Also check if the room name IS a stream ID that's in battle mode
       const { data: streamData, error: streamError } = await supabase
         .from('streams')
         .select('is_battle, battle_id')
@@ -276,8 +309,8 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (!streamError && (streamData?.is_battle || streamData?.battle_id)) {
-        console.log(`🛡️ Stream ${room.name} is in BATTLE MODE. Ignoring room_finished event.`);
-        return new Response(JSON.stringify({ success: true, ignored: true, reason: 'battle_mode' }), {
+        console.log(`🛡️ Stream ${room.name} is in BATTLE MODE (battle_id: ${streamData.battle_id}). Ignoring room_finished event.`);
+        return new Response(JSON.stringify({ success: true, ignored: true, reason: 'stream_in_battle' }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

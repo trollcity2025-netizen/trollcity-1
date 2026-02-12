@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION public.get_user_gift_history(
 RETURNS TABLE (
     id uuid,
     direction text,
-    amount int,
+    amount bigint,
     other_username text,
     gift_name text,
     created_at timestamptz
@@ -17,22 +17,22 @@ AS $$
 BEGIN
     RETURN QUERY
     SELECT
-        ct.id,
-        CASE
+        ct.id::uuid,
+        (CASE
             WHEN ct.type LIKE '%sent%' THEN 'sent'
             ELSE 'received'
-        END as direction,
-        ABS(ct.amount) as amount,
-        COALESCE(up.username, 'Unknown') as other_username,
+        END)::text as direction,
+        ABS(ct.amount)::bigint as amount,
+        COALESCE(up.username, 'Unknown')::text as other_username,
         COALESCE(
             ct.metadata->>'gift_name',
             ct.metadata->>'item',
             ct.metadata->>'gift_type',
             'Gift'
-        ) as gift_name,
-        ct.created_at
-    FROM coin_transactions ct
-    LEFT JOIN user_profiles up ON up.id = (
+        )::text as gift_name,
+        ct.created_at::timestamptz
+    FROM public.coin_transactions ct
+    LEFT JOIN public.user_profiles up ON up.id = (
         CASE
             WHEN ct.type LIKE '%sent%' THEN (ct.metadata->>'receiver_id')::uuid
             ELSE (ct.metadata->>'sender_id')::uuid

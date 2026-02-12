@@ -29,7 +29,9 @@ async function run() {
     await client.query('SET search_path TO public, auth, extensions;')
 
     // Get all SQL files
-    const files = fs.readdirSync(MIGRATIONS_DIR)
+    const targetFile = process.argv[2] // Allow passing specific migration file
+    
+    let files = fs.readdirSync(MIGRATIONS_DIR)
       .filter(f => f.endsWith('.sql'))
       .filter(f => {
         // Extract timestamp prefix
@@ -37,6 +39,11 @@ async function run() {
         return timestamp >= START_MIGRATION
       })
       .sort() // Ensure chronological order
+
+    if (targetFile) {
+        console.log(`Targeting specific migration: ${targetFile}`)
+        files = files.filter(f => f.includes(targetFile))
+    }
 
     console.log(`Found ${files.length} migrations to process from ${START_MIGRATION}...`)
 

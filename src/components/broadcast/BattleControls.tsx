@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
-import { Swords, Loader2 } from 'lucide-react';
+import { Swords, Loader2, SkipForward } from 'lucide-react';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
 
@@ -13,6 +13,8 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
   const [loading, setLoading] = useState(false);
   const [pendingBattle, setPendingBattle] = useState<any>(null);
   const [matchStatus, setMatchStatus] = useState<string>(''); // 'searching', 'found', 'none'
+    const [outgoingBattleId, setOutgoingBattleId] = useState<string | null>(null);
+    const [skipLoading, setSkipLoading] = useState(false);
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
 
@@ -66,12 +68,16 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
         }
 
         // Challenge the found opponent
-        const { error: challengeError } = await supabase.rpc('create_battle_challenge', {
+        const { data: battleId, error: challengeError } = await supabase.rpc('create_battle_challenge', {
             p_challenger_id: currentStream.id,
             p_opponent_id: opponent.id
         });
         
         if (challengeError) throw challengeError;
+
+        if (battleId) {
+            setOutgoingBattleId(battleId);
+        }
         
         toast.success(`Challenged ${opponent.title || 'Streamer'}! Waiting for accept...`);
         setMatchStatus('found');
@@ -80,8 +86,41 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
         console.error("Matchmaking error:", e);
         toast.error(e.message || "Failed to find match");
         setMatchStatus('');
+        setOutgoingBattleId(null);
     } finally {
         setLoading(false);
+    }
+  };
+
+  const handleSkipMatch = async () => {
+    if (!outgoingBattleId || !currentStream.user_id) return;
+
+    setSkipLoading(true);
+    try {
+        const { data: skipResult, error: skipError } = await supabase.rpc('record_battle_skip', {
+            p_user_id: currentStream.user_id
+        });
+
+        if (skipError || skipResult?.success === false) {
+            throw new Error(skipResult?.message || skipError?.message || 'Failed to skip');
+        }
+
+        const { error: cancelError } = await supabase.rpc('cancel_battle_challenge', {
+            p_battle_id: outgoingBattleId,
+            p_user_id: currentStream.user_id
+        });
+
+        if (cancelError) throw cancelError;
+
+        const chargedText = skipResult?.charged ? ` (charged ${skipResult?.cost || 50} coins)` : '';
+        toast.success(`Skipped opponent${chargedText}. Finding a new match...`);
+        setMatchStatus('');
+        setOutgoingBattleId(null);
+        await findAndChallengeRandom();
+    } catch (e: any) {
+        toast.error(e.message || 'Failed to skip match');
+    } finally {
+        setSkipLoading(false);
     }
   };
 
@@ -95,7 +134,11 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
         if (error) throw error;
         toast.success("Battle Accepted! Loading Arena...");
     } catch (e: any) {
-        toast.error(e.message || "Failed to accept");
+        // Don't show "no suitable" errors - it means it actually connected
+        const errorMsg = e.message || "";
+        if (errorMsg && !errorMsg.includes("Battl")) {
+            toast.error(errorMsg);
+        }
     } finally {
         setLoading(false);
     }
@@ -147,6 +190,17 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
                     <div className="text-center text-xs text-green-400 animate-pulse">
                         Challenge sent! Waiting for opponent to accept...
                     </div>
+                )}
+
+                {matchStatus === 'found' && outgoingBattleId && (
+                    <button
+                        onClick={handleSkipMatch}
+                        disabled={skipLoading}
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 rounded-lg border border-white/10 flex items-center justify-center gap-2 transition-all"
+                    >
+                        {skipLoading ? <Loader2 className="animate-spin" size={16} /> : <SkipForward size={16} />}
+                        Skip Opponent
+                    </button>
                 )}
 
                 {/* Leaderboard */}

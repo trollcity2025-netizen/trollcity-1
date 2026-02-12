@@ -1,0 +1,564 @@
+TRAE FINAL PROMPT: Fix Battle Start + Arena Load + Keep Gifting Stable (Ship Today)
+What’s broken (based on current code)
+
+Right now the UI flow is:
+
+BattleControlsList calls RPCs:
+
+find_match_candidate(p_stream_id)
+
+create_battle_challenge(p_challenger_id=currentStream.id, p_opponent_id=opponent.id)
+
+accept_battle(p_battle_id)
+
+BroadcastPage only switches into BattleView when:
+
+if (stream.battle_id) return <BattleView battleId={stream.battle_id} ... />
+
+
+So if accept_battle only updates the battles row but does not update BOTH streams (streams.battle_id), then BroadcastPage never flips into BattleView → user sees “Battle Accepted! Loading Arena…” and nothing happens.
+
+✅ Therefore, the fix is: make the DB drive the UI by ensuring accept_battle atomically sets streams.battle_id for BOTH sides + battle active status.
+
+REQUIRED FIXES (DO THESE IN THIS ORDER)
+1) Database: make accept_battle set streams into battle mode (atomic)
+
+Implement/replace:
+
+RPC: public.accept_battle(p_battle_id uuid)
+
+This function MUST:
+
+lock the battle row
+
+verify it is pending
+
+set battles.status = 'active' and started_at = now()
+
+set BOTH streams:
+
+battle_id = p_battle_id
+
+is_battle = true ✅ (your BroadcastPage/RoomStateSync logic is built around this flag)
+
+optionally layout_mode = 'battle' (only if column exists)
+
+return { success: true, battle_id, challenger_stream_id, opponent_stream_id }
+
+SQL (production-safe, no drops):
+
+CREATE OR REPLACE FUNCTION public.accept_battle(p_battle_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_battle record;
+BEGIN
+  SELECT *
+  INTO v_battle
+  FROM public.battles
+  WHERE id = p_battle_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Battle not found');
+  END IF;
+
+  IF v_battle.status <> 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Battle not pending');
+  END IF;
+
+  -- Activate battle
+  UPDATE public.battles
+  SET status = 'active',
+      started_at = now()
+  WHERE id = p_battle_id;
+
+  -- Put BOTH streams into battle mode (THIS is what triggers BroadcastPage -> BattleView)
+  UPDATE public.streams
+  SET battle_id = p_battle_id,
+      is_battle = true
+  WHERE id IN (v_battle.challenger_stream_id, v_battle.opponent_stream_id);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'battle_id', p_battle_id,
+    'challenger_stream_id', v_battle.challenger_stream_id,
+    'opponent_stream_id', v_battle.opponent_stream_id
+  );
+END;
+$$;
+
+Why this fixes your exact symptom
+
+Your BroadcastPage is subscribed to streams updates (broadcast_page_${id}).
+
+The moment battle_id is set on either stream, this line triggers:
+
+if (stream.battle_id) return <BattleView ... />
+
+
+So arena loads automatically without needing extra navigation code.
+
+2) Database: ensure create_battle_challenge creates a real pending battle row
+
+Your UI assumes a pending battle exists where:
+
+battles.opponent_stream_id = myStream.id
+
+status = 'pending'
+
+So create_battle_challenge must guarantee this and prevent duplicate pending/active battles.
+
+RPC: public.create_battle_challenge(p_challenger_id uuid, p_opponent_id uuid)
+
+Required behavior:
+
+reject if challenger == opponent
+
+reject if either stream already has battle_id set OR already has an active/pending battle
+
+insert battle row: status='pending', challenger_stream_id, opponent_stream_id
+
+return inserted battle id
+
+SQL:
+
+CREATE OR REPLACE FUNCTION public.create_battle_challenge(
+  p_challenger_id uuid,
+  p_opponent_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_exists boolean;
+  v_battle_id uuid;
+BEGIN
+  IF p_challenger_id IS NULL OR p_opponent_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Missing stream ids');
+  END IF;
+
+  IF p_challenger_id = p_opponent_id THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Cannot challenge yourself');
+  END IF;
+
+  -- Prevent overlapping battles
+  SELECT EXISTS(
+    SELECT 1
+    FROM public.battles
+    WHERE status IN ('pending','active')
+      AND (
+        challenger_stream_id IN (p_challenger_id, p_opponent_id)
+        OR opponent_stream_id IN (p_challenger_id, p_opponent_id)
+      )
+  ) INTO v_exists;
+
+  IF v_exists THEN
+    RETURN jsonb_build_object('success', false, 'message', 'One of these streams is already in a battle');
+  END IF;
+
+  INSERT INTO public.battles (challenger_stream_id, opponent_stream_id, status, created_at)
+  VALUES (p_challenger_id, p_opponent_id, 'pending', now())
+  RETURNING id INTO v_battle_id;
+
+  RETURN jsonb_build_object('success', true, 'battle_id', v_battle_id);
+END;
+$$;
+
+3) Database: ensure find_match_candidate returns valid live streams only
+
+Your JS expects:
+
+const opponent = Array.isArray(target) && target.length > 0 ? target[0] : null;
+
+
+So RPC must return a table/rows (not a json object).
+
+Required filters based on your BroadcastPage logic:
+
+streams must be status='live'
+
+not ended
+
+not same stream id
+
+not currently battling: battle_id is null
+
+optionally exclude government categories if needed
+
+SQL:
+
+CREATE OR REPLACE FUNCTION public.find_match_candidate(p_stream_id uuid)
+RETURNS TABLE(id uuid, title text)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT s.id, s.title
+  FROM public.streams s
+  WHERE s.status = 'live'
+    AND s.id <> p_stream_id
+    AND COALESCE(s.battle_id, null) IS NULL
+  ORDER BY random()
+  LIMIT 1;
+$$;
+
+4) Frontend: close the battle modal after accept (quality-of-life, not optional)
+
+Even though stream.battle_id will switch the whole page, you still want clean UX.
+
+In BattleControlsList.handleAccept() after success:
+
+set pendingBattle null
+
+set matchStatus ''
+
+and in BroadcastPage, when stream.battle_id becomes non-null, force-close showBattleManager.
+
+In BroadcastPage add:
+useEffect(() => {
+  if (stream?.battle_id) setShowBattleManager(false);
+}, [stream?.battle_id]);
+
+
+This prevents “stuck modal” overlays while BattleView loads.
+
+5) Battle loads for everyone (hosts + guests + viewers) — using your existing BroadcastPage rule
+
+This is already structurally correct in your app IF both streams get battle_id set:
+
+Both broadcasters are in their own BroadcastPage
+
+Guests/viewers are also in their own BroadcastPage
+
+When streams.battle_id updates, everyone’s page hits:
+
+if (stream.battle_id) return <BattleView ... />
+
+
+✅ That is exactly how you get “everyone from both sides goes into the same battle arena”, driven by DB state.
+
+The missing piece was accept_battle not updating both streams.
+
+6) Do not touch gifting except one stability fix (keep launch-safe)
+
+Your gifting pipeline in code is:
+
+GiftTray → useGiftSystem → supabase.rpc('send_gift_in_stream', ...)
+
+To ship today:
+
+DO NOT create new gift RPC names
+
+DO NOT change purchasing code
+
+DO NOT rename tables
+
+Only required fix (if not already done): make sure send_gift_in_stream can find gifts from the same catalog GiftTray uses (purchasable_items / fallback gift_items) and NOT from public.gifts if that’s a transaction table in your schema.
+
+If Trae already aligned this, leave it. If not, fix it now (single migration). The key is:
+
+GiftTray loads from purchasable_items and fallback gift_items
+
+So the RPC must also price gifts from the same source.
+
+Also, do not break battles scoring:
+
+Your battle scoring in send_gift_in_stream is based on stream id mapping to battles.challenger_stream_id/opponent_stream_id
+
+That’s compatible with your “battle room has two sides” design.
+
+Final acceptance criteria (Trae must verify)
+
+Stream A challenges Stream B → Stream B sees incoming challenge within 3 seconds.
+
+Stream B clicks accept → within 1–2 seconds:
+
+BOTH Stream A and Stream B clients receive streams.battle_id update
+
+Both immediately render BattleView
+
+No manual navigation required
+
+Guests and viewers on both streams also transition (they’re on BroadcastPage too).
+
+Gifts still work in normal broadcast.
+
+Gifts during battle update battle pot/score correctly (because stream_id identifies the side).
+
+Then final prompt :
+TRAE MASTER PROMPT: Broadcast + Stream Controls + Discovery Routing — Fix Realtime Seats/Boxes + Lock/Price/RGB + Big Coin Support + Theme Seeding + Live Now/Explore Navigation
+Non-Negotiable Goals
+
+When host adds/removes boxes OR when seats change, ALL users see it immediately (host, guests, viewers). No “sometimes later”.
+
+If seats are locked, users cannot join any guest box (even if UI shows button).
+
+Seat price must work and must not flash / jitter / constantly rewrite DB.
+
+RGB purchases + coin store + any coin spend must support users with very large balances (up to 1 trillion coins). Fix any integer out of range issues everywhere.
+
+Broadcast themes are not hardcoded — they must be seeded from Supabase and selectable.
+
+A stream shown in Home → Live Now and Explore feed must always be clickable and route to the correct broadcast page reliably.
+
+A) Fix “Boxes don’t show for all viewers” (REALTIME SEATS + REALTIME STREAM CONFIG)
+Root Cause
+
+Right now:
+
+BroadcastPage subscribes to streams updates (good)
+
+BUT seat occupancy + seat availability is driven by useStreamSeats() calling get_stream_seats() (pull)
+
+If we don’t subscribe to the seat session table changes, other viewers won’t update until their next fetch → that’s your “sometimes later” behavior.
+
+Required Fix
+
+Identify the actual table behind seats (the one join_seat_atomic inserts/updates and leave_seat_atomic updates; and that get_stream_seats reads). Common names: stream_seats, seat_sessions, etc.
+
+In useStreamSeats(streamId, ...), add realtime subscription to that seat table:
+
+useEffect(() => {
+  if (!streamId) return;
+
+  const channel = supabase
+    .channel(`seats_${streamId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'SEAT_TABLE_NAME',
+      filter: `stream_id=eq.${streamId}`,
+    }, () => {
+      fetchSeats(); // instant refresh for everyone
+    })
+    .subscribe();
+
+  return () => supabase.removeChannel(channel);
+}, [streamId, fetchSeats]);
+
+
+Replace SEAT_TABLE_NAME with the real seat table.
+
+Ensure any seat state change writes to that seat table:
+
+join seat
+
+leave seat
+
+kick
+
+seat added/removed if applicable
+
+✅ Result: when host “adds a guest box” (or any seat change happens), everyone’s UI updates instantly.
+
+B) Locking must truly prevent joining seats (server-enforced)
+Current Problem
+
+UI may disable, but users can still hit RPC directly or race conditions can allow join.
+
+Required Fix
+
+Enforce lock in the RPC join_seat_atomic:
+
+If streams.are_seats_locked = true AND user is not host/staff → reject.
+
+DB logic inside join RPC (mandatory):
+
+SELECT are_seats_locked INTO v_locked
+FROM public.streams
+WHERE id = p_stream_id;
+
+IF v_locked THEN
+  RETURN jsonb_build_object('success', false, 'message', 'Seats are locked');
+END IF;
+
+
+Also enforce:
+
+seat index is available
+
+stream is live
+
+guest limit rule (if you enforce max 3 guests, enforce in DB too)
+
+✅ Result: lock actually works no matter what UI does.
+
+C) Seat price must work with no flashing / no constant DB updates
+Current Issue
+
+BroadcastControls uses local state (seatPrice, debouncedPrice) and a debounce effect; but if stream updates come in realtime while typing, the input can “flash” or re-sync unexpectedly.
+
+Required Fix (clean + stable)
+
+Treat stream.seat_price as the authoritative value only when not editing.
+
+Only write updates on explicit action:
+
+onBlur OR “Save” button (preferred)
+
+Do NOT continuously update DB while the user types.
+
+Implementation:
+
+Add isEditingPrice state.
+
+When input focused: isEditingPrice = true
+
+OnBlur: call update and set isEditingPrice = false
+
+Only sync local seatPrice from stream.seat_price when NOT editing.
+
+Pseudo:
+
+useEffect(() => {
+  if (!isEditingPrice) setSeatPrice(stream.seat_price || 0);
+}, [stream.seat_price, isEditingPrice]);
+
+
+✅ Result: no flashing, price still updates for everyone right after save/blur via stream realtime.
+
+D) RGB + Coin Store + Purchases must support huge balances (fix integer overflow everywhere)
+Root Cause
+
+Some columns/RPC parameters use INTEGER (32-bit max ~2.1B). You need up to 1,000,000,000,000 (1T). That requires BIGINT.
+
+Required Schema Standards (must apply everywhere coins are stored or computed)
+
+user_profiles.troll_coins → BIGINT
+
+any coin_transactions.amount → BIGINT
+
+purchasable item prices (coin_price, gift cost/value) → BIGINT
+
+any RPC parameters for coin amounts → BIGINT
+
+any derived totals/pots/scores → BIGINT
+
+Migration tasks
+
+Alter columns:
+
+ALTER TABLE public.user_profiles ALTER COLUMN troll_coins TYPE BIGINT;
+
+Wherever else you store coin amounts (coin store, transactions, gifts, seats payments, pots, battles scores, etc.)
+
+Fix RPC signatures:
+
+purchase_rgb_broadcast must accept and compute BIGINT
+
+coin store purchase RPC(s) must accept BIGINT
+
+seat join price parameter must be BIGINT
+
+send_gift_in_stream uses BIGINT (it already does in your shared SQL; ensure gift lookup also uses BIGINT cost)
+
+Make sure any JS parsing uses Number safely:
+
+1T fits in JS Number safely (2^53 is much higher), so UI ok.
+
+✅ Result: no more “integer out of range” for rich users.
+
+E) Broadcast themes must be seeded from Supabase (not hardcoded)
+Required
+
+Create a broadcast_themes table (or use existing) with:
+
+id
+
+name
+
+image_url
+
+is_active
+
+optional sort_order
+
+Seed initial rows in a migration.
+
+ThemeSelector must fetch from broadcast_themes where is_active=true order by sort_order
+
+On select:
+
+update streams.active_theme_url (or theme_id if you want relational)
+
+stream realtime updates push background change to everyone instantly (BroadcastPage uses backgroundImage from active_theme_url already)
+
+✅ Result: theme selector always has data and updates live.
+
+F) Ensure streams are viewable & clickable from Home “Live Now” and Explore feed
+Current Failure Mode
+
+Typically breaks happen due to:
+
+wrong route id (username vs uuid)
+
+mismatch between feed item id and actual streams.id
+
+stream not found because feed uses broadcaster_id or user_profiles.username instead of stream id
+
+not filtering only status='live'
+
+Required Fix
+
+Standardize navigation target:
+
+Always route to: /watch/:streamId (or whatever route mounts BroadcastPage)
+
+Where streamId is streams.id (UUID) ALWAYS.
+
+In Live Now + Explore feed queries:
+
+select streams.id, streams.title, streams.status, streams.user_id, viewer count fields
+
+filter: status='live'
+
+order appropriately
+
+In the card click handler:
+
+navigate(/watch/${stream.id})
+
+In BroadcastPage fetch:
+
+keep the existing .eq('id', id).single() lookup (already expects stream UUID)
+
+✅ Result: any stream shown in Live Now/Explore always opens correctly.
+
+G) Do not break gifting / purchasing while making these changes
+
+Do not rename existing RPCs used by frontend.
+
+If any coin-related column types change, update affected RPCs in the same migration.
+
+Run sanity tests:
+
+buy coins (coin store)
+
+purchase RGB
+
+join paid seat
+
+send gift
+
+select theme
+
+lock seats and verify join blocked
+
+Final Acceptance Tests (must pass)
+
+Host adds/opens seats → every viewer sees Join Stage availability instantly.
+
+Host locks seats → join is blocked server-side instantly.
+
+Seat price changes → stable UI (no flashing), updates for everyone after save/blur.
+
+User with 1T coins can buy RGB + coin store items without overflow.
+
+Theme selector shows seeded themes and selection updates instantly for everyone.
+
+Live Now + Explore cards always open the broadcast page successfully.

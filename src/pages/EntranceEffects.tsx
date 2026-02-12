@@ -27,7 +27,8 @@ const EntranceEffects = () => {
       // Load entrance effects from database table (not hardcoded)
       const { data, error } = await supabase
         .from('entrance_effects')
-        .select('id, name, coin_cost, rarity, animation_type')
+        .select('id, name, coin_cost, rarity, animation_type, category')
+        .neq('category', 'gift') // Exclude gifts that might be in the same table/view
         .order('coin_cost', { ascending: true })
       
       if (error) {

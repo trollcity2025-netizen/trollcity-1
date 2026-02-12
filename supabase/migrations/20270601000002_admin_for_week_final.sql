@@ -184,7 +184,9 @@ END;
 $$;
 
 -- 7. Update is_staff to include temp_city_admin
-DROP FUNCTION IF EXISTS public.is_staff(UUID);
+-- IMPORTANT: We must DROP CASCADE to remove dependent policies, then recreate them.
+DROP FUNCTION IF EXISTS public.is_staff(UUID) CASCADE;
+
 CREATE OR REPLACE FUNCTION public.is_staff(p_user_id UUID DEFAULT public.current_user_id())
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -204,6 +206,36 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+-- Recreate policies dropped by CASCADE
+-- 1. Troll Wall Posts
+CREATE POLICY "Staff remove content" ON public.troll_wall_posts
+FOR DELETE
+USING (public.is_staff(auth.uid()));
+
+-- 2. Troll Post Reactions
+CREATE POLICY "Staff remove reactions" ON public.troll_post_reactions
+FOR DELETE
+USING (public.is_staff(auth.uid()));
+
+-- 3. Court Cases
+CREATE POLICY "Users read own court cases" ON public.court_cases
+FOR SELECT
+USING (auth.uid() = defendant_id OR auth.uid() = plaintiff_id OR public.is_staff(auth.uid()));
+
+-- 4. Officer Shifts
+CREATE POLICY "Officers clock in/out" ON public.officer_shifts
+FOR ALL
+USING (public.is_staff(auth.uid()));
+
+-- 5. Support Tickets
+CREATE POLICY "Users read own tickets" ON public.support_tickets
+FOR SELECT
+USING (auth.uid() = user_id OR public.is_staff(auth.uid()));
+
+CREATE POLICY "Staff manage tickets" ON public.support_tickets
+FOR UPDATE
+USING (public.is_staff(auth.uid()));
 
 -- 8. Emergency Revoke RPC
 CREATE OR REPLACE FUNCTION public.emergency_revoke_admin(p_target_user_id UUID)

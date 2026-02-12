@@ -7,6 +7,7 @@ export default function MuteHandler({ streamId }: { streamId: string }) {
     const { localParticipant } = useLocalParticipant();
 
     useEffect(() => {
+        if (!streamId || !streamId.trim()) return;
         if (!localParticipant) return;
 
         // Check initial mute

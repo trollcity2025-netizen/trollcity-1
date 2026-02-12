@@ -8,6 +8,7 @@ import { getUserEntranceEffect } from '../lib/entranceEffects'
  * - Viewers join the 'room:{streamId}' channel.
  * - The Host (broadcaster) is responsible for periodically updating the 'streams' table
  *   with the accurate viewer count to avoid DB write storms.
+ * - Posts join/leave messages to stream chat
  */
 export function useViewerTracking(streamId: string | null, isHost: boolean = false, customUser: any = null) {
   const { user, profile } = useAuthStore()
@@ -49,7 +50,7 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
 
         if (isHost || isOfficer) {
           const now = Date.now()
-          if (now - lastDbUpdate.current > 15000) { // Update every 15s
+          if (now - lastDbUpdate.current > 5000) { // Update every 5s
             lastDbUpdate.current = now
             
             // Use RPC to bypass potential RLS issues for officers
@@ -65,6 +66,54 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
               })
           }
         }
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        // Post join message to chat
+        newPresences.forEach((p: any) => {
+          if (p.user_id && p.username) {
+            // Fetch user level for the message
+            supabase.from('user_profiles')
+              .select('level')
+              .eq('id', p.user_id)
+              .single()
+              .then(({ data }) => {
+                const level = data?.level || 1;
+                supabase.rpc('post_system_message', {
+                  p_stream_id: streamId,
+                  p_user_id: p.user_id,
+                  p_content: `${p.username} [Lvl ${level}] entered`,
+                  p_username: p.username,
+                  p_avatar_url: p.avatar_url,
+                  p_role: p.role,
+                  p_troll_role: p.troll_role
+                });
+              });
+          }
+        });
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        // Post leave message to chat
+        leftPresences.forEach((p: any) => {
+          if (p.user_id && p.username) {
+            // Fetch user level for the message
+            supabase.from('user_profiles')
+              .select('level')
+              .eq('id', p.user_id)
+              .single()
+              .then(({ data }) => {
+                const level = data?.level || 1;
+                supabase.rpc('post_system_message', {
+                  p_stream_id: streamId,
+                  p_user_id: p.user_id,
+                  p_content: `${p.username} [Lvl ${level}] left`,
+                  p_username: p.username,
+                  p_avatar_url: p.avatar_url,
+                  p_role: p.role,
+                  p_troll_role: p.troll_role
+                });
+              });
+          }
+        });
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -134,7 +183,7 @@ export function useLiveViewerCount(streamId: string | null) {
     }
     getCount()
 
-    // Subscribe to DB updates (debounced by the host's 15s update interval)
+    // Subscribe to DB updates (debounced by the host's 5s update interval)
     // REFACTOR: Changed from Realtime subscription to Polling to reduce DB connection costs
     const interval = setInterval(async () => {
         if (!mounted) return;
@@ -147,7 +196,7 @@ export function useLiveViewerCount(streamId: string | null) {
         if (mounted && data) {
             setViewerCount(data.current_viewers || 0);
         }
-    }, 15000); // Poll every 15s
+    }, 5000); // Poll every 5s
 
     return () => {
       mounted = false

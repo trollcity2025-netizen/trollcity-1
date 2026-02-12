@@ -3,6 +3,7 @@ import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Home, DollarSign, Building, Warehouse, Hotel, Tent, Briefcase, Edit2, X, Zap, Droplets, FileText, Calculator, CheckCircle, Trash2, CreditCard } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Property {
   id: string;
@@ -61,6 +62,7 @@ interface LandlordApplication {
 
 export default function LivingPage() {
   const { user, profile } = useAuthStore();
+    const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'my_home' | 'my_loans' | 'market' | 'landlord' | 'landlord_apply'>('my_home');
   const [marketFilter, setMarketFilter] = useState<'rent' | 'sale'>('rent');
   const [myLease, setMyLease] = useState<Lease | null>(null);
@@ -87,7 +89,7 @@ export default function LivingPage() {
 
   useEffect(() => {
     if (user) {
-        supabase.from('user_credit').select('score').eq('user_id', user.id).single().then(({ data }) => {
+                supabase.from('user_credit').select('score').eq('user_id', user.id).maybeSingle().then(({ data }) => {
             if (data) setCreditScore(data.score);
         });
     }
@@ -133,16 +135,23 @@ export default function LivingPage() {
     if (profile) {
       const adminStatus = profile.role === 'admin' || profile.is_admin;
       setIsAdmin(adminStatus);
+            if (adminStatus) {
+                setIsLandlord(true);
+            }
     }
   }, [profile]);
 
   const checkLandlordStatus = useCallback(async () => {
     if (!user) return;
+        if (profile?.role === 'admin' || profile?.is_admin) {
+            setIsLandlord(true);
+            return;
+        }
     const { data } = await supabase
       .from('user_profiles')
       .select('is_landlord')
       .eq('id', user.id)
-      .single();
+            .maybeSingle();
     
     if (data) setIsLandlord(data.is_landlord || false);
     
@@ -311,7 +320,11 @@ export default function LivingPage() {
       return;
     }
     
-    try {
+        try {
+            const isApartmentListing = adminPropertyForm.type_id === 'apartment';
+            const isForRent = isApartmentListing;
+            const isForSale = !isApartmentListing;
+
       const propertyData = {
         name: adminPropertyForm.name,
         type_id: adminPropertyForm.type_id,
@@ -322,8 +335,8 @@ export default function LivingPage() {
         sqft: adminPropertyForm.sqft,
         electric_cost: adminPropertyForm.electric_cost,
         water_cost: adminPropertyForm.water_cost,
-        is_for_sale: true,
-        is_for_rent: true,
+                is_for_sale: isForSale,
+                is_for_rent: isForRent,
         is_admin_created: true, // Only landlords can buy this
         is_landlord_purchased: false,
         owner_id: null, // No owner yet, available for purchase
@@ -331,7 +344,7 @@ export default function LivingPage() {
         max_tenants: adminPropertyForm.max_tenants,
         current_tenants: 0,
         amenities: ['Basic Amenities'],
-        description: adminPropertyForm.description || 'A property available for rent.',
+                description: adminPropertyForm.description || (isForRent ? 'A property available for rent.' : 'A property available for sale.'),
         image_url: '/api/placeholder/400/300',
       };
       
@@ -341,8 +354,11 @@ export default function LivingPage() {
       
       if (error) throw error;
       
-      toast.success('Property created for rent!');
-      setShowAdminCreateProperty(false);
+    toast.success(isForRent ? 'Property created for rent!' : 'Property created for sale!');
+    setShowAdminCreateProperty(false);
+    setActiveTab('market');
+    setMarketFilter(isForRent ? 'rent' : 'sale');
+    fetchMarket();
       
       // Reset form
       setAdminPropertyForm({
@@ -612,6 +628,12 @@ export default function LivingPage() {
         setLoading(false);
     }
   }, [marketFilter]);
+
+    useEffect(() => {
+        if (activeTab === 'market') {
+            fetchMarket();
+        }
+    }, [activeTab, fetchMarket]);
 
   const handleDeleteProperty = async (propertyId: string) => {
     if (!isAdmin) return;
@@ -1295,7 +1317,10 @@ export default function LivingPage() {
                         </div>
 
                         <div className="mt-6 flex justify-end gap-3 relative z-10">
-                            <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold transition-colors">
+                            <button
+                                onClick={() => navigate('/support')}
+                                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold transition-colors"
+                            >
                                 Report Issue
                             </button>
                             <button 
@@ -1545,10 +1570,10 @@ export default function LivingPage() {
                     
                     <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                         <Building className="w-5 h-5 text-red-500" />
-                        Create Property for Rent
+                        Create Property Listing
                     </h3>
                     <p className="text-sm text-gray-400 mb-6">
-                        This property will be visible in the &quot;For Rent&quot; section.
+                        Apartments appear in &quot;For Rent&quot;. All other types appear in &quot;For Sale&quot;.
                     </p>
 
                     <div className="space-y-4">

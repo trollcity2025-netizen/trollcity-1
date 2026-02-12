@@ -25,6 +25,7 @@ interface UseLiveKitTokenProps {
   canPublish?: boolean;
   enabled?: boolean;
   isGuest?: boolean;
+  attributes?: Record<string, any>;
 }
 
 export function useLiveKitToken({
@@ -35,6 +36,7 @@ export function useLiveKitToken({
   canPublish = false,
   enabled = true,
   isGuest = false,
+  attributes = {},
   role
 }: UseLiveKitTokenProps & { role?: string }) {
   const navigate = useNavigate();
@@ -202,6 +204,7 @@ export function useLiveKitToken({
                 streamId, // Guest endpoint expects streamId sometimes
                 identity: userId,
                 user_id: userId,
+                attributes,
                 // Role is determined server-side now for security
                 // allowPublish: canPublish, // (Ignored by server now too, but keeping for legacy compat if needed)
                 }),

@@ -6,6 +6,7 @@ import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe';
 import { trollCityTheme } from '@/styles/trollCityTheme';
 import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
 import { useThemeAudio } from '../contexts/ThemeAudioContext';
+import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import { 
   Play, 
   Users, 
@@ -172,6 +173,9 @@ export default function Home() {
       {/* Animated Background */}
       <AnimatedGradient />
       <FloatingParticles />
+
+      {/* PWA Install Prompt - Only on Landing Page */}
+      <PWAInstallPrompt />
 
       {/* Content */}
       <div className="relative z-10 min-h-dvh flex flex-col">

@@ -98,7 +98,7 @@ export default function HomeLiveGrid() {
         {streams.map((stream) => (
           <div
             key={stream.id}
-            onClick={() => navigate(`/broadcast/${stream.id}`)}
+            onClick={() => navigate(`/watch/${stream.id}`)}
             className="group cursor-pointer bg-slate-900/50 border border-white/10 rounded-xl overflow-hidden hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 hover:-translate-y-1"
           >
             {/* Thumbnail / Preview Area */}

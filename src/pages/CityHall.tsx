@@ -22,6 +22,7 @@ interface CurrentAdmin {
 
 export default function CityHall() {
     const { user } = useAuthStore();
+    const isUnderConstruction = true;
     const [queue, setQueue] = useState<AdminQueueItem[]>([]);
     const [currentAdmin, setCurrentAdmin] = useState<CurrentAdmin | null>(null);
     const [loading, setLoading] = useState(false);
@@ -90,6 +91,16 @@ export default function CityHall() {
                     </div>
                 </div>
 
+                {/* Under Construction Banner */}
+                {isUnderConstruction && (
+                    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-amber-200">
+                        <div className="text-sm font-semibold uppercase tracking-wider">Under Construction</div>
+                        <div className="mt-1 text-sm text-amber-100/90">
+                            City Hall is being rebuilt. Admin queue and actions are temporarily disabled.
+                        </div>
+                    </div>
+                )}
+
                 {/* Current Admin Section */}
                 <div className="grid md:grid-cols-2 gap-6">
                     <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-6 relative overflow-hidden rounded-2xl`}>
@@ -141,10 +152,10 @@ export default function CityHall() {
 
                         <button 
                             onClick={handleJoinQueue}
-                            disabled={joining || loading}
+                            disabled={joining || loading || isUnderConstruction}
                             className={`w-full mt-4 ${trollCityTheme.buttons.primary} py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
-                            {joining ? 'Processing...' : 'Join Queue'}
+                            {isUnderConstruction ? 'Under Construction' : joining ? 'Processing...' : 'Join Queue'}
                             <ArrowRight className="w-4 h-4" />
                         </button>
                     </div>

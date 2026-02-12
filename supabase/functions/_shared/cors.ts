@@ -24,6 +24,8 @@ const allowedOrigins = [
   'http://localhost:5177',
   'http://localhost:3001',
   'http://localhost:3000',
+  'https://maitrollcity.com',
+  'https://www.maitrollcity.com',
   'https://troll-city.vercel.app',
   getVercelUrl(),
   getVercelBranchUrl()

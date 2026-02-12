@@ -240,7 +240,10 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
         }
 
         case 'stream_mute': {
-            if (!streamId) return;
+            if (!streamId || !streamId.trim()) {
+                toast.error('Stream not found');
+                return;
+            }
 
             if (isCurrentTempAdmin) {
                  try {
@@ -274,8 +277,11 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
             break;
        }
 
-       case 'stream_unmute': {
-            if (!streamId) return;
+      case 'stream_unmute': {
+          if (!streamId || !streamId.trim()) {
+             toast.error('Stream not found');
+             return;
+          }
             try {
                 const { error } = await supabase
                    .from('streams_participants')

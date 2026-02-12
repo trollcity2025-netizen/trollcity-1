@@ -99,12 +99,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const at = new AccessToken(apiKey, apiSecret, { identity: identity, name: profile.username });
 
+    const attributes = params.attributes || {};
+    const metadata = {
+        role: profile.role,
+        ...attributes
+    };
+    at.metadata = JSON.stringify(metadata);
+
     at.addGrant({ 
       room: roomName, 
       roomJoin: true, 
       canPublish: true, 
       canSubscribe: true,
       canPublishData: true,
+      attributes: attributes, // Add attributes to grant if supported by SDK version, else metadata is fallback
     });
 
     if (profile.is_broadcaster) {

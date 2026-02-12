@@ -177,15 +177,26 @@ export function useStreamChat(streamId: string) {
   }, [streamId, fetchVehicleStatus, vehicleCache]);
 
   const sendMessage = async (content: string) => {
+    console.log('💬 [useStreamChat] sendMessage called', { 
+      hasContent: !!content.trim(), 
+      hasUser: !!user, 
+      hasProfile: !!profile,
+      streamId 
+    });
+    
     if (!content.trim()) return;
     
     if (!user || !profile) {
+        console.error('💬 [useStreamChat] No user or profile');
         toast.error('You must be logged in to chat');
         return;
     }
     
     const now = Date.now();
-    if (now - lastSentRef.current < RATE_LIMIT_MS) return;
+    if (now - lastSentRef.current < RATE_LIMIT_MS) {
+        console.log('💬 [useStreamChat] Rate limited');
+        return;
+    }
     lastSentRef.current = now;
 
     let myVehicle = vehicleCache[user.id];
@@ -193,7 +204,9 @@ export function useStreamChat(streamId: string) {
         myVehicle = (await fetchVehicleStatus(user.id)) || { has_vehicle: false };
     }
 
-    const { error } = await supabase.from('stream_messages').insert({
+    console.log('💬 [useStreamChat] Inserting message:', { streamId, userId: user.id, content: content.trim() });
+
+    const { data, error } = await supabase.from('stream_messages').insert({
         stream_id: streamId,
         user_id: user.id,
         content: content.trim(),
@@ -205,11 +218,14 @@ export function useStreamChat(streamId: string) {
         user_rgb_expires_at: profile.rgb_username_expires_at,
         user_glowing_username_color: profile.glowing_username_color,
         vehicle_snapshot: myVehicle
-    });
+    }).select();
 
     if (error) {
-        console.error('Failed to send message:', error);
-        toast.error('Failed to send message');
+        console.error('💬 [useStreamChat] Failed to send message:', error);
+        console.error('💬 [useStreamChat] Error details:', JSON.stringify(error, null, 2));
+        toast.error('Failed to send message: ' + error.message);
+    } else {
+        console.log('💬 [useStreamChat] Message sent successfully:', data);
     }
   };
 

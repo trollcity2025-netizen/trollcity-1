@@ -210,68 +210,6 @@ export interface EffectConfig {
 
 
 
-/**
- * Role-based entrance effects - automatically triggered based on user role
- * These are not purchasable and override any purchased effects
- */
-export const ROLE_BASED_ENTRANCE_EFFECTS: Record<string, EffectConfig> = {
-  'admin': {
-    name: 'Troll City CEO',
-    description: 'Troll City CEO storms the screen with trolls and city lights',
-    animationType: 'troll_city_ceo',
-    soundEffect: 'city_siren',
-    durationSeconds: 8,
-    priority: 100
-  },
-  'secretary': {
-    name: 'Cash Flow Entrance',
-    description: 'Make it rain!',
-    animationType: 'secretary_money',
-    soundEffect: 'coins',
-    durationSeconds: 5,
-    priority: 85
-  },
-  'lead_troll_officer': {
-    name: 'Presidential Salute',
-    description: 'Hail to the Chief',
-    animationType: 'lead_officer_presidential',
-    soundEffect: 'elite_command',
-    durationSeconds: 6,
-    priority: 90
-  },
-  'troll_officer': {
-    name: 'Police Raid',
-    description: 'Freeze! Troll Police!',
-    animationType: 'officer_police',
-    soundEffect: 'elite_command',
-    durationSeconds: 4,
-    priority: 80
-  }
-};
-
-/**
- * User-specific entrance effects - overrides everything else
- */
-export const USER_SPECIFIC_ENTRANCE_EFFECTS: Record<string, EffectConfig> = {
-  'JustK': {
-    name: 'The Matrix Architect',
-    description: 'Welcome to the real world.',
-    animationType: 'matrix_theme',
-    soundEffect: 'divine_bass',
-    durationSeconds: 8,
-    priority: 200
-  },
-  'Mitzie': {
-    name: 'Feline Queen Arrival',
-    description: 'Purr-fect entrance!',
-    animationType: 'cat_theme',
-    soundEffect: 'magical',
-    durationSeconds: 6,
-    priority: 200
-  }
-};
-
-export type RoleBasedEffectKey = keyof typeof ROLE_BASED_ENTRANCE_EFFECTS;
 
 /**
  * Check if user owns a specific entrance effect
@@ -453,52 +391,26 @@ export function getEntranceEffectConfig(effectKey: EntranceEffectKey): EffectCon
 }
 
 /**
- * Get role-based entrance effect configuration
- */
-export function getRoleBasedEffectConfig(role: string): EffectConfig | null {
-  return ROLE_BASED_ENTRANCE_EFFECTS[role] || null;
-}
-
-/**
  * Determine which entrance effect to play for a user
- * Priority: Role-based effects > Purchased active effects > None
+ * Priority: Purchased active effects > None
  */
 export async function getUserEntranceEffect(userId: string): Promise<{
-  effectKey: EntranceEffectKey | RoleBasedEffectKey | null;
-  isRoleBased: boolean;
+  effectKey: EntranceEffectKey | null;
   config: any;
 }> {
   try {
-    // First check user's role for role-based effects
-    const { data: userProfile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', userId)
-      .single();
-
-    if (userProfile?.role && ROLE_BASED_ENTRANCE_EFFECTS[userProfile.role as RoleBasedEffectKey]) {
-      const roleEffect = ROLE_BASED_ENTRANCE_EFFECTS[userProfile.role as RoleBasedEffectKey];
-      return {
-        effectKey: userProfile.role as RoleBasedEffectKey,
-        isRoleBased: true,
-        config: roleEffect
-      };
-    }
-
-    // Fall back to purchased active effect
     const activeEffect = await getUserActiveEffect(userId);
     if (activeEffect) {
       return {
         effectKey: activeEffect,
-        isRoleBased: false,
         config: getEntranceEffectConfig(activeEffect)
       };
     }
 
-    return { effectKey: null, isRoleBased: false, config: null };
+    return { effectKey: null, config: null };
   } catch (err) {
     console.error('Error determining user entrance effect:', err);
-    return { effectKey: null, isRoleBased: false, config: null };
+    return { effectKey: null, config: null };
   }
 }
 
@@ -537,14 +449,14 @@ export async function canAffordEntranceEffect(userId: string, effectKey: Entranc
 export async function triggerUserEntranceEffect(userId: string, targetElement?: HTMLElement): Promise<void> {
 
   try {
-    const { effectKey, isRoleBased } = await getUserEntranceEffect(userId);
+    const { effectKey } = await getUserEntranceEffect(userId);
 
     if (effectKey) {
       // Import the animation function dynamically to avoid circular imports
       const { playEntranceAnimation } = await import('./entranceAnimations');
       await playEntranceAnimation(userId, effectKey, targetElement);
 
-      console.log(`🎪 Triggered ${isRoleBased ? 'role-based' : 'purchased'} entrance effect: ${effectKey} for user ${userId}`);
+      console.log(`🎪 Triggered purchased entrance effect: ${effectKey} for user ${userId}`);
     }
   } catch (err) {
     console.error('Error triggering entrance effect:', err);

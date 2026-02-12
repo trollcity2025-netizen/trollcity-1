@@ -9,40 +9,26 @@ export function useAllCreditScores(currentUserId) {
     async function fetchScores() {
       setLoading(true);
       try {
-        // 1. Fetch all profiles
-        const { data: profiles, error: profilesError } = await supabase
+        // Fetch all profiles with credit_score from user_profiles table
+        const { data: profiles, error } = await supabase
           .from('user_profiles')
-          .select('id, username, avatar_url');
+          .select('id, username, avatar_url, credit_score')
+          .order('credit_score', { ascending: false });
 
-        if (profilesError) throw profilesError;
+        if (error) throw error;
 
-        // 2. Fetch all credit scores from user_credit
-        const { data: creditData, error: creditError } = await supabase
-          .from('user_credit')
-          .select('user_id, score, updated_at');
+        // Map and format
+        const allScores = (profiles || []).map(p => ({
+          user_id: p.id,
+          score: p.credit_score ?? 400,
+          updated_at: new Date().toISOString(),
+          users: {
+            username: p.username || 'Unknown',
+            avatar_url: p.avatar_url
+          }
+        }));
 
-        if (creditError) throw creditError;
-
-        const creditMap = new Map(creditData?.map(d => [d.user_id, d]) || []);
-
-        // 3. Merge
-        const allScores = (profiles || []).map(p => {
-          const credit = creditMap.get(p.id);
-          return {
-            user_id: p.id,
-            score: credit?.score ?? 400,
-            updated_at: credit?.updated_at ?? null,
-            users: {
-              username: p.username || 'Unknown',
-              avatar_url: p.avatar_url
-            }
-          };
-        });
-
-        // 4. Sort
-        allScores.sort((a, b) => b.score - a.score);
-
-        // 5. Move current user to top
+        // Move current user to top
         const mine = allScores.find((row) => row.user_id === currentUserId);
         const others = allScores.filter((row) => row.user_id !== currentUserId);
         setScores(mine ? [mine, ...others] : others);

@@ -45,6 +45,8 @@ export function usePublishEntranceOnJoin({
   const room = useRoomContext();
   const hasPublishedRef = useRef(false);
   const publishedEventIdsRef = useRef<Set<string>>(new Set());
+  const publishedKey = streamId && userId ? `entrance_published_${streamId}_${userId}` : null;
+  const roomEntryKey = streamId ? `entrance_room_connected_${streamId}` : null;
 
   // Generate unique event ID
   const generateEventId = useCallback((uid: string) => {
@@ -55,6 +57,11 @@ export function usePublishEntranceOnJoin({
   const publishEntranceEvent = useCallback(async () => {
     if (!localParticipant || !room || !streamId || !userId) {
       console.log('[usePublishEntranceOnJoin] Missing required data to publish');
+      return;
+    }
+
+    if (publishedKey && sessionStorage.getItem(publishedKey)) {
+      console.log('[usePublishEntranceOnJoin] Entrance already published for this stream, skipping');
       return;
     }
 
@@ -93,11 +100,14 @@ export function usePublishEntranceOnJoin({
       });
 
       publishedEventIdsRef.current.add(eventId);
+      if (publishedKey) {
+        sessionStorage.setItem(publishedKey, '1');
+      }
       console.log(`[usePublishEntranceOnJoin] Published entrance event: ${eventId} for user ${userId} with effect ${effectKey}`);
     } catch (error) {
       console.error('[usePublishEntranceOnJoin] Failed to publish entrance event:', error);
     }
-  }, [localParticipant, room, streamId, userId, username, generateEventId]);
+  }, [localParticipant, room, streamId, userId, username, generateEventId, publishedKey]);
 
   // Effect: Publish entrance event when connected
   useEffect(() => {
@@ -105,6 +115,21 @@ export function usePublishEntranceOnJoin({
     const shouldPublish = connectionState === ConnectionState.Connected;
 
     if (shouldPublish && streamId && userId && !hasPublishedRef.current) {
+      if (roomEntryKey && sessionStorage.getItem(roomEntryKey)) {
+        hasPublishedRef.current = true;
+        console.log('[usePublishEntranceOnJoin] Room already connected this session, skipping publish');
+        return;
+      }
+
+      if (publishedKey && sessionStorage.getItem(publishedKey)) {
+        hasPublishedRef.current = true;
+        console.log('[usePublishEntranceOnJoin] Entrance already published for this stream (session), skipping');
+        return;
+      }
+
+      if (roomEntryKey) {
+        sessionStorage.setItem(roomEntryKey, '1');
+      }
       hasPublishedRef.current = true;
       console.log(`[usePublishEntranceOnJoin] Connection established, publishing entrance for stream ${streamId}`);
       
@@ -115,7 +140,7 @@ export function usePublishEntranceOnJoin({
 
       return () => clearTimeout(timer);
     }
-  }, [connectionState, streamId, userId, publishEntranceEvent]);
+  }, [connectionState, streamId, userId, publishEntranceEvent, publishedKey, roomEntryKey]);
 
   return {
     connectionState,

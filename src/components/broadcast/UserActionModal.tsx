@@ -184,6 +184,10 @@ export default function UserActionModal({
         toast.error("Cannot mute staff members.");
         return;
     }
+    if (!streamId || !streamId.trim()) {
+      toast.error("Stream not found");
+      return;
+    }
     const { error } = await supabase.rpc('mute_user', { p_stream_id: streamId, p_user_id: userId });
     if (error) toast.error("Failed to mute user");
     else {

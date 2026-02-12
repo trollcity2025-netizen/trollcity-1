@@ -156,7 +156,7 @@ export default function OfficerStreamGrid() {
                   WATCH
                 </button>
                 <button
-                  onClick={() => navigate(`/broadcast/${stream.id}?patrol=true`)}
+                  onClick={() => navigate(`/watch/${stream.id}?patrol=true`)}
                   className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-900/50 hover:bg-blue-800/50 border border-blue-700/50 text-blue-200 text-xs font-bold rounded-lg transition-colors"
                 >
                   <Shield className="w-3.5 h-3.5" />

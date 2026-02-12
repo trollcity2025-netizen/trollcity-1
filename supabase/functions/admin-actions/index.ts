@@ -817,8 +817,50 @@ Deno.serve(async (req) => {
 
       case "admin_force_end_stream": {
         if (!isAdmin) throw new Error("Unauthorized");
-        const { streamId } = params;
+        const { streamId, reason } = params;
         if (!streamId) throw new Error("Missing streamId");
+        
+        // BATTLE PROTECTION: Check if stream is in active battle
+        const { data: streamData } = await supabaseAdmin
+            .from("streams")
+            .select("battle_id, user_id")
+            .eq("id", streamId)
+            .single();
+            
+        if (streamData?.battle_id) {
+            const { data: battleData } = await supabaseAdmin
+                .from("battles")
+                .select("status")
+                .eq("id", streamData.battle_id)
+                .single();
+                
+            if (battleData?.status === 'active') {
+                // Log the blocked attempt
+                await supabaseAdmin.from("audit_logs").insert({
+                    action: "admin_force_end_stream_blocked",
+                    user_id: userId,
+                    details: {
+                        streamId,
+                        battleId: streamData.battle_id,
+                        reason: reason || "No reason provided",
+                        blocked_reason: "Stream is in active battle"
+                    }
+                });
+                
+                throw new Error(`Cannot force-end stream ${streamId}: Active battle in progress. End the battle first.`);
+            }
+        }
+        
+        // Log the admin action
+        await supabaseAdmin.from("audit_logs").insert({
+            action: "admin_force_end_stream",
+            user_id: userId,
+            details: {
+                streamId,
+                streamOwner: streamData?.user_id,
+                reason: reason || "No reason provided"
+            }
+        });
         
         const { error } = await supabaseAdmin
             .from("streams")

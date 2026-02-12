@@ -38,23 +38,24 @@ export function useGiftSystem(
     setIsSending(true);
 
     try {
+      const txnKey = `${user.id}_${streamId}_${gift.id}_${Date.now()}`;
+      
       console.log('[GiftDebugger-2] Sending gift...', {
         sender: user.id,
         receiver: finalRecipientId,
         streamId: streamId || null,
-        giftId: gift.slug || gift.id,
+        giftId: gift.id,
         cost: gift.coinCost,
-        quantity
+        quantity,
+        txnKey
       });
 
-      // Use the new send_premium_gift RPC with Cashback/RGB logic
-      // p_cost is removed as it's now looked up server-side for security
+      // Use the new idempotent send_gift_in_stream RPC
       const { data, error } = await supabase.rpc('send_gift_in_stream', {
         p_sender_id: user.id,
-        p_receiver_id: finalRecipientId,
         p_stream_id: streamId || null,
-        p_gift_id: gift.slug || gift.id,
-        p_quantity: quantity
+        p_gift_id: gift.id,
+        p_txn_key: txnKey
       });
 
       console.log('[GiftDebugger-2] RPC Result:', { data, error });

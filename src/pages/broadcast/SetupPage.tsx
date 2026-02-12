@@ -393,7 +393,7 @@ export default function SetupPage() {
       toast.success('Stream created! Going live...');
       isStartingStream.current = true;
       // Navigate using username if available (for clean URL), otherwise ID
-      navigate(`/broadcast/${data.id}`);
+      navigate(`/watch/${data.id}`);
     } catch (err: any) {
       console.error('Error creating stream:', err);
       toast.error(err.message || 'Failed to start stream');
@@ -530,7 +530,7 @@ export default function SetupPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></span>
-                  Starting Stream...
+                  Creating your stream...
                 </span>
               ) : (
                 'Start Broadcast'

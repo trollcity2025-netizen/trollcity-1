@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { Package, Zap, Crown, Star, Palette, CheckCircle, XCircle, Sparkles, Shield, Phone, X, Car, Home, ChevronDown, ChevronUp } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
 // import { PERK_CONFIG } from '../lib/perkSystem'
-import { ENTRANCE_EFFECTS_MAP, ROLE_BASED_ENTRANCE_EFFECTS, USER_SPECIFIC_ENTRANCE_EFFECTS } from '../lib/entranceEffects'
+import { ENTRANCE_EFFECTS_MAP } from '../lib/entranceEffects'
 import { GlowingUsernameColorPicker } from '../components/GlowingUsernameColorPicker'
 import TitleDeedModal from '../components/TitleDeedModal'
 import ShopConsumablesSection from '../components/ShopConsumablesSection'
@@ -313,28 +313,6 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
     }
   }, [user?.id, inventory, perks, insurances, activeItems, loadInventory]);
 
-  const roleEffectKey = (() => {
-    if (!profile) return null;
-    const username = (profile.username || '').toLowerCase();
-    const userSpecific = Object.keys(USER_SPECIFIC_ENTRANCE_EFFECTS).find((k) => k.toLowerCase() === username);
-    if (userSpecific) return `user_${username}`;
-    if (profile.role === 'admin' || profile.troll_role === 'admin' || profile.is_admin) return 'admin';
-    if (profile.role === 'secretary' || profile.troll_role === 'secretary') return 'secretary';
-    if (profile.role === 'lead_troll_officer' || profile.troll_role === 'lead_troll_officer' || profile.is_lead_officer) return 'lead_troll_officer';
-    if (profile.role === 'troll_officer' || profile.troll_role === 'troll_officer') return 'troll_officer';
-    return null;
-  })();
-  const roleEffect = (() => {
-    if (!profile) return null;
-    const username = (profile.username || '').toLowerCase();
-    const userConfig = Object.entries(USER_SPECIFIC_ENTRANCE_EFFECTS).find(
-      ([key]) => key.toLowerCase() === username
-    )?.[1];
-    if (userConfig) return { ...userConfig, type: 'User Exclusive' };
-    const roleKey = roleEffectKey;
-    return roleKey && ROLE_BASED_ENTRANCE_EFFECTS[roleKey] ? ROLE_BASED_ENTRANCE_EFFECTS[roleKey] : null;
-  })();
-
   const deleteInventoryItem = useCallback(
     async (recordId: string, itemId: string) => {
       if (!user?.id) return
@@ -434,9 +412,6 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
         const newSet = new Set(prev);
         // Remove all entrance effects from active set (since DB deactivates all)
         entranceEffects.forEach(e => newSet.delete(e.effect_id));
-        
-        // Also remove role effect if active
-        if (roleEffectKey) newSet.delete(`role_effect_${roleEffectKey}`);
 
         // Add new one if activating
         if (newEffectId) {
@@ -451,47 +426,6 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       console.error('Error toggling effect:', err);
       toast.error('Failed to toggle effect');
     }
-  };
-
-  const toggleRoleEffect = async (isActive: boolean) => {
-      if (!roleEffect) return;
-      const roleEffectId = `role_effect_${roleEffectKey || 'default'}`;
-
-      try {
-          if (isActive) {
-              // Deactivate
-              const { error } = await supabase.rpc('set_active_entrance_effect', { p_effect_id: null });
-              if (error) throw error;
-
-              setActiveItems(prev => {
-                  const newSet = new Set(prev);
-                  newSet.delete(roleEffectId);
-                  return newSet;
-              });
-              toast.success('Role effect deactivated');
-          } else {
-              // Activate
-              const { error } = await supabase.rpc('set_active_entrance_effect', { 
-                  p_effect_id: roleEffectId,
-                  p_item_type: 'role_effect'
-              });
-              if (error) throw error;
-
-              setActiveItems(prev => {
-                  const newSet = new Set(prev);
-                  // Remove purchased effects from local state
-                  entranceEffects.forEach(e => newSet.delete(e.effect_id));
-                  // Add role effect
-                  newSet.add(roleEffectId);
-                  return newSet;
-              });
-              toast.success('Role effect activated');
-          }
-          loadInventory();
-      } catch (err) {
-          console.error('Error toggling role effect:', err);
-          toast.error('Failed to toggle role effect');
-      }
   };
 
   const toggleItemActivation = async (itemId: string, itemType: string) => {
@@ -1017,65 +951,6 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                 </div>
                 )}
               </div>
-            )}
-
-            {/* Role Bonus Section */}
-            {roleEffect && (
-              <div className="mb-8">
-                <div 
-                  className="flex items-center justify-between cursor-pointer mb-4"
-                  onClick={() => toggleSection('roleBonus')}
-                >
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Crown className="w-6 h-6 text-yellow-400" />
-                    Role Bonus
-                  </h2>
-                  {expandedSections.roleBonus ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
-                </div>
-                {expandedSections.roleBonus && (
-                  <div className={`${trollCityTheme.components.card} border-yellow-500/40 bg-gradient-to-r from-yellow-900/20 to-transparent animate-in fade-in slide-in-from-top-2 duration-300`}>
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-yellow-500/20 rounded-lg">
-                      <Sparkles className="w-8 h-8 text-yellow-400" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-xl font-bold text-white">{roleEffect.name}</h3>
-                        <span className="bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full uppercase">
-                          Permanent
-                        </span>
-                        {activeItems.has(`role_effect_${roleEffectKey || 'default'}`) && (
-                             <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full">ACTIVE</span>
-                        )}
-                      </div>
-                      <p className={`${trollCityTheme.text.muted} mb-2`}>{roleEffect.description}</p>
-                      <div className="flex items-center gap-4 mt-4">
-                        <button
-                          onClick={() => toggleRoleEffect(activeItems.has(`role_effect_${roleEffectKey || 'default'}`))}
-                          className={`px-6 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${
-                            activeItems.has(`role_effect_${roleEffectKey || 'default'}`)
-                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-green-600 hover:bg-green-700 text-white'
-                          }`}
-                        >
-                          {activeItems.has(`role_effect_${roleEffectKey || 'default'}`) ? (
-                            <>
-                              <XCircle className="w-4 h-4" />
-                              Deactivate
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="w-4 h-4" />
-                              Activate
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  </div>
-                  )}
-                </div>
             )}
 
             {/* Entrance Effects Section */}

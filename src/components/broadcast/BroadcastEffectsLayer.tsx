@@ -16,6 +16,8 @@ interface ActiveEffect {
 
 export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLayerProps) {
   const [activeEffects, setActiveEffects] = useState<ActiveEffect[]>([]);
+  const shownUsersRef = React.useRef<Set<string>>(new Set());
+  const previousUserIdsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!streamId) return;
@@ -23,33 +25,59 @@ export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLaye
     const channel = supabase.channel(`room:${streamId}`);
 
     channel
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        // newPresences is an array of objects. Each object has a `user_id` and the data tracked.
-        // The structure depends on how `track` was called.
-        // In useViewerTracking: track({ user_id, username, ..., entrance_effect })
+      .on('presence', { event: 'sync' }, () => {
+        // Use 'sync' event to detect truly new users, not 're-tracks'
+        const state = channel.presenceState();
+        const currentUserIds = new Set<string>();
         
-        newPresences.forEach((presence: any) => {
-          if (presence.entrance_effect) {
-             const effect = presence.entrance_effect as EntranceEffectConfig;
-             const id = Math.random().toString(36).substring(7);
-             
-             setActiveEffects(prev => [...prev, {
-                 id,
-                 username: presence.username,
-                 effect
-             }]);
-
-             // Remove after duration
-             setTimeout(() => {
-                 setActiveEffects(prev => prev.filter(e => e.id !== id));
-             }, 5000); // 5 seconds duration
+        // Collect all current user IDs from presence state
+        Object.values(state).forEach((presences: any) => {
+          presences.forEach((p: any) => {
+            if (p.user_id) {
+              currentUserIds.add(p.user_id);
+            }
+          });
+        });
+        
+        // Find users who are in currentUserIds but NOT in previousUserIds
+        // These are truly new joins
+        currentUserIds.forEach(userId => {
+          if (!previousUserIdsRef.current.has(userId) && !shownUsersRef.current.has(userId)) {
+            // Find the presence data for this user
+            Object.values(state).forEach((presences: any) => {
+              presences.forEach((p: any) => {
+                if (p.user_id === userId && p.entrance_effect) {
+                  const effect = p.entrance_effect as EntranceEffectConfig;
+                  const id = Math.random().toString(36).substring(7);
+                  
+                  // Mark this user as shown
+                  shownUsersRef.current.add(userId);
+                  
+                  setActiveEffects(prev => [...prev, {
+                    id,
+                    username: p.username,
+                    effect
+                  }]);
+                  
+                  // Remove after duration
+                  setTimeout(() => {
+                    setActiveEffects(prev => prev.filter(e => e.id !== id));
+                  }, 5000);
+                }
+              });
+            });
           }
         });
+        
+        // Update previous user IDs for next sync
+        previousUserIdsRef.current = currentUserIds;
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      // Clear tracked users when component unmounts
+      shownUsersRef.current.clear();
     };
   }, [streamId]);
 

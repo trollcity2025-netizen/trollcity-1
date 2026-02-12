@@ -5,8 +5,8 @@ import { useAuthStore } from '@/lib/store'
 export interface CreditScoreData {
   user_id: string
   score: number
-  tier: string
-  trend_7d: number
+  tier?: string
+  trend_7d?: number
   updated_at?: string
 }
 
@@ -23,30 +23,28 @@ export function useCreditScore(targetUserId?: string) {
     setLoading(true)
     setError(null)
     try {
+      // Fetch credit_score from user_profiles
       const { data: row, error: err } = await supabase
-        .from('public_user_credit')
-        .select('user_id, score, tier, trend_7d, updated_at')
-        .eq('user_id', userId)
+        .from('user_profiles')
+        .select('id, credit_score')
+        .eq('id', userId)
         .maybeSingle()
 
       if (err && err.code !== 'PGRST116') throw err
       
-      // PGRST116 means no rows found - that's ok, just set null data
+      // PGRST116 means no rows found - that's ok
       if (row) {
-        setData(row as CreditScoreData)
+        setData({
+          user_id: row.id,
+          score: row.credit_score ?? 400,
+          updated_at: new Date().toISOString()
+        } as CreditScoreData)
       } else {
-        // User has no credit score yet - set default
         setData(null)
       }
     } catch (e: any) {
       console.error('Credit score fetch error:', e)
-      // Handle JSON coercion errors gracefully
-      if (e.message?.includes('cannot coerce') || e.code === '22P02') {
-        setError(null)
-        setData(null)
-      } else {
-        setError(e?.message || 'Failed to load credit score')
-      }
+      setError(e?.message || 'Failed to load credit score')
     } finally {
       setLoading(false)
     }

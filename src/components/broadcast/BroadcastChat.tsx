@@ -207,8 +207,8 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         })
         .subscribe();
 
-    // Subscribe to User Entrance (Presence)
-    const viewerChannel = supabase
+    // Subscribe to room presence to show join/leave messages in chat
+    const presenceChannel = supabase
         .channel(`room:${streamId}`)
         .on('presence', { event: 'join' }, ({ newPresences }) => {
             newPresences.forEach((p: any) => {
@@ -234,35 +234,14 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
             });
         })
-        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-            leftPresences.forEach((p: any) => {
-                const systemMsg: Message = {
-                    id: `sys-leave-${Date.now()}-${Math.random()}`,
-                    user_id: p.user_id,
-                    content: 'left the broadcast',
-                    created_at: new Date().toISOString(),
-                    type: 'system',
-                    user_profiles: {
-                        username: p.username || 'Guest',
-                        avatar_url: p.avatar_url || '',
-                        created_at: p.joined_at,
-                        role: p.role,
-                        troll_role: p.troll_role
-                    }
-                };
-                setMessages(prev => {
-                    const updated = [...prev, systemMsg];
-                    if (updated.length > 50) return updated.slice(updated.length - 50);
-                    return updated;
-                });
-                setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            });
-        })
         .subscribe();
 
-    return () => { 
-        supabase.removeChannel(chatChannel); 
-        supabase.removeChannel(viewerChannel);
+    // Note: Presence tracking is handled by useViewerTracking hook in BroadcastPage
+    // We now also subscribe here to show entrance messages in chat
+
+    return () => {
+        supabase.removeChannel(chatChannel);
+        supabase.removeChannel(presenceChannel);
     };
   }, [streamId, fetchVehicleStatus, isViewer, user, profile]);
 
@@ -271,20 +250,34 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    console.log('💬 [BroadcastChat] sendMessage called', { 
+      hasUser: !!user, 
+      hasProfile: !!profile, 
+      inputLength: input.length,
+      streamId 
+    });
+    
     if (!user || !profile) {
+        console.error('💬 [BroadcastChat] No user or profile');
         toast.error('You must be logged in to chat');
         return;
     }
-    if (!input.trim()) return;
+    if (!input.trim()) {
+        console.log('💬 [BroadcastChat] Empty input, ignoring');
+        return;
+    }
     
     // Rate Limit Check
     const now = Date.now();
     if (now - lastSentRef.current < RATE_LIMIT_MS) {
+        console.log('💬 [BroadcastChat] Rate limited');
         return; // Silent fail or show UI feedback
     }
     lastSentRef.current = now;
 
     const content = input.trim();
+    console.log('💬 [BroadcastChat] Preparing to send:', { content, userId: user.id });
     setInput('');
 
     // Optimistic Update
@@ -322,7 +315,9 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             myVehicle = (await fetchVehicleStatus(user.id)) || { has_vehicle: false };
         }
 
-        const { error } = await supabase.from('stream_messages').insert({
+        console.log('💬 [BroadcastChat] Inserting message to DB:', { streamId, userId: user.id, content });
+        
+        const { data, error } = await supabase.from('stream_messages').insert({
             stream_id: streamId,
             user_id: user.id,
             content,
@@ -335,13 +330,16 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             user_rgb_expires_at: profile.rgb_username_expires_at,
             user_glowing_username_color: profile.glowing_username_color,
             vehicle_snapshot: myVehicle
-        });
+        }).select();
 
         if (error) {
-            console.error('Error sending message:', error);
-            toast.error('Failed to send message');
+            console.error('💬 [BroadcastChat] Error sending message:', error);
+            console.error('💬 [BroadcastChat] Error details:', JSON.stringify(error, null, 2));
+            toast.error('Failed to send message: ' + error.message);
             // Remove optimistic message on error
             setMessages(prev => prev.filter(m => m.id !== tempId));
+        } else {
+            console.log('💬 [BroadcastChat] Message sent successfully:', data);
         }
     } catch (err) {
         console.error('Unexpected error sending message:', err);

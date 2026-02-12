@@ -12,8 +12,11 @@ import {
   Wifi,
   Activity,
   Settings,
-  Send
+  Send,
+  Volume2
 } from 'lucide-react'
+import AdminVoiceNotificationsSettings from '../../../components/AdminVoiceNotificationsSettings'
+import { useAdminVoiceNotifications } from '../../../hooks/useAdminVoiceNotifications'
 
 interface QuickActionsBarProps {
   onEmergencyStop: () => void
@@ -43,6 +46,18 @@ export default function QuickActionsBar({
   onViewAnalytics,
   onExportData,
 }: QuickActionsBarProps) {
+  const { announceNotification } = useAdminVoiceNotifications()
+
+  const handleTestVoice = () => {
+    const testNotification = {
+      id: 'test-' + Date.now(),
+      message: 'System alert: This is a test notification for voice synthesis',
+      type: 'alert' as const,
+      timestamp: new Date()
+    }
+    announceNotification(testNotification)
+  }
+
   const quickActions: QuickAction[] = [
     {
       icon: <Send className="w-4 h-4" />,
@@ -79,6 +94,15 @@ export default function QuickActionsBar({
       color: 'text-orange-400',
       bgColor: 'bg-orange-500/20',
       borderColor: 'border-orange-500/30'
+    },
+    {
+      icon: <Volume2 className="w-4 h-4" />,
+      label: 'Test Voice',
+      description: 'Test voice notifications',
+      action: handleTestVoice,
+      color: 'text-cyan-400',
+      bgColor: 'bg-cyan-500/20',
+      borderColor: 'border-cyan-500/30'
     },
     {
       icon: <BarChart3 className="w-4 h-4" />,
@@ -164,6 +188,9 @@ export default function QuickActionsBar({
           <div className="flex items-center gap-2">
             <Wifi className="w-3 h-3 text-green-400" />
             <span className="text-gray-400">Network: <span className="text-green-400">Good</span></span>
+          </div>
+          <div className="ml-auto border-l border-[#2C2C2C] pl-4">
+            <AdminVoiceNotificationsSettings className="text-xs" />
           </div>
         </div>
       </div>

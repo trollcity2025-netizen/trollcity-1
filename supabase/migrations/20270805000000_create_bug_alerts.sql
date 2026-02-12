@@ -87,7 +87,8 @@ CREATE TRIGGER trigger_bug_alerts_updated_at
 -- RLS Policies
 
 -- Admins can do everything
-CREATE POLICY IF NOT EXISTS "Admins can manage all bug alerts"
+DROP POLICY IF EXISTS "Admins can manage all bug alerts" ON bug_alerts;
+CREATE POLICY "Admins can manage all bug alerts"
   ON bug_alerts FOR ALL
   USING (
     EXISTS (
@@ -98,12 +99,14 @@ CREATE POLICY IF NOT EXISTS "Admins can manage all bug alerts"
   );
 
 -- Any authenticated user can create bug alerts
-CREATE POLICY IF NOT EXISTS "Authenticated users can create bug alerts"
+DROP POLICY IF EXISTS "Authenticated users can create bug alerts" ON bug_alerts;
+CREATE POLICY "Authenticated users can create bug alerts"
   ON bug_alerts FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 -- Admins can view all bug alerts
-CREATE POLICY IF NOT EXISTS "Admins can view all bug alerts"
+DROP POLICY IF EXISTS "Admins can view all bug alerts" ON bug_alerts;
+CREATE POLICY "Admins can view all bug alerts"
   ON bug_alerts FOR SELECT
   USING (
     EXISTS (
@@ -114,7 +117,18 @@ CREATE POLICY IF NOT EXISTS "Admins can view all bug alerts"
   );
 
 -- Enable Realtime for bug_alerts
-ALTER PUBLICATION supabase_realtime ADD TABLE bug_alerts;
+-- Check if publication exists and if table is already in it
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'bug_alerts'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE bug_alerts;
+    END IF;
+END $$;
 
 -- Create a function to report bugs (simple insert wrapper)
 CREATE OR REPLACE FUNCTION report_bug(

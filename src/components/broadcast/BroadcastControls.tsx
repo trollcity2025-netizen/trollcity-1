@@ -22,9 +22,10 @@ interface BroadcastControlsProps {
   onShare?: () => void;
   requiredBoxes?: number;
   onBoxCountUpdate?: (count: number) => void;
+  liveViewerCount?: number;
 }
 
-export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate }: BroadcastControlsProps) {
+export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, liveViewerCount }: BroadcastControlsProps) {
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
@@ -39,7 +40,37 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
 
-  // Fetch local attributes for perks
+  // Sync likes from stream
+  useEffect(() => {
+    if (typeof (stream as any).total_likes === 'number') {
+        setLikes((stream as any).total_likes);
+    }
+  }, [stream]);
+
+  const toggleMic = async () => {
+    if (localParticipant) {
+      try {
+        const newVal = !isMicrophoneEnabled;
+        console.log('[BroadcastControls] Toggling mic:', { current: isMicrophoneEnabled, target: newVal });
+        await localParticipant.setMicrophoneEnabled(newVal);
+        
+        // Force state verification after toggle
+        setTimeout(() => {
+          const actualState = localParticipant.isMicrophoneEnabled;
+          console.log('[BroadcastControls] Mic state after toggle:', actualState);
+          if (actualState !== newVal) {
+            console.warn('[BroadcastControls] Mic state mismatch, forcing again');
+            localParticipant.setMicrophoneEnabled(newVal);
+          }
+        }, 300);
+      } catch (e) {
+        console.error('Failed to toggle mic:', e);
+        toast.error('Failed to toggle microphone');
+      }
+    } else {
+      console.warn('[BroadcastControls] toggleMic called but no localParticipant');
+    }
+  };
   const attributes = useParticipantAttributes(user ? [user.id] : [], stream.id);
   const myAttributes = user ? attributes[user.id] : null;
   const activePerks = myAttributes?.activePerks || [];
@@ -103,23 +134,9 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
 
   // Sync local state with stream data
   useEffect(() => {
-    if ((stream as any).total_likes) {
-        setLikes((stream as any).total_likes);
-    }
     setLocked(stream.are_seats_locked || false);
     setHasRgb(stream.has_rgb_effect || false);
-    // Don't overwrite seatPrice if user is typing (handled by debouncing logic somewhat, but risky)
-    // Actually, let's only update seatPrice if significantly different to avoid cursor jumps, 
-    // or just assume stream updates are rare enough or driven by this user.
-    // For now, let's stick to syncing likes/locks/rgb.
   }, [stream]);
-
-  const toggleMic = async () => {
-    if (localParticipant) {
-      const newVal = !isMicrophoneEnabled;
-      await localParticipant.setMicrophoneEnabled(newVal);
-    }
-  };
 
   const toggleCam = async () => {
     if (localParticipant) {
@@ -163,9 +180,14 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
     // Only Host can change price (Prompt: Host only)
     if (!isHost) return;
     
-    let val = parseInt(e.target.value) || 0;
-    // Cap at Postgres Integer Max to avoid "integer out of range"
-    if (val > 2147483647) val = 2147483647;
+        if (e.target.value === '') {
+            setSeatPrice(0);
+            setDebouncedPrice(0);
+            return;
+        }
+
+        let val = parseInt(e.target.value, 10) || 0;
+        if (val > 5000) val = 5000;
     setSeatPrice(val);
     setDebouncedPrice(val);
   };
@@ -405,7 +427,9 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
                 {/* Viewer Count */}
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
                     <Eye size={16} className="text-blue-400" />
-                    <span className="text-sm font-bold text-white">{(stream as any).current_viewers || stream.viewer_count || 0}</span>
+                    <span className="text-sm font-bold text-white">
+                        {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
+                    </span>
                 </div>
 
                 {/* Like Count */}
@@ -544,7 +568,7 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
                  {isHost && (
                      <button 
                         onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
-                        className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
+                        className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors relative z-50"
                      >
                         <Power size={16} />
                         End Stream
@@ -629,14 +653,15 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
                             <input 
                                 type="number" 
                                 min="0"
-                                value={seatPrice}
+                                max="5000"
+                                value={seatPrice === 0 ? '' : seatPrice}
                                 onChange={handlePriceChange}
                                 disabled={!isHost}
                                 className={cn(
                                     "w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
                                     (!isHost) && "opacity-50 cursor-not-allowed"
                                 )}
-                                placeholder="0"
+                                placeholder=""
                             />
                         </div>
                         
