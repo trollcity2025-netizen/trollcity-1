@@ -1,0 +1,200 @@
+{
+  "startedAt": "2026-02-12T07:32:26.541Z",
+  "scope": "full-coverage-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 8,
+    "adminUser": true,
+    "livekit": "not used"
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T07:32:28.292Z",
+      "type": "create_users",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:28.421Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:28.548Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "aca540c2-edd6-4174-8ffb-e21c3ea5e339",
+        "role": "admin"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:28.645Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "a0194196-f955-484a-a30d-133530556df6",
+        "role": "secretary"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:28.747Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "b7d12b60-87df-4355-b518-f96059a55288",
+        "role": "lead_troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:28.831Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "90f1fa23-f567-43a8-a685-c1fed8ead811",
+        "role": "troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:28.931Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "81a34be1-a287-470d-b267-8324f2d4f383",
+        "role": "troller"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:29.034Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "f8423305-b834-4fa1-bca5-f0121b98ce1a",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:29.122Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "9267e7e3-66ba-4921-bf9b-5b9922647e3e",
+        "role": "pastor"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:29.213Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "5d0f86f0-a42f-45e1-a78e-bd28b0acb85b",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:31.520Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:31.605Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "e68231ed-1b97-4a3f-bebf-96928de2a340"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:31.774Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 3
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:31.870Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:32.242Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "a0194196-f955-484a-a30d-133530556df6",
+        "receiverId": "b7d12b60-87df-4355-b518-f96059a55288",
+        "streamId": "04f04662-0dd4-4b70-b8a2-da6b929126c4"
+      }
+    },
+    {
+      "time": "2026-02-12T07:32:43.697Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 50,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T07:32:43.449Z",
+      "step": "admin_toggle_broadcast_lockdown",
+      "warning": "Could not find the function public.admin_toggle_broadcast_lockdown(p_enable) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:32:43.602Z",
+      "step": "get_all_creator_applications",
+      "warning": "Could not find the function public.get_all_creator_applications without parameters in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:32:46.213Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:46.340Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:46.540Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:46.727Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:46.902Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:47.137Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:47.312Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:32:47.465Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 8,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 10,
+    "actions": 16
+  }
+}

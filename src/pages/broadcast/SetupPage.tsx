@@ -24,7 +24,7 @@ function formatTime(seconds: number) {
 
 export default function SetupPage() {
   const navigate = useNavigate();
-  const { user, profile } = useAuthStore();
+  const { user } = useAuthStore();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('general');
   const [loading, setLoading] = useState(false);
@@ -138,17 +138,17 @@ export default function SetupPage() {
     }, 1000);
     
     return () => clearInterval(timer);
-  }, []);
+  }, [timeRemaining]);
   
   // Re-check restriction when timer reaches 0
   useEffect(() => {
-    if (timeRemaining === 0) {
+    if (timeRemaining === 0 && user?.id) {
       // Trigger re-check
       const checkEligible = async () => {
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('created_at')
-          .eq('id', user?.id)
+          .eq('id', user.id)
           .single();
         
         if (profile?.created_at) {
@@ -165,7 +165,7 @@ export default function SetupPage() {
       };
       checkEligible();
     }
-  }, [timeRemaining, user]);
+  }, [timeRemaining, user?.id]);
    
   // Optimize: Pre-fetch LiveKit token as soon as restrictions are passed
   useEffect(() => {
@@ -298,7 +298,7 @@ export default function SetupPage() {
         PreflightStore.setStream(localStream);
       }
     };
-  }, [facingMode]); // Re-run when facing mode changes
+  }, [facingMode, stream]); // Re-run when facing mode changes
 
   const toggleVideo = () => {
     if (stream) {
@@ -327,7 +327,12 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      // 0. Check global broadcast limit (Max 5)
+      // 0. Check global broadcast limit
+      // Check for active event limits first
+      const { data: eventData } = await supabase.rpc('get_active_event');
+      const event = eventData?.[0];
+      const maxBroadcasts = event ? event.max_broadcasts : 5;
+
       const { count, error: countError } = await supabase
         .from('streams')
         .select('*', { count: 'exact', head: true })
@@ -335,8 +340,8 @@ export default function SetupPage() {
 
       if (countError) throw countError;
 
-      if (count !== null && count >= 5) {
-        toast.error('System Limit: Maximum of 5 concurrent broadcasts allowed.');
+      if (count !== null && count >= maxBroadcasts) {
+        toast.error(`System Limit: Maximum of ${maxBroadcasts} concurrent broadcasts allowed${event ? ' during this event' : ''}.`);
         setLoading(false);
         return;
       }
@@ -457,9 +462,9 @@ export default function SetupPage() {
                 
                 {restrictionCheck.reason === 'license' ? (
                   <>
-                    <h2 className="text-2xl font-bold text-white mb-2">Driver's License Required</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">Driver&apos;s License Required</h2>
                     <p className="text-gray-400 mb-6">
-                      {restrictionCheck.message || "You need a valid Driver's License to start a broadcast."}
+                      {restrictionCheck.message || "You need a valid Driver&apos;s License to start a broadcast."}
                     </p>
                     <button 
                       onClick={() => navigate('/dmv')}

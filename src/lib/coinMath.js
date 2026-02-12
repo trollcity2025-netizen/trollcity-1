@@ -6,28 +6,29 @@
 // Single source of truth for coin valuation (based on store price: 300 coins = $1.99)
 export const STORE_USD_PER_COIN = 1.99 / 300;
 
-// Coin Packages (Source of Truth)
+// Coin Packages (Source of Truth) - 100 coins = $1
 export const COIN_PACKAGES = [
-  { id: 'pkg-300', coins: 300, price: 1.99, priceDisplay: "$1.99", emoji: "🟢", name: "Starter" },
-  { id: 'pkg-500', coins: 500, price: 3.49, priceDisplay: "$3.49", emoji: "🟢", name: "Small Boost" },
-  { id: 'pkg-1000', coins: 1000, price: 6.99, priceDisplay: "$6.99", emoji: "🟢", name: "Casual" },
-  { id: 'pkg-2500', coins: 2500, price: 16.99, priceDisplay: "$16.99", emoji: "🔵", popular: true, name: "Bronze" },
-  { id: 'pkg-5000', coins: 5000, price: 33.99, priceDisplay: "$33.99", emoji: "🔵", popular: true, name: "Silver" },
-  { id: 'pkg-10000', coins: 10000, price: 64.99, priceDisplay: "$64.99", emoji: "🔵", bestValue: true, name: "Gold" },
-  { id: 'pkg-15000', coins: 15000, price: 89.99, priceDisplay: "$89.99", emoji: "🟣", bonus: "+5%", name: "Platinum" },
-  { id: 'pkg-25000', coins: 25000, price: 149.99, priceDisplay: "$149.99", emoji: "🟣", bonus: "+10%", name: "Diamond" },
-  { id: 'pkg-50000', coins: 50000, price: 279.99, priceDisplay: "$279.99", emoji: "🟣", bonus: "+15%", name: "Legendary" },
+  { id: 'pkg-300', coins: 300, price: 3.00, priceDisplay: "$3.00", emoji: "🟢", name: "Starter" },
+  { id: 'pkg-500', coins: 500, price: 5.00, priceDisplay: "$5.00", emoji: "🟢", name: "Small Boost" },
+  { id: 'pkg-1000', coins: 1000, price: 10.00, priceDisplay: "$10.00", emoji: "🟢", name: "Casual" },
+  { id: 'pkg-2500', coins: 2500, price: 25.00, priceDisplay: "$25.00", emoji: "🔵", popular: true, name: "Bronze" },
+  { id: 'pkg-5000', coins: 5000, price: 50.00, priceDisplay: "$50.00", emoji: "🔵", popular: true, name: "Silver" },
+  { id: 'pkg-10000', coins: 10000, price: 100.00, priceDisplay: "$100.00", emoji: "🔵", bestValue: true, name: "Gold" },
+  { id: 'pkg-15000', coins: 15000, price: 150.00, priceDisplay: "$150.00", emoji: "🟣", bonus: "+5%", name: "Platinum" },
+  { id: 'pkg-25000', coins: 25000, price: 250.00, priceDisplay: "$250.00", emoji: "🟣", bonus: "+10%", name: "Diamond" },
+  { id: 'pkg-50000', coins: 50000, price: 500.00, priceDisplay: "$500.00", emoji: "🟣", bonus: "+15%", name: "Legendary" },
 ];
 
 // Legacy export for backward compatibility (if needed) or can be removed if unused
 export const coinPackages = COIN_PACKAGES;
 
-// Cashout Tiers (4 total)
+// Cashout Tiers (5 total) - Average 200 coins = $1
 export const cashoutTiers = [
-  { id: "basic", name: "Basic", coins: 12000, payout: 25 },
-  { id: "pro", name: "Pro", coins: 26375, payout: 70 },
-  { id: "elite", name: "Elite", coins: 60000, payout: 150 },
-  { id: "diamond", name: "Diamond", coins: 120000, payout: 355 }
+  { id: "basic", name: "Basic", coins: 15000, payout: 50 },
+  { id: "pro", name: "Pro", coins: 30000, payout: 150 },
+  { id: "elite", name: "Elite", coins: 60000, payout: 300 },
+  { id: "diamond", name: "Diamond", coins: 120000, payout: 600 },
+  { id: "legendary", name: "Legendary", coins: 200000, payout: 1000 }
 ];
 
 /**

@@ -86,17 +86,21 @@ export const useEventBonuses = (): UseEventBonusesReturn => {
   // Format bonus description
   const formatBonus = useCallback((bonus: EventBonus): string => {
     switch (bonus.type) {
-      case 'xp_multiplier':
+      case 'xp_multiplier': {
         const xpPercent = Math.round((bonus.value - 1) * 100);
         return `${xpPercent > 0 ? '+' : ''}${xpPercent}% XP`;
-      case 'coin_rebate':
+      }
+      case 'coin_rebate': {
         return `+${Math.round(bonus.value * 100)}% coins back`;
-      case 'streak_boost':
+      }
+      case 'streak_boost': {
         const streakPercent = Math.round((bonus.value - 1) * 100);
         return `+${streakPercent}% streak`;
-      case 'gift_discount':
+      }
+      case 'gift_discount': {
         const discountPercent = Math.round((1 - bonus.value) * 100);
         return `-${discountPercent}% price`;
+      }
       default:
         return bonus.description;
     }

@@ -2450,50 +2450,6 @@ Deno.serve(async (req) => {
         break;
       }
 
-      // --- Officer Chat (Admin/Lead Officer/Troll Officer) ---
-      case "send_officer_chat": {
-        const { message } = params;
-        if (!message) throw new Error("Missing message");
-        
-        const { error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .insert({
-            sender_id: user.id,
-            content: message,
-            priority: 'normal'
-          });
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_officer_chat_messages": {
-        const { limit = 50 } = params;
-        
-        const { data, error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .select(`
-            *,
-            sender:user_profiles(username, role)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(limit);
-
-        if (error) {
-          console.error('Error fetching chat:', error);
-          throw error;
-        }
-        
-        const mapped = data?.map((msg: any) => ({
-          ...msg,
-          username: msg.sender?.username || msg.user_profiles?.username || 'Officer',
-          role: msg.sender?.role || msg.user_profiles?.role
-        })) || [];
-
-        result = { messages: mapped };
-        break;
-      }
-
       default:
         throw new Error(`Unknown action: ${action}`);
     }

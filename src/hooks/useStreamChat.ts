@@ -223,7 +223,11 @@ export function useStreamChat(streamId: string) {
     if (error) {
         console.error('💬 [useStreamChat] Failed to send message:', error);
         console.error('💬 [useStreamChat] Error details:', JSON.stringify(error, null, 2));
-        toast.error('Failed to send message: ' + error.message);
+        if (String(error.message || '').toLowerCase().includes('rate limit')) {
+            toast.error('You are sending messages too fast. Please slow down.');
+        } else {
+            toast.error('Failed to send message: ' + error.message);
+        }
     } else {
         console.log('💬 [useStreamChat] Message sent successfully:', data);
     }

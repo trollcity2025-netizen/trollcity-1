@@ -59,6 +59,12 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Unread message tracking
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isChatFocused, setIsChatFocused] = useState(true);
+  const lastReadMessageIdRef = useRef<string | null>(null);
   
   // Rate limiting
   const lastSentRef = useRef<number>(0);
@@ -196,6 +202,12 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 if (updated.length > 50) return updated.slice(updated.length - 50);
                 return updated;
             });
+            
+            // Increment unread count if chat not focused and message from someone else
+            if (!isChatFocused && newMsg.user_id !== user?.id) {
+                setUnreadCount(prev => prev + 1);
+            }
+            
             setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         })
         .on('postgres_changes', {
@@ -243,7 +255,32 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         supabase.removeChannel(chatChannel);
         supabase.removeChannel(presenceChannel);
     };
-  }, [streamId, fetchVehicleStatus, isViewer, user, profile]);
+  }, [streamId, fetchVehicleStatus, isViewer, user, profile, isChatFocused]);
+
+  // Track chat focus/visibility
+  useEffect(() => {
+    const handleFocus = () => {
+      setIsChatFocused(true);
+      setUnreadCount(0);
+    };
+    
+    const handleBlur = () => {
+      setIsChatFocused(false);
+    };
+    
+    const chatElement = chatContainerRef.current;
+    if (chatElement) {
+      chatElement.addEventListener('mouseenter', handleFocus);
+      chatElement.addEventListener('mouseleave', handleBlur);
+      chatElement.addEventListener('focus', handleFocus);
+      
+      return () => {
+        chatElement.removeEventListener('mouseenter', handleFocus);
+        chatElement.removeEventListener('mouseleave', handleBlur);
+        chatElement.removeEventListener('focus', handleFocus);
+      };
+    }
+  }, []);
 
   // Removed aggressive auto-delete loop to prevent messages from disappearing due to clock skew
 
@@ -260,7 +297,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     
     if (!user || !profile) {
         console.error('💬 [BroadcastChat] No user or profile');
-        toast.error('You must be logged in to chat');
+        navigate('/auth?mode=signup');
         return;
     }
     if (!input.trim()) {
@@ -335,7 +372,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         if (error) {
             console.error('💬 [BroadcastChat] Error sending message:', error);
             console.error('💬 [BroadcastChat] Error details:', JSON.stringify(error, null, 2));
-            toast.error('Failed to send message: ' + error.message);
+            if (String(error.message || '').toLowerCase().includes('rate limit')) {
+                toast.error('You are sending messages too fast. Please slow down.');
+            } else {
+                toast.error('Failed to send message: ' + error.message);
+            }
             // Remove optimistic message on error
             setMessages(prev => prev.filter(m => m.id !== tempId));
         } else {
@@ -402,10 +443,29 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   };
 
   return (
-    <div className="flex flex-col h-[94%] text-white">
+    <div ref={chatContainerRef} className="flex flex-col h-[94%] text-white relative">
+        {/* Unread Message Notification Bubble */}
+        {unreadCount > 0 && (
+          <div className="absolute -top-2 -right-2 z-50">
+            <div className="relative animate-bounce">
+              {/* Glow effect */}
+              <div className="absolute inset-0 bg-red-500 rounded-full blur-md opacity-70 animate-pulse"></div>
+              {/* Badge */}
+              <div className="relative bg-gradient-to-br from-red-500 via-red-600 to-red-700 text-white text-xs font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2.5 border-2 border-white shadow-2xl ring-2 ring-red-300/50">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="p-4 border-b border-white/10 font-bold bg-zinc-900/50 flex items-center gap-2">
             <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
             Live Chat
+            {unreadCount > 0 && (
+              <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 animate-pulse font-normal">
+                +{unreadCount}
+              </span>
+            )}
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700">
@@ -490,38 +550,23 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         </div>
 
         <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-zinc-900/80 relative">
-            {isGuest ? (
-                <div className="flex items-center justify-between gap-2 bg-zinc-800/50 rounded-full p-2 pl-4 border border-white/5">
-                    <span className="text-zinc-400 text-sm">Sign up to chat</span>
-                    <button 
-                        type="button"
-                        onClick={() => navigate('?mode=signup')}
-                        className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-xs font-bold hover:shadow-lg transition-all text-white"
-                    >
-                        Sign Up
-                    </button>
-                </div>
-            ) : (
-                <>
-                <div className="relative w-full">
-                    <input 
-                        type="text" 
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        placeholder="Type a message..."
-                        className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
-                    />
+            <div className="relative w-full">
+                <input 
+                    type="text" 
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    placeholder={isGuest ? "Sign up to chat..." : "Type a message..."}
+                    className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
+                />
 
-                    <button 
-                        type="submit"  
-                        disabled={!input.trim()}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
-                    >
-                        <Send size={16} />
-                    </button>
-                </div>
-                </>
-            )}
+                <button 
+                    type="submit"  
+                    disabled={!isGuest && !input.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
+                >
+                    <Send size={16} />
+                </button>
+            </div>
         </form>
     </div>
   );

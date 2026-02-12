@@ -12,7 +12,7 @@ export default function TermsOfService() {
           Troll City Terms of Service
         </h1>
         <p className="text-xs text-slate-400 mb-6">
-          Last updated: January 2025
+          Last updated: February 2026
         </p>
 
         <p>
@@ -65,7 +65,36 @@ export default function TermsOfService() {
           to income or benefits you receive from Troll City.
         </p>
 
-        <h2>6. User Conduct and Content</h2>
+        <h2>6. Loans, Credit Cards, and Asset Repossession</h2>
+        <p>
+          <strong>6.1 Troll Bank Loans:</strong> Users may apply for loans through the Troll Bank system. All loans must be repaid according to the agreed terms. Failure to make payments for 30 days or more constitutes a default.
+        </p>
+        <p>
+          <strong>6.2 Credit Cards:</strong> Credit cards may be issued to eligible users based on credit score and account standing. All credit card charges include an 8% finance fee. Credit cards may only be used for approved purchases (Coin Store items, vehicles) and cannot be used for peer-to-peer transfers, gifts, or rent payments. Credit card debt must be repaid promptly to maintain good standing.
+        </p>
+        <p>
+          <strong>6.3 Property and Vehicle Loans:</strong> Properties and vehicles purchased on credit remain subject to the loan agreement until paid in full. Missed payments or defaults may result in repossession.
+        </p>
+        <p>
+          <strong>6.4 Repossession Rights:</strong> By using Troll City&apos;s financial services, you explicitly agree that:
+        </p>
+        <ul>
+          <li><strong>Loan Defaults:</strong> If you fail to make loan payments for 30 consecutive days, Troll City reserves the right to repossess any properties or vehicles purchased with loan funds or owned by you to satisfy the debt.</li>
+          <li><strong>Credit Card Defaults:</strong> If your credit card debt exceeds your credit limit or remains unpaid for 60 days, Troll City reserves the right to repossess your properties and/or vehicles to satisfy the outstanding balance.</li>
+          <li><strong>Rent Defaults:</strong> Property owners who fail to pay rent, utilities, or property-related fees for 30 days may have their properties foreclosed and transferred to the Public Pool or repossessed by administrators.</li>
+          <li><strong>Court Summons:</strong> Defaults on any financial obligation may result in automatic court summons, fines, or legal action within the Troll City judicial system.</li>
+          <li><strong>No Refunds on Repossessed Assets:</strong> Repossessed assets may be sold, auctioned, or redistributed. No refunds or compensation will be provided for repossessed items beyond what is required to satisfy the debt.</li>
+          <li><strong>Credit Score Impact:</strong> Defaults, missed payments, and repossessions will negatively impact your credit score, affecting future loan eligibility and financial opportunities.</li>
+        </ul>
+        <p>
+          <strong>6.5 Asset Recovery:</strong> If you pay off your debt in full after repossession, you may petition administrators for asset restoration, subject to review and approval. Restoration is not guaranteed.
+        </p>
+        <p>
+          <strong>6.6 Responsibility:</strong> You are solely responsible for managing your finances, making timely payments, and understanding the terms of any credit extended to you. Troll City is not responsible for financial losses resulting from defaults or repossessions.
+          You&apos;re also responsible for making sure that any information you provide us is accurate and that you have the right to provide it.
+        </p>
+
+        <h2>7. User Conduct and Content</h2>
         <p>
           You may not use Troll City to harass, threaten, exploit, or harm others, to
           promote hate or illegal activity, or to share infringing or explicit content.
@@ -73,7 +102,7 @@ export default function TermsOfService() {
           applicable law.
         </p>
 
-        <h2>7. Safety, Moderation, and Reporting</h2>
+        <h2>8. Safety, Moderation, and Reporting</h2>
         <p>
           Troll City uses a combination of automated tools and human moderators,
           including Troll Officers, to help keep the platform safe. We may review,
@@ -81,7 +110,7 @@ export default function TermsOfService() {
           an emergency service; in emergencies, contact local authorities directly.
         </p>
 
-        <h2>8. Intellectual Property</h2>
+        <h2>9. Intellectual Property</h2>
         <p>
           Troll City and its logos, artwork, virtual items, and software are protected
           by intellectual property laws. You must not use our marks or assets without
@@ -89,7 +118,7 @@ export default function TermsOfService() {
           rights.
         </p>
 
-        <h2>9. Disclaimers and Limitation of Liability</h2>
+        <h2>10. Disclaimers and Limitation of Liability</h2>
         <p>
           Troll City is provided &quot;as is&quot; and &quot;as available&quot; without warranties of any
           kind. To the maximum extent permitted by law, we are not liable for indirect
@@ -97,7 +126,7 @@ export default function TermsOfService() {
           us in the six months before the claim, or USD $100, whichever is greater.
         </p>
 
-        <h2>10. Termination and Changes</h2>
+        <h2>11. Termination and Changes</h2>
         <p>
           You may stop using Troll City at any time. We may suspend or terminate your
           access at any time, with or without notice, including for suspected
@@ -106,7 +135,7 @@ export default function TermsOfService() {
           revised Terms.
         </p>
 
-        <h2>11. Contact</h2>
+        <h2>12. Contact</h2>
         <p>
           For questions about these Terms or Troll City, contact our support team at
           the email or address listed in the app or on our website.

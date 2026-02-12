@@ -197,21 +197,36 @@ serve(async (req: Request) => {
 
     const { AccessToken, TrackSource, RoomServiceClient } = await getLivekit();
 
-    // ✅ Enforce 100 User Limit (Broadcasters + Viewers)
+    // ✅ Enforce participant caps (total + per room)
     try {
+      const maxTotal = Number(Deno.env.get('LIVEKIT_MAX_TOTAL_PARTICIPANTS') || '600');
+      const maxPerRoom = Number(Deno.env.get('LIVEKIT_MAX_PARTICIPANTS_PER_ROOM') || '60');
+
       const svc = new RoomServiceClient(livekitUrl, apiKey, apiSecret);
       const rooms = await svc.listRooms();
       let totalParticipants = 0;
-      
+      let roomParticipants = 0;
+
       for (const r of rooms) {
         totalParticipants += r.numParticipants;
+        if (r.name === String(room)) {
+          roomParticipants = r.numParticipants;
+        }
       }
-      
-      console.log(`[livekit-token] Current total participants: ${totalParticipants}`);
-      
-      if (totalParticipants >= 100) {
-        console.warn("[livekit-token] Server full (>= 100 participants), denying access");
+
+      console.log(`[livekit-token] Current total participants: ${totalParticipants}, room=${room} participants=${roomParticipants}`);
+
+      if (maxTotal > 0 && totalParticipants >= maxTotal) {
+        console.warn(`[livekit-token] Server full (>= ${maxTotal} participants), denying access`);
         return new Response(JSON.stringify({ error: "Server is full" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (maxPerRoom > 0 && roomParticipants >= maxPerRoom) {
+        console.warn(`[livekit-token] Room full (>= ${maxPerRoom} participants), denying access`);
+        return new Response(JSON.stringify({ error: "Room is full" }), {
           status: 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

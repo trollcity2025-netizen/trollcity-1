@@ -198,7 +198,7 @@ export default function AutomatedPayouts() {
           </h2>
           <p className="text-sm text-gray-400 mt-1">
             {payoutsEnabled 
-              ? "System is running normally. Scheduled payouts will execute on Mondays and Fridays." 
+              ? "System is running normally. Scheduled payouts will execute on Fridays." 
               : "System is on hold. No new payout runs will be generated."}
           </p>
         </div>

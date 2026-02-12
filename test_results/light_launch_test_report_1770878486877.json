@@ -1,0 +1,238 @@
+{
+  "startedAt": "2026-02-12T06:41:26.877Z",
+  "scope": "light-launch-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 4,
+    "concurrency": 4,
+    "livekit": "not used"
+  },
+  "checks": {
+    "tables": [
+      {
+        "table": "user_profiles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "streams",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "stream_messages",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gifts",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "battles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "coin_ledger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "coin_transactions",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "vehicles_catalog",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "user_vehicles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "properties",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gift_ledger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gift_transactions",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "purchasable_items",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "shop_items",
+        "exists": true,
+        "error": null
+      }
+    ],
+    "columns": [],
+    "routines": [
+      {
+        "routine": "send_gift_in_stream",
+        "exists": true,
+        "error": "Could not find the function public.send_gift_in_stream(_ping) in the schema cache"
+      },
+      {
+        "routine": "send_premium_gift",
+        "exists": true,
+        "error": "Could not find the function public.send_premium_gift(_ping) in the schema cache"
+      },
+      {
+        "routine": "purchase_item",
+        "exists": true,
+        "error": "Could not find the function public.purchase_item(_ping) in the schema cache"
+      },
+      {
+        "routine": "purchase_from_ktauto",
+        "exists": true,
+        "error": "Could not find the function public.purchase_from_ktauto(_ping) in the schema cache"
+      },
+      {
+        "routine": "buy_car_insurance",
+        "exists": true,
+        "error": "Could not find the function public.buy_car_insurance(_ping) in the schema cache"
+      },
+      {
+        "routine": "purchase_broadcast_theme",
+        "exists": true,
+        "error": "Could not find the function public.purchase_broadcast_theme(_ping) in the schema cache"
+      },
+      {
+        "routine": "purchase_entrance_effect",
+        "exists": true,
+        "error": "Could not find the function public.purchase_entrance_effect(_ping) in the schema cache"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T06:41:29.597Z",
+      "type": "create_users",
+      "detail": {
+        "count": 4
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:29.836Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 4
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:31.410Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:31.505Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "d64907d9-6aba-4727-96d8-66598ee10a3b"
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:31.804Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 20
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:31.887Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:32.306Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "debff286-74dc-4a79-bdb5-4b5b378f17fc",
+        "receiverId": "f5d106d7-e3ba-480a-911c-6a8c398302cc",
+        "streamId": "940b281e-6c9b-4f3f-b936-5fec04db4361"
+      }
+    },
+    {
+      "time": "2026-02-12T06:41:35.545Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 50,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T06:41:32.588Z",
+      "step": "purchase_shop_item",
+      "warning": "No shop_items found"
+    },
+    {
+      "time": "2026-02-12T06:41:33.081Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:41:33.356Z",
+      "step": "purchase_shop_item",
+      "warning": "No shop_items found"
+    },
+    {
+      "time": "2026-02-12T06:41:33.806Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:41:34.080Z",
+      "step": "purchase_shop_item",
+      "warning": "No shop_items found"
+    },
+    {
+      "time": "2026-02-12T06:41:34.519Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:41:34.801Z",
+      "step": "purchase_shop_item",
+      "warning": "No shop_items found"
+    },
+    {
+      "time": "2026-02-12T06:41:35.273Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 4,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 8,
+    "actions": 8
+  }
+}

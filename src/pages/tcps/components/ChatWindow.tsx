@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
-import { MoreVertical, Phone, Video, ArrowLeft, Ban, EyeOff, MessageCircle, Check, CheckCheck, Trash2 } from 'lucide-react'
+import { MoreVertical, Phone, Video, ArrowLeft, Ban, EyeOff, MessageCircle, Check, CheckCheck, Trash2, Shield } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, createConversation, markConversationRead } from '../../../lib/supabase'
+import { supabase, createConversation, markConversationRead, OFFICER_GROUP_CONVERSATION_ID, sendOfficerMessage } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
 import UserNameWithAge from '../../../components/UserNameWithAge'
@@ -47,6 +47,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
   const [loading, setLoading] = useState(false)
   const [actualConversationId, setActualConversationId] = useState<string | null>(conversationId)
   const [showMenu, setShowMenu] = useState(false)
+  const [isOpsConversation, setIsOpsConversation] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const [isTyping, setIsTyping] = useState(false)
@@ -142,6 +143,13 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
 
     const initChat = async () => {
       if (!user?.id || !otherUserInfo?.id) return
+      
+      // Check if this is the OPS group conversation
+      if (otherUserInfo.id === OFFICER_GROUP_CONVERSATION_ID) {
+        setIsOpsConversation(true)
+        setActualConversationId(OFFICER_GROUP_CONVERSATION_ID)
+        return
+      }
 
       // Reset conversation ID and messages when switching users
       if (actualConversationId !== null && conversationId === null) {
@@ -210,6 +218,56 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
 
   // Fetch messages and sender info
   const fetchMessagesWithSenders = useCallback(async (convId: string, limit = 50, before?: string) => {
+    // Handle OPS group conversation differently
+    if (convId === OFFICER_GROUP_CONVERSATION_ID) {
+      let query = supabase
+        .from('officer_chat_messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      
+      if (before) {
+        query = query.lt('created_at', before)
+      }
+      
+      const { data: messagesData, error } = await query
+      
+      if (error || !messagesData) {
+        console.error('Error fetching OPS messages:', error)
+        return []
+      }
+      
+      // Enhance with sender info
+      const senderIds = [...new Set(messagesData.map(m => m.sender_id))]
+      const senderMap: Record<string, any> = {}
+      
+      if (senderIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('user_profiles')
+          .select('id,username,avatar_url,rgb_username_expires_at,glowing_username_color,created_at')
+          .in('id', senderIds)
+        
+        usersData?.forEach(u => {
+          senderMap[u.id] = u
+        })
+      }
+      
+      return messagesData.map(m => ({
+        id: m.id,
+        conversation_id: OFFICER_GROUP_CONVERSATION_ID,
+        sender_id: m.sender_id,
+        content: m.content,
+        created_at: m.created_at,
+        read_at: null,
+        sender_username: senderMap[m.sender_id]?.username,
+        sender_avatar_url: senderMap[m.sender_id]?.avatar_url,
+        sender_rgb_expires_at: senderMap[m.sender_id]?.rgb_username_expires_at,
+        sender_glowing_username_color: senderMap[m.sender_id]?.glowing_username_color,
+        sender_created_at: senderMap[m.sender_id]?.created_at
+      })).reverse()
+    }
+    
+    // Regular DM conversation
     let query = supabase
       .from('conversation_messages')
       .select('*')
@@ -348,6 +406,62 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
   useEffect(() => {
     if (!actualConversationId || !profile?.id) return
 
+    // For OPS conversation, subscribe to officer_chat_messages
+    if (actualConversationId === OFFICER_GROUP_CONVERSATION_ID) {
+      const channel = supabase
+        .channel(`officer-chat:${actualConversationId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'officer_chat_messages'
+          },
+          async (payload) => {
+            const newMsgRaw = payload.new
+            
+            // Fetch sender info
+            const { data: senderData } = await supabase
+              .from('user_profiles')
+              .select('id,username,avatar_url,rgb_username_expires_at,glowing_username_color,created_at')
+              .eq('id', newMsgRaw.sender_id)
+              .single()
+            
+            const newMsg: Message = {
+              id: newMsgRaw.id,
+              conversation_id: OFFICER_GROUP_CONVERSATION_ID,
+              sender_id: newMsgRaw.sender_id,
+              content: newMsgRaw.content,
+              created_at: newMsgRaw.created_at,
+              read_at: null,
+              sender_username: senderData?.username,
+              sender_avatar_url: senderData?.avatar_url,
+              sender_rgb_expires_at: senderData?.rgb_username_expires_at,
+              sender_glowing_username_color: senderData?.glowing_username_color,
+              sender_created_at: senderData?.created_at
+            }
+
+            setMessages(prev => {
+              const withoutPending = prev.filter(msg => {
+                if (msg.isPending && msg.sender_id === user?.id && msg.content === newMsg.content) {
+                  return false
+                }
+                return true
+              })
+              return [...withoutPending, newMsg]
+            })
+            
+            setTimeout(scrollToBottom, 100)
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+
+    // Regular DM conversation subscription
     const channel = supabase
       .channel(`chat:${actualConversationId}`)
       .on(
@@ -568,32 +682,49 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
           </button>
           
           <div className="relative">
-            <img 
-              src={otherUserInfo.avatar_url || `https://ui-avatars.com/api/?name=${otherUserInfo.username}&background=random`}
-              alt={otherUserInfo.username}
-              className="w-10 h-10 rounded-full border border-purple-500/30"
-            />
-            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#14141F] ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+            {isOpsConversation ? (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+            ) : (
+              <>
+                <img 
+                  src={otherUserInfo.avatar_url || `https://ui-avatars.com/api/?name=${otherUserInfo.username}&background=random`}
+                  alt={otherUserInfo.username}
+                  className="w-10 h-10 rounded-full border border-purple-500/30"
+                />
+                <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#14141F] ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+              </>
+            )}
           </div>
           
           <div>
-            <UserNameWithAge 
-              user={{
-                username: otherUserInfo.username,
-                id: otherUserInfo.id,
-                created_at: otherUserInfo.created_at,
-                glowing_username_color: otherUserInfo.glowing_username_color
-              }}
-              className="font-bold text-white leading-none hover:text-purple-400 transition-colors block"
-            />
-            <span className={`text-xs ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
-              {isOnline ? 'Online' : 'Offline'}
+            {isOpsConversation ? (
+              <div className="font-bold text-white leading-none flex items-center gap-2">
+                <Shield className="w-4 h-4 text-blue-400" />
+                Officer Operations
+              </div>
+            ) : (
+              <UserNameWithAge 
+                user={{
+                  username: otherUserInfo.username,
+                  id: otherUserInfo.id,
+                  created_at: otherUserInfo.created_at,
+                  glowing_username_color: otherUserInfo.glowing_username_color
+                }}
+                className="font-bold text-white leading-none hover:text-purple-400 transition-colors block"
+              />
+            )}
+            <span className={`text-xs ${isOpsConversation ? 'text-blue-400' : isOnline ? 'text-green-400' : 'text-red-400'}`}>
+              {isOpsConversation ? 'Officer Group Chat' : isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
+          {!isOpsConversation && (
+            <>
+              <button 
             onClick={() => handleCall('audio')}
             className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors"
           >
@@ -640,6 +771,8 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
       </div>
 

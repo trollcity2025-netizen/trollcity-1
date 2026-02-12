@@ -1,0 +1,240 @@
+{
+  "startedAt": "2026-02-12T07:26:03.678Z",
+  "scope": "full-coverage-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 8,
+    "adminUser": true,
+    "livekit": "not used"
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T07:26:05.451Z",
+      "type": "create_users",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:05.597Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:05.756Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "51b8b985-5e93-49b1-8413-8e81555fb270",
+        "role": "admin"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:05.856Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "29492791-4756-451d-b316-5b5978bb0a19",
+        "role": "secretary"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:05.949Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "0c5da333-c365-4f7f-8fe8-4028f3c08020",
+        "role": "lead_troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:06.061Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "4aa93b52-8d73-4830-bc08-10a2c3ef579c",
+        "role": "troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:06.157Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "6c45a5cb-1dce-4fd0-a641-723b1eb1c350",
+        "role": "troller"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:06.241Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "cb2b8f86-e7b8-4838-bde0-d4d8a7cc3d8f",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:06.330Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "902bd2e1-b0c8-45cf-afa5-d1853fc82a47",
+        "role": "pastor"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:06.419Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "456b27d8-995d-4ef3-bed5-7e57febe9a82",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:08.805Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:08.904Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "d01a0759-e7a5-432f-aa45-3b92940b63f1"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:09.096Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 3
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:09.182Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:09.572Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "29492791-4756-451d-b316-5b5978bb0a19",
+        "receiverId": "0c5da333-c365-4f7f-8fe8-4028f3c08020",
+        "streamId": "c54e6cc1-1480-4abf-a06c-97c0e5b27571"
+      }
+    },
+    {
+      "time": "2026-02-12T07:26:20.727Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 50,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T07:26:10.375Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:11.731Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:13.021Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:14.306Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:15.631Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:16.987Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:18.261Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:19.582Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not choose the best candidate function between: public.buy_car_insurance(car_garage_id => uuid, plan_id => text), public.buy_car_insurance(car_garage_id => uuid, plan_id => uuid)"
+    },
+    {
+      "time": "2026-02-12T07:26:20.449Z",
+      "step": "admin_toggle_broadcast_lockdown",
+      "warning": "Could not find the function public.admin_toggle_broadcast_lockdown(p_enable) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:26:20.607Z",
+      "step": "get_all_creator_applications",
+      "warning": "Could not find the function public.get_all_creator_applications without parameters in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:26:22.773Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:22.907Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:23.111Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:23.315Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:23.507Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:23.691Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:23.847Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:26:23.997Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 8,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 18,
+    "actions": 16
+  }
+}

@@ -279,11 +279,15 @@ export function useLiveKitToken({
         if (mounted) {
           const msg = err.message || 'Failed to fetch token';
           
-          if (msg.includes("Server is full")) {
-             console.warn("[useLiveKitToken] Server full, redirecting...");
-             toast.error("Server is full (max 100 users). Redirecting to homepage...", { duration: 4000 });
+           if (msg.includes("Room is full")) {
+             console.warn("[useLiveKitToken] Room full, redirecting...");
+             toast.error("Room is full. Please try another room.", { duration: 4000 });
              navigate("/");
-          }
+           } else if (msg.includes("Server is full")) {
+             console.warn("[useLiveKitToken] Server full, redirecting...");
+             toast.error("Server is full. Please try again shortly.", { duration: 4000 });
+             navigate("/");
+           }
 
           setError(msg);
           console.error('[useLiveKitToken] Error fetching token:', err);

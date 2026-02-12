@@ -1,16 +1,18 @@
 export const TIERS = [
-  { coins: 12000, usd: 25, manualReview: false },
-  { coins: 26375, usd: 70, manualReview: false },
-  { coins: 60000, usd: 150, manualReview: false },
-  { coins: 120000, usd: 355, manualReview: true },
+  { coins: 15000, usd: 50, manualReview: false },
+  { coins: 30000, usd: 150, manualReview: false },
+  { coins: 60000, usd: 300, manualReview: false },
+  { coins: 120000, usd: 600, manualReview: false },
+  { coins: 200000, usd: 1000, manualReview: true },
 ] as const;
 
 export const FIXED_FEE_USD = 3;
 
 export function getRateForCoins(coins: number) {
-  if (coins >= 120000) return 355 / 120000;
-  if (coins >= 60000) return 150 / 60000;
-  if (coins >= 26375) return 70 / 26375;
-  if (coins >= 12000) return 25 / 12000;
+  if (coins >= 200000) return 1000 / 200000;
+  if (coins >= 120000) return 600 / 120000;
+  if (coins >= 60000) return 300 / 60000;
+  if (coins >= 30000) return 150 / 30000;
+  if (coins >= 15000) return 50 / 15000;
   return 0;
 }

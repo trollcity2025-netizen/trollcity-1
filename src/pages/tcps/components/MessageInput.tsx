@@ -1,6 +1,6 @@
 import { useState, KeyboardEvent, useRef, useEffect } from 'react'
 import { Send, Smile } from 'lucide-react'
-import { supabase, sendConversationMessage } from '../../../lib/supabase'
+import { supabase, sendConversationMessage, OFFICER_GROUP_CONVERSATION_ID, sendOfficerMessage } from '../../../lib/supabase'
 import { sendNotification } from '../../../lib/sendNotification'
 import { useAuthStore } from '../../../lib/store'
 import { canMessageAdmin } from '../../../lib/perkEffects'
@@ -71,6 +71,17 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
     setSending(true)
 
     try {
+      // Handle OPS group message
+      if (conversationId === OFFICER_GROUP_CONVERSATION_ID) {
+        await sendOfficerMessage(message, 'normal')
+        setMessage('')
+        onMessageSent()
+        setSending(false)
+        inputRef.current?.focus()
+        return
+      }
+      
+      // Regular DM message
       // Check if user needs to pay to message
       const { data: toUser } = await supabase
         .from('user_profiles')

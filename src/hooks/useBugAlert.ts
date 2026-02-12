@@ -190,14 +190,43 @@ export function initGlobalBugReporter() {
   
   const originalOnerror = window.onerror;
   const originalOnunhandledrejection = (window as any).onunhandledrejection;
-  
-  const { reportError } = useBugAlert({ showToast: false });
+
+  const reportError = async (
+    error: Error,
+    context?: {
+      title?: string;
+      severity?: BugAlertSeverity;
+      category?: BugAlertCreate['category'];
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<void> => {
+    try {
+      const bug: BugAlertCreate = {
+        title: context?.title || error.name || 'Unknown Error',
+        description: error.message || 'An error occurred',
+        severity: context?.severity || determineSeverity(error),
+        category: context?.category || 'other',
+        error_message: error.message,
+        stack_trace: error.stack,
+        metadata: {
+          ...context?.metadata,
+          errorName: error.name,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      const { reportBug } = useBugAlertStore.getState();
+      await reportBug(bug);
+    } catch (reportErr) {
+      console.error('Failed to report bug:', reportErr);
+    }
+  };
   
   window.onerror = (event, source, lineno, colno, error) => {
     console.error('[Global Error]', event, source, lineno, colno, error);
     
     if (error) {
-      reportError(error, {
+      void reportError(error, {
         title: `JavaScript Error: ${event as string}`,
         severity: 'high',
         metadata: {
@@ -218,7 +247,7 @@ export function initGlobalBugReporter() {
     console.error('[Unhandled Promise Rejection]', event.reason);
     
     if (event.reason instanceof Error) {
-      reportError(event.reason, {
+      void reportError(event.reason, {
         title: 'Unhandled Promise Rejection',
         severity: 'medium',
         metadata: {

@@ -1,0 +1,422 @@
+{
+  "startedAt": "2026-02-12T06:19:17.237Z",
+  "scope": "light-launch-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 10,
+    "concurrency": 20,
+    "livekit": "not used"
+  },
+  "checks": {
+    "tables": [
+      {
+        "table": "user_profiles",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "streams",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "stream_messages",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "gifts",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "battles",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "coin_ledger",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "coin_transactions",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "vehicles_catalog",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "user_vehicles",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "properties",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "gift_ledger",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "gift_transactions",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "purchasable_items",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      },
+      {
+        "table": "shop_items",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.tables' in the schema cache"
+      }
+    ],
+    "columns": [
+      {
+        "table": "user_profiles",
+        "column": "troll_coins",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "user_profiles",
+        "column": "credit_score",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "user_profiles",
+        "column": "credit_used",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "streams",
+        "column": "broadcaster_id",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "streams",
+        "column": "status",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "streams",
+        "column": "battle_id",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "stream_messages",
+        "column": "stream_id",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "stream_messages",
+        "column": "user_id",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "stream_messages",
+        "column": "content",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "battles",
+        "column": "score_challenger",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "battles",
+        "column": "score_opponent",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      },
+      {
+        "table": "battles",
+        "column": "status",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.columns' in the schema cache"
+      }
+    ],
+    "routines": [
+      {
+        "routine": "send_gift_in_stream",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.routines' in the schema cache"
+      },
+      {
+        "routine": "send_premium_gift",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.routines' in the schema cache"
+      },
+      {
+        "routine": "purchase_shop_item",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.routines' in the schema cache"
+      },
+      {
+        "routine": "purchase_vehicle",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.routines' in the schema cache"
+      },
+      {
+        "routine": "buy_car_insurance",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.routines' in the schema cache"
+      },
+      {
+        "routine": "purchase_rgb_broadcast",
+        "exists": false,
+        "error": "Could not find the table 'public.information_schema.routines' in the schema cache"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T06:19:22.328Z",
+      "type": "create_users",
+      "detail": {
+        "count": 10
+      }
+    },
+    {
+      "time": "2026-02-12T06:19:22.578Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 10
+      }
+    },
+    {
+      "time": "2026-02-12T06:19:22.936Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T06:19:23.036Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "58a72c00-132e-45fd-bf06-aeab7272dd3b"
+      }
+    },
+    {
+      "time": "2026-02-12T06:19:23.433Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 20
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T06:19:17.965Z",
+      "step": "table_missing",
+      "warning": "user_profiles"
+    },
+    {
+      "time": "2026-02-12T06:19:18.094Z",
+      "step": "table_missing",
+      "warning": "streams"
+    },
+    {
+      "time": "2026-02-12T06:19:18.219Z",
+      "step": "table_missing",
+      "warning": "stream_messages"
+    },
+    {
+      "time": "2026-02-12T06:19:18.343Z",
+      "step": "table_missing",
+      "warning": "gifts"
+    },
+    {
+      "time": "2026-02-12T06:19:18.459Z",
+      "step": "table_missing",
+      "warning": "battles"
+    },
+    {
+      "time": "2026-02-12T06:19:18.605Z",
+      "step": "table_missing",
+      "warning": "coin_ledger"
+    },
+    {
+      "time": "2026-02-12T06:19:18.728Z",
+      "step": "table_missing",
+      "warning": "coin_transactions"
+    },
+    {
+      "time": "2026-02-12T06:19:18.857Z",
+      "step": "table_missing",
+      "warning": "vehicles_catalog"
+    },
+    {
+      "time": "2026-02-12T06:19:18.983Z",
+      "step": "table_missing",
+      "warning": "user_vehicles"
+    },
+    {
+      "time": "2026-02-12T06:19:19.130Z",
+      "step": "table_missing",
+      "warning": "properties"
+    },
+    {
+      "time": "2026-02-12T06:19:19.262Z",
+      "step": "table_missing",
+      "warning": "gift_ledger"
+    },
+    {
+      "time": "2026-02-12T06:19:19.382Z",
+      "step": "table_missing",
+      "warning": "gift_transactions"
+    },
+    {
+      "time": "2026-02-12T06:19:19.514Z",
+      "step": "table_missing",
+      "warning": "purchasable_items"
+    },
+    {
+      "time": "2026-02-12T06:19:19.657Z",
+      "step": "table_missing",
+      "warning": "shop_items"
+    },
+    {
+      "time": "2026-02-12T06:19:19.780Z",
+      "step": "column_missing",
+      "warning": "user_profiles.troll_coins"
+    },
+    {
+      "time": "2026-02-12T06:19:19.780Z",
+      "step": "column_missing",
+      "warning": "user_profiles.credit_score"
+    },
+    {
+      "time": "2026-02-12T06:19:19.780Z",
+      "step": "column_missing",
+      "warning": "user_profiles.credit_used"
+    },
+    {
+      "time": "2026-02-12T06:19:19.914Z",
+      "step": "column_missing",
+      "warning": "streams.broadcaster_id"
+    },
+    {
+      "time": "2026-02-12T06:19:19.914Z",
+      "step": "column_missing",
+      "warning": "streams.status"
+    },
+    {
+      "time": "2026-02-12T06:19:19.914Z",
+      "step": "column_missing",
+      "warning": "streams.battle_id"
+    },
+    {
+      "time": "2026-02-12T06:19:20.072Z",
+      "step": "column_missing",
+      "warning": "stream_messages.stream_id"
+    },
+    {
+      "time": "2026-02-12T06:19:20.072Z",
+      "step": "column_missing",
+      "warning": "stream_messages.user_id"
+    },
+    {
+      "time": "2026-02-12T06:19:20.072Z",
+      "step": "column_missing",
+      "warning": "stream_messages.content"
+    },
+    {
+      "time": "2026-02-12T06:19:20.192Z",
+      "step": "column_missing",
+      "warning": "battles.score_challenger"
+    },
+    {
+      "time": "2026-02-12T06:19:20.192Z",
+      "step": "column_missing",
+      "warning": "battles.score_opponent"
+    },
+    {
+      "time": "2026-02-12T06:19:20.192Z",
+      "step": "column_missing",
+      "warning": "battles.status"
+    },
+    {
+      "time": "2026-02-12T06:19:20.342Z",
+      "step": "routine_missing",
+      "warning": "send_gift_in_stream"
+    },
+    {
+      "time": "2026-02-12T06:19:20.342Z",
+      "step": "routine_missing",
+      "warning": "send_premium_gift"
+    },
+    {
+      "time": "2026-02-12T06:19:20.342Z",
+      "step": "routine_missing",
+      "warning": "purchase_shop_item"
+    },
+    {
+      "time": "2026-02-12T06:19:20.342Z",
+      "step": "routine_missing",
+      "warning": "purchase_vehicle"
+    },
+    {
+      "time": "2026-02-12T06:19:20.342Z",
+      "step": "routine_missing",
+      "warning": "buy_car_insurance"
+    },
+    {
+      "time": "2026-02-12T06:19:20.342Z",
+      "step": "routine_missing",
+      "warning": "purchase_rgb_broadcast"
+    },
+    {
+      "time": "2026-02-12T06:19:23.553Z",
+      "step": "gift_test",
+      "warning": "No gifts available"
+    },
+    {
+      "time": "2026-02-12T06:19:23.663Z",
+      "step": "purchase_shop_item",
+      "warning": "No shop_items found"
+    },
+    {
+      "time": "2026-02-12T06:19:23.917Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_options found"
+    },
+    {
+      "time": "2026-02-12T06:19:24.008Z",
+      "step": "battle_gift_test",
+      "warning": "Battle scores did not change"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 10,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 36,
+    "actions": 5
+  }
+}

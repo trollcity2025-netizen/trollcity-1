@@ -759,6 +759,8 @@ export interface SystemSettings {
   payout_unlock_at?: string | null
   trial_started_at?: string | null
   trial_started_by?: string | null
+  gifts_disabled?: boolean | null
+  gifts_disabled_reason?: string | null
   updated_at: string
 }
 
@@ -957,6 +959,7 @@ export async function getConversationMessages(
     .from('conversation_messages')
     .select('id, conversation_id, sender_id, body, created_at')
     .eq('conversation_id', conversationId)
+    .is('is_deleted', false)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -994,5 +997,242 @@ export async function markMessageRead(messageId: string) {
   })
   if (error) {
     throw error
+  }
+}
+
+// Officer Unified Messaging
+export async function isOfficer(userId?: string): Promise<boolean> {
+  const uid = userId || (await supabase.auth.getUser()).data.user?.id
+  if (!uid) return false
+  
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('is_troll_officer, is_pastor, officer_role, role, is_admin, troll_role')
+    .eq('id', uid)
+    .single()
+  
+  // Check all eligible roles for OPS access
+  return (
+    data?.is_troll_officer === true ||
+    data?.is_pastor === true ||
+    data?.role === 'admin' ||
+    data?.is_admin === true ||
+    data?.officer_role === 'lead_officer' ||
+    data?.officer_role === 'owner' ||
+    data?.troll_role === 'secretary' ||
+    data?.troll_role === 'lead_officer' ||
+    data?.troll_role === 'pastor'
+  )
+}
+
+// Special conversation ID for officer group chat
+export const OFFICER_GROUP_CONVERSATION_ID = '00000000-0000-0000-0000-000000000001'
+
+export interface UnifiedMessage {
+  id: string
+  conversation_id: string
+  sender_id: string
+  content: string
+  created_at: string
+  read_at?: string | null
+  is_ops_message: boolean // true if from officer_chat_messages
+  sender_username?: string
+  sender_avatar_url?: string | null
+  sender_rgb_expires_at?: string | null
+  sender_glowing_username_color?: string | null
+  sender_created_at?: string
+}
+
+export async function getUnifiedMessagesForOfficer(
+  userId: string,
+  options?: { limit?: number; include_ops?: boolean }
+): Promise<UnifiedMessage[]> {
+  const limit = options?.limit ?? 50
+  const includeOps = options?.include_ops ?? true
+  
+  // Check if user is officer
+  const isOff = await isOfficer(userId)
+  
+  const messages: UnifiedMessage[] = []
+  
+  // Get regular DM messages
+  const { data: convMembers } = await supabase
+    .from('conversation_members')
+    .select('conversation_id')
+    .eq('user_id', userId)
+  
+  if (convMembers && convMembers.length > 0) {
+    const convIds = convMembers.map(m => m.conversation_id)
+    const { data: dmMessages } = await supabase
+      .from('conversation_messages')
+      .select('*')
+      .in('conversation_id', convIds)
+      .is('is_deleted', false)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    
+    if (dmMessages) {
+      messages.push(...dmMessages.map(m => ({
+        id: m.id,
+        conversation_id: m.conversation_id,
+        sender_id: m.sender_id,
+        content: m.body,
+        created_at: m.created_at,
+        read_at: m.read_at,
+        is_ops_message: false
+      })))
+    }
+  }
+  
+  // Get OPS messages if user is officer and include_ops is true
+  if (isOff && includeOps) {
+    const { data: opsMessages } = await supabase
+      .from('officer_chat_messages')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    
+    if (opsMessages) {
+      messages.push(...opsMessages.map(m => ({
+        id: m.id,
+        conversation_id: OFFICER_GROUP_CONVERSATION_ID,
+        sender_id: m.sender_id,
+        content: m.content,
+        created_at: m.created_at,
+        read_at: null,
+        is_ops_message: true
+      })))
+    }
+  }
+  
+  // Sort by created_at descending
+  messages.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  
+  // Enhance with sender info
+  const senderIds = [...new Set(messages.map(m => m.sender_id))]
+  if (senderIds.length > 0) {
+    const { data: usersData } = await supabase
+      .from('user_profiles')
+      .select('id,username,avatar_url,rgb_username_expires_at,glowing_username_color,created_at')
+      .in('id', senderIds)
+    
+    const senderMap: Record<string, any> = {}
+    usersData?.forEach(u => {
+      senderMap[u.id] = u
+    })
+    
+    messages.forEach(m => {
+      const sender = senderMap[m.sender_id]
+      if (sender) {
+        m.sender_username = sender.username
+        m.sender_avatar_url = sender.avatar_url
+        m.sender_rgb_expires_at = sender.rgb_username_expires_at
+        m.sender_glowing_username_color = sender.glowing_username_color
+        m.sender_created_at = sender.created_at
+      }
+    })
+  }
+  
+  return messages.slice(0, limit)
+}
+
+export async function sendOfficerMessage(content: string, priority: string = 'normal'): Promise<any> {
+  const { data, error } = await supabase
+    .from('officer_chat_messages')
+    .insert({
+      sender_id: (await supabase.auth.getUser()).data.user?.id,
+      content,
+      priority,
+      message_type: 'chat'
+    })
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+// Global Message Notification Listener
+export function setupGlobalMessageNotifications(
+  userId: string,
+  onNewMessage: (senderId: string, senderUsername: string, senderAvatar: string | null, isOpsMessage: boolean) => void
+) {
+  // Subscribe to new DMs
+  const dmChannel = supabase
+    .channel(`global-dms:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'conversation_messages'
+      },
+      async (payload) => {
+        const newMsg = payload.new
+        
+        // Check if this message is in a conversation the user is part of
+        const { data: membership } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('conversation_id', newMsg.conversation_id)
+          .eq('user_id', userId)
+          .single()
+        
+        if (!membership) return // Not in this conversation
+        if (newMsg.sender_id === userId) return // Don't notify for own messages
+        
+        // Fetch sender info
+        const { data: sender } = await supabase
+          .from('user_profiles')
+          .select('username, avatar_url')
+          .eq('id', newMsg.sender_id)
+          .single()
+        
+        if (sender) {
+          onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, false)
+        }
+      }
+    )
+    .subscribe()
+  
+  // Subscribe to OPS messages (if user is officer)
+  isOfficer(userId).then((isOff) => {
+    if (!isOff) return
+    
+    const opsChannel = supabase
+      .channel(`global-ops:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'officer_chat_messages'
+        },
+        async (payload) => {
+          const newMsg = payload.new
+          if (newMsg.sender_id === userId) return // Don't notify for own messages
+          
+          // Fetch sender info
+          const { data: sender } = await supabase
+            .from('user_profiles')
+            .select('username, avatar_url')
+            .eq('id', newMsg.sender_id)
+            .single()
+          
+          if (sender) {
+            onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, true)
+          }
+        }
+      )
+      .subscribe()
+    
+    return () => {
+      supabase.removeChannel(opsChannel)
+    }
+  })
+  
+  // Cleanup function
+  return () => {
+    supabase.removeChannel(dmChannel)
   }
 }

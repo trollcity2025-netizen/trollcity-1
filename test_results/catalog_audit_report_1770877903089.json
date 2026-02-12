@@ -1,0 +1,234 @@
+{
+  "startedAt": "2026-02-12T06:31:43.090Z",
+  "scope": "catalog-audit",
+  "environment": "production",
+  "checks": {
+    "tables": [
+      {
+        "table": "user_profiles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "streams",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "stream_messages",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gifts",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "battles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "coin_ledger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "coin_transactions",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "vehicles_catalog",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "user_vehicles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "properties",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gift_ledger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gift_transactions",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "purchasable_items",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "shop_items",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "insurance_options",
+        "exists": true,
+        "error": null
+      }
+    ],
+    "columns": [
+      {
+        "table": "user_profiles",
+        "column": "troll_coins",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "user_profiles",
+        "column": "credit_score",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "user_profiles",
+        "column": "credit_used",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "streams",
+        "column": "broadcaster_id",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "streams",
+        "column": "status",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "stream_messages",
+        "column": "stream_id",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "stream_messages",
+        "column": "user_id",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "stream_messages",
+        "column": "content",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "battles",
+        "column": "score_challenger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "battles",
+        "column": "score_opponent",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "battles",
+        "column": "status",
+        "exists": true,
+        "error": null
+      }
+    ],
+    "counts": [
+      {
+        "table": "gifts",
+        "count": 0,
+        "error": null
+      },
+      {
+        "table": "shop_items",
+        "count": 0,
+        "error": null
+      },
+      {
+        "table": "insurance_options",
+        "count": 0,
+        "error": null
+      },
+      {
+        "table": "vehicles_catalog",
+        "count": 10,
+        "error": null
+      },
+      {
+        "table": "purchasable_items",
+        "count": 54,
+        "error": null
+      },
+      {
+        "table": "broadcast_themes",
+        "count": 4,
+        "error": null
+      },
+      {
+        "table": "entrance_effects",
+        "count": 20,
+        "error": null
+      },
+      {
+        "table": "call_sounds",
+        "count": null,
+        "error": null
+      },
+      {
+        "table": "perks_catalog",
+        "count": null,
+        "error": null
+      }
+    ]
+  },
+  "warnings": [
+    {
+      "time": "2026-02-12T06:31:46.178Z",
+      "step": "catalog_empty",
+      "warning": "gifts"
+    },
+    {
+      "time": "2026-02-12T06:31:46.258Z",
+      "step": "catalog_empty",
+      "warning": "shop_items"
+    },
+    {
+      "time": "2026-02-12T06:31:46.398Z",
+      "step": "catalog_empty",
+      "warning": "insurance_options"
+    },
+    {
+      "time": "2026-02-12T06:31:47.172Z",
+      "step": "catalog_empty",
+      "warning": "call_sounds"
+    },
+    {
+      "time": "2026-02-12T06:31:47.396Z",
+      "step": "catalog_empty",
+      "warning": "perks_catalog"
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "errors": 0,
+    "warnings": 5,
+    "tablesChecked": 15,
+    "columnsChecked": 11,
+    "countsChecked": 9
+  }
+}

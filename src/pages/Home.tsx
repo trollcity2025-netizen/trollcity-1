@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
 import BroadcastLockdownControl from '@/components/admin/BroadcastLockdownControl';
+import EventCountdown from '@/components/EventCountdown';
 
 // Animated gradient background
 const AnimatedGradient = () => {
@@ -170,6 +171,9 @@ export default function Home() {
 
   return (
     <div className={`relative min-h-dvh overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
+      {/* Event Countdown Banner */}
+      <EventCountdown />
+
       {/* Animated Background */}
       <AnimatedGradient />
       <FloatingParticles />

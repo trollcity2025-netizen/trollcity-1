@@ -1,3 +1,4 @@
+/* global Deno */
 /**
  * Gift Sending Test Script
  * Tests that sender balance is deducted and receiver balance is increased

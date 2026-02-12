@@ -30,8 +30,8 @@ export default function PayoutPolicy() {
 
         <h2>2. Payout Process</h2>
         <p>
-          Payouts are processed 2 times a week, on Mondays and Fridays. You can submit a payout request at any time, 
-          but it will only be processed during these windows.
+          Payouts are processed once a week on Fridays. You can submit a payout request at any time, 
+          but it will only be processed during the Friday payout window.
         </p>
 
         <h2>3. Payout Tiers & Conversion Rates</h2>
@@ -114,7 +114,7 @@ export default function PayoutPolicy() {
 
         <h2>9. Payout Timeline</h2>
         <p>
-          Payouts are processed on Mondays and Fridays. Once processed, funds usually
+          Payouts are processed on Fridays. Once processed, funds usually
           arrive in your PayPal account within 24 hours, though some transactions
           may take longer depending on PayPal&apos;s processing times.
         </p>

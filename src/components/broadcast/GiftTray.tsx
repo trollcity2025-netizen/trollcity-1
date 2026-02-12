@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Coins, Loader2, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useGiftSystem, GiftItem } from '../../lib/hooks/useGiftSystem';
 import { useAuthStore } from '../../lib/store';
@@ -15,11 +16,12 @@ interface GiftTrayProps {
 }
 
 export default function GiftTray({ recipientId, streamId, onClose, battleId, allRecipients }: GiftTrayProps) {
+  const navigate = useNavigate();
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId, battleId, recipientId);
-  const { profile } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const [sendingToAll, setSendingToAll] = useState(false);
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
 
@@ -137,6 +139,10 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   }, [gifts, activeCategory]);
 
   const handleSend = async (gift: GiftItem) => {
+    if (!user) {
+      navigate('/auth?mode=signup');
+      return;
+    }
     if (allRecipients && allRecipients.length > 0) {
       setSendingToAll(true);
       try {
@@ -234,12 +240,12 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
           {filteredGifts.map((gift) => {
             const isHighValue = gift.coinCost >= 1000;
             const isLegendary = gift.coinCost >= 5000;
-            const affordable = canAfford(gift.coinCost);
+            const affordable = user ? canAfford(gift.coinCost) : true;
             
             return (
               <button
                 key={gift.id}
-                disabled={isSending || !affordable}
+                disabled={isSending || (user && !affordable)}
                 onClick={() => handleSend(gift)}
                 className={cn(
                   "flex flex-col items-center gap-1 p-2 rounded-xl transition-all group relative border",

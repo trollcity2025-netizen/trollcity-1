@@ -1,0 +1,240 @@
+{
+  "startedAt": "2026-02-12T07:24:31.386Z",
+  "scope": "full-coverage-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 8,
+    "adminUser": true,
+    "livekit": "not used"
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T07:24:33.093Z",
+      "type": "create_users",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.214Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.438Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "7d08f08f-f24f-4b83-9bc6-1515e8111629",
+        "role": "admin"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.526Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "ead578dd-5c69-46de-9323-cc68ef90e7f3",
+        "role": "secretary"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.622Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "b6a4fb0b-4974-405b-a54b-52148aa2ce1a",
+        "role": "lead_troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.712Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "cba2e1ed-c539-4be0-88d0-5ffc01ee8e4f",
+        "role": "troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.812Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "5ebca980-40bf-4d60-a31f-4d294e38debf",
+        "role": "troller"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:33.905Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "1b4c181a-4d63-407d-b1e0-5274ce8fec88",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:34.010Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "eacd6fa7-220a-4220-84d0-b176a5093987",
+        "role": "pastor"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:34.102Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "6765fc1e-098a-40d8-8d2b-5d51b6d252fa",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:36.497Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:36.587Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "b20701cc-4e80-4c02-861f-700f165ef032"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:36.756Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 3
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:36.847Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:37.213Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "ead578dd-5c69-46de-9323-cc68ef90e7f3",
+        "receiverId": "b6a4fb0b-4974-405b-a54b-52148aa2ce1a",
+        "streamId": "0847a18c-43db-461a-9942-4d1ffc50b38c"
+      }
+    },
+    {
+      "time": "2026-02-12T07:24:48.181Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 50,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T07:24:37.980Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:39.286Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:40.608Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:41.877Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:43.167Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:44.455Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:45.801Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:47.098Z",
+      "step": "buy_car_insurance",
+      "warning": "No user_vehicles found to insure"
+    },
+    {
+      "time": "2026-02-12T07:24:47.943Z",
+      "step": "admin_toggle_broadcast_lockdown",
+      "warning": "Could not find the function public.admin_toggle_broadcast_lockdown(p_enable) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:24:48.098Z",
+      "step": "get_all_creator_applications",
+      "warning": "Could not find the function public.get_all_creator_applications without parameters in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:24:50.204Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:50.343Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:50.538Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:50.722Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:50.951Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:51.173Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:51.328Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T07:24:51.487Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 8,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 18,
+    "actions": 16
+  }
+}

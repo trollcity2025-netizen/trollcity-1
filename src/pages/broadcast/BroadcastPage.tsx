@@ -158,13 +158,13 @@ const GuestLimitOverlay = () => (
         </p>
         <div className="flex gap-4">
             <Link 
-                to="/login" 
+                to="/auth?mode=login" 
                 className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
             >
                 Log In
             </Link>
             <Link 
-                to="/signup" 
+                to="/auth?mode=signup" 
                 className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition-colors border border-white/10"
             >
                 Sign Up
@@ -253,7 +253,7 @@ const MobileStageInner = ({
     );
 };
 
-// Helper component to enforce viewer limits
+  // Helper component to enforce viewer limits
 const BroadcastLimitEnforcer = ({ isHost, mode, isStaff }: { isHost: boolean, mode: string, isStaff: boolean }) => {
     const participants = useParticipants();
     const navigate = useNavigate();
@@ -283,7 +283,7 @@ const BroadcastLimitEnforcer = ({ isHost, mode, isStaff }: { isHost: boolean, mo
             toast.error("Viewer limit (10) reached.");
             navigate('/');
         }
-    }, [participants, isHost, mode, navigate]);
+    }, [participants, isHost, mode, isStaff, navigate]);
 
     return null;
 };
@@ -312,40 +312,25 @@ export default function BroadcastPage() {
   const effectiveUserId = user?.id || guestId;
   const guestUserObj = React.useMemo(() => (!user ? { id: guestId, username: guestId } : null), [user, guestId]);
 
-    const seatPaidKey = id && effectiveUserId ? `seat_paid_${id}_${effectiveUserId}` : null;
-    const [hasPaidSeat, setHasPaidSeat] = useState(false);
+  const seatPaidKey = id && effectiveUserId ? `seat_paid_${id}_${effectiveUserId}` : null;
+  const [hasPaidSeat, setHasPaidSeat] = useState(false);
 
-    useEffect(() => {
-        if (seatPaidKey) {
-            setHasPaidSeat(!!sessionStorage.getItem(seatPaidKey));
-        }
-    }, [seatPaidKey]);
+  useEffect(() => {
+    if (seatPaidKey) {
+        setHasPaidSeat(!!sessionStorage.getItem(seatPaidKey));
+    }
+  }, [seatPaidKey]);
 
   const [guestTimeLeft, setGuestTimeLeft] = useState<number | null>(null);
   const [hostTimeLimit, setHostTimeLimit] = useState(3600000); // Default 1 hour
 
   // Guest Entry Protection & Timer
   useEffect(() => {
-    if (isGuest && id) {
-        const key = `guest_preview_${id}`;
+    if (isGuest) {
+        const key = 'tc_guest_global_preview';
         const startStr = localStorage.getItem(key);
-        const sessionActive = sessionStorage.getItem(`guest_session_${id}`);
         
-        // 1. Strict Entry Check
-        // Allow if: From Explore OR Already in active session (refresh) OR Already used preview (will show expired)
-        // RELAXED: Allow direct entry for guests (deep linking support)
-        /* 
-        if (!fromExplore && !sessionActive && !startStr) {
-             toast.error("Please discover streams via the Explore Feed");
-             navigate('/explore');
-             return;
-        }
-        */
-
-        // Mark session active
-        sessionStorage.setItem(`guest_session_${id}`, 'true');
-
-        // 2. Timer Logic
+        // Timer Logic
         const now = Date.now();
         let remaining = 60;
 
@@ -353,11 +338,8 @@ export default function BroadcastPage() {
             const elapsed = (now - parseInt(startStr, 10)) / 1000;
             remaining = Math.max(0, 60 - elapsed);
         } else {
-            // New preview
+            // New global preview across all streams
             localStorage.setItem(key, now.toString());
-            // Track Guest
-            // supabase.functions.invoke('track-guest', { ... }); 
-            // (Note: Tracking is now done in api/livekit-guest-token)
         }
         
         setGuestTimeLeft(remaining);
@@ -376,20 +358,18 @@ export default function BroadcastPage() {
                     // Expired
                     if (next <= 0) {
                         clearInterval(timer);
-                        // Redirect Logic removed - Show Overlay instead
-                        // navigate(`/?signup=true&next=/watch/${id}`);
                         return 0;
                     }
                     return next;
                 });
             }, 1000);
             return () => clearInterval(timer);
-        } else {
-             // Already expired on load
-             // navigate(`/?signup=true&next=/watch/${id}`);
         }
+    } else if (!isGuest) {
+        // Clear guest time if user logs in
+        setGuestTimeLeft(null);
     }
-  }, [isGuest, id, fromExplore, navigate]);
+  }, [isGuest]);
 
   const [stream, setStream] = useState<Stream | null>(null);
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null);
@@ -398,18 +378,21 @@ export default function BroadcastPage() {
   const [showBattleManager, setShowBattleManager] = useState(false);
   const [preflightStream, setPreflightStream] = useState<MediaStream | null>(null);
     const handleBoxCountUpdate = async (newCount: number) => {
-        const canEditBoxes = isHost || isStaffMember(profile);
-        if (!stream || !canEditBoxes) return;
+    const canEditBoxes = isHost || isStaffMember(profile);
+    if (!stream || !canEditBoxes) return;
 
-    const currentCount = stream.box_count || 1;
+    const { data: eventData } = await supabase.rpc('get_active_event');
+    const event = eventData?.[0];
+    const maxTotalBoxes = event ? (event.max_guests_per_broadcast + 1) : 9;
+
     const requiredBoxes = Object.values(seats).filter(s => s.status === 'active').length;
 
-    if (newCount < requiredBoxes || newCount < 1 || newCount > 9) {
+    if (newCount < requiredBoxes || newCount < 1 || newCount > maxTotalBoxes) {
       toast.warning(
         newCount < 1
         ? "Cannot have less than 1 box."
-        : newCount > 9
-        ? "Maximum of 9 boxes allowed."
+        : newCount > maxTotalBoxes
+        ? `Maximum of ${maxTotalBoxes} boxes allowed${event ? ' during this event' : ''}.`
         : "Cannot remove a box that is currently in use."
       );
       return;
@@ -459,8 +442,6 @@ export default function BroadcastPage() {
   
   // Can publish only if on stage (Host or Active Seat)
   const canPublish = mode === 'stage';
-  
-  const { messages, sendMessage } = useStreamChat(id || '');
 
   // Guest Timer & Tracking - HANDLED ABOVE
   
@@ -497,7 +478,7 @@ export default function BroadcastPage() {
     return () => clearInterval(interval);
   }, [stream?.started_at, isHost, hostTimeLimit]);
 
-  const { token, serverUrl, error: tokenError, isLoading: tokenLoading } = useLiveKitToken({
+  const { token, serverUrl, error: tokenError } = useLiveKitToken({
     streamId: id,
     isHost,
     userId: effectiveUserId,
@@ -639,7 +620,7 @@ export default function BroadcastPage() {
                   filter: `id=eq.${stream.user_id}` 
               }, 
               (payload) => {
-                  setBroadcasterProfile((prev: any) => ({ ...prev, ...payload.new }));
+                  setBroadcasterProfile((prev: any) => prev ? { ...prev, ...payload.new } : payload.new);
               }
           )
           .subscribe();
@@ -720,10 +701,18 @@ export default function BroadcastPage() {
   };
 
   const handleJoinRequest = async (seatIndex: number) => {
-      // Guest Limit Check (Max 3 Guests)
+      if (!user) {
+          navigate('/auth?mode=signup');
+          return;
+      }
+      // Guest Limit Check (Max 2 Guests during event, else 3)
+      const { data: eventData } = await supabase.rpc('get_active_event');
+      const event = eventData?.[0];
+      const maxGuests = event ? event.max_guests_per_broadcast : 3;
+
       const occupiedSeats = Object.values(seats).filter(s => s.status === 'active').length;
-      if (occupiedSeats >= 3) {
-          toast.error("Guest limit reached (Max 3 guests).");
+      if (occupiedSeats >= maxGuests) {
+          toast.error(`Guest limit reached (Max ${maxGuests} guests).`);
           return;
       }
       

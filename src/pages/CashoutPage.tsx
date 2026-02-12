@@ -256,7 +256,7 @@ const CashoutPage: React.FC = () => {
       <div className="w-full max-w-xl bg-[#0B0B12] rounded-2xl border border-purple-500 p-6 shadow-[0_0_25px_rgba(147,51,234,0.5)] text-center">
         <h1 className="text-2xl font-bold mb-4">Request Payout</h1>
         <p className="text-gray-300 text-sm mb-4">
-          PayPal payouts are processed 2 times a week (Monday and Fridays).
+          PayPal payouts are processed once a week (Fridays).
         </p>
         <p className="text-gray-400 text-sm mb-6">
           Please use the new Payout Request page to submit your request.

@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "broadcast_battle_500_3min report",
+  "type": "object",
+  "required": ["startedAt", "run_id", "config", "metrics", "backend", "battle_integrity", "summary"],
+  "properties": {
+    "startedAt": { "type": "string" },
+    "run_id": { "type": "string" },
+    "config": { "type": "object" },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "token_mint_ms": { "type": "object" },
+        "room_join_ms": { "type": "object" },
+        "gift_rpc_ms": { "type": "object" },
+        "chat_insert_ms": { "type": "object" },
+        "battle_create_ms": { "type": "object" },
+        "battle_end_finalize_ms": { "type": "object" },
+        "battle_tick_update_ms": { "type": "object" },
+        "connect_success_rate": { "type": "number" },
+        "publish_success_rate": { "type": "number" },
+        "reconnect_count": { "type": "number" },
+        "disconnect_reason_histogram": { "type": "object" }
+      }
+    },
+    "backend": {
+      "type": "object",
+      "properties": {
+        "error_rate": { "type": "number" },
+        "rate_limit_blocks": { "type": "number" },
+        "lock_contention_count": { "type": "number" }
+      }
+    },
+    "battle_integrity": {
+      "type": "object",
+      "properties": {
+        "battle_start_success_rate": { "type": "number" },
+        "battle_end_success_rate": { "type": "number" },
+        "overlap_violations": { "type": "number" },
+        "orphan_count": { "type": "number" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "battles_created": { "type": "number" },
+        "battles_ended": { "type": "number" },
+        "orphan_count": { "type": "number" },
+        "overlap_violations": { "type": "number" }
+      }
+    }
+  }
+}

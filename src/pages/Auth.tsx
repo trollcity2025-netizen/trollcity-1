@@ -33,38 +33,82 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
   const [alertDetails, setAlertDetails] = useState('')
   const [alertSubmitting, setAlertSubmitting] = useState(false)
   const [dailyLimitReached, setDailyLimitReached] = useState(false)
+  const [activeEvent, setActiveEvent] = useState<any>(null)
+  const [inQueue, setInQueue] = useState(false)
+  const [queueEmail, setQueueEmail] = useState('')
+  const [queueUsername, setQueueUsername] = useState('')
   const [nextWindow, setNextWindow] = useState<Date | null>(null)
   const navigate = useNavigate()
   const { user, profile, setAuth, setProfile } = useAuthStore()
   
-  // Check daily sign-up limit
+  // Check active event and signup limits
   useEffect(() => {
-    const checkLimit = async () => {
+    const checkEventAndLimits = async () => {
       try {
-        const today = new Date()
-        today.setUTCHours(0, 0, 0, 0)
-        
-        const { count } = await supabase
-          .from('user_profiles')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', today.toISOString())
-        
-        if (count !== null && count >= 100) {
-          setDailyLimitReached(true)
-          const tomorrow = new Date(today)
-          tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
-          setNextWindow(tomorrow)
+        // 1. Get Active Event
+        const { data: eventData } = await supabase.rpc('get_active_event')
+        const event = eventData?.[0]
+        setActiveEvent(event)
+
+        if (event) {
+          // 2. Get Signup Count for this event
+          const { data: count } = await supabase.rpc('get_active_event_signup_count')
+
+          if (count !== null && count >= event.signup_cap) {
+            setDailyLimitReached(true)
+            // Calculate end of event
+            const startTime = new Date(event.start_time)
+            const endTime = new Date(startTime.getTime() + event.duration_hours * 60 * 60 * 1000)
+            setNextWindow(endTime)
+          } else {
+            setDailyLimitReached(false)
+          }
+        } else {
+          // Fallback to old daily limit logic if no event
+          const today = new Date()
+          today.setUTCHours(0, 0, 0, 0)
+          
+          const { count } = await supabase
+            .from('user_profiles')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', today.toISOString())
+          
+          if (count !== null && count >= 100) {
+            setDailyLimitReached(true)
+            const tomorrow = new Date(today)
+            tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+            setNextWindow(tomorrow)
+          } else {
+            setDailyLimitReached(false)
+          }
         }
       } catch (err) {
-        console.error('Error checking daily limit:', err)
+        console.error('Error checking limits:', err)
       }
     }
     
-    checkLimit()
-    // Poll every minute to check if day rolled over
-    const interval = setInterval(checkLimit, 60000)
+    checkEventAndLimits()
+    const interval = setInterval(checkEventAndLimits, 60000)
     return () => clearInterval(interval)
   }, [])
+
+  const handleJoinQueue = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('signup_queue').insert({
+        email: queueEmail || email,
+        username: queueUsername || username
+      })
+      if (error) throw error
+      setInQueue(true)
+      toast.success('You have been added to the queue!')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to join queue')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Timer countdown
   const [timeLeft, setTimeLeft] = useState('')
@@ -461,12 +505,62 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
             {!isLogin && dailyLimitReached ? (
               <div className="text-center p-6 bg-slate-800/50 rounded-xl border border-purple-500/30 animate-in fade-in zoom-in duration-300">
                 <AlertTriangle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">Daily Sign-Up Limit Reached</h3>
+                <h3 className="text-xl font-bold text-white mb-2">
+                  {activeEvent ? 'Event Sign-Up Cap Reached' : 'Daily Sign-Up Limit Reached'}
+                </h3>
                 <p className="text-slate-300 mb-6 text-sm">
-                  We limit new registrations to 100 users per day to ensure the best experience for our citizens.
+                  {activeEvent 
+                    ? `Our current event "${activeEvent.event_name}" is limited to ${activeEvent.signup_cap} participants. We've reached the limit!` 
+                    : "We limit new registrations to 100 users per day to ensure the best experience for our citizens."}
                 </p>
+                
+                {inQueue ? (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
+                    <p className="text-green-400 font-bold mb-1">You&apos;re in the queue!</p>
+                    <p className="text-xs text-green-400/80">We&apos;ll notify you when a spot opens up.</p>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900/80 rounded-xl p-4 mb-6 border border-white/5 text-left">
+                    <p className="text-slate-400 text-xs uppercase tracking-widest mb-3 text-center">Join the Waitlist</p>
+                    <div className="space-y-3">
+                      <div className="relative group">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-purple-400 transition-colors" />
+                        <input 
+                          type="email" 
+                          placeholder="Email" 
+                          value={queueEmail}
+                          onChange={(e) => setQueueEmail(e.target.value)}
+                          className="w-full bg-slate-950/50 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500/50"
+                          required
+                        />
+                      </div>
+                      <div className="relative group">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-purple-400 transition-colors" />
+                        <input 
+                          type="text" 
+                          placeholder="Username" 
+                          value={queueUsername}
+                          onChange={(e) => setQueueUsername(e.target.value)}
+                          className="w-full bg-slate-950/50 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500/50"
+                          required
+                        />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={handleJoinQueue}
+                        disabled={loading}
+                        className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-lg transition-colors text-sm"
+                      >
+                        {loading ? 'Joining...' : 'Join Queue'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-slate-950/50 rounded-lg p-4 mb-6 border border-white/5">
-                  <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">Next Registration Window</p>
+                  <p className="text-slate-400 text-xs uppercase tracking-widest mb-1">
+                    {activeEvent ? 'Registration opens in' : 'Next Registration Window'}
+                  </p>
                   <div className="text-3xl font-mono text-cyan-400 font-bold tracking-wider">
                     {timeLeft}
                   </div>

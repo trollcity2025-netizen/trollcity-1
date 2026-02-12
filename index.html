@@ -39,6 +39,17 @@
       gtag('js', new Date());
       gtag('config', 'G-3XKLTEJ3ZR');
     </script>
+
+    <!-- OneSignal Web Push -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "5eec8cd7-849b-4e7c-b143-d6e2bf50c39a",
+        });
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

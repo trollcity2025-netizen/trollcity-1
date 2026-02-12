@@ -1,0 +1,239 @@
+{
+  "startedAt": "2026-02-12T07:19:28.460Z",
+  "scope": "full-coverage-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 8,
+    "adminUser": true,
+    "livekit": "not used"
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T07:19:30.155Z",
+      "type": "create_users",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:30.331Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "b104ac98-5500-48ae-a7ca-526cc29a0143",
+        "role": "admin"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:30.501Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "fe850b07-87e1-42b4-b7dc-d511f9e1589a",
+        "role": "secretary"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:30.602Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "b54b0442-94f4-425e-b7f5-739155a33164",
+        "role": "lead_troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:30.702Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "245cf76d-4e1e-4c6e-9fdb-caefc227c694",
+        "role": "troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:30.802Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "0f13941f-1d76-4ca0-8832-cd6f75bf54da",
+        "role": "troller"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:30.906Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "ac52b2cb-7ef9-4f4f-acad-befcb1443040",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:31.007Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "482ce6b2-1604-4e26-881c-00477b43784f",
+        "role": "pastor"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:31.115Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "9e853d5b-82bb-400a-994a-f5bf8ac15ac9",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:33.447Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:33.546Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "0539935d-8001-47e4-8ea2-b2525d527121"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:33.722Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 3
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:33.807Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:34.172Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "fe850b07-87e1-42b4-b7dc-d511f9e1589a",
+        "receiverId": "b54b0442-94f4-425e-b7f5-739155a33164",
+        "streamId": "b39616e0-3f01-449e-bee6-90035d925151"
+      }
+    },
+    {
+      "time": "2026-02-12T07:19:43.801Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 50,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T07:19:34.801Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:35.375Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:35.911Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:36.481Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:37.037Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:37.561Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:38.199Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:38.767Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:39.302Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:39.881Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:40.435Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:41.055Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:41.621Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:42.145Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:42.755Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_plans found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:43.361Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T07:19:43.572Z",
+      "step": "admin_toggle_broadcast_lockdown",
+      "warning": "Could not find the function public.admin_toggle_broadcast_lockdown(p_enable) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T07:19:43.715Z",
+      "step": "get_all_creator_applications",
+      "warning": "Could not find the function public.get_all_creator_applications without parameters in the schema cache"
+    }
+  ],
+  "errors": [
+    {
+      "time": "2026-02-12T07:19:30.247Z",
+      "step": "seed_profiles",
+      "error": "duplicate key value violates unique constraint \"user_profiles_username_unique\""
+    }
+  ],
+  "cleanup": [
+    {
+      "usersDeleted": 8,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 1,
+    "warnings": 18,
+    "actions": 15
+  }
+}

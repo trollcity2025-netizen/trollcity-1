@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useEffect, useRef, useState } from 'react';
+import { supabase, getSystemSettings } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
 import { generateUUID } from '../lib/uuid';
@@ -20,9 +20,36 @@ export function useGiftSystem(
   _targetUserId?: string
 ) {
   const [isSending, setIsSending] = useState(false);
+  const [giftsDisabled, setGiftsDisabled] = useState(false);
+  const [giftsDisabledReason, setGiftsDisabledReason] = useState<string | null>(null);
   const { user, refreshProfile } = useAuthStore();
 
+  // Simple client-side circuit breaker
+  const circuitRef = useRef<{ openUntil: number }>({ openUntil: 0 });
+
+  useEffect(() => {
+    getSystemSettings()
+      .then((settings) => {
+        setGiftsDisabled(!!settings?.gifts_disabled);
+        setGiftsDisabledReason(settings?.gifts_disabled_reason || null);
+      })
+      .catch(() => {
+        // ignore - don't block gifting on fetch failure
+      });
+  }, []);
+
   const sendGift = async (gift: GiftItem, targetIdOverride?: string, quantity: number = 1): Promise<boolean> => {
+    const now = Date.now();
+    if (circuitRef.current.openUntil > now) {
+      toast.error('Gifting is temporarily paused. Please try again shortly.');
+      return false;
+    }
+
+    if (giftsDisabled) {
+      toast.error(giftsDisabledReason || 'Gifting is temporarily disabled.');
+      return false;
+    }
+
     if (!user) {
       toast.error("You must be logged in to send gifts");
       return false;
@@ -101,7 +128,20 @@ export function useGiftSystem(
 
     } catch (err: any) {
       console.error("Gift error:", err);
-      toast.error(err.message || "Transaction failed");
+      const msg = err?.message || "Transaction failed";
+      if (String(msg).toLowerCase().includes('rate limit')) {
+        toast.error('You are sending gifts too fast. Please slow down.');
+      } else {
+        toast.error(msg);
+      }
+
+      if (
+        String(msg).toLowerCase().includes('timeout') ||
+        String(msg).toLowerCase().includes('deadlock') ||
+        String(msg).toLowerCase().includes('could not obtain lock')
+      ) {
+        circuitRef.current.openUntil = Date.now() + 60_000; // 60s cooldown
+      }
       return false;
     } finally {
       setIsSending(false);

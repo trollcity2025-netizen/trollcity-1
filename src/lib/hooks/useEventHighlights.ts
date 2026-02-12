@@ -164,20 +164,24 @@ export const getHighlightClasses = (
   config: Record<string, unknown>
 ): string => {
   switch (type) {
-    case 'frequent_gifter':
+    case 'frequent_gifter': {
       const frameColor = (config.frameColor as string) || 'gold';
       return `frequent-gifter-frame frame-${frameColor}`;
+    }
     
-    case 'supporter_badge':
+    case 'supporter_badge': {
       const badgeStyle = (config.badgeStyle as string) || 'default';
       return `supporter-badge style-${badgeStyle}`;
+    }
     
-    case 'pair_highlight':
+    case 'pair_highlight': {
       return 'pair-highlight-badge';
+    }
     
-    case 'vip_frame':
+    case 'vip_frame': {
       const frameStyle = (config.frameStyle as string) || 'default';
       return `vip-frame style-${frameStyle}`;
+    }
     
     default:
       return '';

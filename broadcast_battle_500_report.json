@@ -1,0 +1,52 @@
+{
+  "summary": {
+    "status": "FAIL",
+    "total_duration_min": "17.30",
+    "concurrency_peak": 500,
+    "total_errors": 15301,
+    "error_rate": "100.007%"
+  },
+  "livekit": {
+    "token_mint_ms": {
+      "p50": 108,
+      "p95": 155,
+      "p99": 158
+    },
+    "room_join_ms": {
+      "p50": 450,
+      "p95": 681,
+      "p99": 698
+    },
+    "connect_success_rate": "99.82%",
+    "publish_success_rate": "100.00%",
+    "reconnect_count": 0
+  },
+  "supabase": {
+    "gift_rpc_ms": {
+      "p50": 115,
+      "p95": 151,
+      "p99": 182
+    },
+    "chat_insert_ms": {
+      "p50": 115,
+      "p95": 150,
+      "p99": 186
+    },
+    "battle_create_ms": {
+      "p95": 0
+    }
+  },
+  "battle_integrity": {
+    "total_battles_started": 0,
+    "total_battles_ended": 0,
+    "start_success_rate": "NaN%",
+    "overlap_violations": 36,
+    "orphan_battles": 0
+  },
+  "cost_estimation": {
+    "viewer_minutes": 4500,
+    "host_minutes": 150,
+    "guest_minutes": 300,
+    "total_participant_minutes": 4950
+  }
+}

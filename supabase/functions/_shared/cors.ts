@@ -3,7 +3,7 @@
 // The VERCEL_URL is injected by Vercel's runtime
 const getVercelUrl = (): string => {
   try {
-    // @ts-ignore - VERCEL_URL is injected by Vercel
+    // @ts-expect-error - VERCEL_URL is injected by Vercel
     return typeof VERCEL_URL !== 'undefined' ? `https://${VERCEL_URL}` : '';
   } catch {
     return '';
@@ -12,7 +12,7 @@ const getVercelUrl = (): string => {
 
 const getVercelBranchUrl = (): string => {
   try {
-    // @ts-ignore - VERCEL_BRANCH_URL is injected by Vercel
+    // @ts-expect-error - VERCEL_BRANCH_URL is injected by Vercel
     return typeof VERCEL_BRANCH_URL !== 'undefined' ? `https://${VERCEL_BRANCH_URL}` : '';
   } catch {
     return '';

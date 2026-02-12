@@ -1,0 +1,196 @@
+{
+  "startedAt": "2026-02-12T06:25:56.667Z",
+  "scope": "light-launch-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 2,
+    "concurrency": 2,
+    "livekit": "not used"
+  },
+  "checks": {
+    "tables": [
+      {
+        "table": "user_profiles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "streams",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "stream_messages",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gifts",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "battles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "coin_ledger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "coin_transactions",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "vehicles_catalog",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "user_vehicles",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "properties",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gift_ledger",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "gift_transactions",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "purchasable_items",
+        "exists": true,
+        "error": null
+      },
+      {
+        "table": "shop_items",
+        "exists": true,
+        "error": null
+      }
+    ],
+    "columns": [],
+    "routines": [
+      {
+        "routine": "send_gift_in_stream",
+        "exists": true,
+        "error": "Could not find the function public.send_gift_in_stream without parameters in the schema cache"
+      },
+      {
+        "routine": "send_premium_gift",
+        "exists": true,
+        "error": "Could not find the function public.send_premium_gift without parameters in the schema cache"
+      },
+      {
+        "routine": "purchase_shop_item",
+        "exists": true,
+        "error": "Could not find the function public.purchase_shop_item without parameters in the schema cache"
+      },
+      {
+        "routine": "purchase_vehicle",
+        "exists": true,
+        "error": "Could not find the function public.purchase_vehicle without parameters in the schema cache"
+      },
+      {
+        "routine": "buy_car_insurance",
+        "exists": true,
+        "error": "Could not find the function public.buy_car_insurance without parameters in the schema cache"
+      },
+      {
+        "routine": "purchase_rgb_broadcast",
+        "exists": true,
+        "error": "Could not find the function public.purchase_rgb_broadcast without parameters in the schema cache"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T06:25:59.183Z",
+      "type": "create_users",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T06:25:59.438Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T06:26:00.328Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T06:26:00.427Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "cd524e2a-4834-4661-aa90-36a31dbf7b08"
+      }
+    },
+    {
+      "time": "2026-02-12T06:26:00.724Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 20
+      }
+    },
+    {
+      "time": "2026-02-12T06:26:00.812Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T06:26:00.898Z",
+      "step": "gift_test",
+      "warning": "No gifts available"
+    },
+    {
+      "time": "2026-02-12T06:26:00.982Z",
+      "step": "purchase_shop_item",
+      "warning": "No shop_items found"
+    },
+    {
+      "time": "2026-02-12T06:26:01.262Z",
+      "step": "buy_car_insurance",
+      "warning": "No insurance_options found"
+    },
+    {
+      "time": "2026-02-12T06:26:01.367Z",
+      "step": "battle_gift_test",
+      "warning": "Battle scores did not change"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 2,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 4,
+    "actions": 6
+  }
+}

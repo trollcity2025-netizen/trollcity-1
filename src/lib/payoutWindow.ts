@@ -1,5 +1,5 @@
 export const PAYOUT_WINDOW_LABEL =
-  "Payouts available Mondays and Fridays starting at 1:00 AM UTC.";
+  "Payouts available Fridays starting at 1:00 AM UTC.";
 
 export function isPayoutWindowOpen(date: Date = new Date()): boolean {
   const day = date.getUTCDay();

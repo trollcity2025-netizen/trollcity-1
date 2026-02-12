@@ -154,7 +154,7 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
         <div>
             <h4 className="text-sm font-bold text-blue-200">Payout Schedule</h4>
             <p className="text-xs text-blue-300/80">
-                Payouts are processed twice a week: <span className="text-white font-bold">Mondays</span> and <span className="text-white font-bold">Fridays</span>.
+                Payouts are processed once a week on <span className="text-white font-bold">Fridays</span>.
             </p>
         </div>
       </div>

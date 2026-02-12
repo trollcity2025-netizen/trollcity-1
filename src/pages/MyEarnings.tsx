@@ -259,7 +259,7 @@ export default function MyEarnings() {
           </h1>
           <div className="flex flex-col items-end">
             <div className="px-4 py-2 bg-purple-900/30 border border-purple-500/30 rounded-lg text-sm text-purple-200">
-              <span className="font-semibold text-purple-400">Automated Payouts:</span> Mondays & Fridays
+              <span className="font-semibold text-purple-400">Automated Payouts:</span> Every Friday
             </div>
           </div>
         </div>

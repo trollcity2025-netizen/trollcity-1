@@ -6,7 +6,10 @@ import { useLocation } from 'react-router-dom'
 import UserCompliancePrompt from '../UserCompliancePrompt'
 import PurchaseRequiredModal from '../PurchaseRequiredModal'
 import { useAuthStore } from '../../lib/store'
+import { useChatStore } from '../../lib/chatStore'
+import { setupGlobalMessageNotifications, OFFICER_GROUP_CONVERSATION_ID } from '../../lib/supabase'
 import ChatBubble from '../ChatBubble'
+import { toast } from 'sonner'
 
 
 interface AppLayoutProps {
@@ -24,10 +27,49 @@ export default function AppLayout({
 }: AppLayoutProps) {
   const location = useLocation();
   const showLegacySidebar = useAuthStore((s) => s.showLegacySidebar)
+  const user = useAuthStore((s) => s.user)
+  const { openChatBubble, isOpen } = useChatStore()
   const isAuthPage = location.pathname.startsWith('/auth');
   const isLivePage = location.pathname.startsWith('/live/') || location.pathname.startsWith('/broadcast/');
   const isKeyboardVisible = false;
 
+  // Setup global message notifications
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const cleanup = setupGlobalMessageNotifications(
+      user.id,
+      (senderId, senderUsername, senderAvatar, isOpsMessage) => {
+        // Don't auto-open if bubble already open
+        if (isOpen) return
+        
+        // Show toast notification
+        if (isOpsMessage) {
+          toast.info(`🛡️ Officer Operations: New message from ${senderUsername}`, {
+            duration: 4000,
+            action: {
+              label: 'Open',
+              onClick: () => openChatBubble(OFFICER_GROUP_CONVERSATION_ID, '🛡️ Officer Operations', null)
+            }
+          })
+          // Auto-open OPS bubble
+          openChatBubble(OFFICER_GROUP_CONVERSATION_ID, '🛡️ Officer Operations', null)
+        } else {
+          toast.info(`💬 New message from ${senderUsername}`, {
+            duration: 4000,
+            action: {
+              label: 'Open',
+              onClick: () => openChatBubble(senderId, senderUsername, senderAvatar)
+            }
+          })
+          // Auto-open DM bubble
+          openChatBubble(senderId, senderUsername, senderAvatar)
+        }
+      }
+    )
+    
+    return cleanup
+  }, [user?.id, isOpen, openChatBubble])
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

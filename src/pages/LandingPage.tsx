@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
 import AppLayout from '@/components/layout/AppLayout';
+import EventCountdown from '@/components/EventCountdown';
 
 interface PlatformStats {
   totalUsers: number;
@@ -92,7 +93,7 @@ export default function LandingPage() {
     {
       icon: Play,
       title: 'Go Live & Get Paid',
-      description: 'Get Paid 2x a Week'
+      description: 'Get Paid Every Friday'
     },
     {
       icon: Users,
@@ -114,6 +115,9 @@ export default function LandingPage() {
   return (
     <AppLayout showSidebar={true} showHeader={true} showBottomNav={true}>
       <div className={`min-h-screen w-full ${trollCityTheme.backgrounds.primary} overflow-x-hidden relative font-sans`}>
+        {/* Event Countdown Banner */}
+        <EventCountdown />
+
         {/* Money Rain Effect */}
         {isEntering && <MoneyRain />}
 
@@ -167,7 +171,7 @@ export default function LandingPage() {
                   <div className="space-y-4">
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-4">
                       <Sparkles className="w-4 h-4 text-purple-400" />
-                      <span className="text-purple-400 font-semibold text-sm">Get Paid 2x a Week</span>
+                      <span className="text-purple-400 font-semibold text-sm">Get Paid Every Friday</span>
                     </div>
                     
                     <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black">

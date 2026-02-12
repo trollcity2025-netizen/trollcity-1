@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, MessageSquare } from 'lucide-react'
-import { supabase } from '../../../lib/supabase'
+import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, MessageSquare, Shield } from 'lucide-react'
+import { supabase, isOfficer, OFFICER_GROUP_CONVERSATION_ID } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
 import UserNameWithAge from '../../../components/UserNameWithAge'
@@ -44,6 +44,7 @@ export default function InboxSidebar({
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [isUserOfficer, setIsUserOfficer] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -53,8 +54,14 @@ export default function InboxSidebar({
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
+    
+    // Check if user is officer
+    if (user?.id) {
+      isOfficer(user.id).then(setIsUserOfficer)
+    }
+    
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [user?.id])
 
   const handleBlockUser = async (_userId: string) => {
     if (!user) return
@@ -130,6 +137,7 @@ export default function InboxSidebar({
            .from('conversation_messages')
            .select('body, created_at, sender_id')
            .eq('conversation_id', cid)
+           .is('is_deleted', false)
            .order('created_at', { ascending: false })
            .limit(1)
            .maybeSingle()
@@ -159,8 +167,36 @@ export default function InboxSidebar({
       
       const validConvs = convsWithDetails.filter(Boolean) as SidebarConversation[]
       
-      // Sort by timestamp
-      validConvs.sort((a, b) => new Date(b.last_timestamp).getTime() - new Date(a.last_timestamp).getTime())
+      // If user is officer, add Officer Operations group chat at the top
+      if (isUserOfficer) {
+        // Get latest OPS message
+        const { data: latestOpsMsg } = await supabase
+          .from('officer_chat_messages')
+          .select('content, created_at, sender_id')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        
+        const opsConv: SidebarConversation = {
+          other_user_id: OFFICER_GROUP_CONVERSATION_ID,
+          other_username: '👮 Officer Operations',
+          other_avatar_url: null,
+          last_message: latestOpsMsg?.content || 'Officer group chat',
+          last_timestamp: latestOpsMsg?.created_at || new Date().toISOString(),
+          unread_count: 0,
+          is_online: true,
+          other_created_at: new Date().toISOString()
+        }
+        
+        validConvs.unshift(opsConv)
+      }
+      
+      // Sort by timestamp (OPS will stay at top due to unshift)
+      validConvs.sort((a, b) => {
+        if (a.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return -1
+        if (b.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return 1
+        return new Date(b.last_timestamp).getTime() - new Date(a.last_timestamp).getTime()
+      })
       
       setConversations(validConvs)
       onConversationsLoaded(validConvs)
@@ -261,6 +297,8 @@ export default function InboxSidebar({
                   key={conv.other_user_id}
                   className={`relative group w-full p-4 flex items-start gap-3 hover:bg-white/5 transition-colors text-left ${
                     isActive ? 'bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-purple-500' : ''
+                  } ${
+                    conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID ? 'bg-blue-900/10 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-blue-500' : ''
                   }`}
                 >
                   <div 
@@ -269,12 +307,18 @@ export default function InboxSidebar({
                   />
 
                   <div className="relative flex-shrink-0 pointer-events-none">
-                    <img 
-                      src={conv.other_avatar_url || `https://ui-avatars.com/api/?name=${conv.other_username}&background=random`}
-                      alt={conv.other_username}
-                      className="w-12 h-12 rounded-full border border-purple-500/20"
-                    />
-                    {isOnline && (
+                    {conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID ? (
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                        <Shield className="w-6 h-6 text-white" />
+                      </div>
+                    ) : (
+                      <img 
+                        src={conv.other_avatar_url || `https://ui-avatars.com/api/?name=${conv.other_username}&background=random`}
+                        alt={conv.other_username}
+                        className="w-12 h-12 rounded-full border border-purple-500/20"
+                      />
+                    )}
+                    {(isOnline || conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID) && (
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0F0F1A]" />
                     )}
                   </div>

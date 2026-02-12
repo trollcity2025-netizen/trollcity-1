@@ -955,9 +955,11 @@ function AppContent() {
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<LandingHome />} />
-                  <Route path="/explore" element={<ExploreFeed />} />
-                  <Route path="/watch/:id" element={<BroadcastPage />} />
-
+                  <Route path="/broadcast/setup" element={<SetupPage />} />
+                  <Route path="/broadcast/:id" element={<BroadcastPage />} />
+                  <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
+                  <Route path="/broadcast/summary" element={<StreamSummary />} />
+                  
                   {/* President Routes */}
                   <Route path="/president" element={<PresidentPage />} />
                   <Route path="/president/dashboard" element={
@@ -971,11 +973,6 @@ function AppContent() {
                     </RequireRole>
                   } />
 
-                  {/* Broadcast Routes */}
-                  <Route path="/broadcast/setup" element={<SetupPage />} />
-                  <Route path="/broadcast/:id" element={<BroadcastPage />} />
-                  <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
-                  <Route path="/broadcast/summary" element={<StreamSummary />} />
                   <Route path="/dev/battle" element={<BattlePreview />} />
                   <Route path="/dev/stress-test" element={<FrontendLimitsTest />} />
 

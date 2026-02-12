@@ -1,0 +1,254 @@
+{
+  "startedAt": "2026-02-12T06:54:59.146Z",
+  "scope": "full-coverage-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 8,
+    "adminUser": true,
+    "livekit": "not used"
+  },
+  "actions": [
+    {
+      "time": "2026-02-12T06:55:00.928Z",
+      "type": "create_users",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.063Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.217Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "c9b79396-4c01-481b-a293-db4a9099ffb1",
+        "role": "admin"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.315Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "af332d08-f313-46bb-8ee4-eb9d4368aa18",
+        "role": "secretary"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.414Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "329c0e4f-3e76-4713-aa84-83c235a0687d",
+        "role": "lead_troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.502Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "534eea2b-d837-4bd0-bf44-9e6d1baae191",
+        "role": "troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.802Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "d337c4e0-049c-47fa-9882-c4a930610c37",
+        "role": "troller"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:01.907Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "3aaa9c74-ea27-4a3f-bf7f-b796f515334e",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:02.818Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:02.908Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "f72eb6bb-49d7-40ab-82f8-b48e62218ed9"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:03.057Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 3
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:03.142Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:03.553Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "af332d08-f313-46bb-8ee4-eb9d4368aa18",
+        "receiverId": "329c0e4f-3e76-4713-aa84-83c235a0687d",
+        "streamId": "dbe6382a-4221-4e42-ae81-72a6d958f417"
+      }
+    },
+    {
+      "time": "2026-02-12T06:55:08.766Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 50,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-12T06:55:01.613Z",
+      "step": "set_role",
+      "warning": "seller: new row for relation \"user_profiles\" violates check constraint \"chk_valid_role\""
+    },
+    {
+      "time": "2026-02-12T06:55:01.709Z",
+      "step": "set_role",
+      "warning": "pastor: new row for relation \"user_profiles\" violates check constraint \"user_profiles_role_check\""
+    },
+    {
+      "time": "2026-02-12T06:55:04.388Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:04.563Z",
+      "step": "purchase_broadcast_theme",
+      "warning": "Could not find the function public.purchase_broadcast_theme(p_cost, p_name, p_theme_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:04.848Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T06:55:04.928Z",
+      "step": "purchase_landlord_license",
+      "warning": "Could not choose the best candidate function between: public.purchase_landlord_license(), public.purchase_landlord_license(p_use_loan => boolean)"
+    },
+    {
+      "time": "2026-02-12T06:55:05.582Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:05.761Z",
+      "step": "purchase_broadcast_theme",
+      "warning": "Could not find the function public.purchase_broadcast_theme(p_cost, p_name, p_theme_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:06.038Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T06:55:06.122Z",
+      "step": "purchase_landlord_license",
+      "warning": "Could not choose the best candidate function between: public.purchase_landlord_license(), public.purchase_landlord_license(p_use_loan => boolean)"
+    },
+    {
+      "time": "2026-02-12T06:55:06.755Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:06.937Z",
+      "step": "purchase_broadcast_theme",
+      "warning": "Could not find the function public.purchase_broadcast_theme(p_cost, p_name, p_theme_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:07.197Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T06:55:07.281Z",
+      "step": "purchase_landlord_license",
+      "warning": "Could not choose the best candidate function between: public.purchase_landlord_license(), public.purchase_landlord_license(p_use_loan => boolean)"
+    },
+    {
+      "time": "2026-02-12T06:55:07.917Z",
+      "step": "buy_car_insurance",
+      "warning": "Could not find the function public.buy_car_insurance(p_car_id, p_option_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:08.085Z",
+      "step": "purchase_broadcast_theme",
+      "warning": "Could not find the function public.purchase_broadcast_theme(p_cost, p_name, p_theme_id) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:08.355Z",
+      "step": "purchase_house",
+      "warning": "No houses_catalog found or readable"
+    },
+    {
+      "time": "2026-02-12T06:55:08.447Z",
+      "step": "purchase_landlord_license",
+      "warning": "Could not choose the best candidate function between: public.purchase_landlord_license(), public.purchase_landlord_license(p_use_loan => boolean)"
+    },
+    {
+      "time": "2026-02-12T06:55:08.533Z",
+      "step": "admin_toggle_broadcast_lockdown",
+      "warning": "Could not find the function public.admin_toggle_broadcast_lockdown(p_enable) in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:08.681Z",
+      "step": "get_all_creator_applications",
+      "warning": "Could not find the function public.get_all_creator_applications without parameters in the schema cache"
+    },
+    {
+      "time": "2026-02-12T06:55:10.772Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T06:55:10.911Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T06:55:11.124Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    },
+    {
+      "time": "2026-02-12T06:55:11.303Z",
+      "step": "cleanup",
+      "warning": "auth.deleteUser: Database error deleting user"
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 8,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 24,
+    "actions": 14
+  }
+}

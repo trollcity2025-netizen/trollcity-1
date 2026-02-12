@@ -199,6 +199,61 @@ if (typeof window !== 'undefined' && env.PROD) {
         void initPushNotifications()
       }
     })
+
+    const initOneSignalTokenSync = () => {
+      if (typeof window === 'undefined') return
+      const deferred = (window as any).OneSignalDeferred
+      if (!Array.isArray(deferred)) return
+
+      deferred.push(async (OneSignal: any) => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession()
+          const userId = sessionData?.session?.user?.id
+          if (!userId) return
+
+          const saveToken = async (token?: string | null) => {
+            if (!token) return
+            await supabase.from('onesignal_tokens').upsert(
+              {
+                user_id: userId,
+                token,
+                is_active: true,
+                updated_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+              },
+              { onConflict: 'token' }
+            )
+          }
+
+          let token: string | null | undefined = null
+          if (OneSignal?.User?.PushSubscription?.getId) {
+            token = await OneSignal.User.PushSubscription.getId()
+          } else if (OneSignal?.User?.PushSubscription?.id) {
+            token = OneSignal.User.PushSubscription.id
+          } else if (OneSignal?.getUserId) {
+            token = await OneSignal.getUserId()
+          }
+
+          await saveToken(token)
+
+          if (OneSignal?.User?.PushSubscription?.addEventListener) {
+            OneSignal.User.PushSubscription.addEventListener('change', (event: any) => {
+              const nextId = event?.current?.id || event?.id
+              if (nextId) void saveToken(nextId)
+            })
+          }
+        } catch (err) {
+          console.warn('OneSignal token sync failed', err)
+        }
+      })
+    }
+
+    initOneSignalTokenSync()
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        initOneSignalTokenSync()
+      }
+    })
   })
 }
 

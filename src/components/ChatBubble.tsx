@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { X, Minus, Check, CheckCheck } from 'lucide-react'
-import { supabase, createConversation, getConversationMessages, markConversationRead } from '../lib/supabase'
+import { X, Minus, Check, CheckCheck, Shield } from 'lucide-react'
+import { supabase, createConversation, getConversationMessages, markConversationRead, OFFICER_GROUP_CONVERSATION_ID, sendOfficerMessage } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useChatStore } from '../lib/chatStore'
 import { usePresenceStore } from '../lib/presenceStore'
@@ -34,6 +34,7 @@ export default function ChatBubble() {
   const [actualConversationId, setActualConversationId] = useState<string | null>(null)
   const [isMinimized, setIsMinimized] = useState(false)
   const [isTyping, _setIsTyping] = useState(false)
+  const [isOpsConversation, setIsOpsConversation] = useState(false)
   const [activeUserCreatedAt, setActiveUserCreatedAt] = useState<string | undefined>(undefined)
   const [activeUserGlowingColor, setActiveUserGlowingColor] = useState<string | null>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -54,10 +55,11 @@ export default function ChatBubble() {
     const currentActiveUserId = activeUserId
 
     const initChat = async () => {
-      // Reset conversation ID and messages when switching users
-      if (actualConversationId !== null) {
-        setActualConversationId(null)
-        setMessages([])
+      // Check if this is the OPS group conversation
+      if (activeUserId === OFFICER_GROUP_CONVERSATION_ID) {
+        setIsOpsConversation(true)
+        setActualConversationId(OFFICER_GROUP_CONVERSATION_ID)
+        return
       }
       
       // Fetch active user's created_at
@@ -382,36 +384,56 @@ export default function ChatBubble() {
       <div className="bg-[#1F1F2E] p-3 flex items-center justify-between border-b border-purple-500/20 shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
-             <img 
-              src={activeUserAvatar || `https://ui-avatars.com/api/?name=${activeUsername}&background=random`}
-              alt={activeUsername || ''}
-              className="w-8 h-8 rounded-full border border-purple-500/20"
-            />
-                         <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#1F1F2E] ${activeUserId && onlineUserIds.includes(activeUserId) ? 'bg-green-500' : 'bg-gray-500'}`} />
+            {isOpsConversation ? (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+            ) : (
+              <>
+                <img 
+                  src={activeUserAvatar || `https://ui-avatars.com/api/?name=${activeUsername}&background=random`}
+                  alt={activeUsername || ''}
+                  className="w-8 h-8 rounded-full border border-purple-500/20"
+                />
+                <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#1F1F2E] ${activeUserId && onlineUserIds.includes(activeUserId) ? 'bg-green-500' : 'bg-gray-500'}`} />
+              </>
+            )}
           </div>
           <div>
-            {activeUsername && (
-              <UserNameWithAge
-                user={{
-                  username: activeUsername,
-                  created_at: activeUserCreatedAt
-                }}
-                className="font-bold text-white hover:text-purple-400 transition-colors text-sm"
-              />
+            {isOpsConversation ? (
+              <>
+                <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-blue-400" />
+                  Officer Operations
+                </div>
+                <div className="text-[10px] text-blue-400">Officer Group Chat</div>
+              </>
+            ) : (
+              <>
+                {activeUsername && (
+                  <UserNameWithAge
+                    user={{
+                      username: activeUsername,
+                      created_at: activeUserCreatedAt
+                    }}
+                    className="font-bold text-white hover:text-purple-400 transition-colors text-sm"
+                  />
+                )}
+                <div className="text-[10px] flex items-center gap-1">
+                  {activeUserId && onlineUserIds.includes(activeUserId) ? (
+                    <>
+                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                      <span className="text-green-400">Online</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full" />
+                      <span className="text-gray-500">Offline</span>
+                    </>
+                  )}
+                </div>
+              </>
             )}
-            <div className="text-[10px] flex items-center gap-1">
-              {activeUserId && onlineUserIds.includes(activeUserId) ? (
-                <>
-                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                  <span className="text-green-400">Online</span>
-                </>
-              ) : (
-                <>
-                  <span className="w-1.5 h-1.5 bg-gray-500 rounded-full" />
-                  <span className="text-gray-500">Offline</span>
-                </>
-              )}
-            </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
