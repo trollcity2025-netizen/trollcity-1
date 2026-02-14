@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Coins, CreditCard, Smartphone } from 'lucide-react';
+import { X, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
@@ -161,7 +161,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                         }}>
                             <PayPalButtons 
                                 style={{ layout: "vertical", color: "gold", shape: "pill", label: "paypal", height: 48 }}
-                                createOrder={async (data, actions) => {
+                                createOrder={async (_data, _actions) => {
                                   try {
                                       const { data: orderData, error } = await supabase.functions.invoke('paypal-create-order', {
                                         body: {
@@ -180,7 +180,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                                       return "";
                                   }
                                 }}
-                                onApprove={async (data, actions) => {
+                                onApprove={async (data, _actions) => {
                                   try {
                                       const { error } = await supabase.functions.invoke('paypal-complete-order', {
                                         body: {

@@ -64,6 +64,9 @@ const EventCountdown: React.FC = () => {
     <div className="w-full bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-900 border-b border-white/10 overflow-hidden relative group">
       {/* Animated background pulse */}
       <div className="absolute inset-0 bg-white/5 animate-pulse" />
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="banner-rgb-title">Troll City</div>
+      </div>
       
       <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
         <div className="flex items-center gap-3">
@@ -111,6 +114,29 @@ const EventCountdown: React.FC = () => {
           }
           .animate-spin-slow {
             animation: spin-slow 8s linear infinite;
+          }
+          @keyframes gradient-text {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+          }
+          @keyframes rgb-glow {
+            0% { text-shadow: 0 0 18px rgba(255,0,128,0.6), 0 0 40px rgba(0,240,255,0.45); }
+            50% { text-shadow: 0 0 26px rgba(0,255,128,0.7), 0 0 60px rgba(255,200,0,0.5); }
+            100% { text-shadow: 0 0 18px rgba(255,0,128,0.6), 0 0 40px rgba(0,240,255,0.45); }
+          }
+          .banner-rgb-title {
+            font-size: clamp(2.2rem, 5vw, 5rem);
+            font-weight: 900;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: transparent;
+            background-image: linear-gradient(90deg, #ff006e, #00f5ff, #ffee00, #7c3aed);
+            background-size: 300% 100%;
+            background-clip: text;
+            animation: gradient-text 6s ease-in-out infinite, rgb-glow 4.5s ease-in-out infinite;
+            opacity: 0.55;
+            filter: drop-shadow(0 0 20px rgba(0,0,0,0.4));
+            white-space: nowrap;
           }
         `}
       </style>

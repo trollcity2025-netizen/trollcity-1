@@ -55,7 +55,7 @@ const ReportsPanel = () => {
   const loadBans = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("admin-actions", {
-        body: { action: "get_banned_users" },
+        body: { action: "get_banned_users", limit: 100 },
       });
       if (error) throw error;
       setBans(data?.users || []);

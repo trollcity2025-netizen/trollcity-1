@@ -22,6 +22,13 @@ export default function SessionMonitor() {
 
     // Initial check
     const checkSession = async () => {
+      // Validate sessionId is a proper UUID to avoid 400 errors
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!sessionId || sessionId === 'undefined' || !uuidRegex.test(sessionId)) {
+        console.log('[SessionMonitor] Invalid or missing session ID:', sessionId);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('active_sessions')
         .select('is_active')
@@ -44,6 +51,12 @@ export default function SessionMonitor() {
     }
     
     checkSession()
+
+    // Only subscribe if we have a valid session ID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!sessionId || sessionId === 'undefined' || !uuidRegex.test(sessionId)) {
+      return;
+    }
 
     // Subscribe to changes
     const channel = supabase

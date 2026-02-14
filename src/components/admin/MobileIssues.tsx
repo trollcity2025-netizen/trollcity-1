@@ -61,7 +61,7 @@ export default function MobileIssues() {
       if (error) throw error;
       setLogs(logs.filter(l => l.id !== id));
       toast.success('Log deleted');
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete log');
     }
   };
@@ -78,7 +78,7 @@ export default function MobileIssues() {
       if (error) throw error;
       setLogs([]);
       toast.success('All logs cleared');
-    } catch (err) {
+    } catch {
       toast.error('Failed to clear logs');
     }
   };

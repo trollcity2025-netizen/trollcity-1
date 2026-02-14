@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mic, MicOff, Users, MessageSquare, Hand, UserMinus, Settings, Coins, Map } from 'lucide-react';
+import { Mic, MicOff, Users, MessageSquare, Hand, UserMinus, UserPlus, Settings, Coins, Map } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { LiveKitRoom, useParticipants, useRoomContext, RoomAudioRenderer } from '@livekit/components-react';
@@ -20,6 +20,7 @@ interface Room {
   host_id: string;
   is_live: boolean;
   viewer_count: number;
+  current_viewers?: number;
   started_at?: string;
   guest_price: number;
 }
@@ -49,7 +50,8 @@ const PodRoomContent = ({
   onRemoveSpeaker,
   onCancelRequest,
   isStaff,
-  canPublish
+  canPublish,
+  isGuest
 }: { 
   room: Room, 
   currentUser: any, 
@@ -61,7 +63,8 @@ const PodRoomContent = ({
   onRemoveSpeaker: (userId: string) => void,
   onCancelRequest: () => void,
   isStaff: boolean,
-  canPublish: boolean
+  canPublish: boolean,
+  isGuest?: boolean
 }) => {
   const participants = useParticipants();
   const liveKitRoom = useRoomContext();
@@ -448,14 +451,19 @@ const PodRoomContent = ({
             ) : (
                 // Listener Controls
                 <button 
-                    onClick={isHandRaised ? onCancelRequest : onRequestSpeak}
+                    onClick={isGuest ? () => navigate('/auth') : (isHandRaised ? onCancelRequest : onRequestSpeak)}
                     className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all transform hover:scale-105 ${
                         isHandRaised 
                         ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
                         : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30'
                     }`}
                 >
-                    {isHandRaised ? (
+                    {isGuest ? (
+                        <>
+                            <UserPlus className="w-5 h-5" />
+                            Sign in to Speak
+                        </>
+                    ) : isHandRaised ? (
                         <>
                             <Hand className="w-5 h-5" />
                             Cancel Request
@@ -524,11 +532,11 @@ export default function TrollPodRoom() {
     }
 
     const fetchRoom = async () => {
-      const { data, error } = await supabase
-        .from('pod_rooms')
-        .select('*')
-        .eq('id', roomId)
-        .maybeSingle();
+        const { data, error } = await supabase
+          .from('pod_rooms')
+          .select('*, current_viewers')
+          .eq('id', roomId)
+          .maybeSingle();
 
       if (error || !data) {
         toast.error('Room not found or ended');
@@ -543,6 +551,8 @@ export default function TrollPodRoom() {
       }
 
       setRoom(data);
+      const count = data.current_viewers || data.viewer_count || 0;
+      setParticipantCount(count);
     };
 
     fetchRoom();
@@ -561,7 +571,8 @@ export default function TrollPodRoom() {
           navigate('/pods');
         }
         setRoom(payload.new as Room);
-        if (payload.new.viewer_count) setParticipantCount(payload.new.viewer_count);
+        const newCount = payload.new.current_viewers || payload.new.viewer_count;
+        if (newCount !== undefined) setParticipantCount(newCount);
       })
       .subscribe();
 
@@ -644,7 +655,7 @@ export default function TrollPodRoom() {
             table: 'pod_bans', 
             filter: `room_id=eq.${roomId}` 
         }, (payload) => {
-            if (payload.new.user_id === currentUser.id) {
+            if (currentUser && payload.new.user_id === currentUser.id) {
                 toast.error('You have been kicked and banned.');
                 navigate('/pods');
             }
@@ -824,6 +835,7 @@ export default function TrollPodRoom() {
 
   // LiveKit Token Logic
   const isHost = currentUser?.id === room?.host_id;
+  const isGuest = !currentUser;
   const myRole = participantsData.find(p => p.user_id === currentUser?.id)?.role;
   const canPublish = isHost || myRole === 'speaker';
   const isStaff = profile?.role === 'admin' || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.is_admin || profile?.is_troll_officer || false;
@@ -834,6 +846,7 @@ export default function TrollPodRoom() {
     userId: currentUser?.id,
     isHost: isHost,
     canPublish: canPublish,
+    isGuest: isGuest,
     enabled: true // Always fetch token for everyone (LiveKit only)
   });
 
@@ -866,6 +879,7 @@ export default function TrollPodRoom() {
         onCancelRequest={handleCancelRequest}
         isStaff={isStaff}
         canPublish={canPublish}
+        isGuest={isGuest}
       />
     </LiveKitRoom>
   );

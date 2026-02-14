@@ -12,7 +12,6 @@ import { getLevelName } from '../lib/xp';
 import { ENTRANCE_EFFECTS_MAP, EntranceEffect } from '../lib/entranceEffects';
 import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw, Home, Mars, Venus, Trash2, CheckCircle, CreditCard, FileText, Palette, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { deductCoins } from '@/lib/coinTransactions';
 import { PERK_CONFIG } from '@/lib/perkSystem';
 import { canMessageAdmin, getGlowingTextStyle } from '@/lib/perkEffects';
 import { GlowingUsernameColorPicker } from '../components/GlowingUsernameColorPicker';

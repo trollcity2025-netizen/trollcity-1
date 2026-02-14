@@ -16,7 +16,7 @@ export default function ChurchPage() {
   const [isCancelled, setIsCancelled] = useState(false);
   const [timeUntilOpen, setTimeUntilOpen] = useState('');
   const [loading, setLoading] = useState(true);
-  const [pastorId, setPastorId] = useState<string | null>(null);
+  const [_pastorId, setPastorId] = useState<string | null>(null);
 
   // Hooks must be called unconditionally at the top level
   useEffect(() => {

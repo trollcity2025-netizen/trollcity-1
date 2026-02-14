@@ -5,13 +5,15 @@ import { supabase } from '../lib/supabase';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import UserNameWithAge from '../components/UserNameWithAge';
 import { toast } from 'sonner';
+import { VirtuosoGrid } from 'react-virtuoso';
 
 interface Broadcast {
   id: string;
   broadcaster_id: string;
   title: string;
   category: string;
-  viewer_count: number;
+  viewer_count?: number;
+  current_viewers: number;
   started_at: string;
   thumbnail_url?: string;
   type: 'stream' | 'pod';
@@ -39,6 +41,10 @@ export default function ExploreFeed() {
   const ITEMS_PER_PAGE = 20;
 
   const fetchBroadcasts = useCallback(async (targetPage: number, isLoadMore?: boolean) => {
+    // Thundering Herd Prevention: Add random jitter to fetch (0-500ms)
+    // This prevents 100k users from hitting the DB at the exact same millisecond on route enter
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 500));
+
     try {
       if (targetPage === 0) setLoading(true);
       const from = targetPage * ITEMS_PER_PAGE;
@@ -97,6 +103,7 @@ export default function ExploreFeed() {
             title: pod.title,
             category: 'podcast',
             viewer_count: pod.viewer_count || 0,
+            current_viewers: pod.viewer_count || 0,
             started_at: pod.started_at,
             thumbnail_url: undefined, // Pods don't have thumbnails usually
             type: 'pod',
@@ -137,15 +144,48 @@ export default function ExploreFeed() {
   useEffect(() => {
     fetchBroadcasts(0, false);
     
-    // Polling every 30s - resets list to keep "Top" fresh
+    // Polling every 60s as a fallback - resets list to keep "Top" fresh
     const interval = setInterval(() => {
        if (window.scrollY < 500) {
          fetchBroadcasts(0, false);
        }
-    }, 30000);
+    }, 60000);
+
+    // Real-time subscription for live status changes
+    const streamsChannel = supabase.channel('explore_streams')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'streams'
+        },
+        () => {
+          // Any change to streams (new stream, ended stream, viewer count change)
+          // We could be more surgical but refetching the first page is safest for ordering
+          if (window.scrollY < 500) {
+            fetchBroadcasts(0, false);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pod_rooms'
+        },
+        () => {
+          if (window.scrollY < 500) {
+            fetchBroadcasts(0, false);
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
       clearInterval(interval);
+      supabase.removeChannel(streamsChannel);
     };
   }, [filter, fetchBroadcasts]);
 
@@ -227,14 +267,14 @@ export default function ExploreFeed() {
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
               <span className={trollCityTheme.text.secondary}>
-                {broadcasts.reduce((sum, b) => sum + b.viewer_count, 0).toLocaleString()} Total Viewers
+                {broadcasts.reduce((sum, b) => sum + (b.current_viewers || b.viewer_count || 0), 0).toLocaleString()} Total Viewers
               </span>
             </div>
           </div>
         </div>
 
         {/* Broadcasts Grid */}
-        {loading ? (
+        {loading && broadcasts.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl overflow-hidden animate-pulse`}>
@@ -253,8 +293,11 @@ export default function ExploreFeed() {
             <p className={trollCityTheme.text.muted}>Check back later to see who is streaming.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {broadcasts.map((broadcast) => (
+          <VirtuosoGrid
+            useWindowScroll
+            data={broadcasts}
+            listClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            itemContent={(index, broadcast) => (
               <div
                 key={broadcast.id}
                 onClick={() => handleBroadcastClick(broadcast)}
@@ -284,7 +327,7 @@ export default function ExploreFeed() {
                   <div className="absolute top-3 right-3 flex items-center gap-1 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded-full">
                     <Eye className="w-3 h-3 text-white" />
                     <span className="text-white font-semibold text-xs">
-                      {broadcast.viewer_count.toLocaleString()}
+                      {(broadcast.current_viewers || broadcast.viewer_count || 0).toLocaleString()}
                     </span>
                   </div>
 
@@ -345,8 +388,8 @@ export default function ExploreFeed() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
 
         {/* Load More Button */}

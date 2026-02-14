@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { 
   Briefcase, Calendar, Clock, Users, Shield, Video, 
   CheckCircle, FileText, Star, ArrowRight,
-  Cross, Music, Gamepad2, X, Store
+  Cross, X, Store
 } from 'lucide-react'
 
 // Job position type
@@ -602,7 +602,7 @@ export default function Career() {
             ) : (
               <div className="divide-y divide-[#2C2C2C]">
                 {applications.map((app) => {
-                  const position = jobPositions.find(p => p.id === app.type)
+                  const _position = jobPositions.find(p => p.id === app.type)
                   return (
                     <div key={app.id} className="p-6 flex items-center justify-between hover:bg-[#252525] transition-colors">
                       <div className="flex items-center gap-4">

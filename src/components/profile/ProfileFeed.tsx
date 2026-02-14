@@ -16,7 +16,7 @@ export default function ProfileFeed({ userId }: ProfileFeedProps) {
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
   const [isPosting, setIsPosting] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [_showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
@@ -62,7 +62,7 @@ export default function ProfileFeed({ userId }: ProfileFeedProps) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const onEmojiClick = (emojiData: any) => {
+  const _onEmojiClick = (emojiData: any) => {
     setContent(prev => prev + emojiData.emoji);
     setShowEmojiPicker(false);
   };

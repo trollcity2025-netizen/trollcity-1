@@ -166,7 +166,7 @@ async function connectParticipant({ token, livekitUrl, publishAudio, publishVide
       const audioTrack = LocalAudioTrack.createAudioTrack('mic', audioSource);
       await room.localParticipant.publishTrack(audioTrack);
       metrics.publishSuccess += 1;
-    } catch (err) {
+    } catch {
       metrics.publishFailures += 1;
     }
   }
@@ -179,7 +179,7 @@ async function connectParticipant({ token, livekitUrl, publishAudio, publishVide
       const videoTrack = LocalVideoTrack.createVideoTrack('camera', videoSource);
       await room.localParticipant.publishTrack(videoTrack);
       metrics.publishSuccess += 1;
-    } catch (err) {
+    } catch {
       metrics.publishFailures += 1;
     }
   }
@@ -227,7 +227,7 @@ async function main() {
           });
           await sleep(CONFIG.runtimeSeconds * 1000);
           room.disconnect();
-        } catch (err) {
+        } catch {
           metrics.connectFailures += 1;
         }
       });

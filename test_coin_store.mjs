@@ -66,7 +66,7 @@ async function initSupabase() {
   logSuccess('Supabase client initialized');
   
   // Verify connection
-  const { data, error } = await supabase.from('user_profiles').select('id').limit(1);
+  const { error } = await supabase.from('user_profiles').select('id').limit(1);
   if (error) {
     logWarning('Could not verify connection: ' + error.message);
   } else {
@@ -94,7 +94,7 @@ async function testRPCChecks() {
 
   for (const func of rpcFunctions) {
     try {
-      const { data, error } = await supabase.rpc(func.name, func.params);
+      const { error } = await supabase.rpc(func.name, func.params);
       
       // Some functions may fail due to constraints, but that's okay for availability check
       if (error && !error.message.includes('function') && !error.message.includes('不存在')) {

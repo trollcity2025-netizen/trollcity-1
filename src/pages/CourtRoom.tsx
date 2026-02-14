@@ -18,7 +18,7 @@ import CourtGeminiModal from "../components/CourtGeminiModal";
 import CourtDocketModal from "../components/CourtDocketModal";
 import { generateSummaryFeedback } from "../lib/courtAi";
 import { getGlowingTextStyle } from "../lib/perkEffects";
-import { generateUUID } from "../lib/uuid";
+// import { generateUUID } from "../lib/uuid";
 
 const CourtParticipantLabel = ({ trackRef }: { trackRef: any }) => {
   const [username, setUsername] = useState<string | null>(null);
@@ -1104,6 +1104,7 @@ export default function CourtRoom() {
           user_id: defendant,
           release_time: releaseTime.toISOString(),
           reason: sentenceDetails.reason,
+          created_at: new Date().toISOString()
         });
       }
     } catch (err) {

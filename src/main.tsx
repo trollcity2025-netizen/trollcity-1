@@ -11,7 +11,6 @@ import { GlobalAppProvider } from './contexts/GlobalAppContext'
 import { supabase } from './lib/supabase'
 import { initTelemetry } from './lib/telemetry'
 import { initMobilePlatform, isMobilePlatform } from './lib/mobilePlatform'
-import { initializeOfflineNotifications } from './services/offlineNotificationService'
 
 // App version for cache busting
 const env = import.meta.env

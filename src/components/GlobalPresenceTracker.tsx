@@ -5,54 +5,49 @@ import { usePresenceStore } from '../lib/presenceStore';
 
 export default function GlobalPresenceTracker() {
   const { user } = useAuthStore();
-  const { setOnlineCount, setOnlineUserIds } = usePresenceStore();
+  const setOnlineCount = usePresenceStore(state => state.setOnlineCount);
 
   useEffect(() => {
     if (!user?.id) return;
 
-    // Initial heartbeat
-    const sendHeartbeat = async () => {
+    // Heartbeat & Count fetch
+    const syncPresence = async () => {
       try {
+        // 1. Send heartbeat
         await supabase.rpc('heartbeat_presence');
+        
+        // 2. Fetch total online count (approximate from user_presence table)
+        // This replaces the expensive Realtime Presence Roster at 10k users.
+        const twoMinutesAgo = new Date(Date.now() - 120000).toISOString();
+        const { count, error } = await supabase
+          .from('user_presence')
+          .select('*', { count: 'exact', head: true })
+          .gt('last_seen_at', twoMinutesAgo);
+        
+        if (!error && count !== null) {
+          setOnlineCount(count);
+        }
       } catch (err) {
-        console.error('Heartbeat failed:', err);
+        console.error('Presence sync failed:', err);
       }
     };
 
-    sendHeartbeat();
+    syncPresence();
 
-    // Heartbeat every 30 seconds
-    const interval = setInterval(sendHeartbeat, 30000);
+    // Sync every 30 seconds
+    const interval = setInterval(syncPresence, 30000);
 
-    const channel = supabase.channel('global_online_users', {
-      config: {
-        presence: {
-          key: user.id,
-        },
-      },
-    });
+    // We keep the channel but DO NOT track presence.
+    // This allows us to still receive broadcast events if needed without the roster cost.
+    const channel = supabase.channel('global_metrics');
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const userIds = Object.keys(state);
-        setOnlineCount(userIds.length);
-        setOnlineUserIds(userIds);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            online_at: new Date().toISOString(),
-            user_id: user.id,
-          });
-        }
-      });
+    channel.subscribe();
 
     return () => {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [user?.id, setOnlineCount, setOnlineUserIds]);
+  }, [user?.id, setOnlineCount]);
 
   return null;
 }

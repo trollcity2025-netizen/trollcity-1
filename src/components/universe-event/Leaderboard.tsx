@@ -4,6 +4,7 @@ import { Participant } from './types'
 import { Crown, Medal, User } from 'lucide-react'
 import { useAuthStore } from '../../lib/store'
 import UserNameWithAge from '../UserNameWithAge'
+import { Virtuoso } from 'react-virtuoso'
 
 interface LeaderboardProps {
   tournamentId: string
@@ -17,8 +18,6 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
   useEffect(() => {
     const fetchLeaderboard = async () => {
       setLoading(true)
-      // Fetch top 50 participants ordered by points/placement
-      // Assuming placement is already calculated or we sort by points
       const { data, error } = await supabase
         .from('tournament_participants')
         .select(`
@@ -36,7 +35,7 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
         `)
         .eq('tournament_id', tournamentId)
         .order('points', { ascending: false })
-        .limit(50)
+        .limit(100) // Increased limit for scalability, virtualization handles it
   
       if (error) {
         console.error('Error fetching leaderboard:', error)
@@ -44,7 +43,7 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
         const mappedData = data.map((p: any, index: number) => ({
           ...p,
           user_profile: p.user_profiles,
-          placement: index + 1 // Calculate rank dynamically if not present
+          placement: index + 1
         }))
         setParticipants(mappedData)
       }
@@ -76,8 +75,76 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
     }
   }
 
+  const renderParticipant = (index: number, p: Participant) => {
+    const isMe = user?.id === p.user_id
+    return (
+      <div className="pb-2">
+        <div 
+          className={`group relative flex items-center gap-4 p-4 rounded-xl border transition-all duration-300 ${
+            isMe 
+              ? 'bg-purple-900/20 border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.15)] backdrop-blur-md' 
+              : 'bg-black/40 border-white/5 hover:border-purple-500/30 hover:bg-purple-900/10 backdrop-blur-sm'
+          }`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl pointer-events-none" />
+
+          <div className="flex items-center justify-center w-10 shrink-0 relative z-10">
+            {getRankIcon(p.placement || 0)}
+          </div>
+          
+          <div className="relative z-10">
+            <div className={`h-12 w-12 rounded-full flex items-center justify-center overflow-hidden shrink-0 border-2 ${isMe ? 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'border-white/10 group-hover:border-purple-500/30 transition-colors'}`}>
+              {p.user_profile?.avatar_url ? (
+                <img src={p.user_profile.avatar_url} alt={p.user_profile.username} className="h-full w-full object-cover" />
+              ) : (
+                <User className={`h-6 w-6 ${isMe ? 'text-purple-300' : 'text-gray-500'}`} />
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0 relative z-10">
+            <div className="flex items-center gap-2">
+              <UserNameWithAge 
+                user={{
+                   username: p.user_profile?.username || 'Unknown User',
+                   id: p.user_id,
+                   created_at: p.user_profile?.created_at,
+                   rgb_username_expires_at: p.user_profile?.rgb_username_expires_at,
+                   glowing_username_color: p.user_profile?.glowing_username_color
+                }}
+                className={`font-bold truncate text-lg ${isMe ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-white' : 'text-gray-200 group-hover:text-white transition-colors'}`}
+              />
+              {isMe && (
+                <span className="text-[10px] bg-purple-500 text-white px-2 py-0.5 rounded-full font-bold shadow-[0_0_10px_rgba(168,85,247,0.4)] tracking-wider">
+                  YOU
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500 flex items-center gap-3 mt-1">
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500/50"></span>
+                {p.wins || 0} Wins
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500/50"></span>
+                {p.losses || 0} Losses
+              </span>
+            </div>
+          </div>
+
+          <div className="text-right shrink-0 relative z-10">
+            <div className="text-2xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 group-hover:from-purple-200 group-hover:to-white transition-all">
+              {p.points?.toLocaleString() || 0}
+            </div>
+            <div className="text-[10px] text-purple-400/60 uppercase tracking-widest font-bold">Points</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-[600px]">
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -85,81 +152,17 @@ export default function Leaderboard({ tournamentId }: LeaderboardProps) {
           ))}
         </div>
       ) : (
-        <div className="space-y-2">
-          {participants.map((p) => {
-             const isMe = user?.id === p.user_id
-             return (
-              <div 
-                key={p.user_id} 
-                className={`group relative flex items-center gap-4 p-4 rounded-xl border transition-all duration-300 ${
-                  isMe 
-                    ? 'bg-purple-900/20 border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.15)] backdrop-blur-md' 
-                    : 'bg-black/40 border-white/5 hover:border-purple-500/30 hover:bg-purple-900/10 backdrop-blur-sm'
-                }`}
-              >
-                {/* Glow effect for hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl pointer-events-none" />
-
-                <div className="flex items-center justify-center w-10 shrink-0 relative z-10">
-                  {getRankIcon(p.placement || 0)}
-                </div>
-                
-                <div className="relative z-10">
-                  <div className={`h-12 w-12 rounded-full flex items-center justify-center overflow-hidden shrink-0 border-2 ${isMe ? 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'border-white/10 group-hover:border-purple-500/30 transition-colors'}`}>
-                    {p.user_profile?.avatar_url ? (
-                      <img src={p.user_profile.avatar_url} alt={p.user_profile.username} className="h-full w-full object-cover" />
-                    ) : (
-                      <User className={`h-6 w-6 ${isMe ? 'text-purple-300' : 'text-gray-500'}`} />
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 relative z-10">
-                  <div className="flex items-center gap-2">
-                    <UserNameWithAge 
-                      user={{
-                         username: p.user_profile?.username || 'Unknown User',
-                         id: p.user_id,
-                         created_at: p.user_profile?.created_at,
-                         rgb_username_expires_at: p.user_profile?.rgb_username_expires_at,
-                         glowing_username_color: p.user_profile?.glowing_username_color
-                      }}
-                      className={`font-bold truncate text-lg ${isMe ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-white' : 'text-gray-200 group-hover:text-white transition-colors'}`}
-                    />
-                    {isMe && (
-                      <span className="text-[10px] bg-purple-500 text-white px-2 py-0.5 rounded-full font-bold shadow-[0_0_10px_rgba(168,85,247,0.4)] tracking-wider">
-                        YOU
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 flex items-center gap-3 mt-1">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500/50"></span>
-                      {p.wins || 0} Wins
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500/50"></span>
-                      {p.losses || 0} Losses
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0 relative z-10">
-                  <div className="text-2xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 group-hover:from-purple-200 group-hover:to-white transition-all">
-                    {p.points?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-[10px] text-purple-400/60 uppercase tracking-widest font-bold">Points</div>
-                </div>
-              </div>
-            )
-          })}
-          
-          {participants.length === 0 && (
-             <div className="text-center py-12 border border-dashed border-gray-800 rounded-xl bg-black/20">
-               <div className="text-gray-500">No participants yet. Be the first to join!</div>
-             </div>
-          )}
-        </div>
+        participants.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-gray-800 rounded-xl bg-black/20">
+            <div className="text-gray-500">No participants yet. Be the first to join!</div>
+          </div>
+        ) : (
+          <Virtuoso
+            style={{ height: '100%' }}
+            data={participants}
+            itemContent={renderParticipant}
+          />
+        )
       )}
     </div>
   )

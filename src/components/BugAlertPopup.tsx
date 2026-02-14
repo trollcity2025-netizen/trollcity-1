@@ -19,7 +19,7 @@ export function BugAlertPopup({ maxVisible = 3 }: BugAlertPopupProps) {
     markAsRead, 
     acknowledgeAlert, 
     dismissAlert,
-    removeAlert,
+    removeAlert: _removeAlert,
   } = useBugAlertStore();
   
   const [expandedAlert, setExpandedAlert] = useState<string | null>(null);

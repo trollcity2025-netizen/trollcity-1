@@ -21,7 +21,7 @@ export default function StreamSummary() {
       try {
         const { data: stream, error } = await supabase
           .from('streams')
-          .select('title, viewer_count')
+          .select('title, viewer_count, current_viewers')
           .eq('id', streamId)
           .single();
 
@@ -31,7 +31,7 @@ export default function StreamSummary() {
         // Since we don't have a guaranteed stats table for every stream yet, we use what we have
         setStats({
           title: stream.title || 'Broadcast Ended',
-          viewers: stream.viewer_count || 0,
+          viewers: stream.current_viewers || stream.viewer_count || 0,
           likes: 0, // Not stored on streams table by default usually
           gifts: 0  // Would need aggregation query
         });

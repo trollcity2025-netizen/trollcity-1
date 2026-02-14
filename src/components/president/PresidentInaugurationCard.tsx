@@ -24,7 +24,7 @@ export default function PresidentInaugurationCard() {
       const { data } = await supabase
         .from('streams')
         .select('*')
-        .eq('user_id', currentPresident.id)
+        .eq('user_id', currentPresident.user_id)
         .eq('is_live', true)
         .maybeSingle();
       
@@ -40,7 +40,7 @@ export default function PresidentInaugurationCard() {
     // Subscribe to changes
     const channel = supabase
       .channel('president-stream')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams', filter: `user_id=eq.${currentPresident.id}` }, 
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'streams', filter: `user_id=eq.${currentPresident.user_id}` }, 
         () => fetchStream()
       )
       .subscribe();

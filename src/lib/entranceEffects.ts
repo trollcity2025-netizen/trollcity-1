@@ -2,7 +2,7 @@
 // Permanent purchases with activation/deactivation and stream entrance animations
 
 import { supabase } from './supabase';
-import { runStandardPurchaseFlow } from './purchases';
+// import { runStandardPurchaseFlow } from './purchases';
 
 export interface EntranceEffect {
   id: string
@@ -176,6 +176,7 @@ export const ENTRANCE_EFFECTS_DATA: EntranceEffect[] = [
 export const ENTRANCE_EFFECTS_CONFIG = ENTRANCE_EFFECTS_DATA.reduce((acc, effect) => {
   acc[effect.id] = {
     name: effect.name,
+    icon: effect.icon,
     cost: effect.coin_cost,
     rarity: effect.rarity,
     description: effect.description,
@@ -206,6 +207,7 @@ export interface EffectConfig {
   cost?: number;
   rarity?: string;
   imageUrl?: string;
+  icon?: string;
 }
 
 

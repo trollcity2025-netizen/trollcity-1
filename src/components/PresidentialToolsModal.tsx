@@ -10,6 +10,7 @@ import { Crown, Megaphone, FileText, DollarSign, Flag, AlertCircle } from 'lucid
 import { toast } from 'sonner';
 
 export default function PresidentialToolsModal() {
+  const [isOpen, setIsOpen] = useState(false);
   const { 
     isPresident, 
     isVP, 
@@ -77,7 +78,7 @@ export default function PresidentialToolsModal() {
   };
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button 
             variant="outline" 

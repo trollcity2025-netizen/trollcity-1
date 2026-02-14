@@ -1,7 +1,7 @@
 import React from 'react'
 import { useLiveKit } from '../../hooks/useLiveKit'
 import { useSafeLiveKit, useLiveKitAvailable } from '../../hooks/useSafeLiveKit'
-import { LiveKitGuard } from '../LiveKitGuard'
+// import { LiveKitGuard } from '../LiveKitGuard'
 
 /**
  * Demo component showing the difference between unsafe and safe LiveKit usage
@@ -45,18 +45,10 @@ export function SafeLiveKitExample() {
 
 export function GuardedLiveKitExample() {
   return (
-    <LiveKitGuard fallback={
-      <div className="p-4 bg-blue-100 border border-blue-300 rounded">
-        <h3 className="font-bold text-blue-800">Guarded Example</h3>
-        <p className="text-blue-600">Loading LiveKit context...</p>
-      </div>
-    }>
-      <div className="p-4 bg-purple-100 border border-purple-300 rounded">
-        <h3 className="font-bold text-purple-800">Guarded Example</h3>
-        <p className="text-purple-600">This component is only rendered when LiveKit is available.</p>
-        <p>Using LiveKitGuard component for protection.</p>
-      </div>
-    </LiveKitGuard>
+    <div className="p-4 bg-blue-100 border border-blue-300 rounded">
+      <h3 className="font-bold text-blue-800">Guarded Example</h3>
+      <p className="text-blue-600">LiveKitGuard is currently not implemented.</p>
+    </div>
   )
 }
 

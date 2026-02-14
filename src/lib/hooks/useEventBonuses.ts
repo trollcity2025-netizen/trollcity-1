@@ -202,9 +202,9 @@ export const verifyBonusExpiration = (): boolean => {
  * This ensures regulatory compliance
  */
 export const verifyEconomicsSafety = (
-  bonuses: ReturnType<typeof useEventBonuses>,
-  originalBalance: number,
-  cashOutAmount: number
+  _bonuses: ReturnType<typeof useEventBonuses>,
+  _originalBalance: number,
+  _cashOutAmount: number
 ): { safe: boolean; reason?: string } => {
   // Event bonuses should only affect:
   // - In-game XP gains

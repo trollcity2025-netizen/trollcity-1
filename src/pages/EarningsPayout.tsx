@@ -26,8 +26,8 @@ const CASHOUT_TIERS: CashoutTier[] = TIERS.map((t, i) => ({
 }));
 
 export default function EarningsPayout() {
-  const { profile, user } = useAuthStore()
-  const [payoutMethod] = useState<PayoutMethod>('PayPal')
+  const { profile, user: _user } = useAuthStore()
+  const [_payoutMethod] = useState<PayoutMethod>('PayPal')
   const [payoutDetails, setPayoutDetails] = useState('')
   const [fullName, setFullName] = useState('')
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null)
@@ -86,7 +86,7 @@ export default function EarningsPayout() {
     startFlow('cashout')
   }, [])
 
-  const cancelRequest = useCallback(async (id: string) => {
+  const _cancelRequest = useCallback(async (id: string) => {
     if (!profile) return
     try {
       const j = await api.delete(`/payouts/cashouts/${id}`)
@@ -99,8 +99,6 @@ export default function EarningsPayout() {
       toast.error('Cancel failed')
     }
   }, [profile, loadRecent])
-
-  const placeholderForMethod = (_m: PayoutMethod) => 'Email for Gift Card'
 
   const handleSubmit = useCallback(async () => {
     if (!profile) {
@@ -178,7 +176,7 @@ export default function EarningsPayout() {
     } finally {
       setLoading(false)
     }
-  }, [profile, eligibleTiers.length, selectedTierId, troll_coins, payoutDetails, user?.email, payoutMethod, fullName, loadRecent])
+  }, [profile, eligibleTiers.length, selectedTierId, troll_coins, payoutDetails, fullName, loadRecent])
 
   return (
     <div className="min-h-screen bg-[#05030B] text-white p-6">

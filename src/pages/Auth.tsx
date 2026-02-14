@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
-import InstallButton from '../components/InstallButton';
+// import InstallButton from '../components/InstallButton';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import { generateUUID } from '../lib/uuid';
 
@@ -16,7 +16,7 @@ interface AuthProps {
   initialMode?: 'login' | 'signup';
 }
 
-const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
+const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = {}) => {
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
   const initialIsLogin = initialMode 
@@ -64,24 +64,27 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
             setDailyLimitReached(false)
           }
         } else {
-          // Fallback to old daily limit logic if no event
-          const today = new Date()
-          today.setUTCHours(0, 0, 0, 0)
-          
-          const { count } = await supabase
-            .from('user_profiles')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', today.toISOString())
-          
-          if (count !== null && count >= 100) {
-            setDailyLimitReached(true)
-            const tomorrow = new Date(today)
-            tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
-            setNextWindow(tomorrow)
-          } else {
+        // Fallback to old daily limit logic if no event
+        const today = new Date()
+        today.setUTCHours(0, 0, 0, 0)
+        
+        const { count, error: countError } = await supabase
+          .from('user_profiles')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', today.toISOString())
+        
+        if (countError) {
+            console.warn('[Auth] Error fetching user count, assuming limit not reached:', countError)
             setDailyLimitReached(false)
-          }
+        } else if (count !== null && count >= 100) {
+          setDailyLimitReached(true)
+          const tomorrow = new Date(today)
+          tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+          setNextWindow(tomorrow)
+        } else {
+          setDailyLimitReached(false)
         }
+      }
       } catch (err) {
         console.error('Error checking limits:', err)
       }
@@ -212,7 +215,7 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
 
       if (profileData) {
         // Check if admin BEFORE setting profile
-        const isAdmin = profileData.role === 'admin' || profileData.is_admin === true;
+        const _isAdmin = profileData.role === 'admin' || profileData.is_admin === true;
         if (isAdminEmail(data.user.email) && profileData.role !== 'admin') {
           try {
             const now = new Date().toISOString()
@@ -221,7 +224,7 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
               .update({ role: 'admin', updated_at: now })
               .eq('id', data.user.id)
               .select('*')
-              .single()
+              .maybeSingle()
             setProfile(updated || profileData)
           } catch (err) {
             console.error('Failed to update admin role:', err)
@@ -241,7 +244,7 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
               .from('user_profiles')
               .select('ip_address_history')
               .eq('id', data.user.id)
-              .single()
+              .maybeSingle()
             const history = current?.ip_address_history || []
             const entry = { ip: userIP, timestamp: new Date().toISOString() }
             const updated = [...history, entry].slice(-10)
@@ -282,8 +285,8 @@ const Auth = ({ embedded = false, onClose, initialMode }: AuthProps = {}) => {
               const { data: current } = await supabase
                 .from('user_profiles')
                 .select('ip_address_history')
-              .eq('id', data.user.id)
-                .single()
+                .eq('id', data.user.id)
+                .maybeSingle()
               const history = current?.ip_address_history || []
               const entry = { ip: userIP, timestamp: new Date().toISOString() }
               const updated = [...history, entry].slice(-10)

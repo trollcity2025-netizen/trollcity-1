@@ -14,6 +14,7 @@ interface Officer {
   is_troll_officer: boolean
   role?: string
   is_admin?: boolean
+  created_at?: string
 }
 
 interface ScheduleSlot {

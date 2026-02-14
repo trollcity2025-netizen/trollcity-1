@@ -40,7 +40,7 @@ const ClickableUsernameWithReport: React.FC<ClickableUsernameWithReportProps> = 
   const userForAge = {
     username,
     ...profile
-  }
+  } as any;
 
   return (
     <>

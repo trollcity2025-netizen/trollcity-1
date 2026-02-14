@@ -24,7 +24,7 @@ async function testAlters() {
     for (const col of columns) {
         console.log(`Testing ALTER for ${col}...`);
         const sql = `ALTER TABLE public.user_profiles ALTER COLUMN ${col} TYPE BIGINT;`;
-        const { data, error } = await supabase.rpc('exec_sql', { sql });
+        const { error } = await supabase.rpc('exec_sql', { sql });
         if (error) {
             console.error(`FAILED ${col}:`, error.message);
         } else {

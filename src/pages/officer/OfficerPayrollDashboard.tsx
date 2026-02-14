@@ -3,7 +3,7 @@ import { useAuthStore } from '../../lib/store'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import { DollarSign, Clock, TrendingUp, Calendar, Award, Target } from 'lucide-react'
-import { calculateOfficerBaseCoins, calculateTotalOfficerEarnings, OFFICER_BASE_HOURLY_COINS } from '../../lib/officerPay'
+import { calculateOfficerBaseCoins, calculateTotalOfficerEarnings } from '../../lib/officerPay'
 import OfficerPoolPanel from './components/OfficerPoolPanel'
 
 interface WorkSession {

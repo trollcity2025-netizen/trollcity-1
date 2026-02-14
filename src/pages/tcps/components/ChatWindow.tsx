@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { MoreVertical, Phone, Video, ArrowLeft, Ban, EyeOff, MessageCircle, Check, CheckCheck, Trash2, Shield } from 'lucide-react'
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import { useNavigate } from 'react-router-dom'
-import { supabase, createConversation, markConversationRead, OFFICER_GROUP_CONVERSATION_ID, sendOfficerMessage } from '../../../lib/supabase'
+import { useJailMode } from '../../../hooks/useJailMode'
+import { supabase, createConversation, markConversationRead, OFFICER_GROUP_CONVERSATION_ID } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
 import UserNameWithAge from '../../../components/UserNameWithAge'
@@ -39,11 +41,25 @@ interface Message {
 
 export default function ChatWindow({ conversationId, otherUserInfo, isOnline, onBack }: ChatWindowProps) {
   const { user, profile } = useAuthStore()
+  const { isJailed } = useJailMode(profile?.id)
+  const [isOtherUserAdmin, setIsOtherUserAdmin] = useState(false)
   const { openChatBubble } = useChatStore()
   const navigate = useNavigate()
+  const virtuosoRef = useRef<VirtuosoHandle>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   
+  // Buffering for high-frequency updates
+  const messageBufferRef = useRef<Message[]>([])
+  const MAX_MESSAGES = 200
+  const FLUSH_INTERVAL = 150 // ms
+
   const [messages, setMessages] = useState<Message[]>([])
+  const messagesRef = useRef<Message[]>([])
+  
+  // Sync ref with state for use in callbacks
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
   const [loading, setLoading] = useState(false)
   const [actualConversationId, setActualConversationId] = useState<string | null>(conversationId)
   const [showMenu, setShowMenu] = useState(false)
@@ -121,10 +137,21 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
     if (!actualConversationId) return
     if (!confirm('Hide this conversation? It will reappear if they message you.')) return
 
-    // For now, we'll just navigate back since "hiding" usually implies soft delete or just removing from list
-    // A real implementation might need a 'hidden_conversations' table or flag
-    toast.success('Chat hidden')
-    onBack()
+    try {
+      // Use localStorage to persist hidden chats locally
+      const hiddenChats = JSON.parse(localStorage.getItem('hidden_conversations') || '[]')
+      if (!hiddenChats.includes(actualConversationId)) {
+        hiddenChats.push(actualConversationId)
+        localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
+      }
+      
+      toast.success('Chat hidden')
+      onBack()
+      // Trigger a sidebar refresh if possible, or just wait for next fetch
+    } catch (err) {
+      console.error('Error hiding chat:', err)
+      toast.error('Failed to hide chat')
+    }
     setShowMenu(false)
   }
 
@@ -135,6 +162,24 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
     toast.success('Chat bubble opened! You can now navigate anywhere.')
   }
 
+
+  useEffect(() => {
+    if (!otherUserInfo?.id) return
+    
+    const checkOtherUser = async () => {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('role, is_admin')
+        .eq('id', otherUserInfo.id)
+        .single()
+      
+      if (data) {
+        setIsOtherUserAdmin(data.role === 'admin' || data.is_admin === true)
+      }
+    }
+    
+    checkOtherUser()
+  }, [otherUserInfo?.id])
 
   // Initialize or fetch conversation
   useEffect(() => {
@@ -182,8 +227,14 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
              .maybeSingle()
            
            if (shared) {
-             targetConvId = shared.conversation_id
-           } else {
+        targetConvId = shared.conversation_id
+        // If it was hidden, unhide it since we're opening it now
+        const hiddenChats = JSON.parse(localStorage.getItem('hidden_conversations') || '[]')
+        if (hiddenChats.includes(targetConvId)) {
+          const newHidden = hiddenChats.filter((id: string) => id !== targetConvId)
+          localStorage.setItem('hidden_conversations', JSON.stringify(newHidden))
+        }
+      } else {
              // Create new conversation only if still for the same user
              if (currentOtherUserId !== otherUserInfo.id) return
              try {
@@ -208,7 +259,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
     return () => {
       mounted = false
     }
-  }, [conversationId, otherUserInfo?.id, user?.id])
+  }, [conversationId, otherUserInfo?.id, user?.id, actualConversationId])
 
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
@@ -218,6 +269,9 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
 
   // Fetch messages and sender info
   const fetchMessagesWithSenders = useCallback(async (convId: string, limit = 50, before?: string) => {
+    // Thundering Herd Prevention: Jitter on fetch (0-300ms)
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 300));
+
     // Handle OPS group conversation differently
     if (convId === OFFICER_GROUP_CONVERSATION_ID) {
       let query = supabase
@@ -318,6 +372,9 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
     })).reverse()
   }, [])
 
+  // Cache for sender profiles to avoid repeated calls
+  const profileCacheRef = useRef<Record<string, any>>({})
+
   // Use layout effect to adjust scroll position after messages update to prevent jumping
   useLayoutEffect(() => {
     if (isFetchingOlderRef.current && messagesContainerRef.current) {
@@ -388,7 +445,11 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
         }
         
         // Mark as read
-        await markConversationRead(actualConversationId)
+        if (actualConversationId === OFFICER_GROUP_CONVERSATION_ID) {
+          localStorage.setItem('last_seen_ops_timestamp', new Date().toISOString())
+        } else {
+          await markConversationRead(actualConversationId)
+        }
         
         setTimeout(scrollToBottom, 100)
 
@@ -406,6 +467,68 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
   useEffect(() => {
     if (!actualConversationId || !profile?.id) return
 
+    // Flush buffer interval
+    const flushInterval = setInterval(() => {
+      if (messageBufferRef.current.length === 0) return
+
+      const newMsgs = [...messageBufferRef.current]
+      messageBufferRef.current = [];
+
+      setMessages(prev => {
+        // Remove matching temp messages
+        const incomingPairs = new Set(newMsgs.map(m => `${m.sender_id}:${m.content}`))
+        const filtered = prev.filter(m => {
+          if (m.id.startsWith('temp-')) {
+            const key = `${m.sender_id}:${m.content}`
+            return !incomingPairs.has(key)
+          }
+          return true
+        })
+
+        // Merge and deduplicate by ID
+        const existingIds = new Set(filtered.map(m => m.id))
+        const uniqueNew = newMsgs.filter(m => !existingIds.has(m.id))
+        
+        const updated = [...filtered, ...uniqueNew]
+        if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES)
+        return updated
+      })
+
+      setTimeout(() => {
+        if (virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({ index: 'last', behavior: 'smooth' })
+        }
+      }, 50)
+    }, FLUSH_INTERVAL)
+
+    const handleNewMessage = (newMsg: Message) => {
+      messageBufferRef.current.push(newMsg)
+      
+      if (newMsg.sender_id !== user?.id) {
+        if (actualConversationId === OFFICER_GROUP_CONVERSATION_ID) {
+          localStorage.setItem('last_seen_ops_timestamp', new Date().toISOString())
+        } else {
+          markConversationRead(actualConversationId).catch(console.error)
+        }
+      }
+    }
+
+    const getProfileCached = async (userId: string) => {
+      if (profileCacheRef.current[userId]) return profileCacheRef.current[userId]
+      
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('username,avatar_url,rgb_username_expires_at,glowing_username_color,created_at')
+        .eq('id', userId)
+        .maybeSingle()
+      
+      if (data) {
+        profileCacheRef.current[userId] = data
+        return data
+      }
+      return { username: 'Unknown', avatar_url: null }
+    }
+
     // For OPS conversation, subscribe to officer_chat_messages
     if (actualConversationId === OFFICER_GROUP_CONVERSATION_ID) {
       const channel = supabase
@@ -419,13 +542,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
           },
           async (payload) => {
             const newMsgRaw = payload.new
-            
-            // Fetch sender info
-            const { data: senderData } = await supabase
-              .from('user_profiles')
-              .select('id,username,avatar_url,rgb_username_expires_at,glowing_username_color,created_at')
-              .eq('id', newMsgRaw.sender_id)
-              .single()
+            const senderData = await getProfileCached(newMsgRaw.sender_id)
             
             const newMsg: Message = {
               id: newMsgRaw.id,
@@ -441,22 +558,28 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
               sender_created_at: senderData?.created_at
             }
 
-            setMessages(prev => {
-              const withoutPending = prev.filter(msg => {
-                if (msg.isPending && msg.sender_id === user?.id && msg.content === newMsg.content) {
-                  return false
-                }
-                return true
-              })
-              return [...withoutPending, newMsg]
-            })
-            
-            setTimeout(scrollToBottom, 100)
+            handleNewMessage(newMsg)
           }
         )
+        .on('broadcast', { event: 'new-message' }, (payload) => {
+          const { payload: msg } = payload
+          const newMsg: Message = {
+            id: msg.id,
+            conversation_id: OFFICER_GROUP_CONVERSATION_ID,
+            sender_id: msg.sender_id,
+            content: msg.content,
+            created_at: msg.created_at,
+            sender_username: msg.sender_username,
+            sender_avatar_url: msg.sender_avatar_url,
+            sender_rgb_expires_at: msg.sender_rgb_expires_at,
+            sender_glowing_username_color: msg.sender_glowing_username_color,
+          }
+          handleNewMessage(newMsg)
+        })
         .subscribe()
 
       return () => {
+        clearInterval(flushInterval)
         supabase.removeChannel(channel)
       }
     }
@@ -474,14 +597,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
         },
         async (payload) => {
           const newMsgRaw = payload.new
-          // Fetch sender info
-          let senderInfo: {
-            username: string
-            avatar_url: string | null
-            rgb_username_expires_at: string | null
-            glowing_username_color: string | null
-            created_at?: string
-          } = {
+          let senderInfo: any = {
              username: 'Unknown',
              avatar_url: null,
              rgb_username_expires_at: null,
@@ -497,8 +613,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
                created_at: profile?.created_at
              }
           } else {
-             const { data } = await supabase.from('user_profiles').select('username,avatar_url,rgb_username_expires_at,glowing_username_color,created_at').eq('id', newMsgRaw.sender_id).maybeSingle()
-             if (data) senderInfo = data as any
+             senderInfo = await getProfileCached(newMsgRaw.sender_id)
           }
 
           const newMsg: Message = {
@@ -515,59 +630,42 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
             sender_created_at: senderInfo.created_at
           }
 
-          setMessages(prev => {
-            // Remove any pending message that matches
-            const withoutPending = prev.filter(msg => {
-              if (msg.isPending && msg.sender_id === user?.id && msg.content === newMsg.content) {
-                return false
-              }
-              return true
-            })
-            return [...withoutPending, newMsg]
-          })
-          
-          if (newMsg.sender_id !== user?.id) {
-            await markConversationRead(actualConversationId)
-          }
-          if (isAtBottomRef.current) {
-            setTimeout(scrollToBottom, 100)
-          }
+          handleNewMessage(newMsg)
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'conversation_messages',
-          filter: `conversation_id=eq.${actualConversationId}`
-        },
-        (payload) => {
-          const updatedMsg = payload.new
-          setMessages(prev => prev.map(m => 
-            m.id === updatedMsg.id ? { ...m, read_at: updatedMsg.read_at } : m
-          ))
+      .on('broadcast', { event: 'new-message' }, (payload) => {
+        const { payload: msg } = payload
+        const newMsg: Message = {
+          id: msg.id,
+          conversation_id: msg.conversation_id || actualConversationId,
+          sender_id: msg.sender_id,
+          content: msg.content,
+          created_at: msg.created_at,
+          sender_username: msg.sender_username,
+          sender_avatar_url: msg.sender_avatar_url,
+          sender_rgb_expires_at: msg.sender_rgb_expires_at,
+          sender_glowing_username_color: msg.sender_glowing_username_color,
         }
-      )
-      .on('broadcast', { event: 'typing' }, (payload) => {
-         if (payload.payload.userId === otherUserInfo?.id) {
-            setIsTyping(payload.payload.isTyping)
-            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
-            
-            if (payload.payload.isTyping) {
-               // Auto clear after 3 seconds if no stop event received
-               typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000)
-            }
-         }
+        handleNewMessage(newMsg)
+      })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.userId === otherUserInfo?.id) {
+          setIsTyping(payload.isTyping)
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+          if (payload.isTyping) {
+            typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 5000)
+          }
+        }
       })
       .subscribe()
 
     return () => {
+      clearInterval(flushInterval)
       supabase.removeChannel(channel)
     }
-  }, [actualConversationId, profile, scrollToBottom, user?.id, otherUserInfo?.id])
+  }, [actualConversationId, profile, user?.id, otherUserInfo?.id])
 
-  // Poll for new messages and read status updates every second
+  // Poll for new messages and read status updates every 30 seconds (fallback only)
   useEffect(() => {
     if (!actualConversationId) return
 
@@ -616,8 +714,8 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
     // Initial poll
     pollMessages()
 
-    // Poll every second
-    pollIntervalRef.current = setInterval(pollMessages, 1000)
+    // Poll every 30 seconds as a safety fallback for real-time
+    pollIntervalRef.current = setInterval(pollMessages, 30000)
 
     return () => {
       if (pollIntervalRef.current) {
@@ -625,21 +723,6 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
       }
     }
   }, [actualConversationId, fetchMessagesWithSenders])
-
-  const isAtBottomRef = useRef(true)
-
-  const handleScroll = () => {
-    if (!messagesContainerRef.current) return
-    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
-    const atBottom = scrollHeight - scrollTop - clientHeight < 100
-    isAtBottomRef.current = atBottom
-    
-    // Load more logic
-    if (scrollTop < 50 && hasMore && !loading) {
-       console.log('[ChatWindow] Triggering loadMoreMessages', { scrollTop, hasMore, loading })
-       loadMoreMessages()
-    }
-  }
 
   if (!otherUserInfo) {
     return (
@@ -722,7 +805,7 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
         </div>
 
         <div className="flex items-center gap-2">
-          {!isOpsConversation && (
+          {(!isOpsConversation && !(isJailed && !isOtherUserAdmin)) && (
             <>
               <button 
             onClick={() => handleCall('audio')}
@@ -777,113 +860,136 @@ export default function ChatWindow({ conversationId, otherUserInfo, isOnline, on
       </div>
 
       {/* Messages */}
-      <div 
-        className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar"
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        style={{ overflowAnchor: 'none' }}
-      >
-        {loading && (
-          <div className="flex justify-center">
-             <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex-1 min-h-0 relative bg-[#1A1A1A]">
+        {loading && messages.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#1A1A1A]/50">
+             <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
         
-        {messages.map((msg, idx) => {
-          const isMe = msg.sender_id === user?.id
-          const showAvatar = !isMe && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id)
-          
-          return (
-            <div key={msg.id} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
-              {!isMe && (
-                <div className="w-8 flex-shrink-0 flex flex-col justify-end">
-                   {showAvatar ? (
-                     <img 
-                       src={msg.sender_avatar_url || `https://ui-avatars.com/api/?name=${msg.sender_username}&background=random`}
-                       className={`w-8 h-8 rounded-full border border-purple-500/20 ${msg.isPending ? 'opacity-50' : ''}`}
-                       alt={msg.sender_username}
-                     />
-                   ) : <div className="w-8" />}
-                </div>
-              )}
-              
-              <div className={`max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col group`}>
-                {!isMe && showAvatar && (
-                   <UserNameWithAge 
-                     user={{
-                       username: msg.sender_username || '',
-                       id: msg.sender_id,
-                       rgb_username_expires_at: msg.sender_rgb_expires_at || undefined,
-                       glowing_username_color: msg.sender_glowing_username_color || undefined,
-                       created_at: msg.sender_created_at
-                     }}
-                     className="text-xs text-gray-400 ml-1 hover:text-purple-400"
-                   />
+        <Virtuoso
+          ref={virtuosoRef}
+          data={messages}
+          followOutput="smooth"
+          initialTopMostItemIndex={messages.length - 1}
+          className="no-scrollbar"
+          style={{ height: '100%' }}
+          headerFooterTag="div"
+          components={{
+            Header: () => (
+              <div className="p-4 flex flex-col items-center">
+                {hasMore && (
+                  <button 
+                    onClick={loadMoreMessages}
+                    disabled={loading}
+                    className="text-xs text-purple-400 hover:text-purple-300 py-2 px-4 rounded-full bg-purple-500/10 border border-purple-500/20 transition-all disabled:opacity-50"
+                  >
+                    {loading ? 'Loading...' : 'Load older messages'}
+                  </button>
                 )}
-                <div className="flex items-center gap-2">
-                   {isMe && (
-                     <button
-                       onClick={() => handleDeleteMessage(msg.id)}
-                       className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
-                       title="Delete message"
-                     >
-                       <Trash2 className="w-3 h-3" />
-                     </button>
-                   )}
-                   <div 
-                     className={`px-4 py-2 rounded-2xl break-words ${
-                       isMe 
-                         ? 'bg-purple-600 text-white rounded-tr-none' 
-                         : 'bg-[#1F1F2E] text-gray-200 rounded-tl-none border border-purple-500/10'
-                     } ${msg.isPending ? 'opacity-70' : ''}`}
-                   >
-                     {msg.content}
-                   </div>
-                </div>
+                {!hasMore && messages.length > 0 && (
+                  <div className="text-[10px] text-gray-600 uppercase tracking-widest mt-4">
+                    Beginning of conversation
+                  </div>
+                )}
+              </div>
+            ),
+            Footer: () => (
+              <div className="h-4">
+                {isTyping && (
+                  <div className="flex gap-3 justify-start p-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <div className="w-8 flex-shrink-0 flex flex-col justify-end">
+                      <img 
+                        src={otherUserInfo?.avatar_url || `https://ui-avatars.com/api/?name=${otherUserInfo?.username}&background=random`}
+                        className="w-8 h-8 rounded-full border border-purple-500/20"
+                        alt={otherUserInfo?.username}
+                      />
+                    </div>
+                    <div className="flex flex-col items-start space-y-1">
+                       <span className="text-xs text-gray-400 ml-1">{otherUserInfo?.username}</span>
+                       <div className="px-4 py-2 rounded-2xl rounded-tl-none bg-[#1F1F2E] text-gray-400 border border-purple-500/10 flex items-center gap-1">
+                         <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                         <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                         <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" />
+                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          }}
+          itemContent={(idx, msg) => {
+            const isMe = msg.sender_id === user?.id
+            const showAvatar = !isMe && (idx === 0 || messages[idx - 1].sender_id !== msg.sender_id)
+            
+            return (
+              <div className={`flex gap-3 p-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {!isMe && (
+                  <div className="w-8 flex-shrink-0 flex flex-col justify-end">
+                     {showAvatar ? (
+                       <img 
+                         src={msg.sender_avatar_url || `https://ui-avatars.com/api/?name=${msg.sender_username}&background=random`}
+                         className={`w-8 h-8 rounded-full border border-purple-500/20 ${msg.isPending ? 'opacity-50' : ''}`}
+                         alt={msg.sender_username}
+                       />
+                     ) : <div className="w-8" />}
+                  </div>
+                )}
                 
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-gray-500 px-1">
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  
-                  {/* Read status for own messages */}
-                  {isMe && (
-                    <span>
-                      {msg.read_at ? (
-                        <CheckCheck className="w-3 h-3 text-purple-400" />
-                      ) : (
-                        <Check className={`w-3 h-3 ${msg.isPending ? 'text-gray-600' : 'text-gray-400'}`} />
-                      )}
-                    </span>
+                <div className={`max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col group`}>
+                  {!isMe && showAvatar && (
+                     <UserNameWithAge 
+                       user={{
+                         username: msg.sender_username || '',
+                         id: msg.sender_id,
+                         rgb_username_expires_at: msg.sender_rgb_expires_at || undefined,
+                         glowing_username_color: msg.sender_glowing_username_color || undefined,
+                         created_at: msg.sender_created_at
+                       }}
+                       className="text-xs text-gray-400 ml-1 hover:text-purple-400"
+                     />
                   )}
+                  <div className="flex items-center gap-2">
+                     {isMe && (
+                       <button
+                         onClick={() => handleDeleteMessage(msg.id)}
+                         className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                         title="Delete message"
+                       >
+                         <Trash2 className="w-3 h-3" />
+                       </button>
+                     )}
+                     <div 
+                       className={`px-4 py-2 rounded-2xl break-words ${
+                         isMe 
+                           ? 'bg-purple-600 text-white rounded-tr-none' 
+                           : 'bg-[#1F1F2E] text-gray-200 rounded-tl-none border border-purple-500/10'
+                       } ${msg.isPending ? 'opacity-70' : ''}`}
+                     >
+                       {msg.content}
+                     </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-500 px-1">
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    
+                    {isMe && (
+                      <span>
+                        {msg.read_at ? (
+                          <CheckCheck className="w-3 h-3 text-purple-400" />
+                        ) : (
+                          <Check className={`w-3 h-3 ${msg.isPending ? 'text-gray-600' : 'text-gray-400'}`} />
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )
-        })}
-
-        {/* Typing Indicator */}
-        {isTyping && (
-          <div className="flex gap-3 justify-start animate-in fade-in slide-in-from-bottom-2 duration-200">
-             <div className="w-8 flex-shrink-0 flex flex-col justify-end">
-               <img 
-                 src={otherUserInfo.avatar_url || `https://ui-avatars.com/api/?name=${otherUserInfo.username}&background=random`}
-                 className="w-8 h-8 rounded-full border border-purple-500/20"
-                 alt={otherUserInfo.username}
-               />
-             </div>
-             <div className="flex flex-col items-start space-y-1">
-                <span className="text-xs text-gray-400 ml-1">{otherUserInfo.username}</span>
-                <div className="px-4 py-2 rounded-2xl rounded-tl-none bg-[#1F1F2E] text-gray-400 border border-purple-500/10 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" />
-                </div>
-             </div>
-          </div>
-        )}
-
-        <div className="h-1" /> {/* Spacer */}
+            )
+          }}
+        />
       </div>
 
       {/* Input */}

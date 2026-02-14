@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Stream, ChatMessage } from '../../types/broadcast';
-import { useMobileLayout, useSafeAreaHeight } from '../../hooks/useMobileLayout.ts';
+import { useMobileLayout, useSafeAreaHeight } from '../../hooks/useMobileLayout';
 import { cn } from '../../lib/utils';
 import { SeatSession } from '../../hooks/useStreamSeats';
 import TopLiveBar from './TopLiveBar';
@@ -15,6 +15,7 @@ import { MessageSquare } from 'lucide-react';
 interface MobileBroadcastLayoutProps {
   stream: Stream;
   isHost: boolean;
+  isModerator: boolean;
   messages: ChatMessage[];
   seats: Record<number, SeatSession>;
   children: React.ReactNode;
@@ -33,6 +34,7 @@ interface MobileBroadcastLayoutProps {
 export default function MobileBroadcastLayout({
   stream,
   isHost,
+  isModerator,
   messages,
   seats,
   children,
@@ -47,8 +49,8 @@ export default function MobileBroadcastLayout({
   isMicEnabled = true,
   isCamEnabled = true,
 }: MobileBroadcastLayoutProps) {
-  const { isMobile, safeArea } = useMobileLayout();
-  const { headerHeight, dockHeight } = useSafeAreaHeight();
+  const { isMobile } = useMobileLayout();
+  const { headerHeight, dockHeight, safeArea } = useSafeAreaHeight();
   
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   // Removed local isMuted/isCameraOff state to rely on props
@@ -107,6 +109,7 @@ export default function MobileBroadcastLayout({
         <BroadcastControls
           stream={stream}
           isHost={isHost}
+          isModerator={isModerator}
           isOnStage={isHost}
           chatOpen={isChatOpen}
           toggleChat={() => setIsChatOpen(!isChatOpen)}
@@ -280,24 +283,24 @@ export default function MobileBroadcastLayout({
                 onClick={handleToggleMic}
                 className={cn(
                   "w-14 h-14 rounded-full flex items-center justify-center transition-all",
-                  isMuted 
+                  !isMicEnabled 
                     ? "bg-red-500/20 text-red-500 border border-red-500/30" 
                     : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
                 )}
               >
-                {isMuted ? <span className="text-xl">🔇</span> : <span className="text-xl">🎤</span>}
+                {!isMicEnabled ? <span className="text-xl">🔇</span> : <span className="text-xl">🎤</span>}
               </button>
               
               <button
                 onClick={handleToggleCamera}
                 className={cn(
                   "w-14 h-14 rounded-full flex items-center justify-center transition-all",
-                  isCameraOff 
+                  !isCamEnabled 
                     ? "bg-red-500/20 text-red-500 border border-red-500/30" 
                     : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
                 )}
               >
-                {isCameraOff ? <span className="text-xl">📷</span> : <span className="text-xl">📹</span>}
+                {!isCamEnabled ? <span className="text-xl">📷</span> : <span className="text-xl">📹</span>}
               </button>
 
               {isHost && (

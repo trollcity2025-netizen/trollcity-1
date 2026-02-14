@@ -133,7 +133,7 @@ export function HorizontalActionBar({
   onLike,
   onGift,
   onChat,
-  onShare,
+  onShare: _onShare,
   onMenu,
   likesCount = 0,
   unreadCount = 0,

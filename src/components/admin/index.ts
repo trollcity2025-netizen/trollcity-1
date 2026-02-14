@@ -13,6 +13,9 @@ export { StatCard } from './StatCard'
 // Action Components
 export { ActionGroup } from './ActionGroup'
 
+// Load Lab
+export { default as LoadLab } from './LoadLab'
+
 // HR Components
 export { AssignRecruitPanel } from './AssignRecruitPanel'
 export { CreatorApplicationsPanel } from './CreatorApplicationsPanel'

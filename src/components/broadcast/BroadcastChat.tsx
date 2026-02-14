@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Send, User, Trash2, Shield, Crown, Sparkles, Car } from 'lucide-react';
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import UserNameWithAge from '../UserNameWithAge';
@@ -58,13 +59,17 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   const [input, setInput] = useState('');
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Buffering for high-frequency updates
+  const messageBufferRef = useRef<Message[]>([]);
+  const MAX_MESSAGES = 200;
+  const FLUSH_INTERVAL = 150; // ms
   
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
   const [isChatFocused, setIsChatFocused] = useState(true);
-  const lastReadMessageIdRef = useRef<string | null>(null);
   
   // Rate limiting
   const lastSentRef = useRef<number>(0);
@@ -103,6 +108,10 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   // Fetch initial messages (last 50)
   useEffect(() => {
     const fetchMessages = async () => {
+        // Thundering Herd Prevention: Jitter on initial chat load (0-800ms)
+        // High-traffic broadcast entry points are the most likely to cause a DB spike
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
+
         const { data } = await supabase
             .from('stream_messages')
             .select('*, user_profiles(username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color)')
@@ -158,64 +167,63 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     };
     fetchMessages();
 
-    // Subscribe to Chat Messages
+    // Flush buffer interval
+    const flushInterval = setInterval(() => {
+        if (messageBufferRef.current.length === 0) return;
+
+        const newMsgs = [...messageBufferRef.current];
+        messageBufferRef.current = [];
+
+        setMessages(prev => {
+            // Remove optimistic messages that are now in the buffer
+            const incomingIds = new Set(newMsgs.map(m => `${m.user_id}:${m.content}`));
+            const filtered = prev.filter(m => {
+                if (m.id.startsWith('temp-')) {
+                    const key = `${m.user_id}:${m.content}`;
+                    return !incomingIds.has(key);
+                }
+                return true;
+            });
+
+            const updated = [...filtered, ...newMsgs];
+            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+            return updated;
+        });
+    }, FLUSH_INTERVAL);
+
+    // Subscribe to Chat Messages via Server-Signed Broadcast
     const chatChannel = supabase
-        .channel(`chat:${streamId}`)
-        .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'stream_messages',
-            filter: `stream_id=eq.${streamId}`
-        }, (payload) => {
-            const newRow = payload.new as any;
+        .channel(`stream:${streamId}`)
+        .on('broadcast', { event: 'message' }, (payload) => {
+            const envelope = payload.payload;
             
+            // Check if this is a message for this stream and version 1
+            if (envelope.v !== 1 || envelope.stream_id !== streamId) return;
+
             const newMsg: Message = {
-                id: newRow.id,
-                user_id: newRow.user_id,
-                content: newRow.content,
-                created_at: newRow.created_at,
+                id: envelope.txn_id,
+                user_id: envelope.s,
+                content: envelope.d.content,
+                created_at: new Date(envelope.ts).toISOString(),
                 type: 'chat',
                 user_profiles: {
-                    username: newRow.user_name || 'Unknown',
-                    avatar_url: newRow.user_avatar || '',
-                    role: newRow.user_role,
-                    troll_role: newRow.user_troll_role,
-                    created_at: newRow.user_created_at,
-                    rgb_username_expires_at: newRow.user_rgb_expires_at,
-                    glowing_username_color: newRow.user_glowing_username_color
+                    username: envelope.d.user_name || 'Unknown',
+                    avatar_url: envelope.d.user_avatar || '',
+                    role: envelope.d.user_role,
+                    troll_role: envelope.d.user_troll_role,
+                    created_at: envelope.d.user_created_at,
+                    rgb_username_expires_at: envelope.d.user_rgb_expires_at,
+                    glowing_username_color: envelope.d.user_glowing_username_color
                 },
-                vehicle_status: newRow.vehicle_snapshot
+                vehicle_status: envelope.d.vehicle_snapshot
             };
 
-            setMessages(prev => {
-                // Remove optimistic message if it exists (match by content and user within reasonable time)
-                // Or simply filter out temp messages from this user that match content
-                const filtered = prev.filter(m => {
-                    if (m.id.startsWith('temp-') && m.user_id === newMsg.user_id && m.content === newMsg.content) {
-                        return false; 
-                    }
-                    return true;
-                });
-                
-                const updated = [...filtered, newMsg];
-                // Keep only last 50 messages to prevent memory issues and ensure visibility
-                if (updated.length > 50) return updated.slice(updated.length - 50);
-                return updated;
-            });
+            messageBufferRef.current.push(newMsg);
             
             // Increment unread count if chat not focused and message from someone else
             if (!isChatFocused && newMsg.user_id !== user?.id) {
                 setUnreadCount(prev => prev + 1);
             }
-            
-            setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-        })
-        .on('postgres_changes', {
-            event: 'DELETE',
-            schema: 'public',
-            table: 'stream_messages'
-        }, (payload) => {
-            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
         })
         .subscribe();
 
@@ -238,20 +246,13 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                         troll_role: p.troll_role
                     }
                 };
-                setMessages(prev => {
-                    const updated = [...prev, systemMsg];
-                    if (updated.length > 50) return updated.slice(updated.length - 50);
-                    return updated;
-                });
-                setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+                messageBufferRef.current.push(systemMsg);
             });
         })
         .subscribe();
 
-    // Note: Presence tracking is handled by useViewerTracking hook in BroadcastPage
-    // We now also subscribe here to show entrance messages in chat
-
     return () => {
+        clearInterval(flushInterval);
         supabase.removeChannel(chatChannel);
         supabase.removeChannel(presenceChannel);
     };
@@ -318,9 +319,9 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     setInput('');
 
     // Optimistic Update
-    const tempId = `temp-${Date.now()}`;
+    const txnId = crypto.randomUUID();
     const optimisticMessage: Message = {
-        id: tempId,
+        id: txnId,
         user_id: user.id,
         content,
         created_at: new Date().toISOString(),
@@ -339,54 +340,45 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
 
     setMessages(prev => {
         const updated = [...prev, optimisticMessage];
-        if (updated.length > 50) return updated.slice(updated.length - 50);
+        if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
         return updated;
     });
-    setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
 
     try {
-        // Fetch my vehicle status ONCE
-        let myVehicle = vehicleCacheRef.current[user.id];
-        if (!myVehicle) {
-            // We can safely await this here because it's initiated by the SENDER (1 person), not receivers (1000 people)
-            myVehicle = (await fetchVehicleStatus(user.id)) || { has_vehicle: false };
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'chat',
+                stream_id: streamId,
+                txn_id: txnId,
+                data: { content }
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to send message');
         }
 
-        console.log('💬 [BroadcastChat] Inserting message to DB:', { streamId, userId: user.id, content });
-        
-        const { data, error } = await supabase.from('stream_messages').insert({
-            stream_id: streamId,
-            user_id: user.id,
-            content,
-            // Denormalized Payload
-            user_name: profile.username,
-            user_avatar: profile.avatar_url,
-            user_role: profile.role,
-            user_troll_role: profile.troll_role,
-            user_created_at: profile.created_at,
-            user_rgb_expires_at: profile.rgb_username_expires_at,
-            user_glowing_username_color: profile.glowing_username_color,
-            vehicle_snapshot: myVehicle
-        }).select();
+        const signedEnvelope = await response.json();
+        console.log('💬 [BroadcastChat] Message signed and sent:', signedEnvelope);
 
-        if (error) {
-            console.error('💬 [BroadcastChat] Error sending message:', error);
-            console.error('💬 [BroadcastChat] Error details:', JSON.stringify(error, null, 2));
-            if (String(error.message || '').toLowerCase().includes('rate limit')) {
-                toast.error('You are sending messages too fast. Please slow down.');
-            } else {
-                toast.error('Failed to send message: ' + error.message);
-            }
-            // Remove optimistic message on error
-            setMessages(prev => prev.filter(m => m.id !== tempId));
+    } catch (err: any) {
+        console.error('💬 [BroadcastChat] Error sending message:', err);
+        if (String(err.message || '').toLowerCase().includes('rate limit')) {
+            toast.error('You are sending messages too fast. Please slow down.');
         } else {
-            console.log('💬 [BroadcastChat] Message sent successfully:', data);
+            toast.error('Failed to send message: ' + err.message);
         }
-    } catch (err) {
-        console.error('Unexpected error sending message:', err);
-        toast.error('Failed to send message');
         // Remove optimistic message on error
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        setMessages(prev => prev.filter(m => m.id !== txnId));
     }
   };
 
@@ -468,85 +460,95 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             )}
         </div>
         
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700">
-            {messages.length === 0 && (
+        <div className="flex-1 min-h-0 relative">
+            {messages.length === 0 ? (
                 <div className="text-center text-zinc-500 text-sm mt-10 italic">
                     No messages
                 </div>
-            )}
-            {messages.map(msg => {
-                if (msg.type === 'system') {
-                    return (
-                        <div key={msg.id} className="animate-in fade-in slide-in-from-left-2 duration-300 flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/30 p-1.5 rounded-lg border border-white/5">
-                            <Sparkles size={12} className="text-yellow-500" />
-                            <span className="font-bold text-zinc-300 flex items-center gap-1">
-                                {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                                <UserNameWithAge 
-                                    user={{
-                                        username: msg.user_profiles?.username || 'User',
-                                        created_at: msg.user_profiles?.created_at,
-                                        role: msg.user_profiles?.role as any,
-                                        troll_role: msg.user_profiles?.troll_role,
-                                        id: msg.user_id,
-                                        rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                        glowing_username_color: msg.user_profiles?.glowing_username_color
-                                    }}
-                                    className="text-zinc-300"
-                                    showBadges={false}
-                                    isBroadcaster={isHost}
-                                    isModerator={isModerator}
-                                    streamId={streamId}
-                                />
-                            </span>
-                            <span>{msg.content}</span>
-                        </div>
-                    );
-                }
+            ) : (
+                <Virtuoso
+                    ref={virtuosoRef}
+                    data={messages}
+                    followOutput="smooth"
+                    initialTopMostItemIndex={messages.length - 1}
+                    className="scrollbar-thin scrollbar-thumb-zinc-700"
+                    itemContent={(index, msg) => {
+                        if (msg.type === 'system') {
+                            return (
+                                <div className="p-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                    <div className="flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/30 p-1.5 rounded-lg border border-white/5">
+                                        <Sparkles size={12} className="text-yellow-500" />
+                                        <span className="font-bold text-zinc-300 flex items-center gap-1">
+                                            {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
+                                            <UserNameWithAge 
+                                                user={{
+                                                    username: msg.user_profiles?.username || 'User',
+                                                    created_at: msg.user_profiles?.created_at,
+                                                    role: msg.user_profiles?.role as any,
+                                                    troll_role: msg.user_profiles?.troll_role,
+                                                    id: msg.user_id,
+                                                    rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
+                                                    glowing_username_color: msg.user_profiles?.glowing_username_color
+                                                }}
+                                                className="text-zinc-300"
+                                                showBadges={false}
+                                                isBroadcaster={isHost}
+                                                isModerator={isModerator}
+                                                streamId={streamId}
+                                            />
+                                        </span>
+                                        <span>{msg.content}</span>
+                                    </div>
+                                </div>
+                            );
+                        }
 
-                return (
-                <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
-                    <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
-                        {msg.user_profiles?.avatar_url ? (
-                            <img src={msg.user_profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            <User size={14} className="m-1 text-zinc-400" />
-                        )}
-                    </div>
-                    <div className="flex-1 min-w-0 break-words">
-                        <div className="font-bold text-yellow-500 text-sm mr-2 flex items-center inline-flex flex-wrap">
-                            {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                            {renderVehicleBadge(msg.vehicle_status)}
-                            <UserNameWithAge 
-                                user={{
-                                    username: msg.user_profiles?.username || 'User',
-                                    created_at: msg.user_profiles?.created_at,
-                                    role: msg.user_profiles?.role as any,
-                                    troll_role: msg.user_profiles?.troll_role,
-                                    id: msg.user_id,
-                                    rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                    glowing_username_color: msg.user_profiles?.glowing_username_color
-                                }}
-                                className="text-yellow-500"
-                                showBadges={true}
-                                isBroadcaster={isHost}
-                                isModerator={isModerator}
-                                streamId={streamId}
-                            />
-                            <span>:</span>
-                        </div>
-                        <span className="text-gray-200 text-sm">{msg.content}</span>
-                    </div>
-                    {(isHost || isModerator) && (
-                        <button 
-                            onClick={() => deleteMessage(msg.id)}
-                            className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            <Trash2 size={12} />
-                        </button>
-                    )}
-                </div>
-            )})}
-            <div ref={scrollRef} />
+                        return (
+                            <div className="p-2 animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
+                                <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
+                                    {msg.user_profiles?.avatar_url ? (
+                                        <img src={msg.user_profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <User size={14} className="m-1 text-zinc-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0 break-words">
+                                    <div className="font-bold text-yellow-500 text-sm mr-2 flex items-center inline-flex flex-wrap">
+                                        {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
+                                        {renderVehicleBadge(msg.vehicle_status)}
+                                        <UserNameWithAge 
+                                            user={{
+                                                username: msg.user_profiles?.username || 'User',
+                                                created_at: msg.user_profiles?.created_at,
+                                                role: msg.user_profiles?.role as any,
+                                                troll_role: msg.user_profiles?.troll_role,
+                                                id: msg.user_id,
+                                                rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
+                                                glowing_username_color: msg.user_profiles?.glowing_username_color
+                                            }}
+                                            className="text-yellow-500"
+                                            showBadges={true}
+                                            isBroadcaster={isHost}
+                                            isModerator={isModerator}
+                                            streamId={streamId}
+                                        />
+                                        <span>:</span>
+                                    </div>
+                                    <span className="text-gray-200 text-sm ml-1">{msg.content}</span>
+                                </div>
+                                {(isHost || isModerator) && (
+                                    <button 
+                                        onClick={() => deleteMessage(msg.id)}
+                                        className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    }}
+                />
+            )}
         </div>
 
         <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-zinc-900/80 relative">
@@ -555,6 +557,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                     type="text" 
                     value={input}
                     onChange={e => setInput(e.target.value)}
+                    onFocus={() => {
+                        if (isGuest) {
+                            navigate('/auth?mode=signup');
+                        }
+                    }}
                     placeholder={isGuest ? "Sign up to chat..." : "Type a message..."}
                     className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
                 />

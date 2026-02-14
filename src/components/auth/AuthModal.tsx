@@ -8,7 +8,7 @@ const VisuallyHidden = ({ children }: { children: React.ReactNode }) => (
 );
 
 export default function AuthModal() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [initialMode, setInitialMode] = useState<'login' | 'signup'>('login');

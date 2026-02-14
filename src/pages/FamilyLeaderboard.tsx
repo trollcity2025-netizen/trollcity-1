@@ -6,8 +6,9 @@ import {
   Trophy, Medal, Award, TrendingUp,
   Star, Users, Coins, Crown
 } from 'lucide-react'
+import { Virtuoso } from 'react-virtuoso'
 
-const FamilyLeaderboard = ({ user: authUser }: { user?: UserProfile | null }) => {
+const FamilyLeaderboard = ({ user: _authUser }: { user?: UserProfile | null }) => {
   const { user } = useAuthStore()
   const [leaderboard, setLeaderboard] = useState([])
   const [userFamily, setUserFamily] = useState(null)
@@ -70,7 +71,7 @@ const FamilyLeaderboard = ({ user: authUser }: { user?: UserProfile | null }) =>
           )
         `)
         .order(orderBy, { ascending: false })
-        .limit(50)
+        .limit(100)
 
       // Add member counts
       const familiesWithMembers = await Promise.all(
@@ -200,79 +201,82 @@ const FamilyLeaderboard = ({ user: authUser }: { user?: UserProfile | null }) =>
             </h2>
           </div>
 
-          <div className="divide-y divide-zinc-800">
+          <div className="min-h-[400px]">
             {leaderboard.length === 0 ? (
               <div className="p-8 text-center text-gray-400">
                 <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>No families found</p>
               </div>
             ) : (
-              leaderboard.map((family, index) => {
-                const rank = index + 1
-                const isUserFamily = userFamily === family.family_id
+              <Virtuoso
+                style={{ height: '600px' }}
+                data={leaderboard}
+                itemContent={(index, family) => {
+                  const rank = index + 1
+                  const isUserFamily = userFamily === family.family_id
 
-                return (
-                  <div
-                    key={family.family_id}
-                    className={`p-4 hover:bg-zinc-800/50 transition-colors ${
-                      isUserFamily ? 'bg-purple-900/20 border-l-4 border-purple-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {/* Rank */}
-                      <div className="flex items-center justify-center w-12">
-                        {getRankIcon(rank)}
-                      </div>
+                  return (
+                    <div
+                      className={`p-4 hover:bg-zinc-800/50 transition-colors border-b border-zinc-800 last:border-0 ${
+                        isUserFamily ? 'bg-purple-900/20 border-l-4 border-purple-500' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Rank */}
+                        <div className="flex items-center justify-center w-12">
+                          {getRankIcon(rank)}
+                        </div>
 
-                      {/* Family Info */}
-                      <div className="flex items-center gap-3 flex-1">
-                        {family.troll_families?.emblem_url && (
-                          <img
-                            src={family.troll_families.emblem_url}
-                            alt={`${family.troll_families.name} emblem`}
-                            className="w-10 h-10 rounded-full border border-zinc-600"
-                          />
-                        )}
-                        <div>
-                          <h3 className={`font-semibold ${isUserFamily ? 'text-purple-400' : 'text-white'}`}>
-                            {family.troll_families?.name || 'Unknown Family'}
-                            {isUserFamily && <span className="ml-2 text-xs text-purple-300">(Your Family)</span>}
-                          </h3>
-                          <div className="flex items-center gap-4 text-sm text-gray-400">
-                            <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              {family.memberCount} members
+                        {/* Family Info */}
+                        <div className="flex items-center gap-3 flex-1">
+                          {family.troll_families?.emblem_url && (
+                            <img
+                              src={family.troll_families.emblem_url}
+                              alt={`${family.troll_families.name} emblem`}
+                              className="w-10 h-10 rounded-full border border-zinc-600"
+                            />
+                          )}
+                          <div>
+                            <h3 className={`font-semibold ${isUserFamily ? 'text-purple-400' : 'text-white'}`}>
+                              {family.troll_families?.name || 'Unknown Family'}
+                              {isUserFamily && <span className="ml-2 text-xs text-purple-300">(Your Family)</span>}
+                            </h3>
+                            <div className="flex items-center gap-4 text-sm text-gray-400">
+                              <span className="flex items-center gap-1">
+                                <Users className="w-3 h-3" />
+                                {family.memberCount} members
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Star className="w-3 h-3" />
+                                Level {family.level}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Coins */}
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 text-yellow-400">
+                            <Coins className="w-4 h-4" />
+                            <span className="font-bold text-lg">
+                              {formatCoins(
+                                activeTab === 'weekly' ? family.weekly_coins :
+                                activeTab === 'season' ? family.season_coins :
+                                family.total_coins
+                              )}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Star className="w-3 h-3" />
-                              Level {family.level}
-                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {activeTab === 'total' ? 'Total Family Tokens' :
+                             activeTab === 'weekly' ? 'Weekly Family Tokens' :
+                             'Season Family Tokens'}
                           </div>
                         </div>
                       </div>
-
-                      {/* Coins */}
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 text-yellow-400">
-                          <Coins className="w-4 h-4" />
-                          <span className="font-bold text-lg">
-                            {formatCoins(
-                              activeTab === 'weekly' ? family.weekly_coins :
-                              activeTab === 'season' ? family.season_coins :
-                              family.total_coins
-                            )}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {activeTab === 'total' ? 'Total Family Tokens' :
-                           activeTab === 'weekly' ? 'Weekly Family Tokens' :
-                           'Season Family Tokens'}
-                        </div>
-                      </div>
                     </div>
-                  </div>
-                )
-              })
+                  )
+                }}
+              />
             )}
           </div>
         </div>

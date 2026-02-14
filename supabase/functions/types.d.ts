@@ -7,6 +7,33 @@ declare namespace Deno {
 }
 
 // Supabase types
+declare module 'https://esm.sh/@supabase/supabase-js@2.39.7' {
+  export function createClient(url: string, key: string, options?: any): any
+  export type SupabaseClient = object
+}
+
+declare module 'https://esm.sh/@upstash/redis@1.28.4' {
+  export class Redis {
+    constructor(config: { url: string; token: string });
+    xadd(key: string, id: string, fields: Record<string, string>): Promise<string>;
+    get(key: string): Promise<any>;
+    set(key: string, value: any, options?: { nx?: boolean; ex?: number }): Promise<any>;
+    incr(key: string): Promise<number>;
+    expire(key: string, seconds: number): Promise<number>;
+  }
+}
+
+declare module '@upstash/redis' {
+  export class Redis {
+    constructor(config: { url: string; token: string });
+    xadd(key: string, id: string, fields: Record<string, string>): Promise<string>;
+    get(key: string): Promise<any>;
+    set(key: string, value: any, options?: { nx?: boolean; ex?: number }): Promise<any>;
+    incr(key: string): Promise<number>;
+    expire(key: string, seconds: number): Promise<number>;
+  }
+}
+
 declare module 'jsr:@supabase/supabase-js@2' {
   export function createClient(url: string, key: string, options?: any): any
   export type SupabaseClient = object

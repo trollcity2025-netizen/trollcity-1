@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { useParticipants, useTracks, VideoTrack } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, MicOff, VideoOff, Lock } from 'lucide-react';
+import { User, Coins, Plus, MicOff, VideoOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 
@@ -10,7 +10,6 @@ import BroadcasterStatsModal from './BroadcasterStatsModal';
 import { SeatSession } from '../../hooks/useStreamSeats';
 import { getGlowingTextStyle } from '../../lib/perkEffects';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
-import { toast } from 'sonner';
 
 interface BroadcastGridProps {
   stream: Stream;

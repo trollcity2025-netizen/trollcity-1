@@ -66,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // However, to avoid breaking if keys are mismatched during migration, I'll log and try to parse.
         try {
             eventData = JSON.parse(rawBody);
-        } catch (e) {
+        } catch {
             return res.status(400).json({ error: 'Invalid JSON' });
         }
     }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Coins, Loader2, ChevronDown } from 'lucide-react';
+import { Coins, Loader2, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useGiftSystem, GiftItem } from '../../lib/hooks/useGiftSystem';
@@ -22,7 +22,7 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId, battleId, recipientId);
   const { user, profile } = useAuthStore();
-  const [sendingToAll, setSendingToAll] = useState(false);
+  const [_sendingToAll, setSendingToAll] = useState(false);
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
 
   useEffect(() => {

@@ -387,75 +387,36 @@ export async function awardHelpfulReportXP(userId: string, reportId: string) {
 }
 
 /**
- * Process Gift XP Logic
- * Migrated to use xpService (RPC)
- * Updated to use comprehensive XP rates
+ * Process Gift XP Logic (Server-Side)
+ * Calls the process_gift_xp RPC which validates live status and awards XP idempotently.
  */
-export async function processGiftXp(senderId: string, receiverId: string, coinAmount: number) {
-  const sourceId = `gift_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-  // 1. Calculate XP with new rates
-  // Sender gets +1.1 XP per coin (10% bonus for live gifting)
-  const gifterXp = Math.floor(coinAmount * ECONOMY_XP.LIVE_GIFT_BONUS)
-  // Receiver gets +1 XP per coin
-  const streamerXp = Math.floor(coinAmount * XP_RATES.STREAMER)
-
-  // 2. Update Sender (Gifter)
-  const senderResultRaw = await xpService.grantXP(
-      senderId, 
-      gifterXp, 
-      'gift_sent', 
-      sourceId + '_sender',
-      { coin_amount: coinAmount, receiver_id: receiverId }
-  )
-
-  // 3. Update Receiver (Streamer)
-  const receiverResultRaw = await xpService.grantXP(
-      receiverId, 
-      streamerXp, 
-      'gift_received', 
-      sourceId + '_receiver',
-      { coin_amount: coinAmount, sender_id: senderId }
-  )
-
-  // 4. Map to legacy return format for compatibility with useGiftSystem
-  const senderResult = {
-      leveledUp: false, // RPC doesn't return this bool yet, but Sidebar will update auto
-      newLevel: senderResultRaw.data?.level || 1,
-      type: 'gifter'
+export async function processGiftXp(giftTxId: string, streamId: string | null = null) {
+  if (!giftTxId) {
+    console.error('[processGiftXp] Missing giftTxId');
+    return { success: false };
   }
 
-  const receiverResult = {
-      leveledUp: false,
-      newLevel: receiverResultRaw.data?.level || 1,
-      type: 'streamer'
+  const { data, error } = await supabase.rpc('process_gift_xp', {
+    p_gift_tx_id: giftTxId,
+    p_stream_id: streamId
+  });
+
+  if (error) {
+    console.error('[processGiftXp] Error calling RPC:', error);
+    return { success: false, error };
   }
 
-  // Evaluate Badges for both
-  if (senderResultRaw.success) {
-      evaluateBadgesForUser(senderId, { giftAmount: coinAmount }).catch(console.error)
-  }
-  if (receiverResultRaw.success) {
-      evaluateBadgesForUser(receiverId, { giftAmount: coinAmount }).catch(console.error)
-  }
-
-  // 5. Check for Millionaire Hall of Fame (Legacy logic preserved)
-  if (coinAmount >= 250000) {
-    await addToMillionaireHallOfFame(senderId, receiverId, coinAmount)
-  }
-
-  return { 
-    senderResult, 
-    receiverResult,
-    senderData: senderResultRaw.data,
-    receiverData: receiverResultRaw.data
-  }
+  // Refresh badges for sender and receiver if we have their IDs
+  // Note: RPC might not return IDs, but we can usually get them from the gift context if needed.
+  // For now, let the backend handle XP and rely on frontend events for badge updates.
+  
+  return { success: true, data };
 }
 
 /**
  * Add to Millionaire Hall of Fame
  */
-async function addToMillionaireHallOfFame(senderId: string, receiverId: string, amount: number) {
+async function _addToMillionaireHallOfFame(senderId: string, receiverId: string, amount: number) {
   try {
     await supabase
       .from('hall_of_fame')

@@ -5,10 +5,11 @@ import { corsHeaders } from "../_shared/cors.ts"
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders(req.headers.get('origin')) })
   }
 
   try {
+    const cors = corsHeaders(req.headers.get('origin'))
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -18,7 +19,7 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...cors, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -28,7 +29,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Invalid or expired token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...cors, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -51,7 +52,7 @@ serve(async (req) => {
         if (!reporter_id || !reason) {
           return new Response(
             JSON.stringify({ error: 'Missing required fields' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -59,7 +60,7 @@ serve(async (req) => {
         if (reporter_id !== user.id) {
           return new Response(
             JSON.stringify({ error: 'Unauthorized' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -79,13 +80,13 @@ serve(async (req) => {
         if (error) {
           return new Response(
             JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
         return new Response(
           JSON.stringify({ success: true, report: data }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
       }
 
@@ -93,7 +94,7 @@ serve(async (req) => {
         if (!isOfficer) {
           return new Response(
             JSON.stringify({ error: 'Unauthorized: Officer access required' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -102,7 +103,7 @@ serve(async (req) => {
         if (!action_type || !reason || !reason.trim()) {
           return new Response(
             JSON.stringify({ error: 'Missing required fields: action_type and reason are required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -111,8 +112,8 @@ serve(async (req) => {
           await supabase
             .from('moderation_reports')
             .update({
-              status: 'action_taken',
-              reviewed_by: user.id,
+              status: 'resolved',
+              resolved_by: user.id,
               resolved_at: new Date().toISOString()
             })
             .eq('id', report_id)
@@ -131,16 +132,17 @@ serve(async (req) => {
           .from('moderation_actions')
           .insert({
             action_type,
+            action: action_type, // Syncing with legacy 'action' column
             target_user_id: target_user_id || null,
-            stream_id: stream_id || null,
             reason: reason.trim(),
-            action_details: action_details || null,
-            created_by: user.id,
-            expires_at: banExpiresAt,
+            details: action_details || null,
+            officer_id: user.id,
+            actor_id: user.id,
             ban_expires_at: banExpiresAt,
             ban_duration_hours: ban_duration_hours || null,
             honesty_message_shown: honesty_message_shown || false,
-            report_id: report_id || null
+            report_id: report_id || null,
+            status: 'active'
           })
           .select()
           .single()
@@ -148,7 +150,7 @@ serve(async (req) => {
         if (actionError) {
           return new Response(
             JSON.stringify({ error: actionError.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -170,7 +172,19 @@ serve(async (req) => {
           
           if (rpcError) {
              console.error("Ban RPC Error", rpcError)
-             return new Response(JSON.stringify({ error: rpcError.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+             
+             // Update moderation action to rejected status with error message
+             if (actionData?.id) {
+               await supabase
+                 .from('moderation_actions')
+                 .update({ 
+                   status: 'rejected',
+                   error_message: rpcError.message 
+                 })
+                 .eq('id', actionData.id)
+             }
+
+             return new Response(JSON.stringify({ error: rpcError.message }), { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } })
           }
 
           // Create notification for banned user with honesty message
@@ -198,13 +212,33 @@ serve(async (req) => {
 
           if (rpcError) {
               console.error("Unban RPC Error", rpcError)
-              return new Response(JSON.stringify({ error: rpcError.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+              
+              // Update the unban action itself to rejected status
+              if (actionData?.id) {
+                await supabase
+                  .from('moderation_actions')
+                  .update({ 
+                    status: 'rejected',
+                    error_message: rpcError.message 
+                  })
+                  .eq('id', actionData.id)
+              }
+
+              return new Response(JSON.stringify({ error: rpcError.message }), { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } })
           }
+
+          // Update moderation actions status to revoked
+          await supabase
+            .from('moderation_actions')
+            .update({ status: 'revoked' })
+            .eq('target_user_id', target_user_id)
+            .eq('action_type', 'ban_user')
+            .eq('status', 'active')
         }
 
         return new Response(
           JSON.stringify({ success: true, action: actionData }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
       }
 
@@ -212,7 +246,7 @@ serve(async (req) => {
         if (!isOfficer) {
           return new Response(
             JSON.stringify({ error: 'Unauthorized: Officer access required' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -237,13 +271,13 @@ serve(async (req) => {
         if (error) {
           return new Response(
             JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
         return new Response(
           JSON.stringify({ success: true, reports: data || [] }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
       }
 
@@ -251,7 +285,7 @@ serve(async (req) => {
         if (!isOfficer) {
           return new Response(
             JSON.stringify({ error: 'Unauthorized: Officer access required' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 403, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -260,7 +294,7 @@ serve(async (req) => {
         if (!report_id) {
           return new Response(
             JSON.stringify({ error: 'Missing report_id' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
@@ -276,26 +310,26 @@ serve(async (req) => {
         if (error) {
           return new Response(
             JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } }
           )
         }
 
         return new Response(
           JSON.stringify({ success: true }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
       }
 
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
     }
   } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } }
     )
   }
 })

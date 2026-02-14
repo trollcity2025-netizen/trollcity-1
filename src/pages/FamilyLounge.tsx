@@ -9,7 +9,7 @@ import {
   Trophy, Sword, Star, Zap, Award
 } from 'lucide-react'
 
-const FamilyLounge = ({ user: authUser }: { user: UserProfile }) => {
+const FamilyLounge = ({ user: _authUser }: { user: UserProfile }) => {
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const [family, setFamily] = useState(null)

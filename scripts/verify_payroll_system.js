@@ -2,7 +2,6 @@
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 import path from 'path'
-import { fileURLToPath } from 'url'
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
@@ -55,7 +54,7 @@ async function verifyPayrollSystem() {
     
     // 4. Check if User Earnings Summary view is accessible
     console.log('\nChecking user_earnings_summary view...')
-    const { data: summaryData, error: summaryError } = await supabase
+    const { data: _summaryData, error: summaryError } = await supabase
       .from('user_earnings_summary')
       .select('count')
       .limit(1)

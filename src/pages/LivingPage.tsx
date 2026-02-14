@@ -165,7 +165,7 @@ export default function LivingPage() {
     if (appData) {
       setLandlordApplication(appData);
     }
-  }, [user]);
+  }, [user, profile?.is_admin, profile?.role]);
 
   // Landlord Application Handler
   const handleSubmitLandlordApplication = async () => {

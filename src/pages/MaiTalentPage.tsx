@@ -52,7 +52,7 @@ export default function MaiTalentPage() {
   // Function definitions must come before useEffect
   const fetchShowStatus = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error: _error } = await supabase
         .from('mai_talent_config')
         .select('is_live')
         .eq('id', 1)
@@ -117,7 +117,7 @@ export default function MaiTalentPage() {
           .order('total_votes', { ascending: false });
         viewData = result.data;
         viewError = result.error;
-      } catch (err) {
+      } catch {
         console.warn('View access failed, falling back to table');
       }
 
@@ -166,6 +166,7 @@ export default function MaiTalentPage() {
   useEffect(() => {
     fetchAuditions();
     checkStaffStatus();
+    fetchShowStatus();
 
     // Polling instead of Realtime for leaderboard to reduce DB load
     const interval = setInterval(() => {

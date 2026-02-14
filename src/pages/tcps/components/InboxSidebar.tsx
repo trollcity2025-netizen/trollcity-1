@@ -63,24 +63,6 @@ export default function InboxSidebar({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [user?.id])
 
-  const handleBlockUser = async (_userId: string) => {
-    if (!user) return
-    try {
-      // Implement block logic here or call a helper
-      // For now just toast
-      toast.success('User blocked (simulation)')
-      setOpenMenuId(null)
-    } catch {
-      toast.error('Failed to block user')
-    }
-  }
-
-  const handleHideChat = async (_userId: string) => {
-    // Implement hide chat logic
-    toast.success('Chat hidden (simulation)')
-    setOpenMenuId(null)
-  }
-
   const handleOpenBubble = (userId: string, username: string, avatarUrl: string | null) => {
     openChatBubble(userId, username, avatarUrl)
     setOpenMenuId(null)
@@ -88,141 +70,287 @@ export default function InboxSidebar({
 
   const fetchConversations = useCallback(async () => {
     if (!user?.id) return
-    // Only show loading state if we have no conversations yet
-    if (conversations.length === 0) {
-        setLoading(true)
-    }
+    
     try {
-      // Use the listUserConversations helper or manual query
-      // The snippet suggested listUserConversations might exist, but we can do it manually for more control over last message
-      
-      // We need last message and unread count.
-      // This is often complex in Supabase without a dedicated view or RPC.
-      // Let's assume we have an RPC or do a client-side join.
-      
-      // Let's try to fetch members and then last message for each.
-      const { data: members, error } = await supabase
+      // 1. Fetch all conversations the user is a member of
+      const { data: members, error: membersError } = await supabase
         .from('conversation_members')
-        .select('conversation_id, conversations(created_at)')
+        .select('conversation_id')
         .eq('user_id', user.id)
       
-      if (error) throw error
+      if (membersError) throw membersError
+      const convIds = members?.map(m => m.conversation_id) || []
+      
+      // Separate array to hold our processed conversations
+      const processedConvs: SidebarConversation[] = []
 
-      const convIds = members.map(m => m.conversation_id)
-      
-      if (convIds.length === 0) {
-        setConversations([])
-        onConversationsLoaded([])
-        setLoading(false)
-        return
-      }
+      if (convIds.length > 0) {
+        // 2. Fetch other members for these conversations to get their profiles
+        const { data: otherMembers, error: othersError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id, user_id, user_profiles!inner(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
+          .in('conversation_id', convIds)
+          .neq('user_id', user.id)
 
-      // Fetch other members for these conversations
-      const { data: otherMembers } = await supabase
-        .from('conversation_members')
-        .select('conversation_id, user_id, user_profiles(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
-        .in('conversation_id', convIds)
-        .neq('user_id', user.id)
-
-      // Fetch last messages (latest per conversation)
-      // This is hard to do in one query efficiently without lateral join.
-      // We'll fetch latest messages for all these conversations.
-      // Or we can just fetch all messages for these convs limit 1 per conv? No.
-      
-      // Let's fetch the most recent message for each conversation individually or use an RPC if available.
-      // Assuming no RPC for "inbox", we'll do it naively:
-      
-      const convsWithDetails = await Promise.all(convIds.map(async (cid) => {
-         const { data: msgs } = await supabase
-           .from('conversation_messages')
-           .select('body, created_at, sender_id')
-           .eq('conversation_id', cid)
-           .is('is_deleted', false)
-           .order('created_at', { ascending: false })
-           .limit(1)
-           .maybeSingle()
-         
-         const lastMsg = msgs || { body: 'No messages yet', created_at: '', sender_id: '' }
-         
-         // Find other member
-         const other = otherMembers?.find(om => om.conversation_id === cid)
-         if (!other || !other.user_profiles) return null
-         
-         // Unread count?
-         // Assuming we have a read_status table or similar, but typically we check last read time.
-         // Let's skip precise unread count for now or mock it.
-         
-         return {
-           other_user_id: other.user_id,
-           other_username: (other.user_profiles as any).username,
-           other_avatar_url: (other.user_profiles as any).avatar_url,
-           rgb_username_expires_at: (other.user_profiles as any).rgb_username_expires_at,
-           glowing_username_color: (other.user_profiles as any).glowing_username_color,
-           other_created_at: (other.user_profiles as any).created_at,
-           last_message: lastMsg.body,
-           last_timestamp: lastMsg.created_at,
-           unread_count: 0 // TODO: Implement unread count
-         }
-      }))
-      
-      const validConvs = convsWithDetails.filter(Boolean) as SidebarConversation[]
-      
-      // If user is officer, add Officer Operations group chat at the top
-      if (isUserOfficer) {
-        // Get latest OPS message
-        const { data: latestOpsMsg } = await supabase
-          .from('officer_chat_messages')
-          .select('content, created_at, sender_id')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        
-        const opsConv: SidebarConversation = {
-          other_user_id: OFFICER_GROUP_CONVERSATION_ID,
-          other_username: '👮 Officer Operations',
-          other_avatar_url: null,
-          last_message: latestOpsMsg?.content || 'Officer group chat',
-          last_timestamp: latestOpsMsg?.created_at || new Date().toISOString(),
-          unread_count: 0,
-          is_online: true,
-          other_created_at: new Date().toISOString()
+        if (othersError) {
+          console.warn('Error fetching other members, trying without !inner:', othersError)
+          // Fallback if !inner fails (though it shouldn't if relations are correct)
+          const { data: fallbackMembers } = await supabase
+            .from('conversation_members')
+            .select('conversation_id, user_id, user_profiles(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
+            .in('conversation_id', convIds)
+            .neq('user_id', user.id)
+          
+          if (fallbackMembers) {
+            // Manual filter for members that actually have profiles
+            // const validMembers = fallbackMembers.filter(m => m.user_profiles)
+            // ... continue with validMembers
+          }
         }
+
+        // 3. Fetch unread counts for each conversation
+        const { data: unreadData } = await supabase
+          .from('conversation_messages')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+          .neq('sender_id', user.id)
+          .is('read_at', null)
+          .is('is_deleted', false)
+
+        const unreadCounts: Record<string, number> = {}
+        unreadData?.forEach(m => {
+          unreadCounts[m.conversation_id] = (unreadCounts[m.conversation_id] || 0) + 1
+        })
+
+        // 2.5 Fetch blocked users to filter them out
+        const { data: blockedData } = await supabase
+          .from('user_relationships')
+          .select('related_user_id')
+          .eq('user_id', user.id)
+          .eq('status', 'blocked')
         
-        validConvs.unshift(opsConv)
+        const blockedUserIds = new Set(blockedData?.map(b => b.related_user_id) || [])
+
+        // 2.6 Get hidden conversations from localStorage
+        const hiddenConvIds = new Set<string>(JSON.parse(localStorage.getItem('hidden_conversations') || '[]'))
+
+        // 4. Fetch the last message for each conversation
+        const convsWithDetails = await Promise.all(convIds.map(async (cid) => {
+           const { data: msgs } = await supabase
+             .from('conversation_messages')
+             .select('body, created_at, sender_id')
+             .eq('conversation_id', cid)
+             .is('is_deleted', false)
+             .order('created_at', { ascending: false })
+             .limit(1)
+             .maybeSingle()
+           
+           const lastMsg = msgs || { body: 'No messages yet', created_at: null, sender_id: '' }
+           
+           // 4.1 If conversation is hidden, only show it if there are unread messages
+           const isHidden = hiddenConvIds.has(cid)
+           const unreadCount = unreadCounts[cid] || 0
+           if (isHidden && unreadCount === 0) return null
+
+           // Find other member(s)
+           const others = otherMembers?.filter(om => om.conversation_id === cid)
+           if (!others || others.length === 0) return null
+           
+           // For now, handle as 1-on-1 but we could support groups
+           const other = others[0]
+           if (!other.user_profiles || blockedUserIds.has(other.user_id)) return null
+           
+           const profile = other.user_profiles as any
+           
+           return {
+             other_user_id: other.user_id,
+             other_username: profile.username,
+             other_avatar_url: profile.avatar_url,
+             rgb_username_expires_at: profile.rgb_username_expires_at,
+             glowing_username_color: profile.glowing_username_color,
+             other_created_at: profile.created_at,
+             last_message: lastMsg.body,
+             last_timestamp: lastMsg.created_at || '',
+             unread_count: unreadCount
+           }
+        }))
+        
+        processedConvs.push(...(convsWithDetails.filter(Boolean) as SidebarConversation[]))
       }
+
+      // 5. Deduplicate by other_user_id
+      const uniqueConvsMap = new Map<string, SidebarConversation>()
       
-      // Sort by timestamp (OPS will stay at top due to unshift)
-      validConvs.sort((a, b) => {
-        if (a.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return -1
-        if (b.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return 1
-        return new Date(b.last_timestamp).getTime() - new Date(a.last_timestamp).getTime()
+      processedConvs.forEach(conv => {
+        const existing = uniqueConvsMap.get(conv.other_user_id)
+        // If no existing, or this one has a message and the existing doesn't, or this one is newer
+        const hasTime = (t: string) => t && t !== ''
+        if (!existing) {
+          uniqueConvsMap.set(conv.other_user_id, conv)
+        } else if (hasTime(conv.last_timestamp) && !hasTime(existing.last_timestamp)) {
+          uniqueConvsMap.set(conv.other_user_id, conv)
+        } else if (hasTime(conv.last_timestamp) && hasTime(existing.last_timestamp)) {
+          if (new Date(conv.last_timestamp) > new Date(existing.last_timestamp)) {
+            uniqueConvsMap.set(conv.other_user_id, conv)
+          }
+        }
       })
       
-      setConversations(validConvs)
-      onConversationsLoaded(validConvs)
+      const finalConvs = Array.from(uniqueConvsMap.values())
+      
+      // 6. Add Officer Operations if applicable
+      if (isUserOfficer) {
+        try {
+          const { data: latestOpsMsg } = await supabase
+            .from('officer_chat_messages')
+            .select('content, created_at, sender_id')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          
+          // Fetch OPS unread count
+          // We'll use a simple approach: messages since last seen or just any messages?
+          // For now, let's look at the officer_chat_messages table.
+          // In a real app, you'd have an 'officer_chat_read_status' table.
+          // As a workaround, we can use localStorage for 'last_seen_ops_timestamp'
+          const lastSeenOps = localStorage.getItem('last_seen_ops_timestamp') || '1970-01-01T00:00:00Z'
+          const { count: opsUnreadCount } = await supabase
+            .from('officer_chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .gt('created_at', lastSeenOps)
+            .neq('sender_id', user.id)
+
+          const opsConv: SidebarConversation = {
+            other_user_id: OFFICER_GROUP_CONVERSATION_ID,
+            other_username: '👮 Officer Operations',
+            other_avatar_url: null,
+            last_message: latestOpsMsg?.content || 'Officer group chat',
+            last_timestamp: latestOpsMsg?.created_at || new Date().toISOString(),
+            unread_count: opsUnreadCount || 0,
+            is_online: true,
+            other_created_at: new Date().toISOString()
+          }
+          
+          finalConvs.unshift(opsConv)
+        } catch (opsErr) {
+          console.error('Error fetching OPS preview:', opsErr)
+        }
+      }
+      
+      // 7. Sort by timestamp
+      finalConvs.sort((a, b) => {
+        if (a.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return -1
+        if (b.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return 1
+        
+        const timeA = a.last_timestamp ? new Date(a.last_timestamp).getTime() : 0
+        const timeB = b.last_timestamp ? new Date(b.last_timestamp).getTime() : 0
+        return timeB - timeA
+      })
+      
+      setConversations(finalConvs)
+      onConversationsLoaded(finalConvs)
 
     } catch (err) {
       console.error('Error fetching conversations:', err)
     } finally {
       setLoading(false)
     }
-  }, [user?.id, onConversationsLoaded, conversations.length])
+  }, [user?.id, isUserOfficer, onConversationsLoaded])
+
+  const handleBlockUser = async (otherUserId: string) => {
+    if (!user) return
+    if (!confirm('Are you sure you want to block this user?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('user_relationships')
+        .insert({
+          user_id: user.id,
+          related_user_id: otherUserId,
+          status: 'blocked'
+        })
+      
+      if (error) throw error
+      toast.success('User blocked')
+      setOpenMenuId(null)
+      fetchConversations() // Refresh sidebar
+    } catch (err) {
+      console.error('Error blocking user:', err)
+      toast.error('Failed to block user')
+    }
+  }
+
+  const handleHideChat = async (otherUserId: string) => {
+    if (!user) return
+    
+    // We need the conversation ID for this user
+    const conv = conversations.find(c => c.other_user_id === otherUserId)
+    if (!conv) return
+
+    // Find the actual conversation ID for this user
+    const { data: memberData } = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', user.id)
+    
+    if (memberData) {
+      const myConvIds = memberData.map(m => m.conversation_id)
+      const { data: shared } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .in('conversation_id', myConvIds)
+        .eq('user_id', otherUserId)
+        .maybeSingle()
+      
+      if (shared) {
+        const hiddenChats = JSON.parse(localStorage.getItem('hidden_conversations') || '[]')
+        if (!hiddenChats.includes(shared.conversation_id)) {
+          hiddenChats.push(shared.conversation_id)
+          localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
+        }
+        toast.success('Chat hidden')
+        fetchConversations() // Refresh sidebar
+      }
+    }
+    setOpenMenuId(null)
+  }
 
   useEffect(() => {
     fetchConversations()
     
     // Subscribe to new messages to update sidebar ordering/preview
-    const channel = supabase
-      .channel('sidebar-updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, () => {
+    const messagesChannel = supabase
+      .channel('sidebar-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (_payload) => {
+         // Check if the message belongs to one of our conversations
+         fetchConversations()
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, (_payload) => {
+         // Handle read receipts
+         fetchConversations()
+      })
+      .on('broadcast', { event: 'new-message' }, () => {
+         // Instant sidebar update on broadcast
          fetchConversations()
       })
       .subscribe()
-      
-    return () => {
-      supabase.removeChannel(channel)
+
+    // Subscribe to OPS messages if user is officer
+    let opsChannel: any = null
+    if (isUserOfficer) {
+      opsChannel = supabase
+        .channel('sidebar-ops')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'officer_chat_messages' }, () => {
+           fetchConversations()
+        })
+        .subscribe()
     }
-  }, [fetchConversations])
+
+    return () => {
+      supabase.removeChannel(messagesChannel)
+      if (opsChannel) supabase.removeChannel(opsChannel)
+    }
+  }, [fetchConversations, isUserOfficer])
 
   const filteredConversations = conversations.filter(c => 
     c.other_username.toLowerCase().includes(searchQuery.toLowerCase())

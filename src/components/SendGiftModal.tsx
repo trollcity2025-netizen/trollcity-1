@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { X, Coins, Diamond } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useGiftSystem } from '../lib/hooks/useGiftSystem'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
@@ -35,7 +35,8 @@ const GIFT_ITEMS = OFFICIAL_GIFTS.map(g => ({
   type: 'paid',
   tier: g.tier,
   icon: g.icon,
-  currency: 'troll_coins'
+  currency: 'troll_coins',
+  category: 'Official'
 }));
 
 interface GiftItem {

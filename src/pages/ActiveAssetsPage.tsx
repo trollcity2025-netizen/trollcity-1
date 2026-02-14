@@ -108,7 +108,7 @@ export default function ActiveAssetsPage() {
         // Estimate insurance rate bps if not available (default 0.1% = 10bps for simplicity, or 50bps)
         // Premium amount is usually ~2000 flat in new schema, but let's try to derive a bps if we want to show daily cost
         const price = c.vehicles_catalog.price || 10000;
-        const premium = insurance?.premium_amount || 2000;
+        const _premium = insurance?.premium_amount || 2000;
         // Mock bps for display purposes
         const insurance_rate_bps = 50; 
 

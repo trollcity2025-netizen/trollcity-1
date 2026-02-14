@@ -18,9 +18,7 @@ import {
   XCircle,
   Calendar,
   ChevronDown,
-  FileText,
-  User,
-
+  FileText
 } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
 

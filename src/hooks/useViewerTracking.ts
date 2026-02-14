@@ -1,19 +1,21 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { getUserEntranceEffect } from '../lib/entranceEffects'
+// import { getUserEntranceEffect } from '../lib/entranceEffects'
+import { usePresenceStore } from '../lib/presenceStore'
 
 /**
  * Tracks viewer presence using Supabase Realtime.
  * - Viewers join the 'room:{streamId}' channel.
- * - The Host (broadcaster) is responsible for periodically updating the 'streams' table
- *   with the accurate viewer count to avoid DB write storms.
- * - Posts join/leave messages to stream chat
+ * - Scalability: Aggregates counts and batches updates.
+ * - Removes per-user join/leave chat spam.
  */
 export function useViewerTracking(streamId: string | null, isHost: boolean = false, customUser: any = null) {
   const { user, profile } = useAuthStore()
-  const [viewerCount, setViewerCount] = useState<number | undefined>(undefined)
+  const setRoomViewerCount = usePresenceStore(state => state.setRoomViewerCount)
   const lastDbUpdate = useRef<number>(0)
+  const pendingCountRef = useRef<number | null>(null)
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Use customUser if provided (e.g. for Guests)
   const effectiveUser = user || customUser;
@@ -21,132 +23,111 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
   useEffect(() => {
     if (!streamId || !effectiveUser) return
 
-    const channel = supabase.channel(`room:${streamId}`)
+    // Only the Host and Officers track their presence to avoid roster explosion at 10k users.
+    // Viewers just "listen" to the count updated by the host/officers in the DB.
+    const isStaff = profile?.role === 'admin' || profile?.role === 'troll_officer' || profile?.is_troll_officer || profile?.is_admin;
+    
+    // Everyone tracks their presence now to populate the "Active Users" list.
+    // For scalability at 10k+ users, we might need to throttle or limit this in the future.
+    const shouldTrack = true;
+    const isUpdateAuthorized = isHost || isStaff;
+
+    const channel = supabase.channel(`room:${streamId}`, {
+      config: {
+        presence: {
+          key: effectiveUser.id,
+        },
+      },
+    })
 
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
         
-        // Count unique user_ids (deduplicate multiple tabs/connections)
-        const uniqueUsers = new Set();
-        Object.values(state).forEach((presences: any) => {
-            presences.forEach((p: any) => {
-                if (p.user_id) uniqueUsers.add(p.user_id);
-            });
-        });
+        // Count unique keys (user_ids)
+        let count = Object.keys(state).length;
+
+        // If we are tracking ourselves but not yet in the sync state, 
+        // ensure we count ourselves (at least 1)
+        if (shouldTrack && count === 0) {
+          count = 1;
+        }
         
-        const count = uniqueUsers.size;
-        setViewerCount(count)
+        // Scalability: Batch presence updates to 2 seconds
+        pendingCountRef.current = count;
+        if (!updateTimerRef.current) {
+          updateTimerRef.current = setTimeout(() => {
+            if (pendingCountRef.current !== null) {
+              setRoomViewerCount(streamId, pendingCountRef.current);
+              pendingCountRef.current = null;
+            }
+            updateTimerRef.current = null;
+          }, 2000);
+        }
 
-        // If Host OR Officer/Admin, update DB (throttled)
-        // This ensures the DB is updated even if the host is not in the browser
-        const isOfficer = 
-            profile?.role === 'admin' || 
-            profile?.role === 'troll_officer' || 
-            profile?.is_troll_officer || 
-            profile?.is_admin ||
-            profile?.troll_role === 'admin' ||
-            profile?.troll_role === 'troll_officer';
-
-        if (isHost || isOfficer) {
+        // Only Host OR Officer/Admin updates the DB count
+        if (isUpdateAuthorized) {
           const now = Date.now()
-          if (now - lastDbUpdate.current > 5000) { // Update every 5s
+          if (now - lastDbUpdate.current > 10000) { // Throttled to 10s
             lastDbUpdate.current = now
-            
-            // Use RPC to bypass potential RLS issues for officers
-            supabase
-              .rpc('update_stream_viewer_count', { 
-                  p_stream_id: streamId, 
-                  p_count: count 
-              })
-              .then(({ error }) => {
-                if (error) {
-                    console.error('Failed to update stream viewer count:', error)
-                }
-              })
+            supabase.rpc('update_stream_viewer_count', { p_stream_id: streamId, p_count: count });
           }
         }
-      })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        // Post join message to chat
-        newPresences.forEach((p: any) => {
-          if (p.user_id && p.username) {
-            // Fetch user level for the message
-            supabase.from('user_profiles')
-              .select('level')
-              .eq('id', p.user_id)
-              .single()
-              .then(({ data }) => {
-                const level = data?.level || 1;
-                supabase.rpc('post_system_message', {
-                  p_stream_id: streamId,
-                  p_user_id: p.user_id,
-                  p_content: `${p.username} [Lvl ${level}] entered`,
-                  p_username: p.username,
-                  p_avatar_url: p.avatar_url,
-                  p_role: p.role,
-                  p_troll_role: p.troll_role
-                });
-              });
-          }
-        });
-      })
-      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        // Post leave message to chat
-        leftPresences.forEach((p: any) => {
-          if (p.user_id && p.username) {
-            // Fetch user level for the message
-            supabase.from('user_profiles')
-              .select('level')
-              .eq('id', p.user_id)
-              .single()
-              .then(({ data }) => {
-                const level = data?.level || 1;
-                supabase.rpc('post_system_message', {
-                  p_stream_id: streamId,
-                  p_user_id: p.user_id,
-                  p_content: `${p.username} [Lvl ${level}] left`,
-                  p_username: p.username,
-                  p_avatar_url: p.avatar_url,
-                  p_role: p.role,
-                  p_troll_role: p.troll_role
-                });
-              });
-          }
-        });
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          // Fetch entrance effect before tracking
-          let entranceEffect = null;
-          if (user) {
-            try {
-               const effectData = await getUserEntranceEffect(user.id);
-               if (effectData?.config) {
-                   entranceEffect = effectData.config;
-               }
-            } catch (e) {
-               console.error('Failed to load entrance effect:', e);
-            }
-          }
-
+          // Everyone tracks themselves
           await channel.track({
             user_id: effectiveUser.id,
             username: profile?.username || effectiveUser.username || 'Guest',
-            avatar_url: profile?.avatar_url || effectiveUser.avatar_url,
+            avatar_url: profile?.avatar_url || null,
             role: profile?.role || effectiveUser.role,
-            troll_role: profile?.troll_role || effectiveUser.troll_role,
+            troll_role: profile?.troll_role,
             joined_at: new Date().toISOString(),
-            entrance_effect: entranceEffect
           })
+
+          // Also heartbeat into stream_viewers table for the "Active" list
+          // Only for authenticated users (UUID required)
+          if (user?.id) {
+            await supabase.from('stream_viewers').upsert({
+              stream_id: streamId,
+              user_id: user.id,
+              last_seen: new Date().toISOString()
+            }, { onConflict: 'stream_id,user_id' });
+          }
         }
       })
 
+    // Heartbeat for stream_viewers table every 30s
+    const heartbeatInterval = setInterval(async () => {
+      if (streamId && user?.id) {
+        await supabase.from('stream_viewers').upsert({
+          stream_id: streamId,
+          user_id: user.id,
+          last_seen: new Date().toISOString()
+        }, { onConflict: 'stream_id,user_id' });
+      }
+    }, 30000);
+
     return () => {
-      channel.untrack()
-      supabase.removeChannel(channel)
+      clearInterval(heartbeatInterval);
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
+      channel.untrack();
+      supabase.removeChannel(channel);
+      
+      // Try to remove from stream_viewers on leave
+      if (streamId && user?.id) {
+        supabase.from('stream_viewers').delete().match({ stream_id: streamId, user_id: user.id });
+      }
     }
-  }, [streamId, user, isHost, profile, effectiveUser])
+  }, [streamId, user, isHost, profile, effectiveUser, setRoomViewerCount])
+
+  // Get count from store instead of local state for consistency
+  const storeCount = usePresenceStore(state => state.roomViewerCounts[streamId || ''] || 0)
+  
+  // For the broadcaster/host, ensure we show at least 1 viewer (themselves)
+  // This provides immediate feedback before presence syncs.
+  const viewerCount = (isHost && storeCount === 0) ? 1 : storeCount;
 
   return { viewerCount }
 }
@@ -170,6 +151,9 @@ export function useLiveViewerCount(streamId: string | null) {
 
     // Initial fetch
     const getCount = async () => {
+      // Thundering Herd Prevention: Jitter on fetch (0-500ms)
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 500));
+      
       const { data } = await supabase
         .from('streams')
         .select('current_viewers')

@@ -97,7 +97,7 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
              } else if (profileCache.current[m.user_id]) {
                 username = profileCache.current[m.user_id];
              } else {
-                const { data } = await supabase.from('user_profiles').select('username').eq('id', m.user_id).single();
+                const { data } = await supabase.from('user_profiles').select('username').eq('id', m.user_id).maybeSingle();
                 username = data?.username || 'User';
                 if (data?.username) {
                   profileCache.current[m.user_id] = username;

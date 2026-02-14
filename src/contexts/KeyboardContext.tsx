@@ -36,6 +36,7 @@ export const KeyboardProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useKeyboard = () => {
   return useContext(KeyboardContext);
 };

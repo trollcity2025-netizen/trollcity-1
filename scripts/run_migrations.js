@@ -70,7 +70,7 @@ async function run() {
           
           if (isDeadlock) {
             console.warn(`⚠️ Deadlock detected for ${file}. Retrying ${attempt}/${maxRetries} in 5s...`)
-            try { await client.query('ROLLBACK') } catch (rbErr) {}
+            try { await client.query('ROLLBACK') } catch { }
             await new Promise(r => setTimeout(r, 5000))
             continue
           }

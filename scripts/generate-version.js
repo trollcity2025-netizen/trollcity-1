@@ -14,7 +14,7 @@ try {
     const data = fs.readFileSync(versionFilePath, 'utf-8');
     currentVersion = JSON.parse(data);
   }
-} catch (e) {
+} catch {
   console.warn('Could not read version.json, starting fresh.');
 }
 

@@ -1,26 +1,16 @@
 
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '@/lib/store';
-import { useEffect } from 'react';
-import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe';
-import { trollCityTheme } from '@/styles/trollCityTheme';
-import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts';
-import { useThemeAudio } from '../contexts/ThemeAudioContext';
-import PWAInstallPrompt from '../components/PWAInstallPrompt';
-import { 
-  Play, 
-  Users, 
-  ShoppingCart, 
-  Gamepad2, 
-  Star, 
-  ArrowRight,
-  Coins,
-  Shield,
-  Zap
-} from 'lucide-react';
-import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
-import BroadcastLockdownControl from '@/components/admin/BroadcastLockdownControl';
-import EventCountdown from '@/components/EventCountdown';
+import { useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { useAuthStore } from '@/lib/store'
+import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe'
+import { trollCityTheme } from '@/styles/trollCityTheme'
+import PWAInstallPrompt from '../components/PWAInstallPrompt'
+import EventCountdown from '@/components/EventCountdown'
+import LiveStreamsModule from '@/components/home/LiveStreamsModule'
+import TrollWallFeed from '@/components/home/TrollWallFeed'
+import TopRentPayersWidget from '@/components/home/TopRentPayersWidget'
+import TrollPodsWidget from '@/components/home/TrollPodsWidget'
 
 // Animated gradient background
 const AnimatedGradient = () => {
@@ -77,97 +67,25 @@ const FloatingParticles = () => {
   );
 };
 
-// Feature card component
-interface FeatureCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  gradient: string;
-  delay: number;
-}
-
-const FeatureCard = ({ icon, title, description, gradient, delay }: FeatureCardProps) => {
-  return (
-    <div 
-      className={`group relative p-6 ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl hover:border-cyan-400/50 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-cyan-500/20 animate-fade-in-up`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl bg-gradient-to-br ${gradient} blur-xl`} />
-      <div className="relative z-10">
-        <div className="mb-4 p-3 bg-gradient-to-br from-purple-600/20 to-cyan-600/20 rounded-xl w-fit group-hover:scale-110 transition-transform duration-300">
-          {icon}
-        </div>
-        <h3 className="text-xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-          {title}
-        </h3>
-        <p className={`${trollCityTheme.text.muted} leading-relaxed`}>
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-// Stats component - Replaced by TopBroadcasters component with real-time database data
-const _StatsSection = () => {
-  return null;
-};
-
 export default function Home() {
-  const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
-  const hasActiveContent = useActiveBroadcasts();
-  // Theme audio disabled - entrance effect should not play on home page
-  
+  const navigate = useNavigate()
+  const user = useAuthStore((state) => state.user)
+
   // Auto-scroll to top and subscribe to push notifications on page load
   useEffect(() => {
-    window.scrollTo(0, 0);
-    subscribeToNtfyGlobal();
-  }, []);
+    window.scrollTo(0, 0)
+    subscribeToNtfyGlobal()
+  }, [])
 
-  // 🎵 Play theme song on mount (only for unauthenticated users)
-  useEffect(() => {
-    // Theme audio disabled - entrance effect should not play on home page
-  }, [user]);
-
-  const features = [
-    {
-      icon: <Star className="w-8 h-8 text-purple-400" />,
-      title: "Mai Talent",
-      description: "Showcase your skills, compete in live talent shows, and win massive prizes in our premier talent competition.",
-      gradient: "from-purple-600/20 to-pink-600/20",
+  const requireAuth = useCallback(
+    (intent?: string) => {
+      if (user) return true
+      toast.info(`Sign in to ${intent || 'continue'}.`)
+      navigate('/auth')
+      return false
     },
-    {
-      icon: <Users className="w-8 h-8 text-cyan-400" />,
-      title: "Join Families",
-      description: "Create or join families to build your community. Compete for top rankings and exclusive rewards.",
-      gradient: "from-cyan-600/20 to-blue-600/20",
-    },
-    {
-      icon: <ShoppingCart className="w-8 h-8 text-pink-400" />,
-      title: "Troll Mart",
-      description: "Shop for exclusive items, apartments, and customizations. Build your virtual empire in Troll City.",
-      gradient: "from-pink-600/20 to-purple-600/20",
-    },
-    {
-      icon: <Gamepad2 className="w-8 h-8 text-purple-400" />,
-      title: "Troll Family Battles",
-      description: "Compete in Troll Family Battles! Join or create a family, challenge others, and climb the leaderboard.",
-      gradient: "from-purple-600/20 to-cyan-600/20",
-    },
-    {
-      icon: <Coins className="w-8 h-8 text-yellow-400" />,
-      title: "Daily Login Posts",
-      description: "Post once daily to the Troll City Wall and earn 0-100 random Troll Coins. Come back every day for rewards!",
-      gradient: "from-yellow-600/20 to-cyan-600/20",
-    },
-    {
-      icon: <Shield className="w-8 h-8 text-cyan-400" />,
-      title: "Safe Community",
-      description: "Moderated community with family-friendly content. Report features and active moderation team.",
-      gradient: "from-cyan-600/20 to-teal-600/20",
-    },
-  ];
+    [navigate, user]
+  )
 
   return (
     <div className={`relative min-h-dvh overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
@@ -182,143 +100,29 @@ export default function Home() {
       <PWAInstallPrompt />
 
       {/* Content */}
-      <div className="relative z-10 min-h-dvh flex flex-col">
-        
-        {/* Hero Section */}
-        <section className="flex-1 flex items-center px-4 py-20 safe-top">
-          <div className="max-w-7xl mx-auto w-full grid lg:grid-cols-1 gap-10 items-center">
-            {/* Main Heading */}
-            <div className="space-y-8 text-center animate-fade-in">
-              <div className="space-y-4">
-                <h1 className="text-5xl md:text-6xl xl:text-7xl font-black leading-tight bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent animate-gradient-text drop-shadow-[0_10px_40px_rgba(124,58,237,0.35)]">
-                  Welcome to Troll City
-                </h1>
-                <p className="text-xl md:text-2xl text-slate-200">
-                  Stream, Play, Connect & Earn in the Ultimate Online Community
-                </p>
-                <p className="text-lg text-slate-400">
-                  Join thousands of creators and viewers in Troll City - where live streaming meets gaming, shopping, and social connection.
-                </p>
+      <div className="relative z-10 min-h-dvh px-4 md:px-6 py-6 safe-top">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-3xl p-5 md:p-6`}
+          >
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-white">City Feed</h1>
+                <p className={`${trollCityTheme.text.muted} text-sm`}>Live streams happening right now.</p>
               </div>
-
-              {/* CTA Buttons */}
-              {user && (
-                <div className="flex flex-wrap gap-4 items-center animate-fade-in-up" style={{ animationDelay: '180ms' }}>
-                  {/* Desktop/Tablet Button */}
-                  <button
-                    onClick={() => navigate('/broadcast/setup')}
-                    className="hidden md:flex group relative px-8 py-4 rounded-2xl font-semibold text-lg text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 shadow-[0_10px_40px_rgba(236,72,153,0.4)] hover:shadow-[0_15px_50px_rgba(251,146,60,0.35)] transition-all duration-300 hover:-translate-y-0.5 items-center gap-2"
-                  >
-                    <Play className="w-5 h-5" />
-                    Go Live Now
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    <span className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-600/0 via-white/8 to-orange-500/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-
-                  {/* Mobile Sticky Button (PWA Optimized) */}
-                  <div className="md:hidden fixed bottom-20 left-4 right-4 z-50">
-                    <button
-                      onClick={() => navigate('/broadcast/setup')}
-                      className="w-full group relative px-6 py-4 rounded-2xl font-bold text-xl text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 shadow-[0_8px_30px_rgba(236,72,153,0.5)] active:scale-95 transition-all duration-200 flex items-center justify-center gap-3 border border-white/20"
-                    >
-                      <div className="absolute inset-0 bg-white/20 rounded-2xl animate-pulse" />
-                      <Play className="w-6 h-6 fill-current" />
-                      <span className="relative z-10">GO LIVE NOW</span>
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => navigate('/explore')}
-                    className={`px-8 py-4 rounded-2xl font-semibold text-lg text-slate-50 bg-slate-900/60 backdrop-blur-xl border border-white/10 hover:border-cyan-400/40 hover:bg-slate-800/70 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] ${
-                      hasActiveContent ? 'shadow-[0_0_25px_rgba(34,211,238,0.5)] border-cyan-400/50' : ''
-                    }`}
-                  >
-                    Explore Feed
-                  </button>
-                  <button
-                    onClick={() => navigate('/social/mai-talent')}
-                    className="px-8 py-4 rounded-2xl font-semibold text-lg text-purple-100 bg-purple-900/40 backdrop-blur-xl border border-purple-500/30 hover:border-purple-400/60 hover:bg-purple-900/60 transition-all duration-300 hover:-translate-y-0.5 shadow-[0_10px_30px_rgba(168,85,247,0.15)] flex items-center gap-2"
-                  >
-                    <Star className="w-5 h-5 text-purple-400" />
-                    Mai Talent
-                  </button>
-                </div>
-              )}
-
-              {/* Quick Features Preview */}
-              <div className="flex flex-wrap gap-3 text-sm text-slate-300 animate-fade-in-up" style={{ animationDelay: '320ms' }}>
-                <div className="flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-white/10 shadow-[0_8px_25px_rgba(59,130,246,0.15)]">
-                  <Zap className="w-4 h-4 text-yellow-300" />
-                  Free to Join
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-white/10 shadow-[0_8px_25px_rgba(56,189,248,0.15)]">
-                  <Star className="w-4 h-4 text-cyan-300" />
-                  Earn Rewards
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-white/10 shadow-[0_8px_25px_rgba(168,85,247,0.15)]">
-                  <Shield className="w-4 h-4 text-purple-300" />
-                  Safe & Moderated
-                </div>
-              </div>
-
-              {/* Admin-only Broadcast Lockdown Control */}
-              {user?.role === 'admin' && (
-                <div className="mt-8 max-w-xl mx-auto animate-fade-in-up" style={{ animationDelay: '380ms' }}>
-                  <BroadcastLockdownControl />
-                </div>
-              )}
             </div>
+            <LiveStreamsModule onRequireAuth={requireAuth} />
+          </section>
 
-            {/* Live Broadcasters Grid */}
-            <div className="w-full animate-fade-in-up" style={{ animationDelay: '240ms' }}>
-              <div className="text-center mb-8">
-                <h2 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
-                  🔴 Live Now
-                </h2>
-                <p className="text-slate-400">
-                  Join the action in Troll City
-                </p>
-              </div>
-              {/* PresidentInaugurationCard removed */}
-              <HomeLiveGrid />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-8 space-y-6">
+              <TrollWallFeed onRequireAuth={requireAuth} />
             </div>
-
-            {/* Presidential Election Section removed */}
-            {/* <div className="w-full mt-20">
-               <PresidentialCampaignGrid />
-            </div> */}
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section className="px-4 py-20">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                Everything You Need
-              </h2>
-              <p className="text-xl text-slate-400">
-                A complete platform for creators and community members
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {features.map((feature, index) => (
-                <FeatureCard
-                  key={index}
-                  {...feature}
-                  delay={index * 100}
-                />
-              ))}
+            <div className="lg:col-span-4 space-y-6">
+              <TopRentPayersWidget onRequireAuth={requireAuth} />
+              <TrollPodsWidget onRequireAuth={requireAuth} />
             </div>
           </div>
-        </section>
-
-        {/* Footer */}
-        <div className="py-8 text-center text-slate-500 text-sm">
-          © 2026 Troll City, LLC. All rights reserved.
         </div>
-
-        {/* Footer safe area */}
         <div className="safe-bottom" />
       </div>
 
@@ -356,5 +160,5 @@ export default function Home() {
         `}
       </style>
     </div>
-  );
+  )
 }

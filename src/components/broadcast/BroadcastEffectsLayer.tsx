@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
-import { EntranceEffectConfig } from '../../lib/entranceEffects';
+import { EffectConfig } from '../../lib/entranceEffects';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
 
 interface BroadcastEffectsLayerProps {
@@ -11,16 +11,38 @@ interface BroadcastEffectsLayerProps {
 interface ActiveEffect {
   id: string; // unique instance id
   username: string;
-  effect: EntranceEffectConfig;
+  effect: EffectConfig;
 }
 
 export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLayerProps) {
   const [activeEffects, setActiveEffects] = useState<ActiveEffect[]>([]);
-  const shownUsersRef = React.useRef<Set<string>>(new Set());
-  const previousUserIdsRef = React.useRef<Set<string>>(new Set());
+  const effectBufferRef = useRef<ActiveEffect[]>([]);
+  const shownUsersRef = useRef<Set<string>>(new Set());
+  const previousUserIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!streamId) return;
+
+    // High-Frequency Entrance Effect Buffer: Flush every 150ms
+    const flushInterval = setInterval(() => {
+      if (effectBufferRef.current.length === 0) return;
+
+      const newEffects = [...effectBufferRef.current];
+      effectBufferRef.current = [];
+
+      setActiveEffects(prev => {
+        const next = [...prev, ...newEffects];
+        // Limit to 3 simultaneous entrance effects to prevent visual clutter/performance drop
+        return next.slice(-3);
+      });
+
+      // Schedule removal
+      newEffects.forEach(effect => {
+        setTimeout(() => {
+          setActiveEffects(prev => prev.filter(e => e.id !== effect.id));
+        }, 5000);
+      });
+    }, 150);
 
     const channel = supabase.channel(`room:${streamId}`);
 
@@ -47,22 +69,17 @@ export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLaye
             Object.values(state).forEach((presences: any) => {
               presences.forEach((p: any) => {
                 if (p.user_id === userId && p.entrance_effect) {
-                  const effect = p.entrance_effect as EntranceEffectConfig;
+                  const effect = p.entrance_effect as EffectConfig;
                   const id = Math.random().toString(36).substring(7);
                   
                   // Mark this user as shown
                   shownUsersRef.current.add(userId);
                   
-                  setActiveEffects(prev => [...prev, {
+                  effectBufferRef.current.push({
                     id,
                     username: p.username,
                     effect
-                  }]);
-                  
-                  // Remove after duration
-                  setTimeout(() => {
-                    setActiveEffects(prev => prev.filter(e => e.id !== id));
-                  }, 5000);
+                  });
                 }
               });
             });
@@ -74,10 +91,13 @@ export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLaye
       })
       .subscribe();
 
+    const currentShownUsers = shownUsersRef.current;
+
     return () => {
+      clearInterval(flushInterval);
       supabase.removeChannel(channel);
       // Clear tracked users when component unmounts
-      shownUsersRef.current.clear();
+      currentShownUsers.clear();
     };
   }, [streamId]);
 
@@ -93,7 +113,7 @@ export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLaye
   );
 }
 
-function EffectRenderer({ username, effect }: { username: string, effect: EntranceEffectConfig }) {
+function EffectRenderer({ username, effect }: { username: string, effect: EffectConfig }) {
   // Map rarity to colors
   const getRarityStyles = (rarity: string) => {
     switch (rarity) {

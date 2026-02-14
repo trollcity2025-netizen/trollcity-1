@@ -80,7 +80,7 @@ export default function TopLiveBar({
             {hostName}
           </span>
           <span className="text-[10px] text-zinc-300 flex items-center gap-1">
-            {stream.viewer_count?.toLocaleString() || 0} Viewers
+            {(stream.current_viewers || stream.viewer_count || 0).toLocaleString()} Viewers
           </span>
         </div>
 

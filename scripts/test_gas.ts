@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !serviceKey) {
@@ -14,7 +13,7 @@ if (!supabaseUrl || !serviceKey) {
 
 const supabase = createClient(supabaseUrl, serviceKey);
 
-async function testGas() {
+export async function testGas() {
   // 1. Get a test user
   const { data: users, error: userError } = await supabase.from('user_profiles').select('id, username').limit(1);
   if (userError || !users || users.length === 0) {

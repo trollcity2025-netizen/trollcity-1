@@ -1,12 +1,11 @@
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { toast } from 'sonner'
 import { 
   Shield, 
   Clock, 
-  Users, 
   Radio, 
   Gavel, 
   FileText, 
@@ -15,15 +14,13 @@ import {
   BarChart,
   AlertTriangle,
   CheckCircle,
-  XCircle,
-  RefreshCw
 } from 'lucide-react'
-import { trollCityTheme } from '@/styles/trollCityTheme'
+import { trollCityTheme } from '../../styles/trollCityTheme'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function TempAdminDashboard() {
   const { profile } = useAuthStore()
-  const [loading, setLoading] = useState(true)
+  const [_loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [adminTerm, setAdminTerm] = useState<any>(null)
   const [stats, setStats] = useState({
@@ -46,11 +43,7 @@ export default function TempAdminDashboard() {
   const [grantAmount, setGrantAmount] = useState(100)
   const [waivePaymentId, setWaivePaymentId] = useState('')
 
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true)
     try {
       // 1. Get Term Info
@@ -69,13 +62,6 @@ export default function TempAdminDashboard() {
         .select('*')
         .single()
       
-      const { data: reportStats } = await supabase
-        .from('admin_view_reports_queue')
-        .select('open_reports')
-        // This view groups by reason, so we sum or just get counts. 
-        // Actually the view returns multiple rows. Let's just count rows of raw table for simplicity if view is complex
-        // Or just fetch raw count since we have RLS
-      
       const { count: reportCount } = await supabase
         .from('stream_reports')
         .select('*', { count: 'exact', head: true })
@@ -92,23 +78,20 @@ export default function TempAdminDashboard() {
       setStats({
         activeStreams: streamStats?.active_streams_count || 0,
         openReports: reportCount || 0,
-        adminCoinsBalance: profile?.temp_admin_coins_balance || 0 // This is balance GIVEN TO THEM? No, this is balance they HAVE received? 
-        // Wait, the prompt says "Admin Coins (Budget)". 
-        // My migration added `temp_admin_coins_balance` to user_profiles.
-        // Usually an admin GIVES coins. Does the admin have a budget?
-        // The prompt says "Grant 'Admin Coins' (Budget: 10k/day)".
-        // I haven't implemented a "Budget" tracking mechanism yet, just the issuance.
-        // For now, I'll assume infinite issuance or relying on log checks, but let's just show "Coins Issued Today" maybe?
+        adminCoinsBalance: profile?.temp_admin_coins_balance || 0
       })
 
-      setRecentActions(actions || [])
-
+      if (actions) setRecentActions(actions)
     } catch (err) {
-      console.error('Failed to load dashboard:', err)
+      console.error('Failed to load admin dashboard:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [profile?.id, profile?.temp_admin_coins_balance])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   const handleCreatePoll = async () => {
     if (!pollQuestion) return toast.error('Question required')
@@ -197,6 +180,18 @@ export default function TempAdminDashboard() {
   // Calculate time remaining
   const expiresAt = adminTerm ? new Date(adminTerm.expires_at) : null
   const isExpired = expiresAt && new Date() > expiresAt
+
+  if (isExpired) {
+    return (
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6 flex items-center justify-center`}>
+        <div className="text-center">
+          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-3xl font-bold mb-2">Admin Term Expired</h1>
+          <p className="text-gray-400">Your temporary admin session has ended.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-6`}>

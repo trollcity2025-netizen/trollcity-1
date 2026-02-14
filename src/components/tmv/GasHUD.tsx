@@ -10,7 +10,7 @@ export default function GasHUD() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isHudOpen, setIsHudOpen] = useState(true);
   const location = useLocation();
-  const { isKeyboardVisible } = useKeyboard();
+  const { isKeyboardVisible: _isKeyboardVisible } = useKeyboard();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -62,7 +62,7 @@ export default function GasHUD() {
   // Also hide in TCPS to prevent blocking chat UI
   const isTCPS = location.pathname.startsWith('/tcps');
   // Hide in Mobile Shell to prevent blocking menu buttons
-  const isMobileShell = location.pathname === '/mobile';
+  const _isMobileShell = location.pathname === '/mobile';
 
   if (isBroadcastRoom || isPodRoom || isTCPS) {
       return null;

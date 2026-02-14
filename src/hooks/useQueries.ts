@@ -87,7 +87,7 @@ export function useStream(streamId: string) {
         .from('streams')
         .select('*, livekit_room_id, broadcaster:user_profiles!broadcaster_id(*)')
         .eq('id', streamId)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
       return data
@@ -106,7 +106,7 @@ export function useUserProfile(userId: string) {
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
       return data

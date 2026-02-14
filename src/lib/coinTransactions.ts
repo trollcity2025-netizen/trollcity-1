@@ -7,7 +7,7 @@ import { useAuthStore } from '@/lib/store'
 import { trackCoinEarning } from './familyTasks'
 import { trackWarActivity } from './familyWars'
 
-const safeNumber = (value: unknown): number | null => {
+const _safeNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
   }
@@ -64,6 +64,7 @@ export type CoinTransactionType =
   | 'troll_town_sale'
   | 'troll_town_upgrade'
   | 'troll_town_upgrade_task'
+  | 'broadcast_theme'
 
 export type CoinType = 'troll_coins'
 
@@ -228,7 +229,7 @@ export async function deductCoins(params: {
   liability?: number
   useCredit?: boolean // New option for Credit Card payments
 }) {
-  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient, balanceAfter, platformProfit, liability, useCredit } = params
+  const { userId, amount, type, coinType = 'troll_coins', description: _description, metadata, supabaseClient, balanceAfter, platformProfit: _platformProfit, liability: _liability, useCredit } = params
 
   const sb = supabaseClient || supabase
   if (!sb) {
@@ -313,7 +314,7 @@ export async function deductCoins(params: {
       }
 
       // Success! Fetch new balance for UI
-      const { data: profileData } = await sb.from('user_profiles').select('troll_coins').eq('id', userId).single()
+      const { data: profileData } = await sb.from('user_profiles').select('troll_coins').eq('id', userId).maybeSingle()
       const newBalance = profileData?.troll_coins || 0
 
       // Update store immediately to prevent flashing
@@ -373,7 +374,7 @@ export async function addCoins(params: {
   liability?: number
   sourceId?: string
 }) {
-  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient, platformProfit, liability, sourceId } = params
+  const { userId, amount, type, coinType = 'troll_coins', description, metadata, supabaseClient, platformProfit: _platformProfit, liability: _liability, sourceId } = params
   const finalCoinType = coinType || 'troll_coins'
 
   const sb = supabaseClient || supabase
@@ -417,7 +418,7 @@ export async function addCoins(params: {
 
     // Special handling for Admin Grants (Secure RPC)
     if (type === 'admin_grant') {
-      const { data, error } = await sb.rpc('admin_grant_coins', {
+      const { data: _data, error } = await sb.rpc('admin_grant_coins', {
         p_target_id: userId,
         p_amount: amount,
         p_reason: description || 'Admin Grant'

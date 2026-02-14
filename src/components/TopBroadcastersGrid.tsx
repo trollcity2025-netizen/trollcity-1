@@ -10,6 +10,8 @@ interface TopBroadcaster {
   total_gifts: number;
   level?: number;
   glowing_username_color?: string;
+  is_gold?: boolean;
+  rgb_username_expires_at?: string;
 }
 
 export default function TopBroadcastersGrid() {
@@ -50,7 +52,7 @@ export default function TopBroadcastersGrid() {
 
       const { data: profiles } = await supabase
         .from('user_profiles')
-        .select('id, username, avatar_url, level')
+        .select('id, username, avatar_url, level, glowing_username_color, is_gold, rgb_username_expires_at')
         .in('id', recipientIds);
 
       // Aggregate by user
@@ -70,7 +72,9 @@ export default function TopBroadcastersGrid() {
             avatar_url: profile?.avatar_url,
             total_gifts: transaction.amount,
             level: profile?.level,
-            glowing_username_color: profile?.glowing_username_color
+            glowing_username_color: profile?.glowing_username_color,
+            is_gold: profile?.is_gold,
+            rgb_username_expires_at: profile?.rgb_username_expires_at
           });
         }
       });
@@ -121,14 +125,17 @@ export default function TopBroadcastersGrid() {
   }
 
   // Pad with placeholder cards if less than 4
-  const displayBroadcasters = [
+  const displayBroadcasters: TopBroadcaster[] = [
     ...broadcasters,
     ...Array.from({ length: Math.max(0, 4 - broadcasters.length) }).map((_, i) => ({
       user_id: `placeholder-${i}`,
       username: `Coming Soon #${broadcasters.length + i + 1}`,
       avatar_url: undefined,
       total_gifts: 0,
-      level: undefined
+      level: undefined,
+      is_gold: false,
+      rgb_username_expires_at: undefined,
+      glowing_username_color: undefined
     }))
   ];
 

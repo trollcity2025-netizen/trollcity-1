@@ -1,6 +1,6 @@
 import * as React from "react"
 import { X } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 const DialogContext = React.createContext<{
   open?: boolean
@@ -23,12 +23,32 @@ const Dialog = ({
   )
 }
 
-const DialogTrigger = ({ children }: { children: React.ReactNode }) => {
-  // In this manual implementation without Radix, Trigger might need to toggle state
-  // But typically the parent controls state in this codebase's usage (ManualPaymentModal controls isOpen)
-  // So we might not strictly need functional Trigger if controlled externally
-  return <>{children}</>
-}
+const DialogTrigger = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
+>(({ children, asChild, ...props }, ref) => {
+  const { onOpenChange } = React.useContext(DialogContext)
+  
+  const onClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    onOpenChange?.(true)
+    props.onClick?.(e)
+  }
+
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children as React.ReactElement<any>, {
+      ...props,
+      onClick,
+      ref,
+    })
+  }
+
+  return (
+    <button ref={ref} onClick={onClick} {...props}>
+      {children}
+    </button>
+  )
+})
+DialogTrigger.displayName = "DialogTrigger"
 
 const DialogContent = React.forwardRef<
   HTMLDivElement,

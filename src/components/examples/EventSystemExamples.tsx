@@ -9,9 +9,9 @@ import React from 'react';
 import { useGlobalEvent } from '../../contexts/GlobalEventContext';
 import { useEventGifts } from '../../lib/hooks/useEventGifts';
 import { useEventBonuses } from '../../lib/hooks/useEventBonuses';
-import { useEventHighlights } from '../../lib/hooks/useEventHighlights';
+// import { useEventHighlights } from '../../lib/hooks/useEventHighlights';
 import { useEventTheme } from '../GlobalEventThemeLayer';
-import type { EventGift, EventBonus } from '../../lib/events/types';
+// import type { EventGift, EventBonus } from '../../lib/events/types';
 
 // ============================================================================
 // Example 1: Basic Event Usage
@@ -44,8 +44,8 @@ interface GiftShopProps {
   userCoins: number;
 }
 
-export const GiftShopExample: React.FC<GiftShopProps> = ({ baseGifts, userCoins }) => {
-  const { activeEvent, featureFlags } = useGlobalEvent();
+export const GiftShopExample: React.FC<GiftShopProps> = ({ baseGifts: _baseGifts, userCoins: _userCoins }) => {
+  const { activeEvent, featureFlags: _featureFlags } = useGlobalEvent();
   const { activeGifts, applyBonus, badgeLabel } = useEventGifts();
   const { hasBonuses, formatBonus } = useEventBonuses();
   const { isActive, buttonClass } = useEventTheme();

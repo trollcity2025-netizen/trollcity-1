@@ -1,7 +1,6 @@
 // src/pages/TrollBank.tsx
 import React, { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useAuthStore } from '@/lib/store'
 import { useBank } from '@/lib/hooks/useBank'
 import { useCoins } from '@/lib/hooks/useCoins'
 import { toast } from 'sonner'
@@ -9,9 +8,8 @@ import { Coins, CreditCard, Landmark, History, AlertCircle, CheckCircle, Lock } 
 import { trollCityTheme } from '@/styles/trollCityTheme'
 
 export default function TrollBank() {
-  const { profile } = useAuthStore()
   const { balances, refreshCoins } = useCoins()
-  const { loans, ledger, tiers, fetchBankData, applyForLoan, payLoan, payCreditCard, creditInfo } = useBank()
+  const { loans, ledger, payLoan, payCreditCard, creditInfo } = useBank()
   const activeLoan = loans && loans.length > 0 ? loans[0] : null
   
   const [bankBalance, setBankBalance] = useState<number | null>(null)

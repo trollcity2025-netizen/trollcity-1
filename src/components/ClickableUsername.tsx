@@ -202,8 +202,9 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
             // Replaced Ban with Issue Warrant as requested
             try {
                 const { data, error } = await supabase.rpc('issue_warrant', {
-                    p_user_id: targetUserId,
-                    p_reason: reason || 'No reason provided'
+                    p_target_id: targetUserId,
+                    p_reason: reason || 'No reason provided',
+                    p_notes: null
                 })
 
                 if (error) throw error

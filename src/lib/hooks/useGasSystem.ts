@@ -18,7 +18,7 @@ const EXCLUDED_PATHS = [
 export function useGasSystem() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, refreshProfile, setProfile } = useAuthStore();
+  const { user, profile, setProfile } = useAuthStore();
   const lastPathRef = useRef<string | null>(null);
   const processingRef = useRef(false);
 

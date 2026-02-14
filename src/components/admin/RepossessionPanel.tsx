@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRepossession } from '../../lib/hooks/useRepossession';
 import { useAuthStore } from '../../lib/store';
 
@@ -17,7 +17,7 @@ export function RepossessionPanel({ targetUserId, onClose }: RepossessionPanelPr
     repossessProperty,
     repossessVehicle,
     issueLoanDefaultSummon,
-    restoreRepossessedAsset,
+    restoreRepossessedAsset: _restoreRepossessedAsset,
   } = useRepossession();
 
   const [selectedUser, setSelectedUser] = useState<string>(targetUserId || '');
@@ -32,6 +32,13 @@ export function RepossessionPanel({ targetUserId, onClose }: RepossessionPanelPr
 
   const isAdmin = profile?.role === 'admin' || profile?.is_admin || profile?.role === 'lead_troll_officer';
 
+  const handleFetchAssets = useCallback(async (userId: string) => {
+    const result = await getUserAssets(userId);
+    if (result.success) {
+      setUserAssets(result.data);
+    }
+  }, [getUserAssets]);
+
   useEffect(() => {
     if (isAdmin) {
       fetchDelinquentUsers();
@@ -39,14 +46,7 @@ export function RepossessionPanel({ targetUserId, onClose }: RepossessionPanelPr
     if (targetUserId) {
       handleFetchAssets(targetUserId);
     }
-  }, [isAdmin, targetUserId]);
-
-  const handleFetchAssets = async (userId: string) => {
-    const result = await getUserAssets(userId);
-    if (result.success) {
-      setUserAssets(result.data);
-    }
-  };
+  }, [isAdmin, targetUserId, fetchDelinquentUsers, handleFetchAssets]);
 
   const handleSelectUser = (userId: string) => {
     setSelectedUser(userId);

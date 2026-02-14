@@ -35,11 +35,13 @@ async function getLivekit() {
   return mod;
 }
 
-async function authorizeUser(req: Request): Promise<AuthorizedProfile> {
+async function authorizeUser(req: Request): Promise<AuthorizedProfile | null> {
   const authHeader = req.headers.get("authorization") ?? "";
+  
+  // If no auth header, return null (Guest mode)
   if (!authHeader.startsWith("Bearer ")) {
-    console.error("[authorizeUser] Missing or invalid authorization header");
-    throw new Error("Missing authorization header");
+    console.log("[authorizeUser] No auth header found - treating as Guest");
+    return null;
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -62,8 +64,8 @@ async function authorizeUser(req: Request): Promise<AuthorizedProfile> {
   const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
 
   if (userError || !user) {
-    console.error("[authorizeUser] User validation error:", userError?.message);
-    throw new Error("No active session. Please sign in again.");
+    console.warn("[authorizeUser] User validation error (might be expired token):", userError?.message);
+    return null; // Fallback to Guest instead of crashing
   }
 
   console.log("[authorizeUser] JWT validated for user:", user.id);
@@ -112,49 +114,48 @@ serve(async (req: Request) => {
         ? await req.json() as TokenRequestParams
         : Object.fromEntries(new URL(req.url).searchParams) as TokenRequestParams;
 
-    let profile: AuthorizedProfile;
+    let profile: AuthorizedProfile | null = null;
     
     try {
         profile = await authorizeUser(req);
     } catch (e: any) {
-        // Guest Access Logic
-        const isAuthError = e.message === "Missing authorization header" || e.message === "No active session. Please sign in again.";
-        
-        if (isAuthError) {
-             // Validate Guest Intent (Cannot publish)
-             const allowPublish = 
-                params.allowPublish === true || 
-                params.allowPublish === "true" || 
-                params.allowPublish === "1" ||
-                // @ts-expect-error - canPublish might be passed
-                params.canPublish === true;
+        console.error("[livekit-token] Authorization error:", e.message);
+        throw e; // Rethrow genuine server errors
+    }
 
-             if (allowPublish) {
-                 return new Response(JSON.stringify({ error: "Guests cannot publish. Please log in." }), {
-                    status: 403,
-                    headers: { ...corsHeaders, "Content-Type": "application/json" },
-                 });
-             }
-             
-             // Create Guest Profile
-             const guestId = params.identity && String(params.identity).startsWith("guest-") 
-                ? String(params.identity) 
-                : `guest-${crypto.randomUUID()}`;
-                
-             profile = {
-                id: guestId,
-                username: "Guest",
-                role: "guest",
-                avatar_url: null,
-                is_broadcaster: false,
-                is_admin: false,
-                is_lead_officer: false,
-                is_troll_officer: false
-             };
-             console.log(`[livekit-token] Guest access granted: ${guestId}`);
-        } else {
-            throw e; // Rethrow genuine server errors
+    // Guest Access Logic if profile is null
+    if (!profile) {
+        // Validate Guest Intent (Cannot publish)
+        const allowPublish = 
+           params.allowPublish === true || 
+           params.allowPublish === "true" || 
+           params.allowPublish === "1" ||
+           // @ts-expect-error - canPublish might be passed
+           params.canPublish === true;
+
+        if (allowPublish) {
+            return new Response(JSON.stringify({ error: "Guests cannot publish. Please log in." }), {
+               status: 403,
+               headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
         }
+        
+        // Create Guest Profile
+        const guestId = params.identity && String(params.identity).startsWith("guest-") 
+           ? String(params.identity) 
+           : `guest-${crypto.randomUUID()}`;
+           
+        profile = {
+           id: guestId,
+           username: "Guest",
+           role: "guest",
+           avatar_url: null,
+           is_broadcaster: false,
+           is_admin: false,
+           is_lead_officer: false,
+           is_troll_officer: false
+        };
+        console.log(`[livekit-token] Guest access granted: ${guestId}`);
     }
 
     const room = params.room || params.roomName;
@@ -197,10 +198,31 @@ serve(async (req: Request) => {
 
     const { AccessToken, TrackSource, RoomServiceClient } = await getLivekit();
 
-    // ✅ Enforce participant caps (total + per room)
+    // ✅ Enforce participant caps and LMPM logic
     try {
-      const maxTotal = Number(Deno.env.get('LIVEKIT_MAX_TOTAL_PARTICIPANTS') || '600');
-      const maxPerRoom = Number(Deno.env.get('LIVEKIT_MAX_PARTICIPANTS_PER_ROOM') || '60');
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const { createClient } = await getSupabase();
+      const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!);
+
+      // Check LMPM status
+      const { data: lmpmSetting } = await supabaseAdmin
+        .from("admin_app_settings")
+        .select("setting_value")
+        .eq("setting_key", "low_minute_protection_mode")
+        .single();
+      
+      const lmpmEnabled = lmpmSetting?.setting_value?.enabled === true;
+      const isBeforeDeadline = new Date() < new Date('2026-03-01T00:00:00Z');
+
+      // Define caps based on mode
+      const isPod = String(room).includes('-') && (String(room).startsWith('pod-') || String(room).length > 20); // Heuristic for pod IDs
+      const applyLMPM = lmpmEnabled && (!isPod || isBeforeDeadline);
+
+      const maxTotal = applyLMPM ? 7 : Number(Deno.env.get('LIVEKIT_MAX_TOTAL_PARTICIPANTS') || '600');
+      const maxPerRoom = applyLMPM ? 7 : Number(Deno.env.get('LIVEKIT_MAX_PARTICIPANTS_PER_ROOM') || '60');
+      const maxViewers = applyLMPM ? 5 : 60; // Standard viewer limit
+      const maxGuests = applyLMPM ? 1 : 5;
 
       const svc = new RoomServiceClient(livekitUrl, apiKey, apiSecret);
       const rooms = await svc.listRooms();
@@ -214,26 +236,80 @@ serve(async (req: Request) => {
         }
       }
 
-      console.log(`[livekit-token] Current total participants: ${totalParticipants}, room=${room} participants=${roomParticipants}`);
+      console.log(`[livekit-token] LMPM=${lmpmEnabled}, IsPod=${isPod}, ApplyingLMPM=${applyLMPM}, Total: ${totalParticipants}, Room=${room}: ${roomParticipants}`);
 
-      if (maxTotal > 0 && totalParticipants >= maxTotal) {
-        console.warn(`[livekit-token] Server full (>= ${maxTotal} participants), denying access`);
-        return new Response(JSON.stringify({ error: "Server is full" }), {
+      // Global Server Full
+      if (!applyLMPM && maxTotal > 0 && totalParticipants >= maxTotal) {
+        return new Response(JSON.stringify({ error: "City bandwidth exhausted for today." }), {
           status: 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      if (maxPerRoom > 0 && roomParticipants >= maxPerRoom) {
-        console.warn(`[livekit-token] Room full (>= ${maxPerRoom} participants), denying access`);
-        return new Response(JSON.stringify({ error: "Room is full" }), {
+      // Room Full (Total 7 in LMPM)
+      if (roomParticipants >= maxPerRoom) {
+        return new Response(JSON.stringify({ error: isPod ? "The Town Square is full." : "Arena capacity reached." }), {
           status: 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Specific Role Caps in LMPM
+      if (applyLMPM) {
+        const participants = await svc.listParticipants(String(room));
+        
+        // Count roles
+        let hostCount = 0;
+        const _guestCount = 0;
+        const _viewerCount = 0;
+
+        for (const p of participants) {
+          const metadata = JSON.parse(p.metadata || '{}');
+          if (metadata.role === 'host') hostCount++;
+          else if (metadata.role === 'guest' || metadata.role === 'stage' || metadata.role === 'speaker') hostCount++; // Pod speakers count towards capacity if we treat them as "publishers"
+          else viewerCount++;
+        }
+
+        // 1. Host limit (Broadcaster/Host role)
+        if (allowPublish && (profile.is_broadcaster || profile.role === 'broadcaster' || profile.is_admin || isPod)) {
+          // If it's a pod, we allow up to 2 "publishers" (1 host + 1 guest/speaker) in LMPM? 
+          // User said "1 host, 1 guest, 5 viewers". So max 2 publishers.
+          const maxPublishers = isPod ? 2 : 1; 
+          const currentPublishers = hostCount + guestCount;
+
+          if (currentPublishers >= maxPublishers) {
+             // Reconnect check
+             const isExisting = participants.find(p => p.identity === identity);
+             if (!isExisting) {
+                return new Response(JSON.stringify({ error: isPod ? "This Pod has reached its speaker limit." : "Transmission already has a primary host." }), {
+                  status: 403,
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+             }
+          }
+        } 
+        // 2. Guest limit (1 max in LMPM)
+        else if (params.role === 'guest' || params.role === 'stage' || params.role === 'speaker') {
+          if (guestCount >= maxGuests) {
+            return new Response(JSON.stringify({ error: isPod ? "Pod guest limit reached." : "Guest permit limit reached." }), {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+        // 3. Viewer limit (5 max in LMPM)
+        else {
+          if (viewerCount >= maxViewers) {
+            return new Response(JSON.stringify({ error: isPod ? "The Town Square is full (5 viewers max)." : "Arena viewer capacity reached." }), {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+      }
+
     } catch (svcError) {
       console.error("[livekit-token] Failed to check participant count:", svcError);
-      // Proceeding despite error to avoid blocking users on API hiccups
     }
 
     // ✅ FIX role matching — allow publisher as well

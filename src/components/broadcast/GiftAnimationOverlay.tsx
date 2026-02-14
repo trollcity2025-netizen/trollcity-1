@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Gift as GiftIcon, Star, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -19,7 +19,8 @@ interface GiftEvent {
 
 export default function GiftAnimationOverlay({ streamId }: GiftAnimationOverlayProps) {
   const [activeAnimations, setActiveAnimations] = useState<GiftEvent[]>([]);
-  const { refreshBalance } = useCoins();
+  const animationBufferRef = useRef<GiftEvent[]>([]);
+  const { refreshCoins } = useCoins();
 
   // Load gift definitions to map IDs to visuals
   const [giftDefs, setGiftDefs] = useState<Record<string, Gift>>({});
@@ -51,28 +52,45 @@ export default function GiftAnimationOverlay({ streamId }: GiftAnimationOverlayP
   }, []);
 
   useEffect(() => {
+    // High-Frequency Animation Buffer: Flush every 150ms
+    const flushInterval = setInterval(() => {
+      if (animationBufferRef.current.length === 0) return;
+      
+      const newAnims = [...animationBufferRef.current];
+      animationBufferRef.current = [];
+      
+      setActiveAnimations(prev => {
+        const next = [...prev, ...newAnims];
+        // Limit to 5 simultaneous animations to prevent DOM overload
+        return next.slice(-5);
+      });
+
+      // Schedule removal for these specific animations
+      newAnims.forEach(anim => {
+        setTimeout(() => {
+          setActiveAnimations(prev => prev.filter(a => a.id !== anim.id));
+        }, 4000);
+      });
+    }, 150);
+
     // Listen for Realtime Broadcast Events (Faster, matches useGiftSystem)
     const channel = supabase.channel(`stream_events_${streamId}`)
       .on(
         'broadcast',
         { event: 'gift_sent' },
         (payload) => {
-          const event = payload.payload; // Payload structure from useGiftSystem
+          const event = payload.payload;
           
-          // Refresh coin balance if we are the sender or recipient
-          // refreshBalance(); // DISABLED: BroadcastHeader already handles real-time updates. Avoids race condition with stale reads.
-
-          // Add to animation queue
           const giftDef = giftDefs[event.gift_slug] || giftDefs[event.gift_id] || { 
             name: event.gift_name, 
-            icon_url: null, // You might need to pass icon in payload if not found
+            icon_url: null,
             coin_price: event.amount
           };
 
-          // Play Sound
+          // Play Sound (Throttle sounds too?)
           const playGiftSound = (name: string) => {
               const lower = name.toLowerCase();
-              let src = '/sounds/entrance/coins.mp3'; // Default
+              let src = '/sounds/entrance/coins.mp3';
               
               if (lower.includes('rose')) src = '/sounds/rose.mp3';
               else if (lower.includes('diamond')) src = '/sounds/diamond.mp3';
@@ -93,24 +111,20 @@ export default function GiftAnimationOverlay({ streamId }: GiftAnimationOverlayP
             id: event.id || Math.random().toString(36).substring(7),
             gift_id: event.gift_id,
             sender_id: event.sender_id,
-            recipient_id: event.receiver_id || streamId, // Fallback
+            recipient_id: event.receiver_id || streamId,
             gift_data: giftDef as any
           };
 
-          setActiveAnimations((prev) => [...prev, animationEvent]);
-
-          // Auto remove after 4 seconds
-          setTimeout(() => {
-            setActiveAnimations((prev) => prev.filter((a) => a.id !== animationEvent.id));
-          }, 4000);
+          animationBufferRef.current.push(animationEvent);
         }
       )
       .subscribe();
 
     return () => {
+      clearInterval(flushInterval);
       supabase.removeChannel(channel);
     };
-  }, [streamId, giftDefs, refreshBalance]);
+  }, [streamId, giftDefs, refreshCoins]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
@@ -163,7 +177,7 @@ function GiftAnimationItem({ event, index }: { event: GiftEvent; index: number }
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          delay={0.2}
+          transition={{ delay: 0.2 }}
           className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/10 shadow-xl"
         >
           <div className="text-yellow-400 font-bold text-lg flex items-center gap-2 justify-center">

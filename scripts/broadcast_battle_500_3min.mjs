@@ -1,9 +1,8 @@
 
 import fs from 'node:fs';
-import path from 'node:path';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+import { RoomServiceClient } from 'livekit-server-sdk';
 
 dotenv.config();
 
@@ -44,7 +43,7 @@ const CONFIG = {
 };
 
 const adminClient = createClient(CONFIG.supabaseUrl, CONFIG.supabaseServiceKey);
-const roomService = new RoomServiceClient(CONFIG.livekitUrl, CONFIG.livekitApiKey, CONFIG.livekitApiSecret);
+const _roomService = new RoomServiceClient(CONFIG.livekitUrl, CONFIG.livekitApiKey, CONFIG.livekitApiSecret);
 const runId = Date.now().toString().slice(-6);
 
 const metrics = {
@@ -162,7 +161,7 @@ async function preCleanup() {
    // Delete streams first due to FK
    const { data: loadStreams } = await adminClient.from('streams').select('id').ilike('title', 'Load Test Stream%');
    if (loadStreams?.length > 0) {
-     const ids = loadStreams.map(s => s.id);
+     const _ids = loadStreams.map(s => s.id);
      // We don't know the battle IDs, but we can delete battles associated with these streams
      // Since troll_battles uses host_id (user ID), we need to find user IDs first
    }
@@ -279,7 +278,7 @@ function startBattleScheduler(streamIds) {
     }
   };
   
-  const promise = cycle();
+  const _promise = cycle();
   return { stop: () => { running = false; } };
 }
 
@@ -306,13 +305,13 @@ async function createBattle(hostStreamId, challengerStreamId) {
     }
     metrics.battle.started++;
     return data.id;
-  } catch (e) {
+  } catch {
     metrics.battle.start_failures++;
     return null;
   }
 }
 
-async function endBattle(battleId, streamId) {
+async function endBattle(battleId, _streamId) {
   const start = Date.now();
   try {
     const { error } = await adminClient.from('troll_battles')
@@ -325,7 +324,7 @@ async function endBattle(battleId, streamId) {
     } else {
       metrics.battle.ended++;
     }
-  } catch (e) {
+  } catch {
     metrics.battle.end_failures++;
   }
 }
@@ -361,19 +360,19 @@ async function joinRoom(user, streamId) {
         metrics.livekit.publish_total++;
         metrics.livekit.publish_success++;
     }
-  } catch (e) {
+  } catch {
     metrics.livekit.connect_total++;
     metrics.supabase.errors++;
   }
 }
 
-async function mintToken(user, streamId) {
+async function mintToken(_user, _streamId) {
     // Mock token generation latency
     await sleep(50 + Math.random() * 100);
     return "mock-token";
 }
 
-async function simulateLiveKitJoin(token) {
+async function simulateLiveKitJoin(_token) {
     // Mock join latency
     await sleep(200 + Math.random() * 500);
     if (Math.random() < 0.005) throw new Error("Join failed");
@@ -418,7 +417,7 @@ async function simulateActivity(chatters, gifters, streamIds) {
   });
 }
 
-async function checkActiveBattles(streamIds) {
+async function checkActiveBattles(_streamIds) {
     const { data } = await adminClient.from('troll_battles')
         .select('*, host:user_profiles!host_id(username)')
         .eq('status', 'active');

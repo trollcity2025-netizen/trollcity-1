@@ -1,48 +1,15 @@
-import React, { useEffect, useCallback, memo } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { hasRole, UserRole } from '../lib/supabase'
 import {
-  Video,
-  MessageSquare,
-  Wallet,
-  Gavel,
   Shield,
-  Radio,
-  Users,
-  LayoutDashboard,
-  HelpCircle,
   Crown,
-  User,
-  LucideIcon,
-  Landmark,
-  Lock,
 } from 'lucide-react'
-import { cn } from '../lib/utils'
-
-interface NavButtonProps {
-  icon: LucideIcon
-  label: string
-  sublabel: string
-  path: string
-  colorClass: string
-  bgClass: string
-  borderClass?: string
-  isActive: boolean
-  onClick: (path: string) => void
-}
 
 export default function MobileShell({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
-
-  const go = useCallback(
-    (path: string) => {
-      navigate(path)
-    },
-    [navigate]
-  )
 
   useEffect(() => {
     if (!user) navigate('/login', { replace: true })
@@ -62,9 +29,6 @@ export default function MobileShell({ children }: { children: React.ReactNode })
   const isOfficer = hasRole(profile as any, [UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER], {
     allowAdminOverride: true,
   })
-
-  const isActive = (base: string) => pathname === base || pathname.startsWith(base + '/')
-  const profilePath = profile.username ? `/profile/${profile.username}` : '/profile/setup'
 
   return (
     <div className="h-dvh flex flex-col bg-gradient-to-b from-[#05010a] via-[#080316] to-[#05010a] pb-safe">
@@ -106,39 +70,3 @@ export default function MobileShell({ children }: { children: React.ReactNode })
     </div>
   )
 }
-
-const NavButton = memo(function NavButton({
-  icon: Icon,
-  label,
-  sublabel,
-  path,
-  colorClass,
-  bgClass,
-  borderClass,
-  isActive,
-  onClick,
-}: NavButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(path)}
-      aria-label={label}
-      aria-current={isActive ? 'page' : undefined}
-      className={cn(
-        'relative flex items-center gap-3 rounded-2xl px-3 py-3 transition-all active:scale-[0.97] focus:outline-none w-full text-left rgb-outline-card',
-        'bg-[#110e1b]',
-        isActive ? 'bg-[#1a1625]' : 'hover:bg-[#1a1625]',
-        borderClass
-      )}
-    >
-      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center relative z-10', bgClass, colorClass)}>
-        <Icon className="w-5 h-5" />
-      </div>
-
-      <div className="flex flex-col items-start text-left relative z-10">
-        <div className={cn('text-xs font-semibold', isActive ? 'text-white' : 'text-white/90')}>{label}</div>
-        <div className="text-[11px] text-white/60">{sublabel}</div>
-      </div>
-    </button>
-  )
-})

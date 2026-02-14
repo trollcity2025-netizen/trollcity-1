@@ -11,8 +11,8 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, ReactNode } from 'react';
-import { useAuthStore } from '../lib/store';
-import { supabase } from '../lib/supabase';
+// import { useAuthStore } from '../lib/store';
+// import { supabase } from '../lib/supabase';
 import { GlobalEvents, getServerTime, isEventActive, getPrimaryActiveEvent, getActiveEvents, calculateFeatureFlags } from '../lib/events/eventRegistry';
 import type { GlobalEventConfig, EventFeatureFlags, AdminEventOverride } from '../lib/events/types';
 
@@ -59,7 +59,7 @@ export const GlobalEventProvider: React.FC<GlobalEventProviderProps> = ({ childr
   const [adminOverride, setAdminOverrideState] = useState<AdminEventOverride | null>(null);
   
   const updateTimerRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  const _lastUpdateRef = useRef<number>(0);
 
   // Calculate feature flags
   const featureFlags = useMemo(() => 
@@ -304,6 +304,7 @@ export const GlobalEventProvider: React.FC<GlobalEventProviderProps> = ({ childr
  *   // Apply event theme classes
  * }
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const useGlobalEvent = (): GlobalEventContextType => {
   const context = useContext(GlobalEventContext);
   if (context === undefined) {
@@ -319,6 +320,7 @@ export const useGlobalEvent = (): GlobalEventContextType => {
 /**
  * Hook for admin-only event controls
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const useEventAdmin = () => {
   const { adminOverride, setAdminOverride } = useGlobalEvent();
   

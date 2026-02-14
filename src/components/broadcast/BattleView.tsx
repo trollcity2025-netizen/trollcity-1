@@ -480,6 +480,17 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
         });
 
         if (endError || !endResult?.success) {
+          // If it failed because timer not elapsed, reset hasEnded to allow retry
+          if (endResult?.message === 'Battle timer not elapsed') {
+            console.warn("Server says timer not elapsed, retrying in 2 seconds...");
+            setHasEnded(false);
+            setTimeout(() => {
+              if (participantInfo?.role === 'host') {
+                setHasEnded(true);
+                endBattle(true);
+              }
+            }, 2000);
+          }
           return;
         }
 
@@ -489,7 +500,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
       } catch (e) {
           console.error(e);
       }
-  }, [battle, user, challengerStream, opponentStream]);
+  }, [battle, user, challengerStream, opponentStream, participantInfo?.role]);
 
     const [leaveLoading, setLeaveLoading] = useState(false);
 
@@ -598,7 +609,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
                 </div>
             </div>
 
-            {/* Center: Pot & Timer */}
+            {/* Center: Pot */}
             <div className="mx-8 flex flex-col items-center justify-center min-w-[200px]">
                 <div className="flex flex-col items-center mb-1">
                     <span className="text-[10px] text-amber-500/70 uppercase tracking-widest font-bold">Pot</span>
@@ -607,21 +618,6 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
                         <span className="font-mono text-xl font-black">
                             {((battle?.pot_challenger || 0) + (battle?.pot_opponent || 0)).toLocaleString()}
                         </span>
-                    </div>
-                </div>
-                 
-                <div className="flex flex-col items-center">
-                    <span className={cn(
-                        "text-2xl font-black italic tracking-tighter transition-all duration-300",
-                        isSuddenDeath ? "text-red-500 animate-pulse scale-110" : "text-white/20"
-                    )}>
-                        {isSuddenDeath ? "SUDDEN DEATH" : "VS"}
-                    </span>
-                    <div className={cn(
-                        "font-mono text-lg font-bold",
-                        isSuddenDeath ? "text-red-500" : "text-white"
-                    )}>
-                        {battle?.status === 'ended' ? "FINISHED" : formatTime(timeLeft)}
                     </div>
                 </div>
             </div>
@@ -696,6 +692,29 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
         >
             <MemoBattleArena onGift={handleGiftSelect} />
 
+            {/* Central Floating Timer */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 flex flex-col items-center">
+                <div className={cn(
+                    "flex flex-col items-center justify-center p-6 rounded-3xl backdrop-blur-md border shadow-2xl transition-all duration-500",
+                    isSuddenDeath 
+                        ? "bg-red-950/40 border-red-500/50 scale-110 shadow-red-500/20" 
+                        : "bg-black/40 border-white/10 shadow-black/50"
+                )}>
+                    <span className={cn(
+                        "text-3xl font-black italic tracking-tighter mb-1",
+                        isSuddenDeath ? "text-red-500 animate-pulse" : "text-amber-500"
+                    )}>
+                        {isSuddenDeath ? "SUDDEN DEATH" : "BATTLE TIME"}
+                    </span>
+                    <div className={cn(
+                        "font-mono text-6xl font-black drop-shadow-lg",
+                        isSuddenDeath ? "text-red-500" : "text-white"
+                    )}>
+                        {battle?.status === 'ended' ? "FINISHED" : formatTime(timeLeft)}
+                    </div>
+                </div>
+            </div>
+
             <RoomAudioRenderer />
             <MuteHandler streamId={challengerStream.id} />
             <BattleRoomSync isBroadcaster={isBroadcaster} />
@@ -735,16 +754,18 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
                             </div>
                         </div>
 
-                        {battle.winner_id ? (
-                            <div className="mb-8">
-                                <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Winner</div>
-                                <div className="text-2xl font-bold text-white">
-                                    {battle.winner_id === challengerStream.user_id ? challengerStream.title : opponentStream.title}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="mb-8 text-xl font-bold text-zinc-400 italic">It&apos;s a Draw!</div>
-                        )}
+        {battle.status === 'ended' ? (
+            <div className="mb-8">
+                <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Winner</div>
+                <div className="text-2xl font-bold text-white">
+                    {battle.winner_id === challengerStream.user_id ? challengerStream.title : 
+                     battle.winner_id === opponentStream.user_id ? opponentStream.title : 
+                     "It's a Draw!"}
+                </div>
+            </div>
+        ) : (
+            <div className="mb-8 text-xl font-bold text-zinc-400 italic animate-pulse">Calculating Results...</div>
+        )}
 
                         <div className="text-sm text-zinc-500 animate-pulse">
                             Returning to stream in a few seconds...
@@ -757,9 +778,12 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
         {/* Gift Tray */}
         {giftRecipientId && (
             <GiftTray 
-                onClose={() => setGiftRecipientId(null)}
+                onClose={() => {
+                    setGiftRecipientId(null);
+                    setGiftStreamId(null);
+                }}
                 recipientId={giftRecipientId}
-                streamId={giftStreamId || challengerStream.id}
+                streamId={giftStreamId || currentStreamId}
             />
         )}
     </div>

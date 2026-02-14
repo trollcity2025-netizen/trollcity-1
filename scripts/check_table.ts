@@ -6,7 +6,7 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 async function check() {
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('mobile_error_logs')
     .select('count', { count: 'exact', head: true })
 

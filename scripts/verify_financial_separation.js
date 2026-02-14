@@ -21,7 +21,6 @@ async function verifySeparation() {
   
   try {
     // 1. Setup Test Data
-    const testOfficerId = '00000000-0000-0000-0000-000000000000' // Using a dummy UUID if possible, or we need a real user.
     // Ideally we should use a real user or create one. For safety, let's just inspect the logic via dry-run or checks.
     // Actually, let's look for an existing user to use as "Officer".
     

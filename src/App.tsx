@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react
 import { useAuthStore } from "./lib/store";
 
 import { useEligibilityStore } from "./lib/eligibilityStore";
+import { useJailMode } from "./hooks/useJailMode";
 import { supabase, UserRole, reportError } from "./lib/supabase";
 import { Toaster, toast } from "sonner";
 import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
@@ -102,6 +103,7 @@ const FamilyLeaderboard = lazy(() => import("./pages/FamilyLeaderboard.jsx"));
 const FamilyShop = lazy(() => import("./pages/FamilyShop.jsx"));
 const FamilyBrowse = lazy(() => import("./pages/FamilyBrowse"));
 const Support = lazy(() => import("./pages/Support"));
+const JailPage = lazy(() => import("./pages/JailPage"));
 const Safety = lazy(() => import("./pages/Safety"));
 const AdminRFC = lazy(() => import("./components/AdminRFC"));
 const AdminEarningsDashboard = lazy(() => import("./pages/admin/AdminEarningsDashboard"));
@@ -117,7 +119,6 @@ const ReferralBonusPanel = lazy(() => import("./pages/admin/ReferralBonusPanel")
 const SecretaryConsole = lazy(() => import("./pages/secretary/SecretaryConsole"));
 import { systemManagementRoutes } from "./pages/admin/adminRoutes";
 
-const LandingPage = lazyWithRetry(() => import("./pages/LandingPage"));
 const TaxOnboarding = lazy(() => import("./pages/TaxOnboarding"));
 const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 const EarningsPage = lazy(() => import("./pages/EarningsPage"));
@@ -257,12 +258,18 @@ const LoadingScreen = () => (
     const user = useAuthStore((s) => s.user);
     const profile = useAuthStore((s) => s.profile);
     const isLoading = useAuthStore((s) => s.isLoading);
+    const { isJailed } = useJailMode(user?.id);
     const location = useLocation();
     
     useGasSystem(); // Enable Gas System
 
     if (isLoading) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
+
+    // 🚔 Jail Guard
+    if (isJailed && location.pathname !== "/jail") {
+      return <Navigate to="/jail" replace />;
+    }
     
     // If we have a user but no profile, and we are not loading, it means the profile row is missing.
     // We must redirect to setup to create one.
@@ -678,7 +685,7 @@ function AppContent() {
           .from('user_profiles')
           .select('ip_address_history')
           .eq('id', user.id)
-          .single()
+          .maybeSingle()
 
         const ipHistory = currentProfile?.ip_address_history || []
         const newIPEntry = {
@@ -798,16 +805,26 @@ function AppContent() {
         
         // Also check if user has any active battles in the database
         try {
-          const { data: activeBattles } = await supabase
-            .from('battles')
-            .select('id, status')
-            .or(`challenger_stream_id.in.(select id from streams where user_id.eq.${user.id}),opponent_stream_id.in.(select id from streams where user_id.eq.${user.id})`)
-            .eq('status', 'active')
-            .limit(1);
+          // First get the user's stream IDs
+          const { data: userStreams } = await supabase
+            .from('streams')
+            .select('id')
+            .eq('user_id', user.id);
             
-          if (activeBattles && activeBattles.length > 0) {
-            console.log('⚔️ User has active battle - skipping visibility refresh');
-            return;
+          const streamIds = userStreams?.map(s => s.id) || [];
+          
+          if (streamIds.length > 0) {
+            const { data: activeBattles } = await supabase
+              .from('battles')
+              .select('id, status')
+              .or(`challenger_stream_id.in.(${streamIds.join(',')}),opponent_stream_id.in.(${streamIds.join(',')})`)
+              .eq('status', 'active')
+              .limit(1);
+              
+            if (activeBattles && activeBattles.length > 0) {
+              console.log('⚔️ User has active battle - skipping visibility refresh');
+              return;
+            }
           }
         } catch (e) {
           console.error('Failed to check battle status:', e);
@@ -1000,6 +1017,7 @@ function AppContent() {
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/credit-scores" element={<CreditScorePage />} />
                   <Route path="/support" element={<Support />} />
+                  <Route path="/jail" element={<JailPage />} />
                   <Route path="/tmv" element={<TMVPage />} />
                   <Route path="/wall" element={<TrollCityWall />} />
                   <Route path="/wall/:postId" element={<WallPostPage />} />

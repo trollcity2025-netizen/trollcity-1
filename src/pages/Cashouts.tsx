@@ -4,7 +4,7 @@ import { DollarSign, Coins, Clock } from 'lucide-react'
 import { supabase, CashoutTier, UserProfile } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { notifyAdmins } from '../lib/notifications'
+// import { notifyAdmins } from '../lib/notifications'
 
 interface PayoutRequest {
   id: string
@@ -71,7 +71,7 @@ const Cashouts = () => {
   const requestCashout = async (tier: CashoutTier) => {
     if (!profile) return
     // Calculate fee coins per provided schedule
-    const feeCoins = 0
+    const _feeCoins = 0
     const totalCoinsNeeded = tier.coin_amount
 
     if (availableEarnedCoins < totalCoinsNeeded) {
@@ -82,46 +82,22 @@ const Cashouts = () => {
     try {
       setRequesting(tier.id)
 
-      const fee = 0
-      const net = Number(tier.cash_amount)
+      const { data, error } = await supabase.rpc('request_payout', {
+        p_tier_id: tier.id,
+        p_coin_amount: totalCoinsNeeded,
+        p_cash_amount: tier.cash_amount,
+        p_currency: tier.currency
+      })
 
-      const { error: insertError } = await supabase
-        .from('payout_requests')
-        .insert([
-          {
-            user_id: profile.id,
-            coins_used: totalCoinsNeeded,
-            cash_amount: tier.cash_amount,
-            currency: tier.currency,
-            processing_fee: Number(fee.toFixed(2)),
-            net_amount: Number(net.toFixed(2)),
-            status: 'pending',
-            created_at: new Date().toISOString(),
-          },
-        ])
+      if (error) throw error
+      if (!data.success) throw new Error(data.error)
 
-      if (insertError) throw insertError
-
-      // Reserve coins including fee coins so availability reflects deduction
-      const { error: reserveErr } = await supabase
-        .from('user_profiles')
-        .update({
-          reserved_troll_coins: (profile.reserved_troll_coins || 0) + totalCoinsNeeded
-        })
-        .eq('id', profile.id)
-      if (reserveErr) {
-        console.warn('Failed to update reserved_troll_coins:', reserveErr.message)
+      if (data.bonus_applied) {
+        toast.success(`Cashout request submitted! +$${data.bonus_amount.toFixed(2)} Seasonal Bonus applied!`)
+      } else {
+        toast.success('Cashout request submitted')
       }
-
-      // Notify admins
-      await notifyAdmins(
-        'New Payout Request',
-        `${profile.username || 'User'} requested a cashout of $${tier.cash_amount} requiring ${totalCoinsNeeded.toLocaleString()} coins (base ${tier.coin_amount.toLocaleString()} + fee ${feeCoins.toLocaleString()})`,
-        'payout_request',
-        { userId: profile.id, amount: tier.cash_amount, coins: totalCoinsNeeded, baseCoins: tier.coin_amount, feeCoins }
-      )
-
-      toast.success('Cashout request submitted')
+      
       await loadData()
     } catch (e: any) {
       toast.error(e.message || 'Failed to request cashout')

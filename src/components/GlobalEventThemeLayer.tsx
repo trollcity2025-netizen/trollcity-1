@@ -5,7 +5,7 @@
  * GPU-safe, auto-removes cleanly when event ends.
  */
 
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useGlobalEvent } from '../contexts/GlobalEventContext';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import type { EventTheme } from '../lib/events/types';
@@ -173,6 +173,7 @@ interface UseEventThemeReturn {
   particleEffect: string;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useEventTheme = (): UseEventThemeReturn => {
   const { activeEvent, featureFlags } = useGlobalEvent();
   
@@ -198,6 +199,7 @@ export const useEventTheme = (): UseEventThemeReturn => {
 
 let cssInjected = false;
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const injectEventThemeCSS = (): void => {
   if (typeof document === 'undefined' || cssInjected) return;
   

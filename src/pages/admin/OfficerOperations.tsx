@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Calendar,
   MessageSquare,
@@ -90,7 +89,7 @@ export default function OfficerOperations() {
   const [selectedOfficer, setSelectedOfficer] = useState('');
   const [newPatrolType, setNewPatrolType] = useState('general_patrol');
   const [newPatrolInstructions, setNewPatrolInstructions] = useState('');
-  const [newPatrolPriority, setNewPatrolPriority] = useState(1);
+  // const [newPatrolPriority, setNewPatrolPriority] = useState(1);
 
   const loadShifts = useCallback(async () => {
     try {

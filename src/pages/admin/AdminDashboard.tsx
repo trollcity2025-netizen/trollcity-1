@@ -1,11 +1,10 @@
-// src/pages/admin/AdminDashboard.tsx
+// src/pages/admin/AdminDashboard.tsx - Reload
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import './admin.css'
 import { trollCityTheme } from '../../styles/trollCityTheme'
 import { useAuthStore } from '../../lib/store'
 import { supabase, isAdminEmail, UserRole } from '../../lib/supabase'
 import { sendNotification } from '../../lib/sendNotification'
-import { sendGlobalNotification } from '../../lib/ntfyNotify'
 import { Shield } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -18,7 +17,6 @@ import AdditionalTasksGrid from './components/AdditionalTasksGrid'
 import QuickActionsBar from './components/QuickActionsBar'
 import PresidentialOversightPanel from './components/PresidentialOversightPanel'
 import ProposalManagementPanel from './components/shared/ProposalManagementPanel'
-import AdminInterviewDashboard from '@/pages/admin/components/AdminInterviewDashboard'
 import TempAdminDashboard from './TempAdminDashboard'
 import ErrorBoundary from '../../components/ErrorBoundary'
 
@@ -526,6 +524,7 @@ export default function AdminDashboard() {
         .select('id, title, category, status, created_at, broadcaster_id')
         .eq('is_live', true) // Use is_live instead of status for consistency
         .order('created_at', { ascending: false })
+        .limit(100)
 
       if (error) throw error
 

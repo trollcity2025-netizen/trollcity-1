@@ -27,7 +27,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Battle not started');
   END IF;
 
-  v_required := make_interval(secs => p_min_duration_seconds + p_sudden_death_seconds);
+  -- Allow a 10-second grace period for client clock drift
+  v_required := make_interval(secs => p_min_duration_seconds + p_sudden_death_seconds - 10);
 
   IF now() < v_battle.started_at + v_required THEN
     RETURN jsonb_build_object('success', false, 'message', 'Battle timer not elapsed');

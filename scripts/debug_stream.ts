@@ -19,7 +19,7 @@ function loadEnv() {
             });
             return envVars;
         }
-    } catch (e) { }
+    } catch { }
     return {};
 }
 
@@ -150,7 +150,7 @@ async function run() {
             ws.onopen = () => { clearTimeout(tm); console.log("   ✅ WS Connected"); ws.close(); resolve(); };
             ws.onerror = () => { clearTimeout(tm); console.log("   ❌ WS Error"); resolve(); };
         });
-    } catch (e) {
+    } catch {
         console.log("   ❌ WS Exception");
     }
 }

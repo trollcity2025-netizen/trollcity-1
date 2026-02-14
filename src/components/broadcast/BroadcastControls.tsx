@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
 import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
@@ -14,6 +15,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface BroadcastControlsProps {
   stream: Stream;
   isHost: boolean;
+  isModerator?: boolean;
   isOnStage: boolean;
   chatOpen: boolean;
   toggleChat: () => void;
@@ -25,7 +27,8 @@ interface BroadcastControlsProps {
   liveViewerCount?: number;
 }
 
-export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, liveViewerCount }: BroadcastControlsProps) {
+export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, liveViewerCount }: BroadcastControlsProps) {
+  const navigate = useNavigate();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
@@ -75,11 +78,11 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
   const myAttributes = user ? attributes[user.id] : null;
   const activePerks = myAttributes?.activePerks || [];
   
-  const isStaff = isAdmin || profile?.troll_role === 'admin' || profile?.troll_role === 'moderator';
+  const isStaff = isAdmin || profile?.troll_role === 'admin' || profile?.troll_role === 'moderator' || isModerator;
   const canManageStream = isHost || isStaff;
   // Only Host can control stream settings (Visuals, Price, Boxes)
-  // Staff can moderate (ban users), but NOT change stream settings
-  const canEditStream = isHost || isStaff; 
+  // Staff/Mods can moderate (ban users), but NOT change stream settings (unless specified)
+  const canEditStream = isHost || (isStaff && !isModerator); // Only true staff can edit stream settings, mods just moderate chat/users
 
   const togglePerk = async (perkId: string) => {
     if (!user) return;
@@ -162,7 +165,7 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
     } catch (e) {
         console.error(e);
     }
-  }, [canManageStream, stream.id]);
+  }, [canEditStream, stream.id]);
 
   // Debounce price updates to DB
   useEffect(() => {
@@ -301,7 +304,11 @@ export default function BroadcastControls({ stream, isHost, isOnStage, chatOpen,
   };
 
   const handleLike = async () => {
-    if (isLiking || !user) return;
+    if (!user) {
+      navigate('/auth?mode=signup');
+      return;
+    }
+    if (isLiking) return;
     if (isHost) {
         toast.error("Broadcasters cannot like their own broadcast");
         return;

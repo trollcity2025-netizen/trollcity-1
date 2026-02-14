@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Search, User } from 'lucide-react'
 import { Card, CardContent } from '../ui/card'
 import UserNameWithAge from '../UserNameWithAge'
+import { VirtuosoGrid } from 'react-virtuoso'
 
 interface ParticipantsListProps {
   tournamentId: string
@@ -103,48 +104,54 @@ export default function ParticipantsList({ tournamentId }: ParticipantsListProps
           <div className="text-gray-400 animate-pulse">Loading participants...</div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredParticipants.map((p) => (
-            <Card key={p.user_id} className="bg-black/60 border-purple-500/20 hover:border-purple-500/50 hover:bg-black/80 hover:shadow-[0_0_20px_rgba(147,51,234,0.15)] transition-all duration-300 group">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-purple-900/30 flex items-center justify-center overflow-hidden border-2 border-purple-500/30 group-hover:border-purple-400 group-hover:shadow-[0_0_10px_rgba(168,85,247,0.5)] transition-all shrink-0">
-                  {p.user_profile?.avatar_url ? (
-                    <img src={p.user_profile.avatar_url} alt={p.user_profile.username} className="h-full w-full object-cover" />
-                  ) : (
-                    <User className="h-6 w-6 text-purple-400" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <UserNameWithAge 
-                    user={{
-                      username: p.user_profile?.username || 'Unknown User',
-                      id: p.user_id,
-                      created_at: (p.user_profile as any)?.created_at,
-                      rgb_username_expires_at: (p.user_profile as any)?.rgb_username_expires_at,
-                      glowing_username_color: (p.user_profile as any)?.glowing_username_color
-                    }}
-                    className="font-bold text-white truncate text-lg group-hover:text-purple-300 transition-colors"
-                  />
-                  <div className="text-xs text-gray-400 flex gap-2 items-center mt-1">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${p.status === 'active' ? 'bg-green-500/10 text-green-400 border border-green-500/20 shadow-[0_0_5px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                      {(p.status || 'Active')}
-                    </span>
-                    <span className="text-gray-600">•</span>
-                    <span className="text-gray-300 font-medium">Wins: <span className="text-white">{p.wins || 0}</span></span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0 bg-purple-900/10 p-2 rounded-lg border border-purple-500/10 group-hover:border-purple-500/30 transition-colors">
-                  <div className="text-xl font-black text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.5)]">{p.points || 0}</div>
-                  <div className="text-[9px] text-gray-500 uppercase tracking-widest">Pts</div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {filteredParticipants.length === 0 && (
-             <div className="col-span-full text-center py-16 border border-dashed border-gray-800 rounded-2xl bg-black/20">
-               <User className="w-12 h-12 text-gray-700 mx-auto mb-3" />
-               <p className="text-gray-500 font-medium">No participants found matching your criteria.</p>
-             </div>
+        <div className="min-h-[400px]">
+          {filteredParticipants.length === 0 ? (
+            <div className="text-center py-16 border border-dashed border-gray-800 rounded-2xl bg-black/20">
+              <User className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">No participants found matching your criteria.</p>
+            </div>
+          ) : (
+            <VirtuosoGrid
+              style={{ height: '600px' }}
+              data={filteredParticipants}
+              listClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              itemContent={(index, p) => (
+                <Card key={p.user_id} className="bg-black/60 border-purple-500/20 hover:border-purple-500/50 hover:bg-black/80 hover:shadow-[0_0_20px_rgba(147,51,234,0.15)] transition-all duration-300 group h-full">
+                  <CardContent className="p-4 flex items-center gap-4 h-full">
+                    <div className="h-12 w-12 rounded-full bg-purple-900/30 flex items-center justify-center overflow-hidden border-2 border-purple-500/30 group-hover:border-purple-400 group-hover:shadow-[0_0_10px_rgba(168,85,247,0.5)] transition-all shrink-0">
+                      {p.user_profile?.avatar_url ? (
+                        <img src={p.user_profile.avatar_url} alt={p.user_profile.username} className="h-full w-full object-cover" />
+                      ) : (
+                        <User className="h-6 w-6 text-purple-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <UserNameWithAge 
+                        user={{
+                          username: p.user_profile?.username || 'Unknown User',
+                          id: p.user_id,
+                          created_at: (p.user_profile as any)?.created_at,
+                          rgb_username_expires_at: (p.user_profile as any)?.rgb_username_expires_at,
+                          glowing_username_color: (p.user_profile as any)?.glowing_username_color
+                        }}
+                        className="font-bold text-white truncate text-lg group-hover:text-purple-300 transition-colors"
+                      />
+                      <div className="text-xs text-gray-400 flex gap-2 items-center mt-1">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${p.status === 'active' ? 'bg-green-500/10 text-green-400 border border-green-500/20 shadow-[0_0_5px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                          {(p.status || 'Active')}
+                        </span>
+                        <span className="text-gray-600">•</span>
+                        <span className="text-gray-300 font-medium">Wins: <span className="text-white">{p.wins || 0}</span></span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 bg-purple-900/10 p-2 rounded-lg border border-purple-500/10 group-hover:border-purple-500/30 transition-colors">
+                      <div className="text-xl font-black text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.5)]">{p.points || 0}</div>
+                      <div className="text-[9px] text-gray-500 uppercase tracking-widest">Pts</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            />
           )}
         </div>
       )}

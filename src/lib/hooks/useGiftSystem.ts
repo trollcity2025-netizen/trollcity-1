@@ -5,8 +5,8 @@ import { processGiftXp } from '../xp'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../lib/store'
 
-import { generateUUID } from '../uuid'
-import { coinOptimizer } from '../coinRotation'
+// import { generateUUID } from '../uuid'
+// import { coinOptimizer } from '../coinRotation'
 
 export interface GiftItem {
   id: string
@@ -29,7 +29,7 @@ export function useGiftSystem(
   const { user, profile, refreshProfile } = useAuthStore()
   const [isSending, setIsSending] = useState(false)
   
-  const toGiftSlug = (value?: string) => {
+  const _toGiftSlug = (value?: string) => {
     if (!value) return 'gift'
     return value
       .toLowerCase()
@@ -44,7 +44,7 @@ export function useGiftSystem(
     if (!user || !profile) {
       // Handle guest gifting
       if (streamerId && streamId) {
-        const { data: result, error: rpcError } = await supabase.rpc('send_guest_gift', {
+        const { data: _result, error: rpcError } = await supabase.rpc('send_guest_gift', {
           p_guest_id: streamerId, // Using streamerId as a temporary guest ID
           p_receiver_id: targetReceiverId,
           p_stream_id: streamId || null,
@@ -67,7 +67,7 @@ export function useGiftSystem(
     // Use receiverId if provided, otherwise fallback to streamerId
 
     // Validate balance based on gift type (paid or free)
-    const currency = gift.currency || 'troll_coins'
+    const _currency = gift.currency || 'troll_coins'
     
     let balance = 0
     if (gift.type === 'paid') {
@@ -110,6 +110,17 @@ export function useGiftSystem(
       }
 
       console.log('[GiftDebugger] Success:', result)
+
+      // ✅ Award XP and evaluate badges
+      // The send_gift RPC handles coin transfers. We now call the server-side XP logic
+      // using the transaction ID returned by the RPC.
+      try {
+        if (result.transaction_id) {
+          await processGiftXp(result.transaction_id, streamId);
+        }
+      } catch (xpError) {
+        console.error('[GiftDebugger] XP Award Error:', xpError);
+      }
 
       // Refresh balance
       await refreshProfile()

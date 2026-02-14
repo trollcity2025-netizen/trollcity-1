@@ -6,9 +6,10 @@ import { useAuthStore } from '../lib/store';
 
 const GlobalErrorBanner: React.FC = () => {
   const { error, clearError } = useGlobalApp();
-  const profile = useAuthStore((s) => s.profile);
+  const { user, profile } = useAuthStore();
 
-  if (!error) return null;
+  // Do not show errors for unauthenticated users (likely RLS disabled errors on landing page)
+  if (!user || !error) return null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-3 shadow-lg">

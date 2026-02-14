@@ -17,7 +17,8 @@ export const useRealtimeUsers = (): User[] => {
     const { data } = await supabase
       .from('user_profiles')
       .select('id, username, email, role, is_banned, created_at')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500);
     setUsers(data || []);
   };
 

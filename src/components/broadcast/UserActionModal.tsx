@@ -59,7 +59,7 @@ export default function UserActionModal({
     const fetchProfile = async () => {
         // Fetch profile if needed
         if (!username || !role || !createdAt) {
-          const { data } = await supabase.from('user_profiles').select('username, role, troll_role, created_at, avatar_url').eq('id', userId).single();
+          const { data } = await supabase.from('user_profiles').select('username, role, troll_role, created_at, avatar_url').eq('id', userId).maybeSingle();
           if (data) {
               setFetchedUsername(data.username);
               setTargetRole(data.role || data.troll_role);
@@ -68,26 +68,26 @@ export default function UserActionModal({
           }
         } else {
              // If we have basic info, still fetch avatar if missing
-             const { data } = await supabase.from('user_profiles').select('avatar_url').eq('id', userId).single();
+             const { data } = await supabase.from('user_profiles').select('avatar_url').eq('id', userId).maybeSingle();
              if (data) {
                  setFetchedAvatar(data.avatar_url);
              }
         }
 
         // Fetch credit tier
-        const { data: creditData } = await supabase.from('user_credit').select('tier').eq('user_id', userId).single();
+        const { data: creditData } = await supabase.from('user_credit').select('tier').eq('user_id', userId).maybeSingle();
         if (creditData) {
             setFetchedTier(creditData.tier);
         }
 
         // Check follow status
         if (currentUser) {
-            const { data: followData, error: followError } = await supabase
+            const { data: followData, error: _followError } = await supabase
                 .from('user_follows')
                 .select('*')
                 .eq('follower_id', currentUser.id)
                 .eq('following_id', userId)
-                .single();
+                .maybeSingle();
             
             if (followData) {
                 setIsFollowing(true);
@@ -95,7 +95,7 @@ export default function UserActionModal({
         }
     };
     fetchProfile();
-  }, [userId, username, role, createdAt]);
+  }, [userId, username, role, createdAt, currentUser]);
 
   const displayName = username || fetchedUsername || userId;
   const displayCreatedAt = createdAt || fetchedCreatedAt || undefined;
@@ -118,7 +118,7 @@ export default function UserActionModal({
             .from('user_profiles')
             .select('role')
             .eq('id', currentUser?.id)
-            .single();
+            .maybeSingle();
             
         const isKickerStaff = currentUserProfile?.role === 'admin' || currentUserProfile?.role === 'moderator';
         
@@ -207,7 +207,10 @@ export default function UserActionModal({
   };
 
   const handleFollow = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+        navigate('/auth?mode=signup');
+        return;
+    }
     if (isFollowing) {
         // Unfollow
         const { error } = await supabase.from('user_follows').delete().eq('follower_id', currentUser.id).eq('following_id', userId);
@@ -228,6 +231,10 @@ export default function UserActionModal({
   const openChatBubble = useChatStore((state) => state.openChatBubble);
 
   const handleMessage = () => {
+    if (!currentUser) {
+        navigate('/auth?mode=signup');
+        return;
+    }
     openChatBubble(userId, displayName, fetchedAvatar);
     onClose();
   };

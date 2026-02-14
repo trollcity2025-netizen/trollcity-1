@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
-import { useThemeAudio } from '../contexts/ThemeAudioContext';
 
 import MoneyRain from '../components/MoneyRain';
 import { Play, Users, Coins, Trophy, Sparkles, ArrowRight } from 'lucide-react';

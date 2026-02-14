@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/lib/store';
+// import { useAuthStore } from '@/lib/store';
 import { Users, Video, Radio } from 'lucide-react';
 
 interface Stream {
@@ -9,7 +9,8 @@ interface Stream {
   user_id: string;
   title: string;
   status: string;
-  viewer_count: number;
+  viewer_count?: number;
+  current_viewers: number;
   thumbnail_url?: string;
   user_profiles?: {
     username: string;
@@ -31,6 +32,7 @@ export default function HomeLiveGrid() {
           title,
           status,
           viewer_count,
+          current_viewers,
           thumbnail_url,
           user_id,
           user_profiles:user_profiles!streams_user_id_fkey (
@@ -39,11 +41,11 @@ export default function HomeLiveGrid() {
           )
         `)
         .eq('is_live', true)
-        .order('viewer_count', { ascending: false })
+        .order('current_viewers', { ascending: false })
         .range(0, 49); // Limit to top 50 streams for performance
 
       if (error) throw error;
-      setStreams(data || []);
+      setStreams((data as any[]) || []);
     } catch (err) {
       console.error('Error fetching streams:', err);
     } finally {
@@ -132,7 +134,7 @@ export default function HomeLiveGrid() {
             {/* Viewer Count */}
             <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-xs font-medium text-white/90">
               <Users className="w-3 h-3" />
-              {stream.viewer_count || 0}
+              {stream.current_viewers || stream.viewer_count || 0}
             </div>
           </div>
 

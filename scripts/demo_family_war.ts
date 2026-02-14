@@ -117,7 +117,7 @@ async function runDemo() {
 
   // 2. Get a User (to be the declarer)
   let declarerUser
-  const { data: existingUsers, error: userError } = await supabase
+  const { data: existingUsers, error: _userError } = await supabase
     .from('profiles')
     .select('id, username')
     .limit(1)

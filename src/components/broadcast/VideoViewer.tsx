@@ -8,7 +8,10 @@ export default function VideoViewer() {
 
   useEffect(() => {
     if (videoEl.current && videoTracks.length > 0) {
-      videoTracks[0].track?.attach(videoEl.current);
+      const trackRef = videoTracks[0] as any;
+      if (trackRef.track) {
+        trackRef.track.attach(videoEl.current);
+      }
     }
   }, [videoTracks]);
 

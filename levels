@@ -1,0 +1,489 @@
+MASTER IMPLEMENTATION PROMPT
+
+Seasonal Goals + Weekly Bonus + Friday Batch + Goal Boost
+(Using Existing Cashout Tiers)
+
+0️⃣ DO NOT MODIFY
+
+These systems already exist and must NOT be changed:
+
+Existing cashout tier logic
+
+Coin economics (100 coins = $1)
+
+Base conversion (15,000 coins = $50)
+
+Existing payout UI structure
+
+Existing tier calculations
+
+Existing payout math
+
+We are layering bonus eligibility and task logic on top.
+
+1️⃣ SYSTEM OVERVIEW
+
+Implement a Seasonal Goal System that:
+
+Rotates Monthly (Admin configurable)
+
+Defines Daily, Weekly, Monthly tasks
+
+Awards +2.5% payout bonus ONLY if ALL weekly tasks are met
+
+Does NOT change base payout tiers
+
+Adds a Friday Payout Batch Queue
+
+Adds Admin + Secretary payout management tabs
+
+Adds structured “Goal Boost” help system
+
+Is fraud resistant
+
+Requires no redeploy to rotate seasons
+
+Is auditable with snapshots
+
+2️⃣ SEASONAL SYSTEM
+2.1 Tables
+task_seasons
+
+id uuid
+
+season_month text (YYYY-MM unique)
+
+name text
+
+starts_at timestamp
+
+ends_at timestamp
+
+is_active boolean
+
+created_at timestamp
+
+Only one active season at a time.
+
+task_templates
+
+Library of possible tasks:
+
+id uuid
+
+code text unique
+
+label text
+
+metric_type enum:
+
+coins
+
+unique_gifters
+
+returning_gifters
+
+live_minutes
+
+live_sessions
+
+chat_messages
+
+no_strikes
+
+no_fraud
+
+period_type enum:
+
+daily
+
+weekly
+
+monthly
+
+description text
+
+season_tasks
+
+Assign tasks per month:
+
+id uuid
+
+season_id uuid FK
+
+task_template_id uuid FK
+
+period_type daily|weekly|monthly
+
+threshold_number numeric
+
+required boolean
+
+order_index int
+
+No hardcoding anywhere.
+
+3️⃣ QUALIFYING UNIQUE GIFTER RULE
+
+A qualifying unique gifter must:
+
+be verified
+
+send ≥500 coins in that period
+
+not be self-gifting
+
+not be fraud flagged
+
+Must be enforced in SQL logic.
+
+Returning gifter = gifted on ≥2 separate days.
+
+4️⃣ DAILY / WEEKLY / MONTHLY GOAL LOGIC
+Daily
+
+Must complete 5 of 7 days to remain weekly bonus eligible.
+
+Compute:
+
+live_minutes >= threshold
+
+unique_gifters_daily >= threshold
+
+chat_messages >= threshold
+
+no strikes that day
+
+Track daily completion rows.
+
+Weekly
+
+To qualify for bonus:
+
+Must meet ALL required weekly season_tasks.
+
+If ANY required weekly task not met:
+weekly_bonus_eligible = false
+
+Monthly
+
+Status badge system only.
+Does not change payout.
+Used for explore boost and reputation.
+
+5️⃣ WEEKLY BONUS APPLICATION
+
+When payout requested:
+
+Use existing tier result (do NOT change)
+
+Compute weekly_bonus_eligible
+
+If true:
+bonus_percent = 2.5
+bonus_amount = base_payout * 0.025
+
+Else:
+bonus_percent = 0
+bonus_amount = 0
+
+Store snapshot in payout_requests.
+
+Eligibility snapshot must include:
+
+coins_earned
+
+unique_gifters
+
+returning_gifters
+
+live_minutes
+
+live_sessions
+
+strikes
+
+fraud_flags
+
+missing_tasks array
+
+Snapshot must be immutable after creation.
+
+6️⃣ FRIDAY PAYOUT BATCH SYSTEM
+payout_batches
+
+id uuid
+
+batch_date date (Friday)
+
+week_start date
+
+week_end date
+
+season_id uuid
+
+status enum:
+
+open
+
+locked
+
+processing
+
+paid
+
+cancelled
+
+Auto-created when first payout requested for that Friday.
+
+payout_requests
+
+id uuid
+
+batch_id uuid
+
+creator_id uuid
+
+requested_at timestamp
+
+base_payout numeric
+
+bonus_percent numeric
+
+bonus_amount numeric
+
+total_payout numeric
+
+eligibility_snapshot jsonb
+
+tier_value (from existing system)
+
+status enum:
+
+pending
+
+approved
+
+rejected
+
+paid
+
+failed
+
+reviewed_by uuid nullable
+
+reviewed_at timestamp nullable
+
+note text nullable
+
+Unique constraint:
+(batch_id, creator_id)
+
+7️⃣ ADMIN TAB IMPLEMENTATION
+
+Admin → Payouts Tab
+
+Must show:
+
+Current batch summary:
+
+total creators
+
+total base payout
+
+total bonus payout
+
+grand total
+
+Table columns:
+
+creator
+
+tier (existing system)
+
+base payout
+
+bonus %
+
+bonus amount
+
+total payout
+
+weekly coins
+
+bonus eligibility
+
+missing tasks (if any)
+
+payout status
+
+actions: approve / reject / mark paid
+
+Admin also must have:
+Season Management UI:
+
+create new month
+
+define season_tasks
+
+toggle active season
+
+8️⃣ SECRETARY TAB IMPLEMENTATION
+
+Secretary can:
+
+View payout_requests
+
+View eligibility snapshot
+
+View tier
+
+View bonus
+
+Add notes
+
+Mark reviewed
+
+Secretary cannot:
+
+change amounts
+
+approve payout
+
+mark paid
+
+override eligibility
+
+Role enforcement mandatory.
+
+9️⃣ GOAL BOOST SYSTEM
+
+Goal Boost allows creator to request help without spam.
+
+creator_goal_boost table
+
+id uuid
+
+creator_id
+
+season_id
+
+week_start
+
+active boolean
+
+created_at
+
+expires_at
+
+Rules:
+
+Only 1 active boost per week
+
+Must expire in 24 hours
+
+Cannot reactivate within 48 hours
+
+No chat auto-spam
+
+UI must show:
+
+Remaining coins to next weekly goal
+
+Remaining unique gifters needed
+
+Support contributors list
+
+When viewer contributes:
+
+small notification
+
+no repeated popups
+
+Boost auto turns off when weekly goal met.
+
+🔟 ELIGIBLE USERS LIST VIEW
+
+Create computed view:
+
+get_eligible_creators_for_week(week_start)
+
+Return:
+
+creator_id
+
+weekly coins
+
+weekly bonus eligibility
+
+base payout
+
+projected bonus
+
+fraud flags
+
+missing tasks
+
+Admin sees:
+Eligible (haven’t requested payout yet)
+Requested (in batch)
+
+Separate the two.
+
+11️⃣ SYSTEM INTEGRITY REQUIREMENTS
+
+No hardcoded thresholds
+
+All task thresholds pulled from DB
+
+Must work for 2 different seasons with different thresholds
+
+Self gifting excluded
+
+Fraud flagged users ineligible
+
+Bonus only computed on payout request
+
+Tier logic remains untouched
+
+Week definition consistent everywhere
+
+12️⃣ REQUIRED PROOF OUTPUTS
+
+Trae must return:
+
+SQL schema migrations
+
+Seed for two seasons:
+
+different weekly goals
+
+Example creator scenarios:
+
+weekly incomplete → no bonus
+
+weekly complete → bonus applied
+
+Friday batch created
+
+3 payout_requests inserted
+
+JSON eligibility snapshot sample
+
+Admin payout overview query output
+
+Secretary restricted access proof
+
+Goal Boost activation + progress update output
+
+Confirm no modifications to existing tier system
+
+13️⃣ PERFORMANCE REQUIREMENTS
+
+All eligibility queries indexed
+
+No full table scans
+
+Must scale to 10k creators
+
+Must compute weekly eligibility in <100ms

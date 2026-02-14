@@ -160,7 +160,6 @@ export interface UserProfile {
   // Moderation fields
   is_banned?: boolean
   is_officer?: boolean
-  is_president?: boolean
 
   // Verification fields
   is_verified?: boolean
@@ -500,6 +499,53 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.CREATE_CONTENT,
     Permission.MONETIZE
   ],
+  [UserRole.OWNER]: [
+    Permission.MANAGE_USERS,
+    Permission.MANAGE_CONTENT,
+    Permission.MANAGE_FINANCES,
+    Permission.MANAGE_SYSTEM,
+    Permission.MODERATE_CHAT,
+    Permission.MODERATE_STREAMS,
+    Permission.MANAGE_REPORTS,
+    Permission.ISSUE_WARNINGS,
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
+  ],
+  [UserRole.TROLL_CITY_SECRETARY]: [
+    Permission.MANAGE_FINANCES,
+    Permission.MANAGE_REPORTS,
+    Permission.MANAGE_SYSTEM,
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
+  ],
+  [UserRole.TROLL_CITY_TREASURER]: [
+    Permission.MANAGE_FINANCES,
+    Permission.MANAGE_REPORTS,
+    Permission.MANAGE_SYSTEM,
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
+  ],
+  [UserRole.TEMP_ADMIN]: [
+    Permission.MANAGE_USERS,
+    Permission.MODERATE_CHAT,
+    Permission.MODERATE_STREAMS,
+    Permission.MANAGE_REPORTS,
+    Permission.ISSUE_WARNINGS,
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
+  ],
+  [UserRole.EXECUTIVE_SECRETARY]: [
+    Permission.MANAGE_FINANCES,
+    Permission.MANAGE_REPORTS,
+    Permission.MANAGE_SYSTEM,
+    Permission.BROADCAST,
+    Permission.CREATE_CONTENT,
+    Permission.MONETIZE
+  ],
   [UserRole.ADMIN]: [
     // Admin has all permissions
     Permission.MANAGE_USERS,
@@ -682,9 +728,7 @@ export async function reportError(params: {
       component: params.component || null,
       context: {
         ...params.context,
-        // @ts-expect-error -- App version global might not be defined
         appVersion: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
-        // @ts-expect-error -- Build time global might not be defined
         buildTime: typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : undefined,
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined
       },

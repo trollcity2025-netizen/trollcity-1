@@ -1,5 +1,5 @@
 
-import { supabase } from './supabase';
+// import { supabase } from './supabase';
 import { generateUUID } from './uuid';
 
 export interface TelemetryEvent {

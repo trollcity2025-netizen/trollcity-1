@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { LiveKitRoom, RoomAudioRenderer, StartAudio, useLocalParticipant, useParticipants, useRoomContext } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { supabase } from '../../lib/supabase';
@@ -9,25 +9,20 @@ import { useViewerTracking } from '../../hooks/useViewerTracking';
 import { ListenerEntranceEffect } from '../../hooks/useListenerEntranceEffect';
 import { PublishEntranceOnJoin } from '../../hooks/usePublishEntranceOnJoin';
 import { ListenForEntrances } from '../../hooks/useListenForEntrances';
-import { Stream, ChatMessage } from '../../types/broadcast';
+import { Stream } from '../../types/broadcast';
 import BroadcastGrid from '../../components/broadcast/BroadcastGrid';
 import BroadcastChat from '../../components/broadcast/BroadcastChat';
 import BroadcastControls from '../../components/broadcast/BroadcastControls';
 import GiftTray from '../../components/broadcast/GiftTray';
-import MobileBroadcastLayout from '../../components/broadcast/MobileBroadcastLayout';
-import { useMobileBreakpoint } from '../../hooks/useMobileBreakpoint';
-import { useStreamChat } from '../../hooks/useStreamChat';
-import { Loader2, Clock } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useStreamSeats, SeatSession } from '../../hooks/useStreamSeats';
+import { useStreamSeats } from '../../hooks/useStreamSeats';
 import { useStreamEndListener } from '../../hooks/useStreamEndListener';
 import { coinOptimizer } from '../../lib/coinRotation';
-import VideoViewer from '../../components/broadcast/VideoViewer';
 import BattleView from '../../components/broadcast/BattleView';
 import BattleControlsList from '../../components/broadcast/BattleControlsList';
 import PreflightPublisher from '../../components/broadcast/PreflightPublisher';
 import { PreflightStore } from '../../lib/preflightStore';
-import { MobileErrorLogger } from '../../lib/MobileErrorLogger';
 
 import BroadcastHeader from '../../components/broadcast/BroadcastHeader';
 import BroadcastEffectsLayer from '../../components/broadcast/BroadcastEffectsLayer';
@@ -146,61 +141,22 @@ const RoomStateSync = ({ mode, isHost, streamId }: { mode: 'stage' | 'viewer'; i
     return null;
 };
 
-// Guest Limit Overlay Component
-const GuestLimitOverlay = () => (
-    <div className="absolute inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center flex-col p-6 text-center animate-in fade-in duration-300">
-        <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-            <Loader2 className="w-8 h-8 text-red-500 animate-pulse" />
-        </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Preview Ended</h2>
-        <p className="text-zinc-400 mb-6 max-w-md">
-            Your 1-minute free preview has expired. Sign up or log in to continue watching and join the chat!
-        </p>
-        <div className="flex gap-4">
-            <Link 
-                to="/auth?mode=login" 
-                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
-            >
-                Log In
-            </Link>
-            <Link 
-                to="/auth?mode=signup" 
-                className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition-colors border border-white/10"
-            >
-                Sign Up
-            </Link>
-        </div>
-    </div>
-);
-
-// Guest Preview Banner
-const GuestPreviewBanner = ({ timeLeft }: { timeLeft: number }) => {
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    return (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[50] bg-red-600/90 backdrop-blur text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2 animate-in slide-in-from-top-4">
-            <Clock className="w-4 h-4 animate-pulse" />
-            <span>Guest Preview: {formatTime(timeLeft)} — Sign up to keep watching</span>
-        </div>
-    );
-};
-
 // Government stream categories that require staff access
 const GOVERNMENT_CATEGORIES = ['government', 'courtroom', 'troll-court', 'senate', 'congress'];
 
-// Helper function to check if stream is government-restricted
-export function isGovernmentStream(stream: Stream | null): boolean {
+/**
+ * Helper function to check if stream is government-restricted
+ */
+function isGovernmentStream(stream: Stream | null): boolean {
   if (!stream) return false;
   const category = stream.category?.toLowerCase() || '';
   return GOVERNMENT_CATEGORIES.some(cat => category.includes(cat));
 }
 
-// Helper function to check if user is staff
-export function isStaffMember(profile: ReturnType<typeof useAuthStore.getState>['profile']): boolean {
+/**
+ * Helper function to check if user is staff
+ */
+function isStaffMember(profile: ReturnType<typeof useAuthStore.getState>['profile']): boolean {
   if (!profile) return false;
   return Boolean(
     profile.is_admin ||
@@ -213,47 +169,7 @@ export function isStaffMember(profile: ReturnType<typeof useAuthStore.getState>[
   );
 }
 
-// Helper component to access LiveKit context for Mobile Stage
-const MobileStageInner = ({ 
-    stream, isHost, seats, messages, onSendMessage, onLeave, onJoinSeat, onStartBattle, children, hostGlowingColor, liveViewerCount
-}: {
-    stream: Stream;
-    isHost: boolean;
-    seats: Record<number, SeatSession>;
-    messages: ChatMessage[];
-    onSendMessage: (t: string) => void;
-    onLeave: () => void;
-    onJoinSeat: (i: number) => void;
-    onStartBattle: () => void;
-    children: React.ReactNode;
-    hostGlowingColor?: string;
-    liveViewerCount?: number;
-}) => {
-    const { localParticipant } = useLocalParticipant();
-    
-    return (
-        <MobileBroadcastLayout
-            stream={stream}
-            isHost={isHost}
-            messages={messages}
-            seats={seats}
-            onSendMessage={onSendMessage}
-            onToggleMic={() => localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled)}
-            onToggleCamera={() => localParticipant.setCameraEnabled(!localParticipant.isCameraEnabled)}
-            onFlipCamera={() => {}} // Not easily supported in web yet without custom track manipulation
-            onLeave={onLeave}
-            onJoinSeat={onJoinSeat}
-            hostGlowingColor={hostGlowingColor}
-        >
-            <BroadcastHeader stream={stream} isHost={isHost} onStartBattle={onStartBattle} liveViewerCount={liveViewerCount} />
-            {children}
-            <RoomAudioRenderer />
-            <StartAudio label="Click to allow audio" />
-        </MobileBroadcastLayout>
-    );
-};
-
-  // Helper component to enforce viewer limits
+// Helper component to enforce viewer limits
 const BroadcastLimitEnforcer = ({ isHost, mode, isStaff }: { isHost: boolean, mode: string, isStaff: boolean }) => {
     const participants = useParticipants();
     const navigate = useNavigate();
@@ -301,7 +217,7 @@ export default function BroadcastPage() {
   const profile = useAuthStore((s) => s.profile);
   
   const isGuest = !user;
-  const fromExplore = location.state?.fromExplore;
+  const [_fromExplore, _setFromExplore] = useState(location.state?.fromExplore);
 
   // Guest Identity (Persistent for session)
   const [guestId] = useState(() => {
@@ -310,7 +226,7 @@ export default function BroadcastPage() {
     return `TC-${randomSuffix}`;
   });
   const effectiveUserId = user?.id || guestId;
-  const guestUserObj = React.useMemo(() => (!user ? { id: guestId, username: guestId } : null), [user, guestId]);
+  const guestUserObj = useMemo(() => (!user ? { id: guestId, username: guestId } : null), [user, guestId]);
 
   const seatPaidKey = id && effectiveUserId ? `seat_paid_${id}_${effectiveUserId}` : null;
   const [hasPaidSeat, setHasPaidSeat] = useState(false);
@@ -321,62 +237,14 @@ export default function BroadcastPage() {
     }
   }, [seatPaidKey]);
 
-  const [guestTimeLeft, setGuestTimeLeft] = useState<number | null>(null);
-  const [hostTimeLimit, setHostTimeLimit] = useState(3600000); // Default 1 hour
-
-  // Guest Entry Protection & Timer
-  useEffect(() => {
-    if (isGuest) {
-        const key = 'tc_guest_global_preview';
-        const startStr = localStorage.getItem(key);
-        
-        // Timer Logic
-        const now = Date.now();
-        let remaining = 60;
-
-        if (startStr) {
-            const elapsed = (now - parseInt(startStr, 10)) / 1000;
-            remaining = Math.max(0, 60 - elapsed);
-        } else {
-            // New global preview across all streams
-            localStorage.setItem(key, now.toString());
-        }
-        
-        setGuestTimeLeft(remaining);
-
-        if (remaining > 0) {
-            const timer = setInterval(() => {
-                setGuestTimeLeft(prev => {
-                    if (prev === null) return 60;
-                    const next = prev - 1;
-                    
-                    // Warning at 10s
-                    if (next === 10) {
-                        toast.warning("Create an account to keep watching", { duration: 5000 });
-                    }
-
-                    // Expired
-                    if (next <= 0) {
-                        clearInterval(timer);
-                        return 0;
-                    }
-                    return next;
-                });
-            }, 1000);
-            return () => clearInterval(timer);
-        }
-    } else if (!isGuest) {
-        // Clear guest time if user logs in
-        setGuestTimeLeft(null);
-    }
-  }, [isGuest]);
+  const [_hostTimeLimit, setHostTimeLimit] = useState(3600000); // Default 1 hour
 
   const [stream, setStream] = useState<Stream | null>(null);
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [showBattleManager, setShowBattleManager] = useState(false);
-  const [preflightStream, setPreflightStream] = useState<MediaStream | null>(null);
+  const [_preflightStream, setPreflightStream] = useState<MediaStream | null>(null);
     const handleBoxCountUpdate = async (newCount: number) => {
     const canEditBoxes = isHost || isStaffMember(profile);
     if (!stream || !canEditBoxes) return;
@@ -419,7 +287,7 @@ export default function BroadcastPage() {
       }
   }, []);
   
-  const { isMobile } = useMobileBreakpoint();
+  const [_isMobile, _setIsMobile] = useState(false);
   // Moved useStreamChat down to access mode
   
   // Stream End Listener
@@ -429,8 +297,46 @@ export default function BroadcastPage() {
       redirectToSummary: true
   });
 
+  const [isModerator, setIsModerator] = useState(false);
+  
   // Host Check
-  const isHost = stream?.user_id === user?.id;
+  const isHost = stream?.user_id === user?.id || stream?.broadcaster_id === user?.id;
+
+  // Fetch Stream Mods
+  useEffect(() => {
+    const fetchMods = async () => {
+        if (!stream?.user_id || !user?.id) return;
+        
+        // 1. Check if user is the host
+        if (isHost) {
+            setIsModerator(true);
+            return;
+        }
+
+        // 2. Check per-stream moderators
+        const { data, error: _error } = await supabase
+          .from('stream_moderators')
+          .select('user_id')
+          .eq('broadcaster_id', stream.user_id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (data) {
+            setIsModerator(true);
+            return;
+        }
+
+        // 3. Check global roles (Admin/Staff)
+        if (isStaffMember(profile)) {
+            setIsModerator(true);
+            return;
+        }
+
+        setIsModerator(false);
+    };
+    
+    fetchMods();
+  }, [stream?.user_id, user?.id, isHost, profile]);
   
   // Seat System Hook
   const { seats, mySession, joinSeat, leaveSeat, kickParticipant } = useStreamSeats(id, effectiveUserId, broadcasterProfile);
@@ -465,9 +371,9 @@ export default function BroadcastPage() {
       const duration = now - startedAt;
       
       // Use hostTimeLimit instead of hardcoded 1 hour
-      if (duration > hostTimeLimit) {
+      if (duration > _hostTimeLimit) {
         if (isHost) {
-             toast.error(`Broadcast time limit (${hostTimeLimit / 3600000}h) reached.`);
+             toast.error(`Broadcast time limit (${_hostTimeLimit / 3600000}h) reached.`);
         }
       }
     };
@@ -476,7 +382,7 @@ export default function BroadcastPage() {
     checkDuration(); 
 
     return () => clearInterval(interval);
-  }, [stream?.started_at, isHost, hostTimeLimit]);
+  }, [stream?.started_at, isHost, _hostTimeLimit]);
 
   const { token, serverUrl, error: tokenError } = useLiveKitToken({
     streamId: id,
@@ -503,10 +409,10 @@ export default function BroadcastPage() {
               streamUserId: stream.user_id,
               userId: user.id,
               mode,
-              hasPreflight: !!preflightStream
+              hasPreflight: !!_preflightStream
           });
       }
-  }, [stream, user, isHost, mode, preflightStream]);
+  }, [stream, user, isHost, mode, _preflightStream]);
 
   const isStreamOffline = stream?.status === 'ended';
 
@@ -537,6 +443,9 @@ export default function BroadcastPage() {
     let mounted = true;
 
     const fetchStream = async () => {
+      // Thundering Herd Prevention: Jitter on fetch (0-800ms)
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
+      
       const { data, error } = await supabase
         .from('streams')
         .select('*, broadcaster:user_profiles!broadcaster_id(*)')
@@ -577,8 +486,9 @@ export default function BroadcastPage() {
 
     fetchStream();
 
-    // Subscribe to Stream Updates (Box Count, Settings, etc.)
-    const channel = supabase.channel(`broadcast_page_${id}`)
+    // 🚀 Consolidated Broadcast Channel (Scalability: 1 channel instead of 3+)
+    const roomChannel = supabase.channel(`broadcast_room_${id}`)
+        // 1. Stream Updates (Box Count, Settings, etc.)
         .on(
             'postgres_changes',
             {
@@ -592,6 +502,38 @@ export default function BroadcastPage() {
                 setStream(prev => prev ? { ...prev, ...newStream } : newStream);
             }
         )
+        // 2. Broadcaster Profile Updates (Coin Balance)
+        .on(
+            'postgres_changes', 
+            { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'user_profiles', 
+                filter: stream?.user_id ? `id=eq.${stream.user_id}` : undefined 
+            }, 
+            (payload) => {
+                if (stream?.user_id) {
+                    setBroadcasterProfile((prev: any) => prev ? { ...prev, ...payload.new } : payload.new);
+                }
+            }
+        )
+        // 3. Gift Events (Optimistic Balance)
+        .on(
+            'broadcast',
+            { event: 'gift_sent' },
+            (payload) => {
+                if (!isHost || !user) return;
+                const { receiver_id, gift_price } = payload.payload;
+                if (receiver_id === user.id && gift_price) {
+                    const currentProfile = useAuthStore.getState().profile;
+                    if (currentProfile) {
+                        coinOptimizer.updateOptimisticBalance(user.id, {
+                            troll_coins: (currentProfile.troll_coins || 0) + gift_price
+                        });
+                    }
+                }
+            }
+        )
         .subscribe();
 
     // Polling fallback to ensure viewers receive box count updates
@@ -601,61 +543,16 @@ export default function BroadcastPage() {
 
     return () => {
         mounted = false;
-        supabase.removeChannel(channel);
+        supabase.removeChannel(roomChannel);
         clearInterval(pollInterval);
     };
-  }, [id, navigate, profile]);
+  }, [id, navigate, profile, isHost, user, stream?.user_id]);
 
-  // Real-time Broadcaster Profile Updates (Coin Balance)
-  useEffect(() => {
-      if (!stream?.user_id) return;
-
-      const channel = supabase.channel(`broadcaster_update_${stream.user_id}`)
-          .on(
-              'postgres_changes', 
-              { 
-                  event: 'UPDATE', 
-                  schema: 'public', 
-                  table: 'user_profiles', 
-                  filter: `id=eq.${stream.user_id}` 
-              }, 
-              (payload) => {
-                  setBroadcasterProfile((prev: any) => prev ? { ...prev, ...payload.new } : payload.new);
-              }
-          )
-          .subscribe();
-
-      return () => {
-          supabase.removeChannel(channel);
-      }
-  }, [stream?.user_id]);
-
-  // Host Balance Updater (Realtime)
-  useEffect(() => {
-    if (!id || !isHost || !user) return;
-
-    const channel = supabase.channel(`stream_events_${id}_host_balance`)
-        .on(
-            'broadcast',
-            { event: 'gift_sent' },
-            (payload) => {
-                const { receiver_id, gift_price } = payload.payload;
-                if (receiver_id === user.id && gift_price) {
-                        const currentProfile = useAuthStore.getState().profile;
-                        if (currentProfile) {
-                            coinOptimizer.updateOptimisticBalance(user.id, {
-                                troll_coins: (currentProfile.troll_coins || 0) + gift_price
-                            });
-                        }
-                }
-            }
-        )
-        .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
-  }, [id, isHost, user]);
+  // Remove the old broadcaster profile and host balance effects as they are now consolidated
+  /* 
+  useEffect(() => { ... broadcaster_update ... });
+  useEffect(() => { ... stream_events ... host_balance ... });
+  */
 
   // Handle Kick / Lawsuit
   useEffect(() => {
@@ -821,7 +718,7 @@ export default function BroadcastPage() {
   // Force desktop layout (responsive) for all users to ensure consistent experience
   // The "Mobile Version" was hiding too much context.
   /*
-  if (isMobile) {
+  if (_isMobile) {
       if (isStreamOffline) {
           return (
              <div className="h-screen w-full flex items-center justify-center bg-zinc-900 text-white">
@@ -877,10 +774,6 @@ export default function BroadcastPage() {
                         </div>
                     )}
                 </div>
-            ) : (guestTimeLeft === 0 && !user) ? (
-                <div className="flex-1 relative flex flex-col bg-zinc-900 items-center justify-center">
-                    <GuestLimitOverlay />
-                </div>
             ) : (
                 <LiveKitRoom
                     token={token}
@@ -916,16 +809,9 @@ export default function BroadcastPage() {
                     localUserId={effectiveUserId}
                 />
                     
-                    {/* Guest Preview Timer UI */}
-                    {guestTimeLeft !== null && guestTimeLeft > 0 && !user && (
-                        <div className="absolute top-24 right-4 z-[60] bg-red-900/80 backdrop-blur text-white px-4 py-2 rounded-full font-bold animate-pulse border border-red-500 shadow-lg pointer-events-none">
-                            Preview: {guestTimeLeft}s
-                        </div>
-                    )}
-
-                    {preflightStream && (
+                    {_preflightStream && (
                         <PreflightPublisher 
-                            stream={preflightStream} 
+                            stream={_preflightStream} 
                             onPublished={() => PreflightStore.clear()} 
                         />
                     )}
@@ -958,6 +844,7 @@ export default function BroadcastPage() {
                             <BroadcastControls 
                                 stream={stream}
                                 isHost={isHost}
+                                isModerator={isModerator}
                                 isOnStage={mode === 'stage'}
                                 chatOpen={true}
                                 toggleChat={() => {}}
@@ -1020,7 +907,7 @@ export default function BroadcastPage() {
                     hostId={stream.user_id}
                     isHost={isHost} 
                     isViewer={mode === 'viewer'}
-                    isModerator={false} // TODO: Add mod logic
+                    isModerator={isModerator}
                     isGuest={!user}
                 />
             </ErrorBoundary>

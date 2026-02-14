@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { Store, ShoppingCart, Coins, Plus } from 'lucide-react'
@@ -8,7 +7,6 @@ import { trollCityTheme } from '../styles/trollCityTheme'
 
 export default function Marketplace() {
   console.log('🛒 Marketplace component rendering')
-  const { user } = useAuthStore()
   const navigate = useNavigate()
   const [shops, setShops] = useState<any[]>([])
   const [loading, setLoading] = useState(true)

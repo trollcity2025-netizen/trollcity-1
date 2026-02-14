@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { 
-  Video, Clock, CheckCircle, 
-  Users, Play, Calendar, FileText, Trash2
+  Video, Clock, 
+  Users, Calendar, Trash2
 } from 'lucide-react'
 import { InterviewSchedulerModal } from '../components/admin/InterviewSchedulerModal'
 
@@ -24,7 +24,7 @@ interface InterviewSession {
 
 export default function AdminInterviewDashboard() {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const { user: _user } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [interviews, setInterviews] = useState<InterviewSession[]>([])
   const [applications, setApplications] = useState<any[]>([])

@@ -309,7 +309,7 @@ export const useBugAlertStore = create<BugAlertState>((set, get) => ({
   subscribeToRealtime: (userId: string, isAdmin: boolean) => {
     if (!isAdmin) return;
     
-    const { setAlerts, addAlert, updateAlert } = get();
+    const { addAlert, updateAlert } = get();
     
     // Only subscribe to active bug alerts for admins
     const subscription = supabase

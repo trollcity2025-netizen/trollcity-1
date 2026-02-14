@@ -7,7 +7,7 @@
  */
 
 import { supabase } from './supabase';
-import { useAuthStore } from './store';
+// import { useAuthStore } from './store';
 
 interface GiftTestResult {
   success: boolean;

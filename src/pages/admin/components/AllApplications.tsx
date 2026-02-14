@@ -8,7 +8,7 @@ interface Application {
   id: string
   user_id: string
   type: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'interview_scheduled'
   created_at: string
   reviewed_by: string | null
   reviewed_at: string | null

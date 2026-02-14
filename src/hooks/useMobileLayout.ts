@@ -29,5 +29,5 @@ export function useSafeAreaHeight() {
   const headerHeight = 44 + safeArea.top;
   const dockHeight = 50 + safeArea.bottom;
 
-  return { headerHeight, dockHeight };
+  return { headerHeight, dockHeight, safeArea };
 }

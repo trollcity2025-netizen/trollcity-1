@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '../../../../lib/supabase';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../../components/ui/card';
+import { Button } from '../../../../components/ui/button';
+import { Badge } from '../../../../components/ui/badge';
+import { ScrollArea } from '../../../../components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger } from '../../../../components/ui/tabs';
 import { toast } from 'sonner';
 import { FileText, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
@@ -30,7 +30,7 @@ interface ProposalManagementPanelProps {
   viewMode: 'admin' | 'secretary';
 }
 
-export default function ProposalManagementPanel({ viewMode }: ProposalManagementPanelProps) {
+export default function ProposalManagementPanel({ viewMode: _viewMode }: ProposalManagementPanelProps) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');

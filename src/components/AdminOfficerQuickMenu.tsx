@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
 import { UserRole, supabase } from '../lib/supabase';
@@ -11,15 +11,9 @@ const AdminOfficerQuickMenu: React.FC = () => {
   const [isOnDuty, setIsOnDuty] = useState(false);
   const [loadingDuty, setLoadingDuty] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && profile?.id) {
-      checkDutyStatus();
-    }
-  }, [isOpen, profile?.id]);
-
-  const checkDutyStatus = async () => {
+  const checkDutyStatus = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error: _error } = await supabase
         .from('user_profiles')
         .select('on_duty')
         .eq('id', profile!.id)
@@ -31,7 +25,13 @@ const AdminOfficerQuickMenu: React.FC = () => {
     } catch (error) {
       console.error('Error checking duty status:', error);
     }
-  };
+  }, [profile]);
+
+  useEffect(() => {
+    if (isOpen && profile?.id) {
+      checkDutyStatus();
+    }
+  }, [isOpen, profile?.id, checkDutyStatus]);
 
   const toggleDuty = async () => {
     if (loadingDuty) return;

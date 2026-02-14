@@ -70,7 +70,7 @@ export default function GiftStorePage() {
         const bPriority = tierPriority[b.tier] || 0
         return aPriority - bPriority
       })
-  }, [normalizedSearch, selectedCategory, selectedTier, priceFilter, sortBy])
+  }, [giftCatalog, normalizedSearch, selectedCategory, selectedTier, priceFilter, sortBy])
 
   const handlePurchase = async (gift) => {
     if (!profile?.id) {

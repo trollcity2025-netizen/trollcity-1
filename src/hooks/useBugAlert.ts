@@ -15,7 +15,7 @@ interface UseBugAlertOptions {
 }
 
 export function useBugAlert(options: UseBugAlertOptions = {}) {
-  const { autoReport = false, showToast = true, onError } = options;
+  const { autoReport: _autoReport = false, showToast = true, onError } = options;
   const { reportBug } = useBugAlertStore();
   
   const report = useCallback(async (bug: BugAlertCreate): Promise<string | null> => {

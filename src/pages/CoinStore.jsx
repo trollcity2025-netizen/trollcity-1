@@ -6,7 +6,7 @@ import { useCoins } from '@/lib/hooks/useCoins';
 import { useBank as useBankHook } from '../lib/hooks/useBank';
 import { useAllCreditScores } from '../lib/hooks/useAllCreditScores';
 // import { toast } from 'sonner';
-import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle, AlertTriangle, ChevronDown, Gem, X } from 'lucide-react';
+import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle, AlertTriangle, ChevronDown, X } from 'lucide-react';
 import { formatCoins, COIN_PACKAGES } from '../lib/coinMath';
 import { ENTRANCE_EFFECTS_DATA } from '../lib/entranceEffects';
 import { deductCoins } from '@/lib/coinTransactions';
@@ -70,93 +70,28 @@ const SAMPLE_CHAT_SOUNDS = [
   { id: 'sound_10', name: 'Magic Wand', cost: 250, sound_type: 'chat', file_path: '/sounds/wand.mp3' },
 ];
 
-const SAMPLE_BROADCAST_THEMES = [
-  { id: 'classic', slug: 'classic', name: 'Classic Dark', description: 'The classic Troll City look.', price_coins: 0, preview_url: '/assets/themes/theme_purple.svg' },
-  { id: 'neon', slug: 'neon', name: 'Neon Night', description: 'High contrast neon styling.', price_coins: 100, preview_url: '/assets/themes/theme_neon.svg' },
-  { id: 'cyber', slug: 'cyber', name: 'Cyberpunk', description: 'Futuristic cyber styling.', price_coins: 250, preview_url: '/assets/themes/theme_cyber.svg' },
-  { id: 'rgb', slug: 'rgb', name: 'Gamer RGB', description: 'Animated RGB flow for true gamers.', price_coins: 500, preview_url: '/assets/themes/theme_rgb.svg' },
-  { id: 'ocean', slug: 'ocean', name: 'Ocean Breeze', description: 'Calming blue gradients.', price_coins: 750, preview_url: '/assets/themes/theme_ocean.svg' },
-  { id: 'sunset', slug: 'sunset', name: 'Sunset Gold', description: 'Warm golden tones.', price_coins: 1000, preview_url: '/assets/themes/theme_sunset.svg' }
-];
-
-const isMissingTableError = (error) =>
-  Boolean(
-    error?.message?.includes('schema cache') ||
-      error?.message?.includes('Could not find the table') ||
-      error?.message?.includes('relation') ||
-      error?.message?.includes('does not exist'),
-  );
+const STORE_TAB_KEY = 'trollcity_store_last_tab';
+const STORE_COMPLETE_KEY = 'tc-store-show-complete';
 
 export default function CoinStore() {
   const { user, profile, refreshProfile } = useAuthStore();
   const { scores: allCreditScores, loading: loadingScores } = useAllCreditScores(user?.id);
   const navigate = useNavigate();
   const { troll_coins, refreshCoins } = useCoins();
-  const { loans: activeLoans, ledger, refresh: refreshBank, payCreditCard, creditInfo, tiers, payLoan, applyForLoan } = useBankHook(); // useBank hook
+  const { activeLoans, refresh: refreshBank, payCreditCard, creditInfo, _payLoan: _payLoan, applyForLoan, ledger = [] } = useBankHook(); // useBank hook
 
-  const STORE_TAB_KEY = 'tc-store-active-tab';
-  const STORE_COMPLETE_KEY = 'tc-store-show-complete';
   const [loading, setLoading] = useState(true);
   const [loadingPackage, setLoadingPackage] = useState(null);
   const [tab, setTab] = useState('coins');
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
   const [useCredit, setUseCredit] = useState(false);
+  const [_applying, setApplying] = useState(false);
   
   // Bank State
-  const [bankBalance] = useState(null);
   const [showActiveLoanModal, setShowActiveLoanModal] = useState(false);
 
-  const [applying, setApplying] = useState(false);
-  const [payAmount, setPayAmount] = useState('');
-  const [paying, setPaying] = useState(false);
+  const [_payAmount, _setPayAmount] = useState('');
   const [requestedAmount, setRequestedAmount] = useState(100);
-  const [eligibility, setEligibility] = useState({
-    canApply: false,
-    reasons: [],
-    maxAmount: 0
-  });
-
-  const handlePayLoan = async () => {
-    const activeLoan = activeLoans && activeLoans.length > 0 ? activeLoans[0] : null;
-    if (!activeLoan || !payAmount) return;
-    const amount = parseInt(payAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error('Invalid amount');
-      return;
-    }
-    
-    setPaying(true);
-    try {
-      const result = await payLoan(activeLoan.id, amount);
-      if (result.success) {
-        setPayAmount('');
-        refreshCoins(); // Update user coin balance in UI
-      }
-    } catch (err) {
-      console.error('Payment error:', err);
-    } finally {
-      setPaying(false);
-    }
-  };
-
-  const handleDrawCredit = async () => {}; // Legacy placeholder
-
-  const handlePayCredit = async () => {
-    const amount = parseInt(payAmount);
-    if (!amount || amount <= 0) {
-        toast.error('Invalid amount');
-        return;
-    }
-    const result = await payCreditCard(amount);
-    if (result.success) {
-        setPayAmount('');
-        refreshCoins();
-    }
-  };
-
-
-  // Eligibility effect removed
-
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [manualPaymentModalOpen, setManualPaymentModalOpen] = useState(false);
@@ -196,18 +131,13 @@ export default function CoinStore() {
   const [selectedEffectCategory, setSelectedEffectCategory] = useState('All');
   const [perks, setPerks] = useState([]);
   const [plans, setPlans] = useState([]);
-  const [broadcastThemes, setBroadcastThemes] = useState([]);
-  const [ownedThemeIds, setOwnedThemeIds] = useState(new Set());
-  const [themesNote, setThemesNote] = useState(null);
-  const [themePurchasing, setThemePurchasing] = useState(null);
+  const [effectsNote, setEffectsNote] = useState(null);
+  const [perksNote, setPerksNote] = useState(null);
+  const [insuranceNote, setInsuranceNote] = useState(null);
   const [callSounds, setCallSounds] = useState([]);
   const [ownedCallSoundIds, setOwnedCallSoundIds] = useState(new Set());
   const [activeCallSounds, setActiveCallSounds] = useState({});
   const [callSoundPurchasing, setCallSoundPurchasing] = useState(null);
-  const [streamerEntitlements, setStreamerEntitlements] = useState(null);
-  const [effectsNote, setEffectsNote] = useState(null);
-  const [perksNote, setPerksNote] = useState(null);
-  const [insuranceNote, setInsuranceNote] = useState(null);
   const activeStreamId = useLiveContextStore((s) => s.activeStreamId);
   const [liveStreamIsLive, setLiveStreamIsLive] = useState(false);
   const [snackLoading, setSnackLoading] = useState(null);
@@ -225,57 +155,6 @@ export default function CoinStore() {
   // Employee discounts
   const EMPLOYEE_CALL_DISCOUNT = 0.5; // 50% off call minutes
   const EMPLOYEE_COIN_DISCOUNT = 0.015; // 1.5% off coin packs
-
-  const formatCountdown = (targetDate) => {
-    if (!targetDate) return null;
-    const diff = new Date(targetDate).getTime() - Date.now();
-    if (diff <= 0) return '0h';
-    const totalMinutes = Math.floor(diff / 60000);
-    const days = Math.floor(totalMinutes / 1440);
-    const hours = Math.floor((totalMinutes % 1440) / 60);
-    return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
-  };
-
-  const getEligibility = (theme) => {
-    const now = Date.now();
-    const startsAt = theme?.starts_at ? new Date(theme.starts_at).getTime() : null;
-    const endsAt = theme?.ends_at ? new Date(theme.ends_at).getTime() : null;
-    const limitedActive = !theme?.is_limited || ((startsAt ? now >= startsAt : true) && (endsAt ? now <= endsAt : true));
-    const seasonalState = theme?.is_limited
-      ? startsAt && now < startsAt
-        ? `Starts in ${formatCountdown(theme.starts_at)}`
-        : endsAt && now > endsAt
-          ? 'Season ended'
-          : endsAt
-            ? `Ends in ${formatCountdown(theme.ends_at)}`
-            : null
-      : null;
-
-    const entitlements = streamerEntitlements || {};
-    const streamLevel = entitlements.streamer_level ?? profile?.level ?? 0;
-    const followersCount = entitlements.followers_count ?? 0;
-    const hoursStreamed = entitlements.total_hours_streamed ?? 0;
-    const minLevel = theme?.min_stream_level ?? null;
-    const minFollowers = theme?.min_followers ?? null;
-    const minHours = theme?.min_total_hours_streamed ?? null;
-
-    const requiresStreamer = Boolean(theme?.is_streamer_exclusive || minLevel || minFollowers || minHours);
-    const meetsStreamer =
-      (!minLevel || streamLevel >= minLevel) &&
-      (!minFollowers || followersCount >= minFollowers) &&
-      (!minHours || hoursStreamed >= minHours);
-
-    return {
-      limitedActive,
-      seasonalState,
-      requiresStreamer,
-      meetsStreamer,
-      isEligible: limitedActive && (!requiresStreamer || meetsStreamer),
-      minLevel,
-      minFollowers,
-      minHours,
-    };
-  };
 
   /*
   const SAMPLE_CHAT_SOUNDS = [
@@ -349,27 +228,17 @@ export default function CoinStore() {
 
       await refreshCoins();
 
-      const [effRes, perkRes, planRes, themeRes, themeOwnedRes, entitlementsRes, callSoundOwnedRes] = await Promise.all([
+      const [effRes, perkRes, planRes, callSoundOwnedRes] = await Promise.all([
         supabase.from('entrance_effects').select('*').neq('category', 'gift').order('created_at', { ascending: false }),
         supabase.from('perks').select('*').order('created_at', { ascending: false }),
         supabase.from('insurance_options').select('*').order('created_at', { ascending: false }),
-        supabase.from('broadcast_background_themes').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
-        user?.id
-          ? supabase.from('user_broadcast_theme_purchases').select('theme_id').eq('user_id', user.id)
-          : Promise.resolve({ data: [] }),
-        user?.id
-          ? supabase.from('user_streamer_entitlements').select('*').eq('user_id', user.id).maybeSingle()
-          : Promise.resolve({ data: null }),
         user?.id
           ? supabase.from('user_call_sounds').select('sound_id,is_active,call_sound_catalog(sound_type)').eq('user_id', user.id)
           : Promise.resolve({ data: [] })
       ]);
       const applyCatalogData = (result, fallback = [], setter, noteSetter, label) => {
         if (result.error) {
-          const missing = isMissingTableError(result.error);
-          const message = missing
-            ? `${label} catalog is not provisioned in this environment; showing curated samples.`
-            : `Unable to load ${label} (${result.error.message || 'unknown error'}); showing curated samples.`;
+          const message = `Unable to load ${label} (${result.error.message || 'unknown error'}); showing curated samples.`;
           noteSetter(message);
           setter(fallback);
           return fallback;
@@ -419,17 +288,6 @@ export default function CoinStore() {
       }
       setPlans(filteredPlans);
 
-      const loadedThemes = applyCatalogData(
-        themeRes,
-        SAMPLE_BROADCAST_THEMES,
-        setBroadcastThemes,
-        setThemesNote,
-        'broadcast themes',
-      );
-
-      setOwnedThemeIds(new Set((themeOwnedRes?.data || []).map((row) => row.theme_id)));
-      setStreamerEntitlements(entitlementsRes?.data || null);
-      
       // Load sounds
       setCallSounds(SAMPLE_CHAT_SOUNDS);
       const ownedSoundIds = new Set((callSoundOwnedRes?.data || []).map((row) => row.sound_id));
@@ -442,7 +300,7 @@ export default function CoinStore() {
       });
       setActiveCallSounds(activeMap);
 
-      console.log('Effects, perks, plans, themes loaded:', { effects: loadedEffects.length, perks: loadedPerks.length, plans: loadedPlans.length, themes: loadedThemes.length });
+      console.log('Effects, perks, plans loaded:', { effects: loadedEffects.length, perks: loadedPerks.length, plans: loadedPlans.length });
 
     } catch (err) {
       console.error('? Error loading wallet data:', err);
@@ -551,7 +409,7 @@ export default function CoinStore() {
   };
 
 
-  const formatDeductErrorMessage = (error) =>
+  const _formatDeductErrorMessage = (error) =>
     typeof error === 'string'
       ? error
       : error?.message || 'Failed to deduct coins'
@@ -759,79 +617,6 @@ export default function CoinStore() {
    }
  }
 
-  const buyBroadcastTheme = async (theme) => {
-    if (!user?.id) {
-      toast.error('Please log in to purchase a theme');
-      return;
-    }
-
-    if (!theme?.id) {
-      toast.error('Invalid theme');
-      return;
-    }
-
-    if (ownedThemeIds.has(theme.id)) {
-      toast.info('You already own this theme');
-      return;
-    }
-
-    const eligibility = getEligibility(theme);
-    if (!eligibility.isEligible) {
-      toast.error('This theme is locked.');
-      return;
-    }
-
-    setThemePurchasing(theme.id);
-    try {
-      // Get theme price (assume theme.price_coins is available on theme object)
-      const price = theme.price_coins || theme.price || 0;
-      if (price < 0) {
-        toast.error('Invalid theme price');
-        setThemePurchasing(null);
-        return;
-      }
-      if (!useCredit && troll_coins < price) {
-        toast.error(`Not enough Troll Coins. Need ${price}, have ${troll_coins}`);
-        setThemePurchasing(null);
-        return;
-      }
-      if (useCredit && (creditInfo?.available || 0) < price) {
-        toast.error(`Not enough Credit. Need ${price}, available ${creditInfo?.available}`);
-        setThemePurchasing(null);
-        return;
-      }
-
-      // Use RPC function to handle purchase (handles both coin deduction and recording)
-      const { data, error } = await supabase.rpc('purchase_broadcast_theme', {
-        p_user_id: user.id,
-        p_theme_id: theme.id,
-        p_set_active: false
-      });
-
-      if (error) {
-        console.error('Purchase RPC error:', error);
-        throw new Error(error.message || 'Theme purchase failed');
-      }
-
-      if (data && !data.success) {
-        throw new Error(data.error || 'Theme purchase failed');
-      }
-
-      setOwnedThemeIds((prev) => new Set([...Array.from(prev), theme.id]));
-      await refreshCoins();
-      if (refreshProfile) {
-        await refreshProfile();
-      }
-      toast.success('Theme purchased');
-      showPurchaseCompleteOverlay();
-    } catch (err) {
-      console.error('Theme purchase error:', err);
-      toast.error(err?.message || 'Failed to purchase theme');
-    } finally {
-      setThemePurchasing(null);
-    }
-  };
-
   const buyCallSound = async (sound) => {
     if (!user?.id) {
       toast.error('Please log in to purchase a chat sound');
@@ -941,7 +726,8 @@ export default function CoinStore() {
 
   // PayPal functions removed
 
-  const handleApplyLoan = async () => {
+  const _handleApplyLoan = async () => {
+    if (_applying) return;
     if (!requestedAmount || requestedAmount < 100) {
       toast.error('Minimum loan amount is 100 coins');
       return;
@@ -1016,7 +802,7 @@ export default function CoinStore() {
                 </h1>
 
                 {/* Credit Card Toggle */}
-                {['effects', 'perks', 'calls', 'insurance', 'broadcast_themes'].includes(tab) && (
+                {['effects', 'perks', 'calls', 'insurance'].includes(tab) && (
                 <div className="flex items-center gap-3 bg-black/30 border border-white/10 px-4 py-2 rounded-full">
                     <span className={`text-xs font-bold ${!useCredit ? 'text-yellow-400' : 'text-gray-400'}`}>Use Coins</span>
                     <button 
@@ -1037,7 +823,7 @@ export default function CoinStore() {
               <div className="relative">
                 <button 
                     type="button" 
-                    className={`px-3 py-2 rounded flex items-center gap-2 ${['effects', 'perks', 'calls', 'insurance', 'broadcast_themes'].includes(tab) ? 'bg-purple-600' : trollCityTheme.backgrounds.card}`}
+                    className={`px-3 py-2 rounded flex items-center gap-2 ${['effects', 'perks', 'calls', 'insurance'].includes(tab) ? 'bg-purple-600' : trollCityTheme.backgrounds.card}`}
                     onClick={() => setShowStoreDropdown(!showStoreDropdown)}
                 >
                     Store Items
@@ -1471,7 +1257,7 @@ export default function CoinStore() {
                         }}>
                             <PayPalButtons 
                                 style={{ layout: "vertical", color: "gold", shape: "pill", label: "paypal", height: 48 }}
-                                createOrder={async (data, actions) => {
+                                createOrder={async (_data, _actions) => {
                                   try {
                                       const price = isEmployee ? (selectedPackage.price.replace('$', '') * (1 - EMPLOYEE_COIN_DISCOUNT)).toFixed(2) : selectedPackage.price.replace('$', '');
                                       const { data: orderData, error } = await supabase.functions.invoke('paypal-create-order', {
@@ -1491,7 +1277,7 @@ export default function CoinStore() {
                                       return "";
                                   }
                                 }}
-                                onApprove={async (data, actions) => {
+                                onApprove={async (data, _actions) => {
                                   try {
                                       const { error } = await supabase.functions.invoke('paypal-complete-order', {
                                         body: {

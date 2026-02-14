@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { useCoins } from '../lib/hooks/useCoins'
 import { supabase } from '../lib/supabase'
@@ -7,7 +6,7 @@ import { getFamilySeasonStats } from '../lib/familySeasons'
 import { useXPStore } from '../stores/useXPStore'
 import { useCreditScore } from '../lib/hooks/useCreditScore'
 import CreditScoreBadge from '../components/CreditScoreBadge'
-import { Crown, Sword, Trophy, Coins, Star, TrendingUp, Shield, Zap, ShoppingBag, Gavel, Store, Package, DollarSign } from 'lucide-react'
+import { Crown, Sword, Trophy, Coins, Star, Shield, Zap, ShoppingBag, Store, Package, DollarSign, TrendingUp } from 'lucide-react'
 import { STORE_USD_PER_COIN } from '../lib/coinMath'
 
 interface UserStats {
@@ -29,11 +28,10 @@ interface UserStats {
 }
 
 export default function Stats() {
-  const navigate = useNavigate()
   const { user, profile } = useAuthStore()
-  const { balances, loading: coinsLoading } = useCoins()
+  const { balances, loading: _coinsLoading } = useCoins()
   const { xpTotal, level, xpToNext, progress, fetchXP, subscribeToXP, unsubscribe } = useXPStore()
-  const { data: creditData, loading: creditLoading } = useCreditScore()
+  const { data: _creditData, loading: _creditLoading } = useCreditScore()
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -58,15 +56,11 @@ export default function Stats() {
 
         if (familyMember?.family_id) {
           const familyStats = await getFamilySeasonStats(familyMember.family_id)
-          const { data: family, error: familyError2 } = await supabase
+          const { data: family, error: _familyError2 } = await supabase
             .from('troll_families')
             .select('name')
             .eq('id', familyMember.family_id)
             .maybeSingle()
-
-          if (familyError2) {
-            console.error('Error fetching family:', familyError2)
-          }
 
           if (family) {
             familyData = {
@@ -104,8 +98,8 @@ export default function Stats() {
           ...warStats,
           badges
         })
-      } catch (error) {
-        console.error('Failed to load stats:', error)
+      } catch (err) {
+        console.error('Error loading stats:', err)
       } finally {
         setLoading(false)
       }

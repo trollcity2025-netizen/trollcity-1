@@ -3,7 +3,7 @@ import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 import { usePresenceStore } from '../../lib/presenceStore';
 import { useChatStore } from '../../lib/chatStore';
-import { Users, Tv, Globe, GripHorizontal, X, ChevronUp, ChevronDown, Minimize2, Maximize2, Headphones, ExternalLink, RefreshCw, MessageSquare } from 'lucide-react';
+import { Users, Tv, Globe, GripHorizontal, Minimize2, Maximize2, Headphones, ExternalLink, RefreshCw, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';

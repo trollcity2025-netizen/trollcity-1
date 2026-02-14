@@ -8,7 +8,6 @@ import {
   CheckCircle, 
   XCircle, 
   MessageSquare,
-  AlertCircle,
   Calendar,
   FileText
 } from 'lucide-react';

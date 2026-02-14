@@ -16,7 +16,7 @@ export interface GiftItem {
 export function useGiftSystem(
   recipientId: string, 
   streamId: string, 
-  battleId?: string | null,
+  _battleId?: string | null,
   _targetUserId?: string
 ) {
   const [isSending, setIsSending] = useState(false);

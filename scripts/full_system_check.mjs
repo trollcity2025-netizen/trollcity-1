@@ -1,7 +1,6 @@
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import path from 'path';
 
 // Load env vars
 dotenv.config();
@@ -53,7 +52,7 @@ async function main() {
         log('Supabase', 'Cannot initialize Supabase client (missing URL/Key)', 'error');
     } else {
         const sb = createClient(sbUrl, sbKey);
-        const { data, error } = await sb.from('streams').select('count').limit(1);
+        const { data: _data, error } = await sb.from('streams').select('count').limit(1);
         if (error) {
             log('Supabase', `Connection failed: ${error.message}`, 'error');
         } else {
@@ -76,7 +75,7 @@ async function main() {
                 name: "Test Broadcaster"
             });
             at.addGrant({ roomJoin: true, roomName: "test-room", canPublish: true, canSubscribe: true });
-            const token = await at.toJwt();
+            const _token = await at.toJwt();
             log('LiveKit', 'Token generation successful', 'ok');
 
             // Test API Connection

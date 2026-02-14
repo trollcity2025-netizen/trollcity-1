@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
@@ -35,7 +35,7 @@ type Interview = {
 }
 
 // Inner component to render the interview grid
-function InterviewGrid({ interview, isAdmin }: { interview: Interview, isAdmin: boolean }) {
+function InterviewGrid({ interview, isAdmin: _isAdmin }: { interview: Interview, isAdmin: boolean }) {
   const participants = useParticipants();
   const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone]);
   const { localParticipant } = useLocalParticipant();
@@ -319,7 +319,7 @@ export default function InterviewRoom() {
         
       toast.success('Applicant declined')
       navigate('/lead-officer')
-    } catch (error) {
+    } catch {
       toast.error('Failed to decline')
     }
   }
@@ -334,7 +334,7 @@ export default function InterviewRoom() {
         
       toast.success('Interview cancelled')
       navigate('/lead-officer')
-    } catch (error) {
+    } catch {
       toast.error('Failed to cancel')
     }
   }

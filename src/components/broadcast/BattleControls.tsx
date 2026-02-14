@@ -35,7 +35,7 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
     const fetchLeaderboard = async () => {
         const { data } = await supabase
             .from('user_profiles')
-            .select('username, battle_wins')
+            .select('id, username, battle_wins, created_at')
             .order('battle_wins', { ascending: false })
             .limit(5);
         setLeaderboard(data || []);

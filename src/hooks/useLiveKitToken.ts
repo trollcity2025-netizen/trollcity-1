@@ -37,7 +37,7 @@ export function useLiveKitToken({
   enabled = true,
   isGuest = false,
   attributes = {},
-  role
+  _role
 }: UseLiveKitTokenProps & { role?: string }) {
   const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(null);
@@ -302,7 +302,7 @@ export function useLiveKitToken({
     return () => {
       mounted = false;
     };
-  }, [streamId, isHost, userId, roomName, canPublish, enabled, navigate]);
+  }, [streamId, isHost, userId, roomName, canPublish, enabled, navigate, attributes, isGuest]);
 
   return {
     token,

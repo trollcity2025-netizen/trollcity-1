@@ -4,7 +4,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import fs from 'fs'
-import mkcert from 'vite-plugin-mkcert'
+// import mkcert from 'vite-plugin-mkcert'
 // import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // 🚫 Removed dotenv — not needed on Vercel
@@ -21,12 +21,12 @@ try {
     appVersion = versionData.version || '1.0.0';
     buildTime = versionData.buildTime || Date.now();
   }
-} catch (e) {
-  console.warn('Could not read version.json in vite.config.ts');
+} catch (error) {
+  console.warn('Could not read version.json in vite.config.ts', error);
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode: _mode }) => ({
   define: {
     global: 'window',
     __APP_VERSION__: JSON.stringify(appVersion),

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, UserRole } from '../../../lib/supabase'
 import { RoleChangeLog, OfficerBadge } from '../../../types/admin'
 import { toast } from 'sonner'
 import { Shield, Award, History, Ban, ArrowUp, ArrowDown } from 'lucide-react'
@@ -10,7 +10,7 @@ interface UserProfile {
   id: string
   username: string
   avatar_url: string
-  role: string
+  role: UserRole
   is_officer_active: boolean
   is_lead_officer: boolean
   troll_role: string
@@ -45,7 +45,7 @@ export default function OfficerManagementTab() {
       })
 
       if (error) throw error
-      setSearchResults(data?.data || [])
+      setSearchResults((data?.data || []) as UserProfile[])
     } catch (error) {
       console.error(error)
       toast.error('Search failed')
@@ -99,7 +99,7 @@ export default function OfficerManagementTab() {
       toast.success(`Role updated to ${newRole}`)
       
       // Optimistic update
-      setSelectedUser({ ...selectedUser, role: newRole })
+      setSelectedUser({ ...selectedUser, role: newRole as UserRole })
       fetchUserDetails(selectedUser.id)
       setActionReason('')
     } catch (error) {

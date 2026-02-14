@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Loader2, UserX, Unlock, RefreshCcw, User, Eye, Shield, UserMinus, Crown } from 'lucide-react';
+import { Loader2, UserX, Unlock, RefreshCcw, User, Eye, Shield, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
 import { useAuthStore } from '../../lib/store';
@@ -38,7 +38,7 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
     const [activeViewers, setActiveViewers] = useState<ActiveViewer[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'banned' | 'active'>('banned');
-    const { user } = useAuthStore();
+    const { user: _user } = useAuthStore();
 
     const fetchActiveViewers = useCallback(async () => {
         try {
@@ -318,10 +318,10 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
                                                 showBadges={false}
                                             />
                                             {(viewer.role === 'admin' || viewer.troll_role === 'admin') && (
-                                                <Crown size={12} className="text-red-500" title="Admin" />
+                                                <Crown size={12} className="text-red-500" />
                                             )}
                                             {(viewer.role === 'moderator' || viewer.troll_role === 'troll_officer') && (
-                                                <Shield size={12} className="text-blue-400" title="Officer" />
+                                                <Shield size={12} className="text-blue-400" />
                                             )}
                                         </div>
                                         <p className="text-xs text-green-400 truncate">

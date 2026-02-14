@@ -5,12 +5,10 @@ import {
   Zap,
   Bell,
   Download,
-  Lock,
-  Unlock,
   BarChart3,
+  Activity,
   Server,
   Wifi,
-  Activity,
   Settings,
   Send,
   Volume2

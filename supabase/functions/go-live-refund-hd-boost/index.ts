@@ -104,12 +104,7 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (!existingRefund) {
-      const { data: profile } = await supabaseAdmin
-        .from("user_profiles")
-        .select("troll_coins")
-        .eq("id", user.id)
-        .maybeSingle();
-
+      // Profile check removed as credit RPC is used
       const refundAmount = 500;
 
       // Use RPC to add coins securely (handles bypass flag)

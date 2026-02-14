@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Car, Shield, FileText, DollarSign, Wrench, AlertTriangle, Edit2, Check, X } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Car, Shield, FileText, DollarSign, Wrench, Edit2, Check, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { useAuthStore } from '../../lib/store';
@@ -65,7 +65,7 @@ export default function MyGarage() {
     if (user) {
       fetchVehicles();
     }
-  }, [user]);
+  }, [user, fetchVehicles]);
 
   const handleUpdatePlate = async (vehicleId: string) => {
     if (!newPlate || newPlate.length < 3 || newPlate.length > 8) {
@@ -91,7 +91,7 @@ export default function MyGarage() {
     }
   };
 
-  const fetchVehicles = async () => {
+  const fetchVehicles = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('user_vehicles')
@@ -135,7 +135,7 @@ export default function MyGarage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   const handleSell = async (vehicle: Vehicle) => {
     const sellPrice = calculateSellPrice(vehicle);
@@ -452,7 +452,9 @@ export default function MyGarage() {
                           disabled={upgradingType !== null || isMaxed}
                           className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:bg-gray-800 disabled:text-gray-600 text-emerald-400 border border-emerald-500/30 rounded text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
                         >
-                          {isMaxed ? (
+                          {isUpgrading ? (
+                            'Upgrading...'
+                          ) : isMaxed ? (
                             'Max Level Reached'
                           ) : (
                             <>

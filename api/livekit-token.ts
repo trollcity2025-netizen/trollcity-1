@@ -1,4 +1,4 @@
-import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import { AccessToken } from 'livekit-server-sdk';
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 

@@ -9,7 +9,8 @@ export interface Stream {
   status: StreamStatus;
   is_battle: boolean;
   battle_id?: string;
-  viewer_count: number;
+  viewer_count?: number;
+  current_viewers: number;
   box_count: number;
   layout_mode: LayoutMode;
   started_at: string | null;

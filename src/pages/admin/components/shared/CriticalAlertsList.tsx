@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { CriticalAlert } from '../../../../types/admin'
 import { toast } from 'sonner'
@@ -14,20 +14,7 @@ export default function CriticalAlertsList({ viewMode: _viewMode }: CriticalAler
   const [alerts, setAlerts] = useState<CriticalAlert[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!user) return; // Stop if not logged in
-
-    fetchAlerts()
-    
-    // Converted to polling to reduce DB load
-    const interval = setInterval(() => {
-      fetchAlerts()
-    }, 30000)
-
-    return () => clearInterval(interval)
-  }, [user])
-
-  const fetchAlerts = async () => {
+  const fetchAlerts = useCallback(async () => {
     if (!user) return;
     setLoading(true)
     try {
@@ -43,7 +30,20 @@ export default function CriticalAlertsList({ viewMode: _viewMode }: CriticalAler
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return; // Stop if not logged in
+
+    fetchAlerts()
+    
+    // Converted to polling to reduce DB load
+    const interval = setInterval(() => {
+      fetchAlerts()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [user, fetchAlerts])
 
   const handleResolve = async (id: string) => {
     if (!user) return

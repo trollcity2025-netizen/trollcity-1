@@ -161,7 +161,7 @@ async function runFlightChecks() {
             console.warn('⚠️  Rate Limit Result Unexpected (maybe key already exists?):', { allowed1, allowed2 });
         }
     }
-  } catch (e) {
+  } catch {
       console.error('   Rate limit check skipped (RPC likely restricted).');
   }
 

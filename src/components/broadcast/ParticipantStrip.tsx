@@ -16,7 +16,7 @@ export default function ParticipantStrip({
   onJoinRequest,
   className,
   compact = false,
-  orientation = 'portrait',
+  orientation: _orientation = 'portrait',
 }: ParticipantStripProps) {
   // Get active seats only
   const activeSeats = useMemo(() => {

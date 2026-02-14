@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
-import { 
-  Crown
-} from 'lucide-react';
+import { Crown } from 'lucide-react';
+import { CreatorSeasonalGoals } from '../components/CreatorSeasonalGoals';
+// import { useNavigate } from 'react-router-dom';
 
 import {
   LineChart,
@@ -182,6 +182,9 @@ export default function CreatorDashboard() {
             )}
           </div>
         </div>
+
+        {/* SEASONAL GOALS */}
+        <CreatorSeasonalGoals />
 
         {/* TOP METRICS */}
         <section style={card}>

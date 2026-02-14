@@ -117,7 +117,7 @@ export default function GasStationModal({ isOpen, onClose }: { isOpen: boolean; 
     setLoading(true);
     try {
        // Search user first to get ID
-       const { data: users } = await supabase.from('user_profiles').select('id').eq('username', targetUser).single();
+       const { data: users } = await supabase.from('user_profiles').select('id').eq('username', targetUser).maybeSingle();
        if (!users) throw new Error('User not found');
        
        const { error } = await supabase.rpc('request_gas', { 

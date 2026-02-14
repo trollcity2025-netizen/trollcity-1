@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { deductCoins } from '../lib/coinTransactions'
 import { Store, ShoppingCart, Coins, ArrowLeft, Package, Receipt, X } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
 
@@ -106,7 +105,7 @@ export default function ShopView() {
       }
 
       // Deduct coins using the atomic purchase_item RPC
-      const { data: rpcData, error: rpcError } = await supabase.rpc('purchase_item', {
+      const { data: _rpcData, error: rpcError } = await supabase.rpc('purchase_item', {
         p_item_type: 'shop',
         p_item_id: String(item.id),
         p_cost: item.price

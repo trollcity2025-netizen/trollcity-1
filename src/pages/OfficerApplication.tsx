@@ -47,7 +47,7 @@ export default function OfficerApplication() {
         const timePassed = new Date().getTime() - lastDate.getTime()
         
         if (timePassed < sevenDaysMs) {
-          const daysLeft = Math.ceil((sevenDaysMs - timePassed) / (24 * 60 * 60 * 1000))
+          const _daysLeft = Math.ceil((sevenDaysMs - timePassed) / (24 * 60 * 60 * 1000))
           toast.error(`Please think about what you can do and reapply. Must wait 7 days to reapply.`)
           return
         }

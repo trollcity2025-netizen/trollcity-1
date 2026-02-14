@@ -174,7 +174,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
       // This prevents the "blue screen" / leftover UI glitch
       window.location.href = '/messages';
     }
-  }, [roomId, user, navigate, otherUserId, callType, isEnding]);
+  }, [roomId, user, otherUserId, callType, isEnding]);
 
   // Initialize LiveKit connection
   useEffect(() => {

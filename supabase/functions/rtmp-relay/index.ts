@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from "../_shared/cors.ts"
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { EgressClient, RoomServiceClient, EncodedFileOutput, StreamOutput, EncodingOptionsPreset } from "npm:livekit-server-sdk";
+import { EgressClient, RoomServiceClient } from "npm:livekit-server-sdk";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders })

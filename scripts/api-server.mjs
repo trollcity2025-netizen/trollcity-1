@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 app.post('/api/livekit-token', (req, res) => {
-  const { roomName, identity, role, allowPublish } = req.body;
+  const { roomName, identity, _role, allowPublish } = req.body;
 
   if (req.headers['x-load-test-secret'] !== 'your-secret-load-test-key') {
     return res.status(403).send('Forbidden');

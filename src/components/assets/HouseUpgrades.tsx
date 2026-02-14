@@ -111,7 +111,7 @@ export default function HouseUpgrades({ userHouseId, houseStatus }: HouseUpgrade
   };
 
   return (
-    <Dialog onOpenChange={(open) => open && fetchData()}>
+    <Dialog onOpenChange={(open) => { if (open) fetchData(); }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="w-full gap-2 border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800">
           <Wrench className="w-4 h-4" /> Manage Upgrades

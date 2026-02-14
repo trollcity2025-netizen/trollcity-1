@@ -34,7 +34,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function createOrUpdateUser(email, password, role = 'user') {
     // Check if exists
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+    const { data: { users } } = await supabase.auth.admin.listUsers();
     let user = users.find(u => u.email === email);
 
     if (!user) {

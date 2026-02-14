@@ -120,22 +120,22 @@ const Header = () => {
           schema: 'public',
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          // Update event - fetch to get accurate count
-          fetchNotifications();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          // Delete event - decrement count immediately
+      },
+      (_payload) => {
+        // Update event - fetch to get accurate count
+        fetchNotifications();
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      },
+      (_payload) => {
+        // Delete event - decrement count immediately
           setUnreadNotifications(prev => Math.max(0, prev - 1));
           // Also fetch to ensure sync
           fetchNotifications();

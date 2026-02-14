@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { getGlowingTextStyle } from '@/lib/perkEffects'
 import { supabase } from '../lib/supabase'
 import { Bell, X, Dot, CheckCircle, Video, Gift, User, MessageCircle, Shield, Car, DollarSign, FileText, Gavel } from 'lucide-react'
 import { toast } from 'sonner'
+import { Virtuoso } from 'react-virtuoso'
 
 interface Notification {
   id: string
@@ -38,6 +39,8 @@ interface Notification {
   priority?: 'low' | 'normal' | 'high' | 'critical'
 }
 
+const MAX_NOTIFICATIONS = 100 // Memory cap for the frontend list
+
 export default function Notifications() {
   const { profile } = useAuthStore()
   const navigate = useNavigate()
@@ -62,6 +65,7 @@ export default function Notifications() {
         .select('*')
         .eq('user_id', profile.id)
         .order('created_at', { ascending: false })
+        .limit(MAX_NOTIFICATIONS)
 
       if (error) {
         setNotifications([])
@@ -87,7 +91,10 @@ export default function Notifications() {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
-        (payload) => setNotifications((prev) => [payload.new as Notification, ...prev])
+        (payload) => setNotifications((prev) => {
+          const next = [payload.new as Notification, ...prev]
+          return next.slice(0, MAX_NOTIFICATIONS) // Prune memory buffer
+        })
       )
       .on(
         'postgres_changes',
@@ -242,6 +249,89 @@ export default function Notifications() {
     }
   }
 
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(n => filter === 'all' || n.type === filter || (filter === 'moderation_alert' && ['kick', 'ban', 'mute', 'report'].includes(n.type)))
+  }, [notifications, filter])
+
+  const renderNotification = (index: number, notification: Notification) => (
+    <div className="pb-3">
+      <div
+        onClick={() => handleNotificationClick(notification)}
+        className={`relative group p-4 rounded-lg border transition-all cursor-pointer hover:scale-[1.01] ${
+          notification.priority === 'high' || notification.priority === 'critical'
+            ? 'bg-red-950/30 border-red-500/50 hover:border-red-500'
+            : notification.is_read
+            ? 'bg-troll-dark-card/50 border-gray-800 hover:border-gray-600'
+            : 'bg-troll-dark-card border-troll-neon-blue/30 hover:border-troll-neon-blue'
+        }`}
+      >
+        <div className="flex items-start gap-4">
+          <div className={`p-2 rounded-full shrink-0 ${
+            notification.is_read ? 'bg-gray-800 text-gray-400' : 'bg-gray-800 text-white'
+          }`}>
+            {getNotificationIcon(notification.type)}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className={`font-semibold ${notification.is_read ? 'text-gray-300' : 'text-white'}`}>
+                {notification.title}
+              </h3>
+              <span className="text-xs text-gray-500 whitespace-nowrap">
+                {new Date(notification.created_at).toLocaleDateString()}
+              </span>
+            </div>
+            
+            <p className={`mt-1 text-sm ${notification.is_read ? 'text-gray-500' : 'text-gray-300'}`}>
+              {notification.type === 'gift_received' && notification.metadata?.sender_username ? (
+                <>
+                  You received {Number(notification.metadata.coins_spent || 0).toLocaleString()} coins from{' '}
+                  <span 
+                    style={getGlowingTextStyle(notification.metadata.sender_glowing_color)}
+                    className={notification.metadata.sender_glowing_color ? 'font-bold' : ''}
+                  >
+                    @{notification.metadata.sender_username}
+                  </span>
+                </>
+              ) : (
+                notification.message
+              )}
+            </p>
+            
+            {notification.metadata?.action_url && (
+                <div className="mt-2 text-xs text-troll-neon-blue flex items-center gap-1">
+                  Click to view details →
+                </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+            {!notification.is_read && (
+              <button
+                onClick={() => markAsRead(notification.id)}
+                className="p-1.5 hover:bg-white/10 rounded text-gray-400 hover:text-white"
+                title="Mark as read"
+              >
+                <Dot className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={() => dismissNotification(notification.id)}
+              className="p-1.5 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        {!notification.is_read && (
+          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-troll-neon-blue shadow-[0_0_10px_rgba(0,212,255,0.5)]" />
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-troll-dark text-white p-4 md:p-8 pt-24">
       <div className="max-w-4xl mx-auto">
@@ -288,92 +378,19 @@ export default function Notifications() {
 
         {loading ? (
           <div className="text-center py-12 text-gray-500 animate-pulse">Loading notifications...</div>
-        ) : notifications.length === 0 ? (
+        ) : filteredNotifications.length === 0 ? (
           <div className="text-center py-12 bg-troll-dark-card rounded-lg border border-gray-800">
             <Bell className="w-12 h-12 text-gray-600 mx-auto mb-3 opacity-50" />
             <p className="text-gray-400">No notifications yet</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {notifications
-              .filter(n => filter === 'all' || n.type === filter || (filter === 'moderation_alert' && ['kick', 'ban', 'mute', 'report'].includes(n.type)))
-              .map((notification) => (
-              <div
-                key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-                className={`relative group p-4 rounded-lg border transition-all cursor-pointer hover:scale-[1.01] ${
-                  notification.priority === 'high' || notification.priority === 'critical'
-                    ? 'bg-red-950/30 border-red-500/50 hover:border-red-500'
-                    : notification.is_read
-                    ? 'bg-troll-dark-card/50 border-gray-800 hover:border-gray-600'
-                    : 'bg-troll-dark-card border-troll-neon-blue/30 hover:border-troll-neon-blue'
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`p-2 rounded-full shrink-0 ${
-                    notification.is_read ? 'bg-gray-800 text-gray-400' : 'bg-gray-800 text-white'
-                  }`}>
-                    {getNotificationIcon(notification.type)}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className={`font-semibold ${notification.is_read ? 'text-gray-300' : 'text-white'}`}>
-                        {notification.title}
-                      </h3>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">
-                        {new Date(notification.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    
-                    <p className={`mt-1 text-sm ${notification.is_read ? 'text-gray-500' : 'text-gray-300'}`}>
-                      {notification.type === 'gift_received' && notification.metadata?.sender_username ? (
-                        <>
-                          You received {Number(notification.metadata.coins_spent || 0).toLocaleString()} coins from{' '}
-                          <span 
-                            style={getGlowingTextStyle(notification.metadata.sender_glowing_color)}
-                            className={notification.metadata.sender_glowing_color ? 'font-bold' : ''}
-                          >
-                            @{notification.metadata.sender_username}
-                          </span>
-                        </>
-                      ) : (
-                        notification.message
-                      )}
-                    </p>
-                    
-                    {notification.metadata?.action_url && (
-                       <div className="mt-2 text-xs text-troll-neon-blue flex items-center gap-1">
-                          Click to view details →
-                       </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                    {!notification.is_read && (
-                      <button
-                        onClick={() => markAsRead(notification.id)}
-                        className="p-1.5 hover:bg-white/10 rounded text-gray-400 hover:text-white"
-                        title="Mark as read"
-                      >
-                        <Dot className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => dismissNotification(notification.id)}
-                      className="p-1.5 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"
-                      title="Dismiss"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                
-                {!notification.is_read && (
-                  <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-troll-neon-blue shadow-[0_0_10px_rgba(0,212,255,0.5)]" />
-                )}
-              </div>
-            ))}
+          <div className="h-[calc(100vh-280px)]">
+            <Virtuoso
+              style={{ height: '100%' }}
+              data={filteredNotifications}
+              itemContent={renderNotification}
+              increaseViewportBy={200}
+            />
           </div>
         )}
       </div>

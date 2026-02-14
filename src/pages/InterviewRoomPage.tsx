@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { Video, Clock, CheckCircle, XCircle, AlertCircle, Calendar } from 'lucide-react'
+import { Video, Clock, CheckCircle, XCircle, Calendar } from 'lucide-react'
 import { Button } from '../components/ui/button'
 
 interface Application {

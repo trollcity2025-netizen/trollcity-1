@@ -43,7 +43,7 @@ const getCategoryIcon = (type) => {
   }
 }
 
-const FamilyShop = ({ user: authUser }: { user?: UserProfile | null }) => {
+const FamilyShop = ({ user: _authUser }: { user?: UserProfile | null }) => {
   const { user } = useAuthStore()
   const [shopItems, setShopItems] = useState([])
   const [familyPurchases, setFamilyPurchases] = useState([])

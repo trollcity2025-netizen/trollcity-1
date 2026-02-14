@@ -7,7 +7,7 @@ interface BroadcasterStatsModalProps {
   broadcasterProfile: any;
 }
 
-export default function BroadcasterStatsModal({ stream, onClose, broadcasterProfile }: BroadcasterStatsModalProps) {
+export default function BroadcasterStatsModal({ stream, onClose, broadcasterProfile: _broadcasterProfile }: BroadcasterStatsModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-white/10 rounded-xl p-6 w-full max-w-md mx-4">
@@ -26,7 +26,7 @@ export default function BroadcasterStatsModal({ stream, onClose, broadcasterProf
           
           <div className="flex justify-between items-center">
             <span className="text-zinc-400">Viewer Count</span>
-            <span className="text-white font-medium">{stream?.viewer_count || 0}</span>
+            <span className="text-white font-medium">{stream?.current_viewers || stream?.viewer_count || 0}</span>
           </div>
           
           <div className="flex justify-between items-center">

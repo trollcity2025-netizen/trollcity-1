@@ -37,7 +37,7 @@ export default function UserManagementPanel({
       const { data, error } = await supabase.functions.invoke('admin-actions', {
         body: {
           action: 'get_users',
-          limit: 100
+          limit: 200
         }
       })
 

@@ -38,7 +38,7 @@ export const xpService = {
     const { data, error } = await supabase.rpc('grant_xp', {
       p_user_id: userId,
       p_amount: safeAmount,
-      p_source: source,
+      p_source_type: source,
       p_source_id: sourceId,
       p_metadata: metadata
     })

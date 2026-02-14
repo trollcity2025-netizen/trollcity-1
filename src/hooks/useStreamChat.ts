@@ -84,38 +84,38 @@ export function useStreamChat(streamId: string) {
 
     fetchMessages();
 
-    // Active Mode: Use Realtime Subscription
+    // Subscribe via Server-Signed Broadcast
     const chatChannel = supabase
-        .channel(`chat_mobile:${streamId}`)
-        .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'stream_messages',
-            filter: `stream_id=eq.${streamId}`
-        }, (payload) => {
-            const newRow = payload.new as any;
+        .channel(`stream:${streamId}`)
+        .on('broadcast', { event: 'message' }, (payload) => {
+            const envelope = payload.payload;
             
+            // Check if this is a message for this stream and version 1
+            if (envelope.v !== 1 || envelope.stream_id !== streamId) return;
+
             const newMsg: any = {
-                id: newRow.id,
-                user_id: newRow.user_id,
-                content: newRow.content,
-                created_at: newRow.created_at,
+                id: envelope.txn_id,
+                user_id: envelope.s,
+                content: envelope.d.content,
+                created_at: new Date(envelope.ts).toISOString(),
                 type: 'chat',
-                user: {
-                    username: newRow.user_name || 'Unknown',
-                    avatar_url: newRow.user_avatar || '',
-                },
                 user_profiles: {
-                    username: newRow.user_name || 'Unknown',
-                    avatar_url: newRow.user_avatar || '',
-                    role: newRow.user_role,
-                    troll_role: newRow.user_troll_role,
-                    created_at: newRow.user_created_at
+                    username: envelope.d.user_name || 'Unknown',
+                    avatar_url: envelope.d.user_avatar || '',
+                    role: envelope.d.user_role,
+                    troll_role: envelope.d.user_troll_role,
+                    created_at: envelope.d.user_created_at,
+                    rgb_username_expires_at: envelope.d.user_rgb_expires_at,
+                    glowing_username_color: envelope.d.user_glowing_username_color
                 },
-                vehicle_status: newRow.vehicle_snapshot
+                vehicle_status: envelope.d.vehicle_snapshot
             };
 
-            setMessages(prev => [...prev, newMsg]);
+            setMessages(prev => {
+                const updated = [...prev, newMsg];
+                if (updated.length > 100) return updated.slice(updated.length - 100);
+                return updated;
+            });
         })
         .subscribe();
 
@@ -199,37 +199,63 @@ export function useStreamChat(streamId: string) {
     }
     lastSentRef.current = now;
 
-    let myVehicle = vehicleCache[user.id];
-    if (!myVehicle) {
-        myVehicle = (await fetchVehicleStatus(user.id)) || { has_vehicle: false };
-    }
-
-    console.log('💬 [useStreamChat] Inserting message:', { streamId, userId: user.id, content: content.trim() });
-
-    const { data, error } = await supabase.from('stream_messages').insert({
-        stream_id: streamId,
+    // Optimistic Update
+    const txnId = crypto.randomUUID();
+    const optimisticMsg: any = {
+        id: txnId,
         user_id: user.id,
         content: content.trim(),
-        user_name: profile.username,
-        user_avatar: profile.avatar_url,
-        user_role: profile.role,
-        user_troll_role: profile.troll_role,
-        user_created_at: profile.created_at,
-        user_rgb_expires_at: profile.rgb_username_expires_at,
-        user_glowing_username_color: profile.glowing_username_color,
-        vehicle_snapshot: myVehicle
-    }).select();
+        created_at: new Date().toISOString(),
+        type: 'chat',
+        user_profiles: {
+            username: profile.username,
+            avatar_url: profile.avatar_url,
+            role: profile.role,
+            troll_role: profile.troll_role,
+            created_at: profile.created_at,
+            rgb_username_expires_at: profile.rgb_username_expires_at,
+            glowing_username_color: profile.glowing_username_color
+        },
+        vehicle_status: vehicleCache[user.id]
+    };
 
-    if (error) {
-        console.error('💬 [useStreamChat] Failed to send message:', error);
-        console.error('💬 [useStreamChat] Error details:', JSON.stringify(error, null, 2));
-        if (String(error.message || '').toLowerCase().includes('rate limit')) {
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'chat',
+                stream_id: streamId,
+                txn_id: txnId,
+                data: { content: content.trim() }
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to send message');
+        }
+
+        const signedEnvelope = await response.json();
+        console.log('💬 [useStreamChat] Message signed and sent:', signedEnvelope);
+
+    } catch (err: any) {
+        console.error('💬 [useStreamChat] Error sending message:', err);
+        if (String(err.message || '').toLowerCase().includes('rate limit')) {
             toast.error('You are sending messages too fast. Please slow down.');
         } else {
-            toast.error('Failed to send message: ' + error.message);
+            toast.error('Failed to send message: ' + err.message);
         }
-    } else {
-        console.log('💬 [useStreamChat] Message sent successfully:', data);
+        // Remove optimistic message on error
+        setMessages(prev => prev.filter(m => m.id !== txnId));
     }
   };
 

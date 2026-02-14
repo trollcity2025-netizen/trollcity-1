@@ -282,19 +282,24 @@ const ProfileSetup = () => {
         .eq('id', user.id)
         .select('*')
       
-      if (updateErr) throw updateErr
-      const updatedProfile = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows
-      if (updatedProfile) {
-        setProfile(updatedProfile as any)
-        try {
-          localStorage.setItem(
-            `tc-profile-${user.id}`,
-            JSON.stringify({ data: updatedProfile, timestamp: Date.now() })
-          )
-        } catch (err) {
-          console.warn('Failed to update localStorage:', err)
-        }
-        useAuthStore.getState().refreshProfile?.()
+      if (updateErr) {
+          console.error('[ProfileSetup] Database update for avatar failed:', updateErr)
+          // Don't throw if the file was uploaded, just try to update store
+          setProfile({ ...profile, avatar_url: uploadedUrl } as any)
+      } else {
+          const updatedProfile = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows
+          if (updatedProfile) {
+            setProfile(updatedProfile as any)
+            try {
+              localStorage.setItem(
+                `tc-profile-${user.id}`,
+                JSON.stringify({ data: updatedProfile, timestamp: Date.now() })
+              )
+            } catch (err) {
+              console.warn('Failed to update localStorage:', err)
+            }
+            useAuthStore.getState().refreshProfile?.()
+          }
       }
       
       toast.success('Profile picture uploaded successfully')

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
@@ -6,6 +6,9 @@ import { Bell, Check, Trash2, Gift, Trophy, AlertCircle, Shield, DollarSign, Swo
 import { toast } from 'sonner'
 import { Notification, NotificationType } from '../types/notifications'
 import { useAdminVoiceNotifications } from '../hooks/useAdminVoiceNotifications'
+import { Virtuoso } from 'react-virtuoso'
+
+const MAX_NOTIFICATIONS = 100 // Memory cap for the frontend list
 
 export default function Trollifications() {
   const { user, profile } = useAuthStore()
@@ -27,7 +30,7 @@ export default function Trollifications() {
         .eq('user_id', user.id)
         .eq('is_dismissed', false)
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(MAX_NOTIFICATIONS)
       
       if (error) throw error
       setNotifications(data || [])
@@ -45,7 +48,7 @@ export default function Trollifications() {
     if (!user?.id) return
     
     const channel = supabase
-      .channel(`notifications_${user.id}`)
+      .channel(`notifications_page_${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -56,7 +59,10 @@ export default function Trollifications() {
         },
         (payload) => {
           const newNotif = payload.new as Notification
-          setNotifications((prev) => [newNotif, ...prev])
+          setNotifications((prev) => {
+            const next = [newNotif, ...prev]
+            return next.slice(0, MAX_NOTIFICATIONS)
+          })
           setLatestNotification(newNotif)
           setLoading(false)
         }
@@ -96,7 +102,7 @@ export default function Trollifications() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      void supabase.removeChannel(channel)
     }
   }, [user?.id, loadNotifications])
 
@@ -230,16 +236,79 @@ export default function Trollifications() {
     }
   }
 
-  const filteredNotifications = filter === 'unread' 
-    ? notifications.filter(n => !n.is_read) 
-    : notifications
+  const filteredNotifications = useMemo(() => {
+    return filter === 'unread' 
+      ? notifications.filter(n => !n.is_read) 
+      : notifications
+  }, [notifications, filter])
 
-  const unreadCount = notifications.filter(n => !n.is_read).length
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.is_read).length
+  }, [notifications])
+
+  const renderNotification = (index: number, notif: Notification) => (
+    <div className="pb-2 px-4">
+      <div
+        onClick={() => handleNotificationClick(notif)}
+        className={`p-4 rounded-lg hover:bg-[#0D0D0D] transition-colors cursor-pointer ${
+          !notif.is_read ? 'bg-purple-900/10 border-l-4 border-purple-500' : 'bg-[#222222]/50 border-l-4 border-transparent'
+        } ${
+          (notif as any).priority === 'high' || (notif as any).priority === 'critical'
+            ? 'bg-red-900/10 border border-red-500/50 hover:bg-red-900/20'
+            : ''
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-1">
+            {getIcon(notif.type)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              {((notif as any).priority === 'high' || (notif as any).priority === 'critical') && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500 text-white uppercase tracking-wider">
+                  High Alert
+                </span>
+              )}
+              <p className={`text-sm font-semibold ${!notif.is_read ? 'text-white' : 'text-gray-300'}`}>
+                {notif.title}
+              </p>
+            </div>
+            <p className={`text-sm mt-1 ${!notif.is_read ? 'text-gray-200' : 'text-gray-400'}`}>
+              {notif.message}
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              {new Date(notif.created_at).toLocaleString()}
+            </p>
+          </div>
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            {!notif.is_read && (
+              <button
+                type="button"
+                onClick={() => markAsRead(notif.id)}
+                className="p-2 hover:bg-purple-500/20 rounded-lg transition-colors"
+                title="Mark as read"
+              >
+                <Check className="w-4 h-4 text-purple-400" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => deleteNotification(notif.id)}
+              className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4 text-red-400" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-8 pt-24">
+      <div className="max-w-4xl mx-auto h-[calc(100vh-140px)] flex flex-col">
+        <div className="flex items-center justify-between mb-6 shrink-0">
           <div className="flex items-center gap-3">
             <Bell className="w-8 h-8 text-purple-400" />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent">
@@ -263,8 +332,8 @@ export default function Trollifications() {
           )}
         </div>
 
-        <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden">
-          <div className="flex border-b border-[#2C2C2C]">
+        <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden flex flex-col flex-1">
+          <div className="flex border-b border-[#2C2C2C] shrink-0">
             <button
               onClick={() => setFilter('all')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
@@ -287,7 +356,7 @@ export default function Trollifications() {
             </button>
           </div>
 
-          <div className="divide-y divide-[#2C2C2C]">
+          <div className="flex-1 min-h-0">
             {loading ? (
               <div className="p-8 text-center text-gray-400">
                 Loading notifications...
@@ -297,63 +366,12 @@ export default function Trollifications() {
                 {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
               </div>
             ) : (
-              filteredNotifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  onClick={() => handleNotificationClick(notif)}
-                  className={`p-4 hover:bg-[#0D0D0D] transition-colors cursor-pointer ${
-                    !notif.is_read ? 'bg-purple-900/10 border-l-4 border-purple-500' : ''
-                  } ${
-                    (notif as any).priority === 'high' || (notif as any).priority === 'critical'
-                      ? 'bg-red-900/10 border border-red-500/50 hover:bg-red-900/20'
-                      : 'border-transparent'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-1">
-                      {getIcon(notif.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        {((notif as any).priority === 'high' || (notif as any).priority === 'critical') && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500 text-white uppercase tracking-wider">
-                            High Alert
-                          </span>
-                        )}
-                        <p className={`text-sm font-semibold ${!notif.is_read ? 'text-white' : 'text-gray-300'}`}>
-                          {notif.title}
-                        </p>
-                      </div>
-                      <p className={`text-sm mt-1 ${!notif.is_read ? 'text-gray-200' : 'text-gray-400'}`}>
-                        {notif.message}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        {new Date(notif.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      {!notif.is_read && (
-                        <button
-                          type="button"
-                          onClick={() => markAsRead(notif.id)}
-                          className="p-2 hover:bg-purple-500/20 rounded-lg transition-colors"
-                          title="Mark as read"
-                        >
-                          <Check className="w-4 h-4 text-purple-400" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => deleteNotification(notif.id)}
-                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-400" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
+              <Virtuoso
+                style={{ height: '100%' }}
+                data={filteredNotifications}
+                itemContent={renderNotification}
+                increaseViewportBy={200}
+              />
             )}
           </div>
         </div>

@@ -12,7 +12,7 @@ import TitleDeedModal from '../components/TitleDeedModal'
 import ShopConsumablesSection from '../components/ShopConsumablesSection'
 
 export default function UserInventory({ embedded = false }: { embedded?: boolean }) {
-  const { user, profile, refreshProfile } = useAuthStore()
+  const { user, refreshProfile } = useAuthStore()
   const navigate = useNavigate()
   const [inventory, setInventory] = useState<any[]>([])
   const [entranceEffects, setEntranceEffects] = useState<any[]>([])
@@ -311,7 +311,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       console.error('Error deleting expired items:', err);
       toast.error('Failed to delete expired items');
     }
-  }, [user?.id, inventory, perks, insurances, activeItems, loadInventory]);
+  }, [user, inventory, perks, insurances, activeItems, loadInventory, refreshProfile]);
 
   const deleteInventoryItem = useCallback(
     async (recordId: string, itemId: string) => {

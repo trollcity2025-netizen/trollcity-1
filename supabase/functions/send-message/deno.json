@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom"],
+    "types": ["../types.d.ts"]
+  },
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
+    "@upstash/redis": "https://esm.sh/@upstash/redis@1.28.4"
+  },
+  "verify_jwt": true
+}

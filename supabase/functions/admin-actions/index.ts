@@ -627,7 +627,7 @@ Deno.serve(async (req) => {
             }
         }
 
-        const { error } = await supabaseAdmin.rpc('ban_user', {
+        const { data: rpcResult, error } = await supabaseAdmin.rpc('ban_user', {
             target: userId,
             minutes: minutes,
             reason: reason || 'Banned by admin',
@@ -635,6 +635,12 @@ Deno.serve(async (req) => {
         });
 
         if (error) throw error;
+        
+        // Check if RPC returned an error in the JSON response
+        if (rpcResult && rpcResult.status === 'error') {
+            throw new Error(rpcResult.message || rpcResult.error || 'Ban failed');
+        }
+
         result = { success: true };
         break;
       }
@@ -644,7 +650,7 @@ Deno.serve(async (req) => {
         const { userId } = params;
         if (!userId) throw new Error("Missing userId");
 
-        const { error } = await supabaseAdmin.rpc('admin_update_any_profile_field', {
+        const { data: rpcResult, error } = await supabaseAdmin.rpc('admin_update_any_profile_field', {
             p_user_id: userId,
             p_updates: { is_banned: false, banned_until: null },
             p_admin_id: user.id,
@@ -652,6 +658,12 @@ Deno.serve(async (req) => {
         });
 
         if (error) throw error;
+        
+        // Handle potential custom error return from RPC
+        if (rpcResult && rpcResult.status === 'error') {
+            throw new Error(rpcResult.message || 'Unban failed');
+        }
+
         result = { success: true };
         break;
       }
@@ -2254,19 +2266,20 @@ Deno.serve(async (req) => {
         if (!isAdmin && !isSecretary && profile.role !== 'troll_officer') {
           throw new Error("Unauthorized: Admin, Secretary, or Troll Officer only");
         }
-        const { targetUserId, action, reason } = params;
-        if (!targetUserId || !action) throw new Error("Missing required fields");
+        const { targetUserId, license_action, reason } = params;
+        const actionToTake = license_action;
+        if (!targetUserId || !actionToTake) throw new Error("Missing required fields");
 
         // 1. Suspend/Reinstate license using existing RPC
         const { error: suspendError } = await supabaseAdmin.rpc('admin_suspend_license', {
           p_target_user_id: targetUserId,
-          p_action: action // 'suspend', 'revoke', 'reinstate'
+          p_action: actionToTake // 'suspend', 'revoke', 'reinstate'
         });
 
         if (suspendError) throw suspendError;
 
         // 2. If suspending (not reinstating), create court summon
-        if (action === 'suspend' || action === 'revoke') {
+        if (actionToTake === 'suspend' || actionToTake === 'revoke') {
           // Get current court session
           const { data: courtSession } = await supabaseAdmin
             .from('court_sessions')
@@ -2281,7 +2294,7 @@ Deno.serve(async (req) => {
             const { error: summonError } = await supabaseAdmin
               .from('court_summons')
               .insert({
-                summoned_user_id: courtSession.created_by,
+                summoned_user_id: targetUserId,
                 session_id: courtSession.id,
                 case_type: 'TrollCity Policy Violation',
                 status: 'pending',
@@ -2299,10 +2312,10 @@ Deno.serve(async (req) => {
         await supabaseAdmin.rpc('log_admin_action', {
           p_action_type: 'license_suspend_with_summon',
           p_target_id: targetUserId,
-          p_details: { action, reason }
+          p_details: { licenseAction: actionToTake, reason }
         });
 
-        result = { success: true, action };
+        result = { success: true, action: actionToTake };
         break;
       }
 

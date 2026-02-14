@@ -138,7 +138,7 @@ export default function OfficerStreamGrid() {
               <div className="flex items-center gap-4 text-xs text-gray-400">
                 <div className="flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5" />
-                  {(stream.current_viewers || stream.viewer_count || 0)} watching
+                  {(stream.current_viewers || 0)} watching
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />

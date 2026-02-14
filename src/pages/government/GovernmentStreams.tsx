@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -14,14 +14,7 @@ import {
   Activity,
   AlertTriangle
 } from 'lucide-react';
-import { LiveKitRoom, 
-  VideoTrack, 
-  useTracks, 
-  RoomAudioRenderer
-} from '@livekit/components-react';
-import { useLiveKitToken } from '@/hooks/useLiveKitToken';
 import { toast } from 'sonner';
-import { useAuthStore } from '@/lib/store';
 import UserNameWithAge from '@/components/UserNameWithAge';
 import StreamWatchModal from '@/components/broadcast/StreamWatchModal';
 
@@ -41,11 +34,10 @@ interface StreamRow {
   broadcaster_id: string;
   status: string;
   is_live: boolean;
-  current_viewers: number;
+  viewer_count: number;
+  current_viewers?: number;
   title: string;
-  room_name: string;
-  category: string;
-  start_time: string;
+  hls_url?: string;
   broadcaster: {
     username: string;
     avatar_url: string;
@@ -59,6 +51,7 @@ interface PodRow {
   title: string;
   is_live: boolean;
   viewer_count: number;
+  current_viewers?: number;
   started_at: string;
   hls_url?: string;
   host?: {
@@ -98,6 +91,7 @@ export default function GovernmentStreams() {
           status,
           is_live,
           hls_url,
+          viewer_count,
           current_viewers,
           title,
           room_name,
@@ -419,7 +413,7 @@ function PodCard({ pod, onWatch, onEndPod }: { pod: PodRow, onWatch: () => void,
          <div className="flex items-center justify-between text-sm text-gray-400">
             <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
-                <span>{pod.viewer_count || 0} Viewers</span>
+                <span>{(pod.current_viewers || pod.viewer_count || 0)} Viewers</span>
             </div>
             <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4" />
@@ -479,7 +473,7 @@ function StreamCard({
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-400">
             <Users className="w-3 h-3" />
-            {stream.current_viewers}
+            {(stream.current_viewers || stream.viewer_count || 0)} Viewers
           </span>
         </div>
       </div>

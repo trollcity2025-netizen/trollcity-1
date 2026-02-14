@@ -43,6 +43,7 @@ import { supabase, UserRole } from '@/lib/supabase'
 import { useCoins } from '@/lib/hooks/useCoins'
 import { useXPStore } from '@/stores/useXPStore'
 import { useSidebarUpdates } from '@/hooks/useSidebarUpdates'
+import { useJailMode } from '@/hooks/useJailMode'
 
 import SidebarTopBroadcasters from './sidebar/SidebarTopBroadcasters'
 import { getGlowingTextStyle } from '@/lib/perkEffects'
@@ -79,6 +80,8 @@ export default function Sidebar() {
     const status = (profile as any).drivers_license_status
     return !status || status === 'revoked' || status === 'suspended'
   }, [profile])
+
+  const { isJailed } = useJailMode(profile?.id)
 
   const hasRgb = profile?.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > new Date();
   const glowingStyle = (!hasRgb && (profile as any)?.glowing_username_color) ? getGlowingTextStyle((profile as any).glowing_username_color) : undefined;
@@ -156,7 +159,7 @@ export default function Sidebar() {
   }, [profile, isOfficer, isAdmin, isSecretary])
 
   // Define visible paths for each group to calculate highlights correctly
-  const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/wall', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court']
+  const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court']
   
   const supportPaths = ['/support', '/safety']
   
@@ -266,12 +269,30 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar min-h-0">
-        
-        {/* Top Broadcasters */}
-        <SidebarTopBroadcasters isCollapsed={isSidebarCollapsed} />
+        {isJailed ? (
+          <>
+            <div className="px-4 py-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+                <Lock className="text-red-500" size={32} />
+              </div>
+              <div>
+                <p className="text-red-500 font-bold uppercase tracking-wider text-xs">Access Restricted</p>
+                <p className="text-gray-400 text-[10px] mt-1">City services suspended while incarcerated.</p>
+              </div>
+            </div>
 
-        {/* Premium Gold Go Live Button */}
-        <div className={`px-4 mb-2 mt-2 ${isSidebarCollapsed ? 'flex justify-center' : ''}`}>
+            <SidebarGroup title={isSidebarCollapsed ? '' : "Public Services"} isCollapsed={isSidebarCollapsed} highlight={true}>
+              <SidebarItem icon={Lock} label="Jail" to="/jail" active={isActive('/jail')} collapsed={isSidebarCollapsed} className="text-red-400 hover:text-red-300" />
+              <SidebarItem icon={LifeBuoy} label="Support" to="/support" active={isActive('/support')} collapsed={isSidebarCollapsed} />
+            </SidebarGroup>
+          </>
+        ) : (
+          <>
+            {/* Top Broadcasters */}
+            <SidebarTopBroadcasters isCollapsed={isSidebarCollapsed} />
+
+            {/* Premium Gold Go Live Button */}
+            <div className={`px-4 mb-2 mt-2 ${isSidebarCollapsed ? 'flex justify-center' : ''}`}>
           <Link
             to="/broadcast/setup"
             className={`
@@ -298,7 +319,6 @@ export default function Sidebar() {
           <SidebarItem icon={Warehouse} label="Living" to="/living" active={isActive('/living')} collapsed={isSidebarCollapsed} highlight={isUpdated('/living')} onClick={() => markAsViewed('/living')} />
           <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} highlight={isUpdated('/inventory')} onClick={() => markAsViewed('/inventory')} />
           <SidebarItem icon={Vote} label="Troting" to="/troting" active={isActive('/troting')} collapsed={isSidebarCollapsed} highlight={isUpdated('/troting')} onClick={() => markAsViewed('/troting')} />
-          <SidebarItem icon={FileText} label="The Wall" to="/wall" active={isActive('/wall')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wall')} onClick={() => markAsViewed('/wall')} />
           <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} highlight={isUpdated('/marketplace')} onClick={() => markAsViewed('/marketplace')} />
           <SidebarItem icon={Trophy} label="Leaderboard" to="/leaderboard" active={isActive('/leaderboard')} collapsed={isSidebarCollapsed} highlight={isUpdated('/leaderboard')} onClick={() => markAsViewed('/leaderboard')} />
           <SidebarItem icon={TrendingUp} label="Credit Scores" to="/credit-scores" active={isActive('/credit-scores')} collapsed={isSidebarCollapsed} highlight={isUpdated('/credit-scores')} onClick={() => markAsViewed('/credit-scores')} />
@@ -480,6 +500,8 @@ export default function Sidebar() {
           <SidebarItem icon={Video} label="Interview Room" to="/interview-room" active={isActive('/interview-room')} collapsed={isSidebarCollapsed} highlight={isUpdated('/interview-room')} onClick={() => markAsViewed('/interview-room')} />
           <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wallet')} onClick={() => markAsViewed('/wallet')} />
         </SidebarGroup>
+          </>
+        )}
       </div>
 
       {/* Footer Actions */}

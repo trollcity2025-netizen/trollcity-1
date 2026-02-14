@@ -12,7 +12,7 @@ export function useListenerEntranceEffect({
   isHost,
   isGuest,
   canPublish,
-  username,
+  _username,
 }: {
   streamId: string | null | undefined;
   userId: string | null | undefined;

@@ -73,7 +73,8 @@ export default function ReputationDashboard() {
             *,
             user:user_profiles(username, rgb_username_expires_at, glowing_username_color, created_at)
           `)
-          .order('current_score', { ascending: false });
+          .order('current_score', { ascending: false })
+          .limit(500);
 
         setUserReputations(data || []);
       } else if (activeTab === 'officers') {
@@ -83,7 +84,8 @@ export default function ReputationDashboard() {
             *,
             officer:user_profiles(username, rgb_username_expires_at, glowing_username_color, created_at)
           `)
-          .order('current_score', { ascending: false });
+          .order('current_score', { ascending: false })
+          .limit(500);
 
         setOfficerPerformances(data || []);
       } else if (activeTab === 'sellers') {
@@ -93,7 +95,8 @@ export default function ReputationDashboard() {
             *,
             seller:user_profiles(username, rgb_username_expires_at, glowing_username_color, created_at)
           `)
-          .order('current_score', { ascending: false });
+          .order('current_score', { ascending: false })
+          .limit(500);
 
         setSellerReliabilities(data || []);
       }

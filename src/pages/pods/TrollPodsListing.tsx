@@ -14,6 +14,7 @@ interface PodRoom {
   title: string;
   host_id: string;
   viewer_count: number;
+  current_viewers?: number;
   started_at: string;
   livekit_room_id?: string;
   host?: {
@@ -86,25 +87,25 @@ export default function TrollPodsListing() {
     if (!newRoomTitle.trim()) return;
 
     try {
-      // Check active pods limit (Max 5)
-      const { count, error: countError } = await supabase
-        .from('pod_rooms')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_live', true);
-        
-      if (countError) throw countError;
-      
-      if (count !== null && count >= 5) {
-        toast.error('System Limit: Maximum of 5 active pods allowed.');
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('You must be logged in to start a pod');
         return;
       }
 
+      // Check permissions via RPC
+      const { data: canStartData, error: canStartError } = await supabase
+        .rpc('can_start_pod', { p_user_id: user.id });
+
+      if (canStartError) {
+        console.error('Error checking pod permission:', canStartError);
+      } else if (canStartData && canStartData.can_start === false) {
+        toast.error(canStartData.message || 'City bandwidth exhausted.');
+        setIsCreating(false);
+        return;
+      }
+
+      setIsCreating(false);
       const livekitRoomId = `pod_${generateUUID()}`;
 
       const { data, error } = await supabase
@@ -177,7 +178,13 @@ export default function TrollPodsListing() {
           </div>
           
           <button
-            onClick={() => setIsCreating(true)}
+            onClick={() => {
+              if (!profile) {
+                navigate('/auth?mode=signup');
+              } else {
+                setIsCreating(true);
+              }
+            }}
             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-bold text-white hover:shadow-lg hover:shadow-purple-500/25 transition-all transform hover:scale-105"
           >
             <Plus className="w-5 h-5" />
@@ -270,7 +277,7 @@ export default function TrollPodsListing() {
                 <div className="flex items-center justify-between text-white/50 text-sm">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    <span>{room.viewer_count || 0} listening</span>
+                    <span>{(room.current_viewers || room.viewer_count || 0)} listening</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Headphones className="w-4 h-4" />

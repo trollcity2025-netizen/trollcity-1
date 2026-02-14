@@ -7,7 +7,7 @@ import {
   Sword, Clock, Target, Trophy
 } from 'lucide-react'
 
-const FamilyWarsHub = ({ user: authUser }: { user?: UserProfile | null }) => {
+const FamilyWarsHub = ({ user: _authUser }: { user?: UserProfile | null }) => {
   const { user } = useAuthStore()
   const [family, setFamily] = useState(null)
   const [memberRole, setMemberRole] = useState('member')

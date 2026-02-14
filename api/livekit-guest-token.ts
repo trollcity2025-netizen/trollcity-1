@@ -1,4 +1,4 @@
-import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import { AccessToken } from 'livekit-server-sdk';
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as crypto from 'crypto';
@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // If roomName is "broadcast:UUID", we might need to extract UUID. 
     // Usually roomName IS the stream ID or UUID.
     
-    const { data: bans, error: banError } = await supabaseAdmin
+    const { data: bans, error: _banError } = await supabaseAdmin
         .from('stream_bans')
         .select('id, expires_at')
         .eq('stream_id', targetRoom) // Assuming targetRoom is the UUID

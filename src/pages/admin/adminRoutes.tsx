@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { Database, Shield, RefreshCw, Settings, Video, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock } from 'lucide-react'
+import { Database, Shield, RefreshCw, Settings, Video, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap } from 'lucide-react'
 import { UserRole } from '../../lib/supabase'
 
 const DatabaseBackup = lazy(() => import('./DatabaseBackup'))
@@ -17,7 +17,10 @@ const StorePriceEditor = lazy(() => import('./components/StorePriceEditor'))
 const TournamentManager = lazy(() => import('./components/TournamentManager'))
 const AdminManualOrders = lazy(() => import('./AdminManualOrders'))
 const WeeklyReportsView = lazy(() => import('./WeeklyReportsView'))
-// const JailTestSimulator = lazy(() => import("./JailTestSimulator"));
+const AdminJailManagement = lazy(() => import('./AdminJailManagement'))
+const SeasonalGoals = lazy(() => import('./SeasonalGoals'))
+const PayoutBatches = lazy(() => import('./PayoutBatches'))
+const LoadLab = lazy(() => import('../../components/admin/LoadLab'))
 
 export interface AdminRoute {
   id: string
@@ -101,6 +104,19 @@ export const systemManagementRoutes: AdminRoute[] = [
     category: 'system'
   },
   {
+    id: 'load-lab',
+    title: '100k Load Lab',
+    path: '/admin/load-lab',
+    component: LoadLab,
+    roles: [UserRole.ADMIN],
+    description: 'Stress test the UI with simulated 100k traffic',
+    icon: <Zap className="w-5 h-5 text-yellow-400" />,
+    tileColor: 'text-yellow-400',
+    tileBgColor: 'bg-yellow-500/10',
+    tileBorderColor: 'border-yellow-500/30',
+    category: 'system'
+  },
+  {
     id: 'system-config',
     title: 'System Config',
     path: '/admin/system/config',
@@ -174,6 +190,45 @@ export const systemManagementRoutes: AdminRoute[] = [
     description: 'Manage court dockets and cases',
     icon: <Gavel className="w-5 h-5 text-red-200" />,
     tileColor: 'text-red-200',
+    tileBgColor: 'bg-red-500/10',
+    tileBorderColor: 'border-red-500/30',
+    category: 'moderation'
+  },
+  {
+    id: 'seasonal-goals',
+    title: 'Seasonal Goals',
+    path: '/admin/seasonal-goals',
+    component: SeasonalGoals,
+    roles: [UserRole.ADMIN],
+    description: 'Manage creator seasons and tasks',
+    icon: <Trophy className="w-5 h-5 text-yellow-400" />,
+    tileColor: 'text-yellow-400',
+    tileBgColor: 'bg-yellow-500/10',
+    tileBorderColor: 'border-yellow-500/30',
+    category: 'events'
+  },
+  {
+    id: 'payout-batches',
+    title: 'Payout Batches',
+    path: '/admin/payout-batches',
+    component: PayoutBatches,
+    roles: [UserRole.ADMIN, UserRole.SECRETARY],
+    description: 'Manage Friday payout batches',
+    icon: <DollarSign className="w-5 h-5 text-green-400" />,
+    tileColor: 'text-green-400',
+    tileBgColor: 'bg-green-500/10',
+    tileBorderColor: 'border-green-500/30',
+    category: 'economy'
+  },
+  {
+    id: 'jail-management',
+    title: 'Jail Management',
+    path: '/admin/jail-management',
+    component: AdminJailManagement,
+    roles: [UserRole.ADMIN, UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER],
+    description: 'Monitor and manage current city inmates',
+    icon: <Lock className="w-5 h-5 text-red-400" />,
+    tileColor: 'text-red-400',
     tileBgColor: 'bg-red-500/10',
     tileBorderColor: 'border-red-500/30',
     category: 'moderation'

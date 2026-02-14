@@ -123,8 +123,9 @@ export function useListenForEntrances({
 
   // Cleanup on unmount
   useEffect(() => {
+    const currentProcessedEvents = processedEventsRef.current;
     return () => {
-      processedEventsRef.current.clear();
+      currentProcessedEvents.clear();
     };
   }, []);
 

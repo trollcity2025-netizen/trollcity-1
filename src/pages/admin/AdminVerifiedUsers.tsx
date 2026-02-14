@@ -51,6 +51,7 @@ export default function AdminVerifiedUsers() {
         .select('id, username, email, is_verified, verification_date, verification_paid_amount, verification_payment_method, created_at')
         .eq('is_verified', true)
         .order('verification_date', { ascending: false })
+        .limit(500)
 
       if (error) throw error
       setUsers((data as unknown as VerifiedUser[]) || [])

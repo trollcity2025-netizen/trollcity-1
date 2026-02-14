@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // Try to load dotenv
 try {
     dotenv.config();
-} catch (e) {
+} catch {
     console.log("Note: dotenv not found or failed to load. Relying on system environment variables.");
 }
 
@@ -110,7 +110,7 @@ async function checkEgress() {
                      try {
                         const date = new Date(Number(egress.startedAt) / 1000000); // ns to ms
                         console.log(`    Started At: ${date.toISOString()}`);
-                     } catch(e) {
+                     } catch {
                         console.log(`    Started At: ${egress.startedAt}`);
                      }
                 }
