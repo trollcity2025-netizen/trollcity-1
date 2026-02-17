@@ -18,12 +18,29 @@ export default function LiveKitUsageTab() {
   const [loading, setLoading] = useState(true);
   const [streams, setStreams] = useState<StreamSession[]>([]);
   const [totalMinutes, setTotalMinutes] = useState(0);
+  const [launchUsageMinutes, setLaunchUsageMinutes] = useState(0);
+  const [participantSnapshot, setParticipantSnapshot] = useState<{
+    snapshot_at: string;
+    total_participants: number;
+    total_live_streams: number;
+  } | null>(null);
   
   // Configurable quota (could be moved to system settings later)
   const MONTHLY_QUOTA_MINUTES = 10000; // Example: 10,000 minutes (~166 hours)
+  const LAUNCH_QUOTA_MINUTES = 5000;
+  const LAUNCH_BUFFER_LIMIT = 4700;
   
   useEffect(() => {
     fetchUsage();
+    fetchLaunchUsage();
+    fetchParticipantSnapshot();
+
+    const interval = setInterval(() => {
+      fetchLaunchUsage();
+      fetchParticipantSnapshot();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchUsage = async () => {
@@ -76,9 +93,38 @@ export default function LiveKitUsageTab() {
     }
   };
 
+  const fetchLaunchUsage = async () => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase.rpc('get_launch_usage_snapshot', {
+      p_since: startOfDay.toISOString()
+    });
+
+    if (!error) {
+      const rawMinutes = Array.isArray(data) ? data[0]?.minutes_used : data?.minutes_used ?? data;
+      setLaunchUsageMinutes(Number(rawMinutes || 0));
+    }
+  };
+
+  const fetchParticipantSnapshot = async () => {
+    const { data, error } = await supabase.rpc('get_livekit_participant_snapshot', { p_log: true });
+    if (error) return;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      setParticipantSnapshot(row as any);
+    }
+  };
+
   const usagePercent = Math.min(100, (totalMinutes / MONTHLY_QUOTA_MINUTES) * 100);
   const isOverQuota = totalMinutes > MONTHLY_QUOTA_MINUTES;
   const overage = Math.max(0, totalMinutes - MONTHLY_QUOTA_MINUTES);
+
+  const launchRemaining = Math.max(0, LAUNCH_QUOTA_MINUTES - launchUsageMinutes);
+  const launchRemainingWithBuffer = Math.max(0, LAUNCH_BUFFER_LIMIT - launchUsageMinutes);
+  const launchUsagePercent = Math.min(100, (launchUsageMinutes / LAUNCH_QUOTA_MINUTES) * 100);
+  const launchComplete = launchUsageMinutes >= LAUNCH_BUFFER_LIMIT;
+  const participantWarning = (participantSnapshot?.total_participants || 0) >= 95;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -90,6 +136,72 @@ export default function LiveKitUsageTab() {
         <div className="text-sm text-gray-400">
           Current Month: {format(new Date(), 'MMMM yyyy')}
         </div>
+      </div>
+
+      {/* Launch Session Usage */}
+      <div className="bg-zinc-900 p-6 rounded-xl border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-white font-semibold">Launch Session (5,000 minutes)</div>
+          <div className={`text-xs font-bold ${launchComplete ? 'text-red-400' : 'text-emerald-400'}`}>
+            {launchComplete ? 'LOCKED' : 'ACTIVE'}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-black/40 rounded-lg p-4 border border-white/5">
+            <div className="text-xs text-gray-400 uppercase tracking-wider">Minutes Used</div>
+            <div className="text-2xl font-bold text-white">{launchUsageMinutes.toLocaleString()}</div>
+          </div>
+          <div className="bg-black/40 rounded-lg p-4 border border-white/5">
+            <div className="text-xs text-gray-400 uppercase tracking-wider">Remaining</div>
+            <div className="text-2xl font-bold text-emerald-300">{launchRemaining.toLocaleString()}</div>
+          </div>
+          <div className="bg-black/40 rounded-lg p-4 border border-white/5">
+            <div className="text-xs text-gray-400 uppercase tracking-wider">Buffer Remaining</div>
+            <div className={`text-2xl font-bold ${launchRemainingWithBuffer === 0 ? 'text-red-300' : 'text-yellow-300'}`}>
+              {launchRemainingWithBuffer.toLocaleString()}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ${launchComplete ? 'bg-red-500' : 'bg-emerald-500'}`}
+            style={{ width: `${launchUsagePercent}%` }}
+          />
+        </div>
+        {launchComplete && (
+          <div className="mt-4 flex items-start gap-3 text-sm text-red-300 bg-red-900/20 p-4 rounded-lg border border-red-500/20">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div>
+              <p className="font-bold">Launch phase complete — next upgrade unlocking soon.</p>
+              <p className="opacity-80">New broadcasts are disabled to protect the 5,000 minute cap.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Participant Monitor */}
+      <div className="bg-zinc-900 p-6 rounded-xl border border-white/10">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-gray-400">Concurrent Participants</div>
+            <div className="text-3xl font-bold text-white">
+              {participantSnapshot?.total_participants?.toLocaleString() || 0}
+            </div>
+          </div>
+          <div className="text-right text-xs text-gray-500">
+            <div>Live Streams: {participantSnapshot?.total_live_streams || 0}</div>
+            <div>Snapshot: {participantSnapshot?.snapshot_at ? format(new Date(participantSnapshot.snapshot_at), 'HH:mm:ss') : '--'}</div>
+          </div>
+        </div>
+        {participantWarning && (
+          <div className="mt-4 flex items-start gap-3 text-sm text-yellow-300 bg-yellow-900/20 p-4 rounded-lg border border-yellow-500/20">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div>
+              <p className="font-bold">Capacity warning</p>
+              <p className="opacity-80">System is near the join limit. New viewers are being blocked.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Usage Stats Cards */}

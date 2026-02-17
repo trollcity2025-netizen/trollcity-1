@@ -23,7 +23,12 @@ interface StreamRow {
   };
 }
 
-export default function OfficerStreamGrid() {
+interface Props {
+  onUserAction: (username: string) => Promise<void>;
+  onSelectStream: React.Dispatch<React.SetStateAction<StreamRow | null>>;
+}
+
+export default function OfficerStreamGrid({ onUserAction, onSelectStream }: Props) {
   const navigate = useNavigate();
   const [streams, setStreams] = useState<StreamRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,7 +154,7 @@ export default function OfficerStreamGrid() {
               {/* Actions */}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
-                  onClick={() => setSelectedStream(stream)}
+                  onClick={() => onSelectStream(stream)}
                   className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors"
                 >
                   <Eye className="w-3.5 h-3.5" />

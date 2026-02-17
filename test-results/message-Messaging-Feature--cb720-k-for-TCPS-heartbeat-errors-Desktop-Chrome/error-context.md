@@ -1,0 +1,104 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "T TrollCity" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]: T
+          - generic [ref=e9]: TrollCity
+        - button [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+      - generic [ref=e13]:
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - img "chatter1_test" [ref=e17]
+            - generic [ref=e18]: "1"
+          - generic [ref=e19]:
+            - generic [ref=e20]:
+              - heading "chatter1_test" [level=3] [ref=e21]
+              - img [ref=e22]
+            - generic [ref=e27]: Citizen
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - generic [ref=e30]: Level Progress
+            - generic [ref=e31]: 1 → 2
+          - generic [ref=e33]: 0% to next level
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - img [ref=e36]
+            - generic [ref=e41]: 1,000
+          - generic [ref=e42]:
+            - img [ref=e43]
+            - generic [ref=e45]: "0"
+      - generic [ref=e46]:
+        - link "Go Live" [ref=e48] [cursor=pointer]:
+          - /url: /broadcast/setup
+          - img [ref=e49]
+          - generic [ref=e52]: Go Live
+        - button "City Center" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]: City Center
+          - img [ref=e57]
+        - button "Public Services" [ref=e60] [cursor=pointer]:
+          - generic [ref=e61]: Public Services
+          - img [ref=e63]
+        - button "Social" [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]: Social
+          - img [ref=e69]
+        - button "City Registry" [ref=e72] [cursor=pointer]:
+          - generic [ref=e73]: City Registry
+          - img [ref=e75]
+      - link "Stats" [ref=e78] [cursor=pointer]:
+        - /url: /stats
+        - img [ref=e79]
+        - generic [ref=e84]: Stats
+    - generic [ref=e85]:
+      - banner [ref=e87]:
+        - generic [ref=e89]:
+          - img [ref=e90]
+          - textbox "Search users..." [ref=e93]
+        - generic [ref=e94]:
+          - link [ref=e95] [cursor=pointer]:
+            - /url: /trollifications
+            - img [ref=e96]
+          - link "chatter1_test" [ref=e101] [cursor=pointer]:
+            - /url: /profile/chatter1_test
+            - img "chatter1_test" [ref=e103]
+          - button "Logout" [ref=e105] [cursor=pointer]:
+            - img [ref=e106]
+      - main [ref=e109]:
+        - generic [ref=e111]:
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - heading "Test Pod for TCPS Error Check" [level=1] [ref=e116]
+              - generic [ref=e117]:
+                - generic [ref=e118]:
+                  - img [ref=e119]
+                  - generic [ref=e124]: "1"
+                - button "Host Control Panel" [ref=e125] [cursor=pointer]:
+                  - img [ref=e126]
+                - button "GPS Tracker" [ref=e129] [cursor=pointer]:
+                  - img [ref=e130]
+                - button [ref=e132] [cursor=pointer]:
+                  - img [ref=e133]
+                - button "End Pod" [ref=e135] [cursor=pointer]
+            - generic [ref=e139]:
+              - img "chatter1_test" [ref=e141]
+              - generic [ref=e143]:
+                - img [ref=e144]
+                - text: HOST
+              - generic [ref=e146]:
+                - generic [ref=e147]: chatter1_test
+                - img [ref=e148]
+            - button [ref=e155] [cursor=pointer]:
+              - img [ref=e156]
+          - generic [ref=e160]:
+            - generic [ref=e162]: Pod Chat
+            - generic [ref=e167]:
+              - textbox "Say something..." [active] [ref=e168]: Hello chatter2, this is a test message in a pod!
+              - button [ref=e169] [cursor=pointer]:
+                - img [ref=e170]
+  - region "Notifications alt+T"
+```

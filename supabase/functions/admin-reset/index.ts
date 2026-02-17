@@ -164,6 +164,66 @@ export const handler = async (req: Request): Promise<Response> => {
         return withCors({ users_reset: nonAdminUsers.length }, 200);
       }
 
+      case 'reset_repossession_yard': {
+          const results: Record<string, any> = {};
+
+          const { error: propertiesError, count: propertiesCount } = await supabase
+            .from('properties')
+            .update({
+              is_repossessed: false,
+              repossessed_at: null,
+              repossessed_by: null,
+              repossession_reason: null,
+            }, { count: 'exact' })
+            .gte('is_repossessed', false);
+
+          results.properties_updated = propertiesCount;
+          if (propertiesError) {
+            console.error("Error updating properties:", propertiesError);
+            return withCors({ error: "Failed to reset properties repossession status" }, 500);
+          }
+
+          const { error: userVehiclesError, count: userVehiclesCount } = await supabase
+            .from('user_vehicles')
+            .update({
+              is_repossessed: false,
+              repossessed_at: null,
+              repossessed_by: null,
+              repossession_reason: null,
+            }, { count: 'exact' })
+            .gte('is_repossessed', false);
+
+          results.user_vehicles_updated = userVehiclesCount;
+          if (userVehiclesError) {
+            console.error("Error updating user_vehicles:", userVehiclesError);
+            return withCors({ error: "Failed to reset user vehicles repossession status" }, 500);
+          }
+
+          const { error: summonsDeleteError, count: summonsCount } = await supabase
+            .from('loan_default_summons')
+            .delete({ count: 'exact' })
+            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+          results.loan_default_summons_deleted = summonsCount;
+          if (summonsDeleteError) {
+            console.error("Error deleting loan_default_summons:", summonsDeleteError);
+            return withCors({ error: "Failed to clear loan default summons" }, 500);
+          }
+
+          const { error: logsDeleteError, count: logsCount } = await supabase
+            .from('admin_action_logs')
+            .delete({ count: 'exact' })
+            .in('action_type', ['property_repossession', 'vehicle_repossession', 'credit_card_repo']);
+
+          results.admin_action_logs_deleted = logsCount;
+          if (logsDeleteError) {
+            console.error("Error deleting admin_action_logs:", logsDeleteError);
+            return withCors({ error: "Failed to clear admin action logs" }, 500);
+          }
+
+          return withCors({ success: true, reset_repossession_yard_results: results }, 200);
+        }
+
       default:
         return withCors({ error: "Invalid action" }, 400);
     }

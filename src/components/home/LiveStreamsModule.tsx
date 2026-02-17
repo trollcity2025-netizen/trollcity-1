@@ -74,7 +74,6 @@ export default function LiveStreamsModule({ onRequireAuth }: LiveStreamsModulePr
   }, [])
 
   const handleJoin = (streamId: string) => {
-    if (!onRequireAuth('join live streams')) return
     navigate(`/watch/${streamId}`)
   }
 

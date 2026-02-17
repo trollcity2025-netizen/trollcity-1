@@ -116,11 +116,8 @@ BEGIN
   WHERE id = p_sender_id;
 
   -- 3. Credit Receiver (Both spendable AND earned)
-  UPDATE public.user_profiles
-  SET troll_coins = troll_coins + p_amount,
-      earned_balance = COALESCE(earned_balance, 0) + p_amount,
-      total_earned_coins = COALESCE(total_earned_coins, 0) + p_amount
-  WHERE id = p_receiver_id;
+  -- Credit Receiver (Both spendable AND earned) using the savings rule
+  PERFORM public.credit_user_coins_with_savings_rule(p_receiver_id, p_amount);
 
   -- 4. Log User Transactions
   INSERT INTO public.coin_transactions (user_id, amount, type, description, metadata)

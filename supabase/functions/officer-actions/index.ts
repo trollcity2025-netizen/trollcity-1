@@ -1,10 +1,12 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, handleCorsPreflight } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return handleCorsPreflight();
   }
+
+  const origin = req.headers.get("Origin");
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -113,7 +115,7 @@ Deno.serve(async (req) => {
         const { warrantId, resolution } = params;
         const { error } = await supabaseAdmin
           .from('officer_warrants')
-          .update({
+          .update({ 
              status: 'resolved',
              resolution_notes: resolution,
              resolved_at: new Date().toISOString(),
@@ -189,6 +191,73 @@ Deno.serve(async (req) => {
           result = { success: true };
           break;
        }
+
+      case "ban_ip_address": {
+        const { ipAddress, banReason, banDetails, bannedUntil, targetUserId } = params;
+        const officerId = user.id;
+
+        let ipToBan = ipAddress;
+
+        // If an officer is banning a user, we need to find their last known IP
+        if (!ipToBan && targetUserId) {
+          const { data: auditLog, error: logError } = await supabaseAdmin
+            .from('audit_logs')
+            .select('ip_address')
+            .eq('user_id', targetUserId)
+            .not('ip_address', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (logError || !auditLog?.ip_address) {
+            throw new Error(`Could not find an IP address for the target user. IP bans must be done by an admin with a specified IP.`);
+          }
+          ipToBan = auditLog.ip_address;
+        }
+
+        if (!ipToBan) {
+          throw new Error("IP address is required to issue a ban.");
+        }
+
+        // Validate IP address format
+        const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        if (!ipRegex.test(ipToBan)) {
+          throw new Error(`Invalid IP address format: ${ipToBan}`);
+        }
+
+        const fullReason = [banReason, banDetails].filter(Boolean).join(': ');
+
+        const { error: banError } = await supabaseAdmin.from('ip_bans').insert({
+          ip_address: ipToBan,
+          reason: fullReason,
+          banned_until: bannedUntil,
+          banned_by: officerId,
+        });
+
+        if (banError) {
+          // Handle potential primary key conflict if the IP is already banned
+          if (banError.code === '23505') { // unique_violation
+             throw new Error(`This IP address (${ipToBan}) is already banned.`);
+          }
+          throw banError;
+        }
+        
+        // Also log to audit logs
+        await supabaseAdmin.from('audit_logs').insert({
+            action: 'ban_ip_address',
+            user_id: officerId,
+            target_id: targetUserId, // Log which user was targeted
+            details: { 
+                banned_ip: ipToBan, 
+                reason: fullReason,
+                duration: bannedUntil ? 'temporary' : 'permanent'
+            },
+            ip_address: ipToBan // The IP that was banned
+        });
+
+        result = { success: true };
+        break;
+      }
 
       case "request_time_off": {
         const { date, reason } = params;
@@ -271,51 +340,9 @@ Deno.serve(async (req) => {
         break;
       }
       
-      case "send_officer_chat": {
-        const { message } = params;
-        if (!message) throw new Error("Missing message");
-        const { error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .insert({
-            sender_id: user.id,
-            content: message,
-            priority: 'normal'
-          });
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
+      // --- Officer Chat (Legacy) ---
+      // This section has been removed.
 
-      case "get_officer_chat_messages": {
-        const { limit = 50 } = params;
-        
-        // Try to fetch with explicit join
-        const { data, error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .select(`
-            *,
-            sender:user_profiles(username, role)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(limit);
-
-        if (error) {
-            console.error('Error fetching chat:', error);
-            throw error;
-        }
-        
-        // Hydrate/Map if needed
-        const mapped = data.map((msg: any) => ({
-          ...msg,
-          // Handle both aliased and unaliased possibilities just in case
-          username: msg.sender?.username || msg.user_profiles?.username || 'Officer',
-          role: msg.sender?.role || msg.user_profiles?.role
-        }));
-
-        result = { messages: mapped };
-        break;
-      }
-      
       case "find_opponent": {
          const { data, error } = await supabaseAdmin.rpc('find_opponent', {
              p_user_id: params.userId || user.id, 
@@ -331,13 +358,13 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
 
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }
 });

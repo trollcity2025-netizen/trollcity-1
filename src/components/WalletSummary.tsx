@@ -1,4 +1,4 @@
-import { Coins, DollarSign, Crown } from 'lucide-react'
+import { Coins, DollarSign, Crown, Landmark, PiggyBank } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { getVipTier, isOG } from '../lib/vip'
 import { useNavigate } from 'react-router-dom'
@@ -8,15 +8,13 @@ export default function WalletSummary() {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   
-  // ✅ REAL COIN LOGIC: Use useCoins hook for real-time balance updates
-  // This replaces manual fetching and ensures balances stay in sync
   const { balances, loading } = useCoins()
 
   if (!user || !profile) return null
 
-  // Use balances from hook (real-time) or fallback to profile
   const trollCoins = balances.troll_coins
   const totalEarned = balances.total_earned_coins
+  const savings = balances.earned_balance
 
   const vip = getVipTier(totalEarned)
   const ogStatus = isOG(profile.created_at || new Date().toISOString())
@@ -34,8 +32,15 @@ export default function WalletSummary() {
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <PiggyBank className="w-4 h-4 text-green-400" />
+            <span className="text-slate-400">Savings:</span>
+            <span className="font-semibold text-green-300">
+              {loading ? '...' : savings.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
             <DollarSign className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-400">Total earned:</span>
+            <span className="text-slate-400">Lifetime Earned:</span>
             <span className="font-semibold text-cyan-300">
               {loading ? '...' : totalEarned.toLocaleString()}
             </span>
@@ -54,12 +59,28 @@ export default function WalletSummary() {
         </div>
       </div>
 
-      <button
-        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-sm font-semibold transition-colors"
-        onClick={() => navigate('/store')}
-      >
-        Buy Coins
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold transition-colors flex items-center gap-2"
+          onClick={() => navigate('/cashout')}
+        >
+          <DollarSign className="w-4 h-4" />
+          Cash Out
+        </button>
+        <button
+          className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-sm font-semibold transition-colors flex items-center gap-2"
+          onClick={() => navigate('/loans')}
+        >
+          <Landmark className="w-4 h-4" />
+          Pay Loan
+        </button>
+        <button
+          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-sm font-semibold transition-colors"
+          onClick={() => navigate('/store')}
+        >
+          Buy Coins
+        </button>
+      </div>
     </div>
   )
 }

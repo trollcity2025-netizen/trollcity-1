@@ -262,6 +262,21 @@ export default function SecretaryConsole() {
                   <h2 className="text-2xl font-bold text-white mb-2">Intake Inbox</h2>
                   <p className="text-slate-400">Manage and process incoming executive requests.</p>
                 </div>
+                <div className="mb-8 bg-[#13111C] border border-white/5 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-emerald-400" />
+                      <h3 className="text-lg font-bold text-white">Quick Manual Payments</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('manual_payments')}
+                      className="text-xs text-emerald-300 hover:text-emerald-200 transition-colors"
+                    >
+                      Open full queue
+                    </button>
+                  </div>
+                  <ManualCoinOrdersList limit={5} showHeader={false} />
+                </div>
                 <ExecutiveIntakeList viewMode="secretary" />
               </div>
             )}

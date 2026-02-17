@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, Hammer, TrendingUp, Coins, ShoppingBag, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../lib/store'
+import { useAuth } from '../hooks/useAuth'
 import { syncPropertyPurchase, subscribeToProperties, listenForPurchaseBroadcasts } from '../lib/purchaseSync'
 import { toast } from 'sonner'
 import { useCoins } from '../lib/hooks/useCoins'
 import { recordCoinTransaction, deductCoins } from '../lib/coinTransactions'
 import { trollCityTheme } from '../styles/trollCityTheme'
-import KTAuto from '../components/ktauto/KTAuto'
-import MyGarage from '../components/trollstown/MyGarage'
+
 
 type PropertyRow = {
   id: string
@@ -328,7 +327,7 @@ const HomeVisual: React.FC<{ value: number | null; isStarter: boolean | null }> 
 }
 
 const TrollsTownPage: React.FC = () => {
-  const { user, profile } = useAuthStore()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
   const { troll_coins: trollCoins, refreshCoins } = useCoins()
 
@@ -351,7 +350,7 @@ const TrollsTownPage: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const [sellingToBank, setSellingToBank] = useState(false)
   const [sellingAllToBank, setSellingAllToBank] = useState(false)
-  const [activeTab, setActiveTab] = useState<'real_estate' | 'ktauto' | 'my_garage'>('real_estate')
+  const [activeTab, setActiveTab] = useState<'real_estate'>('real_estate')
 
   const effectiveBalance = useMemo(() => {
     // Prefer the hook balance as it's more frequently updated
@@ -1560,34 +1559,9 @@ const TrollsTownPage: React.FC = () => {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-400" />
           )}
         </button>
-        <button
-          onClick={() => setActiveTab('ktauto')}
-          className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'ktauto' ? 'text-blue-400' : `${trollCityTheme.text.muted} hover:text-white`
-          }`}
-        >
-          KTAuto Dealership
-          {activeTab === 'ktauto' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400" />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('my_garage')}
-          className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'my_garage' ? 'text-purple-400' : `${trollCityTheme.text.muted} hover:text-white`
-          }`}
-        >
-          My Garage
-          {activeTab === 'my_garage' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400" />
-          )}
-        </button>
       </div>
 
-      {activeTab === 'ktauto' && <KTAuto />}
-      {activeTab === 'my_garage' && <MyGarage />}
-
-      <div className={`grid grid-cols-1 xl:grid-cols-3 gap-6 ${activeTab === 'ktauto' || activeTab === 'my_garage' ? 'hidden' : ''}`}>
+      <div className={`grid grid-cols-1 xl:grid-cols-3 gap-6 ${activeTab === 'real_estate' ? '' : ''}`}>
         <div className="xl:col-span-2 space-y-6">
           <div className={`${trollCityTheme.backgrounds.card} border ${trollCityTheme.borders.glass} rounded-2xl p-6`}>
             <div className="flex items-center justify-between mb-4">

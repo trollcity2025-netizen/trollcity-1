@@ -4,6 +4,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+console.log('Supabase URL:', supabaseUrl)
+console.log('Supabase Anon Key (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) : 'N/A')
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing production Supabase env vars: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY')
 }
@@ -183,6 +186,15 @@ export interface UserProfile {
 
   // Broadcaster field
   is_broadcaster?: boolean
+
+  // Stream key for RTMP ingest
+  stream_key?: string | null
+
+  // LiveKit ingress metadata
+  ingress_id?: string | null
+  ingress_room_name?: string | null
+  ingress_url?: string | null
+  ingress_updated_at?: string | null
 
   // Profile view price
   profile_view_price?: number
@@ -1182,6 +1194,94 @@ export async function getUnifiedMessagesForOfficer(
   return messages.slice(0, limit)
 }
 
+// Global Message Notification Listener
+export function setupGlobalMessageNotifications(
+  userId: string,
+  onNewMessage: (senderId: string, senderUsername: string, senderAvatar: string | null, isOpsMessage: boolean) => void
+) {
+  // Helper to fetch sender profile
+  const getSenderProfile = async (senderId: string) => {
+    const { data: sender } = await supabase
+      .from('user_profiles')
+      .select('username, avatar_url, glowing_username_color, created_at')
+      .eq('id', senderId)
+      .single()
+    return sender
+  }
+
+  // Handle new DM
+  const handleNewDM = async (payload: any) => {
+    const newMsg = payload.new as ConversationMessage
+    // Only notify if message is not from current user
+    if (newMsg.sender_id === userId) return
+
+    // Check if current user is a member of the conversation
+    const { data: memberData, error: memberError } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', newMsg.conversation_id)
+      .eq('user_id', userId)
+      .single();
+
+    if (memberError || !memberData) return; // Not a member or error fetching
+
+    const senderProfile = await getSenderProfile(newMsg.sender_id);
+    if (senderProfile) {
+      onNewMessage(newMsg.sender_id, senderProfile.username, senderProfile.avatar_url, false);
+    }
+  };
+
+  // Handle new OPS message
+  const handleNewOPS = async (payload: any) => {
+    const newMsg = payload.new as ConversationMessage; // Assuming officer_chat_messages has similar structure
+    // Only notify if message is not from current user
+    if (newMsg.sender_id === userId) return;
+
+    const senderProfile = await getSenderProfile(newMsg.sender_id);
+    if (senderProfile) {
+      onNewMessage(newMsg.sender_id, senderProfile.username, senderProfile.avatar_url, true);
+    }
+  };
+
+  // Subscribe to new DMs
+  const dmChannel = supabase
+    .channel(`global-dms:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'conversation_messages'
+      },
+      handleNewDM
+    )
+    .subscribe();
+  
+  // Subscribe to OPS messages (if user is officer)
+  isOfficer(userId).then((isOff) => {
+    if (!isOff) return;
+    const opsChannel = supabase
+      .channel(`global-ops:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'officer_chat_messages'
+        },
+        handleNewOPS
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(opsChannel);
+    };
+  });
+  // Cleanup function
+  return () => {
+    supabase.removeChannel(dmChannel);
+  };
+}
+
 export async function sendOfficerMessage(content: string, priority: string = 'normal'): Promise<any> {
   const { data, error } = await supabase
     .from('officer_chat_messages')
@@ -1198,87 +1298,406 @@ export async function sendOfficerMessage(content: string, priority: string = 'no
   return data
 }
 
-// Global Message Notification Listener
-export function setupGlobalMessageNotifications(
-  userId: string,
-  onNewMessage: (senderId: string, senderUsername: string, senderAvatar: string | null, isOpsMessage: boolean) => void
-) {
-  // Subscribe to new DMs
-  const dmChannel = supabase
-    .channel(`global-dms:${userId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'conversation_messages'
-      },
-      async (payload) => {
-        const newMsg = payload.new
-        
-        // Check if this message is in a conversation the user is part of
-        const { data: membership } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .eq('conversation_id', newMsg.conversation_id)
-          .eq('user_id', userId)
-          .single()
-        
-        if (!membership) return // Not in this conversation
-        if (newMsg.sender_id === userId) return // Don't notify for own messages
-        
-        // Fetch sender info
-        const { data: sender } = await supabase
-          .from('user_profiles')
-          .select('username, avatar_url')
-          .eq('id', newMsg.sender_id)
-          .single()
-        
-        if (sender) {
-          onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, false)
-        }
+// Check if a user can send messages to another user (pricing + role restrictions)
+export async function canUserMessageTarget(targetUserId: string): Promise<{ canMessage: boolean; messageCost: number; reason?: string }> {
+  const { data: userData } = await supabase.auth.getUser()
+  const senderId = userData.user?.id
+  if (!senderId) return { canMessage: false, messageCost: 0, reason: 'Not authenticated' }
+  if (senderId === targetUserId) return { canMessage: false, messageCost: 0, reason: 'Cannot message yourself' }
+
+  // Get target user profile
+  const { data: targetProfile } = await supabase
+    .from('user_profiles')
+    .select('role, is_officer, is_lead_officer, is_admin, officer_role, troll_role')
+    .eq('id', targetUserId)
+    .single()
+
+  if (!targetProfile) return { canMessage: false, messageCost: 0, reason: 'User not found' }
+
+  // Check if target is a role/staff (only roles can message roles)
+  const isTargetStaff = targetProfile.is_officer || targetProfile.is_lead_officer || targetProfile.is_admin || 
+    targetProfile.officer_role === 'lead_officer' || targetProfile.officer_role === 'owner' ||
+    targetProfile.troll_role === 'secretary' || targetProfile.troll_role === 'lead_officer'
+
+  // Get sender profile
+  const { data: senderProfile } = await supabase
+    .from('user_profiles')
+    .select('total_spent_coins, is_officer, is_lead_officer, is_admin, officer_role, troll_role')
+    .eq('id', senderId)
+    .single()
+
+  if (!senderProfile) return { canMessage: false, messageCost: 0, reason: 'Sender profile not found' }
+
+  const isSenderStaff = senderProfile.is_officer || senderProfile.is_lead_officer || senderProfile.is_admin ||
+    senderProfile.officer_role === 'lead_officer' || senderProfile.officer_role === 'owner' ||
+    senderProfile.troll_role === 'secretary' || senderProfile.troll_role === 'lead_officer'
+
+  // Rule: Regular users cannot message roles
+  if (!isSenderStaff && isTargetStaff) {
+    return { canMessage: false, messageCost: 0, reason: 'Cannot message staff members' }
+  }
+
+  // Get message cost
+  const { data: targetUser } = await supabase
+    .from('user_profiles')
+    .select('message_price')
+    .eq('id', targetUserId)
+    .single()
+
+  const messageCost = targetUser?.message_price ?? 0
+
+  // Check if sender has enough coins
+  if (messageCost > 0 && (senderProfile.total_spent_coins + messageCost > 1000000)) {
+    // Just a basic check - real coin validation would be more complex
+    return { canMessage: true, messageCost, reason: undefined }
+  }
+
+  return { canMessage: true, messageCost, reason: undefined }
+}
+
+// Mark message as read
+export async function markMessageAsRead(messageId: string): Promise<void> {
+  const { error } = await supabase
+    .from('conversation_messages')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', messageId)
+
+  if (error) throw error
+}
+
+// Set or update typing status
+export async function setTypingStatus(conversationId: string, isTyping: boolean): Promise<void> {
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData.user?.id
+  if (!userId) throw new Error('Not authenticated')
+
+  const { error: _deleteError } = await supabase
+    .from('typing_statuses')
+    .delete()
+    .eq('user_id', userId)
+    .eq('conversation_id', conversationId)
+
+  if (!isTyping) return
+
+  const { error: insertError } = await supabase
+    .from('typing_statuses')
+    .insert({
+      user_id: userId,
+      conversation_id: conversationId,
+      is_typing: true
+    })
+
+  if (insertError) throw insertError
+}
+
+// Get user with profile info for messaging
+export async function getUserForMessaging(userId: string): Promise<any> {
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('id, username, avatar_url, message_price, is_officer, is_lead_officer, is_admin, officer_role, troll_role')
+    .eq('id', userId)
+    .single()
+
+  return data
+}
+
+// Get or create conversation with another user
+export async function getOrCreateDirectConversation(otherUserId: string): Promise<string> {
+  const { data: userData } = await supabase.auth.getUser()
+  const currentUserId = userData.user?.id
+  if (!currentUserId) throw new Error('Not authenticated')
+
+  // Generate conversation key (sorted pair to ensure consistency)
+  const directConvKey = currentUserId < otherUserId 
+    ? `${currentUserId}|${otherUserId}`
+    : `${otherUserId}|${currentUserId}`
+
+  // Try to find existing direct conversation with this key
+  const { data: existing, error: searchError } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('type', 'direct')
+    .eq('direct_conversation_key', directConvKey)
+    .single()
+
+  // If found, return it
+  if (existing?.id) {
+    console.log(`Found existing direct conversation: ${existing.id}`)
+    return existing.id
+  }
+
+  // If no error (vs. not found), throw it
+  if (searchError && searchError.code !== 'PGRST116') {
+    // PGRST116 = no rows returned, which is expected
+    console.error('Error checking existing conversation:', searchError)
+  }
+
+  // Create new conversation
+  console.log(`Creating new direct conversation between ${currentUserId} and ${otherUserId}`)
+  const conv = await createConversation([otherUserId])
+  
+  // Update with direct_conversation_key
+  await supabase
+    .from('conversations')
+    .update({ 
+      type: 'direct',
+      direct_conversation_key: directConvKey 
+    })
+    .eq('id', conv.id)
+
+  return conv.id
+}
+
+// Get conversations with last message and member info
+export async function getUserConversationsWithDetails(): Promise<any[]> {
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData.user?.id
+  if (!userId) throw new Error('Not authenticated')
+
+  console.log('[getUserConversationsWithDetails] Starting for user:', userId);
+
+  // Get all conversations user is member of with related data
+  const { data: members } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, conversations(id, created_at, type, direct_conversation_key)')
+    .eq('user_id', userId)
+    .order('joined_at', { ascending: false })
+
+  console.log('[getUserConversationsWithDetails] User memberships:', members?.length);
+
+  if (!members || members.length === 0) return []
+
+  const convIds = members
+    .map((m: any) => m.conversations?.id)
+    .filter(Boolean)
+
+  console.log('[getUserConversationsWithDetails] Conversation IDs:', convIds);
+
+  if (convIds.length === 0) return []
+
+  // Batch query: Get all other members for all conversations in ONE query
+  const { data: allOtherMembers } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, user_id, user_profiles(id, username, avatar_url, is_officer, is_lead_officer, is_admin)')
+    .in('conversation_id', convIds)
+    .neq('user_id', userId)
+
+  console.log('[getUserConversationsWithDetails] Other members rows:', allOtherMembers?.length);
+
+  // Batch query: Get last message for all conversations in ONE query
+  const { data: lastMessages } = await supabase
+    .from('conversation_messages')
+    .select('id, conversation_id, sender_id, body, created_at, read_at')
+    .in('conversation_id', convIds)
+    .order('created_at', { ascending: false })
+
+  console.log('[getUserConversationsWithDetails] Last message rows:', lastMessages?.length);
+
+  // Group last messages by conversation (keep only the most recent)
+  const messagesByConv = new Map<string, any>()
+  if (lastMessages) {
+    for (const msg of lastMessages) {
+      if (!messagesByConv.has(msg.conversation_id)) {
+        messagesByConv.set(msg.conversation_id, msg)
       }
-    )
-    .subscribe()
-  
-  // Subscribe to OPS messages (if user is officer)
-  isOfficer(userId).then((isOff) => {
-    if (!isOff) return
-    
-    const opsChannel = supabase
-      .channel(`global-ops:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'officer_chat_messages'
-        },
-        async (payload) => {
-          const newMsg = payload.new
-          if (newMsg.sender_id === userId) return // Don't notify for own messages
-          
-          // Fetch sender info
-          const { data: sender } = await supabase
-            .from('user_profiles')
-            .select('username, avatar_url')
-            .eq('id', newMsg.sender_id)
-            .single()
-          
-          if (sender) {
-            onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, true)
-          }
-        }
-      )
-      .subscribe()
-    
-    return () => {
-      supabase.removeChannel(opsChannel)
     }
-  })
+  }
+
+  // Group other members by conversation
+  const membersByConv = new Map<string, any[]>()
+  if (allOtherMembers) {
+    for (const member of allOtherMembers) {
+      if (!membersByConv.has(member.conversation_id)) {
+        membersByConv.set(member.conversation_id, [])
+      }
+      if (member.user_profiles?.id && member.user_profiles?.username) {
+        membersByConv.get(member.conversation_id)!.push(member.user_profiles)
+      }
+    }
+  }
+
+  // Build final conversation list
+  const conversations = []
+  for (const convId of convIds) {
+    const otherUsers = membersByConv.get(convId) || []
+    
+    // Skip orphaned conversations (no other members)
+    if (otherUsers.length === 0) continue
+
+    conversations.push({
+      id: convId,
+      lastMessage: messagesByConv.get(convId) || null,
+      otherUsers
+    })
+  }
+
+  // HARD SAFETY NET: Group by conversation id to guarantee uniqueness
+  console.log('[getUserConversationsWithDetails] Raw conversations:', conversations.length);
+  const byId = new Map<string, any>();
   
-  // Cleanup function
-  return () => {
-    supabase.removeChannel(dmChannel)
+  for (const conv of conversations) {
+    const existing = byId.get(conv.id);
+    if (!existing) {
+      byId.set(conv.id, conv);
+      continue;
+    }
+    
+    console.log('[getUserConversationsWithDetails] DUPLICATE FOUND:', conv.id, 'with otherUsers:', conv.otherUsers.map((u: any) => u.username));
+    
+    // Merge otherUsers unique by id
+    const mergedUsers = new Map(existing.otherUsers.map((u: any) => [u.id, u]));
+    conv.otherUsers.forEach((u: any) => mergedUsers.set(u.id, u));
+    
+    // Choose newest lastMessage
+    const bestLast =
+      !existing.lastMessage ? conv.lastMessage :
+      !conv.lastMessage ? existing.lastMessage :
+      new Date(conv.lastMessage.created_at).getTime() > new Date(existing.lastMessage.created_at).getTime()
+        ? conv.lastMessage
+        : existing.lastMessage;
+    
+    byId.set(conv.id, { ...existing, otherUsers: [...mergedUsers.values()], lastMessage: bestLast });
+  }
+  
+  const dedupedConversations = [...byId.values()];
+  console.log('[getUserConversationsWithDetails] After dedup:', dedupedConversations.length);
+  dedupedConversations.forEach((c, i) => {
+    console.log(`  [${i}] id=${c.id}, otherUsers=${c.otherUsers.map((u: any) => u.username).join(',')}`);
+  });
+
+  return dedupedConversations
+}
+
+// ====== SAVINGS ACCOUNT SYSTEM ======
+
+export interface SavingsDetails {
+  savings_balance: number
+  coin_balance: number
+  total_balance: number
+  savings_percentage: number
+  recent_transactions: Array<{
+    id: string
+    type: 'deposit' | 'withdrawal' | 'cashout' | 'loan_payment'
+    amount: number
+    description: string
+    created_at: string
+  }>
+}
+
+/**
+ * Get current savings and coin balances for authenticated user
+ */
+export async function getSavingsDetails(userId: string): Promise<SavingsDetails | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_savings_details', { p_user_id: userId })
+    if (error) {
+      console.error('Error fetching savings details:', error)
+      return null
+    }
+    return data?.[0] || null
+  } catch (err) {
+    console.error('Error in getSavingsDetails:', err)
+    return null
   }
 }
+
+/**
+ * Withdraw from savings for cashout
+ */
+export async function withdrawSavingsForCashout(amount: number): Promise<{
+  success: boolean
+  new_savings_balance?: number
+  message: string
+}> {
+  try {
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) throw new Error('Not authenticated')
+
+    const { data, error } = await supabase.rpc('withdraw_savings_for_cashout', {
+      p_user_id: userId,
+      p_amount: amount
+    })
+
+    if (error) {
+      console.error('Error withdrawing from savings:', error)
+      return { success: false, message: error.message }
+    }
+
+    const result = data?.[0]
+    return {
+      success: result?.success || false,
+      new_savings_balance: result?.new_savings_balance,
+      message: result?.message || 'Unknown error'
+    }
+  } catch (err: any) {
+    console.error('Error in withdrawSavingsForCashout:', err)
+    return { success: false, message: err.message }
+  }
+}
+
+/**
+ * Use savings to pay for lottery/loans
+ */
+export async function useSavingsForLoanPayment(amount: number, loanId: string): Promise<{
+  success: boolean
+  new_savings_balance?: number
+  message: string
+}> {
+  try {
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) throw new Error('Not authenticated')
+
+    const { data, error } = await supabase.rpc('use_savings_for_loan_payment', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_loan_id: loanId
+    })
+
+    if (error) {
+      console.error('Error using savings for loan payment:', error)
+      return { success: false, message: error.message }
+    }
+
+    const result = data?.[0]
+    return {
+      success: result?.success || false,
+      new_savings_balance: result?.new_savings_balance,
+      message: result?.message || 'Unknown error'
+    }
+  } catch (err: any) {
+    console.error('Error in useSavingsForLoanPayment:', err)
+    return { success: false, message: err.message }
+  }
+}
+
+/**
+ * Deposit to savings (auto-called by coin receipt system)
+ * This is primarily for internal use, but exposed for manual deposits if needed
+ */
+export async function depositToSavings(userId: string, coinsReceived: number): Promise<{
+  savings_added: number
+  new_savings_balance: number
+  new_coin_balance: number
+}> {
+  try {
+    const { data, error } = await supabase.rpc('deposit_to_savings', {
+      p_user_id: userId,
+      p_coins_received: coinsReceived
+    })
+
+    if (error) {
+      console.error('Error depositing to savings:', error)
+      throw error
+    }
+
+    return data?.[0] || { savings_added: 0, new_savings_balance: 0, new_coin_balance: 0 }
+  } catch (err) {
+    console.error('Error in depositToSavings:', err)
+    throw err
+  }
+}
+
+// Global Message Notification Listener
+

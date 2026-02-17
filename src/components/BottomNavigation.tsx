@@ -101,6 +101,12 @@ export default function BottomNavigation() {
 
   const centerBtn = getCenterButton()
 
+  const profilePath = profile?.username
+    ? `/profile/${profile.username}`
+    : profile?.id
+      ? `/profile/id/${profile.id}`
+      : '/profile/setup'
+
   // Re-ordering to match: Home, Live, CENTER, Inbox, Profile
   const orderedItems: any[] = [
     { icon: Home, label: 'Home', path: '/', active: isActive('/') && location.pathname !== '/live' },
@@ -114,7 +120,7 @@ export default function BottomNavigation() {
     },
     { isCenter: true, ...centerBtn },
     { icon: MessageSquare, label: 'TCPS', path: '/tcps', active: isActive('/tcps') },
-    { icon: User, label: 'Profile', path: `/profile/${profile?.username || profile?.id}`, active: isActive('/profile') }
+    { icon: User, label: 'Profile', path: profilePath, active: isActive('/profile') }
   ]
 
   // Popup Menu Options

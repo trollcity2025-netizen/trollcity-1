@@ -8,6 +8,7 @@ interface Trollcoins {
   paid_coins: number
   total_earned_coins: number
   total_spent_coins: number
+  earned_balance: number
 }
 
 interface SpendCoinsParams {
@@ -37,6 +38,7 @@ export function useCoins() {
     paid_coins: profile?.paid_coins ?? 0,
     total_earned_coins: profile?.total_earned_coins || 0,
     total_spent_coins: profile?.total_spent_coins || 0,
+    earned_balance: profile?.earned_balance || 0,
   })
   const [optimisticUntil, setOptimisticUntil] = useState<number | null>(null)
   const [optimisticTroll, setOptimisticTroll] = useState<number | null>(null)
@@ -49,9 +51,10 @@ export function useCoins() {
         paid_coins: profile.paid_coins ?? 0,
         total_earned_coins: profile.total_earned_coins || 0,
         total_spent_coins: profile.total_spent_coins || 0,
+        earned_balance: profile.earned_balance || 0,
       })
     }
-  }, [profile, profile?.troll_coins, profile?.paid_coins, profile?.total_earned_coins, profile?.total_spent_coins])
+  }, [profile, profile?.troll_coins, profile?.paid_coins, profile?.total_earned_coins, profile?.total_spent_coins, profile?.earned_balance])
 
   /**
    * Refresh coin balances from database
@@ -68,7 +71,7 @@ export function useCoins() {
 
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('troll_coins, paid_coins, total_earned_coins, total_spent_coins')
+        .select('troll_coins, paid_coins, total_earned_coins, total_spent_coins, earned_balance')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -102,6 +105,10 @@ export function useCoins() {
           profileData?.total_spent_coins ??
           currentProfile?.total_spent_coins ??
           0,
+        earned_balance:
+          profileData?.earned_balance ??
+          currentProfile?.earned_balance ??
+          0,
       }
 
       const nextBalances = {
@@ -109,6 +116,7 @@ export function useCoins() {
         paid_coins: profileData?.paid_coins ?? currentProfile?.paid_coins ?? 0,
         total_earned_coins: nextTotals.total_earned_coins,
         total_spent_coins: nextTotals.total_spent_coins,
+        earned_balance: nextTotals.earned_balance,
       }
 
       setBalances((prev) => {
@@ -116,7 +124,8 @@ export function useCoins() {
           prev.troll_coins === nextBalances.troll_coins &&
           prev.paid_coins === nextBalances.paid_coins &&
           prev.total_earned_coins === nextBalances.total_earned_coins &&
-          prev.total_spent_coins === nextBalances.total_spent_coins
+          prev.total_spent_coins === nextBalances.total_spent_coins &&
+          prev.earned_balance === nextBalances.earned_balance
 
         return isSame ? prev : nextBalances
       })
@@ -125,7 +134,8 @@ export function useCoins() {
         const profileNeedsUpdate =
           currentProfile.troll_coins !== mergedPaid ||
           currentProfile.total_earned_coins !== nextTotals.total_earned_coins ||
-          currentProfile.total_spent_coins !== nextTotals.total_spent_coins
+          currentProfile.total_spent_coins !== nextTotals.total_spent_coins ||
+          currentProfile.earned_balance !== nextTotals.earned_balance
 
           if (profileNeedsUpdate) {
             const updatedProfile: UserProfile = {
@@ -133,6 +143,7 @@ export function useCoins() {
               troll_coins: mergedPaid as number,
               total_earned_coins: nextTotals.total_earned_coins,
               total_spent_coins: nextTotals.total_spent_coins,
+              earned_balance: nextTotals.earned_balance,
             }
             useAuthStore.getState().setProfile(updatedProfile)
           }
@@ -246,6 +257,8 @@ export function useCoins() {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
+          console.log('Real-time coin transaction received! Refreshing coins.');
+          toast.info('Coin transaction received! Refreshing...');
           refreshCoins()
         }
       )
@@ -262,6 +275,8 @@ export function useCoins() {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
+          console.log('Real-time profile update received!', payload);
+          toast.info('Real-time profile update received!');
           const newProfileData = payload.new as any
           const currentProfile = useAuthStore.getState().profile
           if (currentProfile) {
@@ -281,6 +296,10 @@ export function useCoins() {
               typeof newProfileData.total_spent_coins === 'number'
                 ? newProfileData.total_spent_coins
                 : currentProfile.total_spent_coins
+            const nextEarnedBalance =
+              typeof newProfileData.earned_balance === 'number'
+                ? newProfileData.earned_balance
+                : currentProfile.earned_balance
             const updatedProfile: UserProfile = {
               ...currentProfile,
               troll_coins: shouldKeepOptimistic
@@ -288,6 +307,7 @@ export function useCoins() {
                 : Number(candidate ?? currentProfile.troll_coins),
               total_earned_coins: nextEarned,
               total_spent_coins: nextSpent,
+              earned_balance: nextEarnedBalance,
             }
             useAuthStore.getState().setProfile(updatedProfile)
             setBalances((prev) => ({
@@ -305,6 +325,10 @@ export function useCoins() {
                 typeof updatedProfile.total_spent_coins === 'number'
                   ? updatedProfile.total_spent_coins
                   : prev.total_spent_coins,
+              earned_balance:
+                typeof updatedProfile.earned_balance === 'number'
+                  ? updatedProfile.earned_balance
+                  : prev.earned_balance,
             }))
             if (!shouldKeepOptimistic && optimisticUntil) {
               setOptimisticUntil(null)
@@ -369,5 +393,6 @@ export function useCoins() {
     troll_coins: balances.troll_coins,
     totalEarned: balances.total_earned_coins,
     totalSpent: balances.total_spent_coins,
+    earned_balance: balances.earned_balance,
   }
 }

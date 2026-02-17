@@ -24,18 +24,31 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // If a window is already open, focus it
-      for (const client of clientList) {
-        if ('focus' in client) {
-          return client.focus();
-        }
+
+  const urlToOpen = (event.notification && event.notification.data) || '/';
+
+  event.waitUntil((async () => {
+    const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // Prefer a visible/focused client if we can
+    let client = clientList.find(c => 'focus' in c) || null;
+
+    if (client) {
+      await client.focus();
+
+      // Navigate the existing client to the intended URL
+      if ('navigate' in client) {
+        try { await client.navigate(urlToOpen); } catch {}
       }
-      // Otherwise open a new window
-      if (clients.openWindow) {
-        return clients.openWindow(event.notification.data || '/');
-      }
-    })
-  );
+
+      // Optional: tell the app to route internally (if you handle this message client-side)
+      client.postMessage({ type: 'NAVIGATE', url: urlToOpen });
+      return;
+    }
+
+    // No existing window → open a new one
+    if (clients.openWindow) {
+      await clients.openWindow(urlToOpen);
+    }
+  })());
 });

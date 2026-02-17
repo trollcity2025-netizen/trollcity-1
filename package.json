@@ -7,7 +7,7 @@
     "node": "20.x"
   },
   "scripts": {
-    "dev": "node ./scripts/generate-version.js && vite",
+    "dev": "node ./scripts/generate-version.js && vite --host",
     "build": "node ./scripts/generate-version.js && vite build",
     "build:web": "npm run build",
     "lint": "eslint .",
@@ -93,6 +93,7 @@
     "vite-plugin-mkcert": "^1.17.9",
     "vite-plugin-pwa": "^1.2.0",
     "vite-tsconfig-paths": "^6.0.5",
+    "ws": "^8.19.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -122,9 +123,28 @@
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "pg": "^8.11.0",
+    "supabase": "^2.76.8",
     "ts-jest": "^29.4.6",
     "typescript-eslint": "^8.30.1",
     "vercel": "^50.14.0",
     "web-push": "^3.6.7"
-  }
+  },
+  "description": "A production-ready broadcasting application with a troll-themed twist! Built with React, TypeScript, Supabase, and Agora for real-time streaming.",
+  "main": "check_constraint.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trollcity2025-netizen/trollcity-1.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/trollcity2025-netizen/trollcity-1/issues"
+  },
+  "homepage": "https://github.com/trollcity2025-netizen/trollcity-1#readme"
 }

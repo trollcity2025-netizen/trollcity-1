@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAuthStore } from '../lib/store';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Home, DollarSign, Building, Warehouse, Hotel, Tent, Briefcase, Edit2, X, Zap, Droplets, FileText, Calculator, CheckCircle, Trash2, CreditCard } from 'lucide-react';
@@ -61,7 +61,7 @@ interface LandlordApplication {
 }
 
 export default function LivingPage() {
-  const { user, profile } = useAuthStore();
+  const { user, profile } = useAuth();
     const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'my_home' | 'my_loans' | 'market' | 'landlord' | 'landlord_apply'>('my_home');
   const [marketFilter, setMarketFilter] = useState<'rent' | 'sale'>('rent');

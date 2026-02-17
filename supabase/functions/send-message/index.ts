@@ -209,6 +209,33 @@ serve(async (req) => {
     const ts = now; // We use server time for the envelope
     // If client provided a 'ts', we would validate: if (Math.abs(now - body.ts) > MAX_CLOCK_SKEW_MS) ...
 
+    // 3.6 Toxicity Analysis
+    let toxicityScore = 0;
+    if (type === "chat" && data.message) {
+      try {
+        const { data: analysis, error: analysisError } = await supabase.functions.invoke("analyze-message", {
+          body: { message: data.message },
+        });
+
+        if (analysisError) throw analysisError;
+
+        toxicityScore = analysis.score;
+        
+        // Increment abuse score in Redis
+        if (redis && toxicityScore > 0.1) { // Only increment for non-zero scores
+          const abuseKey = `stream_abuse_score:${stream_id}`;
+          // Increment by a value proportional to the toxicity score, scaled by 100
+          await redis.incrbyfloat(abuseKey, toxicityScore * 100); 
+          // Set an expiry for the score to decay over time
+          await redis.expire(abuseKey, 3600); // 1 hour expiry
+        }
+
+      } catch (err) {
+        console.error(`[CRITICAL] Toxicity analysis failed: ${err.message}`);
+        // Fail-open: If analysis fails, we still allow the message through
+      }
+    }
+
     // 4. Validate Stream and User Status (Muted/Banned) + Get Profile
     const [
       { data: stream, error: streamError },
@@ -311,6 +338,7 @@ serve(async (req) => {
       user_created_at: profile.created_at,
       user_rgb_expires_at: profile.rgb_username_expires_at,
       user_glowing_username_color: profile.glowing_username_color,
+      toxicity_score: toxicityScore, // Add toxicity score to the payload
     };
 
     // 7. Canonicalize and Sign

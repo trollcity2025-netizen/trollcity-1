@@ -49,7 +49,7 @@ export default function TrollsTownControl({ isOpen, onClose }: TrollsTownControl
   const townLocations = [
     { icon: Home, label: 'Trolls Town', path: '/trolls-town', color: 'text-purple-400' },
     { icon: Map, label: 'Living', path: '/living', color: 'text-blue-400' },
-    { icon: Car, label: 'Dealership', path: '/dealership', color: 'text-emerald-400' },
+
     { icon: Wrench, label: 'Mechanic', path: '/tmv', color: 'text-orange-400' },
     { icon: Heart, label: 'Hospital', path: '/troller-insurance', color: 'text-red-400' },
     { icon: Shield, label: 'Insurance', path: '/troller-insurance', color: 'text-green-400' },

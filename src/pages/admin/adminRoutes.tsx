@@ -80,6 +80,19 @@ export const systemManagementRoutes: AdminRoute[] = [
     category: 'system'
   },
   {
+    id: 'creator-safety-dashboard',
+    title: 'Creator Safety',
+    path: '/admin/creator-safety',
+    component: lazy(() => import('./CreatorSafetyDashboard')),
+    roles: [UserRole.ADMIN],
+    description: 'Monitor and manage creator safety features',
+    icon: <Shield className="w-5 h-5 text-green-200" />,
+    tileColor: 'text-green-200',
+    tileBgColor: 'bg-emerald-500/10',
+    tileBorderColor: 'border-emerald-500/30',
+    category: 'system'
+  },
+  {
     id: 'officer-operations',
     title: 'Officer Operations',
     path: '/admin/officer-operations',

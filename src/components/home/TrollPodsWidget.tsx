@@ -34,6 +34,7 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
         const { data, error } = await supabase
           .from('pod_rooms')
           .select('id, title, host_id, is_live, viewer_count, started_at')
+          .eq('is_live', true)
           .order('is_live', { ascending: false })
           .order('started_at', { ascending: false })
           .limit(6)
@@ -117,8 +118,8 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
                 <p className="text-xs text-white/40 truncate">Host: {pod.host?.username || 'Unknown'}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${pod.is_live ? 'bg-red-500/20 text-red-300' : 'bg-white/10 text-white/40'}`}>
-                  {pod.is_live ? 'LIVE' : 'RECENT'}
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300">
+                  LIVE
                 </span>
                 <button
                   type="button"
@@ -128,7 +129,7 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
                   }}
                   className="text-xs font-semibold px-3 py-1 rounded-lg bg-purple-600/80 text-white hover:bg-purple-500"
                 >
-                  {pod.is_live ? 'Join' : 'Listen'}
+                  Join
                 </button>
               </div>
             </div>

@@ -4,66 +4,13 @@
 -- 2. Payout Requests (payout_requests) -> Secretaries/Admins
 
 -- ============================================================================
--- 1. NEW MESSAGE NOTIFICATION
+-- 1. NEW MESSAGE NOTIFICATION (Removed - Legacy Messaging System)
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION public.handle_new_message_notification()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_recipient_id UUID;
-    v_sender_name TEXT;
-BEGIN
-    -- Get the recipient (the other person in the conversation)
-    SELECT user_id INTO v_recipient_id
-    FROM public.conversation_members
-    WHERE conversation_id = NEW.conversation_id
-    AND user_id != NEW.sender_id
-    LIMIT 1;
-
-    -- If no recipient found (e.g. self-message?), exit
-    IF v_recipient_id IS NULL THEN
-        RETURN NEW;
-    END IF;
-
-    -- Get sender name
-    SELECT username INTO v_sender_name
-    FROM public.user_profiles
-    WHERE id = NEW.sender_id;
-
-    -- Insert Notification
-    INSERT INTO public.notifications (
-        user_id,
-        type,
-        title,
-        message,
-        link,
-        metadata
-    ) VALUES (
-        v_recipient_id,
-        'message',
-        'New Message from ' || COALESCE(v_sender_name, 'User'),
-        substring(NEW.body from 1 for 100), -- Preview first 100 chars
-        '/tcps?user=' || NEW.sender_id,
-        jsonb_build_object(
-            'conversation_id', NEW.conversation_id,
-            'sender_id', NEW.sender_id,
-            'message_id', NEW.id
-        )
-    );
-
-    RETURN NEW;
-END;
-$$;
-
--- Create Trigger for Messages
+-- Dropping the trigger and function related to new message notifications.
+-- These were part of the old messaging system and are no longer needed.
 DROP TRIGGER IF EXISTS trigger_new_message_notification ON public.conversation_messages;
-CREATE TRIGGER trigger_new_message_notification
-AFTER INSERT ON public.conversation_messages
-FOR EACH ROW
-EXECUTE FUNCTION public.handle_new_message_notification();
+DROP FUNCTION IF EXISTS public.handle_new_message_notification();
 
 
 -- ============================================================================

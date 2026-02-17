@@ -13,11 +13,11 @@ const criticalAssets = manifest.filter((entry: any) => {
   
   // Keep main entry and vendor chunks
   // Based on vite.config.ts manualChunks
-  if (url.includes('vendor-') || 
-      url.includes('ui-') || 
-      url.includes('supabase-') || 
-      url.includes('livekit-') ||
-      url.includes('index-')) {
+  if (url.includes('vendor-') || url.includes('vendor.') ||
+      url.includes('ui-') || url.includes('ui.') ||
+      url.includes('supabase-') || url.includes('supabase.') ||
+      url.includes('livekit-') || url.includes('livekit.') ||
+      url.includes('index-') || url.includes('index.')) {
     return true;
   }
 
@@ -64,9 +64,11 @@ self.addEventListener('activate', (event: any) => {
         const cacheNames = await caches.keys();
         await Promise.all(
           cacheNames.map((name) => {
-            if (name !== CACHE_NAME) {
-              return caches.delete(name);
-            }
+            const isOurRuntime = name === CACHE_NAME;
+            const isWorkbox = name.startsWith('workbox-') || name.startsWith('wb-');
+            const isPrecache = name.includes('precache');
+            if (isOurRuntime || isWorkbox || isPrecache) return Promise.resolve(false);
+            return caches.delete(name);
           })
         );
       } catch {
@@ -97,12 +99,13 @@ self.addEventListener('fetch', (event: any) => {
   // NetworkOnly explicitly
   if (
     url.pathname.startsWith('/streams/') ||
-    url.pathname.includes('.m3u8') ||
+    url.pathname.endsWith('.m3u8') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.mp4') ||
     url.pathname.includes('/rest/v1/') ||
-    url.pathname.includes('/auth/v1/') ||
-    url.pathname.includes('.ts') ||
-    url.pathname.endsWith('.mp4')
+    url.pathname.includes('/auth/v1/')
   ) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
     return;
   }
 
@@ -222,6 +225,13 @@ self.addEventListener('notificationclick', (event: any) => {
 
         if (matchingClient) {
             await matchingClient.focus();
+          if ('navigate' in matchingClient) {
+            try {
+              await (matchingClient as any).navigate(urlToOpen);
+            } catch {
+              // ignore navigation errors
+            }
+          }
             matchingClient.postMessage({ type: 'NAVIGATE', url: urlToOpen });
         } else {
             if ((self as any).clients.openWindow) {

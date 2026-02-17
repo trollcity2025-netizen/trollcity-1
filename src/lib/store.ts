@@ -21,6 +21,45 @@ interface AuthState {
   logout: () => void
 }
 
+function deepEqual(a: any, b: any, seen = new Map()): boolean {
+    if (a === b) return true;
+
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+        if (seen.has(a) && seen.get(a) === b) return true; // Handle circular refs
+
+        if (a.constructor !== b.constructor) return false;
+
+        seen.set(a, b);
+
+        let length, i;
+        if (Array.isArray(a)) {
+            length = a.length;
+            if (length != b.length) return false;
+            for (i = length; i-- > 0;)
+                if (!deepEqual(a[i], b[i], seen)) return false;
+            return true;
+        }
+
+        if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+        if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+        if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
+
+        const keys = Object.keys(a);
+        length = keys.length;
+        if (length !== Object.keys(b).length) return false;
+
+        for (i = length; i-- > 0;) {
+            const key = keys[i];
+            if (!Object.prototype.hasOwnProperty.call(b, key) || !deepEqual(a[key], b[key], seen)) return false;
+        }
+
+        return true;
+    }
+
+    // true if both NaN, false otherwise
+    return a !== a && b !== b;
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -61,15 +100,16 @@ export const useAuthStore = create<AuthState>()(
 
         // Avoid unnecessary updates: compare with current profile
         try {
-          const prev = get().profile
-          if (prev) {
-            const sameId = prev.id === (profile as any).id
-            const prevStr = JSON.stringify(prev)
-            const newStr = JSON.stringify(profile)
-            if (sameId && prevStr === newStr) {
-              // No changes — skip state update to prevent re-renders
-              return
-            }
+          const prev = get().profile;
+          // If the incoming profile is from the XP store sync, it might be a new object
+          // with the same data. We only care if the core XP/level values have changed.
+          if (prev && profile && 
+              prev.level === profile.level && 
+              prev.xp === profile.xp && 
+              prev.total_xp === profile.total_xp &&
+              prev.next_level_xp === profile.next_level_xp &&
+              deepEqual(prev, profile)) { // Also do a deep equal for other properties
+            return;
           }
         } catch {
           // If comparison fails, continue with update

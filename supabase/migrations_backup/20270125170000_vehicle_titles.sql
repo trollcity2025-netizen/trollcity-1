@@ -201,7 +201,7 @@ $$;
 -- 6. RPC to Transfer Vehicle (for Auctions/Sales)
 -- This replaces/enhances the old logic. It transfers the specific user_cars row.
 CREATE OR REPLACE FUNCTION public.transfer_user_car(
-    p_listing_id UUID,
+    p_user_car_id UUID, -- Direct user_car ID
     p_buyer_id UUID
 )
 RETURNS JSONB
@@ -209,76 +209,52 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_listing public.vehicle_listings%ROWTYPE;
-    v_car public.user_cars%ROWTYPE;
+    v_user_car public.user_cars%ROWTYPE;
+    v_seller_id UUID;
 BEGIN
-    -- Verify listing
-    SELECT * INTO v_listing FROM public.vehicle_listings WHERE id = p_listing_id;
+    -- Verify car exists and get current owner (seller)
+    SELECT * INTO v_user_car FROM public.user_cars WHERE id = p_user_car_id;
     IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Listing not found');
+        RETURN jsonb_build_object('success', false, 'message', 'User car not found');
     END IF;
 
-    -- Check if listing has user_car_id (new system)
-    IF v_listing.user_car_id IS NULL THEN
-        -- Legacy fallback: Create a new car for the buyer? 
-        -- Or just return false to let the old logic handle it (which just adds ID to array)
-        -- But we want to support the "Notarized Title" feature.
-        -- If it's a legacy listing, it probably doesn't have a title anyway.
-        RETURN jsonb_build_object('success', false, 'message', 'Listing is legacy (no specific car attached)');
-    END IF;
+    v_seller_id := v_user_car.user_id;
 
-    SELECT * INTO v_car FROM public.user_cars WHERE id = v_listing.user_car_id;
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Car not found');
+    -- Ensure seller is not the buyer
+    IF v_seller_id = p_buyer_id THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Cannot transfer car to self');
     END IF;
 
     -- Transfer ownership
     UPDATE public.user_cars
-    SET user_id = p_buyer_id,
-        is_active = false, -- Reset active status
-        title_status = 'draft', -- Reset title status (new owner needs new title)
+    SET 
+        user_id = p_buyer_id,
+        is_listed_for_sale = FALSE, -- Car is no longer listed after transfer
+        asking_price = NULL,        -- Clear asking price
+        listed_at = NULL,           -- Clear listed timestamp
+        title_status = 'draft',     -- Reset title status for new owner
         notary_id = NULL,
         notarized_at = NULL
-    WHERE id = v_listing.user_car_id;
+    WHERE id = p_user_car_id;
 
-    -- Also update vehicle_upgrades? 
-    -- The current upgrade system uses (user_id, vehicle_id_int).
-    -- If we transfer the car, we should probably transfer the upgrades too.
-    -- But since upgrades are not linked to UUID, we can only transfer ALL upgrades for that model?
-    -- This is a flaw in the current schema. 
-    -- FIX: Update vehicle_upgrades where user_id = seller AND vehicle_id = car_model_id
-    -- to user_id = buyer.
-    -- Risk: If seller has 2 of same car, they lose upgrades for both?
-    -- Since we enforced Unique(user_id, car_id) in user_cars, a user currently can only have 1 of each model.
-    -- So it is safe to transfer all upgrades for that model.
-    
-    DECLARE
-        v_car_model_id_int INTEGER;
-    BEGIN
-        v_car_model_id_int := v_car.car_id::INTEGER;
-        
-        UPDATE public.vehicle_upgrades
-        SET user_id = p_buyer_id
-        WHERE user_id = v_listing.seller_id
-          AND vehicle_id = v_car_model_id_int;
-    EXCEPTION WHEN OTHERS THEN
-        -- Ignore integer parse errors
-        NULL;
-    END;
+    -- Log transaction for seller
+    INSERT INTO public.transactions (user_id, amount, type, description)
+    VALUES (
+        v_seller_id, 
+        0, -- Amount already handled by auction/marketplace logic
+        'sale', 
+        'Transferred ownership of car ' || p_user_car_id || ' to ' || p_buyer_id
+    );
 
-    -- Update legacy profile array for buyer (ensure they have the ID)
-    PERFORM public.add_owned_vehicle_to_profile(v_car.car_id::INTEGER);
-    
-    -- Remove from seller's legacy profile array?
-    -- Not strictly necessary as the array is additive usually, but for correctness:
-    UPDATE public.user_profiles
-    SET owned_vehicle_ids = (
-        SELECT jsonb_agg(elem)
-        FROM jsonb_array_elements(owned_vehicle_ids) elem
-        WHERE elem::text <> v_car.car_id
-    )
-    WHERE id = v_listing.seller_id;
+    -- Log transaction for buyer
+    INSERT INTO public.transactions (user_id, amount, type, description)
+    VALUES (
+        p_buyer_id, 
+        0, -- Amount already handled by auction/marketplace logic
+        'purchase', 
+        'Received ownership of car ' || p_user_car_id || ' from ' || v_seller_id
+    );
 
-    RETURN jsonb_build_object('success', true, 'message', 'Vehicle transferred successfully');
+    RETURN jsonb_build_object('success', true, 'message', 'Car transferred successfully');
 END;
 $$;

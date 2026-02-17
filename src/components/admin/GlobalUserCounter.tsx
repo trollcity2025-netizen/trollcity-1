@@ -21,7 +21,7 @@ interface UserLocation {
 export default function GlobalUserCounter() {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
-  const { onlineCount, onlineUserIds } = usePresenceStore(); // Read from store instead of channel
+    const { onlineCount } = usePresenceStore(); // Read from store instead of channel
   const { openChatBubble } = useChatStore();
   const [inStreamCount, setInStreamCount] = useState(0);
   const [inPodCount, setInPodCount] = useState(0);
@@ -110,14 +110,15 @@ export default function GlobalUserCounter() {
   };
 
   useEffect(() => {
-    if (!isStaff) return;
+    if (!isStaff || !profile) return;
     fetchStats();
     const interval = setInterval(fetchStats, 10000); // Poll every 10s
     return () => clearInterval(interval);
-  }, [isStaff]);
+  }, [isStaff, profile]);
 
   const handleCategoryClick = async (category: 'online' | 'stream' | 'pods' | 'browsing') => {
-    if (!isStaff) return;
+    // Guard: Ensure user is staff and profile is loaded
+    if (!isStaff || !profile) return;
     setActiveCategory(category);
     setIsLoadingDetails(true);
     setCategoryUsers([]);
@@ -203,25 +204,21 @@ export default function GlobalUserCounter() {
         };
 
         if (category === 'online') {
-            // Just fetch all online profiles
-            if (onlineUserIds.length > 0) {
-                const { data: profiles } = await supabase
-                    .from('user_profiles')
-                    .select('id, username, avatar_url')
-                    .in('id', onlineUserIds);
-                
-                if (profiles) {
-                    profiles.forEach(p => {
-                        users.push({
-                            user_id: p.id,
-                            username: p.username,
-                            avatar_url: p.avatar_url,
-                            location_type: 'online',
-                            location_name: 'Online'
-                        });
+            const { data, error } = await supabase.functions.invoke('online-users');
+            if (error) throw error;
+
+            const presence = (data?.users as Array<any>) || [];
+            presence.forEach(p => {
+                if (p.user_profiles) {
+                    users.push({
+                        user_id: p.user_id,
+                        username: (p.user_profiles as any).username,
+                        avatar_url: (p.user_profiles as any).avatar_url,
+                        location_type: 'online',
+                        location_name: 'Online'
                     });
                 }
-            }
+            });
         } else if (category === 'stream') {
             const sUsers = await fetchStreamUsers();
             users.push(...sUsers);
@@ -234,30 +231,30 @@ export default function GlobalUserCounter() {
             const busyUserIds = new Set([...sUsers, ...pUsers].map(u => u.user_id));
             
             // Get all online
-            if (onlineUserIds.length > 0) {
-                const { data: profiles } = await supabase
-                    .from('user_profiles')
-                    .select('id, username, avatar_url')
-                    .in('id', onlineUserIds);
-                
-                if (profiles) {
-                    profiles.forEach(p => {
-                        if (!busyUserIds.has(p.id)) {
-                            users.push({
-                                user_id: p.id,
-                                username: p.username,
-                                avatar_url: p.avatar_url,
-                                location_type: 'browsing',
-                                location_name: 'Browsing Platform'
-                            });
-                        }
+            const { data, error } = await supabase.functions.invoke('online-users');
+            if (error) throw error;
+
+            const presence = (data?.users as Array<any>) || [];
+            presence.forEach(p => {
+                if (p.user_profiles && !busyUserIds.has(p.user_id)) {
+                    users.push({
+                        user_id: p.user_id,
+                        username: (p.user_profiles as any).username,
+                        avatar_url: (p.user_profiles as any).avatar_url,
+                        location_type: 'browsing',
+                        location_name: 'Browsing Platform'
                     });
                 }
-            }
+            });
         }
 
         setCategoryUsers(users);
-    } catch (error) {
+    } catch (error: any) {
+        // Handle permission errors gracefully
+        if (error?.message?.includes('403') || error?.message?.includes('Insufficient permissions')) {
+            console.warn('Access denied: Staff privileges required for this feature');
+            return;
+        }
         console.error('Error fetching details:', error);
     } finally {
         setIsLoadingDetails(false);

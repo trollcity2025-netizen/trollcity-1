@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
@@ -42,6 +42,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   const [hasRgb, setHasRgb] = useState(stream.has_rgb_effect || false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
+    const lastLikeRef = useRef(0);
 
   // Sync likes from stream
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   // Only Host can control stream settings (Visuals, Price, Boxes)
   // Staff/Mods can moderate (ban users), but NOT change stream settings (unless specified)
   const canEditStream = isHost || (isStaff && !isModerator); // Only true staff can edit stream settings, mods just moderate chat/users
+    const isTrollmersStream = stream.stream_kind === 'trollmers';
 
   const togglePerk = async (perkId: string) => {
     if (!user) return;
@@ -203,6 +205,10 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   
   const updateBoxCount = (newCount: number) => {
     if (!canEditStream) return;
+        if (isTrollmersStream && newCount !== 1) {
+            toast.error('Trollmers broadcasts are locked to 1 box');
+            return;
+        }
 
     // Enforce limits
     const minLimit = Math.max(1, requiredBoxes);
@@ -309,6 +315,9 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
       return;
     }
     if (isLiking) return;
+        const now = Date.now();
+        if (now - lastLikeRef.current < 1500) return;
+        lastLikeRef.current = now;
     if (isHost) {
         toast.error("Broadcasters cannot like their own broadcast");
         return;
@@ -633,7 +642,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         <div className="flex items-center gap-3">
                             <button 
                                 onClick={() => updateBoxCount((stream.box_count || 1) - 1)}
-                                disabled={!canEditStream || (stream.box_count || 1) <= Math.max(1, requiredBoxes)}
+                                disabled={!canEditStream || isTrollmersStream || (stream.box_count || 1) <= Math.max(1, requiredBoxes)}
                                 className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
                             >
                                 <Minus size={16} />
@@ -641,7 +650,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             <span className="font-bold text-white min-w-[20px] text-center">{stream.box_count}</span>
                             <button 
                                 onClick={() => updateBoxCount((stream.box_count || 1) + 1)}
-                                disabled={!canEditStream || (stream.box_count || 1) >= 6}
+                                disabled={!canEditStream || isTrollmersStream || (stream.box_count || 1) >= 6}
                                 className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
                             >
                                 <Plus size={16} />

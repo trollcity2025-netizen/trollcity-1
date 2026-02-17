@@ -1,0 +1,1 @@
+CREATE POLICY "TEMP - Allow all authenticated to view profiles" ON public.user_profiles FOR SELECT TO authenticated USING (true);

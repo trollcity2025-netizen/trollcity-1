@@ -27,6 +27,7 @@ export interface WallPost {
   likes: number
   created_at: string
   user_liked?: boolean // Added client-side
+  comment_count: number
   // New fields for replies, reactions, and gifts
   reply_to_post_id?: string | null
   user_reaction?: string | null

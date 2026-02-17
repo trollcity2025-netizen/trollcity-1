@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Trophy, Users } from 'lucide-react'

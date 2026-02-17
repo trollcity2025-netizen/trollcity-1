@@ -72,6 +72,10 @@ const TrollPodRoom = lazy(() => import("./pages/pods/TrollPodRoom"));
 // Lazy-loaded pages
 const MobileShell = lazyWithRetry(() => import("./pages/MobileShell"));
 const Following = lazy(() => import("./pages/Following"));
+
+// Speculative lazy imports to resolve "Cannot find name" errors
+const TMVDrivingManual = lazyWithRetry(() => import("./pages/tmv/DrivingManual"));
+const DriversTest = lazyWithRetry(() => import("./pages/tmv/DriversTest"));
 const ExploreFeed = lazy(() => import("./pages/ExploreFeed"));
 const CoinStore = lazy(() => import("./pages/CoinStore"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
@@ -119,6 +123,7 @@ const ReferralBonusPanel = lazy(() => import("./pages/admin/ReferralBonusPanel")
 const SecretaryConsole = lazy(() => import("./pages/secretary/SecretaryConsole"));
 import { systemManagementRoutes } from "./pages/admin/adminRoutes";
 
+
 const TaxOnboarding = lazy(() => import("./pages/TaxOnboarding"));
 const MyEarnings = lazy(() => import("./pages/MyEarnings"));
 const EarningsPage = lazy(() => import("./pages/EarningsPage"));
@@ -155,6 +160,8 @@ const FamilyApplication = lazy(() => import("./pages/FamilyApplication"));
 const OfficerApplication = lazy(() => import("./pages/OfficerApplication"));
 const TrollerApplication = lazy(() => import("./pages/TrollerApplication"));
 const Career = lazy(() => import("./pages/Career"));
+const AboutUs = lazy(() => import("./pages/AboutUs"));
+const Contact = lazy(() => import("./pages/Contact"));
 const LeadOfficerApplication = lazy(() => import("./pages/LeadOfficerApplication"));
 const PastorApplication = lazy(() => import("./pages/PastorApplication"));
 const ShopEarnings = lazy(() => import("./pages/ShopEarnings"));
@@ -212,7 +219,8 @@ const InterviewRoomPage = lazy(() => import("./pages/InterviewRoomPage"));
 const AdminInterviewDashboard = lazy(() => import("./pages/AdminInterviewDashboard"));
 const PasswordReset = lazy(() => import("./pages/PasswordReset"));
 const CreditScorePage = lazy(() => import("./pages/CreditScorePage"));
-const TMVPage = lazy(() => import("./pages/TMVPage"));
+const _LoansPage = lazy(() => import("./pages/Loans"));
+
 
 // Admin pages
 const BanManagement = lazy(() => import("./pages/admin/BanManagement"));
@@ -232,8 +240,7 @@ const AdminFinanceDashboard = lazy(() => import("./pages/admin/AdminFinanceDashb
 const CreateSchedule = lazy(() => import("./pages/admin/CreateSchedule"));
 const OfficerShifts = lazy(() => import("./pages/admin/OfficerShifts"));
 const EmpireApplicationsPage = lazy(() => import("./pages/admin/EmpireApplicationsPage"));
-import { useGasSystem } from "./lib/hooks/useGasSystem";
-import GasHUD from "./components/tmv/GasHUD";
+
 
 const ReferralBonuses = lazy(() => import("./pages/admin/ReferralBonuses"));
 const ControlPanel = lazy(() => import("./pages/admin/ControlPanel"));
@@ -254,16 +261,31 @@ const LoadingScreen = () => (
     </div>
   );
 
+  const ProfileRedirect = () => {
+    const profile = useAuthStore((s) => s.profile);
+
+    if (!profile) return <Navigate to="/profile/setup" replace />;
+
+    const target = profile.username
+      ? `/profile/${profile.username}`
+      : profile.id
+        ? `/profile/id/${profile.id}`
+        : "/profile/setup";
+
+    return <Navigate to={target} replace />;
+  };
+
   // 🔐 Route Guard
     const RequireAuth = () => {
     const user = useAuthStore((s) => s.user);
+  useAutoClickerDetection(user?.id);
     const profile = useAuthStore((s) => s.profile);
     const isLoading = useAuthStore((s) => s.isLoading);
     const isRefreshing = useAuthStore((s) => s.isRefreshing);
     const { isJailed } = useJailMode(user?.id);
     const location = useLocation();
     
-    useGasSystem(); // Enable Gas System
+
 
     if (isLoading || isRefreshing) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
@@ -308,14 +330,16 @@ const LoadingScreen = () => (
     }
     return (
       <>
-        <GasHUD />
+
         <Outlet />
       </>
     );
   };
 
-import ChatBubble from "./components/ChatBubble";
+
 import AdminPoolTab from './pages/admin/components/AdminPoolTab'
+
+import { useAutoClickerDetection } from './hooks/useAutoClickerDetection';
 
 function AppContent() {
   // Lightweight render counter (dev only)
@@ -342,6 +366,10 @@ function AppContent() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [waitingServiceWorker, setWaitingServiceWorker] = useState<ServiceWorker | null>(null);
+  const didReloadRef = useRef(false);
+  const driverPromptTimerRef = useRef<number | null>(null);
+  const [showDriverManual, setShowDriverManual] = useState(false);
+  const [showDriverTest, setShowDriverTest] = useState(false);
 
 
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
@@ -363,8 +391,15 @@ function AppContent() {
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'NAVIGATE' && event.data.url) {
-        console.log('[App] Received NAVIGATE from SW:', event.data.url);
-        navigate(event.data.url);
+        try {
+          const nextPath = new URL(event.data.url, window.location.origin).pathname;
+          if (nextPath !== window.location.pathname) {
+            console.log('[App] Received NAVIGATE from SW:', nextPath);
+            navigate(nextPath);
+          }
+        } catch (error) {
+          console.warn('[App] Ignored NAVIGATE with invalid URL', error);
+        }
       }
     };
 
@@ -446,6 +481,22 @@ function AppContent() {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
 
+    const handleControllerChange = () => {
+      if (didReloadRef.current) return;
+      didReloadRef.current = true;
+      window.location.reload();
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+    return () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator)) return;
+
     const handleUpdateAvailable = async () => {
       try {
         const registration = await navigator.serviceWorker.getRegistration();
@@ -468,14 +519,6 @@ function AppContent() {
   useEffect(() => {
     if (!updateAvailable || !waitingServiceWorker) return;
 
-    if (isStandalone) {
-      waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-      return;
-    }
-
     toast.info("New update available!", {
       duration: Infinity,
       description: "A new version of Troll City is available.",
@@ -483,14 +526,18 @@ function AppContent() {
         label: "Update Now",
         onClick: () => {
           waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+          setUpdateAvailable(false);
+
           setTimeout(() => {
+            if (didReloadRef.current) return;
+            didReloadRef.current = true;
             window.location.reload();
-          }, 500);
+          }, 1500);
         }
       },
       onDismiss: () => {}
     });
-  }, [updateAvailable, waitingServiceWorker, isStandalone]);
+  }, [updateAvailable, waitingServiceWorker]);
 
   useEffect(() => {
     if (!user || !isStandalone) return;
@@ -521,18 +568,54 @@ function AppContent() {
       return;
     }
 
-    // 🚗 Redirect to Driver Test if no license
-    const licenseStatus = (profile as any).drivers_license_status;
-    if (!licenseStatus || licenseStatus === 'none') {
-        // Only redirect if not already there (though the outer check covers /)
-        navigate('/tmv', { replace: true });
-        return;
-    }
-
     if (profile?.role === 'troll_family') {
       navigate('/family', { replace: true });
     }
   }, [profile, location.pathname, navigate, user]);
+
+  useEffect(() => {
+    if (driverPromptTimerRef.current) {
+      window.clearTimeout(driverPromptTimerRef.current);
+      driverPromptTimerRef.current = null;
+    }
+
+    if (!user || !profile) return;
+
+    const isAdminProfile = profile.role === 'admin' || profile.is_admin;
+    if (isAdminProfile) return;
+
+    const licenseStatus = (profile as any).drivers_license_status;
+    if (licenseStatus && licenseStatus !== 'none') return;
+
+    const createdAtMs = profile.created_at ? new Date(profile.created_at).getTime() : NaN;
+    if (!Number.isFinite(createdAtMs)) return;
+
+    const triggerPrompt = () => {
+      const manualSeen = localStorage.getItem('tmv_driving_manual_acknowledged');
+      if (manualSeen) {
+        setShowDriverTest(true);
+        setShowDriverManual(false);
+      } else {
+        setShowDriverManual(true);
+        setShowDriverTest(false);
+      }
+    };
+
+    const delayMs = createdAtMs + 30 * 60 * 1000 - Date.now();
+    if (delayMs <= 0) {
+      triggerPrompt();
+      return;
+    }
+
+    driverPromptTimerRef.current = window.setTimeout(triggerPrompt, delayMs);
+
+    return () => {
+      if (driverPromptTimerRef.current) {
+        window.clearTimeout(driverPromptTimerRef.current);
+        driverPromptTimerRef.current = null;
+      }
+    };
+  }, [user, profile]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -634,9 +717,15 @@ function AppContent() {
         // Get user's IP address with timeout
         const ipResponse = await fetch('https://api.ipify.org?format=json', {
             signal: controller.signal
-        })
-        const ipData = await ipResponse.json()
-        const userIP = ipData.ip
+        });
+        const ipData = await ipResponse.json();
+        const userIP = ipData.ip;
+
+        if (userIP && user?.id) {
+            supabase.functions.invoke('vpn-detect', {
+                body: { ip: userIP, user_id: user.id },
+            });
+        }
 
         if (controller.signal.aborted) return
 
@@ -780,7 +869,7 @@ function AppContent() {
           context: { args }
         })
       } catch {}
-      originalConsoleError(...args)
+      originalConsoleError.apply(console, args)
     }
     window.addEventListener('error', onError)
     window.addEventListener('unhandledrejection', onRejection)
@@ -878,6 +967,29 @@ function AppContent() {
           </button>
         </div>
       )}
+      {(showDriverManual || showDriverTest) && (
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-3xl">
+            <Suspense fallback={<LoadingScreen />}>
+              {showDriverManual ? (
+                <TMVDrivingManual
+                  onAcknowledge={() => {
+                    setShowDriverManual(false);
+                    setShowDriverTest(true);
+                  }}
+                />
+              ) : (
+                <DriversTest
+                  onComplete={() => {
+                    setShowDriverTest(false);
+                    refreshProfile();
+                  }}
+                />
+              )}
+            </Suspense>
+          </div>
+        </div>
+      )}
       {/* Global Error Banner */}
               <GlobalErrorBanner />
               
@@ -973,7 +1085,6 @@ function AppContent() {
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
-                  <Route path="/" element={<LandingHome />} />
                   <Route path="/broadcast/setup" element={<SetupPage />} />
                   <Route path="/broadcast/:id" element={<BroadcastPage />} />
                   <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
@@ -1020,9 +1131,10 @@ function AppContent() {
                   <Route path="/credit-scores" element={<CreditScorePage />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/jail" element={<JailPage />} />
-                  <Route path="/tmv" element={<TMVPage />} />
+
                   <Route path="/wall" element={<TrollCityWall />} />
                   <Route path="/wall/:postId" element={<WallPostPage />} />
+                  <Route path="/profile" element={<ProfileRedirect />} />
                   <Route path="/profile/setup" element={<ProfileSetup />} />
                   <Route path="/profile/id/:userId" element={<Profile />} />
                   <Route path="/profile/:username" element={<Profile />} />
@@ -1111,6 +1223,8 @@ function AppContent() {
                   <Route path="/apply/lead-officer" element={<LeadOfficerApplication />} />
                   <Route path="/apply/pastor" element={<PastorApplication />} />
                   <Route path="/career" element={<Career />} />
+                  <Route path="/about" element={<AboutUs />} />
+                  <Route path="/contact" element={<Contact />} />
                   <Route path="/interview-room" element={<InterviewRoomPage />} />
                   <Route path="/admin/interview-test" element={<AdminInterviewDashboard />} />
 
@@ -1707,7 +1821,6 @@ function AppContent() {
                   </Routes>
                 </Suspense>
               </ErrorBoundary>
-        <ChatBubble />
         <GlobalPodBanner />
         <BugAlertPopup />
       </AppLayout>

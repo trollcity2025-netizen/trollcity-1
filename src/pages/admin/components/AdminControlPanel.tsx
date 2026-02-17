@@ -7,10 +7,12 @@ import {
   Award, 
   CheckCircle, 
   X, 
-  AlertTriangle
+  AlertTriangle,
+  DollarSign
 } from 'lucide-react'
 import UserNameWithAge from '../../../components/UserNameWithAge'
 import BroadcastLockdownControl from '../../../components/admin/BroadcastLockdownControl'
+import ManualCoinOrdersList from './shared/ManualCoinOrdersList'
 
 
 export default function AdminControlPanel() {
@@ -256,6 +258,17 @@ export default function AdminControlPanel() {
     <div className="space-y-6">
       {/* Broadcast Lockdown Control - Top Priority */}
       <BroadcastLockdownControl />
+
+      <div className="bg-black/60 border border-emerald-600/30 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-lg font-bold text-white">Quick Manual Payments</h3>
+          </div>
+          <span className="text-xs text-slate-400">Latest pending orders</span>
+        </div>
+        <ManualCoinOrdersList limit={5} showHeader={false} />
+      </div>
 
       {/* Rest of Admin Controls */}
       <div className="bg-black/60 border border-purple-600/30 rounded-xl p-6">

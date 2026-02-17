@@ -11,12 +11,13 @@ DECLARE
     v_user_id UUID;
     v_model_url TEXT;
     v_catalog_id UUID;
+    v_car_catalog_id UUID;
     v_base_price INTEGER := 0;
     v_upgrade_total INTEGER := 0;
     v_catalog_rec RECORD;
 BEGIN
     -- Get car details
-    SELECT user_id, model_url INTO v_user_id, v_model_url
+    SELECT user_id, car_catalog_id INTO v_user_id, v_car_catalog_id
     FROM public.user_cars
     WHERE id = p_user_car_id;
 
@@ -24,10 +25,10 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Find Catalog Entry via model_url (most reliable link)
+    -- Find Catalog Entry via car_catalog_id
     SELECT * INTO v_catalog_rec
-    FROM public.vehicles_catalog
-    WHERE model_url = v_model_url
+    FROM public.cars_catalog
+    WHERE id = v_car_catalog_id
     LIMIT 1;
 
     IF FOUND THEN
@@ -76,6 +77,7 @@ DECLARE
     v_catalog_id TEXT;
     v_model_url TEXT;
     v_car_rec RECORD;
+    v_catalog_id_uuid UUID;
 BEGIN
     -- Determine the vehicle_id (Model ID) involved
     IF (TG_OP = 'DELETE') THEN
@@ -88,17 +90,17 @@ BEGIN
     -- We need to map the v_catalog_id (which is from vehicle_upgrades) to user_cars
     -- v_catalog_id corresponds to vehicles_catalog.id or slug.
     
-    -- We'll find the catalog entry first to get the model_url
-    SELECT model_url INTO v_model_url
-    FROM public.vehicles_catalog
+    -- We'll find the catalog entry first to get the catalog ID
+    SELECT id INTO v_catalog_id_uuid
+    FROM public.cars_catalog
     WHERE id::text = v_catalog_id OR slug = v_catalog_id;
 
-    IF v_model_url IS NOT NULL THEN
+    IF v_catalog_id_uuid IS NOT NULL THEN
         -- Update all instances of this car model for the user
         FOR v_car_rec IN 
             SELECT id FROM public.user_cars 
             WHERE user_id = COALESCE(NEW.user_id, OLD.user_id) 
-            AND model_url = v_model_url
+            AND car_catalog_id = v_catalog_id_uuid
         LOOP
             PERFORM public.update_car_value(v_car_rec.id);
         END LOOP;

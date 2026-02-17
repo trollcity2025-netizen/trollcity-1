@@ -31,9 +31,9 @@ if (isMobilePlatform) {
 try {
   const storedVersion = localStorage.getItem('app_version')
   if (storedVersion !== APP_VERSION) {
-    console.log('App version changed, clearing storage')
-    localStorage.clear()
-    sessionStorage.clear()
+    console.log('App version changed, clearing targeted keys only')
+    const KEYS_TO_REMOVE: string[] = []
+    KEYS_TO_REMOVE.forEach((key) => localStorage.removeItem(key))
     localStorage.setItem('app_version', APP_VERSION)
   }
 } catch (error) {

@@ -10,13 +10,16 @@ interface BroadcastHeaderProps {
     onStartBattle?: () => void;
     isHost: boolean;
     liveViewerCount?: number;
+    eventRemainingMs?: number | null;
+    eventEnded?: boolean;
 }
 
-export default function BroadcastHeader({ stream, onStartBattle, isHost, liveViewerCount }: BroadcastHeaderProps) {
+export default function BroadcastHeader({ stream, onStartBattle, isHost, liveViewerCount, eventRemainingMs, eventEnded }: BroadcastHeaderProps) {
     const { profile, setProfile } = useAuthStore();
     const [likes, setLikes] = React.useState(0);
     const [isLiking, setIsLiking] = React.useState(false);
     const profileRef = React.useRef(profile);
+    const lastLikeRef = React.useRef(0);
 
     // Keep profileRef up to date
     React.useEffect(() => {
@@ -85,6 +88,9 @@ export default function BroadcastHeader({ stream, onStartBattle, isHost, liveVie
     // Optimistic Like Handler
     const handleLike = async () => {
         if (isLiking) return;
+        const now = Date.now();
+        if (now - lastLikeRef.current < 1500) return;
+        lastLikeRef.current = now;
         setIsLiking(true);
         const newCount = likes + 1;
         setLikes(newCount);
@@ -101,8 +107,33 @@ export default function BroadcastHeader({ stream, onStartBattle, isHost, liveVie
         }
     };
 
+    const formatRemaining = (remainingMs: number) => {
+        const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    const showTimer = typeof eventRemainingMs === 'number' && eventRemainingMs >= 0;
+
     return (
         <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-end gap-3 pointer-events-none">
+            {showTimer && (
+                <div className={`pointer-events-auto rounded-full px-4 py-2 flex items-center gap-2 shadow-lg shadow-black/20 border ${
+                    eventEnded ? 'bg-red-500/20 border-red-500/40' : 'bg-black/40 border-white/10'
+                }`}
+                >
+                    <div className={`text-xs font-bold uppercase tracking-wider ${eventEnded ? 'text-red-300' : 'text-zinc-300'}`}>
+                        {eventEnded ? 'Event ended' : 'Event ends in'}
+                    </div>
+                    {!eventEnded && (
+                        <div className="text-sm font-mono font-black text-white">
+                            {formatRemaining(eventRemainingMs || 0)}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Left: Coin Balance - REMOVED from left to avoid covering LIVE indicator, now on right */}
             <div className="pointer-events-auto bg-black/40 backdrop-blur-md border border-yellow-500/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-lg shadow-black/20">
                 <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center border border-yellow-500/50">

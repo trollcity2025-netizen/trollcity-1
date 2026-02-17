@@ -7,6 +7,8 @@ export interface Stream {
   title: string;
   category: string;
   stream_kind?: 'regular' | 'trollmers';
+  game_stream_key?: string | null;
+  room_name?: string | null;
   camera_ready?: boolean;
   status: StreamStatus;
   is_battle: boolean;

@@ -8,6 +8,7 @@ export type NotificationType =
   | 'battle_result'
   | 'officer_update'
   | 'system_announcement'
+  | 'call'
   | 'vehicle_auction'
   | 'application_submitted'
   | 'report_filed'

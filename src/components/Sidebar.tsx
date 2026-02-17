@@ -500,9 +500,18 @@ export default function Sidebar() {
           <SidebarItem icon={Video} label="Interview Room" to="/interview-room" active={isActive('/interview-room')} collapsed={isSidebarCollapsed} highlight={isUpdated('/interview-room')} onClick={() => markAsViewed('/interview-room')} />
           <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wallet')} onClick={() => markAsViewed('/wallet')} />
         </SidebarGroup>
+
           </>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="px-4">
+          <SidebarGroup title={isSidebarCollapsed ? '' : "Admin"} isCollapsed={isSidebarCollapsed}>
+            <SidebarItem icon={Shield} label="Creator Safety" to="/admin/creator-safety" active={isActive('/admin/creator-safety')} collapsed={isSidebarCollapsed} />
+          </SidebarGroup>
+        </div>
+      )}
 
       {/* Footer Actions */}
       <div className="p-4 border-t border-white/10 space-y-2">

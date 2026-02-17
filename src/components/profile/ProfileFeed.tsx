@@ -103,16 +103,22 @@ export default function ProfileFeed({ userId }: ProfileFeedProps) {
   useEffect(() => {
     fetchPosts();
 
+    let isSubscribed = true;
     const channel = supabase
       .channel(`profile-feed-${userId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'troll_posts', filter: `user_id=eq.${userId}` },
-        () => fetchPosts()
+        () => {
+          if (isSubscribed) {
+            fetchPosts();
+          }
+        }
       )
       .subscribe();
 
     return () => {
+      isSubscribed = false;
       supabase.removeChannel(channel);
     };
   }, [userId, fetchPosts]);

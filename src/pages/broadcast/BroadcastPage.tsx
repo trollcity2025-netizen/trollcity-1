@@ -14,6 +14,7 @@ import BroadcastGrid from '../../components/broadcast/BroadcastGrid';
 import BroadcastChat from '../../components/broadcast/BroadcastChat';
 import BroadcastControls from '../../components/broadcast/BroadcastControls';
 import GiftTray from '../../components/broadcast/GiftTray';
+import StreamGiftStats from '../../components/broadcast/StreamGiftStats';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStreamSeats } from '../../hooks/useStreamSeats';
@@ -170,13 +171,13 @@ function isStaffMember(profile: ReturnType<typeof useAuthStore.getState>['profil
 }
 
 // Helper component to enforce viewer limits
-const BroadcastLimitEnforcer = ({ isHost, mode, isStaff }: { isHost: boolean, mode: string, isStaff: boolean }) => {
+const BroadcastLimitEnforcer = ({ isHost, mode }: { isHost: boolean, mode: string }) => {
     const participants = useParticipants();
     const navigate = useNavigate();
 
     useEffect(() => {
-        // If I am a host, on stage, OR STAFF, limit doesn't apply
-        if (isHost || mode === 'stage' || isStaff) return;
+        // If I am a host or on stage, limit doesn't apply
+        if (isHost || mode === 'stage') return;
 
         // Filter for viewers (those who cannot publish)
         const viewers = participants.filter(p => !p.permissions?.canPublish);
@@ -196,10 +197,10 @@ const BroadcastLimitEnforcer = ({ isHost, mode, isStaff }: { isHost: boolean, mo
         
         // If I am the 11th viewer (index 10) or later, I must leave
         if (myIndex !== -1 && myIndex >= 10) {
-            toast.error("Viewer limit (10) reached.");
+            toast.error("Room is full — next event starts soon.");
             navigate('/');
         }
-    }, [participants, isHost, mode, isStaff, navigate]);
+    }, [participants, isHost, mode, navigate]);
 
     return null;
 };
@@ -218,6 +219,19 @@ export default function BroadcastPage() {
   
   const isGuest = !user;
   const [_fromExplore, _setFromExplore] = useState(location.state?.fromExplore);
+  const [isPreviewExpired, setIsPreviewExpired] = useState(false);
+
+  // Guest Preview Timer
+  useEffect(() => {
+    if (isGuest) {
+      const timer = setTimeout(() => {
+        setIsPreviewExpired(true);
+        toast.info('Sign up to continue watching.');
+      }, 60000); // 1 minute
+
+      return () => clearTimeout(timer);
+    }
+  }, [isGuest]);
 
   // Guest Identity (Persistent for session)
   const [guestId] = useState(() => {
@@ -248,6 +262,10 @@ export default function BroadcastPage() {
     const handleBoxCountUpdate = async (newCount: number) => {
     const canEditBoxes = isHost || isStaffMember(profile);
     if (!stream || !canEditBoxes) return;
+        if (stream.stream_kind === 'trollmers' && newCount !== 1) {
+            toast.error('Trollmers broadcasts are locked to 1 box');
+            return;
+        }
 
     const { data: eventData } = await supabase.rpc('get_active_event');
     const event = eventData?.[0];
@@ -349,6 +367,24 @@ export default function BroadcastPage() {
   // Can publish only if on stage (Host or Active Seat)
   const canPublish = mode === 'stage';
 
+    const [joinGateStatus, setJoinGateStatus] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
+    const [joinBlockMessage, setJoinBlockMessage] = useState<string | null>(null);
+    const joinGateStreamRef = useRef<string | null>(null);
+
+    const EVENT_DURATION_MS = 90 * 60 * 1000;
+    const [eventRemainingMs, setEventRemainingMs] = useState<number | null>(null);
+    const [eventEnded, setEventEnded] = useState(false);
+    const autoEndTriggeredRef = useRef(false);
+
+    useEffect(() => {
+        setEventEnded(false);
+        setEventRemainingMs(null);
+        autoEndTriggeredRef.current = false;
+        setJoinGateStatus('idle');
+        setJoinBlockMessage(null);
+        joinGateStreamRef.current = null;
+    }, [stream?.id]);
+
   // Guest Timer & Tracking - HANDLED ABOVE
   
   // Host Limit Check (Server-side Override)
@@ -360,6 +396,44 @@ export default function BroadcastPage() {
               });
       }
   }, [isHost, user]);
+
+    useEffect(() => {
+        if (!stream?.id) return;
+
+        if (isHost || mode === 'stage') {
+            setJoinGateStatus('allowed');
+            setJoinBlockMessage(null);
+            joinGateStreamRef.current = null;
+            return;
+        }
+
+        const gateKey = `${stream.id}:${mode}`;
+        if (joinGateStreamRef.current === gateKey) return;
+
+        joinGateStreamRef.current = gateKey;
+        setJoinGateStatus('checking');
+        setJoinBlockMessage(null);
+
+        supabase
+            .rpc('reserve_stream_viewer_slot', { p_stream_id: stream.id })
+            .then(({ data, error }) => {
+                if (error || !data?.success) {
+                    const reason = data?.reason || 'room_full';
+                    if (reason === 'global_limit') {
+                        setJoinBlockMessage('System is at capacity — try again shortly.');
+                    } else if (reason === 'stream_ended') {
+                        setJoinBlockMessage('Event ended');
+                    } else {
+                        setJoinBlockMessage('Room is full — next event starts soon.');
+                    }
+                    setJoinGateStatus('blocked');
+                    return;
+                }
+
+                setJoinGateStatus('allowed');
+                setJoinBlockMessage(null);
+            });
+    }, [stream?.id, isHost, mode]);
 
   // 1. Duration Limit Check (Dynamic)
   useEffect(() => {
@@ -384,16 +458,65 @@ export default function BroadcastPage() {
     return () => clearInterval(interval);
   }, [stream?.started_at, isHost, _hostTimeLimit]);
 
-  const { token, serverUrl, error: tokenError } = useLiveKitToken({
-    streamId: id,
-    isHost,
-    userId: effectiveUserId,
-    roomName: id,
-    // Only request publish permissions if on stage (Host or Active Seat)
-    canPublish,
-    enabled: !!stream,
-    isGuest
-  });
+    useEffect(() => {
+        if (!stream?.started_at) return;
+
+        const startedAt = new Date(stream.started_at).getTime();
+        const updateTimer = () => {
+            const elapsed = Date.now() - startedAt;
+            const remaining = Math.max(0, EVENT_DURATION_MS - elapsed);
+            setEventRemainingMs(remaining);
+            if (remaining <= 0) {
+                setEventEnded(true);
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(interval);
+    }, [stream?.started_at, EVENT_DURATION_MS]);
+
+    useEffect(() => {
+        if (!eventEnded || !stream?.id || autoEndTriggeredRef.current) return;
+
+        autoEndTriggeredRef.current = true;
+        const endStream = async () => {
+            try {
+                const { error } = await supabase.rpc('end_stream', { p_stream_id: stream.id });
+                if (error) throw error;
+            } catch {
+                const { error } = await supabase
+                    .from('streams')
+                    .update({
+                        status: 'ended',
+                        is_live: false,
+                        ended_at: new Date().toISOString(),
+                        is_force_ended: true
+                    })
+                    .eq('id', stream.id);
+
+                if (error) {
+                    console.error('[BroadcastPage] Failed to auto-end stream:', error);
+                }
+            }
+        };
+
+        endStream();
+    }, [eventEnded, stream?.id]);
+
+        const liveKitRoomName = stream?.room_name || id;
+        const tokenEnabled = !!stream && !eventEnded && joinGateStatus === 'allowed';
+        const { token, serverUrl, error: tokenError } = useLiveKitToken({
+        streamId: id,
+        isHost,
+        userId: effectiveUserId,
+                roomName: liveKitRoomName,
+        // Only request publish permissions if on stage (Host or Active Seat)
+        canPublish,
+        enabled: tokenEnabled,
+        isGuest
+    });
 
   useEffect(() => {
     if (tokenError) {
@@ -414,7 +537,7 @@ export default function BroadcastPage() {
       }
   }, [stream, user, isHost, mode, _preflightStream]);
 
-  const isStreamOffline = stream?.status === 'ended';
+    const isStreamOffline = stream?.status === 'ended' || stream?.is_force_ended || eventEnded;
 
   useEffect(() => {
       if (token) {
@@ -430,8 +553,9 @@ export default function BroadcastPage() {
       }
   }, [token]);
 
-  // Viewer Tracking
-  const { viewerCount } = useViewerTracking(id || '', isHost, guestUserObj);
+    // Viewer Tracking
+    const trackingEnabled = joinGateStatus === 'allowed' || isHost || mode === 'stage';
+    const { viewerCount } = useViewerTracking(id || '', isHost, guestUserObj, trackingEnabled);
 
   // Gift Tray State
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
@@ -729,7 +853,7 @@ export default function BroadcastPage() {
           return (
              <div className="h-screen w-full flex items-center justify-center bg-zinc-900 text-white">
                  <div className="text-center">
-                     <h3 className="text-xl font-bold mb-2">Stream Ended</h3>
+                     <h3 className="text-xl font-bold mb-2">Event ended</h3>
                      <p className="text-zinc-400">This broadcast has finished.</p>
                  </div>
              </div>
@@ -753,10 +877,17 @@ export default function BroadcastPage() {
             {isStreamOffline ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-zinc-900 text-white z-0">
                         <div className="text-center">
-                            <h3 className="text-xl font-bold mb-2">Stream Ended</h3>
+                            <h3 className="text-xl font-bold mb-2">Event ended</h3>
                             <p className="text-zinc-400">This broadcast has finished.</p>
                         </div>
                     </div>
+            ) : (joinGateStatus === 'blocked' && joinBlockMessage) ? (
+                <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
+                    <div className="text-red-400 font-bold text-lg">{joinBlockMessage}</div>
+                    <div className="text-zinc-500 text-sm max-w-md">
+                        Live attendance is capped for this launch event.
+                    </div>
+                </div>
             ) : (!token || !serverUrl) ? (
                 <div className="flex-1 flex items-center justify-center flex-col gap-4">
                     {tokenError ? (
@@ -770,7 +901,7 @@ export default function BroadcastPage() {
                             <div className="text-zinc-500 text-sm animate-pulse">
                                 {!stream ? 'Loading stream info...' :
                                  !user ? 'Identifying user...' :
-                                 !token ? (mode === 'stage' && !isHost ? 'Joining seat...' : 'Requesting LiveKit token...') :
+                                 !token ? (joinGateStatus === 'checking' ? 'Checking room capacity...' : (mode === 'stage' && !isHost ? 'Joining seat...' : 'Requesting LiveKit token...')) :
                                  !serverUrl ? 'Connecting to server...' :
                                  'Initializing studio...'}
                             </div>
@@ -789,11 +920,21 @@ export default function BroadcastPage() {
                     audio={mode === 'stage'}
                 className="flex-1 relative flex flex-col"
             >
+                {isPreviewExpired && (
+                  <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <h2 className="text-2xl font-bold">Preview Ended</h2>
+                      <p className="text-lg">Sign up to continue watching.</p>
+                      <button onClick={() => navigate('/auth')} className="mt-4 px-4 py-2 bg-green-500 rounded">
+                        Sign Up
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <RoomStateSync mode={mode} isHost={isHost} streamId={id || ''} />
                 <BroadcastLimitEnforcer 
                     isHost={isHost} 
                     mode={mode} 
-                    isStaff={isStaffMember(profile)} 
                 />
                 <ListenerEntranceEffect
                     streamId={id || ''}
@@ -827,6 +968,8 @@ export default function BroadcastPage() {
                             isHost={isHost} 
                             onStartBattle={() => setShowBattleManager(true)} 
                             liveViewerCount={viewerCount}
+                            eventRemainingMs={eventRemainingMs}
+                            eventEnded={eventEnded}
                         />
                     </div>
                     {/* <VideoViewer />  -- Removed to fix layout duplication with BroadcastGrid */}
@@ -900,27 +1043,30 @@ export default function BroadcastPage() {
 
         {/* Sidebar: Chat & Leaderboard */}
         <div className="w-full md:w-96 h-[50vh] md:h-auto flex flex-col border-t md:border-t-0 md:border-l border-white/10 bg-zinc-950/90 backdrop-blur-md z-40">
-            <ErrorBoundary fallback={
-                <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-                    <p className="text-red-400 font-bold mb-2">Chat Crashed</p>
-                    <p className="text-xs text-zinc-400 mb-4">You can still end the stream.</p>
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-zinc-800 rounded hover:bg-zinc-700 text-xs transition-colors"
-                    >
-                        Reload Page
-                    </button>
-                </div>
-            }>
-                <BroadcastChat 
-                    streamId={stream.id} 
-                    hostId={stream.user_id}
-                    isHost={isHost} 
-                    isViewer={mode === 'viewer'}
-                    isModerator={isModerator}
-                    isGuest={!user}
-                />
-            </ErrorBoundary>
+            <StreamGiftStats streamId={stream.id} />
+            <div className="flex-1 min-h-0">
+                <ErrorBoundary fallback={
+                    <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+                        <p className="text-red-400 font-bold mb-2">Chat Crashed</p>
+                        <p className="text-xs text-zinc-400 mb-4">You can still end the stream.</p>
+                        <button 
+                            onClick={() => window.location.reload()}
+                            className="px-4 py-2 bg-zinc-800 rounded hover:bg-zinc-700 text-xs transition-colors"
+                        >
+                            Reload Page
+                        </button>
+                    </div>
+                }>
+                    <BroadcastChat 
+                        streamId={stream.id} 
+                        hostId={stream.user_id}
+                        isHost={isHost} 
+                        isViewer={mode === 'viewer'}
+                        isModerator={isModerator}
+                        isGuest={!user}
+                    />
+                </ErrorBoundary>
+            </div>
         </div>
 
     </div>

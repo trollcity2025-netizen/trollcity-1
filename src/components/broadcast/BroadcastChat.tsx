@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, User, Trash2, Shield, Crown, Sparkles, Car } from 'lucide-react';
+import { Send, User, Trash2, Shield, Crown, Sparkles, Car, Gift } from 'lucide-react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import UserNameWithAge from '../UserNameWithAge';
 import { toast } from 'sonner';
+import { EDGE_URL } from '../../lib/config';
 
 interface VehicleStatus {
   has_vehicle: boolean;
@@ -348,7 +349,8 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Not authenticated');
 
-        const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+        const edgeUrl = EDGE_URL.replace(/\/$/, '');
+        const response = await fetch(`${edgeUrl}/send-message`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`,
@@ -434,7 +436,38 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     );
   };
 
-  return (
+    const parseGiftEvent = (content: string) => {
+        if (!content.startsWith('GIFT_EVENT:')) return null;
+
+        const payload = content.replace(/^GIFT_EVENT:/, '');
+        const parts = payload.split(':');
+        const rawName = parts[0] || 'gift';
+
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawName);
+        const formattedName = isUuid
+            ? 'Gift'
+            : rawName
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, (match) => match.toUpperCase())
+                    .trim() || 'Gift';
+
+        let quantity: number | null = null;
+        let totalCost: number | null = null;
+
+        if (parts.length >= 3) {
+            const qty = Number(parts[1]);
+            const cost = Number(parts[2]);
+            quantity = Number.isFinite(qty) ? qty : null;
+            totalCost = Number.isFinite(cost) ? cost : null;
+        } else if (parts.length === 2) {
+            const maybeCost = Number(parts[1]);
+            totalCost = Number.isFinite(maybeCost) ? maybeCost : null;
+        }
+
+        return { name: formattedName, quantity, totalCost };
+    };
+
+    return (
     <div ref={chatContainerRef} className="flex flex-col h-[94%] text-white relative">
         {/* Unread Message Notification Bubble */}
         {unreadCount > 0 && (
@@ -503,6 +536,55 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                             );
                         }
 
+                        const giftInfo = parseGiftEvent(msg.content);
+
+                        if (giftInfo) {
+                            const qtyText = giftInfo.quantity ? ` x${giftInfo.quantity}` : '';
+                            const costText = giftInfo.totalCost ? ` (${giftInfo.totalCost.toLocaleString()} coins)` : '';
+
+                            return (
+                                <div className="p-2 animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
+                                    <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                        <Gift size={14} className="text-yellow-400" />
+                                    </div>
+                                    <div className="flex-1 min-w-0 break-words">
+                                        <div className="font-bold text-yellow-500 text-sm mr-2 flex items-center inline-flex flex-wrap">
+                                            {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
+                                            {renderVehicleBadge(msg.vehicle_status)}
+                                            <UserNameWithAge 
+                                                user={{
+                                                    username: msg.user_profiles?.username || 'User',
+                                                    created_at: msg.user_profiles?.created_at,
+                                                    role: msg.user_profiles?.role as any,
+                                                    troll_role: msg.user_profiles?.troll_role,
+                                                    id: msg.user_id,
+                                                    rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
+                                                    glowing_username_color: msg.user_profiles?.glowing_username_color
+                                                }}
+                                                className="text-yellow-500"
+                                                showBadges={true}
+                                                isBroadcaster={isHost}
+                                                isModerator={isModerator}
+                                                streamId={streamId}
+                                            />
+                                            <span>:</span>
+                                        </div>
+                                        <span className="text-gray-200 text-sm ml-1">
+                                            sent {giftInfo.name}{qtyText}{costText}
+                                        </span>
+                                    </div>
+                                    {(isHost || isModerator) && (
+                                        <button 
+                                            onClick={() => deleteMessage(msg.id)}
+                                            className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        }
+
                         return (
                             <div className="p-2 animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
                                 <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
@@ -564,11 +646,12 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                     }}
                     placeholder={isGuest ? "Sign up to chat..." : "Type a message..."}
                     className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
+                    disabled={isGuest}
                 />
 
                 <button 
                     type="submit"  
-                    disabled={!isGuest && !input.trim()}
+                    disabled={isGuest || !input.trim()}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
                 >
                     <Send size={16} />

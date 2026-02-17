@@ -30,6 +30,10 @@
   --troll-green-glow: #00ff00;
   --troll-dark-bg: #020617;
   --troll-dark-card: #0f172a;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 a {

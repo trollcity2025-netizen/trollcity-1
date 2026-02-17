@@ -37,7 +37,10 @@ const Announcements: React.FC = () => {
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [scheduledMessage, setScheduledMessage] = useState('');
   const [scheduledDateTime, setScheduledDateTime] = useState('');
-  const [targetAudience, setTargetAudience] = useState<'all' | 'broadcasters' | 'officers' | 'officers_secretary'>('all');
+  const [targetAudience, setTargetAudience] = useState<'all' | 'broadcasters' | 'officers' | 'officers_secretary' | 'specific_broadcaster'>('all');
+  const [broadcasterSearch, setBroadcasterSearch] = useState('');
+  const [broadcasters, setBroadcasters] = useState<{ id: string; username: string }[]>([]);
+  const [selectedBroadcaster, setSelectedBroadcaster] = useState<{ id: string; username: string } | null>(null);
   
   // Loading states
   const [sending, setSending] = useState(false);
@@ -58,6 +61,29 @@ const Announcements: React.FC = () => {
     loadBroadcastHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (targetAudience === 'specific_broadcaster' && broadcasterSearch.length > 2) {
+        const searchBroadcasters = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('user_profiles')
+                    .select('id, username')
+                    .eq('role', 'broadcaster')
+                    .ilike('username', `%${broadcasterSearch}%`)
+                    .limit(10);
+                if (error) throw error;
+                setBroadcasters(data || []);
+            } catch (error) {
+                console.error('Error searching broadcasters:', error);
+                toast.error('Failed to search for broadcasters');
+            }
+        };
+        searchBroadcasters();
+    } else {
+        setBroadcasters([]);
+    }
+}, [broadcasterSearch, targetAudience]);
 
   const loadScheduledAnnouncements = async () => {
     setLoadingScheduled(true);
@@ -118,7 +144,14 @@ const Announcements: React.FC = () => {
     try {
       let userIds: string[] = [];
 
-      if (targetAudience === 'officers_secretary') {
+      if (targetAudience === 'specific_broadcaster') {
+        if (!selectedBroadcaster) {
+            toast.error('Please select a broadcaster');
+            setSending(false);
+            return;
+        }
+        userIds = [selectedBroadcaster.id];
+      } else if (targetAudience === 'officers_secretary') {
         // Fetch officers and secretaries combined
         const { data: officers } = await supabase
             .from('user_profiles')
@@ -447,15 +480,53 @@ const Announcements: React.FC = () => {
                 <label className="block text-sm font-medium mb-2">Target Audience</label>
                 <select
                   value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value as any)}
+                  onChange={(e) => {
+                      setTargetAudience(e.target.value as any);
+                      setSelectedBroadcaster(null);
+                      setBroadcasterSearch('');
+                  }}
                   className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2"
                 >
                   <option value="all">All Users</option>
                   <option value="broadcasters">Broadcasters Only</option>
                   <option value="officers">Officers Only</option>
                   <option value="officers_secretary">Officers & Secretary</option>
+                  <option value="specific_broadcaster">Specific Broadcaster</option>
                 </select>
               </div>
+
+              {targetAudience === 'specific_broadcaster' && (
+                  <div>
+                      <label className="block text-sm font-medium mb-2">Search Broadcaster</label>
+                      <input
+                          type="text"
+                          value={broadcasterSearch}
+                          onChange={(e) => {
+                              setBroadcasterSearch(e.target.value);
+                              setSelectedBroadcaster(null);
+                          }}
+                          placeholder="Search by username..."
+                          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2"
+                      />
+                      {broadcasters.length > 0 && !selectedBroadcaster && (
+                          <ul className="bg-gray-900 border border-gray-700 rounded-lg mt-2 max-h-48 overflow-y-auto">
+                              {broadcasters.map((broadcaster) => (
+                                  <li
+                                      key={broadcaster.id}
+                                      onClick={() => {
+                                          setSelectedBroadcaster(broadcaster);
+                                          setBroadcasterSearch(broadcaster.username);
+                                          setBroadcasters([]);
+                                      }}
+                                      className="px-4 py-2 cursor-pointer hover:bg-gray-800"
+                                  >
+                                      {broadcaster.username}
+                                  </li>
+                              ))}
+                          </ul>
+                      )}
+                  </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium mb-2">Message</label>

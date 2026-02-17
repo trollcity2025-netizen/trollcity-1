@@ -140,6 +140,7 @@ export default function TermsAgreement() {
     ],
     rules: [
       { icon: '🚫', title: 'Zero Tolerance Policy', desc: 'Harassment, hate speech, or illegal content results in immediate permanent ban' },
+      { icon: '👕', title: 'Live Content Boundaries', desc: 'Men may be shirtless or in underwear; women may be in shirts with underwear. No explicit sexual content, no exposed or visibly aroused genitals, and no touching or simulated touching of intimate body parts while live.' },
       { icon: '⚠️', title: 'Account Responsibility', desc: 'You are responsible for all activity on your account. Secure your credentials.' },
       { icon: '💸', title: 'No Chargebacks', desc: 'All coin purchases are final. Chargebacks will result in permanent ban.' },
       { icon: '🔒', title: 'Account Reset on Ban', desc: 'Banned users lose ALL progress: coins, XP, level, badges reset to 0' },

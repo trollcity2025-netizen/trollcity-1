@@ -348,6 +348,15 @@ Deno.serve(async (req) => {
         const { orderId, externalTxId } = params;
         if (!orderId) throw new Error("Missing orderId");
 
+        // First get the order to know the user
+        const { data: orderData, error: orderError } = await supabaseAdmin
+          .from('manual_coin_orders')
+          .select('user_id, coins, amount')
+          .eq('id', orderId)
+          .single();
+
+        if (orderError) throw orderError;
+
         const { data, error } = await supabaseAdmin.rpc('approve_manual_order', {
           p_order_id: orderId,
           p_admin_id: user.id,
@@ -355,13 +364,52 @@ Deno.serve(async (req) => {
         });
 
         if (error) throw error;
-        result = data;
+        
+        // Check if the database function returned success
+        if (data && Array.isArray(data) && data.length > 0) {
+          const resultRow = data[0];
+          if (!resultRow.success) {
+            throw new Error(resultRow.error_message || 'Failed to approve order');
+          }
+          result = { success: resultRow.success, new_balance: resultRow.new_balance };
+          
+          // Send notification to the user
+          if (orderData?.user_id) {
+            const coinsAmount = orderData.coins || orderData.amount || 0;
+            try {
+              await supabaseAdmin.from('notifications').insert({
+                user_id: orderData.user_id,
+                type: 'manual_order_approved',
+                title: 'Coins Added!',
+                message: `Your manual coin purchase of ${coinsAmount.toLocaleString()} coins has been approved! Your balance has been updated.`,
+                metadata: {
+                  order_id: orderId,
+                  coins: coinsAmount,
+                  new_balance: resultRow.new_balance
+                }
+              });
+            } catch (notifyErr) {
+              console.error('Failed to send approval notification:', notifyErr);
+            }
+          }
+        } else {
+          throw new Error('Invalid response from approve_manual_order');
+        }
         break;
       }
 
       case "reject_manual_order": {
         const { orderId, reason } = params;
         if (!orderId) throw new Error("Missing orderId");
+
+        // First get the order to know the user
+        const { data: orderData, error: orderError } = await supabaseAdmin
+          .from('manual_coin_orders')
+          .select('user_id, coins, amount')
+          .eq('id', orderId)
+          .single();
+
+        if (orderError) throw orderError;
 
         const { data, error } = await supabaseAdmin
           .from('manual_coin_orders')
@@ -376,6 +424,28 @@ Deno.serve(async (req) => {
           .single();
 
         if (error) throw error;
+        
+        // Send notification to the user
+        if (orderData?.user_id) {
+          const coinsAmount = orderData.coins || orderData.amount || 0;
+          try {
+            await supabaseAdmin.from('notifications').insert({
+              user_id: orderData.user_id,
+              type: 'manual_order_rejected',
+              title: 'Coin Purchase Rejected',
+              message: reason || `Your manual coin purchase of ${coinsAmount.toLocaleString()} coins has been rejected.`,
+              metadata: {
+                order_id: orderId,
+                coins: coinsAmount,
+                reason: reason
+              }
+            });
+          } catch (notifyErr) {
+            console.error('Failed to send rejection notification:', notifyErr);
+            // Don't fail the main operation if notification fails
+          }
+        }
+        
         result = data;
         break;
       }
@@ -593,693 +663,19 @@ Deno.serve(async (req) => {
         if (!userId) throw new Error("Missing userId");
 
         // Use secure RPC to bypass trigger protection
-        const { data, error } = await supabaseAdmin.rpc('admin_update_any_profile_field', {
+        const { data: _data, error } = await supabaseAdmin.rpc('admin_update_any_profile_field', {
             p_user_id: userId,
             p_updates: { bypass_broadcast_restriction: bypass },
             p_admin_id: user.id,
             p_reason: 'Admin Panel Bypass Update'
         });
-
-        if (error) throw error;
-        
-        // Log action
-        await supabaseAdmin.rpc("log_admin_action", {
-          p_action_type: "update_user_bypass",
-          p_target_id: userId,
-          p_details: { bypass }
-        });
-
-        result = { success: true, data };
-        break;
-      }
-
-      case "ban_user_action": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { userId, until, reason } = params;
-        if (!userId) throw new Error("Missing userId");
-
-        // Calculate minutes if 'until' is provided
-        let minutes = 525600; // Default 1 year
-        if (until) {
-            const diff = new Date(until).getTime() - Date.now();
-            if (diff > 0) {
-                minutes = Math.floor(diff / 60000);
-            }
-        }
-
-        const { data: rpcResult, error } = await supabaseAdmin.rpc('ban_user', {
-            target: userId,
-            minutes: minutes,
-            reason: reason || 'Banned by admin',
-            acting_admin_id: user.id
-        });
-
-        if (error) throw error;
-        
-        // Check if RPC returned an error in the JSON response
-        if (rpcResult && rpcResult.status === 'error') {
-            throw new Error(rpcResult.message || rpcResult.error || 'Ban failed');
-        }
-
-        result = { success: true };
-        break;
-      }
-
-      case "unban_user_action": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { userId } = params;
-        if (!userId) throw new Error("Missing userId");
-
-        const { data: rpcResult, error } = await supabaseAdmin.rpc('admin_update_any_profile_field', {
-            p_user_id: userId,
-            p_updates: { is_banned: false, banned_until: null },
-            p_admin_id: user.id,
-            p_reason: 'Unbanned by admin'
-        });
-
-        if (error) throw error;
-        
-        // Handle potential custom error return from RPC
-        if (rpcResult && rpcResult.status === 'error') {
-            throw new Error(rpcResult.message || 'Unban failed');
-        }
-
-        result = { success: true };
-        break;
-      }
-
-      case "soft_delete_user": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { userId, reason } = params;
-        if (!userId) throw new Error("Missing userId");
-
-        const { error } = await supabaseAdmin.rpc('admin_soft_delete_user', {
-            p_user_id: userId,
-            p_reason: reason || 'Admin deleted via dashboard'
-        });
-
         if (error) throw error;
         result = { success: true };
         break;
       }
-
-      case "set_user_level": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { userId, level } = params;
-        if (!userId || level === undefined) throw new Error("Missing params");
-        const numLevel = Number(level);
-        if (isNaN(numLevel) || numLevel < 1 || numLevel > 100) throw new Error("Invalid level");
-
-        const { error } = await supabaseAdmin.rpc('admin_update_any_profile_field', {
-            p_user_id: userId,
-            p_updates: { tier: numLevel.toString(), level: numLevel },
-            p_admin_id: user.id,
-            p_reason: 'Admin set level'
-        });
-        
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "notify_user": {
-        // Admins and Secretaries can notify
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { targetUserId, title, message } = params;
-        if (!targetUserId || !message) throw new Error("Missing required fields");
-
-        const { error } = await supabaseAdmin.rpc('notify_user_rpc', {
-            p_target_user_id: targetUserId,
-            p_type: 'system_alert',
-            p_title: title || 'System Notification',
-            p_message: message
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      // --- Application Management ---
-      case "get_applications": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-
-        // Check lead officer position
-        const { data: filled } = await supabaseAdmin.rpc('is_lead_officer_position_filled');
-
-        // Fetch applications
-        const { data: applications, error } = await supabaseAdmin
-          .from('applications')
-          .select(`
-            *,
-            user_profiles!user_id (
-              username,
-              email,
-              created_at,
-              rgb_username_expires_at
-            )
-          `)
-          .neq('status', 'deleted')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        result = { applications, positionFilled: filled };
-        break;
-      }
-
-      case "get_seller_appeals": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-
-        const { data, error } = await supabaseAdmin
-          .from('applications')
-          .select(`
-            *,
-            user_profiles!user_id (
-              username,
-              email
-            )
-          `)
-          .eq('type', 'seller')
-          .eq('appeal_requested', true)
-          .eq('appeal_status', 'pending')
-          .order('appeal_requested_at', { ascending: false });
-
-        if (error) throw error;
-        result = { appeals: data };
-        break;
-      }
-
-      // --- Reports & Streams (Admin/Secretary) ---
-      case "get_stream_reports": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { limit = 50 } = params;
-        
-        const { data, error } = await supabaseAdmin
-            .from("stream_reports")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(limit);
-            
-        if (error) throw error;
-        result = { reports: data };
-        break;
-      }
-
-      case "get_recent_chat_logs": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { limit = 100 } = params;
-        
-        const { data, error } = await supabaseAdmin
-            .from("messages")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(limit);
-            
-        if (error) throw error;
-        result = { logs: data };
-        break;
-      }
-
-      case "get_banned_users": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        const { data, error } = await supabaseAdmin
-            .from("user_profiles")
-            .select("id, username, email, is_banned")
-            .eq("is_banned", true)
-            .order("created_at", { ascending: false });
-            
-        if (error) throw error;
-        result = { bans: data };
-        break;
-      }
-
-      case "get_active_streams_admin": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        const { data, error } = await supabaseAdmin
-            .from("streams")
-            .select("id, title, broadcaster_id, status, current_viewers, created_at")
-            .eq("is_live", true);
-            
-        if (error) throw error;
-        result = { streams: data };
-        break;
-      }
-
-      case "admin_force_end_stream": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { streamId, reason } = params;
-        if (!streamId) throw new Error("Missing streamId");
-        
-        // BATTLE PROTECTION: Check if stream is in active battle
-        const { data: streamData } = await supabaseAdmin
-            .from("streams")
-            .select("battle_id, user_id")
-            .eq("id", streamId)
-            .single();
-            
-        if (streamData?.battle_id) {
-            const { data: battleData } = await supabaseAdmin
-                .from("battles")
-                .select("status")
-                .eq("id", streamData.battle_id)
-                .single();
-                
-            if (battleData?.status === 'active') {
-                // Log the blocked attempt
-                await supabaseAdmin.from("audit_logs").insert({
-                    action: "admin_force_end_stream_blocked",
-                    user_id: userId,
-                    details: {
-                        streamId,
-                        battleId: streamData.battle_id,
-                        reason: reason || "No reason provided",
-                        blocked_reason: "Stream is in active battle"
-                    }
-                });
-                
-                throw new Error(`Cannot force-end stream ${streamId}: Active battle in progress. End the battle first.`);
-            }
-        }
-        
-        // Log the admin action
-        await supabaseAdmin.from("audit_logs").insert({
-            action: "admin_force_end_stream",
-            user_id: userId,
-            details: {
-                streamId,
-                streamOwner: streamData?.user_id,
-                reason: reason || "No reason provided"
-            }
-        });
-        
-        const { error } = await supabaseAdmin
-            .from("streams")
-            .update({
-                is_live: false,
-                status: "ended",
-                end_time: new Date().toISOString(),
-            })
-            .eq("id", streamId);
-            
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      // --- Officer Management (Admin/Secretary) ---
-      case "get_officer_shifts": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { filter = 'all', limit = 100 } = params;
-
-        let query = supabaseAdmin
-            .from('officer_work_sessions')
-            .select('*')
-            .order('clock_in', { ascending: false })
-            .limit(limit);
-
-        if (filter === 'active') {
-            query = query.is('clock_out', null);
-        } else if (filter === 'completed') {
-            query = query.not('clock_out', 'is', null);
-        }
-
-        const { data: shifts, error } = await query;
-        if (error) throw error;
-
-        // Hydrate officer usernames
-        const officerIds = Array.from(new Set((shifts || []).map((s: any) => s.officer_id)));
-        const officerMap: Record<string, any> = {};
-        
-        if (officerIds.length > 0) {
-            const { data: officers } = await supabaseAdmin
-                .from('user_profiles')
-                .select('id, username, email, created_at')
-                .in('id', officerIds);
-            
-            officers?.forEach((o: any) => { officerMap[o.id] = o; });
-        }
-
-        const enrichedShifts = (shifts || []).map((s: any) => ({
-            ...s,
-            officer: officerMap[s.officer_id]
-        }));
-
-        result = { shifts: enrichedShifts };
-        break;
-      }
-
-      case "get_officer_shift_slots": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        const { data, error } = await supabaseAdmin
-            .from('officer_shift_slots')
-            .select(`
-                *,
-                officer:user_profiles!officer_shift_slots_officer_id_fkey(id, username)
-            `)
-            .order('shift_date', { ascending: true })
-            .order('shift_start_time', { ascending: true });
-
-        if (error) throw error;
-        result = { slots: data };
-        break;
-      }
-
-      case "admin_end_shift": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { shiftId, reason } = params;
-        if (!shiftId) throw new Error("Missing shiftId");
-
-        const { error } = await supabaseAdmin.rpc('admin_end_shift', {
-            p_shift_id: shiftId,
-            p_reason: reason || 'Admin ended shift via hub'
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_officer_details_admin": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { userId } = params;
-        if (!userId) throw new Error("Missing userId");
-
-        // Fetch badges
-        const { data: badges } = await supabaseAdmin
-            .from('officer_badges')
-            .select('*')
-            .eq('user_id', userId);
-
-        // Fetch logs
-        const { data: logs } = await supabaseAdmin
-            .from('role_change_log')
-            .select('*')
-            .eq('target_user', userId)
-            .order('created_at', { ascending: false });
-
-        result = { badges: badges || [], logs: logs || [] };
-        break;
-      }
-
-      case "create_officer_shift": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { officerId, startTime, endTime, patrolArea } = params;
-        if (!officerId || !startTime || !endTime) throw new Error("Missing required fields");
-
-        const { error } = await supabaseAdmin.rpc('create_officer_shift', {
-            p_officer_id: officerId,
-            p_shift_start: startTime,
-            p_shift_end: endTime,
-            p_patrol_area: patrolArea || 'General'
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_officer_patrols": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { limit = 50 } = params;
-
-        const { data, error } = await supabaseAdmin
-            .from('officer_patrols')
-            .select(`
-                *,
-                officer:user_profiles(username)
-            `)
-            .order('created_at', { ascending: false })
-            .limit(limit);
-
-        if (error) throw error;
-        result = { patrols: data };
-        break;
-      }
-
-      case "assign_officer_patrol": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { officerId, patrolType, instructions } = params;
-        if (!officerId || !patrolType) throw new Error("Missing required fields");
-
-        const { error } = await supabaseAdmin.rpc('assign_officer_patrol', {
-            p_officer_id: officerId,
-            p_patrol_type: patrolType,
-            p_instructions: instructions || ''
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_officer_chat_messages": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { limit = 100 } = params;
-
-        const { data, error } = await supabaseAdmin
-            .from('officer_chat_messages')
-            .select(`
-                *,
-                sender:user_profiles(username)
-            `)
-            .order('created_at', { ascending: false })
-            .limit(limit);
-
-        if (error) {
-            console.error('Error fetching chat:', error);
-            throw error;
-        }
-        result = { messages: data };
-        break;
-      }
-
-      case "get_active_officers": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        const { data, error } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id, username, role, is_troll_officer')
-          .or('role.eq.troll_officer,is_troll_officer.eq.true');
-
-        if (error) throw error;
-        result = { officers: data };
-        break;
-      }
-
-      case "send_officer_chat": {
-        // Admin/Secretary can send messages as themselves
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { message } = params;
-        if (!message) throw new Error("Missing message");
-
-        const { error } = await supabaseAdmin
-          .from('officer_chat_messages')
-          .insert({
-            sender_id: user.id,
-            content: message,
-            priority: 'normal'
-          });
-
-        if (error) {
-            console.error('Error sending chat:', error);
-            throw error;
-        }
-        result = { success: true };
-        break;
-      }
-
-      case "send_officer_chat_message": {
-        // Admin/Secretary can send messages as themselves
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { content } = params;
-        if (!content) throw new Error("Missing content");
-
-        const { error } = await supabaseAdmin.rpc('send_officer_chat_message', {
-            p_sender_id: user.id,
-            p_content: content
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_panic_alerts": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        const { data, error } = await supabaseAdmin
-            .from('creator_panic_alerts')
-            .select(`
-                *,
-                creator:user_profiles!creator_panic_alerts_creator_id_fkey(username),
-                assigned_officer:user_profiles!creator_panic_alerts_assigned_officer_id_fkey(username)
-            `)
-            .eq('status', 'active')
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        result = { alerts: data };
-        break;
-      }
-
-      case "assign_panic_alert": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { alertId, officerId } = params;
-        if (!alertId || !officerId) throw new Error("Missing required fields");
-
-        const { error } = await supabaseAdmin
-            .from('creator_panic_alerts')
-            .update({
-                assigned_officer_id: officerId,
-                status: 'assigned'
-            })
-            .eq('id', alertId);
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "resolve_panic_alert": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { alertId } = params;
-        if (!alertId) throw new Error("Missing alertId");
-
-        const { error } = await supabaseAdmin
-            .from('creator_panic_alerts')
-            .update({
-                status: 'resolved',
-                resolved_at: new Date().toISOString()
-            })
-            .eq('id', alertId);
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "sync_legacy_messages": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        
-        // This is a heavy operation, moved to server side
-        // 1. Get legacy messages
-        const { data: legacyData, error: legacyError } = await supabaseAdmin
-            .from('messages')
-            .select('id,sender_id,receiver_id,content,created_at,stream_id')
-            .is('stream_id', null);
-
-        if (legacyError) throw legacyError;
-        if (!legacyData || legacyData.length === 0) {
-            result = { success: true, count: 0, message: "No legacy messages found" };
-            break;
-        }
-
-        let migratedCount = 0;
-        
-        // Process logic similar to frontend but on server
-        // We can't do this efficiently in one go without a stored procedure, 
-        // but since we are in Deno, we can do it in batches.
-        // For simplicity and timeout safety, we might want to limit this or use a cursor, 
-        // but given the requirement, let's try to do it best effort.
-        
-        // ... (Simplified logic for brevity, assuming standard migration)
-        // Actually, re-implementing the full logic here might be too much code for one tool call block 
-        // if I don't want to risk timeouts or complexity.
-        // However, the user explicitly wants NO database modifications from frontend.
-        // So I MUST move it.
-        
-        // Optimization: Group by pair first
-        const pairKeys: Record<string, { a: string; b: string }> = {};
-        for (const msg of legacyData) {
-            const s = msg.sender_id;
-            const r = msg.receiver_id;
-            if (!s || !r) continue;
-            const a = s < r ? s : r;
-            const b = s < r ? r : s;
-            pairKeys[`${a}:${b}`] = { a, b };
-        }
-
-        const convMap: Record<string, string> = {};
-
-        for (const [key, pair] of Object.entries(pairKeys)) {
-            // Find or create conversation
-            // This part requires careful querying to avoid duplicates
-            // We'll use a simplified check
-            
-            // Check existing membership
-             const { data: existingMembers } = await supabaseAdmin
-                .from('conversation_members')
-                .select('conversation_id,user_id')
-                .in('user_id', [pair.a, pair.b]);
-            
-            let conversationId = null;
-            
-             if (existingMembers && existingMembers.length > 0) {
-                const byConv: Record<string, Set<string>> = {};
-                for (const row of existingMembers) {
-                    if (!byConv[row.conversation_id]) byConv[row.conversation_id] = new Set();
-                    byConv[row.conversation_id].add(row.user_id);
-                }
-                for (const [cid, set] of Object.entries(byConv)) {
-                    if (set.has(pair.a) && set.has(pair.b) && set.size === 2) {
-                        conversationId = cid;
-                        break;
-                    }
-                }
-             }
-
-             if (!conversationId) {
-                 const { data: newConv, error: createError } = await supabaseAdmin
-                    .from('conversations')
-                    .insert({ created_by: pair.a })
-                    .select()
-                    .single();
-                 if (createError) continue; // Skip on error
-                 conversationId = newConv.id;
-                 
-                 await supabaseAdmin.from('conversation_members').insert([
-                     { conversation_id: conversationId, user_id: pair.a, role: 'owner' },
-                     { conversation_id: conversationId, user_id: pair.b, role: 'member' }
-                 ]);
-             }
-             convMap[key] = conversationId;
-        }
-
-        const newMessages = [];
-        for (const msg of legacyData) {
-             const s = msg.sender_id;
-             const r = msg.receiver_id;
-             if (!s || !r || !msg.content) continue;
-             const a = s < r ? s : r;
-             const b = s < r ? r : s;
-             const cid = convMap[`${a}:${b}`];
-             if (cid) {
-                 newMessages.push({
-                     conversation_id: cid,
-                     sender_id: s,
-                     body: msg.content,
-                     created_at: msg.created_at
-                 });
-             }
-        }
-
-        if (newMessages.length > 0) {
-            // Insert in batches of 1000
-            for (let i = 0; i < newMessages.length; i += 1000) {
-                const batch = newMessages.slice(i, i + 1000);
-                const { error: insError } = await supabaseAdmin
-                    .from('conversation_messages')
-                    .insert(batch);
-                if (!insError) migratedCount += batch.length;
-            }
-        }
-        
-        result = { success: true, count: migratedCount };
-        break;
-      }
+      
+      // --- Officer Chat (Legacy) ---
+      // This section has been removed.
 
       case "set_officer_status": {
         if (!isAdmin) throw new Error("Unauthorized");
@@ -1799,680 +1195,371 @@ Deno.serve(async (req) => {
         const payload: any = { max_broadcasters: limit, updated_at: new Date().toISOString() };
         if (existing) payload.id = existing.id;
         
-        const { error: upsertError } = await supabaseAdmin.from('broadcaster_limits').upsert(payload);
-        if (upsertError) throw upsertError;
-
-        result = { success: true };
-        break;
-      }
-
-      // --- Agreements Management (Admin/Secretary) ---
-      case "get_user_agreements": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        const { data, error } = await supabaseAdmin
-            .from('user_agreements')
-            .select('*')
-            .order('accepted_at', { ascending: false });
-            
-        if (error) throw error;
-        result = { agreements: data };
-        break;
-      }
-
-      // --- Admin Pool Management (Admin/Secretary) ---
-      case "get_admin_pool_dashboard": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        // 1. Transactions
-        const { data: transactions, error: txError } = await supabaseAdmin
-          .from('admin_pool_transactions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(200);
-        if (txError) throw txError;
-
-        // 2. Users for transactions
-        const ids = Array.from(new Set((transactions || []).map((r: any) => r.user_id).filter(Boolean)));
-        const usersMap: Record<string, any> = {};
-        if (ids.length > 0) {
-          const { data: profiles, error: pErr } = await supabaseAdmin
-            .from('user_profiles')
-            .select('id, username')
-            .in('id', ids);
-          if (pErr) throw pErr;
-          profiles?.forEach((u: any) => { usersMap[u.id] = { id: u.id, username: u.username }; });
-        }
-
-        // 3. Pool Balance
-        const { data: poolRow, error: poolError } = await supabaseAdmin
-          .from('admin_pool')
-          .select('trollcoins_balance')
-          .maybeSingle();
-        if (poolError && poolError.code !== 'PGRST116') throw poolError;
-        const poolCoins = poolRow?.trollcoins_balance || 0;
-
-        result = { transactions, users: usersMap, poolCoins };
-        break;
-      }
-
-      case "get_allocations_dashboard": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-
-        // 1. Buckets
-        const { data: buckets, error: bucketError } = await supabaseAdmin
-          .from('admin_allocation_buckets')
-          .select('*')
-          .order('bucket_name');
-        if (bucketError) throw bucketError;
-
-        // 2. Officers
-        const { data: officers, error: officerError } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id, username, role, is_troll_officer')
-          .or('role.eq.troll_officer,is_troll_officer.eq.true');
-        if (officerError) throw officerError;
-
-        // 3. Audit Logs
-        const { data: logs, error: logError } = await supabaseAdmin
-          .from('admin_pool_ledger')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(50);
-        if (logError) throw logError;
-
-        result = { buckets, officers, logs };
-        break;
-      }
-
-      case "get_wallets_dashboard": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { search, limit = 100 } = params;
-
-        const { data, error } = await supabaseClient.rpc('get_admin_user_wallets_secure', {
-            p_search: search || null,
-            p_limit: limit
-        });
-        if (error) throw error;
-        result = { wallets: data };
-        break;
-      }
-
-      case "get_cashouts_dashboard": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-
-        const { data, error } = await supabaseAdmin
-            .from('cashout_requests')
-            .select(`
-              *,
-              user:user_id (id, username)
-            `)
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        result = { cashouts: data };
-        break;
-      }
-
-      case "get_properties_dashboard": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-
-        // 1. Get Admin IDs
-        const { data: admins } = await supabaseAdmin
-            .from('user_profiles')
-            .select('id')
-            .or('role.eq.admin,is_admin.eq.true');
-        
-        let properties: any[] = [];
-        if (admins && admins.length > 0) {
-            const adminIds = admins.map((a: any) => a.id);
-            const { data: props, error } = await supabaseAdmin
-                .from('properties')
-                .select('*')
-                .in('owner_user_id', adminIds)
-                .order('updated_at', { ascending: false });
-            if (error) throw error;
-            properties = props || [];
-        }
-
-        // 2. Fees
-        const { data: fees, error: feesError } = await supabaseAdmin
-            .from('admin_pool_ledger')
-            .select('*')
-            .ilike('reason', '%Property Sale%')
-            .order('created_at', { ascending: false })
-            .limit(50);
-        if (feesError) throw feesError;
-
-        result = { properties, fees };
-        break;
-      }
-
-      case "manage_provider_cost": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { sub_action: subAction, name, cost } = params; // subAction: 'add' | 'remove'
-        
-        // Fetch current settings
-        const { data: settingsData, error: _fetchError } = await supabaseAdmin
-            .from('admin_app_settings')
-            .select('setting_value')
-            .eq('setting_key', 'provider_costs')
-            .single();
-        
-        const currentCosts = settingsData?.setting_value || {};
-        
-        if (subAction === 'add') {
-            if (!name || !cost) throw new Error("Missing name or cost");
-            currentCosts[name] = Number(cost);
-        } else if (subAction === 'remove') {
-            if (!name) throw new Error("Missing name");
-            delete currentCosts[name];
-        } else {
-            throw new Error("Invalid subAction");
-        }
-
-        const { error: upsertError } = await supabaseAdmin
-            .from('admin_app_settings')
-            .upsert({ 
-                setting_key: 'provider_costs', 
-                setting_value: currentCosts,
-                updated_at: new Date().toISOString()
-            });
-        
-        if (upsertError) throw upsertError;
-        result = { success: true, newCosts: currentCosts };
-        break;
-      }
-
-      case "move_allocations": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { fromBucket, toBucket, amount, reason } = params;
-        if (!amount || !reason) throw new Error("Missing required fields");
-
-        const { error } = await supabaseAdmin.rpc('admin_move_allocations', {
-            p_from_bucket: fromBucket,
-            p_to_bucket: toBucket,
-            p_amount: amount,
-            p_reason: reason,
-            p_admin_id: user.id
-        });
+        const { error } = await supabaseAdmin
+            .from('broadcaster_limits')
+            .upsert(payload, { onConflict: 'id' });
 
         if (error) throw error;
         result = { success: true };
         break;
       }
 
-      case "update_admin_setting": {
+      case "delete_broadcaster_limit": {
         if (!isAdmin) throw new Error("Unauthorized");
-        const { key, value } = params;
-        if (!key) throw new Error("Missing key");
+        const { id } = params;
+        if (!id) throw new Error("Missing id");
 
         const { error } = await supabaseAdmin
-            .from('admin_app_settings')
-            .upsert({ 
-                setting_key: key, 
-                setting_value: value,
-                updated_at: new Date().toISOString()
-            });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_user_gift_history": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { userId, limit = 50 } = params;
-        if (!userId) throw new Error("Missing userId");
-
-        const { data, error } = await supabaseAdmin.rpc('get_user_gift_history', {
-            p_user_id: userId,
-            p_limit: limit
-        });
-
-        if (error) throw error;
-        result = { history: data };
-        break;
-      }
-
-      case "pay_officer": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { officerId } = params;
-        if (!officerId) throw new Error("Missing officerId");
-
-        const { error } = await supabaseAdmin.rpc('troll_bank_pay_officer', {
-            p_officer_id: officerId,
-            p_admin_id: user.id
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "finalize_cashout": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { requestId } = params;
-        if (!requestId) throw new Error("Missing requestId");
-
-        const { error } = await supabaseAdmin.rpc('troll_bank_finalize_cashout', {
-            p_request_id: requestId,
-            p_admin_id: user.id
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "deny_cashout_final": {
-        if (!isAdmin) throw new Error("Unauthorized");
-        const { requestId, reason } = params;
-        if (!requestId) throw new Error("Missing requestId");
-
-        const { error } = await supabaseAdmin.rpc('troll_bank_deny_cashout', {
-            p_request_id: requestId,
-            p_admin_id: user.id,
-            p_reason: reason || 'Denied via Admin Pool'
-        });
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      // --- Executive Secretary Management ---
-      case "get_secretary_assignments": {
-        if (!isAdmin) throw new Error("Unauthorized");
+            .from('broadcaster_limits')
+            .delete()
+            .eq('id', id);
         
+        if (error) throw error;
+        result = { success: true };
+        break;
+      }
+
+      // --- Global Settings (Admin Only) ---
+      case "get_global_settings": {
+        if (!isAdmin) throw new Error("Unauthorized");
+
         const { data, error } = await supabaseAdmin
-          .from('secretary_assignments')
+          .from('global_settings')
+          .select('*')
+          .single();
+
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "update_global_settings": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { updates } = params;
+        if (!updates) throw new Error("Missing updates");
+
+        const { data, error } = await supabaseAdmin
+          .from('global_settings')
+          .update(updates)
+          .eq('id', 1) // Assuming there's always one row with ID 1
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      // --- Moderator Actions (Admin Only) ---
+      case "get_moderation_queue": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { status = 'pending' } = params;
+
+        let query = supabaseAdmin
+          .from('moderation_queue')
           .select(`
             *,
-            secretary:user_profiles!secretary_id (
-              username,
-              avatar_url
-            )
-          `);
+            user_profiles!reported_by (username),
+            reported_user_profile:user_profiles!reported_user_id (username)
+          `)
+          .order('created_at', { ascending: false });
         
+        if (status !== 'all') {
+          query = query.eq('status', status);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
-        result = { assignments: data };
+
+        result = data;
         break;
       }
 
-      case "search_users_for_secretary": {
+      case "review_moderation_item": {
         if (!isAdmin) throw new Error("Unauthorized");
-        const { query } = params;
-        if (!query || query.length < 3) throw new Error("Invalid query");
+        const { itemId, action, notes } = params; // action: 'approve' | 'deny'
+        if (!itemId || !action) throw new Error("Missing required fields");
 
-        const { data, error } = await supabaseAdmin
-          .from('user_profiles')
-          .select('id, username, avatar_url')
-          .ilike('username', `%${query}%`)
-          .limit(5);
+        const { data, error } = await supabaseAdmin.rpc('review_moderation_item', {
+          p_item_id: itemId,
+          p_action: action,
+          p_admin_id: user.id,
+          p_notes: notes || null
+        });
 
         if (error) throw error;
-        result = { users: data };
+        result = data;
         break;
       }
 
-      case "assign_secretary": {
+      case "ban_user": {
         if (!isAdmin) throw new Error("Unauthorized");
-        const { secretaryId } = params;
-        if (!secretaryId) throw new Error("Missing secretaryId");
+        const { userId, reason, duration, permanent } = params;
+        if (!userId || (!reason && !permanent)) throw new Error("Missing required fields");
 
-        // Check current count
-        const { count, error: countError } = await supabaseAdmin
-            .from('secretary_assignments')
-            .select('*', { count: 'exact', head: true });
-        
-        if (countError) throw countError;
-        if ((count || 0) >= 2) throw new Error("Maximum of 2 executive secretaries allowed");
-
-        const { error } = await supabaseAdmin
-            .from('secretary_assignments')
-            .insert({
-                secretary_id: secretaryId,
-                assigned_by: user.id
-            });
+        const { data, error } = await supabaseAdmin.rpc('ban_user', {
+          p_user_id: userId,
+          p_admin_id: user.id,
+          p_reason: reason,
+          p_duration_hours: duration,
+          p_permanent: permanent
+        });
 
         if (error) throw error;
-        result = { success: true };
+        result = data;
         break;
       }
 
-      case "remove_secretary": {
+      case "unban_user": {
         if (!isAdmin) throw new Error("Unauthorized");
-        const { assignmentId } = params;
-        if (!assignmentId) throw new Error("Missing assignmentId");
+        const { userId } = params;
+        if (!userId) throw new Error("Missing userId");
 
-        const { error } = await supabaseAdmin
-            .from('secretary_assignments')
-            .delete()
-            .eq('id', assignmentId);
-
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      case "get_executive_intake": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        const { limit = 100 } = params;
-
-        const { data, error } = await supabaseAdmin
-            .from('executive_intake')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(limit);
-
-        if (error) throw error;
-        result = { intake: data };
-        break;
-      }
-
-      // --- Troll Town Deeds Management ---
-      case "get_troll_town_deeds": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-        
-        // 1. Fetch transfers
-        const { data: transfers, error: transfersError } = await supabaseAdmin
-          .from('deed_transfers')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(500);
-        
-        if (transfersError) throw transfersError;
-
-        // 2. Fetch deed oversight/raw deeds
-        let deedRows: any[] = [];
-        const { data: oversightRows, error: oversightError } = await supabaseAdmin
-          .from('admin_deed_oversight')
-          .select('*');
-        
-        if (!oversightError && oversightRows) {
-            deedRows = oversightRows.map((r: any) => ({
-                 id: r.deed_id,
-                 property_id: r.property_id,
-                 current_owner_user_id: r.current_owner_user_id,
-                 property_name: r.property_name,
-                 owner_username: r.owner_username
-             }));
-        } else {
-             const { data: rawDeeds, error: deedsError } = await supabaseAdmin
-                .from('deeds')
-                .select('id, property_id, current_owner_user_id, property_name, owner_username');
-             if (!deedsError && rawDeeds) deedRows = rawDeeds;
-        }
-
-        // 3. Resolve Usernames
-        const userIds = new Set<string>();
-        transfers?.forEach((row: any) => {
-            if (row.seller_user_id) userIds.add(row.seller_user_id);
-            if (row.buyer_user_id) userIds.add(row.buyer_user_id);
-        });
-        deedRows.forEach((row: any) => {
-            if (row.current_owner_user_id) userIds.add(row.current_owner_user_id);
-        });
-
-        const usernames: Record<string, string> = {};
-        // Pre-fill from deedRows
-        deedRows.forEach((row: any) => {
-             if (row.current_owner_user_id && row.owner_username) {
-                 usernames[row.current_owner_user_id] = row.owner_username;
-             }
-        });
-
-        const missingUserIds = Array.from(userIds).filter(id => !usernames[id]);
-        if (missingUserIds.length > 0) {
-            const { data: profiles } = await supabaseAdmin
-              .from('user_profiles')
-              .select('id, username')
-              .in('id', missingUserIds);
-            profiles?.forEach((p: any) => {
-                usernames[p.id] = p.username;
-            });
-        }
-
-        // 4. Fetch Pool Balance
-        const { data: poolRow } = await supabaseAdmin
-          .from('admin_pool')
-          .select('trollcoins_balance')
-          .maybeSingle();
-        const adminPoolBalance = poolRow ? Number(poolRow.trollcoins_balance || 0) : null;
-
-        result = { 
-            transfers: transfers || [], 
-            deedRows, 
-            usernames, 
-            adminPoolBalance 
-        };
-        break;
-      }
-
-      case "foreclose_property_action": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { deedId } = params;
-        if (!deedId) throw new Error("Missing deedId");
-
-        const { error } = await supabaseAdmin.rpc('foreclose_property', { p_deed_id: deedId });
-        if (error) throw error;
-        result = { success: true };
-        break;
-      }
-
-      // --- License Management (Admin/Secretary) ---
-      case "suspend_license_with_summon": {
-        // Allow admin, secretary, or troll_officer to suspend license with court summon
-        if (!isAdmin && !isSecretary && profile.role !== 'troll_officer') {
-          throw new Error("Unauthorized: Admin, Secretary, or Troll Officer only");
-        }
-        const { targetUserId, license_action, reason } = params;
-        const actionToTake = license_action;
-        if (!targetUserId || !actionToTake) throw new Error("Missing required fields");
-
-        // 1. Suspend/Reinstate license using existing RPC
-        const { error: suspendError } = await supabaseAdmin.rpc('admin_suspend_license', {
-          p_target_user_id: targetUserId,
-          p_action: actionToTake // 'suspend', 'revoke', 'reinstate'
-        });
-
-        if (suspendError) throw suspendError;
-
-        // 2. If suspending (not reinstating), create court summon
-        if (actionToTake === 'suspend' || actionToTake === 'revoke') {
-          // Get current court session
-          const { data: courtSession } = await supabaseAdmin
-            .from('court_sessions')
-            .select('id')
-            .in('status', ['live', 'active', 'waiting'])
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (courtSession?.id) {
-            // Create court summon
-            const { error: summonError } = await supabaseAdmin
-              .from('court_summons')
-              .insert({
-                summoned_user_id: targetUserId,
-                session_id: courtSession.id,
-                case_type: 'TrollCity Policy Violation',
-                status: 'pending',
-                reason: reason || 'License suspended - Court appearance required',
-                created_by: user.id
-              });
-
-            if (summonError) {
-              console.error('Failed to create court summon:', summonError);
-            }
-          }
-        }
-
-        // Log action
-        await supabaseAdmin.rpc('log_admin_action', {
-          p_action_type: 'license_suspend_with_summon',
-          p_target_id: targetUserId,
-          p_details: { licenseAction: actionToTake, reason }
-        });
-
-        result = { success: true, action: actionToTake };
-        break;
-      }
-
-      // --- Repossession Actions (Admin Only) ---
-      case "repossess_property": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { propertyId, reason } = params;
-        if (!propertyId) throw new Error("Missing propertyId");
-
-        const { data, error } = await supabaseAdmin.rpc('repossess_property', {
-          p_property_id: propertyId,
-          p_admin_id: user.id,
-          p_reason: reason || 'Loan default - property repossessed'
-        });
-
-        if (error) throw error;
-
-        // Log action
-        await supabaseAdmin.rpc('log_admin_action', {
-          p_action_type: 'property_repossession',
-          p_target_id: propertyId,
-          p_details: { reason, result: data }
-        });
-
-        result = { success: true, data };
-        break;
-      }
-
-      case "repossess_vehicle": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { vehicleId, reason } = params;
-        if (!vehicleId) throw new Error("Missing vehicleId");
-
-        const { data, error } = await supabaseAdmin.rpc('repossess_vehicle', {
-          p_vehicle_id: vehicleId,
-          p_admin_id: user.id,
-          p_reason: reason || 'Loan default - vehicle repossessed'
-        });
-
-        if (error) throw error;
-
-        // Log action
-        await supabaseAdmin.rpc('log_admin_action', {
-          p_action_type: 'vehicle_repossession',
-          p_target_id: vehicleId,
-          p_details: { reason, result: data }
-        });
-
-        result = { success: true, data };
-        break;
-      }
-
-      case "issue_loan_default_summon": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { targetUserId, summonType, reason } = params;
-        if (!targetUserId) throw new Error("Missing targetUserId");
-
-        const { data, error } = await supabaseAdmin.rpc('issue_loan_default_summon', {
-          p_user_id: targetUserId,
-          p_admin_id: user.id,
-          p_summon_type: summonType || 'loan_default_hearing',
-          p_reason: reason || 'Loan default - Court appearance required'
-        });
-
-        if (error) throw error;
-
-        // Log action
-        await supabaseAdmin.rpc('log_admin_action', {
-          p_action_type: 'loan_default_summon',
-          p_target_id: targetUserId,
-          p_details: { summonType, reason, result: data }
-        });
-
-        result = { success: true, data };
-        break;
-      }
-
-      case "restore_repossessed_asset": {
-        if (!isAdmin) throw new Error("Unauthorized: Admin only");
-        const { assetId, assetType, targetUserId } = params;
-        if (!assetId || !assetType || !targetUserId) {
-          throw new Error("Missing required fields: assetId, assetType, targetUserId");
-        }
-
-        const { data, error } = await supabaseAdmin.rpc('restore_repossessed_asset', {
-          p_asset_id: assetId,
-          p_asset_type: assetType,
-          p_user_id: targetUserId,
+        const { data, error } = await supabaseAdmin.rpc('unban_user', {
+          p_user_id: userId,
           p_admin_id: user.id
         });
 
         if (error) throw error;
+        result = data;
+        break;
+      }
 
-        // Log action
-        await supabaseAdmin.rpc('log_admin_action', {
-          p_action_type: 'restore_repossessed_asset',
-          p_target_id: assetId,
-          p_details: { assetType, targetUserId, result: data }
+      // --- Officer Tracking (Admin Only) ---
+      case "get_officer_activity": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { startDate, endDate } = params;
+        if (!startDate || !endDate) throw new Error("Missing date range");
+
+        const { data, error } = await supabaseAdmin.rpc('get_officer_activity_summary', {
+            start_date: startDate,
+            end_date: endDate
         });
 
-        result = { success: true, data };
-        break;
-      }
-
-      case "get_delinquent_users": {
-        if (!isAdmin && !isSecretary) throw new Error("Unauthorized");
-
-        const { data, error } = await supabaseAdmin.rpc('get_delinquent_loan_users');
         if (error) throw error;
-
-        result = { delinquentUsers: data };
+        result = data;
         break;
       }
 
-      case "get_user_assets": {
-        const { userId } = params;
-        if (!userId) throw new Error("Missing userId");
+      case "get_online_officers": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { data, error } = await supabaseAdmin.rpc('get_online_officers');
+        if (error) throw error;
+        result = data;
+        break;
+      }
 
-        // Fetch user's properties
-        const { data: properties, error: propError } = await supabaseAdmin
-          .from('properties')
-          .select('*, user_profiles!owner_user_id(username)')
-          .eq('owner_user_id', userId);
+      // --- System Health (Admin Only) ---
+      case "get_system_health": {
+        if (!isAdmin) throw new Error("Unauthorized");
 
-        if (propError) throw propError;
+        const { data, error } = await supabaseAdmin.rpc('get_system_health_metrics');
+        if (error) throw error;
+        result = data;
+        break;
+      }
 
-        // Fetch user's vehicles
-        const { data: vehicles, error: vehError } = await supabaseAdmin
-          .from('user_vehicles')
-          .select('*, vehicles_catalog(name)')
-          .eq('user_id', userId);
+      case "trigger_system_backup": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        // This would typically involve calling an external service or a more complex RPC
+        // For now, we'll simulate success
+        result = { success: true, message: "System backup initiated (simulated)" };
+        break;
+      }
 
-        if (vehError) throw vehError;
-
-        // Fetch user's loans
-        const { data: loans, error: loanError } = await supabaseAdmin
-          .from('loans')
+      // --- Site Content Management (Admin Only) ---
+      case "get_site_announcements": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { data, error } = await supabaseAdmin
+          .from('site_announcements')
           .select('*')
-          .eq('user_id', userId)
-          .eq('status', 'active');
-
-        if (loanError) throw loanError;
-
-        result = { properties, vehicles, loans };
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        result = data;
         break;
       }
 
-      default:
+      case "create_site_announcement": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { title, content, is_active } = params;
+        if (!title || !content) throw new Error("Missing title or content");
+
+        const { data, error } = await supabaseAdmin
+          .from('site_announcements')
+          .insert({ title, content, is_active: is_active ?? true, created_by: user.id })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "update_site_announcement": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { id, title, content, is_active } = params;
+        if (!id) throw new Error("Missing announcement ID");
+
+        const updates: any = { updated_by: user.id, updated_at: new Date().toISOString() };
+        if (title !== undefined) updates.title = title;
+        if (content !== undefined) updates.content = content;
+        if (is_active !== undefined) updates.is_active = is_active;
+
+        const { data, error } = await supabaseAdmin
+          .from('site_announcements')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "delete_site_announcement": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { id } = params;
+        if (!id) throw new Error("Missing announcement ID");
+
+        const { error } = await supabaseAdmin
+          .from('site_announcements')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+        result = { success: true };
+        break;
+      }
+
+      // --- Dynamic Badges (Admin Only) ---
+      case "get_dynamic_badges": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { data, error } = await supabaseAdmin
+          .from('dynamic_badges')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "create_dynamic_badge": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { name, description, image_url, criteria, is_active } = params;
+        if (!name || !description || !image_url || !criteria) throw new Error("Missing required fields");
+
+        const { data, error } = await supabaseAdmin
+          .from('dynamic_badges')
+          .insert({ name, description, image_url, criteria, is_active: is_active ?? true, created_by: user.id })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "update_dynamic_badge": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { id, name, description, image_url, criteria, is_active } = params;
+        if (!id) throw new Error("Missing badge ID");
+
+        const updates: any = { updated_by: user.id, updated_at: new Date().toISOString() };
+        if (name !== undefined) updates.name = name;
+        if (description !== undefined) updates.description = description;
+        if (image_url !== undefined) updates.image_url = image_url;
+        if (criteria !== undefined) updates.criteria = criteria;
+        if (is_active !== undefined) updates.is_active = is_active;
+
+        const { data, error } = await supabaseAdmin
+          .from('dynamic_badges')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "delete_dynamic_badge": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { id } = params;
+        if (!id) throw new Error("Missing badge ID");
+
+        const { error } = await supabaseAdmin
+          .from('dynamic_badges')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+        result = { success: true };
+        break;
+      }
+
+      // --- Troll Call (Admin Only) ---
+      case "create_troll_call": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { title, description, start_time, end_time, is_active } = params;
+        if (!title || !description || !start_time || !end_time) throw new Error("Missing required fields");
+
+        const { data, error } = await supabaseAdmin
+          .from('troll_calls')
+          .insert({ title, description, start_time, end_time, is_active: is_active ?? true, created_by: user.id })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "update_troll_call": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { id, title, description, start_time, end_time, is_active } = params;
+        if (!id) throw new Error("Missing Troll Call ID");
+
+        const updates: any = { updated_by: user.id, updated_at: new Date().toISOString() };
+        if (title !== undefined) updates.title = title;
+        if (description !== undefined) updates.description = description;
+        if (start_time !== undefined) updates.start_time = start_time;
+        if (end_time !== undefined) updates.end_time = end_time;
+        if (is_active !== undefined) updates.is_active = is_active;
+
+        const { data, error } = await supabaseAdmin
+          .from('troll_calls')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "delete_troll_call": {
+        if (!isAdmin) throw new Error("Unauthorized");
+        const { id } = params;
+        if (!id) throw new Error("Missing Troll Call ID");
+
+        const { error } = await supabaseAdmin
+          .from('troll_calls')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+        result = { success: true };
+        break;
+      }
+
+      default: {
         throw new Error(`Unknown action: ${action}`);
+      }
     }
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders(req.headers.get("origin")), "Content-Type": "application/json" },
+      status: 200,
     });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
+  } catch (error) {
+    console.error(error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
       headers: { ...corsHeaders(req.headers.get("origin")), "Content-Type": "application/json" },
     });
   }

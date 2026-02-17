@@ -55,6 +55,11 @@ cp .env.example .env
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
+# LiveKit RTMP Ingest (OBS)
+# Public ingest endpoint for RTMP (LiveKit Ingress or your RTMP gateway)
+VITE_LIVEKIT_INGRESS_URL=rtmp://ingest.yourdomain.com/live
+LIVEKIT_INGRESS_URL=rtmp://ingest.yourdomain.com/live
+
 # Agora Configuration
 VITE_AGORA_APP_ID=your_agora_app_id
 VITE_BACKEND_TOKEN_SERVER_URL=http://localhost:3001/api/agora-token
@@ -74,6 +79,16 @@ SQUARE_ENVIRONMENT=sandbox
 1. Create a new Supabase project
 2. Apply the migration files in the `supabase/migrations` directory
 3. Set up Row Level Security policies (included in migrations)
+
+## 🎥 OBS RTMP Ingest (Trollmers)
+
+1. Deploy the `livekit-ingress` Edge Function and set server env vars:
+	- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_INGRESS_URL`
+2. Set client env var:
+	- `VITE_LIVEKIT_INGRESS_URL`
+3. In the app: Go Live → Trollmers → copy RTMP URL + Stream Key
+4. In OBS: Settings → Stream → Custom → paste RTMP URL and Stream Key
+5. Click Start Streaming; the broadcast should appear within ~10 seconds
 
 ## 🚀 Local Development
 

@@ -1,248 +1,729 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useAuthStore } from '../lib/store'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { trollCityTheme } from '../styles/trollCityTheme'
-import InboxSidebar from './tcps/components/InboxSidebar'
-import ChatWindow from './tcps/components/ChatWindow'
-import NewMessageModal from './tcps/components/NewMessageModal'
-import IncomingCallPopup from '../components/IncomingCallPopup'
-import { supabase } from '../lib/supabase'
-import { usePresenceStore } from '../lib/presenceStore'
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useAuthStore } from '../lib/store';
+import {
+  MessageCircle,
+  Loader,
+  Send,
+  Check,
+  CheckCheck,
+  AlertCircle,
+} from 'lucide-react';
+import {
+  getConversationMessages,
+  sendConversationMessage,
+  getOrCreateDirectConversation,
+  canUserMessageTarget,
+  markMessageAsRead,
+  setTypingStatus,
+  getUserForMessaging,
+  getUserConversationsWithDetails,
+  searchUsers,
+} from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 
-interface SidebarConversation {
-  other_user_id: string
-  other_username: string
-  other_avatar_url: string | null
-  last_message: string
-  last_timestamp: string
-  unread_count: number
-  is_online?: boolean
-  rgb_username_expires_at?: string | null
+interface Conversation {
+  id: string;
+  lastMessage?: any;
+  otherUsers: any[];
+}
+
+interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  read_at?: string | null;
+}
+
+interface TypingUser {
+  user_id: string;
+  username: string;
 }
 
 export default function TCPS() {
-  const { user } = useAuthStore()
-  const { onlineUserIds } = usePresenceStore()
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
+  const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const targetUserId = searchParams.get('user');
+  const [loading, setLoading] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(
+    searchParams.get('conversation') || null
+  );
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [messageCost, setMessageCost] = useState(0);
+  const [canMessage, setCanMessage] = useState(true);
+  const [messagingError, setMessagingError] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [searchUserText, setSearchUserText] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const [activeConversation, setActiveConversation] = useState<string | null>(null)
+  // Deduplicate and filter conversations to DM-only
+  const dedupConversations = (convs: Conversation[]) => {
+    // Client-side safety net: ensure no duplicates by conversation id
+    const byId = new Map<string, Conversation>();
+    
+    for (const row of convs) {
+      const prev = byId.get(row.id);
+      if (!prev) {
+        byId.set(row.id, row);
+        continue;
+      }
 
-  const [activeTab, setActiveTab] = useState<string>('inbox')
-  const [showNewMessageModal, setShowNewMessageModal] = useState(false)
+      // Merge otherUsers unique by id
+      const mergedUsers = new Map(prev.otherUsers.map((u: any) => [u.id, u]));
+      row.otherUsers.forEach((u: any) => mergedUsers.set(u.id, u));
 
-  const [otherUserInfo, setOtherUserInfo] = useState<{
-    id: string
-    username: string
-    avatar_url: string | null
-    created_at?: string
-    is_online?: boolean
-    rgb_username_expires_at?: string | null
-    glowing_username_color?: string | null
-  } | null>(null)
-  
-  // Incoming call state
-  const [incomingCall, setIncomingCall] = useState<{
-    callerId: string
-    callerUsername: string
-    callerAvatar: string | null
-    callType: 'audio' | 'video'
-    roomId: string
-  } | null>(null)
+      // Choose newest lastMessage
+      const bestLast =
+        !prev.lastMessage ? row.lastMessage :
+        !row.lastMessage ? prev.lastMessage :
+        new Date(row.lastMessage.created_at).getTime() > new Date(prev.lastMessage.created_at).getTime()
+          ? row.lastMessage
+          : prev.lastMessage;
 
-  // Load conversation from URL
-  useEffect(() => {
-    const param = searchParams.get('user')
+      byId.set(row.id, { ...prev, otherUsers: [...mergedUsers.values()], lastMessage: bestLast });
+    }
 
-    if (!param) return
-
-    // Here param is a UUID, not a username
-    supabase
-      .from('user_profiles')
-      .select('id, username, avatar_url, created_at, rgb_username_expires_at, glowing_username_color')
-      .eq('id', param)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setActiveConversation(data.id)
-          setOtherUserInfo({
-            id: data.id,
-            username: data.username,
-            avatar_url: data.avatar_url,
-            created_at: data.created_at,
-            is_online: onlineUserIds.includes(data.id),
-            rgb_username_expires_at: data.rgb_username_expires_at,
-            glowing_username_color: data.glowing_username_color
-          })
+    // Filter to DM-only conversations (direct messages with one other user)
+    const dmOnly = [...byId.values()].filter((c) => c.otherUsers?.length === 1);
+    
+    // Deduplicate by unique user: keep only one conversation per user (the one with newest message)
+    const byUserId = new Map<string, Conversation>();
+    for (const conv of dmOnly) {
+      const userId = conv.otherUsers[0]?.id;
+      if (!userId) continue;
+      
+      const existing = byUserId.get(userId);
+      if (!existing) {
+        byUserId.set(userId, conv);
+      } else {
+        // Keep conversation with more recent message
+        const existingTime = new Date(existing.lastMessage?.created_at ?? 0).getTime();
+        const convTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+        if (convTime > existingTime) {
+          byUserId.set(userId, conv);
         }
-      })
-  }, [searchParams, onlineUserIds])
+      }
+    }
+    
+    // Sort by newest message first
+    return [...byUserId.values()].sort((a, b) => {
+      const aTime = new Date(a.lastMessage?.created_at ?? 0).getTime();
+      const bTime = new Date(b.lastMessage?.created_at ?? 0).getTime();
+      return bTime - aTime;
+    });
+  };
 
-  // Listen for incoming calls
+  // Load conversations
   useEffect(() => {
-    if (!user?.id) return
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
 
-    const callChannel = supabase
-      .channel(`calls:${user.id}`)
+    let isMounted = true;
+
+    const loadConversations = async () => {
+      try {
+        const convs = await getUserConversationsWithDetails();
+        // Diagnostic logging
+        console.log('TCPS convs raw:', convs);
+        console.log('TCPS conv ids:', convs.map((c: any) => c.id));
+        console.log('TCPS conv count:', convs.length);
+        convs.forEach((c: any, i: number) => {
+          console.log(`Conv ${i}: id=${c.id}, otherUsers=${c.otherUsers?.map((u: any) => u.username).join(',')}`);
+        });
+        if (isMounted) {
+          const dedupedConvs = dedupConversations(convs);
+          setConversations(dedupedConvs);
+          setLoading(false);
+
+          // If target user in params, create/find conversation
+          if (targetUserId && isMounted) {
+            try {
+              const convId = await getOrCreateDirectConversation(targetUserId);
+              if (isMounted) setSelectedConvId(convId);
+            } catch (err) {
+              console.error('Failed to create conversation:', err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load conversations:', err);
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadConversations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, targetUserId]);
+
+  // Load messages for selected conversation
+  useEffect(() => {
+    if (!selectedConvId || !user?.id) return;
+
+    let cancelled = false;
+    const unreadMsgIds: string[] = [];
+
+    const loadMessagesAndSetup = async () => {
+      try {
+        // Load messages and sort oldest to newest
+        const msgs = await getConversationMessages(selectedConvId, {
+          limit: 100,
+        });
+        
+        if (cancelled) return;
+        
+        // Sort by created_at ascending (oldest first)
+        const sortedMsgs = msgs.sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        setMessages(sortedMsgs);
+
+        // Collect unread messages to mark all at once
+        for (const msg of sortedMsgs) {
+          if (!msg.read_at && msg.sender_id !== user.id) {
+            unreadMsgIds.push(msg.id);
+          }
+        }
+
+        // Mark all unread messages as read in one operation
+        if (unreadMsgIds.length > 0 && !cancelled) {
+          try {
+            await supabase
+              .from('conversation_messages')
+              .update({ read_at: new Date().toISOString() })
+              .in('id', unreadMsgIds);
+          } catch (err) {
+            console.error('Failed to mark messages as read:', err);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      }
+    };
+
+    loadMessagesAndSetup();
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel(`conversation:${selectedConvId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
+          table: 'conversation_messages',
+          filter: `conversation_id=eq.${selectedConvId}`,
         },
-        async (payload) => {
-          const notification = payload.new as any
-          if (notification.type === 'call' && notification.metadata) {
-            const metadata = notification.metadata
-            setIncomingCall({
-              callerId: metadata.caller_id,
-              callerUsername: metadata.caller_username || 'Unknown',
-              callerAvatar: metadata.caller_avatar || null,
-              callType: metadata.call_type || 'audio',
-              roomId: metadata.room_id
-            })
+        (payload) => {
+          if (cancelled) return;
+          const newMsg = payload.new as Message;
+          
+          // Append in order (trust Supabase ordering)
+          setMessages((prev) => [...prev, newMsg]);
+
+          // Update last message in sidebar and re-sort conversations
+          setConversations((prev) => {
+            const updated = prev.map((c) =>
+              c.id === selectedConvId ? { ...c, lastMessage: newMsg } : c
+            );
+            // Re-sort by newest message
+            return updated.sort((a, b) => {
+              const aTime = new Date(a.lastMessage?.created_at ?? 0).getTime();
+              const bTime = new Date(b.lastMessage?.created_at ?? 0).getTime();
+              return bTime - aTime;
+            });
+          });
+
+          // Mark as read if from other user
+          if (newMsg.sender_id !== user?.id) {
+            markMessageAsRead(newMsg.id).catch(console.error);
+          }
+
+          scrollToBottom();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'conversation_messages',
+          filter: `conversation_id=eq.${selectedConvId}`,
+        },
+        (payload) => {
+          if (cancelled) return;
+          const updatedMsg = payload.new as Message;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m))
+          );
+        }
+      )
+      .subscribe();
+
+    // Subscribe to typing indicators
+    const typingChannel = supabase
+      .channel(`typing:${selectedConvId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'typing_statuses',
+          filter: `conversation_id=eq.${selectedConvId}`,
+        },
+        (payload) => {
+          if (cancelled) return;
+          const deletedUserId = (payload.old as any).user_id;
+          setTypingUsers((prev) =>
+            prev.filter((u) => u.user_id !== deletedUserId)
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'typing_statuses',
+          filter: `conversation_id=eq.${selectedConvId}`,
+        },
+        (payload) => {
+          if (cancelled) return;
+          const typingUser = (payload.new as any).user_id;
+          if (typingUser !== user?.id) {
+            getUserForMessaging(typingUser).then((userData) => {
+              if (!cancelled) {
+                setTypingUsers((prev) => [
+                  ...prev.filter((u) => u.user_id !== typingUser),
+                  { user_id: typingUser, username: userData?.username },
+                ]);
+              }
+            });
           }
         }
       )
-      .subscribe()
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'typing_statuses',
+          filter: `conversation_id=eq.${selectedConvId}`,
+        },
+        (payload) => {
+          if (cancelled) return;
+          const updatedTyping = (payload.new as any);
+          if (!updatedTyping.is_typing) {
+            // User stopped typing - remove them
+            setTypingUsers((prev) =>
+              prev.filter((u) => u.user_id !== updatedTyping.user_id)
+            );
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
-      void supabase.removeChannel(callChannel)
-    }
-  }, [user?.id])
+      cancelled = true;
+      channel.unsubscribe();
+      typingChannel.unsubscribe();
+    };
+  }, [selectedConvId, user?.id]);
 
-  const handleAcceptCall = () => {
-    if (!incomingCall) return
-    navigate(`/call/${incomingCall.roomId}/${incomingCall.callType}/${incomingCall.callerId}`)
-    setIncomingCall(null)
-  }
-
-  const handleDeclineCall = async () => {
-    if (!incomingCall || !user?.id) return
-    
-    // Delete the notification
-    await supabase
-      .from('notifications')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('type', 'call')
-      .contains('metadata', { room_id: incomingCall.roomId })
-    // Log declined call with zero duration
-    try {
-      await supabase.from('call_history').insert({
-        caller_id: incomingCall.callerId,
-        receiver_id: user.id,
-        room_id: incomingCall.roomId,
-        type: incomingCall.callType,
-        duration_minutes: 0,
-        ended_at: new Date().toISOString()
-      })
-    } catch {
-      // ignore logging errors
-    }
-    setIncomingCall(null)
-  }
-
-  // Load target user's info when conversation changes
+  // Check messaging permissions (separate effect)
   useEffect(() => {
-    if (!activeConversation) return
+    if (!selectedConvId || !user?.id || conversations.length === 0) return;
 
-    supabase
-      .from('user_profiles')
-      .select('id, username, avatar_url, created_at, rgb_username_expires_at, glowing_username_color')
-      .eq('id', activeConversation)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setOtherUserInfo({
-            id: data.id,
-            username: data.username,
-            avatar_url: data.avatar_url,
-            created_at: data.created_at,
-            is_online: onlineUserIds.includes(data.id),
-            rgb_username_expires_at: data.rgb_username_expires_at,
-            glowing_username_color: data.glowing_username_color
-          })
+    let cancelled = false;
+
+    const conv = conversations.find((c) => c.id === selectedConvId);
+    if (!conv?.otherUsers?.length) return;
+
+    (async () => {
+      try {
+        const otherUser = conv.otherUsers[0];
+        const { canMessage: canMsg, messageCost: cost, reason } =
+          await canUserMessageTarget(otherUser.id);
+
+        if (cancelled) return;
+
+        setCanMessage(canMsg);
+        setMessageCost(cost);
+        setMessagingError(!canMsg && reason ? reason : null);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Permission check failed:', err);
         }
-      })
-  }, [activeConversation, onlineUserIds])
+      }
+    })();
 
-  const handleSelectConversation = (otherId: string) => {
-    setActiveConversation(otherId)
-    navigate(`/tcps?user=${otherId}`, { replace: true })
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedConvId, user?.id, conversations]);
 
-  const handleNewMessage = (userId: string) => {
-    setActiveConversation(userId)
-    navigate(`/tcps?user=${userId}`, { replace: true })
-    setShowNewMessageModal(false)
-  }
-
-  const handleConversationsLoaded = useCallback((conversations: SidebarConversation[]) => {
-    // Only auto-select first conversation if no user is specified in URL
-    const userParam = searchParams.get('user')
-    if (!activeConversation && !userParam && conversations.length > 0) {
-      const first = conversations[0]
-      setActiveConversation(first.other_user_id)
-      navigate(`/tcps?user=${first.other_user_id}`, { replace: true })
+  // Search users
+  useEffect(() => {
+    if (!searchUserText || searchUserText.length < 2) {
+      setSearchResults([]);
+      return;
     }
-  }, [activeConversation, navigate, searchParams])
 
-  const { backgrounds } = trollCityTheme
-  
-  // Convert onlineUserIds array to Record<string, boolean> for InboxSidebar
-  const onlineUsersRecord = onlineUserIds.reduce((acc, id) => ({ ...acc, [id]: true }), {})
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const results = await searchUsers({ query: searchUserText });
+        if (!cancelled) {
+          // Filter out users already in conversations
+          const existingUserIds = new Set(
+            conversations.flatMap((c) => c.otherUsers.map((u: any) => u.id))
+          );
+          const filtered = results.filter((u) => !existingUserIds.has(u.id));
+          setSearchResults(filtered);
+        }
+      } catch (err) {
+        console.error('Search failed:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchUserText, conversations]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleStartConversation = async (userId: string) => {
+    try {
+      const convId = await getOrCreateDirectConversation(userId);
+      
+      // Reload conversations to ensure the new one appears in the list
+      const convs = await getUserConversationsWithDetails();
+      if (convs && convs.length > 0) {
+        const dedupedConvs = dedupConversations(convs);
+        setConversations(dedupedConvs);
+      }
+      
+      setSelectedConvId(convId);
+      setSearchUserText('');
+      setSearchResults([]);
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
+      toast.error('Failed to start conversation');
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleTyping = useCallback(() => {
+    if (!selectedConvId || !user?.id) return;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      setTypingStatus(selectedConvId, true).catch(console.error);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      setTypingStatus(selectedConvId, false).catch(console.error);
+    }, 3000);
+  }, [selectedConvId, user?.id]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageText.trim() || !selectedConvId || !canMessage) return;
+
+    try {
+      // Stop typing
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      isTypingRef.current = false;
+      await setTypingStatus(selectedConvId, false).catch(() => {});
+
+      // Send message immediately
+      await sendConversationMessage(selectedConvId, messageText.trim());
+      setMessageText('');
+      setMessagingError(null);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setMessagingError('Failed to send message');
+      toast.error('Failed to send message');
+    }
+  };
+
+
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader className="animate-spin" size={32} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
+        <MessageCircle size={48} className="text-gray-400" />
+        <p className="text-gray-600">Please log in to access TCPS</p>
+      </div>
+    );
+  }
+
+  const selectedConv = conversations.find((c) => c.id === selectedConvId);
+  // Conversations are already filtered to DM-only and deduplicated
+  const validConversations = conversations;
 
   return (
-    <div className={`w-full h-[100dvh] overflow-hidden ${backgrounds.primary} flex justify-center items-stretch px-3 py-4 md:py-8 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-8`}>
-        <div className={`relative flex w-full max-w-6xl ${trollCityTheme.backgrounds.card} rounded-2xl md:rounded-3xl border border-white/10 overflow-hidden flex-col md:flex-row h-full`}>
-          {/* Column 1: Sidebar with Conversations */}
-          <div className={`flex-col border-r border-white/5 ${trollCityTheme.backgrounds.glass} w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
-            <InboxSidebar
-              activeConversation={activeConversation}
-              onSelectConversation={handleSelectConversation}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              onlineUsers={onlineUsersRecord}
-              onConversationsLoaded={handleConversationsLoaded}
-              onOpenNewMessage={() => setShowNewMessageModal(true)}
-            />
-          </div>
-
-          {/* Column 2: Chat Window */}
-          <div className={`flex-1 flex-col min-w-0 bg-transparent ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
-            <ChatWindow
-              conversationId={null} // It will be derived from users or we can pass it if we have it
-              otherUserInfo={otherUserInfo}
-              isOnline={otherUserInfo?.is_online}
-              onBack={() => {
-                setActiveConversation(null)
-                navigate('/tcps')
-              }}
-            />
-          </div>
+    <div className="h-screen w-full flex bg-background">
+      {/* Conversations List */}
+      <div className="w-64 border-r border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+          <h2 className="font-semibold text-lg mb-3">Messages</h2>
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={searchUserText}
+            onChange={(e) => setSearchUserText(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
-        <NewMessageModal
-          isOpen={showNewMessageModal}
-          onClose={() => setShowNewMessageModal(false)}
-          onSelectUser={handleNewMessage}
-        />
+        <div className="flex-1 overflow-y-auto">
+          {searchUserText && searchResults.length > 0 && (
+            <>
+              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                Search Results
+              </div>
+              {searchResults.map((user) => (
+                <button
+                  key={user.id}
+                  onClick={() => handleStartConversation(user.id)}
+                  className="w-full p-3 border-b border-gray-200 dark:border-gray-800 text-left transition-colors hover:bg-green-50 dark:hover:bg-green-900/20"
+                >
+                  <div className="font-medium truncate text-green-600 dark:text-green-400">
+                    + Start chat with {user.username}
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
 
-        {incomingCall && (
-          <IncomingCallPopup
-            isOpen={!!incomingCall}
-            callerId={incomingCall.callerId}
-            callerUsername={incomingCall.callerUsername}
-            callerAvatar={incomingCall.callerAvatar}
-            callType={incomingCall.callType}
-            roomId={incomingCall.roomId}
-            onAccept={handleAcceptCall}
-            onDecline={handleDeclineCall}
-          />
+          {validConversations.length === 0 && !searchUserText ? (
+            <div className="p-4 text-center text-gray-500 text-sm">
+              No conversations yet. Search for a user to start messaging.
+            </div>
+          ) : (
+            <>
+              {validConversations.length > 0 && (
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                  Conversations
+                </div>
+              )}
+              {validConversations.map((conv) => (
+                <button
+                  key={conv.id}
+                  onClick={() => setSelectedConvId(conv.id)}
+                  className={`w-full p-3 border-b border-gray-200 dark:border-gray-800 text-left transition-colors ${
+                    selectedConvId === conv.id
+                      ? 'bg-blue-50 dark:bg-blue-900/20'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <div className="font-medium truncate">
+                        {conv.otherUsers
+                          .map((u: any) => u?.username || 'Unknown')
+                          .join(', ') || 'Conversation'}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {conv.lastMessage
+                          ? new Date(conv.lastMessage.created_at).toLocaleDateString([], {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'No messages'}
+                      </div>
+                    </div>
+                    {!conv.lastMessage?.read_at && conv.lastMessage?.sender_id !== user?.id && (
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                    )}
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <div className="flex-1 flex flex-col">
+        {selectedConv && selectedConv.otherUsers && selectedConv.otherUsers.length > 0 ? (
+          <>
+            {/* Header */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <div>
+                  <h3 className="font-semibold">
+                    {selectedConv.otherUsers.map((u) => u.username).join(', ')}
+                  </h3>
+                  {messageCost > 0 && (
+                    <p className="text-xs text-amber-600">
+                      Messages cost: {messageCost} coins
+                    </p>
+                  )}
+                </div>
+              </div>
+              {messagingError && (
+                <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-600 flex items-center gap-2">
+                  <AlertCircle size={14} />
+                  {messagingError}
+                </div>
+              )}
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <MessageCircle size={32} className="text-gray-300 mr-2" />
+                  No messages yet. Start the conversation!
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${
+                      msg.sender_id === user.id ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    <div
+                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        msg.sender_id === user.id
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                      }`}
+                    >
+                      <p className="break-words">{msg.body}</p>
+                      <div className="text-xs mt-1 flex items-center gap-1">
+                        {msg.sender_id === user.id ? (
+                          <>
+                            <span className="opacity-70">
+                              {new Date(msg.created_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                            {msg.read_at ? (
+                              <CheckCheck size={12} className="opacity-70" />
+                            ) : (
+                              <Check size={12} className="opacity-70" />
+                            )}
+                          </>
+                        ) : (
+                          <span className="opacity-70">
+                            {new Date(msg.created_at).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {/* Typing Indicator */}
+              {typingUsers.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    />
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    />
+                  </div>
+                  {typingUsers.map((u) => u.username).join(', ')} typing...
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            <form
+              ref={formRef}
+              onSubmit={handleSendMessage}
+              className="p-4 border-t border-gray-200 dark:border-gray-800"
+            >
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={messageText}
+                  onChange={(e) => {
+                    setMessageText(e.target.value);
+                    handleTyping();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      formRef.current?.requestSubmit();
+                    }
+                  }}
+                  disabled={!canMessage}
+                  placeholder={
+                    canMessage
+                      ? "Type a message..."
+                      : messagingError || "Can't send messages"
+                  }
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  type="submit"
+                  disabled={!messageText.trim() || !canMessage}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600"
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <MessageCircle size={48} className="text-gray-300 mx-auto mb-4" />
+              <p>Select a conversation or start a new one</p>
+            </div>
+          </div>
         )}
       </div>
-    )
-  }
+    </div>
+  );
+}

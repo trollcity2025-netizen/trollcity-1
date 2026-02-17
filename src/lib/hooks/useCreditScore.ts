@@ -48,7 +48,8 @@ export function useCreditScore(targetUserId?: string) {
     } finally {
       setLoading(false)
     }
-  }, [targetUserId, user?.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetUserId])
 
   useEffect(() => {
     fetchCredit()

@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Stream, ChatMessage } from '../../types/broadcast';
-import { useMobileLayout, useSafeAreaHeight } from '../../hooks/useMobileLayout';
+import { useMobileLayout, useSafeAreaHeight } from '@/hooks/useMobileLayout';
 import { cn } from '../../lib/utils';
 import { SeatSession } from '../../hooks/useStreamSeats';
 import TopLiveBar from './TopLiveBar';
@@ -51,6 +51,8 @@ export default function MobileBroadcastLayout({
 }: MobileBroadcastLayoutProps) {
   const { isMobile } = useMobileLayout();
   const { headerHeight, dockHeight, safeArea } = useSafeAreaHeight();
+  const prevMsgLenRef = useRef(0);
+  const MINIMIZED_DOCK_HEIGHT_PX = 60;
   
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   // Removed local isMuted/isCameraOff state to rely on props
@@ -61,17 +63,39 @@ export default function MobileBroadcastLayout({
 
   // Track unread messages when chat is closed
   useEffect(() => {
-    if (!isChatOpen && messages.length > 0) {
-      setUnreadMessages((prev) => Math.min(prev + 1, 9));
+    const prevLen = prevMsgLenRef.current;
+    if (!isChatOpen && messages.length > prevLen) {
+      const delta = messages.length - prevLen;
+      setUnreadMessages((prev) => Math.min(prev + delta, 9));
     }
-  }, [messages.length, isChatOpen]);
-
-  // Clear unread when chat opens
-  useEffect(() => {
     if (isChatOpen) {
       setUnreadMessages(0);
     }
-  }, [isChatOpen]);
+    prevMsgLenRef.current = messages.length;
+  }, [messages.length, isChatOpen]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    if (isChatOpen) {
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = previousOverflow;
+      };
+    }
+  }, [isChatOpen, isMobile]);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsChatOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobile]);
 
   const handleToggleMic = useCallback(() => {
     onToggleMic();
@@ -92,7 +116,10 @@ export default function MobileBroadcastLayout({
   }, []);
 
   // Calculate stage height based on viewport
-  const stageHeight = `calc(100dvh - ${headerHeight}px - ${isMinimized ? '60' : dockHeight}px)`;
+  const stageHeight = useMemo(() => {
+    const dock = isMinimized ? MINIMIZED_DOCK_HEIGHT_PX : dockHeight;
+    return `calc(100dvh - ${headerHeight}px - ${dock}px)`;
+  }, [dockHeight, headerHeight, isMinimized]);
 
   if (!isMobile) {
     // Desktop layout - return original structure
@@ -103,7 +130,7 @@ export default function MobileBroadcastLayout({
           stream={stream}
           hostName={isHost ? 'You' : 'Host'}
           hostGlowingColor={hostGlowingColor}
-          onClose={onLeave}
+          onClose={handleLeave}
           className="z-20"
         />
         <BroadcastControls
@@ -148,9 +175,8 @@ export default function MobileBroadcastLayout({
 
   return (
     <div 
-      className="relative h-dvh w-full bg-black overflow-hidden flex flex-col font-sans text-white"
-      style={{ 
-        paddingBottom: safeArea.bottom,
+      className="relative h-[100dvh] w-full bg-black overflow-hidden flex flex-col font-sans text-white"
+      style={{
         minHeight: '100dvh'
       }}
     >
@@ -199,7 +225,7 @@ export default function MobileBroadcastLayout({
       {isChatOpen && (
         <div className="absolute inset-0 z-40 bg-black/60" onClick={() => setIsChatOpen(false)}>
           <div 
-            className="absolute right-0 top-0 bottom-0 bg-zinc-900 animate-slide-in-right w-80"
+            className="absolute right-0 top-0 bottom-0 bg-zinc-900 animate-slide-in-right w-80 [will-change:transform]"
             onClick={(e) => e.stopPropagation()}
           >
             <ChatBottomSheet
@@ -214,8 +240,7 @@ export default function MobileBroadcastLayout({
       {/* 4. Bottom Dock - Controls */}
       <div 
         className={cn(
-          "absolute bottom-0 left-0 right-0 z-30",
-          isMinimized ? "pb-safe-bottom" : ""
+          "absolute bottom-0 left-0 right-0 z-30"
         )}
         style={{ paddingBottom: safeArea.bottom }}
       >
@@ -233,7 +258,7 @@ export default function MobileBroadcastLayout({
           <div className="bg-gradient-to-t from-black/95 via-black/90 to-transparent pt-4 pb-2">
             {/* Gift Tray Overlay */}
             {isGiftOpen && (
-              <div className="absolute bottom-full left-0 right-0 pb-2" onClick={() => setIsGiftOpen(false)}>
+              <div className="absolute bottom-full left-0 right-0 pb-2 [will-change:transform]" onClick={() => setIsGiftOpen(false)}>
                 <div onClick={(e) => e.stopPropagation()}>
                   <GiftTray
                     recipientId={stream.user_id}
@@ -249,7 +274,7 @@ export default function MobileBroadcastLayout({
               {/* Left: Chat Toggle */}
               <button
                 onClick={() => setIsChatOpen(true)}
-                className="relative w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors"
+                className="relative w-12 h-12 min-w-[44px] min-h-[44px] rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors"
               >
                 <MessageSquare size={20} />
                 {unreadMessages > 0 && (
@@ -271,7 +296,7 @@ export default function MobileBroadcastLayout({
               {/* Right: Minimize Button */}
               <button
                 onClick={() => setIsMinimized(true)}
-                className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
               >
                 <span className="text-xs font-bold">−</span>
               </button>

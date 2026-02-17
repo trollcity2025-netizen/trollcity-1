@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../lib/store'
+import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { 
@@ -44,7 +44,7 @@ const GIFTS = [
 const MAX_POSTS = 100 // Memory cap for the wall feed
 
 export default function TrollCityWall() {
-  const { user, profile } = useAuthStore()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
   const [posts, setPosts] = useState<WallPost[]>([])
   const postBufferRef = useRef<WallPost[]>([])

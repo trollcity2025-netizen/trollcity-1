@@ -252,23 +252,32 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
         
         if (profileData.username) {
           toast.success('Welcome back!', { duration: 2000 })
-          try {
-            const ipRes = await fetch('https://api.ipify.org?format=json')
-            const ipJson = await ipRes.json()
-            const userIP = ipJson.ip
-            const { data: current } = await supabase
-              .from('user_profiles')
-              .select('ip_address_history')
-              .eq('id', data.user.id)
-              .maybeSingle()
-            const history = current?.ip_address_history || []
-            const entry = { ip: userIP, timestamp: new Date().toISOString() }
-            const updated = [...history, entry].slice(-10)
-            await supabase
-              .from('user_profiles')
-              .update({ last_known_ip: userIP, ip_address_history: updated })
-              .eq('id', data.user.id)
-          } catch {}
+            try {
+              const ipRes = await fetch('https://api.ipify.org?format=json');
+              const ipJson = await ipRes.json();
+              const userIP = ipJson.ip;
+
+              if (userIP && data.user?.id) {
+                  supabase.functions.invoke('vpn-detect', {
+                      body: { ip: userIP, user_id: data.user.id },
+                  });
+              }
+
+              const { data: current } = await supabase
+                .from('user_profiles')
+                .select('ip_address_history')
+                .eq('id', data.user.id)
+                .maybeSingle();
+              const history = current?.ip_address_history || [];
+              const entry = { ip: userIP, timestamp: new Date().toISOString() };
+              const updated = [...history, entry].slice(-10);
+              await supabase
+                .from('user_profiles')
+                .update({ last_known_ip: userIP, ip_address_history: updated })
+                .eq('id', data.user.id);
+            } catch (e) {
+                console.error('Error during IP tracking on auth:', e);
+            }
           navigate('/')
         } else {
           toast.success('Login successful! Please complete your profile.')

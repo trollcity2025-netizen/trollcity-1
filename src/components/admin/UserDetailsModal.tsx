@@ -13,8 +13,6 @@ import {
   DollarSign,
   Bell,
   Upload,
-  Gavel,
-  Car
 } from 'lucide-react'
 
 interface UserDetailsModalProps {
@@ -95,8 +93,8 @@ export default function UserDetailsModal({ userId, username, onClose }: UserDeta
   const [loading, setLoading] = useState(true)
   const [userData, setUserData] = useState<UserComprehensiveData | null>(null)
   const [sendingPrompt, setSendingPrompt] = useState(false)
-  const [suspendingLicense, setSuspendingLicense] = useState(false)
-  const [licenseStatus, setLicenseStatus] = useState<string>('none')
+  const [_suspendingLicense, _setSuspendingLicense] = useState(false)
+  const [_licenseStatus, _setLicenseStatus] = useState<string>('none')
 
   const loadUserData = useCallback(async () => {
     setLoading(true)
@@ -255,17 +253,17 @@ export default function UserDetailsModal({ userId, username, onClose }: UserDeta
   }
 
   // Check if user can manage licenses
-  const canManageLicense = adminProfile && (
+  const _canManageLicense = adminProfile && (
     adminProfile.role === 'admin' ||
     adminProfile.role === 'secretary' ||
     adminProfile.role === 'troll_officer' ||
     adminProfile.is_admin === true
   )
 
-  const handleLicenseAction = async (licenseAction: 'suspend' | 'revoke' | 'reinstate') => {
+  const _handleLicenseAction = async (licenseAction: 'suspend' | 'revoke' | 'reinstate') => {
     if (!confirm(`Are you sure you want to ${licenseAction} this user's license?`)) return
 
-    setSuspendingLicense(true)
+    _setSuspendingLicense(true)
     try {
       const reason = licenseAction === 'suspend' || licenseAction === 'revoke'
         ? `License ${licenseAction}ed by ${adminProfile?.username || 'admin'}`
@@ -288,7 +286,7 @@ export default function UserDetailsModal({ userId, username, onClose }: UserDeta
       console.error('Error managing license:', error)
       toast.error(error.message || `Failed to ${licenseAction} license`)
     } finally {
-      setSuspendingLicense(false)
+      _setSuspendingLicense(false)
     }
   }
 
@@ -556,54 +554,7 @@ export default function UserDetailsModal({ userId, username, onClose }: UserDeta
             </div>
           </div>
 
-          {/* License Management */}
-          <div className="bg-zinc-900 rounded-lg border border-white/10 p-4">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Car className="w-5 h-5 text-blue-400" />
-              License Management
-            </h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-gray-400">Driver&apos;s License</div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    licenseStatus === 'suspended' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                    licenseStatus === 'revoked' ? 'bg-red-900/20 text-red-300 border border-red-500/30' :
-                    licenseStatus === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                    licenseStatus === 'expired' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
-                    'bg-gray-500/20 text-gray-400 border border-gray-500/30'
-                  }`}>
-                    {licenseStatus.toUpperCase()}
-                  </span>
-                </div>
-              </div>
 
-              {canManageLicense && (
-                <div className="flex gap-2 pt-2">
-                  {licenseStatus !== 'suspended' && licenseStatus !== 'revoked' && (
-                    <button
-                      onClick={() => handleLicenseAction('suspend')}
-                      disabled={suspendingLicense}
-                      className="px-3 py-1.5 bg-red-900/50 hover:bg-red-900 text-red-200 text-xs rounded border border-red-700 flex items-center gap-1 transition-colors disabled:opacity-50"
-                    >
-                      <Gavel size={12} />
-                      {suspendingLicense ? 'Processing...' : 'Suspend License'}
-                    </button>
-                  )}
-                  {(licenseStatus === 'suspended' || licenseStatus === 'revoked') && (
-                    <button
-                      onClick={() => handleLicenseAction('reinstate')}
-                      disabled={suspendingLicense}
-                      className="px-3 py-1.5 bg-green-900/50 hover:bg-green-900 text-green-200 text-xs rounded border border-green-700 flex items-center gap-1 transition-colors disabled:opacity-50"
-                    >
-                      <CheckCircle size={12} />
-                      {suspendingLicense ? 'Processing...' : 'Reinstate License'}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Agreements */}
           <div className="bg-zinc-900 rounded-lg border border-white/10 p-4">

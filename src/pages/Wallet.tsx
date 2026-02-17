@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useAuth } from "../hooks/useAuth";
 import { useAuthStore } from "../lib/store";
 import { useNavigate } from "react-router-dom";
 import { Wallet as WalletIcon, Coins, DollarSign, RefreshCw, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
@@ -21,7 +22,8 @@ interface CoinTx {
 }
 
 export default function Wallet() {
-  const { user, profile, refreshProfile } = useAuthStore();
+  const { user, profile } = useAuth();
+  const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const navigate = useNavigate();
   const [txs, setTxs] = useState<CoinTx[]>([]);
   const [loading, setLoading] = useState(true);

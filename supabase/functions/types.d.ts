@@ -91,6 +91,16 @@ declare module 'livekit-server-sdk' {
     listRooms(): Promise<{ name: string; numParticipants: number }[]>;
     getRoom(roomName: string): Promise<{ name: string; metadata?: string }>;
   }
+
+  export enum IngressInput {
+    RTMP = 1,
+  }
+
+  export class IngressClient {
+    constructor(url: string, apiKey: string, apiSecret: string);
+    createIngress(inputType: number, options: Record<string, any>): Promise<Record<string, any>>;
+    deleteIngress(ingressId: string): Promise<void>;
+  }
 }
 
 declare module 'https://deno.land/std@0.177.0/http/server.ts' {

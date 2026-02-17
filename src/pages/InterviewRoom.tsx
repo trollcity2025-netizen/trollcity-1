@@ -161,7 +161,7 @@ export default function InterviewRoom() {
             applicant:user_profiles!applicant_id(username, avatar_url)
           `)
           .eq('room_id', roomId)
-          .single()
+          .maybeSingle()
 
         if (error || !data) {
           toast.error('Interview not found')

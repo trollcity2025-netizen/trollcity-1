@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
 
 import MoneyRain from '../components/MoneyRain';
@@ -402,8 +402,15 @@ export default function LandingPage() {
           </div>
 
           {/* Footer */}
-          <div className="py-8 text-center text-slate-500 text-sm">
-            © 2026 Troll City, LLC. All rights reserved.
+          <div className="py-10 border-t border-white/10">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-400">
+              <div>© 2026 Troll City, LLC. All rights reserved.</div>
+              <div className="flex items-center gap-6">
+                <Link to="/about" className="hover:text-white transition-colors">About us</Link>
+                <Link to="/contact" className="hover:text-white transition-colors">Contact</Link>
+                <Link to="/career" className="hover:text-white transition-colors">Careers</Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>

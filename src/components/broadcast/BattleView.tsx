@@ -303,6 +303,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
 
   const updateMyStreamBoxCount = async (newCount: number) => {
     if (!myStream || participantInfo?.role !== 'host') return;
+    if (myStream.stream_kind === 'trollmers' && newCount !== 1) {
+      toast.warning('Trollmers broadcasts are locked to 1 box.');
+      return;
+    }
 
     if (newCount < 1) {
       toast.warning('Cannot have less than 1 box.');

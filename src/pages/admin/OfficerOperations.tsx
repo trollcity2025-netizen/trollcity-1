@@ -225,6 +225,7 @@ export default function OfficerOperations() {
     };
   }, [loadChatMessages]);
 
+
   const syncMessages = async () => {
     if (!window.confirm('Sync legacy direct messages into the new inbox?')) return;
 

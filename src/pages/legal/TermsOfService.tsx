@@ -101,6 +101,13 @@ export default function TermsOfService() {
           We may remove content or restrict accounts that violate our policies or
           applicable law.
         </p>
+        <p>
+          Within Troll City, we allow broader personal expression with clear boundaries.
+          Men may appear shirtless or in underwear; women may appear in shirts with
+          underwear. No explicit sexual content is allowed. Genitals must never be
+          exposed or visibly aroused. Do not touch or simulate touching of intimate
+          body parts while live.
+        </p>
 
         <h2>8. Safety, Moderation, and Reporting</h2>
         <p>

@@ -1,0 +1,285 @@
+react-dom.development.js:29895 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+supabase.ts:7 Supabase URL: https://yjxpwfalenorzrqxwmtr.supabase.co
+supabase.ts:8 Supabase Anon Key (first 5 chars): eyJhb
+LiveKitConfig.ts:8 ✅ VITE_LIVEKIT_URL: wss://trollcity-o707gczb.livekit.cloud
+LiveKitConfig.ts:9 ✅ VITE_LIVEKIT_CLOUD_URL: wss://troll-city-llc-4ixv208d.livekit.cloud
+LiveKitConfig.ts:33 ✅ LIVEKIT_URL FINAL: wss://trollcity-o707gczb.livekit.cloud
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+App.tsx:440 [BugAlert] Admin detected, setting up real-time subscription
+SessionMonitor.tsx:41 [SessionMonitor] Session not found or error: undefined
+useInstallPrompt.ts:27 [PWA] beforeinstallprompt captured. Default banner suppressed for custom UI.
+(index):1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+useCoins.ts:98 [refreshCoins] Balance sync: {dbBalance: 1000033378437, localBalance: 1000033378437, paidBalance: 1000033378437, mergedPaid: 1000033378437}
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:553 Overriding profile level with stats level: 1
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:553 Overriding profile level with stats level: 1
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+Profile.tsx:553 Overriding profile level with stats level: 1
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:553 Overriding profile level with stats level: 1
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:553 Overriding profile level with stats level: 1
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:453 Fetching fresh XP data for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+useXPStore.ts:95 Fetching XP for user: 8dff9f37-21b5-4b8e-adc2-b9286874be1a
+Profile.tsx:465 Using cached profile from store
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:515 Loaded profile data: {id: '8dff9f37-21b5-4b8e-adc2-b9286874be1a', username: 'MaiCorp', avatar_url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD…xjGAMYxgDGMYAxjGAMYxgDGMYAxjGAMYxgDGMYAxjGAf/2Q==', bio: 'I Made This App!!', role: 'admin', …}
+Profile.tsx:516 Gender: male
+Profile.tsx:517 Banner URL: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png
+Profile.tsx:518 Updated at: 2026-02-16T20:41:24.171006+00:00
+Profile.tsx:522 Full banner URL with cache bust: https://yjxpwfalenorzrqxwmtr.supabase.co/storage/v1/object/public/covers/8dff9f37-21b5-4b8e-adc2-b9286874be1a-1769373056957.png?cb=2026-02-16T20:41:24.171006+00:00
+useXPStore.ts:118 user_stats query result: {data: {…}, error: null}
+store.ts:164 Profile updated: MaiCorp admin
+Profile.tsx:553 Overriding profile level with stats level: 1
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin
+store.ts:164 Profile updated: MaiCorp admin

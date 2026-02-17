@@ -84,7 +84,8 @@ export function useProfileViewPayment({
     }
 
     checkPayment()
-  }, [user, user?.id, profileOwnerId, profileViewPrice, paymentProcessed, navigate, onPaymentComplete])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, profileOwnerId, profileViewPrice, paymentProcessed])
 
   return { checking, canView, paymentProcessed }
 }

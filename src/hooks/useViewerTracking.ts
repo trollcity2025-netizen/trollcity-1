@@ -10,7 +10,12 @@ import { usePresenceStore } from '../lib/presenceStore'
  * - Scalability: Aggregates counts and batches updates.
  * - Removes per-user join/leave chat spam.
  */
-export function useViewerTracking(streamId: string | null, isHost: boolean = false, customUser: any = null) {
+export function useViewerTracking(
+  streamId: string | null,
+  isHost: boolean = false,
+  customUser: any = null,
+  enabled: boolean = true
+) {
   const { user, profile } = useAuthStore()
   const setRoomViewerCount = usePresenceStore(state => state.setRoomViewerCount)
   const lastDbUpdate = useRef<number>(0)
@@ -21,7 +26,7 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
   const effectiveUser = user || customUser;
 
   useEffect(() => {
-    if (!streamId || !effectiveUser) return
+    if (!enabled || !streamId || !effectiveUser) return
 
     // Only the Host and Officers track their presence to avoid roster explosion at 10k users.
     // Viewers just "listen" to the count updated by the host/officers in the DB.
@@ -40,40 +45,44 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
       },
     })
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState()
-        
-        // Count unique keys (user_ids)
-        let count = Object.keys(state).length;
+    const updateCountsFromPresence = () => {
+      const state = channel.presenceState();
 
-        // If we are tracking ourselves but not yet in the sync state, 
-        // ensure we count ourselves (at least 1)
-        if (shouldTrack && count === 0) {
-          count = 1;
-        }
-        
-        // Scalability: Batch presence updates to 2 seconds
-        pendingCountRef.current = count;
-        if (!updateTimerRef.current) {
-          updateTimerRef.current = setTimeout(() => {
-            if (pendingCountRef.current !== null) {
-              setRoomViewerCount(streamId, pendingCountRef.current);
-              pendingCountRef.current = null;
-            }
-            updateTimerRef.current = null;
-          }, 2000);
-        }
+      // Count unique keys (user_ids)
+      let count = Object.keys(state).length;
 
-        // Only Host OR Officer/Admin updates the DB count
-        if (isUpdateAuthorized) {
-          const now = Date.now()
-          if (now - lastDbUpdate.current > 10000) { // Throttled to 10s
-            lastDbUpdate.current = now
-            supabase.rpc('update_stream_viewer_count', { p_stream_id: streamId, p_count: count });
+      // If we are tracking ourselves but not yet in the sync state, 
+      // ensure we count ourselves (at least 1)
+      if (shouldTrack && count === 0) {
+        count = 1;
+      }
+
+      // Scalability: Batch presence updates to 2 seconds
+      pendingCountRef.current = count;
+      if (!updateTimerRef.current) {
+        updateTimerRef.current = setTimeout(() => {
+          if (pendingCountRef.current !== null) {
+            setRoomViewerCount(streamId, pendingCountRef.current);
+            pendingCountRef.current = null;
           }
+          updateTimerRef.current = null;
+        }, 2000);
+      }
+
+      // Only Host OR Officer/Admin updates the DB count
+      if (isUpdateAuthorized) {
+        const now = Date.now();
+        if (now - lastDbUpdate.current > 10000) { // Throttled to 10s
+          lastDbUpdate.current = now;
+          supabase.rpc('update_stream_viewer_count', { p_stream_id: streamId, p_count: count });
         }
-      })
+      }
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, updateCountsFromPresence)
+      .on('presence', { event: 'join' }, updateCountsFromPresence)
+      .on('presence', { event: 'leave' }, updateCountsFromPresence)
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           // Everyone tracks themselves
@@ -120,7 +129,7 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
         supabase.from('stream_viewers').delete().match({ stream_id: streamId, user_id: user.id });
       }
     }
-  }, [streamId, user, isHost, profile, effectiveUser, setRoomViewerCount])
+  }, [streamId, user, isHost, profile, effectiveUser, setRoomViewerCount, enabled])
 
   // Get count from store instead of local state for consistency
   const storeCount = usePresenceStore(state => state.roomViewerCounts[streamId || ''] || 0)

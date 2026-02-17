@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { EDGE_URL } from '../lib/config';
 import { useAuthStore } from '../lib/store';
 import { ChatMessage } from '../types/broadcast';
 import { toast } from 'sonner';
@@ -225,7 +226,8 @@ export function useStreamChat(streamId: string) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Not authenticated');
 
-        const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+        const edgeUrl = EDGE_URL.replace(/\/$/, '');
+        const response = await fetch(`${edgeUrl}/send-message`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`,

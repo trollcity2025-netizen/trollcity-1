@@ -63,6 +63,25 @@ const users = [
     is_lead_officer: false,
     is_officer_active: false,
   },
+  {
+    email: 'chatter1@test.com',
+    username: 'chatter1_test',
+    role: 'user',
+    is_admin: false,
+    is_troll_officer: false,
+    is_lead_officer: false,
+    is_officer_active: false,
+    is_broadcaster: true,
+  },
+  {
+    email: 'chatter2@test.com',
+    username: 'chatter2_test',
+    role: 'user',
+    is_admin: false,
+    is_troll_officer: false,
+    is_lead_officer: false,
+    is_officer_active: false,
+  },
 ];
 
 async function getUserIdByEmail(email: string) {

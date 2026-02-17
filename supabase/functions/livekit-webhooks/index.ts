@@ -82,21 +82,29 @@ Deno.serve(async (req: Request) => {
     console.log('LiveKit webhook received:', { event, room });
 
     // Helper function to trigger egress safely and idempotently
+    const resolveStream = async (roomName: string) => {
+      const { data: stream } = await supabase
+        .from('streams')
+        .select('id, room_name, egress_id, hls_started_at')
+        .or(`id.eq.${roomName},room_name.eq.${roomName}`)
+        .maybeSingle();
+      return stream || null;
+    };
+
     const triggerEgressSafe = async (roomName: string) => {
         console.log("🔥 CHECKING EGRESS STATUS", roomName);
         
-        // 1. Idempotency Check
-        // Check streams first (most likely)
-        const { data: stream } = await supabase
-            .from('streams')
-            .select('egress_id, hls_started_at')
-            .eq('id', roomName)
-            .single();
+      // 1. Idempotency Check
+      const stream = await resolveStream(roomName);
 
         if (stream?.egress_id) {
-            console.log(`Egress already active for stream ${roomName} (ID: ${stream.egress_id}). Skipping.`);
+        console.log(`Egress already active for stream ${stream.id} (ID: ${stream.egress_id}). Skipping.`);
             return;
         }
+
+      if (!stream) {
+        console.warn('No stream found for room:', roomName);
+      }
 
         // Check pods/courts if stream not found or just to be safe? 
         // For now, we assume the stream record is the master record for egress status.
@@ -118,9 +126,10 @@ Deno.serve(async (req: Request) => {
             console.log("🔥 STARTING HLS EGRESS", roomName);
             
             // Configure HLS Output
+            const hlsRoomName = stream?.id || roomName;
             const segmentsOptions = {
                 protocol: 1, // S3 = 1 (ProtocolType.S3)
-                filenamePrefix: `streams/${roomName}/`,
+              filenamePrefix: `streams/${hlsRoomName}/`,
                 playlistName: 'master.m3u8',
                 segmentDuration: 4,
             } as any;
@@ -160,7 +169,7 @@ Deno.serve(async (req: Request) => {
 
             // Construct full HLS URL (Normalized)
             const hlsBaseUrl = Deno.env.get("VITE_HLS_BASE_URL");
-            const hlsPath = `/streams/${roomName}/master.m3u8`;
+            const hlsPath = `/streams/${hlsRoomName}/master.m3u8`;
             let hlsUrl = '';
 
             if (hlsBaseUrl) {
@@ -191,10 +200,10 @@ Deno.serve(async (req: Request) => {
                 supabase.from('streams').update({ 
                     hls_url: null, // CLEAR THIS
                     hls_path: hlsPath,
-                    room_name: roomName,
+                  room_name: stream?.room_name || roomName,
                     egress_id: egressInfo.egressId,
                     hls_started_at: new Date().toISOString()
-                }).eq('id', roomName),
+                }).eq('id', stream?.id || roomName),
                 supabase.from('court_sessions').update({ 
                     hls_url: null, // CLEAR THIS
                     egress_id: egressInfo.egressId,
@@ -202,7 +211,7 @@ Deno.serve(async (req: Request) => {
                 }).eq('id', roomName)
             ]);
 
-            console.log('Updated egress state for room:', roomName);
+              console.log('Updated egress state for room:', roomName, 'stream:', stream?.id || roomName);
 
         } catch (egressErr: any) {
             console.error('Failed to trigger Egress:', egressErr);
@@ -212,6 +221,8 @@ Deno.serve(async (req: Request) => {
     };
 
     if (event === 'room_started') {
+      const stream = await resolveStream(room.name);
+      const streamId = stream?.id || room.name;
       // Mark stream as live
       const { error } = await supabase
         .from('streams')
@@ -220,7 +231,7 @@ Deno.serve(async (req: Request) => {
           is_live: true,
           start_time: new Date().toISOString()
         })
-        .eq('id', room.name); // room.name is the stream ID
+        .eq('id', streamId); // room.name may be room_name, not stream id
 
       if (error) {
         console.error('Error updating stream to live:', error);
@@ -305,8 +316,8 @@ Deno.serve(async (req: Request) => {
       const { data: streamData, error: streamError } = await supabase
         .from('streams')
         .select('is_battle, battle_id')
-        .eq('id', room.name)
-        .single();
+        .or(`id.eq.${room.name},room_name.eq.${room.name}`)
+        .maybeSingle();
 
       if (!streamError && (streamData?.is_battle || streamData?.battle_id)) {
         console.log(`🛡️ Stream ${room.name} is in BATTLE MODE (battle_id: ${streamData.battle_id}). Ignoring room_finished event.`);
@@ -317,14 +328,14 @@ Deno.serve(async (req: Request) => {
       }
 
       // Mark stream as ended
-      const { error } = await supabase
+      const { data: _endStream, error } = await supabase
         .from('streams')
         .update({
           status: 'ended',
           is_live: false,
           ended_at: new Date().toISOString()
         })
-        .eq('id', room.name);
+        .eq('id', (await resolveStream(room.name))?.id || room.name);
 
       if (error) {
         console.error('Error updating stream to ended:', error);
@@ -350,6 +361,7 @@ Deno.serve(async (req: Request) => {
       console.log('Egress ended for room:', roomName, 'URL:', recordingUrl);
 
       if (roomName && recordingUrl) {
+        const stream = await resolveStream(roomName);
          const { error } = await supabase
             .from('streams')
             .update({
@@ -358,7 +370,7 @@ Deno.serve(async (req: Request) => {
                // is_live: false, 
                // status: 'ended'
             })
-            .eq('id', roomName); // Assuming roomName maps to stream ID
+            .eq('id', stream?.id || roomName); // roomName may map via room_name
 
          if (error) {
             console.error('Error updating recording_url:', error);

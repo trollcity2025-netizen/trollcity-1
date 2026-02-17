@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
@@ -24,12 +24,21 @@ function formatTime(seconds: number) {
 
 export default function SetupPage() {
   const navigate = useNavigate();
-  const { user, profile } = useAuthStore();
+  const { user, profile, refreshProfile } = useAuthStore();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('general');
+  const [gameStreamKey, setGameStreamKey] = useState('');
+  const [isGeneratingStreamKey, setIsGeneratingStreamKey] = useState(false);
+  const [rtmpUrl, setRtmpUrl] = useState('');
+  const [ingressStatus, setIngressStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showObsChecklist, setShowObsChecklist] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [launchLimitMessage, setLaunchLimitMessage] = useState<string | null>(null);
   const [restrictionCheck, setRestrictionCheck] = useState<{ allowed: boolean; waitTime?: string; reason?: string; message?: string } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null); // Live timer in seconds
+
+  const rtmpIngestUrl = (import.meta as any).env?.VITE_LIVEKIT_INGRESS_URL || (import.meta as any).env?.VITE_RTMP_INGRESS_URL || '';
+  const displayRtmpUrl = rtmpUrl || profile?.ingress_url || rtmpIngestUrl;
 
   // Pre-generate stream ID for token optimization
   const [streamId] = useState(() => generateUUID());
@@ -37,6 +46,39 @@ export default function SetupPage() {
   // Track if we are navigating to broadcast to prevent cleanup
   const isStartingStream = useRef(false);
   const hasPrefetched = useRef<string | null>(null);
+
+  const provisionIngress = useCallback(async (rotate: boolean) => {
+    if (!user?.id) return;
+    setIsGeneratingStreamKey(true);
+    setIngressStatus('idle');
+    const { data, error } = await supabase.functions.invoke('livekit-ingress', {
+      body: { broadcaster_id: user.id, rotate }
+    });
+
+    if (error) {
+      console.error('[SetupPage] Ingress provisioning failed:', error);
+      toast.error('Failed to generate stream key');
+      setIngressStatus('error');
+    } else {
+      const streamKey = data?.stream_key || '';
+      const ingressUrl = data?.rtmp_url || '';
+      if (streamKey) {
+        setGameStreamKey(streamKey);
+        refreshProfile();
+      }
+      if (ingressUrl) {
+        setRtmpUrl(ingressUrl);
+      }
+      setIngressStatus('success');
+    }
+    setIsGeneratingStreamKey(false);
+  }, [refreshProfile, user?.id]);
+
+  useEffect(() => {
+    if (category !== 'trollmers' || !user?.id) return;
+    if (isGeneratingStreamKey) return;
+    provisionIngress(false);
+  }, [category, isGeneratingStreamKey, provisionIngress, user?.id]);
 
   useEffect(() => {
     async function checkRestriction() {
@@ -48,27 +90,15 @@ export default function SetupPage() {
       // We strictly enforce this for ALL users, including Admins.
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
-        .select('created_at, bypass_broadcast_restriction, drivers_license_status, live_restricted_until')
+        .select('created_at, bypass_broadcast_restriction, live_restricted_until')
         .eq('id', user.id)
         .single();
       
       if (profileError) console.error('[SetupPage] Profile fetch error:', profileError);
 
-      const profileStatus = profile?.drivers_license_status?.toLowerCase();
-      
-      console.log('[SetupPage] License Status:', profileStatus);
 
-      const validStatuses = ['valid', 'active', 'approved'];
-      const isLicenseValid = profileStatus && validStatuses.includes(profileStatus);
 
-      if (!isLicenseValid) {
-        setRestrictionCheck({
-          allowed: false,
-          reason: 'license',
-          message: `You must have a valid Driver's License to broadcast (Admins included). Current Status: ${profileStatus || 'None'}`
-        });
-        return;
-      }
+
 
       // Check Bypass (Admins/VIPs) - Only bypasses account age, NOT license
       if (profile?.bypass_broadcast_restriction) {
@@ -332,6 +362,23 @@ export default function SetupPage() {
       setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   };
 
+  const copyToClipboard = async (value: string, label: string) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch (err) {
+      console.error('[SetupPage] Copy failed:', err);
+      toast.error('Copy failed');
+    }
+  };
+
+  const handleRotateKey = async () => {
+    if (isGeneratingStreamKey) return;
+    if (!confirm('Rotate stream key? This will invalidate the current key immediately.')) return;
+    await provisionIngress(true);
+  };
+
   const handleStartStream = async () => {
     if (!title.trim()) {
       toast.error('Please enter a stream title');
@@ -352,15 +399,39 @@ export default function SetupPage() {
         toast.error('Trollmers requires camera enabled');
         return;
       }
+      if (!gameStreamKey.trim()) {
+        toast.error('Trollmers requires a game stream key');
+        return;
+      }
     }
 
     setLoading(true);
+    setLaunchLimitMessage(null);
     try {
       // 0. Check global broadcast limit
       // Check for active event limits first
       const { data: eventData } = await supabase.rpc('get_active_event');
       const event = eventData?.[0];
       const maxBroadcasts = event ? event.max_broadcasts : 5;
+
+      const launchStart = new Date();
+      launchStart.setHours(0, 0, 0, 0);
+
+      const { data: usageData, error: usageError } = await supabase
+        .rpc('get_launch_usage_snapshot', { p_since: launchStart.toISOString() });
+
+      if (!usageError) {
+        const rawUsage = Array.isArray(usageData) ? usageData[0]?.minutes_used : usageData?.minutes_used ?? usageData;
+        const minutesUsed = Number(rawUsage || 0);
+
+        if (minutesUsed >= 4700) {
+          const message = 'Launch phase complete — next upgrade unlocking soon.';
+          setLaunchLimitMessage(message);
+          toast.error(message);
+          setLoading(false);
+          return;
+        }
+      }
 
       const { count, error: countError } = await supabase
         .from('streams')
@@ -375,8 +446,11 @@ export default function SetupPage() {
         return;
       }
 
+      const roomName = category === 'trollmers'
+        ? `trollmers_${user.id.replace(/-/g, "")}`
+        : streamId;
       // Ensure token is ready
-      const safeRoom = streamId.replace(/-/g, "");
+      const safeRoom = roomName.replace(/-/g, "");
       const preflight = PreflightStore.getToken();
       
       if (!preflight.token || preflight.roomName !== safeRoom) {
@@ -412,6 +486,8 @@ export default function SetupPage() {
           title,
           category,
           stream_kind: category === 'trollmers' ? 'trollmers' : 'regular',
+          game_stream_key: category === 'trollmers' ? gameStreamKey.trim() : null,
+          room_name: roomName.replace(/-/g, ""),
           camera_ready: isVideoEnabled,
           status: 'starting', // Wait for LiveKit connection
           is_live: true,
@@ -487,45 +563,23 @@ export default function SetupPage() {
         {/* Form Section */}
         {restrictionCheck && !restrictionCheck.allowed ? (
             <div className="space-y-6 bg-slate-900/50 p-8 rounded-3xl border border-red-500/30 shadow-xl text-center flex flex-col justify-center">
-                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-                  <AlertTriangle className="w-8 h-8 text-red-500" />
-                </div>
-                
-                {restrictionCheck.reason === 'license' ? (
-                  <>
-                    <h2 className="text-2xl font-bold text-white mb-2">Driver&apos;s License Required</h2>
-                    <p className="text-gray-400 mb-6">
-                      {restrictionCheck.message || "You need a valid Driver&apos;s License to start a broadcast."}
-                    </p>
-                    <button 
-                      onClick={() => navigate('/dmv')}
-                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold"
-                    >
-                      Go to DMV
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-2xl font-bold text-white mb-2">Account in Cooldown</h2>
-                    <p className="text-gray-400 mb-6">
-                      New accounts must wait 30 minutes before starting a broadcast to ensure community safety.
-                    </p>
-                    <div className="bg-slate-950 rounded-lg p-4 border border-white/5 inline-block mx-auto">
-                      <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Time Remaining</div>
-                      <div className="text-2xl font-mono text-red-400 font-bold">{restrictionCheck.waitTime}</div>
-                    </div>
-                  </>
-                )}
-
-                <button 
-                  onClick={() => navigate('/')}
-                  className="mt-4 w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-gray-300 hover:text-white"
-                >
-                  Return to Home
-                </button>
-            </div>
-        ) : (
+            <AlertTriangle size={48} className="text-red-500 mx-auto" />
+            <>
+                <h2 className="text-2xl font-bold text-white mb-2">Broadcast Cooldown Active</h2>
+                <p className="text-gray-400 mb-6">
+                  You are on a temporary cooldown. Please wait {restrictionCheck.waitTime} before broadcasting again.
+                </p>
+                <p className="text-xs text-gray-500">This helps ensure fair usage and system stability.</p>
+            </>
+        </div>
+    ) : (
         <div className="space-y-6 bg-slate-900/50 p-8 rounded-3xl border border-white/5 shadow-xl">
+              {launchLimitMessage && (
+                <div className="flex items-center gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="font-semibold">{launchLimitMessage}</span>
+                </div>
+              )}
           <div>
             <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">Go Live</h1>
             <p className="text-gray-400">Set up your broadcast details</p>
@@ -593,6 +647,95 @@ export default function SetupPage() {
                     ⚠️ Trollmers requires camera enabled
                   </p>
                 )}
+                <div className="pt-2 space-y-3">
+                    <div>
+                    <label className="block text-xs font-medium text-amber-200 mb-1">RTMP URL</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={displayRtmpUrl || (isGeneratingStreamKey ? 'Generating...' : 'RTMP URL will appear after ingress is created')}
+                        readOnly
+                        className="w-full bg-slate-950 border border-amber-500/30 rounded-lg px-3 py-2 text-sm text-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-amber-300/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(displayRtmpUrl, 'RTMP URL')}
+                        disabled={!displayRtmpUrl}
+                        className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/40 disabled:opacity-50"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-amber-200 mb-1">Stream Key</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={gameStreamKey || (isGeneratingStreamKey ? 'Generating...' : '')}
+                        readOnly
+                        className="w-full bg-slate-950 border border-amber-500/30 rounded-lg px-3 py-2 text-sm text-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-amber-300/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(gameStreamKey, 'Stream key')}
+                        disabled={!gameStreamKey}
+                        className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/40 disabled:opacity-50"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRotateKey}
+                        disabled={isGeneratingStreamKey}
+                        className="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-500/20 text-rose-200 border border-rose-500/40 disabled:opacity-50"
+                      >
+                        Rotate
+                      </button>
+                    </div>
+                    <p className="text-xs text-amber-200/70 mt-1">
+                      Use OBS/Streamlabs. Console players typically use a capture card or Remote Play into a PC.
+                    </p>
+                    <p className={`text-xs mt-1 ${ingressStatus === 'success' ? 'text-green-300' : ingressStatus === 'error' ? 'text-red-300' : 'text-amber-200/70'}`}>
+                      {ingressStatus === 'success'
+                        ? 'Ingress provisioned ✅'
+                        : ingressStatus === 'error'
+                        ? 'Ingress failed ❌'
+                        : 'Ingress provisioning...'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowObsChecklist(true)}
+                      className="mt-2 text-xs font-semibold text-amber-200 underline underline-offset-2"
+                    >
+                      Test OBS checklist
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showObsChecklist && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-bold text-amber-200">Test OBS</h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowObsChecklist(false)}
+                      className="text-sm text-gray-400 hover:text-white"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+                    <li>Open OBS → Settings → Stream → Service: Custom.</li>
+                    <li>Paste OBS Server from Go Live (RTMP URL).</li>
+                    <li>Paste the Stream Key.</li>
+                    <li>Click Start Streaming in OBS.</li>
+                    <li>Confirm stream shows live in Troll City within ~10 seconds.</li>
+                  </ol>
+                </div>
               </div>
             )}
 

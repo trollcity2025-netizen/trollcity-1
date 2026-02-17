@@ -38,9 +38,9 @@ export default function InterviewRoomPage() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
 
-        if (appError && appError.code !== 'PGRST116') throw appError
+        if (appError) throw appError
         setApplication(appData)
 
         // 2. Check Interview if application exists

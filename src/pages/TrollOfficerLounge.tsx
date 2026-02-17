@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { downloadPayrollPDF } from '../lib/officerPayrollPDF'
 import OfficerStreamGrid from '../components/officer/OfficerStreamGrid'
+import SendAnnouncementModal from '../components/officer/SendAnnouncementModal';
 import {
   Eye,
   Ban,
@@ -18,7 +19,8 @@ import {
   XCircle,
   Calendar,
   ChevronDown,
-  FileText
+  FileText,
+  Megaphone
 } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
 
@@ -29,6 +31,7 @@ type Stream = {
   broadcaster_id: string
   current_viewers?: number
   status: string
+  is_live: boolean
 }
 
 type OfficerChatMessage = {
@@ -62,6 +65,9 @@ export default function TrollOfficerLounge() {
   const [callOffDate, setCallOffDate] = useState('')
   const [callOffReason, setCallOffReason] = useState('')
   const [submittingCallOff, setSubmittingCallOff] = useState(false)
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+
+  const canSendAnnouncements = profile?.role === 'admin' || profile?.is_admin === true || profile?.role === 'lead_troll_officer' || profile?.role === 'troll_officer';
 
   const canManageRequests = profile?.role === 'admin' || profile?.is_admin === true || profile?.role === 'secretary'
 
@@ -448,7 +454,9 @@ export default function TrollOfficerLounge() {
   }
 
   return (
-    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white flex flex-col font-sans`}>
+    <>
+      <SendAnnouncementModal isOpen={showAnnouncementModal} onClose={() => setShowAnnouncementModal(false)} />
+      <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white flex flex-col font-sans`}>
       {/* HEADER */}
       <header className={`border-b ${trollCityTheme.borders.glass} ${trollCityTheme.backgrounds.card} px-6 py-4 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-3">
@@ -557,6 +565,18 @@ export default function TrollOfficerLounge() {
             </button>
           </div>
 
+          {canSendAnnouncements && (
+            <div className="p-4">
+              <button
+                onClick={() => setShowAnnouncementModal(true)}
+                className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition bg-green-600/20 text-green-400 border border-green-500/30 hover:bg-green-600/30"
+              >
+                <Megaphone size={18} />
+                <span className="font-semibold text-sm">Send Announcement</span>
+              </button>
+            </div>
+          )}
+
           <div className={`mt-auto p-4 border-t ${trollCityTheme.borders.glass}`}>
             <div className={`${trollCityTheme.backgrounds.glass} rounded-xl p-4 ${trollCityTheme.borders.glass}`}>
               <h3 className={`text-xs font-bold uppercase ${trollCityTheme.text.mutedDark} mb-3 flex items-center gap-2`}>
@@ -622,272 +642,11 @@ export default function TrollOfficerLounge() {
         </aside>
 
         {/* CENTER PANEL */}
-        <main className="flex-1 overflow-y-auto p-6 relative z-10">
-          {activeTab === 'moderation' && (
-            <div className="space-y-6">
-              {/* LIVE STREAMS GRID */}
-              <div>
-                <OfficerStreamGrid />
-              </div>
-
-              {/* SELECTED STREAM MONITOR */}
-              {selectedStream && (
-                <div className={`border-t ${trollCityTheme.borders.glass} pt-6`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                      <Eye size={20} className="text-blue-400" />
-                      Monitoring: <span className="text-blue-400">{selectedStream.title}</span>
-                    </h3>
-                    <button 
-                      onClick={() => setSelectedStream(null)}
-                      className={`text-xs ${trollCityTheme.text.muted} hover:text-white`}
-                    >
-                      Close Monitor
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* VIDEO PREVIEW */}
-                    <div className={`lg:col-span-2 bg-black rounded-xl border ${trollCityTheme.borders.glass} aspect-video flex items-center justify-center relative overflow-hidden`}>
-                       <p className="text-gray-600 text-sm">Video Feed Preview</p>
-                       {/* 
-                         We can add a real video player here using LiveKit component 
-                         similar to Viewer page but muted/small 
-                       */}
-                    </div>
-
-                    {/* MOD ACTIONS */}
-                    <div className={`${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass} p-4 flex flex-col gap-3`}>
-                      <h4 className={`text-sm font-bold ${trollCityTheme.text.muted} uppercase tracking-wider mb-2`}>Quick Actions</h4>
-                      <div className="space-y-2">
-                        <input 
-                          type="text" 
-                          placeholder="Enter username to punish..." 
-                          className={`w-full ${trollCityTheme.backgrounds.glass} border ${trollCityTheme.borders.glass} rounded px-3 py-2 text-sm focus:border-red-500 outline-none transition`}
-                          id="punish-input"
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                          <button 
-                            onClick={() => {
-                                const input = document.getElementById('punish-input') as HTMLInputElement
-                                if(input?.value) kickUser(input.value)
-                            }}
-                            className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-500 border border-yellow-600/50 py-2 rounded text-xs font-bold uppercase transition flex items-center justify-center gap-2"
-                          >
-                            <DoorOpen size={14} /> Kick
-                          </button>
-                          <button 
-                            onClick={() => {
-                                const input = document.getElementById('punish-input') as HTMLInputElement
-                                if(input?.value) muteUser(input.value)
-                            }}
-                            className="bg-gray-600/20 hover:bg-gray-600/30 text-gray-400 border border-gray-500/50 py-2 rounded text-xs font-bold uppercase transition flex items-center justify-center gap-2"
-                          >
-                            <VolumeX size={14} /> Mute
-                          </button>
-                        </div>
-                        <button 
-                          onClick={() => {
-                              const input = document.getElementById('punish-input') as HTMLInputElement
-                              if(input?.value) banUser(input.value)
-                          }}
-                          className="w-full bg-red-600/20 hover:bg-red-600/30 text-red-500 border border-red-500/50 py-2 rounded text-xs font-bold uppercase transition flex items-center justify-center gap-2"
-                        >
-                          <Ban size={14} /> BAN USER
-                        </button>
-                      </div>
-
-                      <div className={`mt-4 border-t ${trollCityTheme.borders.glass} pt-4`}>
-                        <h4 className={`text-xs font-bold ${trollCityTheme.text.muted} uppercase mb-2`}>Stream Chat Log</h4>
-                        <div className={`h-40 overflow-y-auto bg-black/50 rounded border ${trollCityTheme.borders.glass} p-2 text-xs space-y-1`}>
-                          <div className={`${trollCityTheme.text.mutedDark} italic`}>Connecting to chat stream...</div>
-                          {selectedStream && (
-                            <div className={`${trollCityTheme.text.muted} text-xs italic`}>
-                              Chat history monitoring for {selectedStream.title}
-                              <p className={`mt-2 text-[10px] ${trollCityTheme.text.mutedDark}`}>Live chat integration pending...</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'families' && (
-            <div>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Users size={20} className="text-purple-500" />
-                Family Rankings
-              </h2>
-              <div className={`${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass} overflow-hidden`}>
-                <table className="w-full text-sm text-left">
-                  <thead className={`bg-white/5 ${trollCityTheme.text.muted} uppercase text-xs`}>
-                    <tr>
-                      <th className="px-6 py-3">Rank</th>
-                      <th className="px-6 py-3">Family Name</th>
-                      <th className="px-6 py-3">Reputation</th>
-                      <th className="px-6 py-3">Members</th>
-                      <th className="px-6 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {familiesList.map((family, index) => (
-                      <tr key={family.id} className="hover:bg-white/5 transition">
-                        <td className={`px-6 py-4 font-bold ${trollCityTheme.text.mutedDark}`}>#{index + 1}</td>
-                        <td className="px-6 py-4 font-bold text-white">{family.name}</td>
-                        <td className="px-6 py-4 text-purple-400">{family.total_rep}</td>
-                        <td className="px-6 py-4">{family.member_count}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs border border-green-500/20">
-                            Active
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {familiesList.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className={`px-6 py-8 text-center ${trollCityTheme.text.mutedDark}`}>
-                          No families established yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {activeTab === 'calls' && (
-            <div>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Phone size={20} className="text-yellow-500" />
-                Recent Calls
-              </h2>
-              <div className={`${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass} overflow-hidden`}>
-                <table className="w-full text-sm text-left">
-                  <thead className={`bg-white/5 ${trollCityTheme.text.muted} uppercase text-xs`}>
-                    <tr>
-                      <th className="px-6 py-3">Started</th>
-                      <th className="px-6 py-3">Caller</th>
-                      <th className="px-6 py-3">Receiver</th>
-                      <th className="px-6 py-3">Type</th>
-                      <th className="px-6 py-3">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {callsList.map((c) => (
-                      <tr key={c.id} className="hover:bg-white/5 transition">
-                        <td className={`px-6 py-4 ${trollCityTheme.text.muted}`}>{new Date(c.created_at).toLocaleString()}</td>
-                        <td className="px-6 py-4 text-blue-400 font-semibold">{c.caller?.username || c.caller_id}</td>
-                        <td className="px-6 py-4 text-purple-400 font-semibold">{c.receiver?.username || c.receiver_id}</td>
-                        <td className="px-6 py-4">{c.type}</td>
-                        <td className="px-6 py-4">{c.duration_minutes} min</td>
-                      </tr>
-                    ))}
-                    {callsList.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className={`px-6 py-8 text-center ${trollCityTheme.text.mutedDark}`}>
-                          No calls found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'requests' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <FileText className="text-red-400" />
-                  {canManageRequests ? 'Time Off Requests (Admin)' : 'My Time Off Requests'}
-                </h2>
-                <button
-                  onClick={() => setShowCallOffModal(true)}
-                  className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-bold flex items-center gap-2"
-                >
-                  <Calendar size={16} /> New Request
-                </button>
-              </div>
-              
-              <div className={`${trollCityTheme.backgrounds.card} rounded-xl border ${trollCityTheme.borders.glass} overflow-hidden`}>
-                <table className="w-full text-sm">
-                  <thead className={`bg-white/5 ${trollCityTheme.text.muted}`}>
-                    <tr>
-                      <th className="px-4 py-3 text-left">Date Requested</th>
-                      {canManageRequests && <th className="px-4 py-3 text-left">Officer</th>}
-                      <th className="px-4 py-3 text-left">Shift Date</th>
-                      <th className="px-4 py-3 text-left">Reason</th>
-                      <th className="px-4 py-3 text-left">Status</th>
-                      {canManageRequests && <th className="px-4 py-3 text-right">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {requestsList.length === 0 ? (
-                      <tr>
-                        <td colSpan={canManageRequests ? 6 : 5} className={`px-4 py-8 text-center ${trollCityTheme.text.mutedDark}`}>
-                          {canManageRequests ? 'No pending requests' : 'No request history'}
-                        </td>
-                      </tr>
-                    ) : (
-                      requestsList.map((req) => (
-                        <tr key={req.id} className="hover:bg-white/5">
-                          <td className={`px-4 py-3 ${trollCityTheme.text.muted}`}>
-                            {new Date(req.created_at).toLocaleDateString()}
-                          </td>
-                          {canManageRequests && (
-                            <td className="px-4 py-3 font-semibold text-white">
-                              {req.officer?.username || 'Unknown'}
-                            </td>
-                          )}
-                          <td className="px-4 py-3 text-blue-400">
-                            {new Date(req.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </td>
-                          <td className={`px-4 py-3 ${trollCityTheme.text.secondary} max-w-xs truncate`} title={req.reason}>
-                            {req.reason}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs border ${
-                              req.status === 'approved' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                              req.status === 'denied' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                            }`}>
-                              {req.status?.toUpperCase() || 'PENDING'}
-                            </span>
-                          </td>
-                          {canManageRequests && (
-                            <td className="px-4 py-3 text-right">
-                              {req.status === 'pending' && (
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => handleApproveRequest(req)}
-                                    className="px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/50 rounded hover:bg-green-500/30 transition"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() => handleDenyRequest(req.id)}
-                                    className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 transition"
-                                  >
-                                    Deny
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <OfficerStreamGrid 
+            onUserAction={kickUser} 
+            onSelectStream={setSelectedStream} 
+          />
         </main>
 
         {/* RIGHT SIDEBAR - OFFICER CHAT */}
@@ -987,6 +746,7 @@ export default function TrollOfficerLounge() {
         </div>
       )}
     </div>
+    </>
   )
 }
 
@@ -998,3 +758,4 @@ function UserIconFallback() {
     </svg>
   )
 }
+

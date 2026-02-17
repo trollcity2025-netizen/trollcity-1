@@ -13,8 +13,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100dvh;
       margin: 0;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
       text-align: center;
     }
     .container {
@@ -47,7 +49,21 @@
   <div class="container">
     <h1>You are offline</h1>
     <p>It seems you lost your internet connection. Please check your network and try again.</p>
-    <button onclick="window.location.reload()">Try Again</button>
+    <button onclick="tryAgain()">Try Again</button>
   </div>
+  <script>
+    function tryAgain() {
+      fetch('/version.json', { cache: 'no-store' })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Version check failed');
+          }
+          window.location.href = '/';
+        })
+        .catch(() => {
+          alert('Still offline. Please check your connection and try again.');
+        });
+    }
+  </script>
 </body>
 </html>

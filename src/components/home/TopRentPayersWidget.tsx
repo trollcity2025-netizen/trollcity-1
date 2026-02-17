@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { trollCityTheme } from '@/styles/trollCityTheme'
+import { useAuthStore } from '@/lib/store'
 
 interface RentPayerRow {
   user_id: string
@@ -18,11 +19,17 @@ export default function TopRentPayersWidget({ onRequireAuth }: TopRentPayersWidg
   const [rows, setRows] = useState<RentPayerRow[]>([])
   const [loading, setLoading] = useState(true)
   const [hasAccess, setHasAccess] = useState(true)
+  const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     let mounted = true
 
     const fetchTopRentPayers = async () => {
+      if (!user) {
+        setHasAccess(false)
+        setLoading(false)
+        return
+      }
       try {
         const { data: logs, error } = await supabase
           .from('rent_payment_log')
@@ -84,7 +91,7 @@ export default function TopRentPayersWidget({ onRequireAuth }: TopRentPayersWidg
     return () => {
       mounted = false
     }
-  }, [])
+  }, [user])
 
   return (
     <div

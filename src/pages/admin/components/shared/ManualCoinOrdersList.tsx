@@ -28,22 +28,45 @@ interface ManualOrder {
   }
 }
 
-export default function ManualCoinOrdersList() {
+type ManualCoinOrdersListProps = {
+  limit?: number
+  showHeader?: boolean
+  showRefresh?: boolean
+  title?: string
+  subtitle?: string
+}
+
+export default function ManualCoinOrdersList({
+  limit,
+  showHeader = true,
+  showRefresh = true,
+  title = 'Manual Coin Orders',
+  subtitle = 'Review and approve manual coin purchases'
+}: ManualCoinOrdersListProps) {
   const [orders, setOrders] = useState<ManualOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
   const [confirmApproval, setConfirmApproval] = useState<ManualOrder | null>(null)
+  const [confirmRejection, setConfirmRejection] = useState<ManualOrder | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
   const [txId, setTxId] = useState('')
 
   const fetchOrders = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
+      let query = supabase
         .from('manual_coin_orders')
         .select('*')
         .eq('status', 'pending')
         .neq('purchase_type', 'troll_pass_bundle')
+        .is('deleted_at', null)  // Filter out deleted orders
         .order('created_at', { ascending: false })
+
+      if (limit) {
+        query = query.limit(limit)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
       
@@ -80,7 +103,7 @@ export default function ManualCoinOrdersList() {
 
   useEffect(() => {
     fetchOrders()
-  }, [])
+  }, [limit])
 
   const handleApproveClick = (order: ManualOrder) => {
     setTxId('')
@@ -120,17 +143,22 @@ export default function ManualCoinOrdersList() {
     }
   }
 
-  const handleReject = async (order: ManualOrder) => {
-    if (!confirm(`Reject coin purchase for ${order.user?.username}?`)) return
+  const handleRejectClick = (order: ManualOrder) => {
+    setRejectReason('')
+    setConfirmRejection(order)
+  }
+
+  const handleConfirmReject = async () => {
+    if (!confirmRejection) return
 
     try {
-      setProcessing(order.id)
+      setProcessing(confirmRejection.id)
       
       const { error } = await supabase.functions.invoke('admin-actions', {
         body: {
           action: 'reject_manual_order',
-          orderId: order.id,
-          reason: 'Rejected by admin'
+          orderId: confirmRejection.id,
+          reason: rejectReason.trim() || 'Rejected by admin/secretary'
         }
       })
 
@@ -138,6 +166,7 @@ export default function ManualCoinOrdersList() {
 
       toast.success('Order rejected')
       fetchOrders()
+      setConfirmRejection(null)
     } catch (error: any) {
       console.error('Error rejecting order:', error)
       toast.error(error.message || 'Failed to reject order')
@@ -152,21 +181,25 @@ export default function ManualCoinOrdersList() {
 
   return (
     <div className="space-y-6 relative">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-green-400" />
-            Manual Coin Orders
-          </h2>
-          <p className="text-sm text-slate-400">Review and approve manual coin purchases</p>
+      {showHeader && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <DollarSign className="w-6 h-6 text-green-400" />
+              {title}
+            </h2>
+            <p className="text-sm text-slate-400">{subtitle}</p>
+          </div>
+          {showRefresh && (
+            <button 
+              onClick={fetchOrders}
+              className="text-sm text-slate-400 hover:text-white transition-colors"
+            >
+              Refresh
+            </button>
+          )}
         </div>
-        <button 
-          onClick={fetchOrders}
-          className="text-sm text-slate-400 hover:text-white transition-colors"
-        >
-          Refresh
-        </button>
-      </div>
+      )}
 
       {orders.length === 0 ? (
         <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-12 text-center">
@@ -255,7 +288,7 @@ export default function ManualCoinOrdersList() {
                   Approve
                 </button>
                 <button
-                  onClick={() => handleReject(order)}
+                  onClick={() => handleRejectClick(order)}
                   disabled={processing === order.id}
                   className="flex-1 md:flex-none px-4 py-2 bg-red-900/50 hover:bg-red-900 text-red-200 text-sm font-bold rounded-lg border border-red-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -330,6 +363,60 @@ export default function ManualCoinOrdersList() {
                             className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
                         >
                             {processing === confirmApproval.id ? 'Processing...' : 'Confirm Approval'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {confirmRejection && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl">
+                <h3 className="text-xl font-bold text-white mb-4">Reject Order</h3>
+                
+                <div className="space-y-4">
+                    <div className="bg-slate-800/50 p-4 rounded-lg space-y-2">
+                        <div className="flex justify-between">
+                            <span className="text-slate-400">User</span>
+                            <span className="text-white font-medium">{confirmRejection.user?.username}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-slate-400">Amount</span>
+                            <span className="text-yellow-400 font-bold">{(confirmRejection.coins || confirmRejection.amount || 0).toLocaleString()} coins</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-slate-400">Price</span>
+                            <span className="text-green-400 font-bold">{confirmRejection.amount_usd ? `${confirmRejection.amount_usd.toFixed(2)}` : (confirmRejection.price || 'N/A')}</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-1">
+                            Rejection Reason (will be sent to user)
+                        </label>
+                        <textarea 
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            placeholder="Enter reason for rejection (e.g., payment not received, invalid cashtag, etc.)"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-red-500 outline-none h-24 resize-none"
+                        />
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                        <button 
+                            onClick={() => setConfirmRejection(null)}
+                            className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleConfirmReject}
+                            disabled={processing === confirmRejection.id}
+                            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            {processing === confirmRejection.id ? 'Processing...' : 'Confirm Rejection'}
                         </button>
                     </div>
                 </div>

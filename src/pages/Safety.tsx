@@ -35,6 +35,10 @@ export default function Safety() {
               <h3 className="font-semibold text-white mb-2">Age Restrictions</h3>
               <p className="text-sm">You must be 18+ to use TrollCity. Do not share content that is inappropriate for minors.</p>
             </div>
+            <div>
+              <h3 className="font-semibold text-white mb-2">Live Content Boundaries</h3>
+              <p className="text-sm">Men may appear shirtless or in underwear; women may appear in shirts with underwear. No explicit sexual content, no exposed or visibly aroused genitals, and no touching or simulated touching of intimate body parts while live.</p>
+            </div>
           </div>
         </section>
 

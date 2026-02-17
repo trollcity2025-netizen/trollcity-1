@@ -7,6 +7,7 @@ export default function BroadcastLockdownControl() {
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchLockdownStatus();
@@ -81,6 +82,30 @@ export default function BroadcastLockdownControl() {
     }
   };
 
+  const handleResetRestrictions = async () => {
+    if (!confirm('Reset all broadcast restrictions? This clears 30-minute limits, lockdowns, and user locks.')) {
+      return;
+    }
+
+    try {
+      setResetting(true);
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'reset_broadcast_restrictions' }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setLocked(false);
+      toast.success('Broadcast restrictions cleared for all users');
+    } catch (error) {
+      console.error('Error resetting broadcast restrictions:', error);
+      toast.error('Failed to reset broadcast restrictions');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-4 bg-slate-900/50 rounded-xl border border-white/10">
@@ -118,27 +143,45 @@ export default function BroadcastLockdownControl() {
           </div>
         </div>
 
-        <button
-          onClick={toggleLockdown}
-          disabled={updating}
-          className={`
-            px-6 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all
-            ${locked
-              ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
-              : 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20'
-            }
-            ${updating ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}
-          `}
-        >
-          {updating ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : locked ? (
-            <Unlock className="w-4 h-4" />
-          ) : (
-            <Lock className="w-4 h-4" />
-          )}
-          {locked ? 'Unlock Broadcasts' : 'Lock Broadcasts'}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={toggleLockdown}
+            disabled={updating || resetting}
+            className={`
+              px-6 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all
+              ${locked
+                ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
+                : 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20'
+              }
+              ${(updating || resetting) ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}
+            `}
+          >
+            {updating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : locked ? (
+              <Unlock className="w-4 h-4" />
+            ) : (
+              <Lock className="w-4 h-4" />
+            )}
+            {locked ? 'Unlock Broadcasts' : 'Lock Broadcasts'}
+          </button>
+          <button
+            onClick={handleResetRestrictions}
+            disabled={resetting || updating}
+            className={`
+              px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all
+              border border-amber-400/50 text-amber-200 hover:bg-amber-500/10
+              ${(resetting || updating) ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}
+            `}
+          >
+            {resetting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <AlertTriangle className="w-4 h-4" />
+            )}
+            Reset Restrictions
+          </button>
+        </div>
       </div>
 
       {locked && (

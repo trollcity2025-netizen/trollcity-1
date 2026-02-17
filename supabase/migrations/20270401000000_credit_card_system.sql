@@ -173,7 +173,7 @@ END;
 $$;
 
 -- Repayment RPC
-CREATE OR REPLACE FUNCTION public.pay_credit_card(p_amount BIGINT)
+CREATE OR REPLACE FUNCTION public.pay_credit_card(p_amount BIGINT, p_from_savings BOOLEAN DEFAULT FALSE)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -186,6 +186,9 @@ DECLARE
     v_interest_amount BIGINT;
     v_new_credit_used BIGINT;
     v_new_credit_score INTEGER;
+    v_remaining_balance BIGINT;
+    v_payment_source_field TEXT;
+    v_payment_source_friendly TEXT;
 BEGIN
     IF v_user_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'Not authenticated');
@@ -204,20 +207,30 @@ BEGIN
     -- Cap payment to debt
     v_pay_amount := LEAST(p_amount, v_profile.credit_used);
 
-    -- Check Coin Balance
-    IF v_profile.troll_coins < v_pay_amount THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Insufficient Troll Coins');
+    -- Determine payment source
+    IF p_from_savings THEN
+        IF v_profile.earned_balance < v_pay_amount THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Insufficient Savings Balance');
+        END IF;
+        v_payment_source_field := 'earned_balance';
+        v_payment_source_friendly := 'Savings';
+        v_remaining_balance := v_profile.earned_balance - v_pay_amount;
+    ELSE
+        IF v_profile.troll_coins < v_pay_amount THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Insufficient Troll Coins');
+        END IF;
+        v_payment_source_field := 'troll_coins';
+        v_payment_source_friendly := 'Troll Coins';
+        v_remaining_balance := v_profile.troll_coins - v_pay_amount;
     END IF;
 
     -- Calculate 8% interest/fee on the payment amount
     v_interest_amount := CEIL(v_pay_amount * 0.08);
 
-    -- Execute Payment (deduct from user's coins)
-    UPDATE public.user_profiles
-    SET troll_coins = troll_coins - v_pay_amount,
-        credit_used = credit_used - v_pay_amount
-    WHERE id = v_user_id
-    RETURNING credit_used INTO v_new_credit_used;
+    -- Execute Payment (deduct from user's chosen balance)
+    EXECUTE format('UPDATE public.user_profiles SET %I = %I - %L, credit_used = credit_used - %L WHERE id = %L RETURNING credit_used',
+        v_payment_source_field, v_payment_source_field, v_pay_amount, v_pay_amount, v_user_id)
+    INTO v_new_credit_used;
 
     -- Increase user's credit score (up to 800)
     UPDATE public.user_profiles
@@ -233,32 +246,33 @@ BEGIN
     -- Log Ledger for user's payment
     INSERT INTO public.coin_ledger (user_id, delta, bucket, source, reason, metadata)
     VALUES (
-        v_user_id, 
-        -v_pay_amount, 
-        'repayment', 
-        'credit_card_repay', 
-        'Credit Card Repayment', 
-        jsonb_build_object('remaining_debt', v_new_credit_used, 'interest_paid', v_interest_amount)
+        v_user_id,
+        -v_pay_amount,
+        'repayment',
+        'credit_card_repay',
+        'Credit Card Repayment from ' || v_payment_source_friendly,
+        jsonb_build_object('remaining_debt', v_new_credit_used, 'interest_paid', v_interest_amount, 'source_account', v_payment_source_friendly)
     );
 
     -- Log Ledger for admin's interest income
     INSERT INTO public.coin_ledger (user_id, delta, bucket, source, reason, metadata)
     VALUES (
-        v_admin_id, 
-        v_interest_amount, 
-        'revenue', 
-        'credit_card_interest', 
-        'Credit Card Interest from User Payment', 
+        v_admin_id,
+        v_interest_amount,
+        'revenue',
+        'credit_card_interest',
+        'Credit Card Interest from User Payment',
         jsonb_build_object('payer', v_user_id, 'original_payment', v_pay_amount)
     );
 
     RETURN jsonb_build_object(
-        'success', true, 
-        'paid', v_pay_amount, 
+        'success', true,
+        'paid', v_pay_amount,
         'interest_to_admin', v_interest_amount,
         'remaining_debt', v_new_credit_used,
         'new_credit_score', v_new_credit_score,
-        'remaining_coins', v_profile.troll_coins - v_pay_amount
+        'remaining_balance', v_remaining_balance,
+        'paid_from', v_payment_source_friendly
     );
 END;
 $$;

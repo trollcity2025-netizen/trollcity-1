@@ -1,0 +1,369 @@
+MASTER PROMPT FOR TRAE — Rebuild KT Auto + Realistic Drag Racing + OBD2 Repair System
+Goal
+
+Completely remove the existing KT Auto / vehicle setup and rebuild it from scratch with a realistic mechanic-grade car ownership + customization + drag racing + diagnostics + repair economy.
+
+Hard Rules
+
+KT Auto is the only page for cars (dealership + garage + parts store + drag strip + diagnostics). Do not add new pages for this.
+
+TMV stays the Department for Motor Vehicles (registration, plates, official DMV functions). KT Auto can link to TMV for registration/plates if needed, but all car building/racing/repair is on KT Auto.
+
+No Babylon.js. Use Three.js (or React Three Fiber) for 3D preview and customization.
+
+Everything deducts from troll_coins only.
+
+Visual style must be realistic / premium (not cartoonish). Clean UI, realistic drag strip, believable garage visuals and audio.
+
+1) KT Auto — Main Sections (Inside One Page)
+
+KT Auto should feel like a real dealership + shop. Use tabs/sections inside the page:
+
+Dealership (Buy Cars)
+
+Garage (Customize / Install Parts)
+
+Auto Parts Store (Buy Parts + Buy Tools)
+
+Drag Strip (Race)
+
+OTach Scanner (Diagnostics / Codes / Fix Guidance)
+
+Build Sheet (Invoice-style summary)
+
+2) Car Purchase Model (Stock From Start)
+
+All cars start as basic stock cars visually and statistically.
+
+Offer:
+
+Standard base cars (starter)
+
+A few prebuilt cars (shop builds) for users who want instant performance
+
+Each car has:
+
+Make it generic (no real brands required)
+
+Base stats: hp, torque, weight, traction, shift_speed, reliability
+
+Fuel type: gas or diesel
+
+When purchased:
+
+Deduct troll_coins
+
+Create a persistent owned_vehicle record
+
+3) FULL Customization (Every Part)
+
+Implement a slot-based build system so users can replace parts and the build persists.
+
+Performance Part Slots
+
+Engine (swappable engine assemblies)
+
+Turbo / Supercharger (gas and diesel options)
+
+ECU tune
+
+Intake
+
+Exhaust
+
+Fuel system (diesel-specific: injectors, pump, lift pump)
+
+Transmission
+
+Differential
+
+Suspension (coilovers, control arms, ride height)
+
+Tires (compound, width)
+
+Wheels/Rims (weight + visuals)
+
+Brakes (optional)
+
+Electrical (alternator, battery)
+
+Cosmetic / Visual Slots
+
+Paint (paid, multiple finishes: solid/metallic/pearl/matte)
+
+Wraps / decals (paid)
+
+Window tint (paid)
+
+Body kits: front bumper, rear bumper, side skirts
+
+Hood, fenders, spoiler
+
+Exhaust tips (visual)
+
+Stance/ride height visual adjustments
+
+All customization actions:
+
+Deduct troll_coins
+
+Update car stats
+
+Update visuals in the preview
+
+4) Real Engine Sounds (Required)
+
+Implement realistic engine audio:
+
+Use licensed sound assets (do not rip audio)
+
+RPM-based blending:
+
+idle loop
+
+low/mid/high rev loops
+
+optional turbo spool + blow-off for turbo builds
+
+During drag races, sound should respond to simulated RPM and acceleration.
+
+5) Drag Racing System (Acceleration-Only)
+
+Create a realistic drag strip experience INSIDE the KT Auto page.
+
+Race Format
+
+1v1 drag race (quarter mile)
+
+Users control: acceleration only (tap/hold)
+
+Must include a realistic start system:
+
+“Christmas Tree” light sequence
+
+Reaction time measurement
+
+False start = red light loss (optional but preferred)
+
+Outcome Resolution (Anti-cheat)
+
+Race should be server-authoritative:
+
+Client sends reaction timing + throttle input events
+
+Server computes ET, trap speed, winner
+
+Use simplified but believable physics:
+
+torque curve influence
+
+traction / wheelspin probability
+
+weight effects
+
+turbo spool time (especially diesel)
+
+reliability effects (chance to slip/misfire if damaged)
+
+Coin Handling
+
+Race entry fee in troll_coins
+
+Winner gets the pot minus a platform cut (configurable)
+
+Optional later: spectators betting (not required in this build unless easy)
+
+6) Diesel Support (Must Feel Real)
+
+Add diesel vehicles and diesel-only upgrade ecosystem.
+
+Diesel behaviors:
+
+Higher torque baseline
+
+Lower redline
+
+Turbo spool/lag matters (power ramps in after launch)
+
+Heavy weight tradeoffs
+
+Diesel-only parts categories:
+
+Injectors
+
+High pressure pump
+
+Lift pump
+
+Intercooler upgrades
+
+Turbo upgrades (single/compound)
+
+Diesel ECU tuning
+
+7) Check Engine Lights + OBD2 Repair Loop (OTach Device)
+
+Add a realism system: after races (and optionally over time), cars can throw a Check Engine Light.
+
+OTach Device
+
+Every user can obtain an “OTach” OBD2 scanner (your in-world brand).
+
+OTach is an item that can be purchased (or granted once), stored in inventory.
+
+After a race, user can open OTach Scanner section and scan the car.
+
+OBD2 Diagnostic System
+
+Scans return:
+
+One or more OBD2 codes (e.g., P0301, P0420, etc.)
+
+A human-readable diagnosis
+
+The exact part(s) required to fix it
+
+If the user ignores CEL:
+
+Performance penalties apply in races (reduced power, traction issues, reliability)
+
+Potential escalation to worse codes if desired
+
+Fix Workflow (Required)
+
+Race happens → chance of CEL / code
+
+User opens OTach → sees code + recommended part
+
+User goes to Auto Parts Store section
+
+Buys required part(s) (deduct troll_coins)
+
+Part appears in Parts Inventory
+
+User must also have the correct Tools (wrenches, jack, diagnostic kit, etc.)
+
+Tools are purchased in the store and appear in Tools Inventory
+
+In Garage section, user selects the car → selects the code → installs the part using required tools
+
+Code clears, CEL off, performance restored
+
+8) Inventory Requirements (Two Inventories, Same Page)
+
+Create two inventories visible on KT Auto:
+
+A) Parts Inventory
+
+Owned parts
+
+Compatibility indicators (which car/slot)
+
+Quantity and condition
+
+B) Tools Inventory
+
+Owned tools
+
+Tools are reusable (do not consume)
+
+Certain installations require specific tools
+
+The Auto Parts Store must sell BOTH:
+
+Parts
+
+Tools
+…and clearly show what tools are required for each repair.
+
+9) Registration + Plates (TMV is DMV)
+
+TMV remains DMV functions only:
+
+Register vehicle
+
+Issue/edit license plate text (editable)
+
+Plate edits must cost troll_coins
+
+Plate data must display on the vehicle (UI + optionally 3D plate texture)
+
+KT Auto can show “Plate: ____” and link to TMV to edit/renew, but the authoritative system is TMV.
+
+10) Data Model Requirements (High-Level)
+
+Implement persistent tables/entities for:
+
+owned_vehicles
+
+vehicle_build_slots (or vehicle_parts_installed)
+
+parts_catalog + tools_catalog
+
+user_parts_inventory
+
+user_tools_inventory
+
+vehicle_diagnostics (active codes, history)
+
+races (results: ET, MPH, reaction time, winner, coin pot)
+
+transactions/ledger entries for every coin deduction
+
+Everything must be auditable and consistent.
+
+11) UI/UX Requirements (Best Looking)
+
+Realistic visuals:
+
+Dealership showroom vibe
+
+Garage bay vibe
+
+Drag strip at night with real lighting and timing board
+
+Clean performance UI:
+
+Build sheet like a mechanic invoice (before/after stats)
+
+Drag results like timing slip (RT, 60ft, 1/8, 1/4, MPH)
+
+No cartoon fonts, no childish icons.
+
+12) Phased Delivery (So This Ships)
+
+Implement in this order:
+
+KT Auto: dealership + owned car list + basic garage view
+
+Parts/tools store + inventories + install flow
+
+Drag racing (server authoritative) + coin pots
+
+OTach scanner + codes + repair penalties
+
+Diesel expansion (if not already included in base)
+
+Paint/body kits + 3D preview polish
+
+Acceptance Checklist
+
+User can buy a stock car (coins deducted)
+
+User can customize mechanical + cosmetic (coins deducted)
+
+User can drag race with acceleration-only control
+
+Winner receives coins, platform cut applied
+
+After race, car can trigger CEL
+
+OTach scan returns OBD2 code + tells required part
+
+User buys part + required tools
+
+Part goes to Parts Inventory, tools to Tools Inventory
+
+User installs part, code clears, performance restored
+
+Plates are editable via TMV DMV, costs coins, plate displays on car

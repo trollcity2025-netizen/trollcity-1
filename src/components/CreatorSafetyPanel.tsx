@@ -16,26 +16,31 @@ const CreatorSafetyPanel: React.FC<CreatorSafetyPanelProps> = ({ streamId, isHos
   const [panicMode, setPanicMode] = useState(false);
   const [abuseLevel, setAbuseLevel] = useState(0); // 0-100
 
-  useEffect(() => {
-    // Mock abuse level monitoring - in real app this would analyze chat messages
-    const interval = setInterval(() => {
-      // Simulate random abuse level changes
-      setAbuseLevel(prev => {
-        const change = (Math.random() - 0.5) * 20;
-        const newLevel = Math.max(0, Math.min(100, prev + change));
-        return newLevel;
-      });
-    }, 5000);
 
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
-    // Auto-lock chat if abuse level gets too high
-    if (abuseLevel > 70 && !chatLocked && isHost) {
-      handleAutoLock();
-    }
-  }, [abuseLevel, chatLocked, isHost]);
+    const fetchAbuseLevel = async () => {
+      if (!isHost) return;
+      try {
+        const { data, error } = await supabase.functions.invoke('get-stream-abuse-score', {
+          body: { stream_id: streamId },
+        });
+        if (error) throw error;
+        
+        // The score from redis is 0-100, but the UI expects 0-100.
+        // We can also apply some smoothing here.
+        setAbuseLevel(prevLevel => prevLevel * 0.7 + data.score * 0.3);
+
+      } catch (err) {
+        console.error('Failed to fetch abuse level:', err);
+      }
+    };
+
+    fetchAbuseLevel(); // Fetch immediately on mount
+    const interval = setInterval(fetchAbuseLevel, 5000); // And every 5 seconds
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [streamId, isHost]);
 
   const handlePanicButton = async () => {
     setPanicMode(true);

@@ -3,7 +3,8 @@
 
 CREATE OR REPLACE FUNCTION public.pay_bank_loan(
     p_loan_id UUID,
-    p_amount INTEGER
+    p_amount INTEGER,
+    p_from_savings BOOLEAN DEFAULT FALSE
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -13,11 +14,13 @@ AS $$
 DECLARE
     v_user_id UUID := auth.uid();
     v_loan RECORD;
-    v_balance INTEGER;
+    v_profile RECORD;
     v_credit_increase INTEGER;
     v_new_score INTEGER;
     v_current_score INTEGER;
     v_actual_pay INTEGER;
+    v_payment_source_field TEXT;
+    v_payment_source_friendly TEXT;
 BEGIN
     -- 1. Verify Loan
     SELECT * INTO v_loan FROM public.loans WHERE id = p_loan_id;
@@ -41,20 +44,29 @@ BEGIN
     END IF;
 
     -- 2. Check User Balance
-    SELECT troll_coins INTO v_balance FROM public.user_profiles WHERE id = v_user_id;
-    IF v_balance < v_actual_pay THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Insufficient coins');
+    SELECT * INTO v_profile FROM public.user_profiles WHERE id = v_user_id FOR UPDATE;
+    IF p_from_savings THEN
+        IF v_profile.earned_balance < v_actual_pay THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Insufficient Savings Balance');
+        END IF;
+        v_payment_source_field := 'earned_balance';
+        v_payment_source_friendly := 'Savings';
+    ELSE
+        IF v_profile.troll_coins < v_actual_pay THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Insufficient Troll Coins');
+        END IF;
+        v_payment_source_field := 'troll_coins';
+        v_payment_source_friendly := 'Troll Coins';
     END IF;
 
     -- 3. Process Payment
     -- Deduct coins
-    UPDATE public.user_profiles 
-    SET troll_coins = troll_coins - v_actual_pay 
-    WHERE id = v_user_id;
+    EXECUTE format('UPDATE public.user_profiles SET %I = %I - %L WHERE id = %L', 
+        v_payment_source_field, v_payment_source_field, v_actual_pay, v_user_id);
 
     -- Log Ledger
     INSERT INTO public.coin_ledger (user_id, delta, bucket, source, reason, metadata)
-    VALUES (v_user_id, -v_actual_pay, 'loan_repayment', 'bank', 'Manual Loan Repayment', jsonb_build_object('loan_id', p_loan_id));
+    VALUES (v_user_id, -v_actual_pay, 'loan_repayment', 'bank', 'Manual Loan Repayment from ' || v_payment_source_friendly, jsonb_build_object('loan_id', p_loan_id));
 
     -- Update Loan
     UPDATE public.loans
@@ -112,4 +124,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.pay_bank_loan(UUID, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.pay_bank_loan(UUID, INTEGER, BOOLEAN) TO authenticated;

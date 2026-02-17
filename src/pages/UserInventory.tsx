@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
@@ -12,7 +13,8 @@ import TitleDeedModal from '../components/TitleDeedModal'
 import ShopConsumablesSection from '../components/ShopConsumablesSection'
 
 export default function UserInventory({ embedded = false }: { embedded?: boolean }) {
-  const { user, refreshProfile } = useAuthStore()
+  const { user } = useAuth()
+  const refreshProfile = useAuthStore((s) => s.refreshProfile)
   const navigate = useNavigate()
   const [inventory, setInventory] = useState<any[]>([])
   const [entranceEffects, setEntranceEffects] = useState<any[]>([])

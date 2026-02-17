@@ -22,6 +22,14 @@ export const useXPStore = create<XPState>((set) => {
     const auth = useAuthStore.getState()
     if (!auth?.profile || !auth?.setProfile) return
 
+    // Prevent infinite loops by checking if an update is actually needed.
+    const prev = auth.profile
+    if (prev.level === level &&
+        (prev.xp === totalXp || prev.total_xp === totalXp) &&
+        prev.next_level_xp === nextLevelXp) {
+      return;
+    }
+
     auth.setProfile({
       ...auth.profile,
       level: level || auth.profile.level || 1,

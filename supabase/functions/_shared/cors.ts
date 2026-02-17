@@ -63,11 +63,11 @@ export function corsHeaders(origin?: string | null): Record<string, string> {
   return headers;
 }
 
-export function handleCorsPreflight() {
+export function handleCorsPreflight(origin?: string | null) {
   return new Response("ok", {
     status: 200,
     headers: {
-      ...corsHeaders(),
+      ...corsHeaders(origin),
       "Content-Type": "text/plain",
       "Cache-Control": "max-age=0, s-maxage=0, no-cache, no-store, must-revalidate",
     },

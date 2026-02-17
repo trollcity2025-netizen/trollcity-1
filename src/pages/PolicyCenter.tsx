@@ -21,7 +21,7 @@ export default function PolicyCenter() {
     },
     {
       title: 'Safety & Community Guidelines',
-      description: 'Community standards and safety rules',
+      description: 'Community standards, safety rules, and live content boundaries',
       icon: <Shield className="w-6 h-6" />,
       path: '/legal/safety',
       color: 'text-yellow-400',

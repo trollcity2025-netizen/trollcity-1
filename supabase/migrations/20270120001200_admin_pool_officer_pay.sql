@@ -79,11 +79,8 @@ BEGIN
     );
 
     -- 3. Update officer spendable and earned balances
-    UPDATE public.user_profiles
-    SET troll_coins = troll_coins + v_effective_pay,
-        earned_balance = COALESCE(earned_balance, 0) + v_effective_pay,
-        total_earned_coins = COALESCE(total_earned_coins, 0) + v_effective_pay
-    WHERE id = p_officer_id;
+    -- Update officer spendable and earned balances using the savings rule
+    PERFORM public.credit_user_coins_with_savings_rule(p_officer_id, v_effective_pay);
 
     -- 4. Update Admin Pool liability and ledger
     SELECT id INTO v_admin_pool_id FROM public.admin_pool LIMIT 1;
