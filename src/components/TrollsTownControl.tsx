@@ -14,7 +14,7 @@ import {
   Users,
   Briefcase,
   Scale,
-  Fuel
+
 } from 'lucide-react';
 import { useCity3DStore } from '../lib/stores/cityScene3D';
 
@@ -26,11 +26,7 @@ interface TrollsTownControlProps {
 export default function TrollsTownControl({ isOpen, onClose }: TrollsTownControlProps) {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState<'town' | 'services' | 'shopping'>('town');
-  const { activeCar } = useCity3DStore();
-  
-  // Simulated gas level (in real app, this would come from vehicle data)
-  const gasLevel = activeCar ? Math.max(0, Math.min(100, 75 + Math.random() * 25)) : 0;
-  const gasColor = gasLevel > 50 ? 'text-emerald-400' : gasLevel > 25 ? 'text-yellow-400' : 'text-red-400';
+  const { } = useCity3DStore();
 
   // Close menu with Escape key
   useEffect(() => {
@@ -86,29 +82,7 @@ export default function TrollsTownControl({ isOpen, onClose }: TrollsTownControl
             </div>
           </div>
           
-          {/* Gas Bar */}
-          {activeCar ? (
-            <div className="flex items-center gap-3 px-4 py-2 bg-[#1A1A25] rounded-lg border border-white/10">
-              <Fuel className={`w-5 h-5 ${gasColor}`} />
-              <div className="flex-1">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-gray-400">Fuel</span>
-                  <span className={`font-medium ${gasColor}`}>{Math.round(gasLevel)}%</span>
-                </div>
-                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-500 ${gasLevel > 50 ? 'bg-emerald-500' : gasLevel > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                    style={{ width: `${gasLevel}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-4 py-2 bg-[#1A1A25] rounded-lg border border-white/10">
-              <Car className="w-5 h-5 text-gray-500" />
-              <span className="text-xs text-gray-500">No vehicle active</span>
-            </div>
-          )}
+
           
           <button
             onClick={onClose}
