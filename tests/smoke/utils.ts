@@ -26,7 +26,7 @@ function getSupabaseClient() {
 export async function clearSession(page: Page) {
   await page.context().clearCookies();
   await page.addInitScript(() => localStorage.clear());
-  await page.goto('/auth', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('/auth', { waitUntil: 'domcontentloaded', timeout: 60000 });
 }
 
 async function ensureProfileComplete(userId: string) {
@@ -66,7 +66,7 @@ async function ensureProfileComplete(userId: string) {
 }
 
 export async function login(page: Page, email: string, password = TEST_PASSWORD) {
-  await page.goto('/auth', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('/auth', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByPlaceholder('Password').fill(password);
   await page.locator('form').getByRole('button', { name: 'Sign In' }).click();

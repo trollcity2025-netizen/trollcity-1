@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function MoneyRain() {
+export default function CoinRain() {
   const [items, setItems] = useState<{ id: number; x: number; delay: number; duration: number; rotation: number; scale: number }[]>([]);
 
   useEffect(() => {
@@ -10,7 +10,7 @@ export default function MoneyRain() {
       id: i,
       x: Math.random() * 100, // Random horizontal position %
       delay: Math.random() * 2, // Random start delay
-      duration: 2 + Math.random() * 2, // Random fall duration
+      duration: (2 + Math.random() * 2) * 1.65, // Random fall duration (65% slower)
       rotation: Math.random() * 360,
       scale: 0.5 + Math.random() * 0.5, // vary size
     }));
@@ -18,13 +18,13 @@ export default function MoneyRain() {
   }, []);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
       <AnimatePresence>
         {items.map((item) => (
           <motion.img
             key={item.id}
-            src="https://purepng.com/public/uploads/large/purepng.com-one-hundred-dollar-billbanknoteus-billus-dollargreenback-14215266736783d8g5.png"
-            alt="bill"
+            src="https://pngimg.com/uploads/coin/coin_PNG36871.png"
+            alt="coin"
             initial={{ y: -100, x: `${item.x}vw`, opacity: 0, rotate: item.rotation }}
             animate={{ 
               y: '120vh', 
@@ -37,7 +37,7 @@ export default function MoneyRain() {
               ease: "linear",
               repeat: Infinity 
             }}
-            className="absolute top-0 w-32 h-auto object-contain"
+            className="absolute top-0 w-12 h-12 object-contain"
             style={{ scale: item.scale }}
           />
         ))}

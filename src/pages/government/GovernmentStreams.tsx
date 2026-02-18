@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { usePodStatusStore } from '@/lib/podStore';
 import { 
   Users, 
   Radio, 
@@ -209,7 +210,8 @@ export default function GovernmentStreams() {
         if (error) throw error;
         
         toast.success('Pod ended');
-        fetchPods();
+            fetchPods(); // Refresh this component's view
+            usePodStatusStore.getState().triggerPodUpdate(); // Notify other components
     } catch (e) {
         console.error(e);
         toast.error('Failed to end pod');

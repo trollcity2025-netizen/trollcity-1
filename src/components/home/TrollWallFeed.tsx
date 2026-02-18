@@ -241,10 +241,7 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   }
 
   const handleLike = async (postId: string) => {
-    if (!user?.id) {
-      onRequireAuth('like a post')
-      return
-    }
+    if (!onRequireAuth('like posts')) return
 
     if (likingPosts.has(postId)) return
     setLikingPosts((prev) => new Set(prev).add(postId))
@@ -279,10 +276,7 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   }
 
   const handleReplySubmit = async (postId: string) => {
-    if (!user?.id) {
-      onRequireAuth('reply to a post')
-      return
-    }
+    if (!onRequireAuth('reply to posts')) return
 
     if (!replyText.trim()) {
       toast.error('Write a reply before posting')

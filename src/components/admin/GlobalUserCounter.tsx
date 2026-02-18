@@ -3,7 +3,7 @@ import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 import { usePresenceStore } from '../../lib/presenceStore';
 import { useChatStore } from '../../lib/chatStore';
-import { Users, Tv, Globe, GripHorizontal, Minimize2, Maximize2, Headphones, ExternalLink, RefreshCw, MessageSquare } from 'lucide-react';
+import { Users, Tv, Globe, GripHorizontal, Minimize2, Maximize2, Headphones, ExternalLink, RefreshCw, MessageSquare, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';
@@ -182,24 +182,25 @@ export default function GlobalUserCounter() {
         const fetchPodUsers = async () => {
             const podUsers: UserLocation[] = [];
             const { data: participants } = await supabase
-                .from('pod_room_participants')
-                .select('user_id, room_id, user_profiles(username, avatar_url), pod_rooms(title)')
-                .eq('is_active', true); // Assuming is_active flag or just existence
+                    .from('pod_room_participants')
+                    .select('user_id, room_id, user_profiles(username, avatar_url), pod_rooms!inner(title, is_live)') // Explicitly select is_live from pod_rooms and use !inner join
+                    .eq('pod_rooms.is_live', true); // Filter on the joined table's is_live column
 
-            if (participants) {
-                participants.forEach(p => {
-                    if (p.user_profiles) {
-                        podUsers.push({
-                            user_id: p.user_id,
-                            username: (p.user_profiles as any).username,
-                            avatar_url: (p.user_profiles as any).avatar_url,
-                            location_type: 'pod',
-                            location_name: `In Pod: ${(p.pod_rooms as any)?.title || 'Unknown Pod'}`,
-                            location_id: p.room_id
-                        });
-                    }
-                });
-            }
+                if (participants) {
+                    participants.forEach(p => {
+                        // Ensure pod_rooms data and is_live status are correct before pushing
+                        if (p.user_profiles && p.pod_rooms && (p.pod_rooms as any).is_live) {
+                            podUsers.push({
+                                user_id: p.user_id,
+                                username: (p.user_profiles as any).username,
+                                avatar_url: (p.user_profiles as any).avatar_url,
+                                location_type: 'pod',
+                                location_name: `In Pod: ${(p.pod_rooms as any)?.title || 'Unknown Pod'}`,
+                                location_id: p.room_id
+                            });
+                        }
+                    });
+                }
             return podUsers;
         };
 
@@ -258,6 +259,37 @@ export default function GlobalUserCounter() {
         console.error('Error fetching details:', error);
     } finally {
         setIsLoadingDetails(false);
+    }
+  };
+
+  const handleEndPod = async (podId: string) => {
+    if (!podId || !isStaff) return;
+
+    // Optimistic UI update
+    setCategoryUsers(prev => prev.filter(u => u.location_id !== podId));
+
+    try {
+        const { error } = await supabase
+            .from('pod_rooms')
+            .update({ is_live: false, ended_at: new Date().toISOString() })
+            .eq('id', podId);
+
+        if (error) {
+            console.error('Error ending pod:', error);
+            // Revert UI if error
+            handleCategoryClick('pods'); // Refresh the list
+        } else {
+            // Also remove participants
+            await supabase
+                .from('pod_room_participants')
+                .delete()
+                .eq('room_id', podId);
+            
+            fetchStats(); // Refresh main counters
+        }
+    } catch (err) {
+        console.error('Exception ending pod:', err);
+        handleCategoryClick('pods'); // Refresh the list
     }
   };
 
@@ -517,6 +549,15 @@ export default function GlobalUserCounter() {
                                         >
                                             <Users className="w-4 h-4" />
                                         </button>
+                                        {u.location_type === 'pod' && (
+                                            <button 
+                                                onClick={() => handleEndPod(u.location_id!)}
+                                                className="p-2 hover:bg-red-500/20 text-gray-400 hover:text-red-500 rounded-md transition-colors"
+                                                title="End Pod"
+                                            >
+                                                <XCircle className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}

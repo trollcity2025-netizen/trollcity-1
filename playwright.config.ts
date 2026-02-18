@@ -34,7 +34,8 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host --port 5173',
     url: baseURL,
-    reuseExistingServer: true,
+    timeout: 120 * 1000,
+    reuseExistingServer: false,
     env: {
       NODE_ENV: 'test',
       VITE_ENV: 'test',

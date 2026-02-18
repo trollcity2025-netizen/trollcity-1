@@ -74,8 +74,6 @@ const MobileShell = lazyWithRetry(() => import("./pages/MobileShell"));
 const Following = lazy(() => import("./pages/Following"));
 
 // Speculative lazy imports to resolve "Cannot find name" errors
-const TMVDrivingManual = lazyWithRetry(() => import("./pages/tmv/DrivingManual"));
-const DriversTest = lazyWithRetry(() => import("./pages/tmv/DriversTest"));
 const ExploreFeed = lazy(() => import("./pages/ExploreFeed"));
 const CoinStore = lazy(() => import("./pages/CoinStore"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
@@ -367,9 +365,6 @@ function AppContent() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [waitingServiceWorker, setWaitingServiceWorker] = useState<ServiceWorker | null>(null);
   const didReloadRef = useRef(false);
-  const driverPromptTimerRef = useRef<number | null>(null);
-  const [showDriverManual, setShowDriverManual] = useState(false);
-  const [showDriverTest, setShowDriverTest] = useState(false);
 
 
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
@@ -572,50 +567,6 @@ function AppContent() {
       navigate('/family', { replace: true });
     }
   }, [profile, location.pathname, navigate, user]);
-
-  useEffect(() => {
-    if (driverPromptTimerRef.current) {
-      window.clearTimeout(driverPromptTimerRef.current);
-      driverPromptTimerRef.current = null;
-    }
-
-    if (!user || !profile) return;
-
-    const isAdminProfile = profile.role === 'admin' || profile.is_admin;
-    if (isAdminProfile) return;
-
-    const licenseStatus = (profile as any).drivers_license_status;
-    if (licenseStatus && licenseStatus !== 'none') return;
-
-    const createdAtMs = profile.created_at ? new Date(profile.created_at).getTime() : NaN;
-    if (!Number.isFinite(createdAtMs)) return;
-
-    const triggerPrompt = () => {
-      const manualSeen = localStorage.getItem('tmv_driving_manual_acknowledged');
-      if (manualSeen) {
-        setShowDriverTest(true);
-        setShowDriverManual(false);
-      } else {
-        setShowDriverManual(true);
-        setShowDriverTest(false);
-      }
-    };
-
-    const delayMs = createdAtMs + 30 * 60 * 1000 - Date.now();
-    if (delayMs <= 0) {
-      triggerPrompt();
-      return;
-    }
-
-    driverPromptTimerRef.current = window.setTimeout(triggerPrompt, delayMs);
-
-    return () => {
-      if (driverPromptTimerRef.current) {
-        window.clearTimeout(driverPromptTimerRef.current);
-        driverPromptTimerRef.current = null;
-      }
-    };
-  }, [user, profile]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -967,29 +918,6 @@ function AppContent() {
           </button>
         </div>
       )}
-      {(showDriverManual || showDriverTest) && (
-        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4 py-10">
-          <div className="w-full max-w-3xl">
-            <Suspense fallback={<LoadingScreen />}>
-              {showDriverManual ? (
-                <TMVDrivingManual
-                  onAcknowledge={() => {
-                    setShowDriverManual(false);
-                    setShowDriverTest(true);
-                  }}
-                />
-              ) : (
-                <DriversTest
-                  onComplete={() => {
-                    setShowDriverTest(false);
-                    refreshProfile();
-                  }}
-                />
-              )}
-            </Suspense>
-          </div>
-        </div>
-      )}
       {/* Global Error Banner */}
               <GlobalErrorBanner />
               
@@ -1106,7 +1034,14 @@ function AppContent() {
                   <Route path="/dev/battle" element={<BattlePreview />} />
                   <Route path="/dev/stress-test" element={<FrontendLimitsTest />} />
 
-                  <Route path="/mobile" element={<MobileShell><Outlet /></MobileShell>} />
+                  <Route path="/mobile" element={<MobileShell><Outlet /></MobileShell>}>
+                    <Route index element={<Navigate to="/mobile/tcps" replace />} />
+                    <Route path="tcps" element={<TCPS />} />
+                    <Route path="troll-pods" element={<TrollPodsListing />} />
+                    <Route path="troll-pods/:id" element={<TrollPodRoom />} />
+                    <Route path="watch" element={<TrollPodsListing />} />
+                    <Route path="pods" element={<TrollPodsListing />} />
+                  </Route>
                   <Route path="/live" element={<LandingHome />} />
                   <Route path="/messages" element={<Navigate to="/tcps" replace />} />
                   <Route path="/tcps" element={<MobileShell><TCPS /></MobileShell>} />

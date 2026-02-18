@@ -3,6 +3,19 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../lib/store";
 import { hasRole, UserRole } from "../lib/supabase";
 import { Shield, Crown } from "lucide-react";
+import CoinRain from '../components/MoneyRain';
+
+// Background Image
+const BackgroundImage = () => {
+  return (
+    <div
+      className="absolute inset-0 bg-cover bg-center z-0"
+      style={{
+        backgroundImage: "url('/assets/troll-city-background.jpg')",
+      }}
+    />
+  );
+};
 
 export default function MobileShell({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuthStore();
@@ -23,7 +36,9 @@ export default function MobileShell({ children }: { children: React.ReactNode })
   const compact = pathname.startsWith("/watch") || pathname.startsWith("/pods");
 
   return (
-    <div className="relative h-[100dvh] flex flex-col bg-gradient-to-b from-[#05010a] via-[#080316] to-[#05010a] pb-[env(safe-area-inset-bottom)]">
+    <div className="relative h-[100dvh] flex flex-col pb-[env(safe-area-inset-bottom)]">
+      <BackgroundImage />
+      <CoinRain />
       <div className="px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 border-b border-white/10 bg-black/40 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">

@@ -28,7 +28,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const [manualPaymentOpen, setManualPaymentOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'venmo' | 'paypal' | 'cashapp'>('venmo');
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
-  const [showPayPal, setShowPayPal] = useState(false);
+
 
   useEffect(() => {
     if (isOpen) {
@@ -36,7 +36,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
       // Reset state when opening
       setShowPaymentMethods(false);
       setSelectedPack(null);
-      setShowPayPal(false);
+
     }
   }, [isOpen]);
 
@@ -71,18 +71,14 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   };
 
   const handleManualPayment = (provider: 'venmo' | 'paypal' | 'cashapp') => {
-    if (provider === 'paypal') {
-      setShowPayPal(true);
-    } else {
-      setSelectedProvider(provider);
-      setManualPaymentOpen(true);
-    }
+    setSelectedProvider(provider);
+    setManualPaymentOpen(true);
   };
 
   const handleBackToPackages = () => {
     setShowPaymentMethods(false);
     setSelectedPack(null);
-    setShowPayPal(false);
+
   };
 
   if (!isOpen) return null;
@@ -151,68 +147,6 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                     <div className="text-[#00D632] font-medium text-sm">Select</div>
                   </button>
 
-                  {showPayPal ? (
-                    <div className="w-full p-4 bg-[#00457C]/10 border border-[#00457C]/30 rounded-lg animate-in fade-in zoom-in-95 duration-200">
-                        <div className="mb-3 text-center text-[#00457C] font-bold">Secure PayPal Checkout</div>
-                        <PayPalScriptProvider options={{ 
-                            clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "sb",
-                            currency: "USD",
-                            intent: "capture"
-                        }}>
-                            <PayPalButtons 
-                                style={{ layout: "vertical", color: "gold", shape: "pill", label: "paypal", height: 48 }}
-                                createOrder={async (_data, _actions) => {
-                                  try {
-                                      const { data: orderData, error } = await supabase.functions.invoke('paypal-create-order', {
-                                        body: {
-                                          amount: selectedPack.price.replace('$', ''),
-                                          coins: selectedPack.coins,
-                                          user_id: user?.id,
-                                          package_id: selectedPack.id
-                                        }
-                                      });
-                                      if (error) throw error;
-                                      if (!orderData?.orderId) throw new Error("Order creation failed");
-                                      return orderData.orderId;
-                                  } catch (err: any) {
-                                      console.error("PayPal Create Error:", err);
-                                      toast.error("Failed to initialize PayPal: " + (err.message || "Unknown error"));
-                                      return "";
-                                  }
-                                }}
-                                onApprove={async (data, _actions) => {
-                                  try {
-                                      const { error } = await supabase.functions.invoke('paypal-complete-order', {
-                                        body: {
-                                          orderId: data.orderID,
-                                          userId: user?.id,
-                                          packageId: selectedPack.id
-                                        }
-                                      });
-                                      if (error) throw error;
-                                      toast.success(`Successfully purchased ${selectedPack.coins.toLocaleString()} coins!`);
-                                      onClose();
-                                  } catch (err: any) {
-                                      console.error("PayPal Capture Error:", err);
-                                      toast.error("Payment verification failed. Please contact support.");
-                                  }
-                                }}
-                                onCancel={() => setShowPayPal(false)}
-                                onError={(err) => {
-                                    console.error("PayPal Error:", err);
-                                    toast.error("PayPal encountered an error");
-                                    setShowPayPal(false);
-                                }}
-                            />
-                        </PayPalScriptProvider>
-                        <button 
-                            onClick={() => setShowPayPal(false)} 
-                            className="w-full text-center text-xs text-zinc-400 mt-3 hover:text-white transition-colors"
-                        >
-                            Cancel PayPal
-                        </button>
-                    </div>
-                  ) : (
                   <button
                     onClick={() => handleManualPayment('paypal')}
                     className="w-full flex items-center justify-between p-4 bg-[#00457C]/10 border border-[#00457C]/30 hover:bg-[#00457C]/20 hover:border-[#00457C]/50 rounded-lg transition-all group"
@@ -226,7 +160,6 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                     </div>
                     <div className="text-[#00457C] font-medium text-sm">Select</div>
                   </button>
-                  )}
                 </div>
 
                 <div className="pt-4 border-t border-zinc-800">
@@ -247,6 +180,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                   {packages.map((pkg) => (
                     <button
                       key={pkg.id}
+                      data-testid={pkg.id}
                       onClick={() => handlePackageSelect(pkg)}
                       className={`group relative flex items-center justify-between p-4 rounded-lg border transition-all duration-200
                         ${selectedPack?.id === pkg.id 

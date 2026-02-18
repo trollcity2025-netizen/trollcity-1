@@ -11,59 +11,17 @@ import LiveStreamsModule from '@/components/home/LiveStreamsModule'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
 import TopRentPayersWidget from '@/components/home/TopRentPayersWidget'
 import TrollPodsWidget from '@/components/home/TrollPodsWidget'
+import CoinRain from '../components/MoneyRain';
 
-// Animated gradient background
-const AnimatedGradient = () => {
+// Background Image
+const BackgroundImage = () => {
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 animate-gradient-shift" />
-      <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_20%_20%,rgba(147,51,234,0.18),transparent)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(140%_140%_at_80%_0%,rgba(45,212,191,0.14),transparent)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(140%_140%_at_90%_90%,rgba(236,72,153,0.12),transparent)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(109,40,217,0.08)_0%,rgba(14,165,233,0.06)_40%,rgba(236,72,153,0.08)_100%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(255,255,255,0.06),transparent_35%)] mix-blend-screen" />
-      <style>
-        {`
-          @keyframes gradient-shift {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.85; }
-          }
-          .animate-gradient-shift {
-            animation: gradient-shift 12s ease-in-out infinite;
-          }
-        `}
-      </style>
-    </div>
-  );
-};
-
-// Floating particles effect
-const FloatingParticles = () => {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 20 }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute w-1 h-1 bg-cyan-400/40 rounded-full shadow-[0_0_12px_rgba(34,211,238,0.35)]"
-          style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            animation: `float-particle ${5 + Math.random() * 10}s ease-in-out infinite`,
-            animationDelay: `${Math.random() * 5}s`,
-          }}
-        />
-      ))}
-      <style>
-        {`
-          @keyframes float-particle {
-            0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0; }
-            10% { opacity: 0.6; }
-            90% { opacity: 0.6; }
-            50% { transform: translateY(-100px) translateX(50px); }
-          }
-        `}
-      </style>
-    </div>
+    <div
+      className="absolute inset-0 bg-cover bg-center"
+      style={{
+        backgroundImage: "url('/assets/troll-city-background.jpg')",
+      }}
+    />
   );
 };
 
@@ -92,9 +50,11 @@ export default function Home() {
       {/* Event Countdown Banner */}
       <EventCountdown />
 
-      {/* Animated Background */}
-      <AnimatedGradient />
-      <FloatingParticles />
+      {/* Background Image */}
+          <BackgroundImage />
+
+          {/* Falling Coins Animation */}
+          <CoinRain />
 
       {/* PWA Install Prompt - Only on Landing Page */}
       <PWAInstallPrompt />

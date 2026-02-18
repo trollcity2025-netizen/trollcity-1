@@ -38,6 +38,7 @@ export default function TrollPodsListing() {
         .from('pod_rooms')
         .select('*')
         .eq('is_live', true)
+        .gte('updated_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
         .order('viewer_count', { ascending: false });
 
       if (roomsError) throw roomsError;

@@ -830,7 +830,13 @@ const TrollsTownPage: React.FC = () => {
         throw error
       }
 
-      setListings((data || []) as PropertyRow[])
+      const validListings = (data || []).filter(p => {
+        const systemVal = computeSystemValue(p as PropertyRow)
+        const max = Math.round(systemVal * (1 + MAX_LISTING_PREMIUM))
+        return !(p.ask_price && p.ask_price > max)
+      })
+
+      setListings(validListings as PropertyRow[])
     } catch (error) {
       console.error('Failed to refresh listings', error)
     }

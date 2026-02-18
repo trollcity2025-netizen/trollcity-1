@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Headphones, Radio } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { supabase, hasRole, UserRole } from '@/lib/supabase'
+import { useAuthStore } from '@/lib/store'
+import { usePodStatusStore } from '@/lib/podStore'
 import { trollCityTheme } from '@/styles/trollCityTheme'
 
 interface PodRoom {
@@ -25,9 +27,18 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
   const [pods, setPods] = useState<PodRoom[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const { profile } = useAuthStore()
+  const lastPodUpdate = usePodStatusStore((state) => state.lastPodUpdate);
 
   useEffect(() => {
     let mounted = true
+    const isOfficer = hasRole(profile as any, [UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER], { allowAdminOverride: true });
+
+    if (!isOfficer) {
+      setLoading(false);
+      setPods([]);
+      return;
+    }
 
     const fetchPods = async () => {
       try {
@@ -35,11 +46,14 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
           .from('pod_rooms')
           .select('id, title, host_id, is_live, viewer_count, started_at')
           .eq('is_live', true)
+          .gte('updated_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
           .order('is_live', { ascending: false })
           .order('started_at', { ascending: false })
           .limit(6)
 
         if (error) throw error
+
+        console.log('data from supabase', data)
 
         const rooms = (data as PodRoom[]) || []
         if (rooms.length === 0) {
@@ -76,7 +90,7 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
       mounted = false
       clearInterval(interval)
     }
-  }, [])
+  }, [profile, lastPodUpdate])
 
   const handleJoin = (podId: string) => {
     if (!onRequireAuth('listen to a pod')) return
