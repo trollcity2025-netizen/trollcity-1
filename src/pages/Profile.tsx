@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../lib/store';
 import { useXPStore } from '../stores/useXPStore';
 import CreditScoreBadge from '../components/CreditScoreBadge';
-import BadgesGrid from '../components/badges/BadgesGrid';
+import BadgesGrid from '../components/badges/BadgesGrid';     
 import UserBadge from '../components/UserBadge';
 import { useCreditScore as _useCreditScore } from '../lib/hooks/useCreditScore';
 import { useProfileViewPayment as _useProfileViewPayment } from '../hooks/useProfileViewPayment';
