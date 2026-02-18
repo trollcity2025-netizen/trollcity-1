@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useInRouterContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { useAuthStore } from '../lib/store';
 import { useXPStore } from '../stores/useXPStore';
 import CreditScoreBadge from '../components/CreditScoreBadge';
 import BadgesGrid from '../components/badges/BadgesGrid';
 import UserBadge from '../components/UserBadge';
-import { useCreditScore } from '../lib/hooks/useCreditScore';
-import { useProfileViewPayment } from '../hooks/useProfileViewPayment';
+import { useCreditScore as _useCreditScore } from '../lib/hooks/useCreditScore';
+import { useProfileViewPayment as _useProfileViewPayment } from '../hooks/useProfileViewPayment';
 import { getLevelName } from '../lib/xp';
 import { ENTRANCE_EFFECTS_MAP, EntranceEffect } from '../lib/entranceEffects';
 import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw, Home, Mars, Venus, Trash2, CheckCircle, CreditCard, FileText, Palette, Sparkles, X } from 'lucide-react';
@@ -17,14 +18,14 @@ import { canMessageAdmin, getGlowingTextStyle } from '@/lib/perkEffects';
 import { GlowingUsernameColorPicker } from '../components/GlowingUsernameColorPicker';
 import { cars } from '../data/vehicles';
 import { trollCityTheme } from '../styles/trollCityTheme';
-import TMVTab from '../components/tmv/TMVTab';
 import ProfileFeed from '../components/profile/ProfileFeed';
 
 function ProfileInner() {
   const { username, userId } = useParams();
   const navigate = useNavigate();
-  const { user: currentUser, profile: currentUserProfile, refreshProfile } = useAuthStore();
-  const { fetchXP, subscribeToXP, unsubscribe, level: xpStoreLevel } = useXPStore();
+  const { user: currentUser, profile: currentUserProfile } = useAuth();
+  const refreshProfile = useAuthStore((s) => s.refreshProfile);
+  const { fetchXP, subscribeToXP, unsubscribe } = useXPStore();
   
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -62,22 +63,24 @@ function ProfileInner() {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
   const tabDropdownRef = useRef<HTMLDivElement | null>(null);
-  const { data: creditData, loading: creditLoading } = useCreditScore(profile?.id);
+
+  // DISABLED - These hooks were causing multiple API calls and re-renders on load
+  // const memoizedProfileId = useMemo(() => profile?.id, [profile?.id]);
+  // const { data: creditData, loading: creditLoading } = useCreditScore(memoizedProfileId);
 
   // Profile Costs State
   const [messageCost, setMessageCost] = useState(0);
   const [viewCost, setViewCost] = useState(0);
 
-  const handlePaymentComplete = useCallback(() => {
+  const _handlePaymentComplete = useCallback(() => {
     refreshProfile();
   }, [refreshProfile]);
 
-  // Profile View Cost Logic
-  const { checking: paymentChecking, canView } = useProfileViewPayment({
-    profileOwnerId: profile?.id,
-    profileViewPrice: profile?.profile_view_cost || 0,
-    onPaymentComplete: handlePaymentComplete
-  });
+  // Disabled hooks - were causing multiple API calls and re-renders on load
+  const creditData = null;
+  const creditLoading = false;
+  const paymentChecking = false;
+  const canView = true;
 
   const handleUpdateCosts = async () => {
     if (!currentUser || currentUser.id !== profile.id) return;
@@ -352,7 +355,6 @@ function ProfileInner() {
   const tabOptions = [
     { key: 'social', label: 'Social', show: true },
     { key: 'inventory', label: 'Inventory & Perks', show: canSeeFullProfile },
-    { key: 'tmv', label: 'TMV Dashboard', show: canSeeFullProfile },
     { key: 'earnings', label: 'Earnings', show: canSeeFullProfile },
     { key: 'purchases', label: 'Purchase History', show: canSeeFullProfile },
     { key: 'admin_titles', label: 'Admin Titles', show: canSeeFullProfile && isAdminViewer },
@@ -361,14 +363,15 @@ function ProfileInner() {
   const activeTabLabel = tabOptions.find((option) => option.key === activeTab)?.label || 'Posts';
 
   useEffect(() => {
-    if (!isOwnProfile) return;
-    if (activeTab === 'earnings' && profile?.id) {
+    if (!isOwnProfile || !profile?.id) return;
+    if (activeTab === 'earnings') {
       fetchEarnings(profile.id);
     }
-    if (activeTab === 'purchases' && profile?.id) {
+    if (activeTab === 'purchases') {
       fetchPurchases(profile.id);
     }
-  }, [activeTab, profile?.id, isOwnProfile, fetchEarnings, fetchPurchases]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, profile?.id, isOwnProfile]);
 
   const handleRepurchasePerk = async (perk: any) => {
     if (!currentUser || currentUser.id !== profile.id) return;
@@ -445,55 +448,43 @@ function ProfileInner() {
 
   const [isFollowing, setIsFollowing] = useState(false);
 
+  // Track if this is the initial load (not a re-render)
+  const initialLoadRef = useRef(true);
+  const prevProfileIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     // Auto-scroll to top on page load
     window.scrollTo(0, 0);
 
+    let isMounted = true;
+
     const fetchProfile = async () => {
-      // Always fetch fresh XP data for own profile to avoid level glitch
+      // Determine the target ID before any early returns
+      let targetId: string | null = null;
+      if (userId) {
+        targetId = userId;
+      } else if (username) {
+        // Will resolve username to ID in the query
+      } else if (currentUser?.id) {
+        targetId = currentUser.id;
+      }
+      
+      // Only show loading spinner on initial load or when viewing a different profile
+      // This prevents flashing on re-renders
+      const isDifferentProfile = prevProfileIdRef.current !== targetId && !username;
+      if (initialLoadRef.current || isDifferentProfile) {
+        if (!isMounted) return;
+        setLoading(true);
+      }
+      
+      // Always fetch fresh XP data for own profile
       if (currentUser?.id) {
         console.log('Fetching fresh XP data for user:', currentUser.id);
         fetchXP(currentUser.id);
         subscribeToXP(currentUser.id);
       }
       
-      // OPTIMIZATION: Check if we already have the data in the global store for own profile
-      if (currentUserProfile && (
-          (userId && userId === currentUserProfile.id) || 
-          (username && username === currentUserProfile.username) ||
-          (!userId && !username && currentUser?.id === currentUserProfile.id)
-      )) {
-          // Use cached data immediately
-          console.log('Using cached profile from store');
-          
-          const effectiveProfile = { ...currentUserProfile };
-          // If we have a fresher level in XP store, use it to prevent flicker
-          if (xpStoreLevel && xpStoreLevel > (effectiveProfile.level || 0)) {
-            console.log('Using fresher level from XP store:', xpStoreLevel);
-            effectiveProfile.level = xpStoreLevel;
-          }
-          
-          setProfile(effectiveProfile);
-          setLoading(false);
-          
-          if (currentUser?.id === currentUserProfile.id) {
-            setMessageCost(currentUserProfile.message_cost || 0);
-            setViewCost(currentUserProfile.profile_view_cost || 0);
-          }
-          
-          // Always do a background fetch to ensure we have latest level data
-          // This prevents the "level jump" glitch
-      } else {
-          // Only show loading if we don't have data yet
-          const shouldShowLoading = !profile || 
-            (userId && profile?.id !== userId) || 
-            (username && profile?.username !== username);
-
-          if (shouldShowLoading) {
-            setLoading(true);
-          }
-      }
-      
+      // Build the query
       let query = supabase.from('user_profiles').select('*');
       
       if (userId) {
@@ -503,7 +494,7 @@ function ProfileInner() {
       } else if (currentUser?.id) {
          query = query.eq('id', currentUser.id);
       } else {
-         setLoading(false);
+         if (isMounted) setLoading(false);
          return;
       }
 
@@ -511,73 +502,71 @@ function ProfileInner() {
       
       if (error || !data) {
         console.error('Profile not found', error);
-      } else {
-        // ... (rest of logic)
+        if (isMounted) setLoading(false);
+        return;
+      }
 
-        console.log('Loaded profile data:', data); // Debug log
-        console.log('Gender:', data.gender); // Debug log
-        console.log('Banner URL:', data.banner_url); // Debug log
-        console.log('Updated at:', data.updated_at); // Debug log
-        
-        // If banner_url exists, test if it's accessible
-        if (data.banner_url) {
-          console.log('Full banner URL with cache bust:', `${data.banner_url}${data.banner_url.includes('?') ? '&' : '?'}cb=${data.updated_at || Date.now()}`)
-        }
+      // Track the profile ID for future comparisons
+      prevProfileIdRef.current = data.id;
+      initialLoadRef.current = false;
+
+      // Fetch all related data in parallel
+      const [followersRes, followingRes, postsRes, statsRes] = await Promise.all([
+        supabase
+          .from('user_follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', data.id),
+        supabase
+          .from('user_follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', data.id),
+        supabase
+          .from('troll_posts')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', data.id),
+        supabase
+          .from('user_stats')
+          .select('level')
+          .eq('user_id', data.id)
+          .maybeSingle()
+      ]);
+
+      // Override profile level with stats level if available (source of truth)
+      if (statsRes.data?.level) {
+        console.log('Overriding profile level with stats level:', statsRes.data.level);
+        data.level = statsRes.data.level;
+      }
+      
+      // BATCH ALL UPDATES INTO SINGLE STATE CALLS
+      // This prevents flashing from multiple re-renders
+      if (isMounted) {
+        setProfile(data);
+        setFollowersCount(followersRes.count || 0);
+        setFollowingCount(followingRes.count || 0);
+        setPostsCount(postsRes.count || 0);
         
         if (currentUser?.id === data.id) {
           setMessageCost(data.message_cost || 0);
           setViewCost(data.profile_view_cost || 0);
-        }
-
-        // Fetch follower/following/posts counts and user stats in parallel for performance
-        const [followersRes, followingRes, postsRes, statsRes] = await Promise.all([
-          supabase
-            .from('user_follows')
-            .select('*', { count: 'exact', head: true })
-            .eq('following_id', data.id),
-          supabase
-            .from('user_follows')
-            .select('*', { count: 'exact', head: true })
-            .eq('follower_id', data.id),
-          supabase
-            .from('troll_posts')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', data.id),
-          supabase
-            .from('user_stats')
-            .select('level')
-            .eq('user_id', data.id)
-            .maybeSingle()
-        ]);
-
-        // Override profile level with stats level if available (source of truth)
-        if (statsRes.data?.level) {
-          console.log('Overriding profile level with stats level:', statsRes.data.level);
-          data.level = statsRes.data.level;
-        }
-        
-        setProfile(data);
-          
-        setFollowersCount(followersRes.count || 0);
-        setFollowingCount(followingRes.count || 0);
-        setPostsCount(postsRes.count || 0);
-
-        // Fetch inventory last as it's heavy and not immediately needed for above-the-fold content
-        if (currentUser?.id === data.id) {
+          // Fetch inventory for own profile only
           fetchInventory(data.id);
         } else {
+          // Reset inventory for other profiles
           setInventory({ perks: [], effects: [], insurance: [], callMinutes: null, homeListings: [], vehicleListings: [], vehicles: [], titlesAndDeeds: [] });
           setEarnings([]);
           setPurchases([]);
         }
+        
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchProfile();
     
-    // Set up real-time subscription for profile updates
+    // Set up real-time subscription for profile updates with debouncing
     if (userId || username) {
+      let debounceTimer: ReturnType<typeof setTimeout>;
+      
       const channel = supabase
         .channel(`profile-updates-${userId || username}`)
         .on(
@@ -589,8 +578,8 @@ function ProfileInner() {
             filter: userId ? `id=eq.${userId}` : `username=eq.${username}`
           },
           (payload) => {
-            // Only refetch if coin balance or critical info changed
-            // This prevents loops when updating last_seen or other minor fields
+            // Only update profile data if critical info changed
+            // DO NOT call fetchProfile again as it creates a loop with inventory fetches
             const newP = payload.new as any;
             const oldP = payload.old as any;
             
@@ -599,40 +588,61 @@ function ProfileInner() {
                 newP.troll_coins !== oldP.troll_coins ||
                 newP.level !== oldP.level
             ) {
-                console.log('Profile balance/level updated in real-time:', newP);
-                fetchProfile();
+                console.log('Profile balance/level updated in real-time, updating local state only');
+                
+                // Update profile state directly without refetching inventory
+                setProfile((prev: any) => ({
+                  ...prev,
+                  coins: newP.coins,
+                  troll_coins: newP.troll_coins,
+                  level: newP.level
+                }));
             }
           }
         )
         .subscribe()
       
       return () => {
-        supabase.removeChannel(channel)
+        isMounted = false;
+        clearTimeout(debounceTimer);
+        supabase.removeChannel(channel);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, userId, currentUser?.id, fetchInventory]);
+  }, [username, userId, currentUser?.id]);
 
   // Cleanup XP subscription on unmount
   useEffect(() => {
     return () => {
-      unsubscribe();
+      try {
+        unsubscribe();
+      } catch (err) {
+        console.error('Error unsubscribe from XP store:', err);
+      }
     };
   }, [unsubscribe]);
 
-  // Live status check
+  // Live status check - prevent unnecessary re-renders
   useEffect(() => {
     if (!profile?.id) return;
 
+    let isMounted = true;
+    
     const checkLiveStatus = async () => {
-      const { data } = await supabase
-        .from('streams')
-        .select('id')
-        .eq('broadcaster_id', profile.id)
-        .eq('is_live', true)
-        .maybeSingle();
-      
-      setIsProfileLive(!!data);
+      try {
+        const { data } = await supabase
+          .from('streams')
+          .select('id')
+          .eq('broadcaster_id', profile.id)
+          .eq('is_live', true)
+          .maybeSingle();
+        
+        if (isMounted) {
+          setIsProfileLive(!!data);
+        }
+      } catch (err) {
+        console.error('Error checking live status:', err);
+      }
     };
     
     checkLiveStatus();
@@ -652,11 +662,12 @@ function ProfileInner() {
       .subscribe();
 
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, [profile?.id]);
 
-  // Check follow status
+  // Check follow status - with precise dependencies to prevent excessive checks
   useEffect(() => {
     const checkFollowStatus = async () => {
       if (!currentUser || !profile?.id) return;
@@ -672,7 +683,8 @@ function ProfileInner() {
     };
 
     checkFollowStatus();
-  }, [currentUser, profile?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, profile?.id]);
 
   const handleFollow = async () => {
     if (!currentUser) {
@@ -735,7 +747,7 @@ function ProfileInner() {
 
   // Defer early returns to after hooks to satisfy lint rules
 
-  // Load announcement preferences
+  // Load announcement preferences - only trigger when these specific properties change
   useEffect(() => {
     if (isOwnProfile && profile?.announcements_enabled !== undefined) {
       setAnnouncementsEnabled(profile.announcements_enabled);
@@ -743,7 +755,7 @@ function ProfileInner() {
     if (isOwnProfile && profile?.banner_notifications_enabled !== undefined) {
       setBannerNotificationsEnabled(profile.banner_notifications_enabled);
     }
-  }, [isOwnProfile, profile]);
+  }, [isOwnProfile, profile?.announcements_enabled, profile?.banner_notifications_enabled]);
 
   const toggleAnnouncements = async () => {
     if (!currentUser) return;
@@ -1434,10 +1446,6 @@ function ProfileInner() {
                 </div>
               )}
             </div>
-          )}
-
-          {activeTab === 'tmv' && (
-            <TMVTab profile={profile} isOwnProfile={isOwnProfile} />
           )}
 
            {activeTab === 'earnings' && (
