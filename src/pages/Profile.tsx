@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useInRouterContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../hooks/useAuth';
+
 import { useAuthStore } from '../lib/store';
 import { useXPStore } from '../stores/useXPStore';
 import CreditScoreBadge from '../components/CreditScoreBadge';
@@ -23,7 +23,8 @@ import ProfileFeed from '../components/profile/ProfileFeed';
 function ProfileInner() {
   const { username, userId } = useParams();
   const navigate = useNavigate();
-  const { user: currentUser, profile: currentUserProfile } = useAuth();
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserProfile = useAuthStore((s) => s.profile);
   const refreshProfile = useAuthStore((s) => s.refreshProfile);
   const { fetchXP, subscribeToXP, unsubscribe } = useXPStore();
   
