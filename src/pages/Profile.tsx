@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useInRouterContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth.ts';
 import { useAuthStore } from '../lib/store';
 import { useXPStore } from '../stores/useXPStore';
 import CreditScoreBadge from '../components/CreditScoreBadge';
