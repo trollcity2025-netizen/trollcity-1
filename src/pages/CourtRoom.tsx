@@ -3,8 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../lib/store";
 import { supabase, UserRole } from "../lib/supabase";
 import { startCourtSession } from "../lib/courtSessions";
-import { LiveKitRoom, ParticipantTile, useTracks, useParticipants } from "@livekit/components-react";
-import "@livekit/components-styles";
+
 import { toast } from "sonner";
 import RequireRole from "../components/RequireRole";
 import CourtAIAssistant from "../components/CourtAIAssistant";
@@ -13,176 +12,17 @@ import CourtChat from "../components/CourtChat";
 import CourtAIController from "../components/CourtAIController";
 import UserSearchDropdown from "../components/UserSearchDropdown";
 import { Scale, Gavel, FileText, Users, CheckCircle, Upload, Bell, Sparkles } from "lucide-react";
-import { Track } from "livekit-client";
+
 import CourtGeminiModal from "../components/CourtGeminiModal";
 import CourtDocketModal from "../components/CourtDocketModal";
 import { generateSummaryFeedback } from "../lib/courtAi";
 import { getGlowingTextStyle } from "../lib/perkEffects";
+import { AgoraProvider } from "@/hooks/useAgora";
+import CourtAdjournedAnimation from "@/components/court/CourtAdjournedAnimation";
+import CourtBroadcast from "@/components/court/CourtBroadcast";
 // import { generateUUID } from "../lib/uuid";
 
-const CourtParticipantLabel = ({ trackRef }: { trackRef: any }) => {
-  const [username, setUsername] = useState<string | null>(null);
-  const [rgbExpiry, setRgbExpiry] = useState<string | null>(null);
-  const [glowingColor, setGlowingColor] = useState<string | null>(null);
-  const identity = trackRef?.participant?.identity || null;
-  const name = trackRef?.participant?.name || null;
-  useEffect(() => {
-    let mounted = true;
-    const fetchProfile = async () => {
-      if (!identity) {
-        setUsername(name || null);
-        return;
-      }
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('username,rgb_username_expires_at,glowing_username_color')
-        .eq('id', identity)
-        .maybeSingle();
-      if (!mounted) return;
-      if (error) {
-        setUsername(name || identity);
-        setRgbExpiry(null);
-        setGlowingColor(null);
-        return;
-      }
-      setUsername(data?.username || name || identity);
-      setRgbExpiry(data?.rgb_username_expires_at || null);
-      setGlowingColor(data?.glowing_username_color || null);
-    };
-    fetchProfile();
-    return () => {
-      mounted = false;
-    };
-  }, [identity, name]);
-  const isRgbActive =
-    rgbExpiry !== null && new Date(rgbExpiry) > new Date();
-  
-  const glowingStyle = (!isRgbActive && glowingColor) ? getGlowingTextStyle(glowingColor) : undefined;
 
-  return (
-    <div className="absolute bottom-2 left-2 right-2 flex justify-center pointer-events-none">
-      <span
-        className={`px-2 py-1 rounded bg-black/60 text-white text-xs ${
-          isRgbActive ? 'rgb-username font-bold' : ''
-        }`}
-        style={glowingStyle}
-      >
-        {username || identity || 'Participant'}
-      </span>
-    </div>
-  );
-};
-
-// Memoized Court Video Grid - Prevents remounting and flickering
-const CourtVideoGrid = memo(({ maxTiles }: { maxTiles: number }) => {
-  const tracks = useTracks(
-    [Track.Source.Camera, Track.Source.ScreenShare],
-    { onlySubscribed: true }
-  );
-
-  const visible = useMemo(() => 
-    (tracks || []).slice(0, Math.max(2, maxTiles || 2)),
-    [tracks, maxTiles]
-  );
-
-  const placeholders = Math.max(2, maxTiles || 2) - visible.length;
-
-  const getCols = () => {
-    const cols = Math.max(2, maxTiles || 2);
-    if (cols <= 2) return 2;
-    if (cols <= 3) return 3;
-    return Math.min(cols, 4);
-  };
-
-  return (
-    <div
-      className="w-full h-[60vh] gap-2 p-2"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${getCols()}, minmax(0, 1fr))`
-      }}
-    >
-      {visible.map((t, index) => {
-        const participantSid = t.participant?.sid || `participant-${index}`;
-        const stableKey = `${participantSid}-${index}`;
-        
-        return (
-          <div
-            key={stableKey}
-            className="tc-neon-frame relative"
-          >
-            <ParticipantTile trackRef={t} />
-            <CourtParticipantLabel trackRef={t} />
-          </div>
-        );
-      })}
-      {Array.from({ length: placeholders }).map((_, i) => (
-        <div 
-          key={`ph-${i}`}
-          className="tc-neon-frame flex items-center justify-center"
-          style={{ pointerEvents: 'none' }}
-        >
-          <div className="text-gray-400 text-sm">Waiting for participant…</div>
-        </div>
-      ))}
-    </div>
-  );
-});
-
-CourtVideoGrid.displayName = 'CourtVideoGrid';
-
-// Memoized Track Counter
-const CourtTrackCounter = memo(({ onCount }: { onCount: (count: number) => void }) => {
-  const tracks = useTracks(
-    [Track.Source.Camera, Track.Source.ScreenShare],
-    { onlySubscribed: true }
-  );
-
-  const activeCount = useMemo(() => {
-    const identities = new Set(
-      (tracks || []).map((t) => t.participant?.sid || t.participant?.identity)
-    );
-    return identities.size;
-  }, [tracks]);
-
-  useEffect(() => {
-    onCount(activeCount);
-  }, [activeCount, onCount]);
-
-  return null;
-});
-
-CourtTrackCounter.displayName = 'CourtTrackCounter';
-  
-  const CourtLimitEnforcer = ({ isJudge, isOfficer }: { isJudge: boolean, isOfficer: boolean }) => {
-    const participants = useParticipants();
-    const navigate = useNavigate();
-    
-    useEffect(() => {
-       if (isJudge || isOfficer) return;
-
-       // Filter for viewers (those who cannot publish)
-       const viewers = participants.filter(p => !p.permissions?.canPublish);
-       
-       // Sort by join time to identify who exceeded the limit
-       // We use a fallback to creationTime or just assume order if joinedAt is missing (though it shouldn't be)
-       const sortedViewers = [...viewers].sort((a, b) => {
-          const timeA = a.joinedAt?.getTime() || 0;
-          const timeB = b.joinedAt?.getTime() || 0;
-          return timeA - timeB;
-       });
-
-       const myIndex = sortedViewers.findIndex(p => p.isLocal);
-       
-       // If I am a viewer and I am the 11th or later (index 10+), I must leave
-       if (myIndex !== -1 && myIndex >= 10) {
-          toast.error('Viewer limit (10) reached.');
-          navigate('/troll-court');
-       }
-    }, [participants, isJudge, isOfficer, navigate]);
-    
-    return null;
-  };
   
   const isValidUuid = (value?: string | null) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -193,15 +33,21 @@ export default function CourtRoom() {
    const { user, profile } = useAuthStore();
    const { courtId } = useParams();
    const navigate = useNavigate();
-   const [token, setToken] = useState(null);
-   const [serverUrl, setServerUrl] = useState(null);
+
    const [loading, setLoading] = useState(true);
    const [_participantsAllowed, _setParticipantsAllowed] = useState([]);
-   const [courtSession, setCourtSession] = useState(null);
+   const [courtSession, setCourtSession] = useState<any>(null);
    const [boxCount, setBoxCount] = useState(2);
    const [joinBoxRequested, setJoinBoxRequested] = useState(false);
    const [joinBoxLoading, setJoinBoxLoading] = useState(false);
    const [activeBoxCount, setActiveBoxCount] = useState(0);
+   const [agoraToken, setAgoraToken] = useState<string | null>(null);
+   const [muxPlaybackId, setMuxPlaybackId] = useState<string | null>(null);
+   const [showCoinGrantModal, setShowCoinGrantModal] = useState(false);
+  const [showCoinDeductModal, setShowCoinDeductModal] = useState(false);
+  const [coinManagementData, setCoinManagementData] = useState({ userId: '', amount: 0, reason: '' });
+
+  const [showAdjournedAnimation, setShowAdjournedAnimation] = useState(false);
 
   // Stabilize room ID once at mount
   const roomIdRef = useRef<string | null>(null);
@@ -274,6 +120,28 @@ export default function CourtRoom() {
   const [summaries, setSummaries] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<any[]>([]);
   const [summaryText, setSummaryText] = useState('');
+  useEffect(() => {
+    if (courtSession) {
+      // For viewers, we need the Mux playback ID.
+      if (courtSession.mux_playback_id) {
+        setMuxPlaybackId(courtSession.mux_playback_id);
+      } else if (isJudge) {
+        // TODO: If no playback ID, the judge needs to create one.
+        // This will likely involve calling a new RPC function that:
+        // 1. Calls the `mux-create` edge function.
+        // 2. Updates the `court_sessions` table with the new Mux IDs.
+        console.warn('Court session is missing a Mux playback ID. Viewers cannot watch.');
+        // For now, we'll allow the judge to proceed, but viewers will be stuck.
+      }
+
+      // For publishers (judge, participants), we need an Agora token.
+      // This is usually fetched when they start the session or join a box.
+      if (canPublish && !agoraToken) {
+        // The token should have been fetched already. If not, something is wrong.
+        console.error('Publisher is missing an Agora token.');
+      }
+    }
+  }, [courtSession, isJudge, canPublish, agoraToken]);
   const [isSubmittingSummary, setIsSubmittingSummary] = useState(false);
   const [defenseCounselEnabled, setDefenseCounselEnabled] = useState(false);
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
@@ -306,140 +174,9 @@ export default function CourtRoom() {
   };
 
 
-  const initCourtroom = useCallback(async () => {
-    if (!user || !courtId || !isValidUuid(courtId)) return;
 
-    setLoading(true);
-    try {
-      const { data: session, error: sessionError } = await supabase
-        .from('court_sessions')
-        .select('*')
-        .eq('id', courtId)
-        .maybeSingle();
 
-      if (sessionError) throw sessionError;
-      
-      if (!session) {
-        toast.error('Court session not found');
-        navigate('/troll-court');
-        return;
-      }
 
-      setCourtSession(session);
-      setBoxCount(Math.min(4, Math.max(2, session.max_boxes || 2)));
-
-      // Always connect to LiveKit for all users (viewers and speakers)
-      const isJudge = profile?.role === 'admin' || profile?.role === 'lead_troll_officer' || profile?.is_admin || profile?.is_lead_officer;
-      const isOfficer = profile?.role === 'troll_officer' || profile?.is_troll_officer;
-      const canPublishInitial = isJudge || isOfficer || ["defendant", "accuser", "witness", "attorney"].includes(profile?.role);
-      
-      // Get token
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error('Missing VITE_SUPABASE_URL for LiveKit token endpoint');
-      }
-      const tokenUrl = `${supabaseUrl}/functions/v1/livekit-token`;
-
-      const authSession = await supabase.auth.getSession();
-      const accessToken = authSession.data.session?.access_token;
-      if (!accessToken) {
-        throw new Error('No active session');
-      }
-
-      const response = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          room: courtId,
-          identity: user.id,
-          role: canPublishInitial ? 'host' : 'guest'
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get LiveKit token');
-      }
-
-      const data = await response.json();
-      if (!data?.token || !data?.url) {
-        throw new Error('Invalid LiveKit token response');
-      }
-      setToken(data.token);
-      setServerUrl(data.url);
-
-    } catch (err) {
-      console.error('Error initializing courtroom:', err);
-      toast.error('Failed to join court session');
-    } finally {
-      setLoading(false);
-    }
-  }, [user, courtId, navigate, profile]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    // Handle missing/invalid IDs early so we don't get "invalid input syntax for type uuid: \"null\""
-    if (!courtId || courtId === 'null' || courtId === 'undefined') {
-      toast.error('Invalid court session');
-      setLoading(false);
-      navigate('/troll-court');
-      return;
-    }
-
-    // Support /court/active as a shortcut (resolves to the current live session)
-    if (courtId === 'active') {
-      void (async () => {
-        try {
-          const { data: currentSession, error } = await supabase.rpc('get_current_court_session');
-          if (error) throw error;
-          
-          let session = Array.isArray(currentSession) ? currentSession[0] : currentSession;
-          
-          // If RPC returned nothing, check via direct query just in case (for 'active' status support)
-          if (!session) {
-             const { data: fallbackSession } = await supabase
-              .from('court_sessions')
-              .select('*')
-              .in('status', ['live', 'active', 'waiting'])
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-             
-             if (fallbackSession) {
-               session = fallbackSession;
-             }
-          }
-
-          const resolvedId = session?.id;
-          if (!resolvedId || !isValidUuid(resolvedId)) {
-            toast.error('No active court session found');
-            setLoading(false);
-            navigate('/troll-court');
-            return;
-          }
-          navigate(`/court/${resolvedId}`);
-        } catch (err) {
-          console.error('[CourtRoom] Failed to resolve active court session:', err);
-          toast.error('No active court session found');
-          setLoading(false);
-          navigate('/troll-court');
-        }
-      })();
-      return;
-    }
-
-    if (!isValidUuid(courtId)) {
-      toast.error('Invalid court session');
-      setLoading(false);
-      navigate('/troll-court');
-      return;
-    }
-
-    initCourtroom();
-  }, [user, courtId, initCourtroom, navigate]);
 
   useEffect(() => {
     if (!activeCase || !activeCase.id) return;
@@ -654,9 +391,9 @@ export default function CourtRoom() {
       // Get token from Vercel endpoint
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       if (!supabaseUrl) {
-        throw new Error('Missing VITE_SUPABASE_URL for LiveKit token endpoint');
+        throw new Error('Missing VITE_SUPABASE_URL for Agora token endpoint');
       }
-      const tokenUrl = `${supabaseUrl}/functions/v1/livekit-token`;
+      const tokenUrl = `${supabaseUrl}/functions/v1/agora-token`;
 
       const session = await supabase.auth.getSession();
       const accessToken = session.data.session?.access_token;
@@ -682,17 +419,16 @@ export default function CourtRoom() {
       }
 
       const data = await response.json();
-      if (!data?.token || !data?.url) {
-        throw new Error('Invalid LiveKit token response');
+      if (!data?.token) {
+        throw new Error('Invalid Agora token response');
       }
-      setToken(data.token);
-      setServerUrl(data.url);
+      setAgoraToken(data.token);
       setJoinBoxRequested(true);
       toast.success('Joined a court box');
     } catch (err) {
       console.error("Courtroom join box error:", err);
       if (err?.message?.includes('404') || err?.status === 404) {
-        toast.error('LiveKit token service not available. Please check configuration.');
+        toast.error('Agora token service not available. Please check configuration.');
       } else {
         toast.error('Unable to join a court box');
       }
@@ -720,9 +456,9 @@ export default function CourtRoom() {
       // Get token from Vercel endpoint
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       if (!supabaseUrl) {
-        throw new Error('Missing VITE_SUPABASE_URL for LiveKit token endpoint');
+        throw new Error('Missing VITE_SUPABASE_URL for Agora token endpoint');
       }
-      const tokenUrl = `${supabaseUrl}/functions/v1/livekit-token`;
+      const tokenUrl = `${supabaseUrl}/functions/v1/agora-token`;
 
       const session = await supabase.auth.getSession();
       const accessToken = session.data.session?.access_token;
@@ -747,14 +483,13 @@ export default function CourtRoom() {
       }
 
       const tokenData = await tokenResponse.json();
-      if (!tokenData?.token || !tokenData?.url) {
-        throw new Error('Invalid LiveKit token response');
+      if (!tokenData?.token) {
+        throw new Error('Invalid Agora token response');
       }
       const resolvedSessionId = sessionData?.id || targetCourtId;
       setCourtSession(sessionData || { id: resolvedSessionId, status: 'active' });
       setBoxCount(Math.min(6, Math.max(2, sessionData?.maxBoxes || 2)));
-      setToken(tokenData.token);
-      setServerUrl(tokenData.url);
+      setAgoraToken(tokenData.token);
       toast.success('Court session started');
       if (resolvedSessionId !== courtId) {
         navigate(`/court/${resolvedSessionId}`);
@@ -762,7 +497,7 @@ export default function CourtRoom() {
     } catch (err) {
       console.error('Error starting court session:', err);
       if (err?.message?.includes('404') || err?.status === 404) {
-        toast.error('LiveKit token service not available. Please check configuration.');
+        toast.error('Agora token service not available. Please check configuration.');
       } else {
         toast.error('Failed to start court session');
       }
@@ -806,7 +541,11 @@ export default function CourtRoom() {
       // Also update local state to reflect ended status immediately
       setCourtSession(prev => prev ? { ...prev, status: 'ended' } : null);
       
-      navigate('/troll-court');
+      // Show animation and then navigate
+      setShowAdjournedAnimation(true);
+      setTimeout(() => {
+        navigate('/troll-court');
+      }, 3000); // Animation duration + delay
     } catch (err) {
       console.error('Error ending court session:', err);
       toast.error(`Failed to end court session: ${(err as any)?.message || 'Unknown error'}`);
@@ -1115,6 +854,8 @@ export default function CourtRoom() {
           reason: sentenceDetails.reason,
           created_at: new Date().toISOString()
         });
+        await supabase.rpc('remove_user_from_court', { p_user_id: defendant, p_session_id: courtId });
+        toast.success(`${defendant} has been sentenced to ${sentenceDetails.duration} hours in jail.`);
       }
     } catch (err) {
       console.error('Error applying sentence:', err);
@@ -1286,19 +1027,12 @@ export default function CourtRoom() {
     );
   }
 
-  if ((!token || !serverUrl || token === '' || serverUrl === '')) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-10 text-center">
-        <div className="text-red-400">Failed to join court session. Please try again.</div>
-        <div className="text-xs text-gray-500 mt-2">
-          Token: {token ? 'present' : 'missing'}, ServerUrl: {serverUrl ? 'present' : 'missing'}
-        </div>
-      </div>
-    );
-  }
+
 
   return (
+    <AgoraProvider>
     <RequireRole roles={[UserRole.USER, UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER, UserRole.ADMIN]}>
+      {showAdjournedAnimation && <CourtAdjournedAnimation />}
       <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-4">
 
         {/* Header */}
@@ -1375,20 +1109,12 @@ export default function CourtRoom() {
                   </button>
                 </div>
               )}
-              {token && (
-                <LiveKitRoom
-                  token={token}
-                  serverUrl={serverUrl}
-                  connect={true}
-                  audio={true}
-                  video={true}
-                  className="w-full"
-                >
-                  <CourtLimitEnforcer isJudge={Boolean(isJudge)} isOfficer={Boolean(isOfficer)} />
-                  <CourtTrackCounter onCount={setActiveBoxCount} />
-                  <CourtVideoGrid maxTiles={boxCount} />
-                </LiveKitRoom>
-              )}
+              <CourtBroadcast
+                canPublish={canPublish}
+                courtSession={courtSession}
+                agoraToken={agoraToken}
+                muxPlaybackId={muxPlaybackId}
+              />
             </div>
 
             {/* Court Status */}
@@ -1524,6 +1250,18 @@ export default function CourtRoom() {
                           Issue Verdict
                         </button>
                         <div className="border-t border-zinc-700 pt-2 mt-2">
+                          <button
+                            onClick={() => setShowCoinGrantModal(true)}
+                            className="w-full py-2 bg-green-600 hover:bg-green-700 rounded text-sm mb-2"
+                          >
+                            Grant Coins
+                          </button>
+                          <button
+                            onClick={() => setShowCoinDeductModal(true)}
+                            className="w-full py-2 bg-red-600 hover:bg-red-700 rounded text-sm mb-2"
+                          >
+                            Deduct Coins
+                          </button>
                           <button
                             onClick={loadSentencingOptions}
                             className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm"
@@ -2180,7 +1918,27 @@ export default function CourtRoom() {
                   ))}
                 </div>
 
-                {/* Other Penalties */}
+                  {/* Other Penalties */}
+                  <div className="bg-zinc-800 rounded-lg p-3">
+                    <h4 className="font-semibold mb-2 text-red-400">Jail</h4>
+                    <div className="mb-2 p-2 bg-zinc-700 rounded">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Jail Time</span>
+                        <input type="number" placeholder="Hours" className="bg-zinc-900 text-white w-20 p-1 rounded" id="jail-duration" />
+                        <button
+                          onClick={() => {
+                            const duration = (document.getElementById('jail-duration') as HTMLInputElement).value;
+                            if (duration) {
+                              applySentence('jail', { duration: parseInt(duration), reason: 'Sentenced by court' });
+                            }
+                          }}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 <div className="bg-zinc-800 rounded-lg p-3">
                   <h4 className="font-semibold mb-2 text-yellow-400">Other Penalties</h4>
                   {sentencingOptions.otherPenalties.map((penalty, index) => (
@@ -2460,7 +2218,92 @@ export default function CourtRoom() {
           </div>
         )}
 
+        {/* Coin Management Modals */}
+        {(showCoinGrantModal || showCoinDeductModal) && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-zinc-900 rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                {showCoinGrantModal ? 'Grant Coins' : 'Deduct Coins'}
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">User ID</label>
+                  <input
+                    type="text"
+                    value={coinManagementData.userId}
+                    onChange={(e) => setCoinManagementData(prev => ({ ...prev, userId: e.target.value }))}
+                    className="w-full bg-zinc-800 border border-zinc-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    placeholder="Enter user ID"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Amount</label>
+                  <input
+                    type="number"
+                    value={coinManagementData.amount}
+                    onChange={(e) => setCoinManagementData(prev => ({ ...prev, amount: parseInt(e.target.value) || 0 }))}
+                    className="w-full bg-zinc-800 border border-zinc-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    placeholder="Enter amount"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Reason</label>
+                  <input
+                    type="text"
+                    value={coinManagementData.reason}
+                    onChange={(e) => setCoinManagementData(prev => ({ ...prev, reason: e.target.value }))}
+                    className="w-full bg-zinc-800 border border-zinc-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    placeholder="Enter reason"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={async () => {
+                    const { userId, amount, reason } = coinManagementData;
+                    if (!userId || !amount || !reason) {
+                      toast.error('All fields are required');
+                      return;
+                    }
+
+                    const rpcName = showCoinGrantModal ? 'court_grant_coins' : 'court_deduct_coins';
+
+                    try {
+                      const { error } = await supabase.rpc(rpcName, { p_user_id: userId, p_amount: amount, p_reason: reason });
+                      if (error) throw error;
+                      toast.success(`Successfully ${showCoinGrantModal ? 'granted' : 'deducted'} ${amount} coins`);
+                      setShowCoinGrantModal(false);
+                      setShowCoinDeductModal(false);
+                      setCoinManagementData({ userId: '', amount: 0, reason: '' });
+                    } catch (err) {
+                      console.error(`Error with ${rpcName}:`, err);
+                      toast.error(`Failed to ${showCoinGrantModal ? 'grant' : 'deduct'} coins`);
+                    }
+                  }}
+                  className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 rounded font-semibold transition-colors"
+                >
+                  {showCoinGrantModal ? 'Grant' : 'Deduct'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCoinGrantModal(false);
+                    setShowCoinDeductModal(false);
+                    setCoinManagementData({ userId: '', amount: 0, reason: '' });
+                  }}
+                  className="flex-1 py-2 bg-gray-600 hover:bg-gray-700 rounded font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
       </div>
     </RequireRole>
+    </AgoraProvider>
   );
 }

@@ -23,11 +23,11 @@ export function useCreditScore(targetUserId?: string) {
     setLoading(true)
     setError(null)
     try {
-      // Fetch credit_score from user_profiles
+      // Fetch credit_score from user_credit
       const { data: row, error: err } = await supabase
-        .from('user_profiles')
-        .select('id, credit_score')
-        .eq('id', userId)
+        .from('user_credit')
+        .select('user_id, score')
+        .eq('user_id', userId)
         .maybeSingle()
 
       if (err && err.code !== 'PGRST116') throw err
@@ -35,8 +35,8 @@ export function useCreditScore(targetUserId?: string) {
       // PGRST116 means no rows found - that's ok
       if (row) {
         setData({
-          user_id: row.id,
-          score: row.credit_score ?? 400,
+          user_id: row.user_id,
+          score: row.score ?? 400,
           updated_at: new Date().toISOString()
         } as CreditScoreData)
       } else {

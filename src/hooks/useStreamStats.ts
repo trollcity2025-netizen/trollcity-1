@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Room, RoomEvent } from 'livekit-client'
+
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-export function useStreamStats(room: Room | null, streamerId: string | null) {
-  const [viewerCount, setViewerCount] = useState(1)
+export function useStreamStats(streamerId: string | null) {
+  const [viewerCount, setViewerCount] = useState(1) // Default to 1 (the streamer)
   const [duration, setDuration] = useState('00:00:00')
   const [streamerStats, setStreamerStats] = useState<any>(null)
 
@@ -22,32 +23,6 @@ export function useStreamStats(room: Room | null, streamerId: string | null) {
     return () => clearInterval(timer)
   }, [])
 
-  // Viewer count from LiveKit
-  useEffect(() => {
-    if (!room) return
-
-    const updateViewers = () => {
-      // Count remote participants (viewers) + local participant
-      const count = room.remoteParticipants.size + (room.localParticipant ? 1 : 0)
-      setViewerCount(Math.max(1, count)) // At least 1 (the streamer)
-    }
-
-    // Initial update
-    updateViewers()
-
-    // Listen to participant events
-    const handleParticipantConnected = () => updateViewers()
-    const handleParticipantDisconnected = () => updateViewers()
-
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected)
-    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
-
-    return () => {
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected)
-      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
-    }
-  }, [room])
-
   // Fetch streamer stats (coins, level, badge)
   useEffect(() => {
     if (!streamerId) return
@@ -56,7 +31,7 @@ export function useStreamStats(room: Room | null, streamerId: string | null) {
       try {
         const { data } = await supabase
           .from('user_profiles')
-          .select('username, level, total_earned_coins, troll_coins, troll_coins')
+          .select('username, level, total_earned_coins, troll_coins')
           .eq('id', streamerId)
           .single()
 

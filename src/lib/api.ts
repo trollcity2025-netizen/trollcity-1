@@ -30,10 +30,7 @@ export const API_ENDPOINTS = {
     saveCard: '/payments',
     chargeCard: '/charge-stored-card',
   },
-  livekit: {
-    token: '/livekit-token',   // Correct path for STREAM token
-    api: '/livekit-api',
-  },
+
   broadcastSeats: {
     list: '/broadcast-seats',
     action: '/broadcast-seats',
@@ -130,15 +127,13 @@ async function request<T = any>(
     const sessionExpiringSoon = expiresAt && (expiresAt - now) < 60;
 
 
-    // Enhanced logging for specific endpoints
-    const isLiveKitEndpoint = endpoint.includes('livekit');
     const isBroadcastEndpoint = endpoint.includes('broadcast') || 
                                endpoint.includes('live-prepare') || 
                                endpoint.includes('live-mark') ||
                                endpoint.includes('refund-hd-boost') ||
                                endpoint.includes('announcement');
 
-    if (isLiveKitEndpoint || isBroadcastEndpoint) {
+    if (isBroadcastEndpoint) {
       console.log(`[API ${requestId}] Session check:`, {
         hasSession: !!sessionData?.data?.session,
         hasToken: !!token,
@@ -188,7 +183,7 @@ async function request<T = any>(
       requestHeaders['Authorization'] = `Bearer ${token}`;
     }
 
-    if (isLiveKitEndpoint || isBroadcastEndpoint) {
+    if (isBroadcastEndpoint) {
       console.log(`[API ${requestId}] ${endpoint} headers:`, {
         hasApiKey: !!requestHeaders['apikey'],
         hasAuth: !!requestHeaders['Authorization'],
@@ -310,7 +305,7 @@ async function request<T = any>(
         openPurchaseGate(data?.error || data?.message || errorMsg)
       }
 
-      if (isLiveKitEndpoint || isBroadcastEndpoint) {
+      if (isBroadcastEndpoint) {
         console.error(`[API ${requestId}] ❌ Request failed:`, {
           status: response.status,
           statusText: response.statusText,

@@ -44,22 +44,14 @@ Deno.serve(async (_req) => {
         console.error('Error enforcing LMPM durations:', lmpmError)
     } else if (lmpmResult?.total_ended > 0) {
         console.log(`LMPM: Auto-ended ${lmpmResult.ended_streams} streams and ${lmpmResult.ended_pods} pods.`)
-        
-        // If we ended streams in the DB, we should also try to close the rooms in LiveKit
-        // This is a secondary safety net as the frontend also has a timer.
-        try {
-          const livekitUrl = Deno.env.get("LIVEKIT_URL")?.replace('wss://', 'https://');
-          const apiKey = Deno.env.get("LIVEKIT_API_KEY");
-          const apiSecret = Deno.env.get("LIVEKIT_API_SECRET");
-          
-          if (livekitUrl && apiKey && apiSecret) {
-            // We'd need the list of stream IDs that were ended to close specific rooms
-            // For now, the DB update will trigger room_finished eventually or 
-            // the next token request will fail.
-          }
-        } catch (lkErr) {
-          console.error('Failed to close LiveKit rooms via cron:', lkErr);
-        }
+    }
+
+    // 5. End Stale Battles
+    const { error: staleBattlesError } = await supabase.rpc('end_stale_battles')
+    if (staleBattlesError) {
+        console.error('Error ending stale battles:', staleBattlesError)
+    } else {
+        console.log('Stale battles ended successfully')
     }
 
     return new Response(JSON.stringify({ success: true }), {

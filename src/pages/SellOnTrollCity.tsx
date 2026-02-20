@@ -647,7 +647,7 @@ export default function SellOnTrollCity() {
                         <DollarSign className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
                         <div>
                           <h3 className="font-semibold text-yellow-400 mb-1">Weekly Platform Fee</h3>
-                          <p className="text-gray-300 text-sm">Platform access requires a weekly fee paid in Troll Coins. If you cannot afford the fee, pause your shop anytime to avoid charges.</p>
+                          <p className="text-gray-300 text-sm">Platform access requires a weekly fee of 2,000 Troll Coins. If you cannot afford the fee, pause your shop anytime to avoid charges.</p>
                         </div>
                       </div>
                     </div>

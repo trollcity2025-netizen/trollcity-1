@@ -1,8 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from "../_shared/cors.ts"
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { EgressClient, RoomServiceClient } from "npm:livekit-server-sdk";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders })
 
@@ -13,18 +11,7 @@ Deno.serve(async (req) => {
       throw new Error('Missing roomName')
     }
 
-    // 1. Setup Clients
-    const LIVEKIT_API_KEY = Deno.env.get("LIVEKIT_API_KEY")!
-    const LIVEKIT_API_SECRET = Deno.env.get("LIVEKIT_API_SECRET")!
-    const LIVEKIT_URL = Deno.env.get("LIVEKIT_URL")!
-    
-    // Ensure URL is HTTP/HTTPS for API
-    const apiUrl = LIVEKIT_URL.replace('wss://', 'https://').replace('ws://', 'http://');
-
-    const roomService = new RoomServiceClient(apiUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
-    const egressClient = new EgressClient(apiUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
-
-    // 2. Get Stream Key from DB
+    // 1. Get Stream Key from DB (or create via Mux if missing)
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -36,55 +23,103 @@ Deno.serve(async (req) => {
       .eq('id', roomName) // Assuming roomName is streamId
       .single()
 
-    if (streamError || !streamData || !streamData.mux_stream_key) {
-      console.error('Stream key missing for room:', roomName)
-      throw new Error('Stream key not found or Mux not initialized for this stream')
+    if (streamError || !streamData) {
+      console.warn('Stream record not found for room:', roomName)
     }
 
-    const rtmpUrl = `rtmp://live.mux.com/app/${streamData.mux_stream_key}`
+    let streamKey = streamData?.mux_stream_key || null;
+    let muxStreamId = streamData?.mux_stream_id || null;
 
-    // 3. Find Broadcaster Tracks
-    const participants = await roomService.listParticipants(roomName);
-    
-    // Broadcaster is usually the one with identity matching user_id (if roomName is streamId)
-    // Or just find the first one publishing Camera
-    const broadcaster = participants.find(p => p.identity === streamData.user_id) || 
-                        participants.find(p => p.tracks.some(t => t.source === 0)); // 0 = Camera in proto
+    // If no Mux stream exists, create one now (server-side)
+    if (!streamKey) {
+      const tokenId = Deno.env.get('MUX_TOKEN_ID');
+      const tokenSecret = Deno.env.get('MUX_TOKEN_SECRET');
 
-    if (!broadcaster) {
-      throw new Error('Broadcaster not found in room')
+      if (!tokenId || !tokenSecret) {
+        console.error('Mux credentials missing in env');
+        return new Response(JSON.stringify({ error: 'Mux not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const apiUrl = 'https://api.mux.com/video/v1/live-streams';
+      const auth = btoa(`${tokenId}:${tokenSecret}`);
+
+      const createBody = {
+        playback_policy: ['public'],
+        new_asset_settings: { playback_policy: ['public'] },
+        name: `stream-${roomName}`,
+      };
+
+      const muxResp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${auth}`
+        },
+        body: JSON.stringify(createBody)
+      });
+
+      if (!muxResp.ok) {
+        const errText = await muxResp.text().catch(() => 'unknown');
+        console.error('Mux create error:', muxResp.status, errText);
+        return new Response(JSON.stringify({ error: 'Mux API error', status: muxResp.status }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const muxData = await muxResp.json().catch(() => ({}));
+      // Best-effort extraction of stream key
+      streamKey = muxData?.data?.stream_key?.value || muxData?.data?.stream_key || null;
+      muxStreamId = muxData?.data?.id || null;
+
+      if (!streamKey) {
+        console.error('Created mux stream but no stream key present', muxData);
+        return new Response(JSON.stringify({ error: 'Mux stream created but no stream key available' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Persist to DB
+      try {
+        await supabaseClient.from('streams').update({ mux_stream_key: streamKey, mux_stream_id: muxStreamId }).eq('id', roomName);
+      } catch (e) {
+        console.warn('Failed to persist mux stream key to DB', e);
+      }
     }
 
-    const videoTrack = broadcaster.tracks.find(t => t.source === 0); // Camera
-    const audioTrack = broadcaster.tracks.find(t => t.source === 2); // Microphone
+    const rtmpUrl = `rtmp://live.mux.com/app/${streamKey}`;
 
-    if (!videoTrack) {
-        throw new Error('Broadcaster is not publishing video')
-    }
+    // Start Agora RTMP Push
+    const appId = Deno.env.get('AGORA_APP_ID') || '';
+    const customerId = Deno.env.get('AGORA_CUSTOMER_ID') || '';
+    const customerSecret = Deno.env.get('AGORA_CUSTOMER_SECRET') || '';
 
-    // 4. Start Egress (Track Composite or Room Composite)
-    // Use TrackComposite to mix specific audio/video tracks.
-    // If audio is missing, we can still proceed with video only? Or fail? 
-    // Mux needs audio usually, but silence is okay.
-    
-    const audioTrackId = audioTrack?.sid;
-    const videoTrackId = videoTrack.sid;
+    if (appId && customerId && customerSecret) {
+        try {
+            const agoraApiUrl = `https://api.agora.io/v1/projects/${appId}/rtmp-converters`;
+            const auth = btoa(`${customerId}:${customerSecret}`);
 
-    console.log(`Starting Egress for room ${roomName} to ${rtmpUrl}`);
-    console.log(`Tracks: Video=${videoTrackId}, Audio=${audioTrackId}`);
+            const agoraResp = await fetch(agoraApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Basic ${auth}`
+                },
+                body: JSON.stringify({
+                    "name": roomName,
+                    "transcodeOptions": {
+                        "rtcChannel": roomName,
+                        "rtmpUrls": [rtmpUrl],
+                    }
+                })
+            });
 
-    const info = await egressClient.startTrackCompositeEgress(
-        roomName,
-        {
-            stream: {
-                urls: [rtmpUrl]
-            },
-            audioTrackId: audioTrackId, // Optional, but highly recommended
-            videoTrackId: videoTrackId,
+            if (!agoraResp.ok) {
+                const errText = await agoraResp.text().catch(() => 'unknown');
+                console.error('Agora start relay error:', agoraResp.status, errText);
+                // Do not block the response to the client, just log the error
+            }
+        } catch (e) {
+            console.error('Agora start relay exception:', e);
         }
-    );
+    }
 
-    return new Response(JSON.stringify(info), {
+    return new Response(JSON.stringify({ rtmpUrl, muxStreamId, streamKey }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   } catch (e) {

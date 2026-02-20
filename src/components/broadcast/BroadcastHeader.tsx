@@ -12,9 +12,12 @@ interface BroadcastHeaderProps {
     liveViewerCount?: number;
     eventRemainingMs?: number | null;
     eventEnded?: boolean;
+    broadcasterProfile: any;
+    hideBattleButton?: boolean;
+
 }
 
-export default function BroadcastHeader({ stream, onStartBattle, isHost, liveViewerCount, eventRemainingMs, eventEnded }: BroadcastHeaderProps) {
+export default function BroadcastHeader({ stream, onStartBattle, isHost, liveViewerCount, eventRemainingMs, eventEnded, broadcasterProfile, hideBattleButton, hideCoinBalance }: BroadcastHeaderProps) {
     const { profile, setProfile } = useAuthStore();
     const [likes, setLikes] = React.useState(0);
     const [isLiking, setIsLiking] = React.useState(false);
@@ -134,30 +137,11 @@ export default function BroadcastHeader({ stream, onStartBattle, isHost, liveVie
                 </div>
             )}
 
-            {/* Left: Coin Balance - REMOVED from left to avoid covering LIVE indicator, now on right */}
-            <div className="pointer-events-auto bg-black/40 backdrop-blur-md border border-yellow-500/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-lg shadow-black/20">
-                <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center border border-yellow-500/50">
-                    <Coins size={16} className="text-yellow-400" />
-                </div>
-                <div className="flex flex-col leading-none">
-                    <span className="text-[10px] text-yellow-500/70 font-bold uppercase tracking-wider">Balance</span>
-                    <span className="text-sm font-black text-white">
-                        {(profile?.troll_coins || 0).toLocaleString()}
-                    </span>
-                </div>
-            </div>
 
-            {isHost && onStartBattle && (
-                <button
-                    onClick={onStartBattle}
-                    className="pointer-events-auto flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white rounded-full px-4 py-2 shadow-lg shadow-red-500/20 transition-all"
-                >
-                    <Swords size={16} />
-                    <span className="text-xs font-bold">
-                        {stream.stream_kind === 'trollmers' ? 'HEAD TO HEAD' : 'BATTLE'}
-                    </span>
-                </button>
-            )}
+
+
+
+
 
             {/* Right: Stream Stats - HIDDEN for now to keep header clean and avoid overlap with sidebar on desktop */}
             <div className="hidden items-center gap-3">

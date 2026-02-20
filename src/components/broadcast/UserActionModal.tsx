@@ -32,6 +32,7 @@ interface UserActionModalProps {
   onGift: () => void;
   onGiftAll?: () => void;
   onKickStage?: () => void;
+  isBroadofficer?: boolean;
 }
 
 export default function UserActionModal({ 
@@ -45,7 +46,8 @@ export default function UserActionModal({
   onClose, 
   onGift,
   onGiftAll,
-  onKickStage
+  onKickStage,
+  isBroadofficer: initialIsBroadofficer,
 }: UserActionModalProps) {
   const [fetchedUsername, setFetchedUsername] = React.useState<string | null>(null);
   const [fetchedCreatedAt, setFetchedCreatedAt] = React.useState<string | null>(null);
@@ -53,6 +55,7 @@ export default function UserActionModal({
   const [fetchedTier, setFetchedTier] = React.useState<string | null>(null);
   const [fetchedAvatar, setFetchedAvatar] = React.useState<string | null>(null);
   const [isFollowing, setIsFollowing] = React.useState(false);
+  const [isBroadofficer, setIsBroadofficer] = React.useState(initialIsBroadofficer || false);
   const { user: currentUser } = useAuthStore.getState();
 
   React.useEffect(() => {
@@ -93,15 +96,29 @@ export default function UserActionModal({
                 setIsFollowing(true);
             }
         }
+
+        // Check broadofficer status
+        if (isHost && currentUser) {
+            const { data: broadofficerData, error: _broadofficerError } = await supabase
+                .from('broadcast_officers')
+                .select('*')
+                .eq('officer_id', userId)
+                .eq('broadcaster_id', currentUser.id)
+                .maybeSingle();
+            
+            if (broadofficerData) {
+                setIsBroadofficer(true);
+            }
+        }
     };
     fetchProfile();
-  }, [userId, username, role, createdAt, currentUser]);
+  }, [userId, username, role, createdAt, currentUser, isHost]);
 
   const displayName = username || fetchedUsername || userId;
   const displayCreatedAt = createdAt || fetchedCreatedAt || undefined;
   const isTargetStaff = targetRole === 'admin' || targetRole === 'moderator' || targetRole === 'staff';
   const navigate = useNavigate();
-  const hasModActions = isHost || isModerator;
+  const hasModActions = isHost || isModerator || isBroadofficer;
 
   const handleKick = async () => {
     if (isTargetStaff) {
@@ -198,11 +215,41 @@ export default function UserActionModal({
 
   const handlePromote = async () => {
     if (!confirm("Promote this user to Broadofficer? They will have moderation powers.")) return;
-    const { error } = await supabase.rpc('assign_broadofficer', { p_user_id: userId });
-    if (error) toast.error("Failed to promote user");
-    else {
-        toast.success("User promoted to Broadofficer");
-        onClose();
+    if (!currentUser) return;
+    const { error } = await supabase.rpc('assign_broadofficer', { p_officer_id: userId, p_broadcaster_id: currentUser.id });
+    if (error) {
+      toast.error("Failed to promote user");
+    } else {
+      toast.success("User promoted to Broadofficer");
+      setIsBroadofficer(true);
+      onClose();
+    }
+  };
+
+  const handleDemote = async () => {
+    if (!confirm("Demote this user from Broadofficer?")) return;
+    if (!currentUser) return;
+    const { error } = await supabase.rpc('unassign_broadofficer', { p_officer_id: userId, p_broadcaster_id: currentUser.id });
+    if (error) {
+      toast.error("Failed to demote user");
+    } else {
+      toast.success("User demoted from Broadofficer");
+      setIsBroadofficer(false);
+      onClose();
+    }
+  };
+
+  const handleAlertTrollOfficers = async () => {
+    const reason = prompt("Please provide a reason for alerting the Troll Officers.");
+    if (!reason) return;
+
+    const { error } = await supabase.rpc('alert_troll_officers', { p_target_user_id: userId, p_stream_id: streamId, p_reason: reason });
+
+    if (error) {
+      toast.error("Failed to alert Troll Officers.");
+    } else {
+      toast.success("Troll Officers have been alerted.");
+      onClose();
     }
   };
 
@@ -374,10 +421,24 @@ export default function UserActionModal({
                )}
 
                {isHost && !isTargetStaff && (
-                 <button onClick={handlePromote} className="w-full flex items-center justify-center gap-2 p-2 bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 rounded-lg transition-colors border border-blue-500/20 mt-2">
+                 isBroadofficer ? (
+                  <button onClick={handleDemote} className="w-full flex items-center justify-center gap-2 p-2 bg-red-900/20 hover:bg-red-900/40 text-red-400 rounded-lg transition-colors border border-red-500/20 mt-2">
+                     <Shield size={16} />
+                     <span>Demote from Officer</span>
+                  </button>
+                 ) : (
+                  <button onClick={handlePromote} className="w-full flex items-center justify-center gap-2 p-2 bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 rounded-lg transition-colors border border-blue-500/20 mt-2">
+                      <Shield size={16} />
+                      <span>Promote to Officer</span>
+                  </button>
+                 )
+               )}
+
+               {hasModActions && !isTargetStaff && (
+                <button onClick={handleAlertTrollOfficers} className="w-full flex items-center justify-center gap-2 p-2 bg-yellow-900/20 hover:bg-yellow-900/40 text-yellow-400 rounded-lg transition-colors border border-yellow-500/20 mt-2">
                     <Shield size={16} />
-                    <span>Promote to Officer</span>
-                 </button>
+                    <span>Alert Troll Officers</span>
+                </button>
                )}
             </div>
           )}

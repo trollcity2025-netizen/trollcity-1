@@ -105,50 +105,50 @@ export default function LiveStreamsModule({ onRequireAuth }: LiveStreamsModulePr
   return (
     <div className="max-h-[420px] overflow-y-auto pr-2 custom-scrollbar space-y-3">
       {streams.map((stream) => (
-        <div
-          key={stream.id}
-          className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-4 flex gap-4 items-center hover:border-cyan-400/40 transition-colors`}
-        >
-          <div className="relative h-[84px] w-[140px] overflow-hidden rounded-xl bg-black/40 flex-shrink-0">
-            {stream.thumbnail_url ? (
-              <img
-                src={stream.thumbnail_url}
-                alt={stream.title || 'Live stream'}
-                className="h-full w-full object-cover"
-              />
-            ) : stream.user_profiles?.avatar_url ? (
-              <img
-                src={stream.user_profiles.avatar_url}
-                alt={stream.user_profiles.username || 'Streamer avatar'}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-cyan-900/20" />
-            )}
-            <div className="absolute left-2 top-2 rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
-              LIVE
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">
-              {stream.title || 'Untitled Stream'}
-            </p>
-            <p className="text-xs text-slate-400 truncate">
-              {stream.user_profiles?.username || 'Unknown streamer'}
-            </p>
-            <div className="mt-2 flex items-center gap-2 text-xs text-slate-300">
-              <Users className="h-3 w-3" />
-              {stream.current_viewers || stream.viewer_count || 0} watching
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleJoin(stream.id)}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-cyan-600 hover:opacity-90 transition-opacity"
+          <div
+            key={stream.id}
+            className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-4 flex gap-4 items-center hover:border-cyan-400/40 transition-colors`}
           >
-            Join Live
-          </button>
-        </div>
+            <Link to={`/live/${stream.id}`} className="relative h-[84px] w-[140px] overflow-hidden rounded-xl bg-black/40 flex-shrink-0 ring-2 ring-red-500/80 ring-offset-2 ring-offset-zinc-900 shadow-2xl shadow-red-500/20">
+              {stream.thumbnail_url ? (
+                <img
+                  src={stream.thumbnail_url}
+                  alt={stream.title || 'Live stream'}
+                  className="h-full w-full object-cover"
+                />
+              ) : stream.user_profiles?.avatar_url ? (
+                <img
+                  src={stream.user_profiles.avatar_url}
+                  alt={stream.user_profiles.username || 'Streamer avatar'}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-cyan-900/20" />
+              )}
+              <div className="absolute left-2 top-2 rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                LIVE
+              </div>
+            </Link>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white truncate">
+                {stream.title || 'Untitled Stream'}
+              </p>
+              <p className="text-xs text-slate-400 truncate">
+                {stream.user_profiles?.username || 'Unknown streamer'}
+              </p>
+              <div className="mt-2 flex items-center gap-2 text-xs text-slate-300">
+                <Users className="h-3 w-3" />
+                {stream.current_viewers || stream.viewer_count || 0} watching
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleJoin(stream.id)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-cyan-600 hover:opacity-90 transition-opacity"
+            >
+              Join Live
+            </button>
+          </div>
       ))}
     </div>
   )

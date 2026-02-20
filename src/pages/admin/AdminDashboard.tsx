@@ -181,7 +181,6 @@ export default function AdminDashboard() {
       toast.info(`Switched to tab: ${activeTab}`)
     }
   }, [activeTab])
-  const [liveKitStatus, setLiveKitStatus] = useState<unknown | null>(null)
   const [supabaseStatus, setSupabaseStatus] = useState<unknown | null>(null)
   const [paypalStatus, setPaypalStatus] = useState<unknown | null>(null)
   const [paypalTesting, setPaypalTesting] = useState(false)
@@ -727,50 +726,6 @@ export default function AdminDashboard() {
     navigate(`/live/${id}?admin=1`)
   }
 
-  const testLiveKitStreaming = async () => {
-    try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error('VITE_SUPABASE_URL environment variable is not set');
-      }
-      const tokenUrl = `${supabaseUrl}/functions/v1/livekit-token`;
-
-      const session = await supabase.auth.getSession();
-      const accessToken = session.data.session?.access_token;
-      if (!accessToken) throw new Error('No active session');
-
-      const response = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          room: 'admin-test',
-          identity: profile?.id || profile?.username || 'admin',
-          role: 'host',
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Token request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!data?.token || !data?.url) {
-        setLiveKitStatus({ ok: false, error: 'Token error' })
-        toast.error('LiveKit test failed')
-      } else {
-        setLiveKitStatus({ ok: true })
-        toast.success('LiveKit token generated')
-      }
-    } catch (e: any) {
-      setLiveKitStatus({ ok: false, error: e?.message || 'LiveKit request failed' })
-      toast.error('LiveKit test failed')
-    }
-  }
 
 
   const testSupabase = async () => {
@@ -1186,11 +1141,9 @@ export default function AdminDashboard() {
           <CityControlsHealth
             paypalStatus={paypalStatus}
             supabaseStatus={supabaseStatus}
-            liveKitStatus={liveKitStatus}
             liveStreams={liveStreams}
             onTestPayPal={testPayPal}
             onTestSupabase={testSupabase}
-            onTestLiveKit={testLiveKitStreaming}
             onLoadLiveStreams={loadLiveStreams}
             onCreateTrollDrop={createTrollDrop}
             trollDropAmount={trollDropAmount}

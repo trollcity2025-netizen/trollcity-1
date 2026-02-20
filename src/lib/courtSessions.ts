@@ -105,9 +105,54 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
       return { data: null, error: updateOrInsert.error }
     }
 
-    const data = updateOrInsert.data
-    return {
-      data: {
+    const data = updateOrInsert.data;
+
+    // Create Mux stream for the session
+    try {
+      const muxRes: any = await supabase.functions.invoke('mux-create', {
+        method: 'POST',
+        body: JSON.stringify({ stream_id: data.id }),
+      });
+
+      if (muxRes.error) throw new Error(muxRes.error.message);
+
+      const muxData = muxRes?.data || muxRes;
+      const playbackId = muxData?.playback_id || null;
+      if (!playbackId) throw new Error('mux-create did not return playback_id');
+
+      // Update the session with Mux data
+      const { data: finalData, error: muxUpdateError } = await supabase
+        .from('court_sessions')
+        .update({
+          mux_playback_id: playbackId,
+          mux_stream_key: muxData.stream_key || null,
+        })
+        .eq('id', data.id)
+        .select()
+        .single();
+
+      if (muxUpdateError) throw muxUpdateError;
+
+      return {
+        data: {
+          id: finalData.id,
+          sessionId: finalData.session_id || finalData.id,
+          maxBoxes: finalData.max_boxes,
+          roomName: finalData.room_name,
+          status: finalData.status,
+          created_at: finalData.created_at,
+          startedAt: finalData.started_at,
+          defendantId: finalData.defendant_id,
+          hls_url: finalData.hls_url,
+          mux_playback_id: finalData.mux_playback_id,
+        },
+        error: null,
+      };
+    } catch (muxError) {
+      console.error('Error creating Mux stream for court session:', muxError);
+      // If Mux fails, the session is still created but won't be viewable by the public.
+      // We can return the session data without the Mux info.
+      return { data: {
         id: data.id,
         sessionId: data.session_id || data.id,
         maxBoxes: data.max_boxes,
@@ -117,8 +162,7 @@ export async function startCourtSession(params: StartCourtSessionParams): Promis
         startedAt: data.started_at,
         defendantId: data.defendant_id,
         hls_url: data.hls_url
-      },
-      error: null
+      }, error: muxError };
     }
   } catch (err) {
     console.error('Error in startCourtSession:', err)

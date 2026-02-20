@@ -5,7 +5,7 @@ import { useAuthStore } from "./lib/store";
 
 import { useEligibilityStore } from "./lib/eligibilityStore";
 import { useJailMode } from "./hooks/useJailMode";
-import { supabase, UserRole, reportError } from "./lib/supabase";
+import { supabase, UserProfile, UserRole, reportError } from "./lib/supabase";
 import { Toaster, toast } from "sonner";
 import GlobalLoadingOverlay from "./components/GlobalLoadingOverlay";
 import GlobalErrorBanner from "./components/GlobalErrorBanner";
@@ -40,6 +40,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import AppLayout from "./components/layout/AppLayout";
 
 import { lazyWithRetry } from "./utils/lazyImport";
+import { AgoraProvider } from "./hooks/useAgora";
 
 // Static pages (fast load)
 import LandingHome from "./pages/Home";
@@ -50,6 +51,7 @@ import TermsAgreement from "./pages/TermsAgreement";
 import ExitPage from "./pages/ExitPage";
 
 import TrollBank from "./pages/TrollBank";
+const Broadcast = lazy(() => import("./pages/Broadcast"));
 import CityHall from "./pages/CityHall";
 const SetupPage = lazy(() => import("./pages/broadcast/SetupPage"));
 const BroadcastPage = lazy(() => import("./pages/broadcast/BroadcastPage"));
@@ -106,6 +108,8 @@ const FamilyShop = lazy(() => import("./pages/FamilyShop.jsx"));
 const FamilyBrowse = lazy(() => import("./pages/FamilyBrowse"));
 const Support = lazy(() => import("./pages/Support"));
 const JailPage = lazy(() => import("./pages/JailPage"));
+const JailVisitRoom = lazy(() => import("./pages/JailVisitRoom"));
+const JailCall = lazy(() => import("./pages/JailCall"));
 const Safety = lazy(() => import("./pages/Safety"));
 const AdminRFC = lazy(() => import("./components/AdminRFC"));
 const AdminEarningsDashboard = lazy(() => import("./pages/admin/AdminEarningsDashboard"));
@@ -131,13 +135,13 @@ const PayoutStatus = lazy(() => import("./pages/PayoutStatus"));
 const AdminLaunchTrial = lazy(() => import("./pages/admin/LaunchTrial"));
 
 
-const JoinPage = lazyWithRetry(() => import("./pages/Join"));
+
 const KickFeePage = lazy(() => import("./pages/broadcast/KickFeePage"));
 const KickFee = lazy(() => import("./pages/KickFee"));
 const BanFee = lazy(() => import("./pages/BanFee"));
-const TrollCourtSession = lazy(() => import("./pages/TrollCourtSession"));
 
-const Call = lazy(() => import("./pages/Call"));
+
+
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Trollifications = lazy(() => import("./pages/Trollifications"));
 const OfficerScheduling = lazy(() => import("./pages/OfficerScheduling"));
@@ -354,6 +358,35 @@ function AppContent() {
 
   // Some legacy logic needs the full profile object in several effects
   const profile = useAuthStore((s) => s.profile);
+  const setProfile = useAuthStore((s) => s.setProfile);
+
+
+  // Centralized profile subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`profile-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Received profile update from subscription:', payload.new);
+          const newProfile = payload.new as UserProfile;
+          setProfile(newProfile);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, setProfile]);
 
 
   const location = useLocation();
@@ -1017,6 +1050,7 @@ function AppContent() {
                   <Route path="/broadcast/:id" element={<BroadcastPage />} />
                   <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
                   <Route path="/broadcast/summary" element={<StreamSummary />} />
+                  <Route path="/broadcast" element={<Broadcast />} />
                   
                   {/* President Routes */}
                   <Route path="/president" element={<PresidentPage />} />
@@ -1048,7 +1082,7 @@ function AppContent() {
           <Route path="/city-hall" element={<CityHall />} />
                   <Route path="/universe-event" element={<UniverseEventPage />} />
                   <Route path="/events/universe" element={<Navigate to="/universe-event" replace />} />
-                  <Route path="/call/:roomId/:type/:userId" element={<Call />} />
+                  <Route path="/call/:roomId/:type/:userId" element={<JailCall />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
                   <Route path="/following/:userId" element={<Following />} />
@@ -1066,6 +1100,7 @@ function AppContent() {
                   <Route path="/credit-scores" element={<CreditScorePage />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/jail" element={<JailPage />} />
+                <Route path="/jail/visit/:roomId/:userId" element={<JailVisitRoom />} />
 
                   <Route path="/wall" element={<TrollCityWall />} />
                   <Route path="/wall/:postId" element={<WallPostPage />} />
@@ -1086,10 +1121,10 @@ function AppContent() {
                   
                   {/* 🎥 Streaming */}
 
-                  <Route path="/join" element={<JoinPage />} />
+                  
                   <Route path="/kick-fee" element={<KickFee />} />
                   <Route path="/ban-fee" element={<BanFee />} />
-                  <Route path="/troll-court/session" element={<TrollCourtSession />} />
+
                   <Route path="/live/:streamId" element={<Navigate to="/live" replace />} />
                   <Route path="/interview/:roomId" element={<InterviewRoom />} />
                   <Route path="/stream/:id" element={<Navigate to="/live" replace />} />
@@ -1791,7 +1826,7 @@ function App() {
     return cleanup;
   }, []);
 
-  return <AppContent />;
+  return <AgoraProvider><AppContent /></AgoraProvider>;
 }
 
 export default App;

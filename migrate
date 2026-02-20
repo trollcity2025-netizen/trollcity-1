@@ -1,0 +1,178 @@
+We are doing a full streaming stack migration for Troll City. Implement everything below end-to-end.
+
+HIGH LEVEL (NEW ARCHITECTURE)
+
+* Agora = real-time RTC ONLY for stage participants (broadcaster/hosts/guests/speakers/joiners).
+* Mux = ALL viewers/listeners everywhere (HLS playback). If you are watching/listening only (not in a guest box / not speaking), you are on Mux.
+* Remove Bunny completely. Remove LiveKit completely.
+* Remove all app-level “broadcast limits / box restrictions” that existed due to old plan limits (no hard-coded max guests, max publishers, max broadcasts, etc). UI should expand/scroll rather than block.
+
+SCOPE (APPLY THIS EVERYWHERE STREAMS/APLAYER EXIST)
+
+* Regular broadcasts
+* Battles (including sudden death)
+* Jail streams
+* TrollPods (audio rooms)
+* Officer Lounge / Officer Dashboard (any “view streams” panels)
+* Any global “watch streams” list, preview cards, stream detail pages, embedded players
+
+CORE USER RULES
+
+1. Stage vs Audience
+
+* Stage (Agora RTC): broadcaster + approved guests + anyone who clicks Join/Go Live/Raise Hand/Speak and is accepted.
+* Audience (Mux HLS): everyone else viewing/listening.
+
+2. Viewer detection (hard rule)
+
+* If user is not in the guest box and is not speaking/publishing: use Mux.
+* If user clicks Join (guest/speaker), switch from Mux → Agora and show them in the guest/stage UI.
+
+3. TrollPods
+
+* Default: listeners use Mux (audio HLS).
+* If user clicks Join/Speak: switch to Agora audio RTC.
+
+4. Battles
+
+* Battle hosts + stage guests use Agora.
+* All non-guest viewers watch via Mux HLS.
+* Chat/gifting/score updates remain realtime via Supabase (video may be delayed for viewers because HLS).
+
+REMOVE LIVEKIT COMPLETELY
+
+* Delete LiveKit SDK usage and any code paths:
+
+  * token generation endpoints
+  * join/publish/subscribe logic
+  * UI components/controls referencing LiveKit
+  * env vars: LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL, LIVEKIT_HOST, VITE_LIVEKIT_TOKEN_URL, etc.
+* Remove any “minutes cap” gating logic tied to LiveKit plans.
+
+REMOVE BUNNY COMPLETELY
+
+* Delete Bunny storage/CDN logic:
+
+  * env vars BUNNY_STORAGE_* and VITE_HLS_BASE_URL if it is Bunny-specific
+  * upload code paths
+  * any Bunny HLS URLs or storage URL builders
+  * any docs/README references in repo
+
+AGORA (STAGE) IMPLEMENTATION (WEB)
+
+* Use Agora Web SDK (agora-rtc-sdk-ng), NOT agora-react-uikit.
+* Client config: mode/live suitable for interactive live streaming (host role publishes tracks).
+* Token security:
+
+  * Agora project is “Secure”.
+  * Tokens MUST be generated server-side in Supabase Edge Functions.
+  * Never expose Agora App Certificate in frontend.
+* Add frontend env:
+
+  * VITE_AGORA_APP_ID
+* Add Supabase Edge secrets:
+
+  * AGORA_APP_ID
+  * AGORA_APP_CERTIFICATE
+
+MUX (VIEWERS/LISTENERS) IMPLEMENTATION
+
+* Use Mux “Pay as you go” (production live enabled; watermark removed). We will use Mux for audience playback.
+* Mux API tokens MUST be server-side only:
+
+  * Supabase Edge secrets:
+
+    * MUX_TOKEN_ID
+    * MUX_TOKEN_SECRET
+* For each live session (broadcast/battle/pod/jail), create or attach a Mux Live Stream and store:
+
+  * mux_playback_id (safe for frontend)
+  * mux_stream_key (PRIVATE; store server-side only; never expose to browser)
+* Audience player uses the Mux HLS manifest:
+
+  * https://stream.mux.com/<PLAYBACK_ID>.m3u8
+  * Use an HLS-capable player in the web frontend.
+
+AGORA → MUX PIPELINE (STAGE TO AUDIENCE)
+
+* When a session goes live, we must push the stage feed to Mux so viewers can watch via HLS.
+* Implement “start/stop broadcast to Mux” per session:
+
+  * Start: ensure Mux live stream exists; push RTMP from Agora channel to Mux ingest using the Mux stream key.
+  * Stop: stop the push and mark session ended.
+* Important: This must work for:
+
+  * regular broadcasts
+  * battles
+  * jail
+  * trollpods (audio-only push is fine)
+* Maintain stable mapping:
+
+  * session_id ↔ agora_channel_name ↔ mux_live_stream_id ↔ mux_playback_id
+
+NO MORE BOX RESTRICTIONS (REMOVE ALL APP-LEVEL CAPS)
+
+* Remove ANY logic limiting:
+
+  * number of guest boxes
+  * number of publishers
+  * number of concurrent broadcasts allowed by the app
+  * “limit reached” UI blockers
+* The UI should adapt (grid expands, scroll, pagination) instead of blocking joins.
+* We can add product caps later if needed, but for now: zero artificial restrictions.
+
+DATA MODEL / STORAGE (SUPABASE)
+Create/Update tables as needed so each session can store:
+
+* id
+* kind: 'broadcast' | 'battle' | 'pod' | 'jail'
+* status: 'live' | 'ended' | ...
+* broadcaster_id
+* agora_channel_name
+* mux_live_stream_id (optional)
+* mux_playback_id
+* mux_stream_key (private; do NOT expose via public selects; only Edge Functions/admin)
+* created_at, started_at, ended_at
+
+SECURITY REQUIREMENTS (MUST FOLLOW)
+
+* Never put these in Render/Vite env:
+
+  * AGORA_APP_CERTIFICATE
+  * MUX_TOKEN_SECRET
+  * MUX_STREAM_KEY
+  * SUPABASE_SERVICE_ROLE_KEY
+  * PAYPAL_*_SECRET
+* Frontend only gets:
+
+  * VITE_AGORA_APP_ID
+  * mux_playback_id (per session, safe)
+* Any action that creates Mux streams or generates Agora tokens must go through Supabase Edge Functions.
+
+ENV CLEANUP
+
+* Render frontend env should remain only frontend-safe (VITE_* plus PAYPAL_CLIENT_ID if used).
+* Supabase secrets should contain server-only secrets (AGORA/MUX/PayPal/OneSignal/etc).
+* Remove any unused AI keys, LiveKit, Bunny keys, etc.
+
+BUILD/DEPLOY FIX (RENDER LINUX)
+
+* Fix the current build error:
+  Profile.tsx imports src/hooks/useAuth but no file exists.
+  Remove that import and use the existing auth store (useAuthStore from src/lib/store) or correct to actual auth hook if present.
+* Run `npm run build` and ensure no case-sensitive path errors remain.
+
+ACCEPTANCE CRITERIA
+
+1. Watching streams anywhere (broadcast/battle/jail/pod/officer views) uses Mux playback, not Agora.
+2. Joining as guest/speaker switches user to Agora RTC and shows them in stage/guest UI.
+3. LiveKit and Bunny are completely removed from codebase and env usage.
+4. No app-level caps remain on number of stage boxes/joins/broadcasts (UI adapts).
+5. Tokens and secrets are correctly split (frontend safe vs server-only).
+6. Render build passes and deploy succeeds.
+
+Deliverables:
+
+* PR with code changes
+* Updated env var list (Render vs Supabase)
+* Brief notes on how to start a session, push to Mux, and how viewers play HLS.

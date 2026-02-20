@@ -6,29 +6,29 @@ import { useCoins } from '@/lib/hooks/useCoins';
 import { useBank as useBankHook } from '../lib/hooks/useBank';
 import { useAllCreditScores } from '../lib/hooks/useAllCreditScores';
 // import { toast } from 'sonner';
-import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle, AlertTriangle, ChevronDown, X } from 'lucide-react';
+import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle, AlertTriangle, ChevronDown, X, DollarSign } from 'lucide-react';
 import { formatCoins, COIN_PACKAGES } from '../lib/coinMath';
 import { ENTRANCE_EFFECTS_DATA } from '../lib/entranceEffects';
 import { deductCoins } from '@/lib/coinTransactions';
 import { purchaseCallMinutes } from '@/lib/callMinutes';
 import { useLiveContextStore } from '../lib/liveContextStore';
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 
 import { trollCityTheme } from '@/styles/trollCityTheme';
-import ManualPaymentModal from '@/components/broadcast/ManualPaymentModal';
+import BraintreeCheckoutModal from '@/components/payments/BraintreeCheckoutModal';
+import ManualPurchaseModal from '@/components/ManualPurchaseModal';
+// PayPal and manual provider flow removed — unified Braintree checkout will be used
 import TrollPassBanner from '@/components/ui/TrollPassBanner';
 import { toast } from 'sonner';
 
 const MANUAL_PROVIDERS = [
-  { id: 'venmo', name: 'Venmo', icon: '📱', color: 'bg-[#008CFF]' },
-  { id: 'paypal', name: 'PayPal', icon: '🅿️', color: 'bg-[#00457C]' },
-  { id: 'cashapp', name: 'Cash App', icon: '💲', color: 'bg-[#00D632]' }
+  { id: 'cashapp', name: 'Cash App', icon: <img src="/img/cashapp-logo.svg" alt="Cash App" className="w-5 h-5" />, provider_id: '$trollcity95' },
+  { id: 'venmo', name: 'Venmo', icon: <img src="/img/venmo-logo.svg" alt="Venmo" className="w-5 h-5" />, provider_id: '@troll-city' },
+  { id: 'paypal', name: 'PayPal', icon: <img src="/img/paypal-logo.svg" alt="PayPal" className="w-5 h-5" />, provider_id: 'paypal.me/trollcity' },
 ];
 
-const coinPackages = COIN_PACKAGES.map(p => ({
-  ...p,
-  price: p.priceDisplay // Map priceDisplay to price for backward compatibility with this component's expectations (string with $)
-}));
+// Provider selector removed — Braintree handles payment methods
+
+const coinPackages = COIN_PACKAGES;
 
 const SAMPLE_EFFECTS = ENTRANCE_EFFECTS_DATA;
 
@@ -94,35 +94,14 @@ export default function CoinStore() {
   const [requestedAmount, setRequestedAmount] = useState(100);
 
   const [selectedPackage, setSelectedPackage] = useState(null);
-  const [manualPaymentModalOpen, setManualPaymentModalOpen] = useState(false);
-  // Default to Venmo as requested
-  const [selectedProviderId, setSelectedProviderId] = useState('venmo');
-  const [showPayPal, setShowPayPal] = useState(false);
+  const [braintreeModalOpen, setBraintreeModalOpen] = useState(false);
+
+  const [selectedProviderId, setSelectedProviderId] = useState('cashapp');
+  const [manualPurchaseModalOpen, setManualPurchaseModalOpen] = useState(false);
 
   const handleManualPurchase = (pkg) => {
-    // PayPal handling
-    if (selectedProviderId === 'paypal') {
-        setSelectedPackage(pkg);
-        setShowPayPal(true);
-        return;
-    }
-
-    // Check for cooldown on CashApp/Venmo
-    if (['cashapp', 'venmo'].includes(selectedProviderId)) {
-      const lastRequest = localStorage.getItem('last_manual_request_time');
-      if (lastRequest) {
-        const diff = Date.now() - parseInt(lastRequest, 10);
-        if (diff < 60000) {
-          const remaining = Math.ceil((60000 - diff) / 1000);
-          toast.error(`Please wait ${remaining} seconds before making another request.`);
-          return;
-        }
-      }
-      localStorage.setItem('last_manual_request_time', Date.now().toString());
-    }
-
     setSelectedPackage(pkg);
-    setManualPaymentModalOpen(true);
+    setManualPurchaseModalOpen(true);
   };
 
   // const [loadingPay, setLoadingPay] = useState(false);
@@ -1210,14 +1189,12 @@ export default function CoinStore() {
                   </div>
                 </div>
 
-                {/* Payment Provider Selector */}
                 <div className="mb-4 flex gap-2">
                   {MANUAL_PROVIDERS.map(p => (
                     <button
                       key={p.id}
                       onClick={() => {
                         setSelectedProviderId(p.id);
-                        setShowPayPal(false);
                       }}
                       className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 border transition-colors ${selectedProviderId === p.id ? 'bg-purple-600 text-white border-purple-400' : 'bg-[#181825] text-gray-300 border-[#2C2C2C] hover:bg-[#232336]'}`}
                     >
@@ -1227,90 +1204,10 @@ export default function CoinStore() {
                   ))}
                 </div>
                 
-                {showPayPal && selectedPackage ? (
-                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                     <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                <span className="text-2xl">🅿️</span> PayPal Checkout
-                            </h3>
-                            <button onClick={() => setShowPayPal(false)} className="p-1 hover:bg-zinc-800 rounded-full">
-                                <X className="w-6 h-6 text-zinc-400" />
-                            </button>
-                        </div>
-                        
-                        <div className="mb-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-gray-400">Package</span>
-                                <span className="font-bold text-yellow-400">{selectedPackage.coins.toLocaleString()} Coins</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-400">Total</span>
-                                <span className="font-bold text-white text-xl">${isEmployee ? (selectedPackage.price.replace('$', '') * (1 - EMPLOYEE_COIN_DISCOUNT)).toFixed(2) : selectedPackage.price.replace('$', '')}</span>
-                            </div>
-                        </div>
-
-                        <PayPalScriptProvider options={{ 
-                            clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "sb",
-                            currency: "USD",
-                            intent: "capture"
-                        }}>
-                            <PayPalButtons 
-                                style={{ layout: "vertical", color: "gold", shape: "pill", label: "paypal", height: 48 }}
-                                createOrder={async (_data, _actions) => {
-                                  try {
-                                      const price = isEmployee ? (selectedPackage.price.replace('$', '') * (1 - EMPLOYEE_COIN_DISCOUNT)).toFixed(2) : selectedPackage.price.replace('$', '');
-                                      const { data: orderData, error } = await supabase.functions.invoke('paypal-create-order', {
-                                        body: {
-                                          amount: price,
-                                          coins: selectedPackage.coins,
-                                          user_id: user?.id,
-                                          package_id: selectedPackage.id
-                                        }
-                                      });
-                                      if (error) throw error;
-                                      if (!orderData?.orderId) throw new Error("Order creation failed");
-                                      return orderData.orderId;
-                                  } catch (err) {
-                                      console.error("PayPal Create Error:", err);
-                                      toast.error("Failed to initialize PayPal: " + (err.message || "Unknown error"));
-                                      return "";
-                                  }
-                                }}
-                                onApprove={async (data, _actions) => {
-                                  try {
-                                      const { error } = await supabase.functions.invoke('paypal-complete-order', {
-                                        body: {
-                                          orderId: data.orderID,
-                                          userId: user?.id,
-                                          packageId: selectedPackage.id
-                                        }
-                                      });
-                                      if (error) throw error;
-                                      toast.success(`Successfully purchased ${selectedPackage.coins.toLocaleString()} coins!`);
-                                      setShowPayPal(false);
-                                      refreshCoins();
-                                  } catch (err) {
-                                      console.error("PayPal Capture Error:", err);
-                                      toast.error("Payment verification failed. Please contact support.");
-                                  }
-                                }}
-                                onCancel={() => setShowPayPal(false)}
-                                onError={(err) => {
-                                    console.error("PayPal Error:", err);
-                                    toast.error("PayPal encountered an error");
-                                    setShowPayPal(false);
-                                }}
-                            />
-                        </PayPalScriptProvider>
-                     </div>
-                   </div>
-                ) : (
+                
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {coinPackages.map((pkg) => {
-                      // Parse the USD price
-                      const priceMatch = pkg.price.match(/\$(\d+\.?\d*)/);
-                      const originalPrice = priceMatch ? parseFloat(priceMatch[1]) : 0;
+                      const originalPrice = pkg.price;
                       const discountedPrice = isEmployee ? originalPrice * (1 - EMPLOYEE_COIN_DISCOUNT) : originalPrice;
                       
                       return (
@@ -1330,31 +1227,31 @@ export default function CoinStore() {
                             <div className="font-bold text-2xl text-white mb-1">{formatCoins(pkg.coins)}</div>
                             {isEmployee ? (
                               <div className="mb-1">
-                                <span className="text-lg font-semibold text-gray-400 line-through">{pkg.price}</span>
+                                <span className="text-lg font-semibold text-gray-400 line-through">{pkg.priceDisplay}</span>
                                 <span className="text-lg font-semibold text-green-400 ml-2">${discountedPrice.toFixed(2)}</span>
                               </div>
                             ) : (
-                              <div className="text-lg font-semibold text-green-400 mb-1">{pkg.price}</div>
+                              <div className="text-lg font-semibold text-green-400 mb-1">{pkg.priceDisplay}</div>
                             )}
                             <div className="text-sm text-gray-400 mb-4">Troll Coins</div>
                             
                             <button
                               onClick={() => {
-                                const purchasePkg = isEmployee ? { ...pkg, price: `${discountedPrice.toFixed(2)}` } : pkg;
+                                const price = isEmployee ? discountedPrice : originalPrice;
+                                const purchasePkg = { ...pkg, price: price, coins: pkg.coins };
                                 handleManualPurchase(purchasePkg);
                               }}
-                              className={`w-full py-2 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isEmployee ? 'bg-green-600 hover:bg-green-500' : (MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.color || 'bg-purple-600')} hover:brightness-110`}
+                              className={`w-full py-2 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isEmployee ? 'bg-green-600 hover:bg-green-500' : 'bg-purple-600'} hover:brightness-110`}
                             >
-                              Buy with {MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.name}
+                              Buy
                             </button>
                           </div>
                         </div>
                       );
                     })}
                   </div>
+                </>
               )}
-            </>
-            )}
 
             {/* Entrance Effects */}
             {tab === 'effects' && (
@@ -1751,17 +1648,24 @@ export default function CoinStore() {
           </div>
         </div>
         
-        <ManualPaymentModal
-          isOpen={manualPaymentModalOpen}
-          onClose={() => setManualPaymentModalOpen(false)}
+        <BraintreeCheckoutModal
+          isOpen={braintreeModalOpen}
+          onClose={() => setBraintreeModalOpen(false)}
           pkg={selectedPackage}
-          providerId={selectedProviderId}
           onSuccess={() => {
-            setManualPaymentModalOpen(false);
+            setBraintreeModalOpen(false);
             showPurchaseCompleteOverlay();
             refreshCoins();
           }}
         />
+        {manualPurchaseModalOpen && (
+          <ManualPurchaseModal
+            pkg={selectedPackage}
+            provider={MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)}
+            onClose={() => setManualPurchaseModalOpen(false)}
+            profile={profile}
+          />
+        )}
         </div>
       )
   );

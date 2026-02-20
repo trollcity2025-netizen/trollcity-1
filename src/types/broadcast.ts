@@ -27,6 +27,10 @@ export interface Stream {
   active_theme_url?: string;
   hls_path?: string;
   hls_url?: string;
+  // Mux integration fields (added during migration)
+  mux_playback_id?: string | null;
+  mux_stream_id?: string | null;
+  mux_stream_key?: string | null;
 }
 
 export interface StreamGuest {

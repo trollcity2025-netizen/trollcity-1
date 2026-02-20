@@ -65,9 +65,7 @@ function ProfileInner() {
   const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
   const tabDropdownRef = useRef<HTMLDivElement | null>(null);
 
-  // DISABLED - These hooks were causing multiple API calls and re-renders on load
-  // const memoizedProfileId = useMemo(() => profile?.id, [profile?.id]);
-  // const { data: creditData, loading: creditLoading } = useCreditScore(memoizedProfileId);
+  const { data: creditData, loading: creditLoading } = _useCreditScore(profile?.id);
 
   // Profile Costs State
   const [messageCost, setMessageCost] = useState(0);
@@ -77,9 +75,6 @@ function ProfileInner() {
     refreshProfile();
   }, [refreshProfile]);
 
-  // Disabled hooks - were causing multiple API calls and re-renders on load
-  const creditData = null;
-  const creditLoading = false;
   const paymentChecking = false;
   const canView = true;
 
@@ -982,7 +977,7 @@ function ProfileInner() {
             <CreditScoreBadge
               score={creditData?.score}
               tier={creditData?.tier}
-              trend7d={creditData?.trend_7d}
+              trend30d={creditData?.trend_30d}
               loading={creditLoading}
             />
           </div>

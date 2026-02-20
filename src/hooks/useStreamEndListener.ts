@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 
@@ -18,9 +18,11 @@ export function useStreamEndListener({
   redirectToSummary = true,
 }: UseStreamEndListenerProps) {
   const navigate = useNavigate()
+  const effectRan = useRef(false)
 
   useEffect(() => {
-    if (!enabled || !streamId) return
+    if (!enabled || !streamId || effectRan.current) return
+    effectRan.current = true
 
     console.log('[useStreamEndListener] Setting up listener for stream:', streamId)
 
@@ -39,23 +41,8 @@ export function useStreamEndListener({
           const newRecord = payload.new as any
           console.log('[useStreamEndListener] Stream update detected:', newRecord)
           
-          if (newRecord?.status === 'ended' || newRecord?.is_live === false) {
+          if (newRecord?.status === 'ended') {
             console.log('[useStreamEndListener] Stream ended detected, redirecting to summary...')
-            if (redirectToSummary) {
-              navigate(`/broadcast/summary/${streamId}`)
-            }
-          }
-        }
-      )
-      .on(
-        'broadcast',
-        { event: 'stream-ended' },
-        (payload) => {
-          console.log('[useStreamEndListener] Received broadcast stream-ended event:', payload)
-          const { streamId: endedStreamId } = payload.payload || {}
-          
-          if (endedStreamId === streamId) {
-            console.log('[useStreamEndListener] Stream ended via broadcast, redirecting...')
             if (redirectToSummary) {
               navigate(`/broadcast/summary/${streamId}`)
             }

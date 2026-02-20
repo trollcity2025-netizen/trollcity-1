@@ -10,19 +10,37 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const normalizeHandle = (raw: string | undefined | null) => {
-  const trimmed = (raw ?? "").trim();
-  // Remove leading $ or @
-  const clean = trimmed.replace(/^[$@]+/, "");
-  
-  if (!clean) return { tag: null, error: null };
-  
-  // Allow alphanumeric, ., _, -, and @ (for emails), plus + for email aliases
-  if (!/^[A-Za-z0-9._\-@+]{1,128}$/.test(clean)) {
-    return { tag: null, error: "Handle contains invalid characters." };
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const isValidUUID = (id: string | null | undefined): boolean => {
+  if (!id) return false;
+  return UUID_REGEX.test(id);
+};
+
+const validateAndNormalizeHandle = (provider: string, raw: string | undefined | null) => {
+  const handle = (raw ?? "").trim();
+  if (!handle) {
+    return { tag: null, error: "Handle cannot be empty." };
   }
-  
-  return { tag: clean };
+
+  switch (provider) {
+    case 'cashapp':
+      if (!/^\$[A-Za-z0-9_]{1,20}$/.test(handle)) {
+        return { tag: null, error: "Invalid Cash App Cashtag. It must start with '$' and contain letters, numbers, or underscores." };
+      }
+      return { tag: handle };
+    case 'venmo':
+      if (!/^@[A-Za-z0-9\-]{3,30}$/.test(handle)) {
+        return { tag: null, error: "Invalid Venmo handle. It must start with '@' and contain letters, numbers, or hyphens." };
+      }
+      return { tag: handle };
+    case 'paypal':
+      if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$/.test(handle)) {
+        return { tag: null, error: "Invalid PayPal email address." };
+      }
+      return { tag: handle };
+    default:
+      return { tag: null, error: "Unsupported payment provider." };
+  }
 };
 
 Deno.serve(async (req) => {
@@ -67,16 +85,29 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "Please wait 60 seconds before making another request." }), { status: 429, headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      const pkg = body?.package;
-      const coins = Number(body?.coins ?? pkg?.coins);
-      const amountUsd = Number(body?.amount_usd ?? pkg?.price_usd);
+      const pkg = body?.package || {};
+      const coins = Number(pkg?.coins || 0);
+      const amountUsd = Number(pkg?.price || 0);
+
       const packageId = body?.package_id ?? pkg?.id ?? null;
-      const { tag: payerCashtag, error: tagError } = normalizeHandle(body?.cashapp_tag ?? body?.cash_app_tag ?? body?.payer_cashtag);
+      const purchaseType = body?.purchase_type || 'manual_cashapp';
+      let paymentMethod = 'cashapp';
+      if (purchaseType.includes('venmo')) paymentMethod = 'venmo';
+      if (purchaseType.includes('paypal')) paymentMethod = 'paypal';
+
+      const { tag: payerId, error: tagError } = validateAndNormalizeHandle(paymentMethod, body?.payer_id);
+
       if (tagError) {
         return new Response(JSON.stringify({ error: tagError }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       }
+
       if (!coins || !amountUsd) {
         return new Response(JSON.stringify({ error: "Missing coins or amount" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      
+      const providerId = body?.provider_id as string | undefined;
+      if (!providerId) {
+        return new Response(JSON.stringify({ error: "Missing payment provider ID" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       }
 
       // Verify user profile exists (user_id in manual_coin_orders references user_profiles.id)
@@ -101,15 +132,18 @@ Deno.serve(async (req) => {
       if (purchaseType.includes('venmo')) paymentMethod = 'venmo';
       if (purchaseType.includes('paypal')) paymentMethod = 'paypal';
 
+      const finalPackageId = isValidUUID(packageId) ? packageId : null;
+
       const { data: order, error } = await supabaseAdmin
         .from("manual_coin_orders")
         .insert({
           user_id: authData.user.id,
-          package_id: packageId,
+          package_id: finalPackageId,
           coins,
           amount_cents,
           note_suggested: noteSuggested,
-          payer_cashtag: payerCashtag || "unknown",
+          provider_id: providerId, // formerly cashapp_cashtag
+          payer_id: payerId,       // new field for the user's payment identifier
           purchase_type: purchaseType,
           payment_method: paymentMethod,
           metadata: {
@@ -117,7 +151,8 @@ Deno.serve(async (req) => {
             email,
             package_name: pkg?.name,
             purchase_type: purchaseType,
-            payer_cashtag: payerCashtag || "unknown",
+            provider_id: providerId, // formerly cashapp_cashtag
+            payer_id: payerId,       // new field for the user's payment identifier
             payment_method: paymentMethod
           },
         })

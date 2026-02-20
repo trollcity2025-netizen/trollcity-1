@@ -12,7 +12,9 @@ interface MoreControlsDrawerProps {
   onFlipCamera: () => void;
   onSettings?: () => void;
   onLeave?: () => void;
+  onClearStage?: () => void;
   isHost?: boolean;
+  userRole?: string | null;
 }
 
 export default function MoreControlsDrawer({
@@ -25,9 +27,13 @@ export default function MoreControlsDrawer({
   onFlipCamera,
   onSettings,
   onLeave,
-  isHost
+  onClearStage,
+  isHost,
+  userRole
 }: MoreControlsDrawerProps) {
   if (!isOpen) return null;
+
+  const canClearStage = userRole === 'admin' || userRole === 'lead_troll_officer';
 
   return (
     <>

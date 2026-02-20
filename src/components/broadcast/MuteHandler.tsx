@@ -1,20 +1,20 @@
 import { useEffect } from 'react';
-import { useLocalParticipant } from '@livekit/components-react';
+import { useAgora } from '../../hooks/useAgora';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
+import { useAuthStore } from '../../lib/store';
 
 export default function MuteHandler({ streamId }: { streamId: string }) {
-    const { localParticipant } = useLocalParticipant();
+    const { localAudioTrack } = useAgora();
+    const { user } = useAuthStore();
 
     useEffect(() => {
-        if (!streamId || !streamId.trim()) return;
-        if (!localParticipant) return;
+        if (!streamId || !streamId.trim() || !user?.id) return;
 
-        // Check initial mute
         const checkMute = async () => {
-             const { data } = await supabase.from('stream_mutes').select('id').eq('stream_id', streamId).eq('user_id', localParticipant.identity).maybeSingle();
+             const { data } = await supabase.from('stream_mutes').select('id').eq('stream_id', streamId).eq('user_id', user.id).maybeSingle();
              if (data) {
-                 localParticipant.setMicrophoneEnabled(false);
+                 localAudioTrack?.setMuted(true);
                  toast.error("You have been muted by a moderator.");
              }
         };
@@ -28,8 +28,8 @@ export default function MuteHandler({ streamId }: { streamId: string }) {
                 filter: `stream_id=eq.${streamId}` 
             }, (payload) => {
                 const data = (payload as any).new;
-                if (data && data.user_id === localParticipant.identity) {
-                    localParticipant.setMicrophoneEnabled(false);
+                if (data && data.user_id === user.id) {
+                    localAudioTrack?.setMuted(true);
                     toast.error("You have been muted by a moderator.");
                 }
             })
@@ -40,15 +40,15 @@ export default function MuteHandler({ streamId }: { streamId: string }) {
                 filter: `stream_id=eq.${streamId}` 
             }, (payload) => {
                  const data = (payload as any).old;
-                 if (data && data.user_id === localParticipant.identity) {
-                     localParticipant.setMicrophoneEnabled(true);
+                 if (data && data.user_id === user.id) {
+                     localAudioTrack?.setMuted(false);
                      toast.success("You have been unmuted.");
                  }
             })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [streamId, localParticipant]);
+    }, [streamId, user?.id, localAudioTrack]);
 
     return null;
 }

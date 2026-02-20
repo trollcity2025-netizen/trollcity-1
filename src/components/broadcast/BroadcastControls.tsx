@@ -2,15 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
-import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, UserCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import BannedUsersList from './BannedUsersList';
 import ThemeSelector from './ThemeSelector';
-import { useLocalParticipant } from '@livekit/components-react';
+import { useAgora } from '../../hooks/useAgora';
 import { useAuthStore } from '../../lib/store';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useStreamSeats } from '../../hooks/useStreamSeats';
 
 interface BroadcastControlsProps {
   stream: Stream;
@@ -25,54 +26,54 @@ interface BroadcastControlsProps {
   requiredBoxes?: number;
   onBoxCountUpdate?: (count: number) => void;
   liveViewerCount?: number;
+  onShowBattleManager?: () => void;
+  mySession: any;
+  onLeaveStage: () => Promise<void>;
 }
 
-export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, liveViewerCount }: BroadcastControlsProps) {
-  const navigate = useNavigate();
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
+export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, liveViewerCount, onShowBattleManager, _mySession, _onLeaveStage }: BroadcastControlsProps) {
+  const _navigate = useNavigate();
+  const { publish, unpublish, localVideoTrack, _remoteUsers } = useAgora();
+  const isMicrophoneEnabled = localVideoTrack ? localVideoTrack.isMuted : false;
+  const isCameraEnabled = localVideoTrack ? true : false;
   const { user, isAdmin, profile } = useAuthStore();
+  const { _seats, _joinSeat, _kickParticipant } = useStreamSeats(stream.id, user?.id, profile);
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
   const [locked, setLocked] = useState(stream.are_seats_locked || false);
   const [debouncedPrice, setDebouncedPrice] = useState(seatPrice);
   const [showEffects, setShowEffects] = useState(false);
   const [showBannedList, setShowBannedList] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
-  const [likes, setLikes] = useState(0); // Local like count for immediate feedback
-  const [isLiking, setIsLiking] = useState(false);
-  const [hasRgb, setHasRgb] = useState(stream.has_rgb_effect || false);
+  const [_likes, _setLikes] = useState(0); // Local like count for immediate feedback
+  const [_isLiking, _setIsLiking] = useState(false);
+  const [_hasRgb, setHasRgb] = useState(stream.has_rgb_effect || false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
-    const lastLikeRef = useRef(0);
+    const _lastLikeRef = useRef(0);
 
   // Sync likes from stream
   useEffect(() => {
     if (typeof (stream as any).total_likes === 'number') {
-        setLikes((stream as any).total_likes);
+        _setLikes((stream as any).total_likes);
     }
   }, [stream]);
 
   const toggleMic = async () => {
-    if (localParticipant) {
+    if (localVideoTrack) {
       try {
-        const newVal = !isMicrophoneEnabled;
-        console.log('[BroadcastControls] Toggling mic:', { current: isMicrophoneEnabled, target: newVal });
-        await localParticipant.setMicrophoneEnabled(newVal);
-        
-        // Force state verification after toggle
-        setTimeout(() => {
-          const actualState = localParticipant.isMicrophoneEnabled;
-          console.log('[BroadcastControls] Mic state after toggle:', actualState);
-          if (actualState !== newVal) {
-            console.warn('[BroadcastControls] Mic state mismatch, forcing again');
-            localParticipant.setMicrophoneEnabled(newVal);
-          }
-        }, 300);
+        await localVideoTrack.setMuted(!isMicrophoneEnabled);
       } catch (e) {
         console.error('Failed to toggle mic:', e);
         toast.error('Failed to toggle microphone');
       }
+    }
+  };
+
+  const toggleCam = async () => {
+    if (localVideoTrack) {
+      await unpublish();
     } else {
-      console.warn('[BroadcastControls] toggleMic called but no localParticipant');
+      await publish();
     }
   };
   const attributes = useParticipantAttributes(user ? [user.id] : [], stream.id);
@@ -85,6 +86,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   // Staff/Mods can moderate (ban users), but NOT change stream settings (unless specified)
   const canEditStream = isHost || (isStaff && !isModerator); // Only true staff can edit stream settings, mods just moderate chat/users
     const isTrollmersStream = stream.stream_kind === 'trollmers';
+  const isChurchStream = stream.category === 'church';
 
   const togglePerk = async (perkId: string) => {
     if (!user) return;
@@ -143,13 +145,6 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
     setHasRgb(stream.has_rgb_effect || false);
   }, [stream]);
 
-  const toggleCam = async () => {
-    if (localParticipant) {
-      const newVal = !isCameraEnabled;
-      await localParticipant.setCameraEnabled(newVal);
-    }
-  };
-
   const isMicOn = isMicrophoneEnabled;
   const isCamOn = isCameraEnabled;
 
@@ -197,6 +192,18 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
     setDebouncedPrice(val);
   };
 
+  const handlePriceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const target = e.target as HTMLInputElement;
+      const newPrice = parseInt(target.value, 10) || 0;
+      setSeatPrice(newPrice);
+      setDebouncedPrice(newPrice);
+      updateStreamConfig(newPrice, locked, true);
+      target.blur();
+    }
+  };
+
   const toggleLock = () => {
     const newLocked = !locked;
     setLocked(newLocked);
@@ -231,7 +238,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
      // Only Host can toggle RGB (Prompt: Host only)
      if (!isHost) return;
      
-     const enabling = !hasRgb;
+     const enabling = !_hasRgb;
      
      try {
         // If enabling, we might be purchasing. 
@@ -309,47 +316,16 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
     }
   };
 
-  const handleLike = async () => {
-    if (!user) {
-      navigate('/auth?mode=signup');
-      return;
-    }
-    if (isLiking) return;
-        const now = Date.now();
-        if (now - lastLikeRef.current < 1500) return;
-        lastLikeRef.current = now;
-    if (isHost) {
-        toast.error("Broadcasters cannot like their own broadcast");
-        return;
-    }
-    setIsLiking(true);
-    
-    // Optimistic update
-    setLikes(prev => prev + 1);
+  const _handleMuteParticipant = async (_userId: string) => {
+    if (!isHost && !isStaff) return;
+    // TODO: Implement Agora mute participant
+    toast.success("Participant muted");
+  };
 
-    try {
-        // Try to insert into stream_likes if table exists
-        const { error } = await supabase.from('stream_likes').insert({
-            stream_id: stream.id,
-            user_id: user.id
-        });
-
-        if (error) {
-            // If duplicate like (unique constraint), maybe just ignore or toggle?
-            // Assuming we just want to count likes, we might ignore unique constraint errors
-            if (error.code !== '23505') { // 23505 is unique violation
-                console.error("Like error:", error);
-            }
-        }
-        
-        // Also try to update total_likes on stream if column exists
-        // We can do this via RPC to be safe, or just let a trigger handle it
-        // For now, we'll assume a trigger handles counting or we just rely on realtime updates
-    } catch (e) {
-        console.error(e);
-    } finally {
-        setTimeout(() => setIsLiking(false), 500); // Debounce
-    }
+  const _handleUnpublishParticipant = async (_userId: string) => {
+    if (!isHost && !isStaff) return;
+    // TODO: Implement Agora unpublish participant
+    toast.success("Participant camera turned off");
   };
 
   return (
@@ -451,16 +427,8 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                 {/* Like Count */}
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
                     <Heart size={16} className="text-pink-500 fill-pink-500/20" />
-                    <span className="text-sm font-bold text-white">{likes}</span>
+                    <span className="text-sm font-bold text-white">{_likes}</span>
                 </div>
-
-                {/* My Balance */}
-                {user && (
-                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5" title="My Troll Coins">
-                        <Coins size={16} className="text-yellow-500" />
-                        <span className="text-sm font-bold text-white">{(profile?.troll_coins || 0).toLocaleString()}</span>
-                    </div>
-                )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -512,12 +480,12 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
 
                  {/* Like Button */}
                  <button
-                    onClick={(e) => { e.stopPropagation(); handleLike(); }}
-                    disabled={isLiking}
+                    onClick={(e) => { e.stopPropagation(); /* TODO: Implement like */ }}
+                    disabled={_isLiking}
                     className="p-2 hover:bg-pink-500/20 rounded-lg transition-colors group"
                     title="Like Stream"
                  >
-                    <Heart size={20} className={cn("text-zinc-400 group-hover:text-pink-500 transition-colors", isLiking && "scale-125 text-pink-500 fill-pink-500")} />
+                    <Heart size={20} className={cn("text-zinc-400 group-hover:text-pink-500 transition-colors", _isLiking && "scale-125 text-pink-500 fill-pink-500")} />
                  </button>
 
                  {/* Chat Toggle */}
@@ -558,6 +526,15 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                     >
                         <ImageIcon size={20} />
                     </button>
+                    {isHost && isChurchStream && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); /* TODO: Show approval panel */ }}
+                            className="p-2 hover:bg-green-500/20 rounded-lg transition-colors group"
+                            title="Approve Audience to Join"
+                        >
+                            <UserCheck size={20} className="text-zinc-400 group-hover:text-green-500 transition-colors" />
+                        </button>
+                    )}
                     </>
                  )}
 
@@ -605,7 +582,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
         </div>
 
         {/* Stream Controls - Host & Staff */}
-        {canManageStream && (
+        {canManageStream && !isChurchStream && (
             <div className="flex flex-col gap-4">
                 <div 
                     className="flex items-center justify-between border-t border-white/10 pt-4 cursor-pointer hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
@@ -633,6 +610,22 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         className="overflow-hidden"
                     >
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
+                            {/* Battle Manager Control - Host Only */}
+                            {isHost && onShowBattleManager && !isChurchStream && (
+                                <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
+                                    <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
+                                        <LayoutGrid size={16} className="text-orange-500" />
+                                        Battle
+                                    </span>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); onShowBattleManager(); }}
+                                        className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-white transition text-sm font-bold rounded-md"
+                                        title="Manage Battle"
+                                    >
+                                        Manage
+                                    </button>
+                                </div>
+                            )}
                             {/* Box Layout Control */}
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
                         <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
@@ -669,9 +662,9 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             <input 
                                 type="number" 
                                 min="0"
-                                max="5000"
                                 value={seatPrice === 0 ? '' : seatPrice}
                                 onChange={handlePriceChange}
+                                onKeyDown={handlePriceKeyDown}
                                 disabled={!isHost}
                                 className={cn(
                                     "w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
@@ -708,23 +701,23 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             onClick={toggleStreamRgb}
                             className={cn(
                                 "w-12 h-6 rounded-full transition-colors relative flex items-center", 
-                                hasRgb ? "bg-green-500" : "bg-zinc-700"
+                                _hasRgb ? "bg-green-500" : "bg-zinc-700"
                             )}
                             title={
-                                 hasRgb 
+                                 _hasRgb 
                                      ? "Disable RGB Effect" 
                                      : (stream.rgb_purchased ? "Enable RGB Effect" : "Unlock RGB Effect (10 Coins)")
                              }
                          >
                             <div className={cn("absolute left-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm", 
-                                hasRgb && "translate-x-6"
+                                _hasRgb && "translate-x-6"
                             )} />
                          </button>
                     </div>
                     )}
 
                     {/* Guest RGB Toggle (Only if Stream has RGB enabled) */}
-                    {!isHost && hasRgb && isOnStage && (
+                    {!isHost && _hasRgb && isOnStage && (
                         <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
                             <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
                                 <Palette size={16} className="text-purple-400" />

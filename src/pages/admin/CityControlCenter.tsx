@@ -100,7 +100,7 @@ export default function CityControlCenter() {
   const loadSystemHealth = useCallback(async () => {
     try {
       // Test services and update health status
-      const services = ['paypal', 'supabase', 'livekit', 'database', 'api'];
+      const services = ['paypal', 'supabase', 'database', 'api'];
       const healthChecks = await Promise.allSettled(
         services.map(async (service) => {
           const startTime = Date.now();
@@ -131,24 +131,10 @@ export default function CityControlCenter() {
                 }
                 break;
               }
-              case 'livekit': {
-                // Test LiveKit connectivity via Edge Function
-                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const tokenUrl = `${supabaseUrl}/functions/v1/livekit-token`;
-                const livekitResponse = await fetch(tokenUrl, { 
-                  method: 'OPTIONS',
-                  headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY }
-                });
-                if (!livekitResponse.ok) {
-                  status = 'degraded';
-                  error = `LiveKit service check failed: ${livekitResponse.status} ${livekitResponse.statusText}`;
-                }
-                break;
-              }
               case 'api': {
                 // Test general Edge Function health
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const apiUrl = `${supabaseUrl}/functions/v1/livekit-token`; 
+                const apiUrl = `${supabaseUrl}/functions/v1/agora-token`; 
                 const apiResponse = await fetch(apiUrl, { 
                   method: 'OPTIONS',
                   headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY }

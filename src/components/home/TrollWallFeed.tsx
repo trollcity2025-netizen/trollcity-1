@@ -121,7 +121,7 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [user])
+  }, [user?.id, hiddenPosts])
 
   const loadComments = useCallback(async (postId: string) => {
     if (loadingComments === postId) return

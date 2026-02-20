@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Users, Radio, Shield, Eye } from 'lucide-react';
 import { format12hr } from '../../utils/timeFormat';
-import StreamWatchModal, { WatchableStream } from '../broadcast/StreamWatchModal';
+import MuxViewer from '../broadcast/MuxViewer';
 
 interface StreamRow {
   id: string;
@@ -25,14 +25,12 @@ interface StreamRow {
 
 interface Props {
   onUserAction: (username: string) => Promise<void>;
-  onSelectStream: React.Dispatch<React.SetStateAction<StreamRow | null>>;
 }
 
-export default function OfficerStreamGrid({ onUserAction, onSelectStream }: Props) {
+export default function OfficerStreamGrid({ onUserAction }: Props) {
   const navigate = useNavigate();
   const [streams, setStreams] = useState<StreamRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStream, setSelectedStream] = useState<WatchableStream | null>(null);
 
   const fetchStreams = async () => {
     try {
@@ -152,33 +150,19 @@ export default function OfficerStreamGrid({ onUserAction, onSelectStream }: Prop
               </div>
 
               {/* Actions */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
-                  onClick={() => onSelectStream(stream)}
-                  className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors"
+                  onClick={() => navigate(`/watch/${stream.id}?patrol=true`)}
+                  className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors col-span-2"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   WATCH
                 </button>
-                <button
-                  onClick={() => navigate(`/watch/${stream.id}?patrol=true`)}
-                  className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-900/50 hover:bg-blue-800/50 border border-blue-700/50 text-blue-200 text-xs font-bold rounded-lg transition-colors"
-                >
-                  <Shield className="w-3.5 h-3.5" />
-                  PATROL
-                </button>
-              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {selectedStream && (
-        <StreamWatchModal 
-          stream={selectedStream} 
-          onClose={() => setSelectedStream(null)} 
-        />
-      )}
+
     </div>
   );
 }

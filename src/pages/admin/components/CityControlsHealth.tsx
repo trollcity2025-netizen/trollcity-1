@@ -16,13 +16,11 @@ import {
 } from 'lucide-react'
 
 interface CityControlsHealthProps {
-  paypalStatus: any
-  supabaseStatus: any
-  liveKitStatus: any
+  paypalStatus: { ok: boolean; error?: string } | null
+  supabaseStatus: { ok: boolean; error?: string } | null
   liveStreams: any[]
   onTestPayPal: () => void
   onTestSupabase: () => void
-  onTestLiveKit: () => void
   onLoadLiveStreams: () => void
   onCreateTrollDrop: () => void
   trollDropAmount: number
@@ -35,11 +33,9 @@ interface CityControlsHealthProps {
 export default function CityControlsHealth({
   paypalStatus,
   supabaseStatus,
-  liveKitStatus,
   liveStreams,
   onTestPayPal,
   onTestSupabase,
-  onTestLiveKit,
   onLoadLiveStreams,
   onCreateTrollDrop,
   trollDropAmount,
@@ -66,12 +62,6 @@ export default function CityControlsHealth({
       status: supabaseStatus?.ok ? 'healthy' : 'error',
       icon: <Database className="w-4 h-4" />,
       details: supabaseStatus?.error || 'Connected'
-    },
-    {
-      name: 'LiveKit Streaming',
-      status: liveKitStatus?.ok ? 'healthy' : 'error',
-      icon: <Camera className="w-4 h-4" />,
-      details: liveKitStatus?.error || 'Connected'
     },
     {
       name: 'Active Streams',
@@ -139,7 +129,6 @@ export default function CityControlsHealth({
                   onClick={
                     item.name === 'PayPal API' ? onTestPayPal :
                     item.name === 'Supabase DB' ? onTestSupabase :
-                    item.name === 'LiveKit Streaming' ? onTestLiveKit :
                     item.name === 'Active Streams' ? onLoadLiveStreams : undefined
                   }
                   disabled={item.name === 'PayPal API' && paypalTesting}

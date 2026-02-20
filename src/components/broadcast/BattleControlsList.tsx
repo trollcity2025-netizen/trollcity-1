@@ -7,17 +7,33 @@ import UserNameWithAge from '../UserNameWithAge';
 import { cn } from '../../lib/utils';
 
 interface BattleControlsListProps {
-  currentStream: Stream;
+  battleId: string;
 }
 
-export default function BattleControlsList({ currentStream }: BattleControlsListProps) {
+export default function BattleControlsList({ battleId }: BattleControlsListProps) {
   const [loading, setLoading] = useState(false);
   const [pendingBattle, setPendingBattle] = useState<any>(null);
   const [matchStatus, setMatchStatus] = useState<string>(''); // 'searching', 'found', 'none'
+  const [currentStream, setCurrentStream] = useState<Stream | null>(null);
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [trollmersLeaderboard, setTrollmersLeaderboard] = useState<any[]>([]);
-  const isTrollmers = currentStream.stream_kind === 'trollmers';
+  const isTrollmers = currentStream?.stream_kind === 'trollmers';
+
+  useEffect(() => {
+    const fetchStream = async () => {
+      const { data } = await supabase
+        .from('streams')
+        .select('*')
+        .eq('battle_id', battleId)
+        .maybeSingle();
+      setCurrentStream(data as Stream);
+    };
+
+    if (battleId) {
+      fetchStream();
+    }
+  }, [battleId]);
 
   // Poll for pending challenges
   useEffect(() => {

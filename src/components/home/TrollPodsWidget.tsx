@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Headphones, Radio } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, hasRole, UserRole } from '@/lib/supabase'
@@ -28,19 +28,41 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const { profile } = useAuthStore()
-  const lastPodUpdate = usePodStatusStore((state) => state.lastPodUpdate);
+  const lastPodUpdate = usePodStatusStore((state) => state.lastPodUpdate)
+
+  const profileId = profile?.id ?? null
+
+  const isOfficer = useMemo(() => {
+    return hasRole(
+      profile as any,
+      [UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER],
+      { allowAdminOverride: true }
+    )
+  }, [profileId]) // only recalc when user changes, not every profile object refresh
+
+  const inFlightRef = useRef(false)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
-    let mounted = true
-    const isOfficer = hasRole(profile as any, [UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER], { allowAdminOverride: true });
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
+  useEffect(() => {
     if (!isOfficer) {
-      setLoading(false);
-      setPods([]);
-      return;
+      setLoading(false)
+      setPods([])
+      return
     }
 
+    let cancelled = false
+
     const fetchPods = async () => {
+      if (inFlightRef.current) return
+      inFlightRef.current = true
+
       try {
         const { data, error } = await supabase
           .from('pod_rooms')
@@ -53,44 +75,56 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
 
         if (error) throw error
 
-        console.log('data from supabase', data)
-
         const rooms = (data as PodRoom[]) || []
+
+        if (cancelled || !mountedRef.current) return
+
         if (rooms.length === 0) {
-          if (mounted) setPods([])
+          setPods([])
           return
         }
 
         const hostIds = [...new Set(rooms.map((room) => room.host_id))]
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profilesError } = await supabase
           .from('user_profiles')
           .select('id, username, avatar_url')
           .in('id', hostIds)
 
+        if (profilesError) {
+          // Don’t blow up the widget if profiles query fails
+          console.warn('[Pods] failed to fetch host profiles', profilesError)
+        }
+
+        if (cancelled || !mountedRef.current) return
+
         const merged = rooms.map((room) => ({
           ...room,
-          host: profiles?.find((profile) => profile.id === room.host_id) || {
-            username: 'Unknown',
-            avatar_url: null
-          }
+          host:
+            profiles?.find((p: any) => p.id === room.host_id) || {
+              username: 'Unknown',
+              avatar_url: null,
+            },
         }))
 
-        if (mounted) setPods(merged)
+        setPods(merged)
       } catch (err) {
         console.error('Error fetching pods:', err)
       } finally {
-        if (mounted) setLoading(false)
+        inFlightRef.current = false
+        if (!cancelled && mountedRef.current) setLoading(false)
       }
     }
 
+    setLoading(true)
     fetchPods()
+
     const interval = setInterval(fetchPods, 15000)
 
     return () => {
-      mounted = false
+      cancelled = true
       clearInterval(interval)
     }
-  }, [profile, lastPodUpdate])
+  }, [isOfficer, lastPodUpdate]) // ✅ no `profile` object dependency
 
   const handleJoin = (podId: string) => {
     if (!onRequireAuth('listen to a pod')) return
@@ -98,7 +132,8 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
   }
 
   return (
-    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-4`}
+    <div
+      className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-4`}
       onClick={() => onRequireAuth('listen to a pod')}
     >
       <div className="flex items-center gap-2 mb-3">
@@ -117,20 +152,33 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
       ) : (
         <div className="space-y-3">
           {pods.map((pod) => (
-            <div key={pod.id} className="rounded-xl border border-white/10 bg-black/30 p-3 flex items-center gap-3">
+            <div
+              key={pod.id}
+              className="rounded-xl border border-white/10 bg-black/30 p-3 flex items-center gap-3"
+            >
               <div className="h-10 w-10 rounded-full overflow-hidden bg-white/5 flex-shrink-0">
                 {pod.host?.avatar_url ? (
-                  <img src={pod.host.avatar_url} alt={pod.host?.username || 'Host'} className="h-full w-full object-cover" />
+                  <img
+                    src={pod.host.avatar_url}
+                    alt={pod.host?.username || 'Host'}
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-xs text-white/60">
                     {pod.host?.username?.[0]?.toUpperCase() || 'P'}
                   </div>
                 )}
               </div>
+
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{pod.title || 'Untitled Pod'}</p>
-                <p className="text-xs text-white/40 truncate">Host: {pod.host?.username || 'Unknown'}</p>
+                <p className="text-sm font-semibold text-white truncate">
+                  {pod.title || 'Untitled Pod'}
+                </p>
+                <p className="text-xs text-white/40 truncate">
+                  Host: {pod.host?.username || 'Unknown'}
+                </p>
               </div>
+
               <div className="flex flex-col items-end gap-2">
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300">
                   LIVE

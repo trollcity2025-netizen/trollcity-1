@@ -77,24 +77,7 @@ export function useBugAlert(options: UseBugAlertOptions = {}) {
     });
   }, [report]);
   
-  const reportLiveKitError = useCallback(async (
-    error: Error,
-    context?: {
-      roomId?: string;
-      participantId?: string;
-      action?: string;
-    }
-  ): Promise<string | null> => {
-    return reportError(error, {
-      title: `LiveKit Error: ${context?.action || 'Unknown'}`,
-      severity: 'critical',
-      category: 'livekit',
-      metadata: {
-        ...context,
-        errorCode: 'LIVEKIT_ERROR',
-      },
-    });
-  }, [reportError]);
+
   
   const reportBroadcastError = useCallback(async (
     error: Error,
@@ -136,7 +119,6 @@ export function useBugAlert(options: UseBugAlertOptions = {}) {
     report,
     reportError,
     reportCritical,
-    reportLiveKitError,
     reportBroadcastError,
     reportAuthError,
   };
@@ -151,7 +133,6 @@ function determineSeverity(error: Error): BugAlertSeverity {
   
   // Critical errors
   if (
-    message.includes('livekit') ||
     message.includes('connection failed') ||
     message.includes('network') ||
     name.includes('typeerror') ||

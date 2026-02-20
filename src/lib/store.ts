@@ -94,21 +94,32 @@ export const useAuthStore = create<AuthState>()(
       // Sets profile AND applies admin overrides with production validation
       setProfile: (profile) => {
         if (!profile) {
-          set({ profile: null, isAdmin: null })
-          return
+          set({ profile: null, isAdmin: null });
+          return;
+        }
+        
+        const currentProfile = get().profile;
+        
+        // Deduplication: Only apply the update if commit_timestamp or updated_at is newer
+        if (currentProfile && profile.updated_at && currentProfile.updated_at) {
+          const currentTimestamp = new Date(currentProfile.updated_at).getTime();
+          const newTimestamp = new Date(profile.updated_at).getTime();
+          if (newTimestamp < currentTimestamp) {
+            console.log('Stale profile update ignored');
+            return; // Do not apply stale updates
+          }
         }
 
         // Avoid unnecessary updates: compare with current profile
         try {
-          const prev = get().profile;
           // If the incoming profile is from the XP store sync, it might be a new object
           // with the same data. We only care if the core XP/level values have changed.
-          if (prev && profile && 
-              prev.level === profile.level && 
-              prev.xp === profile.xp && 
-              prev.total_xp === profile.total_xp &&
-              prev.next_level_xp === profile.next_level_xp &&
-              deepEqual(prev, profile)) { // Also do a deep equal for other properties
+          if (currentProfile && profile && 
+              currentProfile.level === profile.level && 
+              currentProfile.xp === profile.xp && 
+              currentProfile.total_xp === profile.total_xp &&
+              currentProfile.next_level_xp === profile.next_level_xp &&
+              deepEqual(currentProfile, profile)) { // Also do a deep equal for other properties
             return;
           }
         } catch {
@@ -167,6 +178,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setLoading: (loading) => set({ isLoading: loading }),
+
+
+
 
       setAdmin: (adminState) => set({ isAdmin: adminState }),
 

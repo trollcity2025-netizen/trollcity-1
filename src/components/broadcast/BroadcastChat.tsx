@@ -1,12 +1,15 @@
+import { useUIStore } from '../../lib/ui-store';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, User, Trash2, Shield, Crown, Sparkles, Car, Gift } from 'lucide-react';
+import { Send, User, Trash2, Shield, Crown, Sparkles, Car } from 'lucide-react';
+import GiftMessage from './GiftMessage';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import UserNameWithAge from '../UserNameWithAge';
 import { toast } from 'sonner';
 import { EDGE_URL } from '../../lib/config';
+import { AnimatePresence } from 'framer-motion'; // Import AnimatePresence
 
 interface VehicleStatus {
   has_vehicle: boolean;
@@ -17,12 +20,12 @@ interface VehicleStatus {
   insurance_active?: boolean;
 }
 
-interface Message {
+interface ChatMessage {
   id: string;
   user_id: string;
   content: string;
   created_at: string;
-  type?: 'chat' | 'system';
+  type: 'chat';
   // Denormalized fields
   user_name?: string;
   user_avatar?: string;
@@ -45,6 +48,50 @@ interface Message {
   vehicle_status?: VehicleStatus;
 }
 
+interface SystemMessage {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  type: 'system';
+  user_profiles?: {
+    username: string;
+    avatar_url: string;
+    role?: string;
+    troll_role?: string;
+    created_at?: string;
+  } | null;
+}
+
+export interface GiftMessageData {
+  username: string;
+  user_id: string;
+  gift_id: string;
+  gift_name: string;
+  gift_icon: string; // URL or emoji
+  gift_value: number; // Coin value of a single gift
+  gift_count: number; // Number of gifts sent in this message
+  rarity: "common" | "rare" | "epic" | "legendary";
+  timestamp: string;
+}
+
+export interface GiftMessageType extends GiftMessageData {
+  id: string;
+  type: 'gift';
+  created_at: string;
+  user_profiles?: {
+    username: string;
+    avatar_url: string;
+    role?: string;
+    troll_role?: string;
+    created_at?: string;
+    rgb_username_expires_at?: string;
+    glowing_username_color?: string;
+  } | null;
+}
+
+type Message = ChatMessage | SystemMessage | GiftMessageType;
+
 interface BroadcastChatProps {
     streamId: string;
     hostId: string;
@@ -52,13 +99,16 @@ interface BroadcastChatProps {
     isHost?: boolean;
     isViewer?: boolean;
     isGuest?: boolean;
+    broadcasterId?: string;
+    guestUser: { id: string; username: string; } | null;
 }
 
-export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false }: BroadcastChatProps) {
+export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false, broadcasterId, guestUser }: BroadcastChatProps) {
   const navigate = useNavigate();
+  const setLastGift = useUIStore(state => state.setLastGift);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [streamMods, setStreamMods] = useState<string[]>([]);
+  const [broadofficers, setBroadofficers] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -79,16 +129,21 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   // Cache for vehicle status to avoid repeated calls
   const vehicleCacheRef = useRef<Record<string, VehicleStatus>>({});
 
-  // Fetch Stream Mods
+  // Callback to remove a gift message after its animation completes
+  const handleGiftAnimationComplete = useCallback((id: string) => {
+    setMessages(prevMessages => prevMessages.filter(msg => msg.id !== id));
+  }, []);
+
+  // Fetch Broadofficers
   useEffect(() => {
-      const fetchMods = async () => {
+      const fetchBroadofficers = async () => {
           const { data } = await supabase
-            .from('stream_moderators')
-            .select('user_id')
+            .from('broadcast_officers')
+            .select('officer_id')
             .eq('broadcaster_id', hostId);
-          if (data) setStreamMods(data.map(d => d.user_id));
+          if (data) setBroadofficers(data.map(d => d.officer_id));
       };
-      if (hostId) fetchMods();
+      if (hostId) fetchBroadofficers();
   }, [hostId]);
 
   const fetchVehicleStatus = useCallback(async (userId: string) => {
@@ -121,40 +176,35 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             .limit(50);
         
         if (data) {
-            // Process messages: Use denormalized data if available, else fallback
-            const processedMessages = await Promise.all(data.reverse().map(async (m: any) => {
-                let vStatus = m.vehicle_snapshot as VehicleStatus | undefined;
-                
-                // Construct profile from denormalized data OR fallback to joined data
-                const uProfile = {
-                    username: m.user_name || m.user_profiles?.username || 'Unknown',
-                    avatar_url: m.user_avatar || m.user_profiles?.avatar_url || '',
-                    role: m.user_role || m.user_profiles?.role,
-                    troll_role: m.user_troll_role || m.user_profiles?.troll_role,
-                    created_at: m.user_created_at || m.user_profiles?.created_at,
-                    rgb_username_expires_at: m.user_rgb_expires_at || m.user_profiles?.rgb_username_expires_at,
-                    glowing_username_color: m.user_glowing_username_color || m.user_profiles?.glowing_username_color
+            const processedMessages = data.reverse().map((msg: any) => {
+                const baseMessage = {
+                    id: msg.id,
+                    user_id: msg.user_id,
+                    created_at: msg.created_at,
+                    user_profiles: msg.user_profiles || null, // Assumes user_profiles is joined or denormalized
+                    vehicle_status: msg.vehicle_snapshot || null, // Use snapshot if available
                 };
 
-                // Fallback for old messages without snapshot
-                if (!vStatus && !m.vehicle_snapshot) {
-                     // Check cache or fetch (Legacy support only)
-                     if (vehicleCacheRef.current[m.user_id]) {
-                         vStatus = vehicleCacheRef.current[m.user_id];
-                     } else {
-                         // We intentionally allow this fetch for OLD messages on load, 
-                         // but new messages will skip it.
-                         vStatus = await fetchVehicleStatus(m.user_id) || undefined;
-                     }
+                if (msg.type === 'chat') {
+                    return { ...baseMessage, type: 'chat', content: msg.content };
+                } else if (msg.type === 'system') {
+                    return { ...baseMessage, type: 'system', content: msg.content };
+                } else if (msg.type === 'gift') {
+                    return {
+                        ...baseMessage,
+                        type: 'gift',
+                        username: msg.username || msg.user_profiles?.username || 'Unknown',
+                        gift_id: msg.gift_id || '',
+                        gift_name: msg.gift_name || 'Gift',
+                        gift_icon: msg.gift_icon || '',
+                        gift_value: msg.gift_value || 0,
+                        gift_count: msg.gift_count || 1,
+                        rarity: msg.rarity || 'common',
+                        timestamp: msg.created_at,
+                    };
                 }
-
-                return {
-                    ...m,
-                    type: 'chat',
-                    user_profiles: uProfile,
-                    vehicle_status: vStatus
-                } as Message;
-            }));
+                return { ...baseMessage, type: 'chat', content: msg.content }; // Fallback to chat
+            }) as Message[];
             
             setMessages(prev => {
                 // Merge with existing messages (which might be system messages or realtime messages received while fetching)
@@ -176,19 +226,53 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         messageBufferRef.current = [];
 
         setMessages(prev => {
+            let modifiablePrev = [...prev];
+
             // Remove optimistic messages that are now in the buffer
-            const incomingIds = new Set(newMsgs.map(m => `${m.user_id}:${m.content}`));
-            const filtered = prev.filter(m => {
+            const incomingIds = new Set(newMsgs.map(m => m.type === 'chat' ? `${m.user_id}:${(m as ChatMessage).content}` : m.id));
+            modifiablePrev = modifiablePrev.filter(m => {
                 if (m.id.startsWith('temp-')) {
-                    const key = `${m.user_id}:${m.content}`;
+                    const key = `${m.user_id}:${(m as ChatMessage).content}`;
                     return !incomingIds.has(key);
                 }
                 return true;
             });
 
-            const updated = [...filtered, ...newMsgs];
-            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
-            return updated;
+            let updatedMessages = [...modifiablePrev];
+
+            for (const newMsg of newMsgs) {
+                if (newMsg.type === 'gift') {
+                    const lastMessage = updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1] : undefined;
+                    if (
+                        lastMessage &&
+                        lastMessage.type === 'gift' &&
+                        lastMessage.user_id === newMsg.user_id &&
+                        lastMessage.gift_id === newMsg.gift_id &&
+                        (new Date(newMsg.created_at).getTime() - new Date(lastMessage.created_at).getTime()) < 3000
+                    ) {
+                        // It's a stackable gift. Replace the last message with an updated one.
+                        const updatedGift = {
+                            ...lastMessage,
+                            gift_count: lastMessage.gift_count + newMsg.gift_count,
+                            id: newMsg.id, // Use new ID to re-trigger animation
+                            created_at: newMsg.created_at,
+                        };
+                        updatedMessages = [...updatedMessages.slice(0, -1), updatedGift];
+                        setLastGift(updatedGift);
+                    } else {
+                        updatedMessages.push(newMsg);
+                        setLastGift(newMsg as GiftMessageType);
+                    }
+                } else {
+                    updatedMessages.push(newMsg);
+                }
+            }
+
+
+            if (updatedMessages.length > MAX_MESSAGES) {
+                return updatedMessages.slice(updatedMessages.length - MAX_MESSAGES);
+            }
+            return updatedMessages;
         });
     }, FLUSH_INTERVAL);
 
@@ -201,29 +285,49 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             // Check if this is a message for this stream and version 1
             if (envelope.v !== 1 || envelope.stream_id !== streamId) return;
 
-            const newMsg: Message = {
+            let newMsg: Message | null = null;
+
+            const baseMessage = {
                 id: envelope.txn_id,
                 user_id: envelope.s,
-                content: envelope.d.content,
                 created_at: new Date(envelope.ts).toISOString(),
-                type: 'chat',
-                user_profiles: {
-                    username: envelope.d.user_name || 'Unknown',
-                    avatar_url: envelope.d.user_avatar || '',
-                    role: envelope.d.user_role,
-                    troll_role: envelope.d.user_troll_role,
-                    created_at: envelope.d.user_created_at,
-                    rgb_username_expires_at: envelope.d.user_rgb_expires_at,
-                    glowing_username_color: envelope.d.user_glowing_username_color
-                },
-                vehicle_status: envelope.d.vehicle_snapshot
+                user_profiles: envelope.p,
+                vehicle_status: envelope.v,
             };
 
-            messageBufferRef.current.push(newMsg);
-            
-            // Increment unread count if chat not focused and message from someone else
-            if (!isChatFocused && newMsg.user_id !== user?.id) {
-                setUnreadCount(prev => prev + 1);
+            if (envelope.t === 'chat') {
+                newMsg = {
+                    ...baseMessage,
+                    type: 'chat',
+                    content: envelope.d.content
+                };
+            } else if (envelope.t === 'system') {
+                newMsg = {
+                    ...baseMessage,
+                    type: 'system',
+                    content: envelope.d.content
+                };
+            } else if (envelope.t === 'gift') {
+                newMsg = {
+                    ...baseMessage,
+                    type: 'gift',
+                    username: envelope.d.username,
+                    gift_id: envelope.d.gift_id,
+                    gift_name: envelope.d.gift_name,
+                    gift_icon: envelope.d.gift_icon,
+                    gift_value: envelope.d.gift_value,
+                    gift_count: envelope.d.gift_count,
+                    rarity: envelope.d.rarity,
+                    timestamp: envelope.ts,
+                };
+            }
+
+            if (newMsg) {
+                messageBufferRef.current.push(newMsg);
+                // Increment unread count if chat not focused and message from someone else
+                if (!isChatFocused && newMsg.user_id !== user?.id) {
+                    setUnreadCount(prev => prev + 1);
+                }
             }
         })
         .subscribe();
@@ -282,10 +386,9 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         chatElement.removeEventListener('focus', handleFocus);
       };
     }
+    
+    // Cleanup aggressive auto-delete loop. It caused messages to disappear due to clock skew
   }, []);
-
-  // Removed aggressive auto-delete loop to prevent messages from disappearing due to clock skew
-
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,7 +498,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
       }
       
       // Stream Moderator (Broadofficer)
-      if (streamMods.includes(userId)) {
+      if (broadofficers.includes(userId)) {
            return <Shield size={12} className="text-green-500 inline mr-1" />;
       }
 
@@ -436,228 +539,77 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     );
   };
 
-    const parseGiftEvent = (content: string) => {
-        if (!content.startsWith('GIFT_EVENT:')) return null;
-
-        const payload = content.replace(/^GIFT_EVENT:/, '');
-        const parts = payload.split(':');
-        const rawName = parts[0] || 'gift';
-
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawName);
-        const formattedName = isUuid
-            ? 'Gift'
-            : rawName
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, (match) => match.toUpperCase())
-                    .trim() || 'Gift';
-
-        let quantity: number | null = null;
-        let totalCost: number | null = null;
-
-        if (parts.length >= 3) {
-            const qty = Number(parts[1]);
-            const cost = Number(parts[2]);
-            quantity = Number.isFinite(qty) ? qty : null;
-            totalCost = Number.isFinite(cost) ? cost : null;
-        } else if (parts.length === 2) {
-            const maybeCost = Number(parts[1]);
-            totalCost = Number.isFinite(maybeCost) ? maybeCost : null;
-        }
-
-        return { name: formattedName, quantity, totalCost };
-    };
-
-    return (
-    <div ref={chatContainerRef} className="flex flex-col h-[94%] text-white relative">
-        {/* Unread Message Notification Bubble */}
-        {unreadCount > 0 && (
-          <div className="absolute -top-2 -right-2 z-50">
-            <div className="relative animate-bounce">
-              {/* Glow effect */}
-              <div className="absolute inset-0 bg-red-500 rounded-full blur-md opacity-70 animate-pulse"></div>
-              {/* Badge */}
-              <div className="relative bg-gradient-to-br from-red-500 via-red-600 to-red-700 text-white text-xs font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2.5 border-2 border-white shadow-2xl ring-2 ring-red-300/50">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <div className="p-4 border-b border-white/10 font-bold bg-zinc-900/50 flex items-center gap-2">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
-            Live Chat
-            {unreadCount > 0 && (
-              <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 animate-pulse font-normal">
-                +{unreadCount}
-              </span>
-            )}
-        </div>
-        
-        <div className="flex-1 min-h-0 relative">
-            {messages.length === 0 ? (
-                <div className="text-center text-zinc-500 text-sm mt-10 italic">
-                    No messages
+  return (
+    <div className="w-[350px] flex flex-col h-full bg-black/30 backdrop-blur-md border-l border-white/10 text-white shadow-2xl" ref={chatContainerRef}>
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <Virtuoso
+          ref={virtuosoRef}
+          data={messages}
+          followOutput="smooth"
+          atBottomStateChange={setIsChatFocused}
+          itemContent={(index, msg) => {
+            if (msg.type === 'system') {
+              return (
+                <div key={msg.id} className="text-zinc-400 text-sm italic">
+                  <span className="font-bold">{msg.user_profiles?.username || 'System'}</span> {msg.content}
                 </div>
-            ) : (
-                <Virtuoso
-                    ref={virtuosoRef}
-                    data={messages}
-                    followOutput="smooth"
-                    initialTopMostItemIndex={messages.length - 1}
-                    className="scrollbar-thin scrollbar-thumb-zinc-700"
-                    itemContent={(index, msg) => {
-                        if (msg.type === 'system') {
-                            return (
-                                <div className="p-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                    <div className="flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/30 p-1.5 rounded-lg border border-white/5">
-                                        <Sparkles size={12} className="text-yellow-500" />
-                                        <span className="font-bold text-zinc-300 flex items-center gap-1">
-                                            {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                                            <UserNameWithAge 
-                                                user={{
-                                                    username: msg.user_profiles?.username || 'User',
-                                                    created_at: msg.user_profiles?.created_at,
-                                                    role: msg.user_profiles?.role as any,
-                                                    troll_role: msg.user_profiles?.troll_role,
-                                                    id: msg.user_id,
-                                                    rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                                    glowing_username_color: msg.user_profiles?.glowing_username_color
-                                                }}
-                                                className="text-zinc-300"
-                                                showBadges={false}
-                                                isBroadcaster={isHost}
-                                                isModerator={isModerator}
-                                                streamId={streamId}
-                                            />
-                                        </span>
-                                        <span>{msg.content}</span>
-                                    </div>
-                                </div>
-                            );
-                        }
-
-                        const giftInfo = parseGiftEvent(msg.content);
-
-                        if (giftInfo) {
-                            const qtyText = giftInfo.quantity ? ` x${giftInfo.quantity}` : '';
-                            const costText = giftInfo.totalCost ? ` (${giftInfo.totalCost.toLocaleString()} coins)` : '';
-
-                            return (
-                                <div className="p-2 animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
-                                    <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                                        <Gift size={14} className="text-yellow-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0 break-words">
-                                        <div className="font-bold text-yellow-500 text-sm mr-2 flex items-center inline-flex flex-wrap">
-                                            {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                                            {renderVehicleBadge(msg.vehicle_status)}
-                                            <UserNameWithAge 
-                                                user={{
-                                                    username: msg.user_profiles?.username || 'User',
-                                                    created_at: msg.user_profiles?.created_at,
-                                                    role: msg.user_profiles?.role as any,
-                                                    troll_role: msg.user_profiles?.troll_role,
-                                                    id: msg.user_id,
-                                                    rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                                    glowing_username_color: msg.user_profiles?.glowing_username_color
-                                                }}
-                                                className="text-yellow-500"
-                                                showBadges={true}
-                                                isBroadcaster={isHost}
-                                                isModerator={isModerator}
-                                                streamId={streamId}
-                                            />
-                                            <span>:</span>
-                                        </div>
-                                        <span className="text-gray-200 text-sm ml-1">
-                                            sent {giftInfo.name}{qtyText}{costText}
-                                        </span>
-                                    </div>
-                                    {(isHost || isModerator) && (
-                                        <button 
-                                            onClick={() => deleteMessage(msg.id)}
-                                            className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <Trash2 size={12} />
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <div className="p-2 animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
-                                <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
-                                    {msg.user_profiles?.avatar_url ? (
-                                        <img src={msg.user_profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <User size={14} className="m-1 text-zinc-400" />
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0 break-words">
-                                    <div className="font-bold text-yellow-500 text-sm mr-2 flex items-center inline-flex flex-wrap">
-                                        {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                                        {renderVehicleBadge(msg.vehicle_status)}
-                                        <UserNameWithAge 
-                                            user={{
-                                                username: msg.user_profiles?.username || 'User',
-                                                created_at: msg.user_profiles?.created_at,
-                                                role: msg.user_profiles?.role as any,
-                                                troll_role: msg.user_profiles?.troll_role,
-                                                id: msg.user_id,
-                                                rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                                glowing_username_color: msg.user_profiles?.glowing_username_color
-                                            }}
-                                            className="text-yellow-500"
-                                            showBadges={true}
-                                            isBroadcaster={isHost}
-                                            isModerator={isModerator}
-                                            streamId={streamId}
-                                        />
-                                        <span>:</span>
-                                    </div>
-                                    <span className="text-gray-200 text-sm ml-1">{msg.content}</span>
-                                </div>
-                                {(isHost || isModerator) && (
-                                    <button 
-                                        onClick={() => deleteMessage(msg.id)}
-                                        className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    }}
-                />
-            )}
-        </div>
-
-        <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-zinc-900/80 relative">
-            <div className="relative w-full">
-                <input 
-                    type="text" 
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onFocus={() => {
-                        if (isGuest) {
-                            navigate('/auth?mode=signup');
-                        }
-                    }}
-                    placeholder={isGuest ? "Sign up to chat..." : "Type a message..."}
-                    className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
-                    disabled={isGuest}
-                />
-
-                <button 
-                    type="submit"  
-                    disabled={isGuest || !input.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
-                >
-                    <Send size={16} />
-                </button>
-            </div>
-        </form>
+              );
+            } else if (msg.type === 'gift') {
+              return (
+                <AnimatePresence key={msg.id}>
+                  <GiftMessage
+                    id={msg.id}
+                    username={msg.user_profiles?.username || msg.username}
+                    giftName={msg.gift_name}
+                    giftAmount={msg.gift_value}
+                    giftCount={msg.gift_count}
+                    rarity={msg.rarity}
+                    giftIcon={msg.gift_icon}
+                    totalCoins={msg.gift_value * msg.gift_count}
+                    onAnimationComplete={handleGiftAnimationComplete}
+                  />
+                </AnimatePresence>
+              );
+            } else {
+              return (
+                <div key={msg.id} className="text-sm p-2 rounded-lg bg-black/20 hover:bg-black/40 transition-colors">
+                  <div className="flex items-baseline">
+                    {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
+                    {renderVehicleBadge(msg.vehicle_status)}
+                    <UserNameWithAge
+                      user={{
+                          username: msg.user_profiles?.username || 'Anonymous',
+                          created_at: msg.user_profiles?.created_at,
+                          rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
+                          glowing_username_color: msg.user_profiles?.glowing_username_color,
+                      }}
+                      isBroadcaster={msg.user_id === broadcasterId}
+                    />
+                    <span className="ml-2 text-zinc-300 break-words">{msg.content}</span>
+                  </div>
+                </div>
+              );
+            }
+          }}
+        />
+      </div>
+      <form onSubmit={sendMessage} className="flex items-center p-3 border-t border-white/10">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Say something..."
+          className="flex-1 bg-black/30 text-white text-sm rounded-full px-4 py-2 mr-2 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all placeholder:text-zinc-500 border border-transparent focus:border-purple-500/50"
+          disabled={isViewer}
+        />
+        <button
+          type="submit"
+          className="bg-gradient-to-br from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white font-bold p-2.5 rounded-full transition-all duration-200 shadow-lg shadow-purple-500/20 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none"
+          disabled={isViewer || !input.trim()}
+        >
+          <Send size={18} />
+        </button>
+      </form>
     </div>
   );
 }

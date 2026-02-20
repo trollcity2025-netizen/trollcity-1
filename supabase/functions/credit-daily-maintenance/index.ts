@@ -27,9 +27,9 @@ function getTier(score: number): string {
   return "Elite";
 }
 
-function trendFromDelta(sum7d: number): number {
-  if (sum7d > 0) return 1;
-  if (sum7d < 0) return -1;
+function trendFromDelta(sum30d: number): number {
+  if (sum30d > 0) return 1;
+  if (sum30d < 0) return -1;
   return 0;
 }
 
@@ -41,7 +41,7 @@ export default async function handler(req: Request) {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const windowStart7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const windowStart30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     console.log("Starting credit score recalculation...");
 
@@ -77,7 +77,7 @@ export default async function handler(req: Request) {
       
       stats.totalDelta += (event.delta ?? 0);
       
-      if (event.created_at >= windowStart7d) {
+      if (event.created_at >= windowStart30d) {
         stats.recentDelta += (event.delta ?? 0);
       }
       
@@ -91,7 +91,7 @@ export default async function handler(req: Request) {
         user_id,
         score,
         tier: getTier(score),
-        trend_7d: trendFromDelta(stats.recentDelta),
+        trend_30d: trendFromDelta(stats.recentDelta),
         updated_at: new Date().toISOString(),
       };
     });

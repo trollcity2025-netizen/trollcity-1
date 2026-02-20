@@ -22,9 +22,8 @@ import CashoutRequestsList from './admin/components/shared/CashoutRequestsList'
 import GiftCardFulfillmentList from './admin/components/shared/GiftCardFulfillmentList'
 import CriticalAlertsList from './admin/components/shared/CriticalAlertsList'
 import ExecutiveReportsList from './admin/components/shared/ExecutiveReportsList'
-import ManualCoinOrdersList from './admin/components/shared/ManualCoinOrdersList'
 
-type TabId = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'troll_town' | 'shifts' | 'manual_payments'
+type TabId = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'troll_town' | 'shifts'
 
 export default function SecretaryConsole() {
   const { user, profile } = useAuthStore()
@@ -35,24 +34,21 @@ export default function SecretaryConsole() {
   const [counts, setCounts] = useState({
     intake: 0,
     cashouts: 0,
-    alerts: 0,
-    manual_orders: 0
+    alerts: 0
   })
 
   const fetchCounts = useCallback(async () => {
     try {
-        const [intakeRes, cashoutRes, alertsRes, manualRes] = await Promise.all([
-            supabase.from('executive_intake').select('id', { count: 'exact', head: true }).eq('status', 'new'),
-            supabase.from('cashout_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-            supabase.from('critical_alerts').select('id', { count: 'exact', head: true }).eq('resolved', false),
-            supabase.from('manual_coin_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending')
+        const [intakeRes, cashoutRes, alertsRes] = await Promise.all([
+          supabase.from('executive_intake').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+          supabase.from('cashout_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+          supabase.from('critical_alerts').select('id', { count: 'exact', head: true }).eq('resolved', false)
         ])
         
         setCounts({
-            intake: intakeRes.count || 0,
-            cashouts: cashoutRes.count || 0,
-            alerts: alertsRes.count || 0,
-            manual_orders: manualRes.count || 0
+          intake: intakeRes.count || 0,
+          cashouts: cashoutRes.count || 0,
+          alerts: alertsRes.count || 0
         })
     } catch (e) {
         console.error("Error fetching counts", e)
@@ -153,14 +149,7 @@ export default function SecretaryConsole() {
             alert={counts.cashouts > 0}
             count={counts.cashouts}
           />
-          <NavButton 
-            active={activeTab === 'manual_payments'} 
-            onClick={() => setActiveTab('manual_payments')}
-            icon={<CreditCard className="w-5 h-5" />}
-            label="Manual Payments"
-            alert={counts.manual_orders > 0}
-            count={counts.manual_orders}
-          />
+          {/* Manual payments removed — use Coin Store (Braintree) */}
           <NavButton 
             active={activeTab === 'giftcards'} 
             onClick={() => setActiveTab('giftcards')}
@@ -228,7 +217,7 @@ export default function SecretaryConsole() {
         <div className={suspended ? 'opacity-50 pointer-events-none select-none' : ''}>
             {activeTab === 'intake' && <ExecutiveIntakeList viewMode="secretary" />}
             {activeTab === 'cashouts' && <CashoutRequestsList viewMode="secretary" />}
-            {activeTab === 'manual_payments' && <ManualCoinOrdersList />}
+            {/* manual_payments tab removed */}
             {activeTab === 'giftcards' && <GiftCardFulfillmentList viewMode="secretary" />}
             {activeTab === 'alerts' && <CriticalAlertsList viewMode="secretary" />}
             {activeTab === 'reports' && <ExecutiveReportsList viewMode="secretary" />}

@@ -16,7 +16,7 @@ interface PodRoom {
   viewer_count: number;
   current_viewers?: number;
   started_at: string;
-  livekit_room_id?: string;
+  agora_channel_name?: string;
   host?: {
     username: string;
     avatar_url: string;
@@ -107,7 +107,7 @@ export default function TrollPodsListing() {
       }
 
       setIsCreating(false);
-      const livekitRoomId = `pod_${generateUUID()}`;
+      const agoraChannelName = `pod_${generateUUID()}`;
 
       const { data, error } = await supabase
         .from('pod_rooms')
@@ -116,7 +116,7 @@ export default function TrollPodsListing() {
           host_id: user.id,
           is_live: true,
           started_at: new Date().toISOString(),
-          livekit_room_id: livekitRoomId,
+          agora_channel_name: agoraChannelName,
         })
         .select()
         .single();

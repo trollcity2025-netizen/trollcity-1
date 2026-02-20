@@ -19,7 +19,7 @@ BEGIN
   RETURN EXISTS (
     SELECT 1 FROM user_profiles
     WHERE id = p_user_id
-      AND role IN ('admin', 'officer', 'lead_officer', 'secretary', 'pastor')
+      AND role IN ('admin', 'troll_officer', 'lead_troll_officer', 'secretary', 'pastor')
       AND (is_banned IS FALSE OR is_banned IS NULL)
       AND (suspended_until IS NULL OR suspended_until < NOW())
   );
@@ -95,7 +95,6 @@ SELECT
   stream_count,
   followers_count,
   following_count,
-  is_troll_officer,
   is_admin,
   is_lead_officer
 FROM public.user_profiles;

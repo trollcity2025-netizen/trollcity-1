@@ -16,7 +16,6 @@ const criticalAssets = manifest.filter((entry: any) => {
   if (url.includes('vendor-') || url.includes('vendor.') ||
       url.includes('ui-') || url.includes('ui.') ||
       url.includes('supabase-') || url.includes('supabase.') ||
-      url.includes('livekit-') || url.includes('livekit.') ||
       url.includes('index-') || url.includes('index.')) {
     return true;
   }

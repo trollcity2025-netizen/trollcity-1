@@ -1,0 +1,1 @@
+ALTER TABLE public.coin_transactions ALTER COLUMN amount TYPE bigint;

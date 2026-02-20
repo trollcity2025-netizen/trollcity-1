@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "npm:agora-access-token": "agora-access-token"
+  },
+  "tasks": {},
+  "env": ["AGORA_APP_ID", "AGORA_APP_CERTIFICATE"]
+}

@@ -10,7 +10,7 @@ import CropPhotoModal from '../components/CropPhotoModal'
 import { KeyRound } from 'lucide-react'
 import { setResetPin } from '@/services/passwordManager'
 import { trollCityTheme } from '../styles/trollCityTheme'
-import { bunnyStorage } from '../lib/bunny-storage'
+// import { bunnyStorage } from '../lib/bunny-storage'
 
 const ProfileSetup = () => {
   const navigate = useNavigate()
@@ -40,6 +40,7 @@ const ProfileSetup = () => {
   const [gender, setGender] = React.useState((profile as any)?.gender || '')
   const [messageCost, setMessageCost] = React.useState((profile as any)?.message_cost || 0)
   const [viewCost, setViewCost] = React.useState((profile as any)?.profile_view_cost || 0)
+  const [preferredPaymentMethod, setPreferredPaymentMethod] = React.useState((profile as any)?.preferred_payment_method || 'card')
   const [loading, setLoading] = React.useState(false)
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false)
   const [uploadingCover, setUploadingCover] = React.useState(false)
@@ -144,6 +145,7 @@ const ProfileSetup = () => {
           full_name: fullName.trim(),
           bio: bio || null, 
           gender,
+          preferred_payment_method: preferredPaymentMethod || null,
           message_cost: messageCost,
           profile_view_cost: viewCost,
           updated_at: now 
@@ -342,11 +344,11 @@ const ProfileSetup = () => {
       const name = `covers/${user.id}-${Date.now()}.${ext}`
 
       // Upload to Bunny Storage
-      const { publicUrl: uploadedUrl, error: uploadErr } = await bunnyStorage.upload(name, croppedFile)
-
-      if (uploadErr || !uploadedUrl) {
-        throw uploadErr || new Error('Failed to upload cover photo')
-      }
+      // const { publicUrl: uploadedUrl, error: uploadErr } = await bunnyStorage.upload(name, croppedFile)
+      // if (uploadErr || !uploadedUrl) {
+      //   throw uploadErr || new Error('Failed to upload cover photo')
+      // }
+      const uploadedUrl = 'placeholder' // TODO: replace with Supabase storage
 
       console.log('Uploaded URL:', uploadedUrl)
       console.log('User ID:', user.id)
@@ -557,6 +559,24 @@ const ProfileSetup = () => {
                   className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
                   rows={4}
                 />
+              </div>
+
+              <div>
+                <label htmlFor="preferredPaymentMethod" className="block text-sm mb-2">Preferred Payment Method</label>
+                <select
+                  id="preferredPaymentMethod"
+                  name="preferredPaymentMethod"
+                  value={preferredPaymentMethod}
+                  onChange={(e) => setPreferredPaymentMethod(e.target.value)}
+                  className={`w-full px-4 py-2 rounded ${trollCityTheme.components.input} text-white focus:outline-none`}
+                >
+                  <option value="card">Card</option>
+                  <option value="paypal">PayPal</option>
+                  <option value="venmo">Venmo</option>
+                  <option value="apple_pay">Apple Pay</option>
+                  <option value="google_pay">Google Pay</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">This sets your preferred checkout method but does not store card data.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

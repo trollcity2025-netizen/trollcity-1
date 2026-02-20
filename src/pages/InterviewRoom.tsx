@@ -2,17 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { 
-  LiveKitRoom, 
-  RoomAudioRenderer, 
-  StartAudio, 
-  VideoTrack,
-  useParticipants,
-  useTracks,
-  useLocalParticipant
-} from '@livekit/components-react'
-import { Track, Participant } from 'livekit-client'
-import '@livekit/components-styles'
+import { AgoraProvider, useAgora } from '../hooks/useAgora';
 import { Button } from '../components/ui/button'
 import { toast } from 'sonner'
 import { User, DollarSign, CheckCircle, XCircle, Trash2, Mic, MicOff, Video, VideoOff } from 'lucide-react'
@@ -36,101 +26,82 @@ type Interview = {
 
 // Inner component to render the interview grid
 function InterviewGrid({ interview, isAdmin: _isAdmin }: { interview: Interview, isAdmin: boolean }) {
-  const participants = useParticipants();
-  const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone]);
-  const { localParticipant } = useLocalParticipant();
+  const { remoteUsers, localVideoTrack } = useAgora();
+  const localVideoRef = useRef<HTMLDivElement | null>(null);
 
-  // Find participants
-  // We identify the applicant by their username (identity). 
-  // The interviewer is anyone else who has admin/lead privileges (but simplified: anyone else in the room who is publishing)
-  const applicant = participants.find(p => p.identity === interview.applicant?.username);
-  
-  // The interviewer is the other person (not the applicant). 
-  // If multiple admins join, we might show them all, but for now let's pick the first non-applicant.
-  const interviewer = participants.find(p => p.identity !== interview.applicant?.username);
-
-  const getVideoTrack = (p?: Participant) => {
-    if (!p) return null;
-    return tracks.find(t => t.participant.identity === p.identity && t.source === Track.Source.Camera);
-  };
-
-  const interviewerTrack = getVideoTrack(interviewer);
-  const applicantTrack = getVideoTrack(applicant);
-
-  const renderParticipantBox = (
-    title: string, 
-    colorClass: string, 
-    participant?: Participant, 
-    trackRef?: any
-  ) => {
-    const isLocal = participant?.identity === localParticipant.identity;
-    const isMicOn = participant?.isMicrophoneEnabled;
-    const isCamOn = participant?.isCameraEnabled;
-
-    return (
-      <div className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group`}>
-        <div className={`absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 backdrop-blur-sm ${colorClass.replace('border-', 'text-')}`}>
-          {title}
-          {participant && (
-            <div className="flex gap-1 ml-2">
-               {isMicOn ? <Mic size={14} className="text-green-400" /> : <MicOff size={14} className="text-red-400" />}
-            </div>
-          )}
-        </div>
-        
-        {participant && trackRef ? (
-          <VideoTrack 
-            trackRef={trackRef} 
-            className="w-full h-full object-cover" 
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500 flex-col gap-2">
-            <User size={48} />
-            <p>Waiting for {title.toLowerCase()}...</p>
-          </div>
-        )}
-
-        {/* Local Controls Overlay */}
-        {isLocal && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-full backdrop-blur-sm">
-             <Button 
-               size="icon" 
-               variant={isMicOn ? "ghost" : "destructive"} 
-               className="h-10 w-10 rounded-full"
-               onClick={() => localParticipant.setMicrophoneEnabled(!isMicOn)}
-             >
-               {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
-             </Button>
-             <Button 
-               size="icon" 
-               variant={isCamOn ? "ghost" : "destructive"} 
-               className="h-10 w-10 rounded-full"
-               onClick={() => localParticipant.setCameraEnabled(!isCamOn)}
-             >
-               {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
-             </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
+  useEffect(() => {
+    if (localVideoTrack && localVideoRef.current) {
+      localVideoTrack.play(localVideoRef.current);
+    }
+    return () => {
+      localVideoTrack?.stop();
+    };
+  }, [localVideoTrack]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl flex-1">
-      {renderParticipantBox(
-        "Interviewer (Admin/Lead)", 
-        "border-purple-800", 
-        interviewer, 
-        interviewerTrack
-      )}
-      {renderParticipantBox(
-        "Applicant", 
-        "border-blue-800", 
-        applicant, 
-        applicantTrack
-      )}
+      <div ref={localVideoRef} className="w-full h-full bg-black rounded-lg overflow-hidden" />
+      {remoteUsers.map((user) => (
+        <RemoteUser key={user.uid} user={user} />
+      ))}
     </div>
   );
+}
+
+const RemoteUser = ({ user }: { user: any }) => {
+  const videoRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (user.videoTrack && videoRef.current) {
+      user.videoTrack.play(videoRef.current);
+    }
+    return () => {
+      user.videoTrack?.stop();
+    };
+  }, [user.videoTrack]);
+
+  return <div ref={videoRef} className="w-full h-full bg-black rounded-lg overflow-hidden" />;
+};
+
+const InterviewRoomWithAgora = ({ interview, isAdmin }: { interview: Interview, isAdmin: boolean }) => {
+  const { join, leave, publish } = useAgora();
+  const { roomId } = useParams<{ roomId: string }>();
+  const { profile } = useAuthStore();
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getToken = async () => {
+      if (!roomId || !profile?.id) return;
+      const { data: connectionData, error: connectionError } = await supabase.functions.invoke('agora-token', {
+        body: {
+          room: roomId,
+          identity: profile.id,
+          role: 'host'
+        }
+      });
+
+      if (connectionError || !connectionData?.token) {
+        console.error("Connection error:", connectionError);
+        toast.error("Failed to connect to video server");
+        return;
+      }
+      setToken(connectionData.token);
+    };
+    getToken();
+  }, [roomId, profile?.id]);
+
+  useEffect(() => {
+    if (token && roomId) {
+      join(import.meta.env.VITE_AGORA_APP_ID, roomId, token);
+      publish();
+    }
+
+    return () => {
+      leave();
+    }
+  }, [token, roomId, join, leave, publish]);
+
+  return <InterviewGrid interview={interview} isAdmin={isAdmin} />;
 }
 
 export default function InterviewRoom() {
@@ -139,8 +110,6 @@ export default function InterviewRoom() {
   const { profile } = useAuthStore()
   const [interview, setInterview] = useState<Interview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [connection, setConnection] = useState<string>("")
-  const [livekitUrl, setLivekitUrl] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
   
   // Hire Modal State
@@ -172,27 +141,8 @@ export default function InterviewRoom() {
         setInterview(data)
 
         const isInterviewer = profile.role === 'admin' || profile.is_lead_officer || profile.role === 'secretary'
-        const isApplicant = data.applicant_id === profile.id
 
         setIsAdmin(isInterviewer)
-
-        // Get Connection Details
-        const { data: connectionData, error: connectionError } = await supabase.functions.invoke('livekit-token', {
-          body: {
-            room: roomId,
-            identity: profile.id,
-            role: (isInterviewer || isApplicant) ? 'host' : 'guest'
-          }
-        })
-
-        if (connectionError || !connectionData?.token || !connectionData?.url) {
-          console.error("Connection error:", connectionError)
-          toast.error("Failed to connect to video server")
-          return
-        }
-
-        setConnection(connectionData.token)
-        setLivekitUrl(connectionData.url)
 
         // If pending and admin joins, update status to active
         if (isInterviewer && data.status === 'pending') {
@@ -343,92 +293,81 @@ export default function InterviewRoom() {
 
   if (loading) return <div className="flex items-center justify-center h-screen text-white">Loading Interview Room...</div>
 
+  if (!interview) {
+    return <div className="h-screen w-full flex items-center justify-center bg-gray-950 text-white">Interview not found.</div>
+  }
+
   return (
-    <div className="min-h-screen bg-black text-white p-4 flex flex-col items-center">
-      <div className="w-full max-w-6xl mb-6 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-purple-400">Interview Room</h1>
-          <p className="text-gray-400">Applicant: {interview?.applicant?.username}</p>
-        </div>
-        {isAdmin && (
-          <div className="flex gap-2">
-             <Button variant="destructive" onClick={handleCancel} className="gap-2">
-              <Trash2 size={16} /> Cancel Interview
-            </Button>
-            <Button variant="outline" onClick={handleDecline} className="border-red-500 text-red-500 hover:bg-red-900/20 gap-2">
-              <XCircle size={16} /> Decline
-            </Button>
-            <Button onClick={() => setShowHireModal(true)} className="bg-green-600 hover:bg-green-700 gap-2">
-              <CheckCircle size={16} /> Hire Worker
-            </Button>
+    <AgoraProvider>
+      <div className="min-h-screen bg-black text-white p-4 flex flex-col items-center">
+        <div className="w-full max-w-6xl mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-purple-400">Interview Room</h1>
+            <p className="text-gray-400">Applicant: {interview?.applicant?.username}</p>
           </div>
-        )}
-      </div>
+          {isAdmin && (
+            <div className="flex gap-2">
+               <Button variant="destructive" onClick={handleCancel} className="gap-2">
+                <Trash2 size={16} /> Cancel Interview
+              </Button>
+              <Button variant="outline" onClick={handleDecline} className="border-red-500 text-red-500 hover:bg-red-900/20 gap-2">
+                <XCircle size={16} /> Decline
+              </Button>
+              <Button onClick={() => setShowHireModal(true)} className="bg-green-600 hover:bg-green-700 gap-2">
+                <CheckCircle size={16} /> Hire Worker
+              </Button>
+            </div>
+          )}
+        </div>
 
-      {connection && livekitUrl && (
-        <LiveKitRoom
-          video={true}
-          audio={true}
-          token={connection}
-          serverUrl={livekitUrl}
-          data-lk-theme="default"
-          className="flex-1 w-full flex flex-col items-center"
-          onDisconnected={() => {
-             toast.info("Disconnected from interview")
-             navigate('/lead-officer')
-          }}
-        >
-           <InterviewGrid interview={interview!} isAdmin={isAdmin} />
-           <RoomAudioRenderer />
-           <StartAudio label="Click to enable audio" />
-        </LiveKitRoom>
-      )}
+        <InterviewRoomWithAgora interview={interview} isAdmin={isAdmin} />
 
-      {/* Hire Modal */}
-      <Dialog open={showHireModal} onOpenChange={setShowHireModal}>
-        <DialogContent className="bg-[#1A1A2E] border-purple-800 text-white">
-          <DialogHeader>
-            <DialogTitle>Hire {interview?.applicant?.username}</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Hourly Rate ($/hr)</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  type="number"
-                  value={hrRate}
-                  disabled={hiring}
-                  onChange={(e) => setHrRate(e.target.value)}
-                  className="pl-10 bg-black/40 border-purple-800 text-white"
-                />
+        {/* Hire Modal */}
+        <Dialog open={showHireModal} onOpenChange={setShowHireModal}>
+          <DialogContent className="bg-[#1A1A2E] border-purple-800 text-white">
+            <DialogHeader>
+              <DialogTitle>Hire {interview?.applicant?.username}</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Hourly Rate ($/hr)</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="number"
+                    value={hrRate}
+                    disabled={hiring}
+                    onChange={(e) => setHrRate(e.target.value)}
+                    className="pl-10 bg-black/40 border-purple-800 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={workerRole} onValueChange={setWorkerRole}>
+                  <SelectTrigger className="bg-black/40 border-purple-800 text-white">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0D0D1A] border-purple-800 text-white">
+                    <SelectItem value="troll_officer">Troll Officer</SelectItem>
+                    <SelectItem value="lead_troll_officer">Lead Troll Officer</SelectItem>
+                    <SelectItem value="secretary">Secretary</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={workerRole} onValueChange={setWorkerRole}>
-                <SelectTrigger className="bg-black/40 border-purple-800 text-white">
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#0D0D1A] border-purple-800 text-white">
-                  <SelectItem value="troll_officer">Troll Officer</SelectItem>
-                  <SelectItem value="lead_troll_officer">Lead Troll Officer</SelectItem>
-                  <SelectItem value="secretary">Secretary</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowHireModal(false)}>Cancel</Button>
-            <Button onClick={handleHire} disabled={hiring} className="bg-green-600 hover:bg-green-700">
-              {hiring ? 'Hiring...' : 'Confirm Hire'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setShowHireModal(false)}>Cancel</Button>
+              <Button onClick={handleHire} disabled={hiring} className="bg-green-600 hover:bg-green-700">
+                {hiring ? 'Hiring...' : 'Confirm Hire'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </AgoraProvider>
   )
 }

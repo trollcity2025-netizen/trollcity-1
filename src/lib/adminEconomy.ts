@@ -96,7 +96,6 @@ export function hasRouteAccess(userRole: string, isLeadOfficer: boolean, route: 
     '/', '/messages', '/following', '/store', '/transactions',
     '/shop-partner', '/sell', '/creator-contract',
     '/leaderboard', '/wall', '/go-live',
-    '/tromody', '/battles', '/empire-partner', '/trollifications',
     '/apply', '/earnings', '/support', '/safety'
   ]
 

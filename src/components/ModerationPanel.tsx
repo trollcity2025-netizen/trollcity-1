@@ -9,12 +9,11 @@ import api from "../lib/api";
 import IPBanModal from "./officer/IPBanModal";
 
 interface ModerationPanelProps {
-  room: any; // LiveKit Room
   targetUserId: string;
   roomId: string;
 }
 
-export default function ModerationPanel({ room, targetUserId, roomId }: ModerationPanelProps) {
+export default function ModerationPanel({ targetUserId, roomId }: ModerationPanelProps) {
   const [open, setOpen] = useState(false);
   const [showIPBanModal, setShowIPBanModal] = useState(false);
   const [targetIP, setTargetIP] = useState<string | null>(null);
@@ -31,7 +30,6 @@ export default function ModerationPanel({ room, targetUserId, roomId }: Moderati
         reason,
         ban_duration_hours: 24 // Default to 24h
       });
-      room?.disconnectParticipant(targetUserId);
     } catch (error) {
       console.error("Ban failed:", error);
       alert("Failed to ban user");
@@ -59,7 +57,6 @@ export default function ModerationPanel({ room, targetUserId, roomId }: Moderati
     const reason = window.prompt("Enter kick reason (optional):") || "Kicked by moderator";
     
     // Disconnect first for immediate effect
-    room?.disconnectParticipant(targetUserId);
 
     try {
         await api.post(api.endpoints.moderation.logEvent, {
@@ -74,11 +71,6 @@ export default function ModerationPanel({ room, targetUserId, roomId }: Moderati
   };
 
   const handleMute = async () => {
-    room?.localParticipant.setParticipantPermissions(targetUserId, {
-      canPublishAudio: false,
-      canPublishData: true,
-      canSubscribe: true
-    });
     
     try {
         await api.post(api.endpoints.moderation.logEvent, {
@@ -136,7 +128,6 @@ export default function ModerationPanel({ room, targetUserId, roomId }: Moderati
         stream_id: roomId,
         reason
       });
-      room?.disconnect();
     } catch (error) {
       console.error("Disable stream failed:", error);
       alert("Failed to disable stream");
@@ -220,7 +211,6 @@ export default function ModerationPanel({ room, targetUserId, roomId }: Moderati
         onSuccess={() => {
           setShowIPBanModal(false);
           // Optional: disconnect user after IP ban
-          room?.disconnectParticipant(targetUserId);
         }}
         targetUserId={targetUserId}
         targetIP={targetIP || undefined}

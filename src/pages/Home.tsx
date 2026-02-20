@@ -5,13 +5,14 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
 import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe'
 import { trollCityTheme } from '@/styles/trollCityTheme'
-import PWAInstallPrompt from '../components/PWAInstallPrompt'
+
 import EventCountdown from '@/components/EventCountdown'
 import LiveStreamsModule from '@/components/home/LiveStreamsModule'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
 import TopRentPayersWidget from '@/components/home/TopRentPayersWidget'
 import TrollPodsWidget from '@/components/home/TrollPodsWidget'
 import CoinRain from '../components/MoneyRain';
+import FeaturedStreamPreview from '@/components/home/FeaturedStreamPreview';
 
 // Background Image
 const BackgroundImage = () => {
@@ -47,6 +48,8 @@ export default function Home() {
 
   return (
     <div className={`relative min-h-dvh overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
+
+
       {/* Event Countdown Banner */}
       <EventCountdown />
 
@@ -56,15 +59,12 @@ export default function Home() {
           {/* Falling Coins Animation */}
           <CoinRain />
 
-      {/* PWA Install Prompt - Only on Landing Page */}
-      <PWAInstallPrompt />
-
       {/* Content */}
       <div className="relative z-10 min-h-dvh px-4 md:px-6 py-6 safe-top">
         <div className="max-w-7xl mx-auto space-y-6">
-          <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-3xl p-5 md:p-6`}
-          >
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+          {!user && <FeaturedStreamPreview />}
+
+          <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-3xl p-5 md:p-6`}>  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-white">City Feed</h1>
                 <p className={`${trollCityTheme.text.muted} text-sm`}>Live streams happening right now.</p>

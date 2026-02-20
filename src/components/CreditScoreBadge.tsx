@@ -5,6 +5,7 @@ export interface CreditScoreBadgeProps {
   score?: number
   tier?: string
   trend7d?: number
+  trend30d?: number
   loading?: boolean
 }
 
@@ -33,9 +34,11 @@ function tierColor(tier?: string) {
   }
 }
 
-export function CreditScoreBadge({ score, tier, trend7d, loading }: CreditScoreBadgeProps) {
+export function CreditScoreBadge({ score, tier, trend7d, trend30d, loading }: CreditScoreBadgeProps) {
   const displayScore = loading ? '—' : score ?? '—'
   const displayTier = loading ? 'Loading…' : tier ?? 'Unknown'
+  const trend = trend30d ?? trend7d
+  const trendLabel = trend30d ? '30d' : '7d'
 
   return (
     <div
@@ -53,8 +56,8 @@ export function CreditScoreBadge({ score, tier, trend7d, loading }: CreditScoreB
       </div>
       <div className="flex flex-col items-end gap-1 text-sm">
         <div className="flex items-center gap-2">
-          <span className="text-white/80">7d</span>
-          {trendIcon(trend7d)}
+          <span className="text-white/80">{trendLabel}</span>
+          {trendIcon(trend)}
         </div>
       </div>
     </div>

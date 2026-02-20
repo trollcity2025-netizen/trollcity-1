@@ -190,12 +190,6 @@ export interface UserProfile {
   // Stream key for RTMP ingest
   stream_key?: string | null
 
-  // LiveKit ingress metadata
-  ingress_id?: string | null
-  ingress_room_name?: string | null
-  ingress_url?: string | null
-  ingress_updated_at?: string | null
-
   // Profile view price
   profile_view_price?: number
 

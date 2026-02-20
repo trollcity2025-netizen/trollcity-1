@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { BookOpen, Clock, Gift, Shield, Calendar, Info, Loader2, XCircle } from 'lucide-react';
+import MuxViewer from '@/components/broadcast/MuxViewer';
 import DailyPassage from '@/components/church/DailyPassage';
 import PrayerFeed from '@/components/church/PrayerFeed';
 // import { toast } from 'sonner';
@@ -17,6 +18,8 @@ export default function ChurchPage() {
   const [timeUntilOpen, setTimeUntilOpen] = useState('');
   const [loading, setLoading] = useState(true);
   const [_pastorId, setPastorId] = useState<string | null>(null);
+   const [activeStream, setActiveStream] = useState<any | null>(null);
+   const [muxPlaybackId, setMuxPlaybackId] = useState<string | null>(null);
 
   // Hooks must be called unconditionally at the top level
   useEffect(() => {
@@ -30,6 +33,57 @@ export default function ChurchPage() {
        fetchActivePastor();
     }
   }, [isSunday, isOpen]);
+
+   // When pastor is known, fetch their active stream (if any)
+   useEffect(() => {
+      let mounted = true;
+      const loadStream = async () => {
+         if (!_pastorId) return;
+         try {
+            const { data } = await supabase
+               .from('streams')
+               .select('*')
+               .eq('user_id', _pastorId)
+               .neq('status', 'ended')
+               .order('started_at', { ascending: false })
+               .limit(1)
+               .maybeSingle();
+
+            if (!mounted) return;
+            if (data) {
+               setActiveStream(data);
+               setMuxPlaybackId(data.mux_playback_id || null);
+            } else {
+               setActiveStream(null);
+               setMuxPlaybackId(null);
+            }
+         } catch (err) {
+            console.error('Failed to load pastor stream', err);
+         }
+      };
+
+      loadStream();
+
+      // Subscribe to real-time updates for this pastor's stream
+      let channel: any = null;
+      if (_pastorId) {
+         channel = supabase
+            .channel(`church-stream-${_pastorId}`)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'streams', filter: `user_id=eq.${_pastorId}` }, (payload) => {
+               const newRow = payload.new as any;
+               if (mounted) {
+                  setActiveStream((prev) => (prev ? { ...prev, ...newRow } : newRow));
+                  if (newRow?.mux_playback_id) setMuxPlaybackId(newRow.mux_playback_id);
+               }
+            })
+            .subscribe();
+      }
+
+      return () => {
+         mounted = false;
+         if (channel) supabase.removeChannel(channel);
+      };
+   }, [_pastorId]);
 
   if (!profile) {
     return (
@@ -216,10 +270,16 @@ export default function ChurchPage() {
 
          {/* Content Grid */}
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Feed */}
-            <div className="lg:col-span-2">
-               <PrayerFeed isOpen={isOpen} />
-            </div>
+                  {/* Main Feed */}
+                  <div className="lg:col-span-2">
+                      {isSunday && isOpen && activeStream && muxPlaybackId && profile?.id !== _pastorId ? (
+                         <div className="aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 mb-4">
+                            <MuxViewer playbackId={muxPlaybackId} />
+                         </div>
+                      ) : (
+                         <PrayerFeed isOpen={isOpen} />
+                      )}
+                  </div>
 
             {/* Sidebar Info */}
             <div className="space-y-6">

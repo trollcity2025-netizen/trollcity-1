@@ -6,7 +6,7 @@ const DatabaseBackup = lazy(() => import('./DatabaseBackup'))
 const CityControlCenter = lazy(() => import('./CityControlCenter'))
 const CacheClear = lazy(() => import('./CacheClear'))
 const SystemConfig = lazy(() => import('./SystemConfig'))
-const LiveKitUsageTab = lazy(() => import('./components/LiveKitUsageTab'))
+
 const UserFormsTab = lazy(() => import('./components/UserFormsTab'))
 const AdminErrors = lazy(() => import('./AdminErrors'))
 const AdminCallsTab = lazy(() => import('./components/AdminCallsTab'))
@@ -170,19 +170,7 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileBorderColor: 'border-purple-500/30',
     category: 'system'
   },
-  {
-    id: 'livekit-usage',
-    title: 'LiveKit Usage',
-    path: '/admin/system/livekit',
-    component: LiveKitUsageTab,
-    roles: [UserRole.ADMIN],
-    description: 'Monitor broadcast minutes & quotas',
-    icon: <Video className="w-5 h-5 text-pink-200" />,
-    tileColor: 'text-pink-200',
-    tileBgColor: 'bg-pink-500/10',
-    tileBorderColor: 'border-pink-500/30',
-    category: 'system'
-  },
+
   {
     id: 'user-forms',
     title: 'User Forms',

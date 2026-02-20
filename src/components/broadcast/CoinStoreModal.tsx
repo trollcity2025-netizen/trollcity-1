@@ -3,8 +3,7 @@ import { X, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-import ManualPaymentModal from './ManualPaymentModal';
+import BraintreeDropIn from '@/components/BraintreeDropIn';
 
 interface CoinPackage {
   id: string;
@@ -24,9 +23,6 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const [packages, setPackages] = useState<CoinPackage[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Manual Payment State
-  const [manualPaymentOpen, setManualPaymentOpen] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<'venmo' | 'paypal' | 'cashapp'>('venmo');
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
 
 
@@ -117,58 +113,19 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-sm text-zinc-400 font-medium uppercase tracking-wider">Manual Payment Options</p>
-                  
-                  <button
-                    onClick={() => handleManualPayment('venmo')}
-                    className="w-full flex items-center justify-between p-4 bg-[#008CFF]/10 border border-[#008CFF]/30 hover:bg-[#008CFF]/20 hover:border-[#008CFF]/50 rounded-lg transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📱</span>
-                      <div className="text-left">
-                        <div className="font-bold text-white group-hover:text-[#008CFF] transition-colors">Venmo</div>
-                        <div className="text-xs text-zinc-400">Send via @trollcityllc</div>
-                      </div>
-                    </div>
-                    <div className="text-[#008CFF] font-medium text-sm">Select</div>
-                  </button>
+                  <p className="text-sm text-zinc-400 font-medium uppercase tracking-wider">Payment</p>
+                  <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+                    <p className="text-sm text-zinc-400">Use a secure payment method below to complete your purchase.</p>
+                  </div>
 
-                  <button
-                    onClick={() => handleManualPayment('cashapp')}
-                    className="w-full flex items-center justify-between p-4 bg-[#00D632]/10 border border-[#00D632]/30 hover:bg-[#00D632]/20 hover:border-[#00D632]/50 rounded-lg transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">💲</span>
-                      <div className="text-left">
-                        <div className="font-bold text-white group-hover:text-[#00D632] transition-colors">Cash App</div>
-                        <div className="text-xs text-zinc-400">Send via $trollcity95</div>
-                      </div>
-                    </div>
-                    <div className="text-[#00D632] font-medium text-sm">Select</div>
-                  </button>
+                  <div>
+                    <BraintreeDropIn packId={String(selectedPack.id)} onSuccess={(newBalance) => {
+                      toast.success('Purchase successful')
+                      // Optionally refresh packs/profile
+                      setShowPaymentMethods(false)
+                    }} />
+                  </div>
 
-                  <button
-                    onClick={() => handleManualPayment('paypal')}
-                    className="w-full flex items-center justify-between p-4 bg-[#00457C]/10 border border-[#00457C]/30 hover:bg-[#00457C]/20 hover:border-[#00457C]/50 rounded-lg transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🅿️</span>
-                      <div className="text-left">
-                        <div className="font-bold text-white group-hover:text-[#00457C] transition-colors">PayPal</div>
-                        <div className="text-xs text-zinc-400">Secure Checkout</div>
-                      </div>
-                    </div>
-                    <div className="text-[#00457C] font-medium text-sm">Select</div>
-                  </button>
-                </div>
-
-                <div className="pt-4 border-t border-zinc-800">
-                  <button 
-                    onClick={handleBackToPackages}
-                    className="w-full py-3 text-zinc-400 hover:text-white transition-colors text-sm font-medium"
-                  >
-                    ← Back to Packages
-                  </button>
                 </div>
               </div>
             ) : (
@@ -227,12 +184,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
         </div>
       </div>
 
-      <ManualPaymentModal 
-        isOpen={manualPaymentOpen} 
-        onClose={() => setManualPaymentOpen(false)} 
-        pkg={selectedPack} 
-        providerId={selectedProvider} 
-      />
+      {/* Manual payments disabled: moved to Braintree Drop-in */}
     </>
   );
 }

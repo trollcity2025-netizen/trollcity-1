@@ -4,9 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { Mic, MicOff, Users, MessageSquare, Hand, UserMinus, UserPlus, Settings, Coins, Map } from 'lucide-react';
 
 import { toast } from 'sonner';
-import { LiveKitRoom, useParticipants, useRoomContext, RoomAudioRenderer } from '@livekit/components-react';
-import '@livekit/components-styles';
-import { useLiveKitToken } from '../../hooks/useLiveKitToken';
+import { AgoraProvider, useAgora } from '../../hooks/useAgora';
+import MuxViewer from '../../components/broadcast/MuxViewer';
 import { useAuthStore } from '../../lib/store';
 import { emitEvent as triggerEvent } from '../../lib/events';
 import PodParticipantBox from './PodParticipantBox';
@@ -39,7 +38,7 @@ interface PodParticipant {
 }
 
 // --- Active Speaker / Host View (LiveKit) ---
-const PodRoomContent = ({ 
+const PodRoomContentWithAgora = ({ 
   room, 
   currentUser, 
   isHost,
@@ -50,7 +49,6 @@ const PodRoomContent = ({
   onRemoveSpeaker,
   onCancelRequest,
   isStaff,
-  canPublish,
   isGuest
 }: { 
   room: Room, 
@@ -63,148 +61,29 @@ const PodRoomContent = ({
   onRemoveSpeaker: (userId: string) => void,
   onCancelRequest: () => void,
   isStaff: boolean,
-  canPublish: boolean,
   isGuest?: boolean
 }) => {
-  const participants = useParticipants();
-  const liveKitRoom = useRoomContext();
+  const { join, leave, publish, unpublish, localAudioTrack, remoteUsers, micMuted, toggleMic } = useAgora();
   const [showChat, setShowChat] = useState(true);
   const [showHostPanel, setShowHostPanel] = useState(false);
   const [trollsTownControlOpen, setTrollsTownControlOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Derived state
-  const myRecord = participantsData.find(p => p.user_id === currentUser?.id);
-  const isSpeaker = isHost || myRecord?.role === 'speaker' || myRecord?.role === 'officer';
-  const isOfficer = myRecord?.role === 'officer';
-  const isHandRaised = myRecord?.is_hand_raised;
+  const isSpeaker = isHost || participantsData.find(p => p.user_id === currentUser?.id)?.role === 'speaker' || participantsData.find(p => p.user_id === currentUser?.id)?.role === 'officer';
 
-  // Limits Check
   useEffect(() => {
-    // 1. Duration Limit (1 hour)
-    if (room.started_at) {
-      const checkDuration = () => {
-        const startedAt = new Date(room.started_at!).getTime();
-        const duration = Date.now() - startedAt;
-        if (duration > 3600000) { // 1 hour in ms
-          toast.error("Pod time limit (1 hour) reached.");
-          if (isHost) {
-             // Optional: Force end?
-          }
-        }
-      };
-      checkDuration();
-      const interval = setInterval(checkDuration, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [room.started_at, isHost]);
+    // Only join Agora if the user should publish (host or speaker).
+    if (!isSpeaker) return;
 
-  // 2. Viewer Limit Check (10 viewers)
-  useEffect(() => {
-    // If I am a listener (not host/speaker) and count > 10, warn or kick
-    // Note: participantCount includes host/speakers. 
-    // If strict 10 viewers + host + guests, limit might be higher.
-    // Assuming "10 viewers" means total people watching who are not speakers.
-    
-    if (!isSpeaker && !isHost && !isStaff) {
-       // Check how many listeners there are
-       // simple approximation: participantCount - speakers count
-       const speakerCount = participantsData.filter(p => p.role === 'host' || p.role === 'speaker').length;
-       const viewerCount = participantCount - speakerCount;
-       
-       if (viewerCount > 10) {
-          toast.error("Viewer limit (10) reached. You cannot join this pod.");
-          navigate('/pods');
-       }
-    }
-  }, [participantCount, isSpeaker, isHost, isStaff, participantsData, navigate]);
+    join(import.meta.env.VITE_AGORA_APP_ID, room.id, null, currentUser?.id);
+    // publish will be a no-op if already published
+    publish();
 
-  // Task Tracking: Listen to Pod
-  useEffect(() => {
-    if (!currentUser || !room.id) return;
-
-    // Trigger "listened" event every 5 minutes
-    const interval = setInterval(() => {
-        triggerEvent('pod_listened', currentUser.id, { roomId: room.id, minutes: 5 });
-    }, 300000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, [currentUser, room.id]);
-
-  // Instant Mute / Permission Enforcement
-  useEffect(() => {
-    const p = liveKitRoom.localParticipant;
-    if (!p) return;
-
-    // 1. If I am not a speaker/host, I should NOT be publishing audio
-    if (!canPublish && p.isMicrophoneEnabled) {
-        console.log('[TrollPod] Enforcing listener mute');
-        p.setMicrophoneEnabled(false);
-    }
-
-    // 2. If I am muted by host
-    if (myRecord?.is_muted && p.isMicrophoneEnabled) {
-       p.setMicrophoneEnabled(false);
-       toast.error('You have been muted by the host.');
-    }
-  }, [myRecord?.is_muted, canPublish, liveKitRoom.localParticipant]);
-
-  const handlePromoteOfficer = async (userId: string) => {
-    if (!isHost) return;
-    await supabase.from('pod_room_participants')
-      .update({ role: 'officer', is_hand_raised: false })
-      .eq('room_id', room.id)
-      .eq('user_id', userId);
-    toast.success('User promoted to Officer');
-  };
-
-  const handleDisableChat = async (userId: string) => {
-    if (!isHost && !isOfficer) return;
-    const { error } = await supabase.from('pod_chat_bans').insert({ room_id: room.id, user_id: userId });
-    if (!error) toast.success('Chat disabled for user');
-    else toast.error('Failed to disable chat');
-  };
-
-  const handleKick = async (userId: string) => {
-    if (!isHost && !isOfficer) return;
-    if (confirm('Are you sure you want to kick this user?')) {
-        try {
-        await supabase.from('pod_room_participants').delete().eq('room_id', room.id).eq('user_id', userId);
-        toast.success('User kicked');
-        } catch {
-        toast.error('Failed to kick user');
-        }
-    }
-  };
-  
-  const handleBan = async (userId: string) => {
-      if (!isHost && !isOfficer) return;
-      if (confirm('Kick and Ban user for 24 hours?')) {
-          try {
-            await supabase.from('pod_room_participants').delete().eq('room_id', room.id).eq('user_id', userId);
-            // Calculate 24h from now
-            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-            await supabase.from('pod_bans').insert({ 
-                room_id: room.id, 
-                user_id: userId,
-                expires_at: expiresAt
-            });
-            toast.success('User banned for 24h');
-          } catch {
-            toast.error('Failed to ban user');
-          }
-      }
-  };
-
-  const handleMute = async (identity: string) => {
-    if (!isHost && !isOfficer) return;
-    await supabase
-      .from('pod_room_participants')
-      .update({ is_muted: true })
-      .eq('room_id', room.id)
-      .eq('user_id', identity);
-    toast.success('Mute command sent');
-  };
+    return () => {
+      // Leave Agora when no longer a speaker
+      leave();
+    };
+  }, [room.id, currentUser?.id, isSpeaker, join, leave, publish]);
 
   const handleLeave = async () => {
     if (!currentUser?.id || !room?.id) return;
@@ -220,7 +99,7 @@ const PodRoomContent = ({
 
                 if (error) throw error;
                 
-                liveKitRoom.disconnect();
+                leave();
                 setTimeout(() => navigate('/pods'), 500);
             } catch (err) {
                 console.error(err);
@@ -236,7 +115,7 @@ const PodRoomContent = ({
                 .eq('user_id', currentUser.id);
         } catch (e) { console.error(e); }
         
-        liveKitRoom.disconnect();
+        leave();
     }
   };
 
@@ -251,7 +130,7 @@ const PodRoomContent = ({
 
             if (error) throw error;
             
-            liveKitRoom.disconnect();
+            leave();
             setTimeout(() => navigate('/pods'), 500);
             toast.success('Pod ended by Staff');
         } catch (err) {
@@ -397,33 +276,33 @@ const PodRoomContent = ({
         {/* We filter LiveKit participants to only show those who are publishing or are host/speakers in DB */}
         <div className="flex-1 p-4 overflow-y-auto bg-gradient-to-b from-gray-900 to-black">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {participants.map((p) => {
-               const isParticipantHost = p.identity === room.host_id;
-               const isSelf = p.identity === currentUser?.id;
-               
-               // Check Supabase role
-               const sbUser = participantsData.find(pd => pd.user_id === p.identity);
-               const isSpeakerRole = sbUser?.role === 'speaker';
+            {/* Host/Self always first */}
+            {participantsData.filter(p => p.user_id === room.host_id).map(p => (
+              <PodParticipantBox
+                key={p.user_id}
+                participant={p} // Using supabase data
+                isHost={true}
+                isSelf={p.user_id === currentUser?.id}
+                isSpeaking={false} // Agora's speaking detection can be added here
+                isMuted={p.user_id === currentUser?.id ? micMuted : remoteUsers.find(u => u.uid === p.user_id)?.audioTrack?.isMuted}
+              />
+            ))}
 
-               // Only render if they are host, approved speaker
-               // Listeners should NOT be in the grid, even if they have audio tracks (unless they are speakers)
-               if (!isParticipantHost && !isSpeakerRole) return null; 
+            {/* Remote Speakers */}
+            {remoteUsers.map(user => {
+              const participantInfo = participantsData.find(p => p.user_id === user.uid);
+              if (!participantInfo || participantInfo.role !== 'speaker') return null;
 
-               return (
-                 <PodParticipantBox
-                   key={p.identity}
-                   participant={p}
-                   isHost={isParticipantHost}
-                   isOfficer={participantsData.find(pd => pd.user_id === p.identity)?.role === 'officer'}
-                   isSelf={isSelf}
-                   onKick={isHost || isOfficer ? handleKick : undefined}
-                   onBan={isHost || isOfficer ? handleBan : undefined}
-                   onMute={isHost || isOfficer ? handleMute : undefined}
-                   onDemote={isHost || isOfficer ? onRemoveSpeaker : undefined}
-                   onPromoteOfficer={isHost ? handlePromoteOfficer : undefined}
-                   onDisableChat={isHost || isOfficer ? handleDisableChat : undefined}
-                 />
-               );
+              return (
+                <PodParticipantBox
+                  key={user.uid}
+                  participant={participantInfo}
+                  isHost={false}
+                  isSelf={false}
+                  isSpeaking={user.hasAudio} // Example, can be refined
+                  isMuted={user.audioTrack?.isMuted}
+                />
+              );
             })}
           </div>
         </div>
@@ -433,10 +312,10 @@ const PodRoomContent = ({
             {isSpeaker ? (
                 <>
                     <button 
-                        className={`p-4 rounded-full transition-all duration-200 transform hover:scale-105 ${liveKitRoom.localParticipant.isMicrophoneEnabled ? 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-500/20' : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'}`}
-                        onClick={() => liveKitRoom.localParticipant.setMicrophoneEnabled(!liveKitRoom.localParticipant.isMicrophoneEnabled)}
+                        className={`p-4 rounded-full transition-all duration-200 transform hover:scale-105 ${!micMuted ? 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-500/20' : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'}`}
+                        onClick={toggleMic}
                     >
-                        {liveKitRoom.localParticipant.isMicrophoneEnabled ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
+                        {!micMuted ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
                     </button>
                     {!isHost && (
                          <button 
@@ -495,7 +374,12 @@ const PodRoomContent = ({
          />
       </div>
       
-      <RoomAudioRenderer />
+      {/* For non-publishing listeners, prefer HLS/Mux playback when available. */}
+      {!participantsData.find(p => p.user_id === currentUser?.id && (p.role === 'speaker' || p.role === 'host')) && room?.mux_playback_id ? (
+        <div className="w-full">
+          <MuxViewer playbackId={room.mux_playback_id} />
+        </div>
+      ) : null}
       
       {showHostPanel && (
         <PodHostControlPanel 
@@ -833,46 +717,19 @@ export default function TrollPodRoom() {
       }
   };
 
-  // LiveKit Token Logic
   const isHost = currentUser?.id === room?.host_id;
   const isGuest = !currentUser;
   const myRole = participantsData.find(p => p.user_id === currentUser?.id)?.role;
-  const canPublish = isHost || myRole === 'speaker';
   const isStaff = profile?.role === 'admin' || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.is_admin || profile?.is_troll_officer || false;
 
-  const livekitRoomId = room?.livekit_room_id || roomId;
-
-  const { token, serverUrl, isLoading, error } = useLiveKitToken({
-    streamId: livekitRoomId,
-    roomName: livekitRoomId,
-    userId: currentUser?.id,
-    isHost: isHost,
-    canPublish: canPublish,
-    isGuest: isGuest,
-    enabled: Boolean(livekitRoomId && currentUser?.id)
-  });
-
   if (!room) return <div className="flex items-center justify-center h-screen bg-black text-white">Loading room...</div>;
-  
-  if (isLoading) return <div className="flex items-center justify-center h-screen bg-black text-white">Connecting to Pod...</div>;
-  if (error) return <div className="flex items-center justify-center h-screen bg-black text-white">Error: {error}</div>;
-  if (!token || !serverUrl) return <div className="flex items-center justify-center h-screen bg-black text-white">Initializing connection...</div>;
 
   return (
-    <LiveKitRoom
-      token={token}
-      serverUrl={serverUrl}
-      connect={true}
-      video={false} // Pods are audio-only
-      audio={canPublish} // Only publish audio if host/speaker
-      data-lk-theme="default"
-      style={{ height: '100vh' }}
-      onDisconnected={() => navigate('/pods')}
-    >
-      <PodRoomContent 
-        room={room} 
-        currentUser={currentUser} 
-        isHost={isHost} 
+    <AgoraProvider>
+      <PodRoomContentWithAgora
+        room={room}
+        currentUser={currentUser}
+        isHost={isHost}
         participantsData={participantsData}
         participantCount={participantCount}
         onRequestSpeak={handleRequestSpeak}
@@ -880,9 +737,8 @@ export default function TrollPodRoom() {
         onRemoveSpeaker={handleRemoveSpeaker}
         onCancelRequest={handleCancelRequest}
         isStaff={isStaff}
-        canPublish={canPublish}
         isGuest={isGuest}
       />
-    </LiveKitRoom>
+    </AgoraProvider>
   );
 }

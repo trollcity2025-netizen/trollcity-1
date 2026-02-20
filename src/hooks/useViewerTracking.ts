@@ -25,8 +25,11 @@ export function useViewerTracking(
   // Use customUser if provided (e.g. for Guests)
   const effectiveUser = user || customUser;
 
+  const effectRan = useRef(false);
+
   useEffect(() => {
-    if (!enabled || !streamId || !effectiveUser) return
+    if (!enabled || !streamId || !effectiveUser || effectRan.current) return;
+    effectRan.current = true;
 
     // Only the Host and Officers track their presence to avoid roster explosion at 10k users.
     // Viewers just "listen" to the count updated by the host/officers in the DB.
@@ -98,6 +101,7 @@ export function useViewerTracking(
           // Also heartbeat into stream_viewers table for the "Active" list
           // Only for authenticated users (UUID required)
           if (user?.id) {
+            console.log('Attempting to upsert stream_viewer with user:', user);
             await supabase.from('stream_viewers').upsert({
               stream_id: streamId,
               user_id: user.id,
@@ -110,6 +114,7 @@ export function useViewerTracking(
     // Heartbeat for stream_viewers table every 30s
     const heartbeatInterval = setInterval(async () => {
       if (streamId && user?.id) {
+        console.log('Heartbeat: Attempting to upsert stream_viewer with user:', user);
         await supabase.from('stream_viewers').upsert({
           stream_id: streamId,
           user_id: user.id,

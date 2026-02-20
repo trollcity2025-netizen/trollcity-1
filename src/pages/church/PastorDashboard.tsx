@@ -73,6 +73,88 @@ export default function PastorDashboard() {
      }
   };
 
+   const handleStartService = async () => {
+      if (!profile || !profile.id) return;
+
+      const controller = new AbortController();
+      const signal = controller.signal;
+
+      try {
+         // Create a stream record for the church service
+         const title = `Sunday Service - ${new Date().toLocaleDateString()}`;
+         const { data, error } = await supabase
+            .from('streams')
+            .insert({
+               user_id: profile.id,
+               broadcaster_id: profile.id,
+               title,
+               category: 'church',
+               status: 'pending',
+               box_count: 1,
+               layout_mode: 'grid'
+            })
+            .select()
+            .abortSignal(signal)
+            .single();
+
+         if (error || !data) throw error || new Error('Failed to create stream');
+
+         const streamId = data.id;
+
+         // Create Mux stream and get playback id via edge function
+         const muxRes: any = await supabase.functions.invoke('mux-create', {
+            signal,
+            method: 'POST',
+            body: JSON.stringify({ stream_id: streamId }),
+         });
+
+         if (muxRes.error) throw new Error(muxRes.error.message);
+
+         const muxData = muxRes?.data || muxRes;
+         const playbackId = muxData?.playback_id || null;
+
+         // Update the stream row with mux info and mark live
+         const { error: updErr } = await supabase
+            .from('streams')
+            .update({
+               mux_playback_id: playbackId,
+               mux_live_stream_id: muxData?.stream_id || muxData?.id || null,
+               mux_stream_key: muxData?.stream_key || null,
+               mux_rtmp_url: muxData?.rtmp_url || null,
+               status: 'live',
+               started_at: new Date().toISOString(),
+            })
+            .eq('id', streamId)
+            .abortSignal(signal);
+
+         if (updErr) throw updErr;
+
+             // Send a global church live alert
+             try {
+                await supabase.from('admin_broadcasts').insert({
+                   message: "Troll Church is now LIVE! Join us for the Sunday Service.",
+                   type: 'church',
+                   is_active: true,
+                   created_by: profile.id
+                }).abortSignal(signal);
+             } catch (e) {
+                console.warn('Failed to send live broadcast notice', e);
+             }
+
+             toast.success('Service started — going live');
+             navigate(`/broadcast/${streamId}`);
+      } catch (err: any) {
+         if (err.name !== 'AbortError') {
+            console.error('Failed to start service:', err);
+            toast.error(err?.message || 'Failed to start service');
+        }
+      }
+
+      return () => {
+        controller.abort();
+      }
+   };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8">
        <div className="max-w-4xl mx-auto">
@@ -154,6 +236,13 @@ export default function PastorDashboard() {
                    >
                       <Mic size={18} />
                       Send &quot;Live&quot; Alert
+                   </button>
+                   <button
+                     onClick={handleStartService}
+                     className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold mt-2 flex items-center justify-center gap-2"
+                   >
+                      <Mic size={18} />
+                      Start Service (Go Live)
                    </button>
                    <p className="text-xs text-gray-500 text-center">
                       Sends a global notification that Church is live.

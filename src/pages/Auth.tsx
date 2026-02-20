@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
-// import InstallButton from '../components/InstallButton';
+import InstallButton from '../components/InstallButton';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import { generateUUID } from '../lib/uuid';
 
@@ -756,16 +756,13 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
         </div>
         */}
 
-        {/* Install Button - HIDDEN FOR MAINTENANCE
         <div className="mt-6">
           <InstallButton 
             text="Install App"
             showInstalledBadge={true}
             className="w-full"
           />
-        </div>
-        */}
-      </div>
+        </div>      </div>
       </div>
       {/* Alert Admin Modal */}
       {showAlertAdmin && (

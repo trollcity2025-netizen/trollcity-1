@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
 
     let body: any = {};
     try { body = await req.json(); } catch {}
-    const { action, stream_id, user_id, title, category, room_name, livekit_url } = body || {};
+    const { action, stream_id, user_id, title, category, room_name } = body || {};
 
     const requesterId = authData.user.id;
     const { data: requesterProfile } = await supabase
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       if (!user_id || requesterId !== user_id) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      if (!room_name || !livekit_url || !title) {
+      if (!room_name || !title) {
         return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       const now = new Date().toISOString();
@@ -75,7 +75,6 @@ Deno.serve(async (req) => {
           is_live: true,
           start_time: now,
           room_name,
-          livekit_url,
           created_at: now,
         })
         .select('*')

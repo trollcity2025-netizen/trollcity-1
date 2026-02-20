@@ -43,6 +43,9 @@ export default function ManualCoinOrdersList({
   title = 'Manual Coin Orders',
   subtitle = 'Review and approve manual coin purchases'
 }: ManualCoinOrdersListProps) {
+  // Temporarily disable manual order approval UI — use Coin Store (Braintree)
+  const DISABLE_MANUAL_ORDERS = true
+
   const [orders, setOrders] = useState<ManualOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
@@ -104,6 +107,20 @@ export default function ManualCoinOrdersList({
   useEffect(() => {
     fetchOrders()
   }, [limit])
+
+  if (DISABLE_MANUAL_ORDERS) {
+    return (
+      <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-6">
+        <div className="flex items-start gap-4">
+          <div className="text-3xl text-yellow-400">⚠️</div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Manual Coin Orders Disabled</h3>
+            <p className="text-sm text-slate-400">Manual payment approval is temporarily disabled. All purchases should use the Coin Store (Braintree Drop-in). You can re-enable manual approvals in the admin console when ready.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const handleApproveClick = (order: ManualOrder) => {
     setTxId('')

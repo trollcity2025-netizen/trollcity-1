@@ -1,11 +1,12 @@
 import React from 'react';
+import { useParams } from 'react-router-dom';
+import JailCall from './JailCall';
 
 const JailVisitRoom: React.FC = () => {
+  const { roomId, userId } = useParams<{ roomId: string; userId: string }>();
+
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">Jail Visit Room</h1>
-      <p>This is where you can visit inmates.</p>
-    </div>
+    <JailCall roomId={roomId} callType="video" otherUserId={userId} />
   );
 };
 

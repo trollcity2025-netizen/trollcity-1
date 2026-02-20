@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import UserNameWithAge from '@/components/UserNameWithAge';
-import StreamWatchModal from '@/components/broadcast/StreamWatchModal';
+import MuxViewer from '@/components/broadcast/MuxViewer';
 
 // Types
 interface OfficerLog {
@@ -373,10 +373,17 @@ export default function GovernmentStreams() {
 
       {/* Watch Modal */}
       {selectedStream && (
-        <StreamWatchModal 
-          stream={selectedStream} 
-          onClose={() => setSelectedStream(null)} 
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+            <button 
+              onClick={() => setSelectedStream(null)}
+              className="absolute top-4 right-4 z-50 p-2 bg-black/50 hover:bg-red-600 rounded-full text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <MuxViewer playbackId={selectedStream.hls_url?.split('.m3u8')[0].split('/').pop() || ''} />
+          </div>
+        </div>
       )}
 
       {/* Summon Modal */}

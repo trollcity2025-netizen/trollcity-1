@@ -169,7 +169,7 @@ export default function AdminManualOrders() {
     <div className="p-4 text-white">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold">Manual Cash App Orders</h2>
+          <h2 className="text-xl font-bold">Manual Orders</h2>
           <p className="text-sm text-gray-400">Mark paid & credit coins. Syncs wallet ledger for economy dashboards.</p>
         </div>
         <button
@@ -217,7 +217,7 @@ export default function AdminManualOrders() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
             {rows.map(({ o, user, pkg, hasRgb, amountUsd }) => {
               const isFocused = focusOrderId === o.id
-              const payerTag = o.payer_cashtag || o.metadata?.payer_cashtag || o.metadata?.cashapp_tag
+              const payerTag = o.payer_id || o.payer_cashtag || o.metadata?.payer_cashtag || o.metadata?.cashapp_tag
               return (
               <div
                 key={o.id}
@@ -255,7 +255,7 @@ export default function AdminManualOrders() {
                 </div>
 
                 <div className="text-xs text-gray-300">
-                  <div className="font-semibold mb-1">Payer Cash App Tag</div>
+                  <div className="font-semibold mb-1">Payer Tag</div>
                   <div className="bg-white/5 rounded px-2 py-1 inline-flex items-center gap-2 text-green-100 border border-green-500/30">
                     {payerTag ? `$${payerTag}` : 'Not provided'}
                   </div>
@@ -263,7 +263,7 @@ export default function AdminManualOrders() {
                 </div>
 
                 <div className="text-xs text-gray-300">
-                  <div className="font-semibold mb-1">Cash App Note</div>
+                  <div className="font-semibold mb-1">Note</div>
                   <div className="bg-white/5 rounded px-2 py-1 inline-flex items-center gap-2 text-purple-100 border border-purple-500/30">
                     <Clock3 className="w-4 h-4" /> {o.note_suggested || '—'}
                   </div>

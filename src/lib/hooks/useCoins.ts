@@ -275,8 +275,8 @@ export function useCoins() {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          console.log('Real-time profile update received!', payload);
-          toast.info('Real-time profile update received!');
+
+
           const newProfileData = payload.new as any
           const currentProfile = useAuthStore.getState().profile
           if (currentProfile) {

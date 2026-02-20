@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "livekit-api": {
-      "verify_jwt": false
-    }
-  }
-}
