@@ -7,9 +7,10 @@ import UserNameWithAge from '../UserNameWithAge';
 
 interface BattleControlsProps {
   currentStream: Stream;
+  onBattleAccepted?: () => void;
 }
 
-export default function BattleControls({ currentStream }: BattleControlsProps) {
+export default function BattleControls({ currentStream, onBattleAccepted }: BattleControlsProps) {
   const [loading, setLoading] = useState(false);
   const [pendingBattle, setPendingBattle] = useState<any>(null);
   const [matchStatus, setMatchStatus] = useState<string>(''); // 'searching', 'found', 'none'
@@ -133,6 +134,41 @@ export default function BattleControls({ currentStream }: BattleControlsProps) {
         });
         if (error) throw error;
         toast.success("Battle Accepted! Loading Arena...");
+        
+        // Poll for battle status to become active, then refresh the page
+        const pollBattleStatus = async () => {
+            let attempts = 0;
+            const maxAttempts = 20; // 10 seconds max wait
+            
+            const checkStatus = async () => {
+                attempts++;
+                const { data: battle } = await supabase
+                    .from('battles')
+                    .select('status')
+                    .eq('id', pendingBattle.id)
+                    .maybeSingle();
+                
+                if (battle?.status === 'active') {
+                    // Battle is active, refresh the page to show battle view
+                    if (onBattleAccepted) {
+                        onBattleAccepted();
+                    } else {
+                        window.location.reload();
+                    }
+                    return true;
+                }
+                return false;
+            };
+            
+            while (attempts < maxAttempts) {
+                const isActive = await checkStatus();
+                if (isActive) break;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        };
+        
+        pollBattleStatus();
+        
     } catch (e: any) {
         // Don't show "no suitable" errors - it means it actually connected
         const errorMsg = e.message || "";

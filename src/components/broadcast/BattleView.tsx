@@ -309,6 +309,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
   const { user } = useAuthStore();
   const effectiveUserId = viewerId || user?.id;
 
+  // isBroadcaster needs to be defined before the useEffect that uses it
+  const isBroadcaster = participantInfo?.role === 'host' || participantInfo?.role === 'stage';
+
   // 🔍 DIAGNOSTIC LOGGING for battle stream tracking
   useEffect(() => {
     console.log('🎮 [BattleView] Component State:', {
@@ -391,7 +394,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
     setGiftStreamId(sourceStreamId);
   }, []);
 
-  const isBroadcaster = participantInfo?.role === 'host' || participantInfo?.role === 'stage';
+  // isBroadcaster moved above useEffect to fix ReferenceError
   const myStream = useMemo(() => {
     if (!participantInfo?.team) return null;
     if (participantInfo.team === 'challenger') return challengerStream;
@@ -416,6 +419,37 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
       setChallengerStream({ ...myStream, box_count: newCount });
     } else if (participantInfo.team === 'opponent') {
       setOpponentStream({ ...myStream, box_count: newCount });
+    }
+
+    // Broadcast the change to all connected clients immediately
+    try {
+      const broadcastChannel = supabase.channel(`stream:${myStream.id}`);
+      
+      // Subscribe and wait for confirmation
+      await new Promise<void>((resolve, reject) => {
+        broadcastChannel.subscribe((status) => {
+          console.log('[BoxCount] Battle channel subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            resolve();
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            reject(new Error('Channel subscription failed'));
+          }
+        });
+      });
+      
+      // Send the broadcast
+      await broadcastChannel.send({
+        type: 'broadcast',
+        event: 'box_count_changed',
+        payload: { box_count: newCount, stream_id: myStream.id }
+      });
+      console.log('[BoxCount] Battle broadcast sent');
+      
+      setTimeout(() => {
+        supabase.removeChannel(broadcastChannel);
+      }, 3000);
+    } catch (broadcastErr) {
+      console.warn('[BoxCount] Broadcast error (non-fatal):', broadcastErr);
     }
 
     const { error } = await supabase.rpc('set_stream_box_count', {
@@ -525,6 +559,17 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
             setChallengerStream((prev) => prev ? { ...prev, ...(payload.new as Stream) } : (payload.new as Stream));
           }
         )
+        // Listen for custom box_count_changed events
+        .on(
+          'broadcast',
+          { event: 'box_count_changed' },
+          (payload) => {
+            const boxData = payload.payload;
+            if (boxData && boxData.box_count !== undefined) {
+              setChallengerStream((prev) => prev ? { ...prev, box_count: boxData.box_count } : prev);
+            }
+          }
+        )
         .subscribe();
       channels.push(c);
     }
@@ -536,6 +581,17 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
           { event: 'UPDATE', schema: 'public', table: 'streams', filter: `id=eq.${opponentStream.id}` },
           (payload) => {
             setOpponentStream((prev) => prev ? { ...prev, ...(payload.new as Stream) } : (payload.new as Stream));
+          }
+        )
+        // Listen for custom box_count_changed events
+        .on(
+          'broadcast',
+          { event: 'box_count_changed' },
+          (payload) => {
+            const boxData = payload.payload;
+            if (boxData && boxData.box_count !== undefined) {
+              setOpponentStream((prev) => prev ? { ...prev, box_count: boxData.box_count } : prev);
+            }
           }
         )
         .subscribe();

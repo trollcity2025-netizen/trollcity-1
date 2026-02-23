@@ -8,9 +8,10 @@ import { cn } from '../../lib/utils';
 
 interface BattleControlsListProps {
   currentStream: Stream;
+  onBattleAccepted?: () => void;
 }
 
-export default function BattleControlsList({ currentStream }: BattleControlsListProps) {
+export default function BattleControlsList({ currentStream, onBattleAccepted }: BattleControlsListProps) {
   const [loading, setLoading] = useState(false);
   const [pendingBattle, setPendingBattle] = useState<any>(null);
   const [matchStatus, setMatchStatus] = useState<string>(''); // 'searching', 'found', 'none'
@@ -139,6 +140,41 @@ export default function BattleControlsList({ currentStream }: BattleControlsList
         });
         if (error) throw error;
         toast.success("Battle Accepted! Loading Arena...");
+        
+        // Poll for battle status to become active, then refresh the page
+        const pollBattleStatus = async () => {
+            let attempts = 0;
+            const maxAttempts = 20; // 10 seconds max wait
+            
+            const checkStatus = async () => {
+                attempts++;
+                const { data: battle } = await supabase
+                    .from('battles')
+                    .select('status')
+                    .eq('id', pendingBattle.id)
+                    .maybeSingle();
+                
+                if (battle?.status === 'active') {
+                    // Battle is active, refresh the page to show battle view
+                    if (onBattleAccepted) {
+                        onBattleAccepted();
+                    } else {
+                        window.location.reload();
+                    }
+                    return true;
+                }
+                return false;
+            };
+            
+            while (attempts < maxAttempts) {
+                const isActive = await checkStatus();
+                if (isActive) break;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        };
+        
+        pollBattleStatus();
+        
     } catch (e: any) {
         // Don't show "no suitable" errors - it means it actually connected
         const errorMsg = e.message || "";
@@ -169,7 +205,7 @@ export default function BattleControlsList({ currentStream }: BattleControlsList
                     <div className="bg-gradient-to-r from-amber-500/10 to-rose-500/10 border border-amber-500/30 rounded-lg p-3 mb-2">
                         <p className="text-amber-300 font-bold text-sm mb-1">🏆 Trollmers Head-to-Head</p>
                         <p className="text-xs text-zinc-400">
-                            Camera required • 100+ followers • Weekly prizes
+                            Camera required • 1+ followers • Weekly prizes
                         </p>
                     </div>
                 )}
