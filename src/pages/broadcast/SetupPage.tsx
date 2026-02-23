@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
+import AgoraRTC from 'agora-rtc-sdk-ng';
 import { Video, VideoOff, Mic, MicOff, AlertTriangle, RefreshCw, Radio, Youtube, Users, BookOpen, Dumbbell, Briefcase, Heart, Swords } from 'lucide-react';
 import { toast } from 'sonner';
 import { MobileErrorLogger } from '@/lib/MobileErrorLogger';
@@ -47,6 +48,7 @@ function CategoryIcon({ categoryId }: { categoryId: string }) {
     case 'business': return <span className="text-2xl">💼</span>;
     case 'spiritual': return <span className="text-2xl">✝️</span>;
     case 'trollmers': return <span className="text-2xl">🏆</span>;
+    case 'election': return <span className="text-2xl">🗳️</span>;
     default: return <span className="text-2xl">💬</span>;
   }
 }
@@ -140,6 +142,7 @@ export default function SetupPage() {
 
   useEffect(() => {
     let localStream: MediaStream | null = null;
+    const isMounted = { current: true };
 
     // Check for multiple cameras
     navigator.mediaDevices?.enumerateDevices().then(devices => {
@@ -191,11 +194,34 @@ export default function SetupPage() {
           video: { facingMode }, 
           audio: true 
         });
+        
+        if (!isMounted.current) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        
         localStream = mediaStream;
         setStream(mediaStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
+        
+        // Track if we've already attached to prevent multiple flashes
+        let videoAttached = false;
+        
+        // Attach to video element - try immediately and also set up observer
+        const attachToVideo = () => {
+          if (videoRef.current && !videoAttached) {
+            videoRef.current.srcObject = mediaStream;
+            videoAttached = true;
+          }
+        };
+        
+        // Try immediately
+        attachToVideo();
+        
+        // Also try after a short delay in case element isn't mounted yet (only if not already attached)
+        if (!videoAttached) {
+          setTimeout(attachToVideo, 100);
         }
+        
       } catch (err: any) {
         console.warn("Error accessing media devices, trying audio only.", err);
         MobileErrorLogger.logError(err, 'SetupPage:getUserMedia');
@@ -207,6 +233,7 @@ export default function SetupPage() {
 
         try {
             const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            if (!isMounted.current) return;
             localStream = audioStream;
             setStream(audioStream);
             setIsVideoEnabled(false);
@@ -220,6 +247,7 @@ export default function SetupPage() {
     getMedia();
 
     return () => {
+      isMounted.current = false;
       // Cleanup stream only if NOT starting stream
       if (localStream && !isStartingStream.current) {
         console.log('[SetupPage] Cleaning up media stream');
@@ -229,7 +257,7 @@ export default function SetupPage() {
         PreflightStore.setStream(localStream);
       }
     };
-  }, [facingMode, stream]); // Re-run when facing mode changes
+  }, [facingMode]); // Only re-run when facing mode changes
 
   const toggleVideo = () => {
     if (stream) {
@@ -267,12 +295,21 @@ export default function SetupPage() {
 
     // Check Trollmers requirements
     if (category === 'trollmers') {
-      if (followerCount < 100 && profile?.role !== 'admin') {
-        toast.error('Trollmers requires 100+ followers');
+      if (followerCount < 1 && profile?.role !== 'admin') {
+        toast.error('Trollmers requires 1+ followers');
         return;
       }
       if (!isVideoEnabled && profile?.role !== 'admin') {
         toast.error('Trollmers requires camera enabled');
+        return;
+      }
+    }
+
+    // Check President Elections requirements - only admin, secretary, lead_troll_officer, troll_officer
+    if (category === 'election') {
+      const allowedRoles = ['admin', 'secretary', 'lead_troll_officer', 'troll_officer'];
+      if (!profile?.role || !allowedRoles.includes(profile.role)) {
+        toast.error('President Elections category is only available to admins and officers');
         return;
       }
     }
@@ -305,15 +342,131 @@ export default function SetupPage() {
                        categoryConfig.layoutMode === 'spotlight' ? 'spotlight' : 'grid',
           // Store category-specific data
           ...(category === 'spiritual' && { selected_religion: selectedReligion }),
-          ...(category === 'gaming' && { stream_key: streamKey }),
         })
         .select()
         .maybeSingle();
 
       if (error) throw error;
 
-      toast.success('Stream created! Going live...');
+      let muxStreamKey: string | null = null;
+
+      // Create Mux stream and get RTMP credentials for all broadcast types
+      try {
+        const { data: muxData, error: muxError } = await supabase.functions.invoke('create-mux-stream', {
+          body: {
+            type: 'broadcast',
+            room_id: streamId,
+            room_name: title,
+            title: title
+          }
+        });
+
+        if (muxError) {
+          console.warn('Failed to create Mux stream:', muxError);
+        } else if (muxData?.success) {
+          muxStreamKey = muxData.stream_key;
+          // Update the stream with Mux credentials
+          await supabase
+            .from('streams')
+            .update({
+              mux_playback_id: muxData.playback_id,
+              mux_stream_key: muxData.stream_key,
+              mux_rtmp_url: muxData.rtmp_url
+            })
+            .eq('id', streamId);
+
+          // For gaming category, show OBS panel with stream key
+          if (category === 'gaming' && muxData.stream_key) {
+            setStreamKey(muxData.stream_key);
+            setShowOBSPanel(true);
+          }
+        }
+      } catch (muxErr) {
+        console.warn('Mux stream creation failed:', muxErr);
+      }
+
+      // Now start Agora and Mux WHIP streaming BEFORE navigating
+      toast.success('Starting broadcast...');
       isStartingStream.current = true;
+
+      try {
+        // Get Agora token
+        const numericUid = Math.floor(Math.random() * 100000);
+        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
+          body: { channel: streamId, uid: numericUid, role: 'publisher' }
+        });
+
+        if (tokenError || !tokenData?.token) {
+          console.warn('Failed to get Agora token:', tokenError);
+          // Continue anyway - viewers can still use Mux
+        } else {
+          // Create Agora client
+          const agoraClient = AgoraRTC.createClient({
+            mode: 'rtc',
+            codec: 'vp8'
+          });
+
+          // Join Agora channel
+          await agoraClient.join(
+            import.meta.env.VITE_AGORA_APP_ID!,
+            streamId,
+            tokenData.token,
+            numericUid
+          );
+          console.log('[SetupPage] Joined Agora channel');
+
+          // Use existing local tracks from the preview
+          // The stream state contains our local media stream
+          const localTracks = stream; // This is the MediaStream from useState
+          
+          if (localTracks && localTracks.getAudioTracks().length > 0) {
+            // Convert MediaStream tracks to Agora tracks
+            const audioTrack = localTracks.getAudioTracks()[0];
+            const videoTrack = localTracks.getVideoTracks()[0] || null;
+
+            // Create Agora tracks from the existing MediaStreamTrack
+            const agoraAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+              AEC: true,
+              AGC: true,
+              ANS: true
+            });
+            
+            let agoraVideoTrack: any = null;
+            if (videoTrack && isVideoEnabled) {
+              agoraVideoTrack = await AgoraRTC.createCameraVideoTrack({
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 30 }
+              });
+            }
+
+            // Publish tracks
+            const tracksToPublish = agoraVideoTrack 
+              ? [agoraAudioTrack, agoraVideoTrack] 
+              : [agoraAudioTrack];
+            
+            await agoraClient.publish(tracksToPublish);
+            console.log('[SetupPage] Published to Agora');
+
+            // Wait 2 seconds for Agora to establish media flow
+            console.log('[SetupPage] Waiting for Agora media flow...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Using Agora only - no Mux needed
+            console.log('[SetupPage] Broadcast is live via Agora!');
+            toast.success('Live on Troll City! 🏙️');
+
+            // Store Agora client and tracks in PreflightStore for BroadcastPage
+            PreflightStore.setAgoraClient(agoraClient, tracksToPublish);
+            console.log('[SetupPage] Stored Agora client in PreflightStore');
+          }
+        }
+      } catch (agoraErr) {
+        console.error('[SetupPage] Error with Agora:', agoraErr);
+        // Continue anyway - stream will work without Agora, just viewers need to use Mux
+      }
+
+      // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
     } catch (err: any) {
       console.error('Error creating stream:', err);
@@ -343,7 +496,7 @@ export default function SetupPage() {
           <div>
             <span className="text-gray-400">RTMP Ingest URL:</span>
             <code className="block bg-black/50 p-2 rounded text-blue-300 text-xs mt-1">
-              rtmp://live.trollcity.app/live
+              rtmp://global-live.mux.com:5222/app
             </code>
           </div>
           
@@ -416,8 +569,8 @@ export default function SetupPage() {
             )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-300">Followers:</span>
-              <span className={`font-bold ${followerCount >= 100 || profile?.role === 'admin' ? 'text-green-400' : 'text-red-400'}`}>
-                {followerCount} / 100 {profile?.role === 'admin' && '(Admin Bypass ✓)'}
+              <span className={`font-bold ${followerCount >= 1 || profile?.role === 'admin' ? 'text-green-400' : 'text-red-400'}`}>
+                {followerCount} / 1 {profile?.role === 'admin' && '(Admin Bypass ✓)'}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -426,17 +579,17 @@ export default function SetupPage() {
                 {isVideoEnabled ? '✓ Yes' : '✗ No'}
               </span>
             </div>
-            {(followerCount < 100 && profile?.role !== 'admin') && !isVideoEnabled && (
+            {(followerCount < 1 && profile?.role !== 'admin') && !isVideoEnabled && (
               <p className="text-xs text-amber-300 mt-2">
-                ⚠️ Trollmers requires 100+ followers and camera enabled
+                ⚠️ Trollmers requires 1+ followers and camera enabled
               </p>
             )}
-            {(followerCount < 100 && profile?.role !== 'admin') && isVideoEnabled && (
+            {(followerCount < 1 && profile?.role !== 'admin') && isVideoEnabled && (
               <p className="text-xs text-amber-300 mt-2">
-                ⚠️ Trollmers requires 100+ followers
+                ⚠️ Trollmers requires 1+ followers
               </p>
             )}
-            {followerCount >= 100 && !isVideoEnabled && (
+            {followerCount >= 1 && !isVideoEnabled && (
               <p className="text-xs text-amber-300 mt-2">
                 ⚠️ Trollmers requires camera enabled
               </p>
@@ -588,6 +741,7 @@ export default function SetupPage() {
                 <option value="business">💼 Business & Finance</option>
                 <option value="spiritual">✝️ Spiritual / Church</option>
                 <option value="trollmers">🏆 Trollmers Head-to-Head</option>
+                <option value="election">🗳️ President Elections</option>
               </select>
             </div>
 

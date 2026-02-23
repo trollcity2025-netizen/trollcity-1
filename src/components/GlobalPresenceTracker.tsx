@@ -6,6 +6,7 @@ import { usePresenceStore } from '../lib/presenceStore';
 export default function GlobalPresenceTracker() {
   const { user } = useAuthStore();
   const setOnlineCount = usePresenceStore(state => state.setOnlineCount);
+  const setOnlineUserIds = usePresenceStore(state => state.setOnlineUserIds);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -16,16 +17,23 @@ export default function GlobalPresenceTracker() {
         // 1. Send heartbeat
         await supabase.rpc('heartbeat_presence');
         
-        // 2. Fetch total online count (approximate from user_presence table)
+        // 2. Fetch total online count and user IDs (approximate from user_presence table)
         // This replaces the expensive Realtime Presence Roster at 10k users.
         const twoMinutesAgo = new Date(Date.now() - 120000).toISOString();
-        const { count, error } = await supabase
+        const { data: presenceData, count, error } = await supabase
           .from('user_presence')
-          .select('*', { count: 'exact', head: true })
+          .select('user_id')
           .gt('last_seen_at', twoMinutesAgo);
         
-        if (!error && count !== null) {
-          setOnlineCount(count);
+        if (!error) {
+          if (count !== null) {
+            setOnlineCount(count);
+          }
+          // Also store the user IDs for the GlobalUserCounter
+          if (presenceData) {
+            const userIds = presenceData.map(p => p.user_id).filter(Boolean);
+            setOnlineUserIds(userIds);
+          }
         }
       } catch (err) {
         console.error('Presence sync failed:', err);
@@ -47,7 +55,7 @@ export default function GlobalPresenceTracker() {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [user?.id, setOnlineCount]);
+  }, [user?.id, setOnlineCount, setOnlineUserIds]);
 
   return null;
 }

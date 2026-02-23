@@ -44,6 +44,27 @@ if (typeof window !== 'undefined') {
   (window as any).__ENV = env
   initTelemetry()
   
+  // Register service worker for PWA (production only)
+  // In dev mode, Vite PWA doesn't work properly
+  if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    window.addEventListener('load', async () => {
+      try {
+        const registration = await navigator.serviceWorker.register('/service-worker.js', {
+          scope: '/'
+        });
+        console.log('[ServiceWorker] Registered successfully:', registration.scope);
+        
+        // Check for updates periodically
+        setInterval(() => {
+          registration.update();
+        }, 60 * 60 * 1000); // Check every hour
+        
+      } catch (error) {
+        console.error('[ServiceWorker] Registration failed:', error);
+      }
+    });
+  }
+  
   // Initialize offline notification system
   // This will deliver queued notifications when user comes back online
   // initializeOfflineNotifications()

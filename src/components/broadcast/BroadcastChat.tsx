@@ -1,27 +1,22 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, User, Trash2, Shield, Crown, Sparkles, Car } from 'lucide-react';
+import { Send, User, Trash2, Shield, Crown, Sparkles, Gift } from 'lucide-react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import UserNameWithAge from '../UserNameWithAge';
 import { toast } from 'sonner';
 
-interface VehicleStatus {
-  has_vehicle: boolean;
-  vehicle_name?: string;
-  plate?: string;
-  license_status?: string;
-  is_suspended?: boolean;
-  insurance_active?: boolean;
-}
-
 interface Message {
   id: string;
   user_id: string;
   content: string;
   created_at: string;
-  type?: 'chat' | 'system';
+  type?: 'chat' | 'system' | 'gift';
+  // Gift-specific fields
+  gift_type?: string;
+  gift_amount?: number;
+  sender_name?: string;
   // Denormalized fields
   user_name?: string;
   user_avatar?: string;
@@ -30,7 +25,6 @@ interface Message {
   user_created_at?: string;
   user_rgb_expires_at?: string;
   user_glowing_username_color?: string;
-  vehicle_snapshot?: VehicleStatus;
 
   user_profiles?: {
     username: string;
@@ -41,7 +35,6 @@ interface Message {
     rgb_username_expires_at?: string;
     glowing_username_color?: string;
   } | null;
-  vehicle_status?: VehicleStatus;
 }
 
 interface BroadcastChatProps {
@@ -51,6 +44,34 @@ interface BroadcastChatProps {
     isHost?: boolean;
     isViewer?: boolean;
     isGuest?: boolean;
+}
+
+// Helper to parse gift messages from content
+// Format: "GIFT_EVENT:giftName:amount" or "userId sent a/giftName"
+function parseGiftMessage(content: string): { giftType: string; amount: number; senderName: string } | null {
+  // Check for GIFT_EVENT format: GIFT_EVENT:Clown:1
+  if (content.startsWith('GIFT_EVENT:')) {
+    const parts = content.split(':');
+    if (parts.length >= 3) {
+      const giftType = parts[1];
+      const amount = parseInt(parts[2], 10) || 1;
+      return { giftType, amount, senderName: 'Someone' };
+    }
+  }
+  
+  // Check for "userId sent a Clown" or "userId sent Clowns" format
+  const sentMatch = content.match(/^user([a-f0-9]+)\s+(sent\s+a?|sent)\s+(.+)$/i);
+  if (sentMatch) {
+    const senderId = sentMatch[1];
+    const giftName = sentMatch[3];
+    // Check if plural (e.g., "Clowns")
+    const isPlural = giftName.toLowerCase().endsWith('s');
+    const giftType = isPlural ? giftName.slice(0, -1) : giftName;
+    const amount = isPlural ? Math.floor(Math.random() * 10) + 2 : 1; // Estimate for plural
+    return { giftType, amount, senderName: `User${senderId}` };
+  }
+  
+  return null;
 }
 
 export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false }: BroadcastChatProps) {
@@ -75,9 +96,6 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   const lastSentRef = useRef<number>(0);
   const RATE_LIMIT_MS = 1000; // 1 message per second
 
-  // Cache for vehicle status to avoid repeated calls
-  const vehicleCacheRef = useRef<Record<string, VehicleStatus>>({});
-
   // Fetch Stream Mods
   useEffect(() => {
       const fetchMods = async () => {
@@ -89,21 +107,6 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
       };
       if (hostId) fetchMods();
   }, [hostId]);
-
-  const fetchVehicleStatus = useCallback(async (userId: string) => {
-    if (vehicleCacheRef.current[userId]) return vehicleCacheRef.current[userId];
-    
-    try {
-      const { data, error } = await supabase.rpc('get_broadcast_vehicle_status', { target_user_id: userId });
-      if (!error && data) {
-        vehicleCacheRef.current[userId] = data as VehicleStatus;
-        return data as VehicleStatus;
-      }
-    } catch (err) {
-      console.error('Error fetching vehicle status:', err);
-    }
-    return null;
-  }, []);
 
   // Fetch initial messages (last 50)
   useEffect(() => {
@@ -121,9 +124,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         
         if (data) {
             // Process messages: Use denormalized data if available, else fallback
-            const processedMessages = await Promise.all(data.reverse().map(async (m: any) => {
-                let vStatus = m.vehicle_snapshot as VehicleStatus | undefined;
-                
+            const processedMessages = data.reverse().map((m: any) => {
                 // Construct profile from denormalized data OR fallback to joined data
                 const uProfile = {
                     username: m.user_name || m.user_profiles?.username || 'Unknown',
@@ -135,25 +136,12 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                     glowing_username_color: m.user_glowing_username_color || m.user_profiles?.glowing_username_color
                 };
 
-                // Fallback for old messages without snapshot
-                if (!vStatus && !m.vehicle_snapshot) {
-                     // Check cache or fetch (Legacy support only)
-                     if (vehicleCacheRef.current[m.user_id]) {
-                         vStatus = vehicleCacheRef.current[m.user_id];
-                     } else {
-                         // We intentionally allow this fetch for OLD messages on load, 
-                         // but new messages will skip it.
-                         vStatus = await fetchVehicleStatus(m.user_id) || undefined;
-                     }
-                }
-
                 return {
                     ...m,
                     type: 'chat',
-                    user_profiles: uProfile,
-                    vehicle_status: vStatus
+                    user_profiles: uProfile
                 } as Message;
-            }));
+            });
             
             setMessages(prev => {
                 // Merge with existing messages (which might be system messages or realtime messages received while fetching)
@@ -214,8 +202,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                     created_at: envelope.d.user_created_at,
                     rgb_username_expires_at: envelope.d.user_rgb_expires_at,
                     glowing_username_color: envelope.d.user_glowing_username_color
-                },
-                vehicle_status: envelope.d.vehicle_snapshot
+                }
             };
 
             messageBufferRef.current.push(newMsg);
@@ -229,7 +216,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
 
     // Subscribe to room presence to show join/leave messages in chat
     const presenceChannel = supabase
-        .channel(`room:${streamId}`)
+        .channel(`stream:${streamId}`)
         .on('presence', { event: 'join' }, ({ newPresences }) => {
             newPresences.forEach((p: any) => {
                 const systemMsg: Message = {
@@ -249,14 +236,48 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 messageBufferRef.current.push(systemMsg);
             });
         })
+        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+            leftPresences.forEach((p: any) => {
+                const systemMsg: Message = {
+                    id: `sys-${Date.now()}-${Math.random()}`,
+                    user_id: p.user_id,
+                    content: 'left the broadcast',
+                    created_at: new Date().toISOString(),
+                    type: 'system',
+                    user_profiles: {
+                        username: p.username || 'Guest',
+                        avatar_url: p.avatar_url || '',
+                        created_at: p.joined_at,
+                        role: p.role,
+                        troll_role: p.troll_role
+                    }
+                };
+                messageBufferRef.current.push(systemMsg);
+            });
+        })
         .subscribe();
+
+    // Auto-delete messages after 30 seconds
+    const autoDeleteInterval = setInterval(() => {
+        const now = Date.now();
+        const thirtySecondsAgo = new Date(now - 30000).toISOString();
+        setMessages(prev => prev.filter(msg => {
+            // Keep system messages (join/leave) for 60 seconds
+            if (msg.type === 'system') {
+                return msg.created_at > thirtySecondsAgo;
+            }
+            // Keep chat messages for 30 seconds
+            return msg.created_at > thirtySecondsAgo;
+        }));
+    }, 5000); // Check every 5 seconds
 
     return () => {
         clearInterval(flushInterval);
+        clearInterval(autoDeleteInterval);
         supabase.removeChannel(chatChannel);
         supabase.removeChannel(presenceChannel);
     };
-  }, [streamId, fetchVehicleStatus, isViewer, user, profile, isChatFocused]);
+  }, [streamId, isViewer, user, profile, isChatFocused]);
 
   // Track chat focus/visibility
   useEffect(() => {
@@ -334,8 +355,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             created_at: profile.created_at,
             rgb_username_expires_at: profile.rgb_username_expires_at,
             glowing_username_color: profile.glowing_username_color
-        },
-        vehicle_status: vehicleCacheRef.current[user.id] // Use cached vehicle status if available
+        }
     };
 
     setMessages(prev => {
@@ -417,28 +437,6 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
       return null;
   };
 
-  const renderVehicleBadge = (status?: VehicleStatus) => {
-    if (!status || !status.has_vehicle) return null;
-    
-    // Check for issues
-    const isSuspended = status.is_suspended || status.license_status === 'suspended';
-    const noInsurance = status.insurance_active === false;
-    
-    let colorClass = "text-blue-400";
-    if (isSuspended) colorClass = "text-red-500 animate-pulse";
-    else if (noInsurance) colorClass = "text-orange-400";
-    
-    return (
-        <span 
-            className={`inline-flex items-center gap-0.5 ml-1 mr-1 ${colorClass}`} 
-            title={`Vehicle: ${status.vehicle_name} | Plate: ${status.plate} | Status: ${status.license_status} | Insured: ${status.insurance_active ? 'Yes' : 'No'}`}
-        >
-            <Car size={12} />
-            {isSuspended && <span className="text-[10px] font-bold">!</span>}
-        </span>
-    );
-  };
-
   return (
     <div ref={chatContainerRef} className="flex flex-col h-[94%] text-white relative">
         {/* Unread Message Notification Bubble */}
@@ -465,95 +463,95 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             )}
         </div>
         
-        <div className="flex-1 min-h-0 relative">
-            {messages.length === 0 ? (
-                <div className="text-center text-zinc-500 text-sm mt-10 italic">
-                    No messages
-                </div>
-            ) : (
-                <Virtuoso
-                    ref={virtuosoRef}
-                    data={messages}
-                    followOutput="smooth"
-                    initialTopMostItemIndex={messages.length - 1}
-                    className="scrollbar-thin scrollbar-thumb-zinc-700"
-                    itemContent={(index, msg) => {
-                        if (msg.type === 'system') {
-                            return (
-                                <div className="p-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                    <div className="flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/30 p-1.5 rounded-lg border border-white/5">
-                                        <Sparkles size={12} className="text-yellow-500" />
-                                        <span className="font-bold text-zinc-300 flex items-center gap-1">
-                                            {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                                            <UserNameWithAge 
-                                                user={{
-                                                    username: msg.user_profiles?.username || 'User',
-                                                    created_at: msg.user_profiles?.created_at,
-                                                    role: msg.user_profiles?.role as any,
-                                                    troll_role: msg.user_profiles?.troll_role,
-                                                    id: msg.user_id,
-                                                    rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                                    glowing_username_color: msg.user_profiles?.glowing_username_color
-                                                }}
-                                                className="text-zinc-300"
-                                                showBadges={false}
-                                                isBroadcaster={isHost}
-                                                isModerator={isModerator}
-                                                streamId={streamId}
-                                            />
-                                        </span>
-                                        <span>{msg.content}</span>
-                                    </div>
-                                </div>
-                            );
-                        }
-
+        <div className="flex-1 min-h-0 relative overflow-hidden">
+            {/* Floating Messages - Show last 10 messages as floating bubbles */}
+            <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-1 p-2 max-h-[200px] overflow-hidden">
+                {messages.slice(-10).map((msg, index) => {
+                    // Calculate animation delay based on index (newer messages appear on top)
+                    const isSystem = msg.type === 'system';
+                    
+                    // Check if this is a gift message
+                    const isGift = msg.type === 'gift' || msg.content?.startsWith('GIFT_EVENT:');
+                    
+                    if (isSystem) {
                         return (
-                            <div className="p-2 animate-in fade-in slide-in-from-bottom-2 duration-300 flex items-start gap-2 group">
-                                <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
-                                    {msg.user_profiles?.avatar_url ? (
-                                        <img src={msg.user_profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <User size={14} className="m-1 text-zinc-400" />
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0 break-words">
-                                    <div className="font-bold text-yellow-500 text-sm mr-2 flex items-center inline-flex flex-wrap">
-                                        {renderBadge(msg.user_id, msg.user_profiles?.role, msg.user_profiles?.troll_role)}
-                                        {renderVehicleBadge(msg.vehicle_status)}
-                                        <UserNameWithAge 
-                                            user={{
-                                                username: msg.user_profiles?.username || 'User',
-                                                created_at: msg.user_profiles?.created_at,
-                                                role: msg.user_profiles?.role as any,
-                                                troll_role: msg.user_profiles?.troll_role,
-                                                id: msg.user_id,
-                                                rgb_username_expires_at: msg.user_profiles?.rgb_username_expires_at,
-                                                glowing_username_color: msg.user_profiles?.glowing_username_color
-                                            }}
-                                            className="text-yellow-500"
-                                            showBadges={true}
-                                            isBroadcaster={isHost}
-                                            isModerator={isModerator}
-                                            streamId={streamId}
-                                        />
-                                        <span>:</span>
-                                    </div>
-                                    <span className="text-gray-200 text-sm ml-1">{msg.content}</span>
-                                </div>
-                                {(isHost || isModerator) && (
-                                    <button 
-                                        onClick={() => deleteMessage(msg.id)}
-                                        className="text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
-                                )}
+                            <div 
+                                key={msg.id}
+                                className="flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/60 p-1.5 rounded-lg border border-white/5 animate-in slide-in-from-bottom-2 fade-in duration-300"
+                            >
+                                <Sparkles size={12} className="text-yellow-500 flex-shrink-0" />
+                                <span className="font-bold text-zinc-300 flex items-center gap-1 truncate">
+                                    {msg.user_profiles?.username || 'User'}
+                                </span>
+                                <span className="truncate">{msg.content}</span>
                             </div>
                         );
-                    }}
-                />
-            )}
+                    }
+                    
+                    if (isGift) {
+                        // Parse gift info from message
+                        let giftType = msg.gift_type || 'gift';
+                        let giftAmount = msg.gift_amount || 1;
+                        let senderName = msg.sender_name || msg.user_profiles?.username || 'Someone';
+                        
+                        // If not already parsed, try to parse from content
+                        if (!msg.gift_type && msg.content) {
+                            const parsed = parseGiftMessage(msg.content);
+                            if (parsed) {
+                                giftType = parsed.giftType;
+                                giftAmount = parsed.amount;
+                                senderName = parsed.senderName;
+                            }
+                        }
+                        
+                        // Format the gift name (capitalize first letter)
+                        const formattedGiftName = giftType.charAt(0).toUpperCase() + giftType.slice(1).toLowerCase();
+                        const giftText = giftAmount > 1 ? `sent ${formattedGiftName}s` : `sent a ${formattedGiftName}`;
+                        
+                        return (
+                            <div 
+                                key={msg.id}
+                                className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 p-2 rounded-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
+                            >
+                                <Gift size={14} className="text-yellow-400 flex-shrink-0" />
+                                <span className="text-xs">
+                                    <span className="font-bold text-yellow-400">{senderName}</span>
+                                    <span className="text-zinc-400"> {giftText}</span>
+                                    {giftAmount > 1 && (
+                                        <span className="text-yellow-400 ml-1">x{giftAmount}</span>
+                                    )}
+                                </span>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div 
+                            key={msg.id}
+                            className="flex items-center gap-2 bg-black/50 backdrop-blur-sm p-2 rounded-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
+                        >
+                            <div className="w-5 h-5 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
+                                {msg.user_profiles?.avatar_url ? (
+                                    <img src={msg.user_profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={10} className="m-0.5 text-zinc-400" />
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0 flex items-center gap-1">
+                                <span className="font-bold text-yellow-400 text-xs truncate">
+                                    {msg.user_profiles?.username || 'User'}:
+                                </span>
+                                <span className="text-white text-xs truncate">{msg.content}</span>
+                            </div>
+                        </div>
+                    );
+                })}
+                {messages.length === 0 && (
+                    <div className="text-center text-zinc-500 text-xs italic">
+                        Send a message...
+                    </div>
+                )}
+            </div>
         </div>
 
         <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-zinc-900/80 relative">

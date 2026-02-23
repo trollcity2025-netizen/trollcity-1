@@ -32,6 +32,8 @@ export interface WallPost {
   user_reaction?: string | null
   reactions?: Record<string, number> // reaction_type -> count
   gifts?: Record<string, { count: number; coins: number }> // gift_type -> data
+  // Nested replies (merged into parent post)
+  replies?: WallPost[]
 }
 
 export interface WallPostMetadata {

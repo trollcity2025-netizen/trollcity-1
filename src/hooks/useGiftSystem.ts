@@ -80,9 +80,11 @@ export function useGiftSystem(
       // Use the new idempotent send_gift_in_stream RPC
       const { data, error } = await supabase.rpc('send_gift_in_stream', {
         p_sender_id: user.id,
+        p_receiver_id: finalRecipientId,
         p_stream_id: streamId || null,
         p_gift_id: gift.id,
-        p_txn_key: txnKey
+        p_quantity: quantity,
+        p_metadata: { txn_key: txnKey }
       });
 
       console.log('[GiftDebugger-2] RPC Result:', { data, error });
@@ -95,7 +97,8 @@ export function useGiftSystem(
         // Broadcast event for animations (Optimistic + RPC backup)
         // RPC might not trigger broadcast immediately or correctly for all clients
         // We manually broadcast here to ensure immediate visual feedback
-        const channel = supabase.channel(`stream_events_${streamId}`);
+        const channel = supabase.channel(`broadcast-gifts-${streamId}`);
+        await channel.subscribe();
         await channel.send({
             type: 'broadcast',
             event: 'gift_sent',

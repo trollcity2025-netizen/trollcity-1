@@ -1,33 +1,82 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, X } from 'lucide-react';
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import { cn } from '../../lib/utils';
+import { OFFICIAL_GIFTS, GiftItem } from '../../lib/giftConstants';
 
 interface GiftAnimationOverlayProps {
   gifts: BroadcastGift[];
   onAnimationComplete?: (giftId: string) => void;
+  // Map of user IDs to their DOM element positions for gift overlay
+  userPositions?: Record<string, { top: number; left: number; width: number; height: number }>;
+  // Function to get latest positions (preferred - provides fresh positions)
+  getUserPositions?: () => Record<string, { top: number; left: number; width: number; height: number }>;
 }
 
-const HIGH_VALUE_THRESHOLD = 500; // Gifts >= 500 coins get full-screen animation
-const ANIMATION_DURATION = 5000; // 5 seconds
+// Helper function to get proper gift name and icon from gift_id
+const getGiftDetails = (gift: BroadcastGift): { name: string; icon: string; cost: number } => {
+  // First try to find by gift_id (which is the slug/id like 'cash_toss')
+  const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.gift_id);
+  if (officialGift) {
+    return { name: officialGift.name, icon: officialGift.icon, cost: officialGift.cost };
+  }
+  // Fallback to gift_name if it exists (might already be a proper name)
+  return { 
+    name: gift.gift_name || 'Gift', 
+    icon: gift.gift_icon || '🎁',
+    cost: gift.amount 
+  };
+};
 
-export default function GiftAnimationOverlay({ gifts, onAnimationComplete }: GiftAnimationOverlayProps) {
+// Helper function to trigger vibration based on gift price
+const triggerVibration = (cost: number) => {
+  if (!navigator.vibrate) return;
+  
+  // Different vibration patterns based on gift cost
+  if (cost >= 10000) {
+    // Legendary - strong long vibration
+    navigator.vibrate([200, 100, 200, 100, 300]);
+  } else if (cost >= 2500) {
+    // Epic - medium vibration
+    navigator.vibrate([150, 75, 150]);
+  } else if (cost >= 500) {
+    // Rare - short vibration
+    navigator.vibrate(100);
+  }
+  // Common gifts (< 500) don't vibrate to avoid annoyance
+};
+
+const HIGH_VALUE_THRESHOLD = 500; // Gifts >= 500 coins get enhanced animation
+const ANIMATION_DURATION = 5000; // 5 seconds
+const LOW_VALUE_DURATION = 3000; // 3 seconds for low-value gifts
+
+export default function GiftAnimationOverlay({ gifts, onAnimationComplete, userPositions, getUserPositions }: GiftAnimationOverlayProps) {
   const [visibleGifts, setVisibleGifts] = useState<BroadcastGift[]>([]);
 
   useEffect(() => {
     if (gifts.length > 0) {
-      // Filter for high-value gifts only for full-screen animations
-      const highValueGifts = gifts.filter(g => g.amount >= HIGH_VALUE_THRESHOLD);
-      
-      if (highValueGifts.length > 0) {
-        setVisibleGifts(prev => {
-          // Add new high-value gifts that aren't already showing
-          const existingIds = new Set(prev.map(g => g.id));
-          const newGifts = highValueGifts.filter(g => !existingIds.has(g.id));
-          return [...prev, ...newGifts];
+      // Show ALL gifts with animations (not just high-value)
+      // Filter for gifts that aren't already showing
+      setVisibleGifts(prev => {
+        const existingIds = new Set(prev.map(g => g.id));
+        const newGifts = gifts.filter(g => {
+          if (existingIds.has(g.id)) return false;
+          
+          // Get gift details to check cost
+          const details = getGiftDetails(g);
+          
+          // Trigger vibration for all gifts (vibration function handles threshold internally)
+          triggerVibration(details.cost);
+          
+          return true;
         });
-      }
+        
+        if (newGifts.length > 0) {
+          return [...prev, ...newGifts];
+        }
+        return prev;
+      });
     }
   }, [gifts]);
 
@@ -53,41 +102,77 @@ export default function GiftAnimationOverlay({ gifts, onAnimationComplete }: Gif
     onAnimationComplete?.(giftId);
   };
 
+  // Helper to get position for a user
+  const getPosition = useCallback((receiverId?: string) => {
+    if (!receiverId) return undefined;
+    // Use getUserPositions callback if available for latest positions
+    if (getUserPositions) {
+      const positions = getUserPositions();
+      return positions[receiverId];
+    }
+    // Fallback to static positions
+    return userPositions?.[receiverId];
+  }, [getUserPositions, userPositions]);
+
   return (
     <AnimatePresence>
-      {visibleGifts.map((gift) => (
-        <GiftAnimation
-          key={gift.id}
-          gift={gift}
-          onDismiss={() => dismissGift(gift.id)}
-        />
-      ))}
+      {visibleGifts.map((gift) => {
+        // Get position for the receiver if available
+        const receiverPosition = getPosition(gift.receiver_id);
+        return (
+          <GiftAnimation
+            key={gift.id}
+            gift={gift}
+            onDismiss={() => dismissGift(gift.id)}
+            position={receiverPosition}
+          />
+        );
+      })}
     </AnimatePresence>
   );
 }
 
 // Individual gift animation component
-function GiftAnimation({ gift, onDismiss }: { gift: BroadcastGift; onDismiss: () => void }) {
-  const isEpic = gift.amount >= 2500;
-  const isLegendary = gift.amount >= 5000;
+function GiftAnimation({ gift, onDismiss, position }: { gift: BroadcastGift; onDismiss: () => void; position?: { top: number; left: number; width: number; height: number } }) {
+  // Get proper gift details from official gifts list
+  const giftDetails = getGiftDetails(gift);
+  const isEpic = giftDetails.cost >= 2500;
+  const isLegendary = giftDetails.cost >= 10000;
+  const isRare = giftDetails.cost >= 500;
+
+  // Calculate position style - if position is provided, overlay on user box
+  const isPositioned = !!position;
+  const positionStyle: React.CSSProperties = isPositioned ? {
+    position: 'absolute',
+    top: position.top,
+    left: position.left,
+    width: position.width,
+    height: position.height,
+  } : {};
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      animate={{ opacity: isPositioned ? 1 : 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
+      className={cn(
+        "z-[9999] pointer-events-none flex items-center justify-center",
+        isPositioned ? "absolute" : "fixed inset-0"
+      )}
+      style={positionStyle}
     >
-      {/* Background overlay */}
-      <div className={cn(
-        "absolute inset-0",
-        isLegendary ? "bg-gradient-to-br from-yellow-900/80 via-purple-900/60 to-black/90" :
-        isEpic ? "bg-gradient-to-br from-purple-900/70 via-pink-900/50 to-black/80" :
-        "bg-black/60"
-      )} />
+      {/* Background overlay - only show for full screen */}
+      {!isPositioned && (
+        <div className={cn(
+          "absolute inset-0",
+          isLegendary ? "bg-gradient-to-br from-yellow-900/80 via-purple-900/60 to-black/90" :
+          isEpic ? "bg-gradient-to-br from-purple-900/70 via-pink-900/50 to-black/80" :
+          "bg-black/60"
+        )} />
+      )}
 
-      {/* Particle effects for legendary/epic */}
-      {isLegendary && (
+      {/* Particle effects for legendary/epic - only for full screen */}
+      {!isPositioned && isLegendary && (
         <div className="absolute inset-0 overflow-hidden">
           {[...Array(20)].map((_, i) => (
             <motion.div
@@ -131,7 +216,7 @@ function GiftAnimation({ gift, onDismiss }: { gift: BroadcastGift; onDismiss: ()
           <p className="text-white text-xl font-bold drop-shadow-lg">
             {gift.sender_name || 'Someone'}
           </p>
-          <p className="text-zinc-300">sent a gift!</p>
+          <p className="text-zinc-300">sent {giftDetails.name.toLowerCase()}!</p>
         </motion.div>
 
         {/* Gift icon */}
@@ -168,7 +253,7 @@ function GiftAnimation({ gift, onDismiss }: { gift: BroadcastGift; onDismiss: ()
               ease: "easeInOut"
             }}
           >
-            {gift.gift_icon || '🎁'}
+            {giftDetails.icon}
           </motion.span>
         </motion.div>
 
@@ -181,10 +266,11 @@ function GiftAnimation({ gift, onDismiss }: { gift: BroadcastGift; onDismiss: ()
             "px-8 py-3 rounded-2xl font-bold text-2xl",
             isLegendary && "bg-gradient-to-r from-yellow-500 to-orange-500 text-black",
             isEpic && "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
-            !isLegendary && !isEpic && "bg-gradient-to-r from-pink-500 to-red-500 text-white"
+            isRare && !isEpic && !isLegendary && "bg-gradient-to-r from-blue-500 to-cyan-500 text-white",
+            !isRare && !isEpic && !isLegendary && "bg-gradient-to-r from-pink-500 to-red-500 text-white"
           )}
         >
-          {gift.gift_name}
+          {giftDetails.name}
         </motion.div>
 
         {/* Amount */}
@@ -221,6 +307,9 @@ function GiftAnimation({ gift, onDismiss }: { gift: BroadcastGift; onDismiss: ()
 
 // Chat gift message component (for low-value gifts)
 export function GiftChatMessage({ gift }: { gift: BroadcastGift }) {
+  // Get proper gift details
+  const giftDetails = getGiftDetails(gift);
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -232,7 +321,7 @@ export function GiftChatMessage({ gift }: { gift: BroadcastGift }) {
       <span className="text-sm">
         <span className="font-bold text-yellow-400">{gift.sender_name}</span>
         <span className="text-zinc-400"> sent </span>
-        <span className="font-bold text-white">{gift.gift_icon} {gift.gift_name}</span>
+        <span className="font-bold text-white">{giftDetails.icon} {giftDetails.name}</span>
         {gift.amount > 0 && (
           <span className="text-yellow-400 ml-1">x{gift.amount}</span>
         )}

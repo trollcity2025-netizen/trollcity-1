@@ -157,7 +157,34 @@ export default function TrollCityWall() {
           }
         })
 
-        setPosts(postsWithLikes as WallPost[])
+        // Group replies under their parent posts
+        const parentPosts = postsWithLikes.filter((p: any) => !p.reply_to_post_id)
+        const replies = postsWithLikes.filter((p: any) => p.reply_to_post_id)
+        
+        // Create a map of parent id to replies
+        const repliesMap: Record<string, any[]> = {}
+        replies.forEach((reply: any) => {
+          const parentId = reply.reply_to_post_id
+          if (!repliesMap[parentId]) {
+            repliesMap[parentId] = []
+          }
+          repliesMap[parentId].push(reply)
+        })
+        
+        // Sort replies by created_at (oldest first for threaded view)
+        Object.keys(repliesMap).forEach(parentId => {
+          repliesMap[parentId].sort((a, b) => 
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          )
+        })
+        
+        // Attach replies to parent posts
+        const postsWithReplies = parentPosts.map((post: any) => ({
+          ...post,
+          replies: repliesMap[post.id] || []
+        })) as WallPost[]
+
+        setPosts(postsWithReplies)
       } else {
         setPosts([])
       }
@@ -200,13 +227,40 @@ export default function TrollCityWall() {
       setPosts(prev => {
         let next = [...prev]
         updates.forEach(newPost => {
-          // If it's an update to an existing post, merge it to preserve profile data
-          const idx = next.findIndex(p => p.id === newPost.id)
-          if (idx !== -1) {
-            next[idx] = { ...next[idx], ...newPost }
+          // Check if this is a reply to an existing post
+          if (newPost.reply_to_post_id) {
+            // Find the parent post and add reply to it
+            const parentIdx = next.findIndex(p => p.id === newPost.reply_to_post_id)
+            if (parentIdx !== -1) {
+              const parent = next[parentIdx]
+              const existingReplies = parent.replies || []
+              // Check if reply already exists
+              const replyIdx = existingReplies.findIndex(r => r.id === newPost.id)
+              if (replyIdx !== -1) {
+                // Update existing reply
+                const updatedReplies = [...existingReplies]
+                updatedReplies[replyIdx] = { ...updatedReplies[replyIdx], ...newPost }
+                next[parentIdx] = { ...parent, replies: updatedReplies }
+              } else {
+                // Add new reply
+                next[parentIdx] = { 
+                  ...parent, 
+                  replies: [...existingReplies, newPost as WallPost]
+                }
+              }
+            }
+            // If parent not found, the reply will be handled on next loadPosts()
           } else {
-            // Otherwise prepend (standard wall behavior)
-            next = [newPost, ...next]
+            // It's a parent post
+            const idx = next.findIndex(p => p.id === newPost.id)
+            if (idx !== -1) {
+              // Update existing post, preserving replies
+              const existingReplies = next[idx].replies || []
+              next[idx] = { ...next[idx], ...newPost, replies: existingReplies }
+            } else {
+              // New parent post - prepend
+              next = [{ ...newPost, replies: [] }, ...next]
+            }
           }
         })
         return next.slice(0, MAX_POSTS)
@@ -699,6 +753,77 @@ export default function TrollCityWall() {
             <span className="text-sm">Share</span>
           </button>
         </div>
+
+        {/* Nested Replies */}
+        {post.replies && post.replies.length > 0 && (
+          <div className="mt-4 ml-4 border-l-2 border-purple-500/30 pl-4 space-y-3">
+            {post.replies.map((reply) => (
+              <div key={reply.id} className="bg-zinc-800/50 rounded-lg p-4">
+                {/* Reply Header */}
+                <div className="flex items-start gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 bg-gradient-to-br from-purple-500 to-pink-500">
+                    {reply.avatar_url ? (
+                      <img src={reply.avatar_url} alt={reply.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white font-bold text-sm">{reply.username?.[0]?.toUpperCase() || 'U'}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {reply.username ? (
+                        <UserNameWithAge 
+                          user={{
+                            username: reply.username, 
+                            id: reply.user_id,
+                            is_admin: reply.is_admin,
+                            is_troll_officer: reply.is_troll_officer,
+                            is_og_user: reply.is_og_user,
+                            created_at: reply.user_created_at
+                          }}
+                          className="font-semibold text-sm text-white hover:text-purple-400" 
+                        />
+                      ) : (
+                        <span className="font-semibold text-sm text-gray-500">Deleted User</span>
+                      )}
+                      {reply.is_admin && <span className="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded">ADMIN</span>}
+                      <span className="text-gray-500 text-xs">
+                        {new Date(reply.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  {user && (reply.user_id === user.id || isAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(reply.id)}
+                      className="p-1 hover:bg-red-500/20 rounded transition-colors text-red-400"
+                      title="Delete reply"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                {/* Reply Content */}
+                <p className="text-gray-300 text-sm whitespace-pre-wrap break-words">{reply.content}</p>
+                {/* Reply Actions */}
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700">
+                  <button
+                    type="button"
+                    onClick={() => handleLike(reply.id)}
+                    disabled={!user || likingPosts.has(reply.id)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded transition-colors text-xs ${
+                      reply.user_liked
+                        ? 'bg-pink-600/20 text-pink-400'
+                        : 'hover:bg-zinc-700 text-gray-400 hover:text-pink-400'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <Heart className={`w-3 h-3 ${reply.user_liked ? 'fill-current' : ''}`} />
+                    <span>{reply.likes || 0}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -811,3 +936,4 @@ export default function TrollCityWall() {
     </div>
   )
 }
+

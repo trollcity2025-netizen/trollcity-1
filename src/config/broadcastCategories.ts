@@ -17,7 +17,8 @@ export type BroadcastCategoryId =
   | 'fitness' 
   | 'business' 
   | 'spiritual' 
-  | 'trollmers';
+  | 'trollmers'
+  | 'election';
 
 // Layout modes
 export type LayoutMode = 'grid' | 'split' | 'classroom' | 'spotlight' | 'debate';
@@ -397,6 +398,36 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     requiresMinFollowers: 100,
     requiresCamera: true,
     showCoinBalanceInChat: true, // Stream category - show coin balance
+  },
+
+  // 12. President Elections - Special category for elections (admin, secretary, lead troll officer, troll officers only)
+  election: {
+    id: 'election',
+    name: '🗳️ President Elections',
+    icon: '🗳️',
+    description: 'Live election debates and voting streams',
+    layoutMode: 'split',
+    defaultBoxCount: 2,
+    maxBoxCount: 4,
+    allowGuestBoxes: true,
+    allowAddBox: true,
+    allowDeductBox: true,
+    hostRoleLabel: 'Host',
+    allowFrontCamera: true,
+    allowRearCamera: true,
+    forceRearCamera: false,
+    hasOBSIntegration: false,
+    hasYouTubePlayer: false,
+    maxYouTubePlayerBoxes: 0,
+    hasMatchingSystem: false,
+    matchingTerminology: 'Debate',
+    requiresReligion: false,
+    supportsBattles: false,
+    battleType: 'none',
+    isOneWayBroadcast: false,
+    requiresMinFollowers: 0,
+    requiresCamera: true,
+    showCoinBalanceInChat: true,
   },
 };
 

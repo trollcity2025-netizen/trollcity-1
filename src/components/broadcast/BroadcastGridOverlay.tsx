@@ -31,7 +31,7 @@ export default function BroadcastGridOverlay({
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   const { user } = useAuthStore();
   
-  const effectiveBoxCount = Math.min(maxItems || stream.box_count, 6);
+  const effectiveBoxCount = Math.max(1, Math.min(maxItems || stream.box_count || 1, 6));
   const boxes = Array.from({ length: effectiveBoxCount }, (_, i) => i);
   
   const handleUserClick = (userId: string | undefined) => {

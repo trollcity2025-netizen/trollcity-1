@@ -15,7 +15,7 @@ import AgoraRTC, {
   IRemoteAudioTrack,
 } from 'agora-rtc-sdk-ng';
 import TrollsTownControl from '../../components/TrollsTownControl';
-import { IAgoraRTCRemoteUser, ILocalAudioTrack, ILocalVideoTrack } from 'agora-rtc-sdk-ng';
+import { IAgoraRTCRemoteUser, ILocalVideoTrack } from 'agora-rtc-sdk-ng';
 
 
 interface Room {
@@ -514,17 +514,30 @@ export default function TrollPodRoom() {
 
     const joinChannel = async () => {
       if (canPublish) {
-        const { data, error } = await supabase
-          .from('current_user_is_following')
-          .select('token')
-          .eq('room_name', roomName)
-          .maybeSingle();
-
-        if (error || !data) {
-          console.error('Error fetching token', error);
+        // Convert user ID to numeric UID for Agora
+        const stringToUid = (str: string): number => {
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+          }
+          return Math.abs(hash);
+        };
+        const numericUid = stringToUid(currentUser.id);
+        
+        // Fetch Agora token using edge function
+        const { data, error } = await supabase.functions.invoke('agora-token', {
+          body: {
+            channel: roomName,
+            uid: numericUid
+          }
+        });
+        
+        if (error || !data?.token) {
+          console.error('Error fetching token', error || 'No token returned');
           return;
         }
-
+        
         await client.join(
           import.meta.env.VITE_AGORA_APP_ID!,
           roomName,
@@ -536,17 +549,51 @@ export default function TrollPodRoom() {
         await client.publish([audioTrack]);
         setLocalAudioTrack(audioTrack);
       } else {
-        const { data, error } = await supabase
-          .from('rooms')
-          .select('mux_playback_id')
-          .eq('name', roomName)
-          .maybeSingle();
+        // Listeners: use Agora to subscribe to the pod audio
+        const stringToUid = (str: string): number => {
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+          }
+          return Math.abs(hash);
+        };
+        const listenerUid = stringToUid(currentUser.id);
+        
+        try {
+          // Get listener token
+          const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
+            body: {
+              channel: roomName,
+              uid: listenerUid,
+              role: 'subscriber'
+            }
+          });
 
-        if (error || !data) {
-          console.error('Error fetching mux playback id', error);
-          return;
+          if (tokenError || !tokenData?.token) {
+            console.error('Listener token error', tokenError);
+            return;
+          }
+
+          const appId = import.meta.env.VITE_AGORA_APP_ID;
+          
+          if (!appId) {
+            console.warn('VITE_AGORA_APP_ID not configured');
+            return;
+          }
+
+          await client.join(
+            appId,
+            roomName,
+            tokenData.token,
+            listenerUid
+          );
+          
+          console.log('[TrollPodRoom] Listener joined Agora successfully');
+          
+        } catch (listenerErr) {
+          console.error('[TrollPodRoom] Listener join error:', listenerErr);
         }
-        setMuxPlaybackId(data.mux_playback_id);
       }
     };
 

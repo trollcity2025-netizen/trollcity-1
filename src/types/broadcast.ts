@@ -26,6 +26,9 @@ export interface Stream {
   hls_path?: string;
   hls_url?: string;
   mux_playback_id?: string;
+  mux_stream_key?: string;
+  mux_rtmp_url?: string;
+  mux_live_stream_id?: string;
 }
 
 export interface StreamGuest {
@@ -79,5 +82,4 @@ export interface ChatMessage {
     rgb_username_expires_at?: string;
     glowing_username_color?: string;
   };
-  vehicle_status?: any; // Avoiding circular dependency or complex type for now
 }

@@ -1,17 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { ChatMessage } from '../types/broadcast';
 import { toast } from 'sonner';
-
-interface VehicleStatus {
-  has_vehicle: boolean;
-  vehicle_name?: string;
-  plate?: string;
-  license_status?: string;
-  is_suspended?: boolean;
-  insurance_active?: boolean;
-}
 
 export function useStreamChat(streamId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -19,24 +10,6 @@ export function useStreamChat(streamId: string) {
   const lastSentRef = useRef<number>(0);
   const RATE_LIMIT_MS = 1000;
   
-  // Cache for vehicle status
-  const [vehicleCache, setVehicleCache] = useState<Record<string, VehicleStatus>>({});
-
-  const fetchVehicleStatus = useCallback(async (userId: string) => {
-    if (vehicleCache[userId]) return vehicleCache[userId];
-    
-    try {
-      const { data, error } = await supabase.rpc('get_broadcast_vehicle_status', { target_user_id: userId });
-      if (!error && data) {
-        setVehicleCache(prev => ({ ...prev, [userId]: data }));
-        return data as VehicleStatus;
-      }
-    } catch (err) {
-      console.error('Error fetching vehicle status:', err);
-    }
-    return null;
-  }, [vehicleCache]);
-
   useEffect(() => {
     if (!streamId) return;
 
@@ -50,9 +23,7 @@ export function useStreamChat(streamId: string) {
             .order('created_at', { ascending: true });
         
         if (data) {
-            const processedMessages = await Promise.all(data.map(async (m: any) => {
-                let vStatus = m.vehicle_snapshot as VehicleStatus | undefined;
-                
+            const processedMessages = data.map((m: any) => {
                 const uProfile = {
                     username: m.user_name || m.user_profiles?.username || 'Unknown',
                     avatar_url: m.user_avatar || m.user_profiles?.avatar_url || '',
@@ -61,22 +32,13 @@ export function useStreamChat(streamId: string) {
                     created_at: m.user_created_at || m.user_profiles?.created_at
                 };
 
-                if (!vStatus && !m.vehicle_snapshot) {
-                     if (vehicleCache[m.user_id]) {
-                         vStatus = vehicleCache[m.user_id];
-                     } else {
-                         vStatus = await fetchVehicleStatus(m.user_id) || undefined;
-                     }
-                }
-
                 return {
                     ...m,
                     type: 'chat',
-                    user: uProfile, // Map to 'user' for ChatMessage type compatibility if needed, or stick to user_profiles
-                    user_profiles: uProfile,
-                    vehicle_status: vStatus
+                    user: uProfile,
+                    user_profiles: uProfile
                 };
-            }));
+            });
             
             setMessages(processedMessages as ChatMessage[]);
         }
@@ -107,8 +69,7 @@ export function useStreamChat(streamId: string) {
                     created_at: envelope.d.user_created_at,
                     rgb_username_expires_at: envelope.d.user_rgb_expires_at,
                     glowing_username_color: envelope.d.user_glowing_username_color
-                },
-                vehicle_status: envelope.d.vehicle_snapshot
+                }
             };
 
             setMessages(prev => {
@@ -174,7 +135,7 @@ export function useStreamChat(streamId: string) {
         supabase.removeChannel(chatChannel); 
         supabase.removeChannel(presenceChannel);
     };
-  }, [streamId, fetchVehicleStatus, vehicleCache]);
+  }, [streamId]);
 
   const sendMessage = async (content: string) => {
     console.log('💬 [useStreamChat] sendMessage called', { 
@@ -215,8 +176,7 @@ export function useStreamChat(streamId: string) {
             created_at: profile.created_at,
             rgb_username_expires_at: profile.rgb_username_expires_at,
             glowing_username_color: profile.glowing_username_color
-        },
-        vehicle_status: vehicleCache[user.id]
+        }
     };
 
     setMessages(prev => [...prev, optimisticMsg]);

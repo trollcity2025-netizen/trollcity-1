@@ -24,6 +24,7 @@ interface BroadcastControlsProps {
   onShare?: () => void;
   requiredBoxes?: number;
   onBoxCountUpdate?: (count: number) => void;
+  onStreamEnd?: () => void;
   handleLike: () => void;
   toggleBattleMode: () => void;
   liveViewerCount?: number;
@@ -33,11 +34,11 @@ interface BroadcastControlsProps {
   onPinProduct?: () => void;
 }
 
-export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, handleLike, liveViewerCount, localTracks, toggleCamera, toggleMicrophone, onPinProduct }: BroadcastControlsProps) {
+export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, onStreamEnd, handleLike, liveViewerCount, localTracks, toggleCamera, toggleMicrophone, onPinProduct }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
-  const isMicOn = audioTrack ? !audioTrack.muted : false;
-  const isCamOn = videoTrack ? !videoTrack.muted : false;
+  const isMicOn = audioTrack ? audioTrack.enabled : false;
+  const isCamOn = videoTrack ? videoTrack.enabled : false;
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
   const [locked, setLocked] = useState(stream.are_seats_locked || false);
@@ -51,14 +52,25 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
 
+  // Stable box count to prevent unnecessary rerenders
+  const boxCount = stream.box_count || 1;
 
+  // Sync locked state from stream - only when are_seats_locked changes
+  useEffect(() => {
+    setLocked(stream.are_seats_locked || false);
+  }, [stream.are_seats_locked]);
 
-  // Sync likes from stream
+  // Sync RGB effect from stream - only when has_rgb_effect changes
+  useEffect(() => {
+    setHasRgb(stream.has_rgb_effect || false);
+  }, [stream.has_rgb_effect]);
+
+  // Sync likes from stream - only when total_likes changes
   useEffect(() => {
     if (typeof (stream as any).total_likes === 'number') {
         setLikes((stream as any).total_likes);
     }
-  }, [stream]);
+  }, [(stream as any).total_likes]);
   const attributes = useParticipantAttributes(user ? [user.id] : [], stream.id);
   const myAttributes = user ? attributes[user.id] : null;
   const activePerks = myAttributes?.activePerks || [];
@@ -190,9 +202,14 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
       return;
     }
 
-    // Call the parent handler
-    if (onBoxCountUpdate) {
-      onBoxCountUpdate(newCount);
+    // Call the parent handler with error handling
+    try {
+      if (onBoxCountUpdate) {
+        onBoxCountUpdate(newCount);
+      }
+    } catch (err) {
+      console.error("Box count update error:", err);
+      // Prevent error from propagating
     }
   };
 
@@ -244,6 +261,8 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
         if (result && result.success === false) throw new Error(result.message || "Failed to end stream");
 
         toast.success("Broadcast ended");
+        // Trigger callback for instant navigation
+        if (onStreamEnd) onStreamEnd();
     } catch (e: any) {
         console.error("End Stream RPC Error:", e);
         
@@ -375,24 +394,6 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
                     </span>
                 </div>
-
-                {/* Box Count Controls */}
-                {canEditStream && (
-                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                        <LayoutGrid size={16} className="text-purple-400" />
-                        <span className="text-sm font-bold text-white">
-                            {stream.box_count || 1}
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <button onClick={() => updateBoxCount((stream.box_count || 1) - 1)} className="p-1 hover:bg-white/20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed" disabled={(stream.box_count || 1) <= requiredBoxes}>
-                                <Minus size={12} />
-                            </button>
-                            <button onClick={() => updateBoxCount((stream.box_count || 1) + 1)} className="p-1 hover:bg-white/20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed" disabled={(stream.box_count || 1) >= 6}>
-                                <Plus size={12} />
-                            </button>
-                        </div>
-                    </div>
-                )}
 
                 {/* Like Count */}
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
@@ -593,16 +594,18 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         </span>
                         <div className="flex items-center gap-3">
                             <button 
-                                onClick={() => updateBoxCount((stream.box_count || 1) - 1)}
-                                disabled={!canEditStream || (stream.box_count || 1) <= Math.max(1, requiredBoxes)}
+                                type="button"
+                                onClick={() => updateBoxCount(boxCount - 1)}
+                                disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes)}
                                 className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
                             >
                                 <Minus size={16} />
                             </button>
-                            <span className="font-bold text-white min-w-[20px] text-center">{stream.box_count}</span>
+                            <span className="font-bold text-white min-w-[20px] text-center">{boxCount}</span>
                             <button 
-                                onClick={() => updateBoxCount((stream.box_count || 1) + 1)}
-                                disabled={!canEditStream || (stream.box_count || 1) >= 6}
+                                type="button"
+                                onClick={() => updateBoxCount(boxCount + 1)}
+                                disabled={!canEditStream || boxCount >= 6}
                                 className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
                             >
                                 <Plus size={16} />

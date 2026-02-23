@@ -77,7 +77,36 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
         } as WallPost
       })
 
-      setPosts((prev) => (append ? [...prev, ...normalized] : normalized))
+      // Group replies under their parent posts
+      const parentPosts = normalized.filter((p: WallPost) => !p.reply_to_post_id)
+      const replies = normalized.filter((p: WallPost) => p.reply_to_post_id)
+      
+      // Create a map of parent id to replies
+      const repliesMap: Record<string, WallPost[]> = {}
+      replies.forEach((reply: WallPost) => {
+        const parentId = reply.reply_to_post_id
+        if (parentId) {
+          if (!repliesMap[parentId]) {
+            repliesMap[parentId] = []
+          }
+          repliesMap[parentId].push(reply)
+        }
+      })
+      
+      // Sort replies by created_at (oldest first for threaded view)
+      Object.keys(repliesMap).forEach(parentId => {
+        repliesMap[parentId].sort((a, b) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+      })
+      
+      // Attach replies to parent posts
+      const postsWithReplies = parentPosts.map((post: WallPost) => ({
+        ...post,
+        replies: repliesMap[post.id] || []
+      })) as WallPost[]
+
+      setPosts((prev) => (append ? [...prev, ...postsWithReplies] : postsWithReplies))
       setHasMore(rows.length === PAGE_SIZE)
     } catch (err: any) {
       console.error('Error loading wall posts:', err)
@@ -272,6 +301,65 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                     Post Reply
                   </button>
                 </div>
+              </div>
+            )}
+            
+            {/* Nested Replies */}
+            {post.replies && post.replies.length > 0 && (
+              <div className="mt-4 ml-4 border-l-2 border-purple-500/30 pl-4 space-y-3">
+                {post.replies.map((reply) => (
+                  <div key={reply.id} className="bg-black/20 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <div className="h-7 w-7 rounded-full overflow-hidden bg-white/5 flex-shrink-0">
+                        {reply.avatar_url ? (
+                          <img src={reply.avatar_url} alt={reply.username || 'User'} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-xs text-white/60">
+                            {reply.username?.[0]?.toUpperCase() || 'T'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {reply.username ? (
+                            <UserNameWithAge
+                              user={{
+                                username: reply.username,
+                                id: reply.user_id,
+                                is_admin: reply.is_admin,
+                                is_troll_officer: reply.is_troll_officer,
+                                is_og_user: reply.is_og_user,
+                                created_at: reply.user_created_at
+                              }}
+                              className="font-semibold text-sm text-white"
+                            />
+                          ) : (
+                            <span className="font-semibold text-sm text-white/60">Deleted User</span>
+                          )}
+                          <span className="text-xs text-white/40">
+                            {new Date(reply.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-white/80 whitespace-pre-wrap break-words">{reply.content}</p>
+                        <div className="mt-2 flex items-center gap-2 text-xs text-white/50">
+                          <button
+                            type="button"
+                            onClick={() => handleLike(reply.id)}
+                            disabled={likingPosts.has(reply.id)}
+                            className={`flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+                              reply.user_liked
+                                ? 'bg-pink-600/20 text-pink-300'
+                                : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <Heart className={`h-3 w-3 ${reply.user_liked ? 'fill-current' : ''}`} />
+                            {reply.likes || 0}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

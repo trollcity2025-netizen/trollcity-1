@@ -245,8 +245,14 @@ export default function UserActionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={(e) => { e.stopPropagation(); onClose(); }}
+    >
+      <div 
+        className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-800/50">
@@ -277,7 +283,7 @@ export default function UserActionModal({
               )}
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-zinc-400 hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>

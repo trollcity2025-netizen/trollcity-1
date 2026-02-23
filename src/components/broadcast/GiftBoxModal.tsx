@@ -102,6 +102,30 @@ export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, o
     fetchGifts();
   }, [isOpen]);
 
+  // Helper function to get gift category
+  const getGiftCategory = (gift: GiftItem): GiftCategory => {
+    // This would need to be enriched from the original data
+    // For now, we'll try to infer from the gift name/icon
+    const nameLower = gift.name.toLowerCase();
+    const icon = gift.icon;
+    
+    if (nameLower.includes('car') || nameLower.includes('lamborghini') || nameLower.includes('ferrari')) return 'cars';
+    if (nameLower.includes('house') || nameLower.includes('mansion') || nameLower.includes('castle')) return 'houses';
+    if (nameLower.includes('boat') || nameLower.includes('yacht')) return 'boats';
+    if (nameLower.includes('plane') || nameLower.includes('jet') || nameLower.includes('helicopter')) return 'planes';
+    if (nameLower.includes('crown') || nameLower.includes('diamond') || nameLower.includes('gold')) return 'luxury';
+    if (nameLower.includes('cigarette') || nameLower.includes('cigar') || nameLower.includes('smoke')) return 'smoking';
+    if (nameLower.includes('beer') || nameLower.includes('wine') || nameLower.includes('champagne')) return 'drinking';
+    if (nameLower.includes('clown') || nameLower.includes('meme') || nameLower.includes('troll')) return 'funny';
+    if (nameLower.includes('christmas') || nameLower.includes('santa') || nameLower.includes('pumpkin')) return 'holiday';
+    if (nameLower.includes('rainbow') || nameLower.includes('pride')) return 'lgbt';
+    if (icon === '👨' || nameLower.includes('men') || nameLower.includes('muscle')) return 'men';
+    if (icon === '👩' || nameLower.includes('women') || nameLower.includes('dress')) return 'women';
+    if (nameLower.includes('sunny') || nameLower.includes('snow') || nameLower.includes('spring')) return 'seasonal';
+    
+    return 'general';
+  };
+
   // Filter gifts
   const filteredGifts = useMemo(() => {
     let filtered = gifts;
@@ -125,29 +149,6 @@ export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, o
 
     return filtered;
   }, [gifts, selectedCategory, searchQuery]);
-
-  const getGiftCategory = (gift: GiftItem): GiftCategory => {
-    // This would need to be enriched from the original data
-    // For now, we'll try to infer from the gift name/icon
-    const nameLower = gift.name.toLowerCase();
-    const icon = gift.icon;
-    
-    if (nameLower.includes('car') || nameLower.includes('lamborghini') || nameLower.includes('ferrari')) return 'cars';
-    if (nameLower.includes('house') || nameLower.includes('mansion') || nameLower.includes('castle')) return 'houses';
-    if (nameLower.includes('boat') || nameLower.includes('yacht')) return 'boats';
-    if (nameLower.includes('plane') || nameLower.includes('jet') || nameLower.includes('helicopter')) return 'planes';
-    if (nameLower.includes('crown') || nameLower.includes('diamond') || nameLower.includes('gold')) return 'luxury';
-    if (nameLower.includes('cigarette') || nameLower.includes('cigar') || nameLower.includes('smoke')) return 'smoking';
-    if (nameLower.includes('beer') || nameLower.includes('wine') || nameLower.includes('champagne')) return 'drinking';
-    if (nameLower.includes('clown') || nameLower.includes('meme') || nameLower.includes('troll')) return 'funny';
-    if (nameLower.includes('christmas') || nameLower.includes('santa') || nameLower.includes('pumpkin')) return 'holiday';
-    if (nameLower.includes('rainbow') || nameLower.includes('pride')) return 'lgbt';
-    if (icon === '👨' || nameLower.includes('men') || nameLower.includes('muscle')) return 'men';
-    if (icon === '👩' || nameLower.includes('women') || nameLower.includes('dress')) return 'women';
-    if (nameLower.includes('sunny') || nameLower.includes('snow') || nameLower.includes('spring')) return 'seasonal';
-    
-    return 'general';
-  };
 
   const handleSendGift = async () => {
     if (!selectedGift || !user) return;

@@ -43,7 +43,7 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
         if (giftItems && giftItems.length > 0) {
           mappedGifts = giftItems.map((g: any) => ({
             id: g.id,
-            name: g.name,
+            name: g.name?.startsWith('gift_') ? g.name.replace('gift_', '') : g.name,
             icon: g.icon || '🎁',
             coinCost: g.value || 0,
             type: 'paid' as const,
@@ -93,7 +93,7 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
         if (giftItems && giftItems.length > 0) {
           const mappedGifts = giftItems.map((g: any) => ({
             id: g.id,
-            name: g.name,
+            name: g.name?.startsWith('gift_') ? g.name.replace('gift_', '') : g.name,
             icon: g.icon || '🎁',
             coinCost: g.value || 0,
             type: 'paid' as const,

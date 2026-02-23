@@ -313,6 +313,7 @@ export const useAuthStore = create<AuthState>()(
 )
 
 let initDone = false
+let initialAuthHandled = false
 
 export async function initAuthAndData() {
   if (initDone) return
@@ -337,6 +338,12 @@ export async function initAuthAndData() {
   }
 
   supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Skip the initial state change event to prevent duplicate profile refresh
+    if (!initialAuthHandled) {
+      initialAuthHandled = true
+      return
+    }
+    
     try {
       const prev = useAuthStore.getState()
       const sameUser = (!!prev.user && !!session?.user && prev.user.id === session.user.id) || (!prev.user && !session?.user)

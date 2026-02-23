@@ -29,32 +29,94 @@ interface BroadcastGridProps {
   localUserId: string;
   toggleCamera: () => void;
   toggleMicrophone: () => void;
+  // Mapping of user IDs to Agora UIDs for remote users
+  userIdToAgoraUid?: Record<string, number>;
+  // Callback to get user box positions for gift animations
+  onGetUserPositions?: (getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => void;
 }
 
 const AgoraVideoPlayer = memo(({ videoTrack }: { videoTrack: ILocalVideoTrack | IRemoteVideoTrack }) => {
   const videoRef = useRef<HTMLDivElement>(null);
+  const isPlayingRef = useRef(false);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoTrack.play(videoRef.current);
+    // Defensive: ensure we have a valid container and track
+    if (!videoRef.current || !videoTrack) {
+      console.log('[AgoraVideoPlayer] Skipping play - no container or track:', { hasContainer: !!videoRef.current, hasTrack: !!videoTrack });
+      return;
     }
+
+    // Already playing - just return to avoid re-creating video element
+    if (isPlayingRef.current) {
+      return;
+    }
+
+    try {
+      videoTrack.play(videoRef.current);
+      isPlayingRef.current = true;
+      console.log('[AgoraVideoPlayer] Video playing successfully');
+    } catch (err) {
+      console.error('[AgoraVideoPlayer] Failed to play video:', err);
+    }
+
     return () => {
-      videoTrack.stop();
+      try {
+        videoTrack.stop();
+        isPlayingRef.current = false;
+      } catch (err) {
+        console.warn('[AgoraVideoPlayer] Error stopping video:', err);
+      }
     };
   }, [videoTrack]);
 
-  return <div ref={videoRef} className="w-full h-full object-cover"></div>;
+  // Use absolute positioning to fill parent container completely
+  // This ensures video renders even when parent has flex/grid layout
+  return (
+    <div 
+      ref={videoRef} 
+      className="absolute inset-0 w-full h-full"
+      style={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0
+      }}
+    />
+  );
 });
 
 const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: ILocalAudioTrack | IRemoteAudioTrack }) => {
   const audioRef = useRef<HTMLDivElement>(null);
+  const isPlayingRef = useRef(false);
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioTrack.play(audioRef.current);
+    // Defensive: ensure we have a valid track
+    if (!audioTrack) {
+      console.log('[AgoraAudioPlayer] No audio track');
+      return;
     }
+
+    // Already playing
+    if (isPlayingRef.current) {
+      return;
+    }
+
+    try {
+      audioTrack.play();
+      isPlayingRef.current = true;
+      console.log('[AgoraAudioPlayer] Audio playing');
+    } catch (err) {
+      console.error('[AgoraAudioPlayer] Failed to play audio:', err);
+    }
+
     return () => {
-      audioTrack.stop();
+      try {
+        audioTrack.stop();
+        isPlayingRef.current = false;
+      } catch (err) {
+        console.warn('[AgoraAudioPlayer] Error stopping audio:', err);
+      }
     };
   }, [audioTrack]);
 
@@ -80,9 +142,41 @@ export default function BroadcastGrid({
   localUserId,
   toggleCamera,
   toggleMicrophone,
+  userIdToAgoraUid = {},
+  onGetUserPositions,
 }: BroadcastGridProps) {
+  // Log when stream changes to debug updates
+  const prevStreamRef = useRef(stream?.box_count);
+  useEffect(() => {
+    if (prevStreamRef.current !== stream?.box_count) {
+      console.log('[BroadcastGrid] Stream box_count changed:', prevStreamRef.current, '->', stream?.box_count);
+      prevStreamRef.current = stream?.box_count;
+    }
+  }, [stream?.box_count]);
+  
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   const [showHostStats, setShowHostStats] = useState(false);
+  const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Expose positions when callback is provided
+  const getPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}));
+  
+  useEffect(() => {
+    if (onGetUserPositions) {
+      getPositionsRef.current = onGetUserPositions;
+    }
+  }, [onGetUserPositions]);
+
+  // Update positions when seats or user change
+  useEffect(() => {
+    // Trigger position update after render
+    const timeoutId = setTimeout(() => {
+      if (getPositionsRef.current) {
+        getPositionsRef.current();
+      }
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [seats, stream.user_id]);
 
   // Deduplicate user IDs (prevents redundant attribute lookups)
   const userIds = useMemo(() => {
@@ -113,19 +207,39 @@ export default function BroadcastGrid({
       // and to carry the identity for attribute lookup
       participant = { uid: localUserId, hasAudio: !!audioTrack, hasVideo: !!videoTrack, audioTrack, videoTrack } as IRemoteUser;
     } else {
-      // Remote user
-      participant = remoteUsers.find(u => u.uid === userId);
+      // Remote user - use the userIdToAgoraUid mapping if available
+      const agoraUid = userIdToAgoraUid[userId];
+      if (agoraUid !== undefined) {
+        participant = remoteUsers.find(u => u.uid === agoraUid);
+      } else {
+        // Fallback: try to find by matching numeric Agora UID with user ID patterns
+        participant = remoteUsers.find(u => {
+          const uidStr = String(u.uid);
+          return uidStr === userId || uidStr === userId.replace(/-/g, '').substring(0, 8);
+        });
+      }
+      
       if (participant) {
         videoTrack = participant.videoTrack;
         audioTrack = participant.audioTrack;
+      } else {
+        // Last resort: find any remote user with video (for host case)
+        const remoteWithVideo = remoteUsers.find(u => u.videoTrack);
+        if (remoteWithVideo) {
+          participant = remoteWithVideo;
+          videoTrack = participant.videoTrack;
+          audioTrack = participant.audioTrack;
+        }
       }
     }
     
-    const isMicOn = audioTrack ? audioTrack.enabled : false;
-    const isCamOn = videoTrack ? videoTrack.enabled : false;
+    // For remote users, we assume camera is on if we have a video track
+    // The enabled property works differently for remote vs local tracks
+    const isMicOn = isLocal ? (audioTrack ? (audioTrack as any).enabled !== false : false) : !!audioTrack;
+    const isCamOn = isLocal ? (videoTrack ? (videoTrack as any).enabled !== false : false) : !!videoTrack;
 
     return { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn };
-  }, [localUserId, localTracks, remoteUsers]);
+  }, [localUserId, localTracks, remoteUsers, userIdToAgoraUid]);
 
   // Calculate how many boxes we must render (never hide occupied seats)
   const seatKeys = Object.keys(seats);
@@ -133,6 +247,12 @@ export default function BroadcastGrid({
   const requiredBoxes = Math.max(1, maxOccupiedSeatIndex + 1); // 0-indexed
 
   const streamBoxCount = Math.max(1, Number(stream.box_count || 1));
+  console.log('[BroadcastGrid] Box count calculation:', { 
+    streamBoxCount, 
+    requiredBoxes, 
+    seatKeys,
+    maxOccupiedSeatIndex 
+  });
   const baseCount = Math.max(streamBoxCount, requiredBoxes);
 
   const HARD_CAP = 6;
@@ -183,6 +303,7 @@ export default function BroadcastGrid({
         effectiveBoxCount >= 5 && 'grid-cols-2 grid-rows-3',
         effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
       )}
+      style={{ minHeight: '300px' }}
     >
       {boxes.map((seatIndex) => {
         const seat = seats[seatIndex];
@@ -197,6 +318,11 @@ export default function BroadcastGrid({
 
         // Find participant + tracks
         const { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn } = getParticipantAndTracks(userId);
+
+        // Debug logging
+        if (userId && !isLocal) {
+          console.log('[BroadcastGrid] Remote user:', userId, { participant: !!participant, videoTrack: !!videoTrack, audioTrack: !!audioTrack, isCamOn, remoteUsersCount: remoteUsers.length });
+        }
 
         // Determine profile used for visuals
         let displayProfile = seat?.user_profile;
@@ -230,6 +356,11 @@ export default function BroadcastGrid({
           <div
             key={seatIndex}
             className={boxClass}
+            ref={(el) => {
+              if (userId) {
+                boxRefs.current[userId] = el;
+              }
+            }}
             onClick={() => {
               if (isStreamHost && seatIndex === 0) {
                  setShowHostStats(true);
@@ -285,7 +416,7 @@ export default function BroadcastGrid({
               </div>
             ) : null}
 
-            {audioTrack && <AgoraAudioPlayer audioTrack={audioTrack} />}
+            {audioTrack && !isLocal && <AgoraAudioPlayer audioTrack={audioTrack} />}
 
             {/* Empty Seat */}
             {!userId && (
