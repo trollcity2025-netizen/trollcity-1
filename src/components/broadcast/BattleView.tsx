@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import AgoraRTC, { IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack, ILocalVideoTrack, ILocalAudioTrack } from "agora-rtc-sdk-ng";
+import AgoraRTC, { IAgoraRTCClient, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack, ILocalVideoTrack, ILocalAudioTrack, ICameraVideoTrack, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
 
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
@@ -130,9 +131,23 @@ interface BattleArenaProps {
   localAudioTrack: ILocalAudioTrack | null;
   localVideoTrack: ILocalVideoTrack | null;
   remoteUsers: IRemoteUser[];
+  challengerStreamId: string;
+  opponentStreamId: string;
+  challengerHostId: string;
+  opponentHostId: string;
 }
 
-const BattleArena = ({ onGift, battleId, localAudioTrack, localVideoTrack, remoteUsers }: BattleArenaProps) => {
+const BattleArena = ({
+  onGift,
+  battleId,
+  localAudioTrack,
+  localVideoTrack,
+  remoteUsers,
+  challengerStreamId,
+  opponentStreamId,
+  challengerHostId,
+  opponentHostId
+}: BattleArenaProps) => {
   const { user } = useAuthStore();
   const [allBattleParticipants, setAllBattleParticipants] = useState<AgoraBattleParticipant[]>([]);
   
@@ -238,23 +253,52 @@ const BattleArena = ({ onGift, battleId, localAudioTrack, localVideoTrack, remot
   }, [allBattleParticipants]);
 
   const handleGiftClick = (p: AgoraBattleParticipant) => {
-    if (p.sourceStreamId) {
-      onGift(p.identity, p.sourceStreamId);
-    }
+    const resolvedStreamId =
+      p.sourceStreamId ||
+      (p.team === 'challenger' ? challengerStreamId : p.team === 'opponent' ? opponentStreamId : '');
+
+    if (!resolvedStreamId || !p.identity) return;
+    onGift(p.identity, resolvedStreamId);
+  };
+
+  const handleSideGiftClick = (team: 'challenger' | 'opponent') => {
+    const streamId = team === 'challenger' ? challengerStreamId : opponentStreamId;
+    const hostId = team === 'challenger' ? challengerHostId : opponentHostId;
+    if (!streamId || !hostId) return;
+    onGift(hostId, streamId);
   };
 
   return (
     <div className="flex-1 flex overflow-hidden p-4 gap-4 bg-black/40">
       {/* Challenger Side */}
       <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 scrollbar-hide">
+        <button
+          onClick={() => handleSideGiftClick('challenger')}
+          className="self-start px-3 py-1 text-xs font-bold rounded-full bg-purple-600/80 hover:bg-purple-500 text-white border border-purple-400/30"
+        >
+          Gift Side A
+        </button>
         {categorized.challenger.host && (
-          <div onClick={() => handleGiftClick(categorized.challenger.host!)} className="cursor-pointer">
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              handleGiftClick(categorized.challenger.host!);
+            }}
+            className="cursor-pointer"
+          >
             <BattleParticipantTile {...categorized.challenger.host} side="challenger" />
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
           {categorized.challenger.guests.map(p => (
-            <div key={p.identity} onClick={() => handleGiftClick(p)} className="cursor-pointer">
+            <div
+              key={p.identity}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGiftClick(p);
+              }}
+              className="cursor-pointer"
+            >
               <BattleParticipantTile {...p} side="challenger" />
             </div>
           ))}
@@ -266,14 +310,33 @@ const BattleArena = ({ onGift, battleId, localAudioTrack, localVideoTrack, remot
 
       {/* Opponent Side */}
       <div className="flex-1 flex flex-col gap-4 overflow-y-auto pl-2 scrollbar-hide">
+        <button
+          onClick={() => handleSideGiftClick('opponent')}
+          className="self-start px-3 py-1 text-xs font-bold rounded-full bg-emerald-600/80 hover:bg-emerald-500 text-white border border-emerald-400/30"
+        >
+          Gift Side B
+        </button>
         {categorized.opponent.host && (
-          <div onClick={() => handleGiftClick(categorized.opponent.host!)} className="cursor-pointer">
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              handleGiftClick(categorized.opponent.host!);
+            }}
+            className="cursor-pointer"
+          >
             <BattleParticipantTile {...categorized.opponent.host} side="opponent" />
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
           {categorized.opponent.guests.map(p => (
-            <div key={p.identity} onClick={() => handleGiftClick(p)} className="cursor-pointer">
+            <div
+              key={p.identity}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGiftClick(p);
+              }}
+              className="cursor-pointer"
+            >
               <BattleParticipantTile {...p} side="opponent" />
             </div>
           ))}
@@ -291,22 +354,27 @@ interface BattleViewProps {
   battleId: string;
   currentStreamId: string; // The stream ID the user originally navigated to
   viewerId?: string;
+  localTracks?: [IMicrophoneAudioTrack, ICameraVideoTrack] | null;
 }
 
-export default function BattleView({ battleId, currentStreamId, viewerId }: BattleViewProps) {
+export default function BattleView({ battleId, currentStreamId, viewerId, localTracks: passedLocalTracks }: BattleViewProps) {
   const [battle, setBattle] = useState<any>(null);
   const [challengerStream, setChallengerStream] = useState<Stream | null>(null);
   const [opponentStream, setOpponentStream] = useState<Stream | null>(null);
   const [participantInfo, setParticipantInfo] = useState<any>(null);
-  const [token, setToken] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [showResults, setShowResults] = useState(false);
   const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
   const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
   const [localVideoTrack, setLocalVideoTrack] = useState<ILocalVideoTrack | null>(null);
   const [remoteUsers, setRemoteUsers] = useState<IRemoteUser[]>([]);
+  const [participantSnapshots, setParticipantSnapshots] = useState<Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>>([]);
+  const [arenaReadyAtMs, setArenaReadyAtMs] = useState<number | null>(null);
+  const [arenaReady, setArenaReady] = useState(false);
+  const publishedArenaReadyRef = useRef(false);
   
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const effectiveUserId = viewerId || user?.id;
 
   // isBroadcaster needs to be defined before the useEffect that uses it
@@ -330,6 +398,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
   useEffect(() => {
     const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
     setAgoraClient(client);
+    let mounted = true;
+    let createdAudioTrack: ILocalAudioTrack | null = null;
+    let createdVideoTrack: ILocalVideoTrack | null = null;
 
     const joinBattle = async () => {
       if (!battle || !effectiveUserId) return;
@@ -345,13 +416,30 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
 
           await client.join(import.meta.env.VITE_AGORA_APP_ID!, roomName, data.token, effectiveUserId);
 
-          const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-          const videoTrack = await AgoraRTC.createCameraVideoTrack();
+          // Use passed tracks from BroadcastPage if available, otherwise create new ones
+          if (passedLocalTracks && passedLocalTracks[0] && passedLocalTracks[1]) {
+            console.log('[BattleView] Using passed local tracks from BroadcastPage');
+            if (!mounted) return;
+            setLocalAudioTrack(passedLocalTracks[0]);
+            setLocalVideoTrack(passedLocalTracks[1]);
+            await client.publish([passedLocalTracks[0], passedLocalTracks[1]]);
+          } else {
+            console.log('[BattleView] Creating new local tracks');
+            const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+              AEC: true,  // Acoustic Echo Cancellation
+              AGC: true,  // Automatic Gain Control
+              ANS: true   // Automatic Noise Suppression
+            });
+            const videoTrack = await AgoraRTC.createCameraVideoTrack();
 
-          setLocalAudioTrack(audioTrack);
-          setLocalVideoTrack(videoTrack);
+            createdAudioTrack = audioTrack;
+            createdVideoTrack = videoTrack;
+            if (!mounted) return;
+            setLocalAudioTrack(audioTrack);
+            setLocalVideoTrack(videoTrack);
 
-          await client.publish([audioTrack, videoTrack]);
+            await client.publish([audioTrack, videoTrack]);
+          }
         } catch (error) {
           console.error("Failed to join battle as publisher:", error);
           toast.error("Couldn't connect to the battle.");
@@ -365,11 +453,21 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
 
     const handleUserPublished = async (user: IRemoteUser, mediaType: 'audio' | 'video') => {
       await client.subscribe(user, mediaType);
-      setRemoteUsers((prev) => [...prev, user]);
+      setRemoteUsers((prev) => {
+        const filtered = prev.filter((u) => u.uid !== user.uid);
+        return [...filtered, user];
+      });
     };
 
     const handleUserUnpublished = (user: IRemoteUser) => {
-      setRemoteUsers((prev) => prev.filter((u) => u.uid !== user.uid));
+      setRemoteUsers((prev) => {
+        const target = prev.find((u) => u.uid === user.uid);
+        if (!target) return prev;
+        if (!target.audioTrack && !target.videoTrack) {
+          return prev.filter((u) => u.uid !== user.uid);
+        }
+        return [...prev];
+      });
     };
 
     client.on('user-published', handleUserPublished);
@@ -378,13 +476,14 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
     joinBattle();
 
     return () => {
+      mounted = false;
       client.off('user-published', handleUserPublished);
       client.off('user-unpublished', handleUserUnpublished);
-      localAudioTrack?.close();
-      localVideoTrack?.close();
+      if (createdAudioTrack) createdAudioTrack.close();
+      if (createdVideoTrack) createdVideoTrack.close();
       client.leave();
     };
-  }, [battle, effectiveUserId, isBroadcaster]);
+  }, [battle, effectiveUserId, isBroadcaster, passedLocalTracks]);
 
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
   const [giftStreamId, setGiftStreamId] = useState<string | null>(null);
@@ -503,19 +602,13 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
                 
                 setParticipantInfo(pData || { role: 'viewer', team: null });
 
-                // 4. Fetch Agora Token for the SHARED room
-                const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
-                    body: {
-                    channel: `battle-${battleId}`,
-                    identity: effectiveUserId,
-                    role: (pData?.role === 'host' || pData?.role === 'stage') ? 'host' : 'guest'
-                    }
-                });
-
-                if (!tokenError && tokenData?.token) { // Agora token doesn't have 'url'
-                  setToken(tokenData.token);
-                }
             }
+
+            const { data: participantData } = await supabase
+              .from('battle_participants')
+              .select('user_id, role')
+              .eq('battle_id', battleId);
+            setParticipantSnapshots((participantData as Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>) || []);
         } catch (e) {
             console.error("[BattleView] Initialization error:", e);
         } finally {
@@ -544,6 +637,109 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
         supabase.removeChannel(channel);
     };
   }, [battleId, effectiveUserId]);
+
+  useEffect(() => {
+    if (!battleId) return;
+    const participantsChannel = supabase
+      .channel(`battle_participants:${battleId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'battle_participants', filter: `battle_id=eq.${battleId}` },
+        async () => {
+          const { data } = await supabase
+            .from('battle_participants')
+            .select('user_id, role')
+            .eq('battle_id', battleId);
+          setParticipantSnapshots((data as Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>) || []);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(participantsChannel);
+    };
+  }, [battleId]);
+
+  useEffect(() => {
+    if (!battleId) return;
+
+    const arenaChannel = supabase.channel(`battle_arena:${battleId}`);
+    arenaChannel
+      .on('broadcast', { event: 'arena_ready' }, (payload) => {
+        const readyAtMs = Number(payload?.payload?.ready_at_ms || 0);
+        if (!readyAtMs || arenaReadyAtMs) return;
+        setArenaReadyAtMs(readyAtMs);
+        setArenaReady(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(arenaChannel);
+    };
+  }, [battleId, arenaReadyAtMs]);
+
+  useEffect(() => {
+    if (!battle || battle.status !== 'active' || arenaReady) return;
+
+    const expectedHosts = participantSnapshots.filter((p) => p.role === 'host').map((p) => p.user_id);
+    const expectedStages = participantSnapshots.filter((p) => p.role === 'stage').map((p) => p.user_id);
+
+    const loaded = new Set<string>();
+    if (effectiveUserId && (localVideoTrack || localAudioTrack)) {
+      loaded.add(String(effectiveUserId));
+    }
+
+    for (const remoteUser of remoteUsers) {
+      const hasMedia = Boolean(remoteUser.videoTrack || remoteUser.audioTrack);
+      if (!hasMedia) continue;
+      loaded.add(String(remoteUser.uid));
+    }
+
+    const hostsReady = expectedHosts.length >= 2 && expectedHosts.every((id) => loaded.has(String(id)));
+    const stagesReady = expectedStages.every((id) => loaded.has(String(id)));
+
+    if (hostsReady && stagesReady) {
+      const nowMs = Date.now();
+      setArenaReadyAtMs(nowMs);
+      setArenaReady(true);
+
+      if (participantInfo?.role === 'host' && !publishedArenaReadyRef.current) {
+        publishedArenaReadyRef.current = true;
+        const publishChannel = supabase.channel(`battle_arena:${battleId}`);
+        publishChannel.subscribe(async (status) => {
+          if (status !== 'SUBSCRIBED') return;
+          await publishChannel.send({
+            type: 'broadcast',
+            event: 'arena_ready',
+            payload: { ready_at_ms: nowMs },
+          });
+          setTimeout(() => {
+            supabase.removeChannel(publishChannel);
+          }, 500);
+        });
+      }
+    }
+  }, [
+    battle,
+    arenaReady,
+    participantSnapshots,
+    remoteUsers,
+    localVideoTrack,
+    localAudioTrack,
+    effectiveUserId,
+    participantInfo?.role,
+    battleId,
+  ]);
+
+  useEffect(() => {
+    if (!battle || battle.status !== 'active' || arenaReady) return;
+    const timeout = setTimeout(() => {
+      if (arenaReady) return;
+      setArenaReadyAtMs(Date.now());
+      setArenaReady(true);
+    }, 4500);
+    return () => clearTimeout(timeout);
+  }, [battle, arenaReady]);
 
   useEffect(() => {
     if (!challengerStream?.id && !opponentStream?.id) return;
@@ -663,6 +859,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
 
       setLeaveLoading(true);
       try {
+        // Immediately set battle as ended locally to stop timer and update UI
+        setBattle((prev: any) => prev ? { ...prev, status: 'ended' } : prev);
+        setShowResults(true);
+
         const { data: leaveResult, error: leaveError } = await supabase.rpc('leave_battle', {
           p_battle_id: battle.id,
           p_user_id: user.id
@@ -670,32 +870,38 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
 
         if (leaveError || leaveResult?.success === false) {
           toast.error(leaveResult?.message || leaveError?.message || 'Failed to leave battle');
-          return;
-        }
-
-        const { error: payoutError } = await supabase.rpc('distribute_battle_winnings', { p_battle_id: battle.id });
-        if (payoutError) {
-          toast.error('Left battle but payout failed.');
+          // Still navigate away even if RPC fails
         } else {
+          // Distribute winnings
+          try {
+            await supabase.rpc('distribute_battle_winnings', { p_battle_id: battle.id });
+          } catch (payoutErr) {
+            console.warn('Payout failed:', payoutErr);
+          }
           toast.success('You left the battle. Opponent wins.');
         }
+        
+        // Navigate to summary when leaving battle
+        navigate(`/summary/${currentStreamId}`);
       } catch (e) {
         console.error(e);
         toast.error('Failed to leave battle');
+        // Navigate to summary even on error
+        navigate(`/summary/${currentStreamId}`);
       } finally {
         setLeaveLoading(false);
       }
-    }, [battle, user]);
+    }, [battle, user, navigate, currentStreamId, supabase]);
 
   useEffect(() => {
-    if (!battle?.started_at || battle.status !== 'active') {
+    if (!battle?.started_at || battle.status !== 'active' || !arenaReady) {
         if (battle?.status === 'ended') setHasEnded(true);
         return;
     }
 
     const interval = setInterval(() => {
         const now = new Date();
-        const start = new Date(battle.started_at);
+        const start = new Date(arenaReadyAtMs || battle.started_at);
         const elapsed = (now.getTime() - start.getTime()) / 1000;
         
         const BATTLE_DURATION = 180; 
@@ -718,7 +924,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [battle?.started_at, battle?.status, participantInfo?.role, hasEnded, endBattle]);
+  }, [battle?.started_at, battle?.status, participantInfo?.role, hasEnded, endBattle, arenaReady, arenaReadyAtMs]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -726,7 +932,18 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (loading || !battle || !challengerStream || !opponentStream || !token) {
+  // Navigate to summary when battle ends (ALL users, ALL categories)
+  useEffect(() => {
+    if (showResults && battle?.status === 'ended') {
+      const timer = setTimeout(() => {
+        // Navigate to summary page when battle ends - ALL users, ALL categories
+        navigate(`/summary/${currentStreamId}`);
+      }, 5000); // 5 seconds to see results
+      return () => clearTimeout(timer);
+    }
+  }, [showResults, battle?.status, navigate, currentStreamId]);
+
+  if (loading || !battle || !challengerStream || !opponentStream) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-black text-amber-500 gap-4">
         <Loader2 className="animate-spin" size={48} />
@@ -813,7 +1030,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
                   disabled={leaveLoading}
                   className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/80 hover:bg-red-500 text-white border border-red-500/40 transition disabled:opacity-60"
                 >
-                  {leaveLoading ? 'Leaving...' : 'Leave Battle'}
+                  {leaveLoading ? 'Leaving...' : 'Forfeit'}
                 </button>
               </div>
             )}
@@ -839,6 +1056,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
             localAudioTrack={localAudioTrack}
             localVideoTrack={localVideoTrack}
             remoteUsers={remoteUsers}
+            challengerStreamId={challengerStream.id}
+            opponentStreamId={opponentStream.id}
+            challengerHostId={challengerStream.user_id}
+            opponentHostId={opponentStream.user_id}
           />
 
             {/* Central Floating Timer */}
@@ -859,14 +1080,12 @@ export default function BattleView({ battleId, currentStreamId, viewerId }: Batt
                         "font-mono text-6xl font-black drop-shadow-lg",
                         isSuddenDeath ? "text-red-500" : "text-white"
                     )}>
-                        {battle?.status === 'ended' ? "FINISHED" : formatTime(timeLeft)}
+                        {battle?.status === 'ended' ? "FINISHED" : arenaReady ? formatTime(timeLeft) : "SYNCING"}
                     </div>
                 </div>
             </div>
 
-            <RoomAudioRenderer />
             <MuteHandler streamId={challengerStream.id} />
-            <BattleRoomSync isBroadcaster={isBroadcaster} />
             
             {/* Shared Chat & Gifts */}
             <div className="absolute bottom-0 left-0 w-full h-[250px] pointer-events-none z-10 flex gap-4 px-4">

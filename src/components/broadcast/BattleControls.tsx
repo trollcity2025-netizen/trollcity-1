@@ -16,6 +16,7 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
   const [matchStatus, setMatchStatus] = useState<string>(''); // 'searching', 'found', 'none'
     const [outgoingBattleId, setOutgoingBattleId] = useState<string | null>(null);
     const [skipLoading, setSkipLoading] = useState(false);
+    const [waitingForAccept, setWaitingForAccept] = useState(false);
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
 
@@ -48,6 +49,46 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
 
     return () => clearInterval(interval);
   }, [currentStream.id]);
+
+  // Poll for outgoing battle status - for challenger to detect when battle becomes active
+  useEffect(() => {
+    if (!outgoingBattleId) {
+      setWaitingForAccept(false);
+      return;
+    }
+
+    setWaitingForAccept(true);
+
+    const pollOutgoingBattle = async () => {
+      const { data: battle } = await supabase
+        .from('battles')
+        .select('status')
+        .eq('id', outgoingBattleId)
+        .maybeSingle();
+
+      if (battle?.status === 'active') {
+        // Battle is active - challenger should also navigate to battle view
+        if (onBattleAccepted) {
+          onBattleAccepted();
+        } else {
+          window.location.reload();
+        }
+      } else if (battle?.status === 'ended' || battle?.status === 'cancelled') {
+        // Battle was cancelled or ended without acceptance
+        setOutgoingBattleId(null);
+        setMatchStatus('');
+        setWaitingForAccept(false);
+      }
+    };
+
+    const pollInterval = setInterval(pollOutgoingBattle, 2000);
+    pollOutgoingBattle(); // Check immediately
+
+    return () => {
+      clearInterval(pollInterval);
+      setWaitingForAccept(false);
+    };
+  }, [outgoingBattleId, onBattleAccepted, supabase]);
 
   const findAndChallengeRandom = async () => {
     if (matchStatus === 'searching') return;
@@ -224,11 +265,11 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
 
                 {matchStatus === 'found' && (
                     <div className="text-center text-xs text-green-400 animate-pulse">
-                        Challenge sent! Waiting for opponent to accept...
+                        {waitingForAccept ? 'Waiting for opponent to accept...' : 'Challenge sent! Waiting for opponent to accept...'}
                     </div>
                 )}
 
-                {matchStatus === 'found' && outgoingBattleId && (
+                {matchStatus === 'found' && outgoingBattleId && !waitingForAccept && (
                     <button
                         onClick={handleSkipMatch}
                         disabled={skipLoading}
@@ -236,6 +277,35 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
                     >
                         {skipLoading ? <Loader2 className="animate-spin" size={16} /> : <SkipForward size={16} />}
                         Skip Opponent
+                    </button>
+                )}
+
+                {matchStatus === 'found' && outgoingBattleId && waitingForAccept && (
+                    <button
+                        onClick={async () => {
+                            if (!outgoingBattleId || !currentStream.user_id) return;
+                            setSkipLoading(true);
+                            try {
+                                const { error: cancelError } = await supabase.rpc('cancel_battle_challenge', {
+                                    p_battle_id: outgoingBattleId,
+                                    p_user_id: currentStream.user_id
+                                });
+                                if (cancelError) throw cancelError;
+                                setMatchStatus('');
+                                setOutgoingBattleId(null);
+                                setWaitingForAccept(false);
+                                toast.success('Challenge cancelled. Find a new match!');
+                            } catch (e: any) {
+                                toast.error(e.message || 'Failed to cancel challenge');
+                            } finally {
+                                setSkipLoading(false);
+                            }
+                        }}
+                        disabled={skipLoading}
+                        className="w-full bg-red-900/50 hover:bg-red-800 text-red-200 font-bold py-2 rounded-lg border border-red-500/30 flex items-center justify-center gap-2 transition-all"
+                    >
+                        {skipLoading ? <Loader2 className="animate-spin" size={16} /> : <SkipForward size={16} />}
+                        Cancel Challenge
                     </button>
                 )}
 

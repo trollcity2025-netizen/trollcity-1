@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Gift, MicOff, Ban, Shield, X, UserPlus, MessageSquare, Eye } from 'lucide-react';
+import { User, Gift, MicOff, Ban, Shield, X, UserPlus, MessageSquare, Eye, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
@@ -53,7 +53,22 @@ export default function UserActionModal({
   const [fetchedTier, setFetchedTier] = React.useState<string | null>(null);
   const [fetchedAvatar, setFetchedAvatar] = React.useState<string | null>(null);
   const [isFollowing, setIsFollowing] = React.useState(false);
+  const [showReportModal, setShowReportModal] = React.useState(false);
+  const [selectedReason, setSelectedReason] = React.useState<string>('');
+  const [reportDescription, setReportDescription] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { user: currentUser } = useAuthStore.getState();
+
+  // Report reasons
+  const reportReasons = [
+    { id: 'spam', label: 'Spam / Advertising', description: 'Posting promotional content or repetitive messages' },
+    { id: 'harassment', label: 'Harassment / Bullying', description: 'Targeting or insulting other users' },
+    { id: 'inappropriate', label: 'Inappropriate Content', description: 'Sharing NSFW or offensive material' },
+    { id: ' impersonation', label: 'Impersonation', description: 'Pretending to be someone else' },
+    { id: 'violence', label: 'Violence / Threats', description: 'Threatening or promoting violence' },
+    { id: 'scam', label: 'Scam / Fraud', description: 'Attempting to scam other users' },
+    { id: 'other', label: 'Other', description: 'Any other violation' },
+  ];
 
   React.useEffect(() => {
     const fetchProfile = async () => {
@@ -172,11 +187,94 @@ export default function UserActionModal({
       }
   };
   
-  const handleReport = async () => {
-      // Implement report logic
-      // For now just toast
-      toast.success("User reported to Admins.");
+  const handleReport = () => {
+    // Show the report modal
+    setShowReportModal(true);
+  };
+
+  const submitReport = async () => {
+    if (!currentUser) {
+      navigate('/auth?mode=signup');
+      return;
+    }
+
+    if (!selectedReason) {
+      toast.error('Please select a reason for reporting');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Get reporter's profile info
+      const { data: reporterProfile } = await supabase
+        .from('user_profiles')
+        .select('username, avatar_url')
+        .eq('id', currentUser.id)
+        .single();
+
+      // Get reported user's profile info
+      const { data: reportedProfile } = await supabase
+        .from('user_profiles')
+        .select('username, avatar_url')
+        .eq('id', userId)
+        .single();
+
+      // Insert report into database
+      const { error: reportError } = await supabase.from('user_reports').insert({
+        reporter_id: currentUser.id,
+        reported_user_id: userId,
+        reason: selectedReason,
+        description: reportDescription || null,
+        stream_id: streamId || null,
+        status: 'pending'
+      });
+
+      if (reportError) {
+        console.error('Report error:', reportError);
+        toast.error('Failed to submit report');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Notify officers via realtime
+      // Get all officers
+      const { data: officers } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .in('role', ['admin', 'moderator', 'troll_officer']);
+
+      // Send notification to each officer
+      if (officers && officers.length > 0) {
+        const reportChannel = supabase.channel('officer-notifications');
+        await reportChannel.send({
+          type: 'broadcast',
+          event: 'new_report',
+          payload: {
+            report_id: `report-${Date.now()}`,
+            reporter_id: currentUser.id,
+            reporter_name: reporterProfile?.username || 'Unknown',
+            reporter_avatar: reporterProfile?.avatar_url || null,
+            reported_user_id: userId,
+            reported_user_name: reportedProfile?.username || 'Unknown',
+            reported_user_avatar: reportedProfile?.avatar_url || null,
+            reason: selectedReason,
+            description: reportDescription || null,
+            stream_id: streamId,
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+
+      toast.success('Report submitted. Officers will review shortly.');
+      setShowReportModal(false);
       onClose();
+    } catch (err) {
+      console.error('Submit report error:', err);
+      toast.error('Failed to submit report');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleMute = async () => {
@@ -390,6 +488,107 @@ export default function UserActionModal({
         </div>
 
       </div>
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={(e) => { e.stopPropagation(); setShowReportModal(false); }}
+        >
+          <div 
+            className="bg-zinc-900 border border-yellow-500/30 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl scale-100 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-red-900/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <AlertTriangle size={20} className="text-red-500" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white">Report User</h3>
+                  <p className="text-xs text-zinc-400">Reporting {displayName}</p>
+                </div>
+              </div>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setShowReportModal(false); }} className="text-zinc-400 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Reason for reporting <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {reportReasons.map((reason) => (
+                    <label
+                      key={reason.id}
+                      className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
+                        selectedReason === reason.id
+                          ? 'bg-red-500/20 border-red-500/50'
+                          : 'bg-zinc-800 border-transparent hover:border-white/10'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="reportReason"
+                        value={reason.id}
+                        checked={selectedReason === reason.id}
+                        onChange={(e) => setSelectedReason(e.target.value)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium text-white text-sm">{reason.label}</div>
+                        <div className="text-xs text-zinc-400">{reason.description}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Additional details (optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Provide more context about the issue..."
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitReport}
+                  disabled={!selectedReason || isSubmitting}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-red-600/50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Shield size={16} />
+                      Submit Report
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

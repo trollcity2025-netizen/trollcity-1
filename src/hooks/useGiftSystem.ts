@@ -3,6 +3,7 @@ import { supabase, getSystemSettings } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
 import { generateUUID } from '../lib/uuid';
+import { OFFICIAL_GIFTS } from '../lib/giftConstants';
 
 export interface GiftItem {
   id: string;
@@ -57,8 +58,16 @@ export function useGiftSystem(
 
     const finalRecipientId = targetIdOverride || recipientId;
 
-    if (user.id === finalRecipientId) {
+    // For logged-in users, check if sending to themselves
+    // For guests (no user), they can't send gifts anyway, but we check to be safe
+    if (user && user.id === finalRecipientId) {
       toast.error("You cannot send gifts to yourself");
+      return false;
+    }
+
+    // Guests cannot send gifts - they need to be logged in
+    if (!user) {
+      toast.error("You must be logged in to send gifts");
       return false;
     }
 
@@ -94,10 +103,28 @@ export function useGiftSystem(
       if (data && data.success) {
         toast.success(`Sent ${gift.name}!`);
         
+        // Get sender's profile for username
+        let senderName = 'Someone';
+        try {
+          const { data: profileData } = await supabase
+            .from('user_profiles')
+            .select('username')
+            .eq('id', user.id)
+            .single();
+          if (profileData?.username) {
+            senderName = profileData.username;
+          }
+        } catch (profileErr) {
+          console.warn('[GiftSystem] Could not fetch sender profile:', profileErr);
+        }
+        
+        // Get gift icon from official gifts
+        const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.id);
+        const giftIcon = officialGift?.icon || '🎁';
+        
         // Broadcast event for animations (Optimistic + RPC backup)
-        // RPC might not trigger broadcast immediately or correctly for all clients
-        // We manually broadcast here to ensure immediate visual feedback
-        const channel = supabase.channel(`broadcast-gifts-${streamId}`);
+        // Use the SAME channel as the stream subscription for consistent delivery
+        const channel = supabase.channel(`stream:${streamId}`);
         await channel.subscribe();
         await channel.send({
             type: 'broadcast',
@@ -107,12 +134,43 @@ export function useGiftSystem(
                 gift_id: gift.id,
                 gift_slug: gift.slug,
                 gift_name: gift.name,
+                gift_icon: giftIcon,
                 amount: gift.coinCost * quantity,
                 sender_id: user.id,
+                sender_name: senderName,
                 receiver_id: finalRecipientId,
                 timestamp: new Date().toISOString()
             }
         });
+        
+        // Also send a chat message so it appears in the live chat with username
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const txnId = generateUUID();
+            await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                type: 'gift',
+                stream_id: streamId,
+                txn_id: txnId,
+                data: {
+                  content: `GIFT_EVENT:${gift.name}:${quantity}`,
+                  gift_type: gift.slug,
+                  gift_amount: quantity,
+                  sender_name: senderName,
+                  is_gift_message: true
+                }
+              })
+            });
+          }
+        } catch (chatErr) {
+          console.warn('[GiftSystem] Could not send chat message:', chatErr);
+        }
         
         // Refresh profile to update balance (Optimistic)
         refreshProfile(); 

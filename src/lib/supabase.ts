@@ -58,6 +58,8 @@ export interface UserProfile {
   no_kick_until: string | null
   no_ban_until: string | null
   mic_muted_until?: string | null
+  broadcast_chat_disabled?: boolean
+  broadcast_mic_muted?: boolean
   live_restricted_until?: string | null
   ban_expires_at?: string | null
   has_active_warrant?: boolean

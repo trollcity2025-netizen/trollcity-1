@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties, useRef, useEffect, memo, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { ILocalVideoTrack, ILocalAudioTrack, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import { Stream } from '../../types/broadcast';
 import { User, Coins, Plus, MicOff, VideoOff } from 'lucide-react';
@@ -9,6 +10,8 @@ import BroadcasterStatsModal from './BroadcasterStatsModal';
 import { SeatSession } from '../../hooks/useStreamSeats';
 import { getGlowingTextStyle } from '../../lib/perkEffects';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
+import { useAuthStore } from '../../lib/store';
+import { getAllPersistentGifts, type PersistentGift } from '../../lib/persistentGiftStore';
 
 interface BroadcastGridProps {
   stream: Stream;
@@ -86,6 +89,8 @@ const AgoraVideoPlayer = memo(({ videoTrack }: { videoTrack: ILocalVideoTrack | 
   );
 });
 
+AgoraVideoPlayer.displayName = 'AgoraVideoPlayer';
+
 const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: ILocalAudioTrack | IRemoteAudioTrack }) => {
   const audioRef = useRef<HTMLDivElement>(null);
   const isPlayingRef = useRef(false);
@@ -123,6 +128,8 @@ const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: ILocalAudioTrack | 
   return <div ref={audioRef}></div>;
 });
 
+AgoraAudioPlayer.displayName = 'AgoraAudioPlayer';
+
 export default function BroadcastGrid({
   stream,
   isHost,
@@ -145,6 +152,8 @@ export default function BroadcastGrid({
   userIdToAgoraUid = {},
   onGetUserPositions,
 }: BroadcastGridProps) {
+  const { profile } = useAuthStore();
+  
   // Log when stream changes to debug updates
   const prevStreamRef = useRef(stream?.box_count);
   useEffect(() => {
@@ -157,13 +166,39 @@ export default function BroadcastGrid({
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   const [showHostStats, setShowHostStats] = useState(false);
   const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [persistentGifts, setPersistentGifts] = useState<Map<string, PersistentGift[]>>(new Map());
+
+  // Update persistent gifts periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPersistentGifts(getAllPersistentGifts());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Expose positions when callback is provided
   const getPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}));
   
   useEffect(() => {
     if (onGetUserPositions) {
-      getPositionsRef.current = onGetUserPositions;
+      // Store the callback that calculates positions from DOM refs
+      getPositionsRef.current = () => {
+        const positions: Record<string, { top: number; left: number; width: number; height: number }> = {};
+        Object.entries(boxRefs.current).forEach(([userId, el]) => {
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            positions[userId] = {
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height
+            };
+          }
+        });
+        return positions;
+      };
+      // Also pass the function to the callback so parent can call it
+      onGetUserPositions(getPositionsRef.current);
     }
   }, [onGetUserPositions]);
 
@@ -520,6 +555,48 @@ export default function BroadcastGrid({
                     title="Mic Muted"
                   >
                     <MicOff size={14} className="text-white" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Coin Balance in Top Right */}
+            {userId && (
+              <div className="absolute top-3 right-3 z-10 pointer-events-none">
+                <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+                  <Coins size={12} className="text-yellow-400" />
+                  <span className="text-sm font-bold text-white">
+                    {(displayProfile?.troll_coins || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Persistent Gifts Badge */}
+            {userId && persistentGifts.get(userId) && persistentGifts.get(userId)!.length > 0 && (
+              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1">
+                {persistentGifts.get(userId)!.slice(0, 3).map((gift, idx) => (
+                  <motion.div
+                    key={`${gift.giftId}-${gift.expiresAt}-${idx}`}
+                    initial={{ scale: 0, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0, y: 20 }}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-full font-bold text-xs shadow-lg",
+                      gift.amount >= 10000 
+                        ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-black"
+                        : gift.amount >= 5000
+                        ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                        : "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                    )}
+                  >
+                    <span>{gift.giftIcon}</span>
+                    <span>x{gift.amount >= 1000 ? Math.floor(gift.amount / 1000) : 1}</span>
+                  </motion.div>
+                ))}
+                {persistentGifts.get(userId)!.length > 3 && (
+                  <div className="text-xs text-yellow-400 font-bold">
+                    +{persistentGifts.get(userId)!.length - 3} more
                   </div>
                 )}
               </div>

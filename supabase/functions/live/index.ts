@@ -64,7 +64,46 @@ Deno.serve(async (req) => {
       if (!title) {
         return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+      
       const now = new Date().toISOString();
+      
+      // Try to create Mux live stream for viewers
+      let muxPlaybackId = null;
+      let muxStreamKey = null;
+      const muxTokenId = Deno.env.get('MUX_TOKEN_ID');
+      const muxTokenSecret = Deno.env.get('MUX_TOKEN_SECRET');
+      const rtmpUrl = "rtmp://global-live.mux.com:5222/app";
+      
+      if (muxTokenId && muxTokenSecret) {
+        try {
+          const muxResponse = await fetch('https://api.mux.com/video/v1/live-streams', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Basic ${btoa(`${muxTokenId}:${muxTokenSecret}`)}`
+            },
+            body: JSON.stringify({
+              playback_policy: ['public'],
+              new_asset_settings: {
+                playback_policy: ['public']
+              },
+              metadata: {
+                type: 'broadcast',
+                title
+              }
+            })
+          });
+          
+          if (muxResponse.ok) {
+            const muxData = await muxResponse.json();
+            muxPlaybackId = muxData.data?.playback_ids?.[0]?.id;
+            muxStreamKey = muxData.data?.stream_key;
+          }
+        } catch (muxErr) {
+          console.warn('Failed to create Mux stream:', muxErr);
+        }
+      }
+      
       const { data: streamRow, error } = await supabase
         .from('streams')
         .insert({
@@ -73,6 +112,10 @@ Deno.serve(async (req) => {
           category,
           current_viewers: 1,
           is_live: true,
+          status: 'live',
+          mux_playback_id: muxPlaybackId,
+          mux_stream_key: muxStreamKey,
+          mux_rtmp_url: rtmpUrl,
           start_time: now,
           created_at: now,
         })

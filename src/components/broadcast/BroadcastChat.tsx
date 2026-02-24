@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import UserNameWithAge from '../UserNameWithAge';
 import { toast } from 'sonner';
+import GiftBoxModal from './GiftBoxModal';
 
 interface Message {
   id: string;
@@ -48,14 +49,15 @@ interface BroadcastChatProps {
 
 // Helper to parse gift messages from content
 // Format: "GIFT_EVENT:giftName:amount" or "userId sent a/giftName"
-function parseGiftMessage(content: string): { giftType: string; amount: number; senderName: string } | null {
+function parseGiftMessage(content: string, senderName?: string): { giftType: string; amount: number; senderName: string } | null {
   // Check for GIFT_EVENT format: GIFT_EVENT:Clown:1
   if (content.startsWith('GIFT_EVENT:')) {
     const parts = content.split(':');
     if (parts.length >= 3) {
       const giftType = parts[1];
       const amount = parseInt(parts[2], 10) || 1;
-      return { giftType, amount, senderName: 'Someone' };
+      // Use the provided senderName if available, otherwise default to 'Someone'
+      return { giftType, amount, senderName: senderName || 'Someone' };
     }
   }
   
@@ -91,6 +93,9 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
   const [isChatFocused, setIsChatFocused] = useState(true);
+  const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
+  const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+  const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
   
   // Rate limiting
   const lastSentRef = useRef<number>(0);
@@ -106,6 +111,46 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
           if (data) setStreamMods(data.map(d => d.user_id));
       };
       if (hostId) fetchMods();
+  }, [hostId]);
+
+  useEffect(() => {
+    if (!hostId) return;
+
+    let mounted = true;
+    const fetchHostModerationState = async () => {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('broadcast_chat_disabled')
+        .eq('id', hostId)
+        .maybeSingle();
+
+      if (mounted) {
+        setHostChatDisabledByOfficer(!!data?.broadcast_chat_disabled);
+      }
+    };
+
+    fetchHostModerationState();
+
+    const moderationChannel = supabase
+      .channel(`host-chat-lock:${hostId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${hostId}`
+        },
+        (payload: any) => {
+          setHostChatDisabledByOfficer(!!payload?.new?.broadcast_chat_disabled);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(moderationChannel);
+    };
   }, [hostId]);
 
   // Fetch initial messages (last 50)
@@ -193,7 +238,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 user_id: envelope.s,
                 content: envelope.d.content,
                 created_at: new Date(envelope.ts).toISOString(),
-                type: 'chat',
+                type: envelope.t === 'gift' ? 'gift' : 'chat',
+                // Preserve gift-specific fields if present
+                gift_type: envelope.d.gift_type,
+                gift_amount: envelope.d.gift_amount,
+                sender_name: envelope.d.sender_name,
                 user_profiles: {
                     username: envelope.d.user_name || 'Unknown',
                     avatar_url: envelope.d.user_avatar || '',
@@ -326,7 +375,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         console.log('💬 [BroadcastChat] Empty input, ignoring');
         return;
     }
-    
+    if (hostChatDisabledByOfficer) {
+        toast.error('Chat is disabled for this broadcaster by officer control');
+        return;
+    }
+
     // Rate Limit Check
     const now = Date.now();
     if (now - lastSentRef.current < RATE_LIMIT_MS) {
@@ -407,6 +460,20 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     }
   };
 
+  const openGiftForUser = (targetUserId?: string | null) => {
+    if (!targetUserId) return;
+    if (!user) {
+      navigate('/auth?mode=signup');
+      return;
+    }
+    if (user.id === targetUserId) {
+      toast.error('You cannot send gifts to yourself');
+      return;
+    }
+    setGiftRecipientId(targetUserId);
+    setIsGiftModalOpen(true);
+  };
+
   const deleteMessage = async (msgId: string) => {
       await supabase.from('stream_messages').delete().eq('id', msgId);
   };
@@ -480,23 +547,29 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                                 className="flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/60 p-1.5 rounded-lg border border-white/5 animate-in slide-in-from-bottom-2 fade-in duration-300"
                             >
                                 <Sparkles size={12} className="text-yellow-500 flex-shrink-0" />
-                                <span className="font-bold text-zinc-300 flex items-center gap-1 truncate">
+                                <button
+                                    type="button"
+                                    onClick={() => openGiftForUser(msg.user_id)}
+                                    className="font-bold text-zinc-300 hover:text-yellow-300 transition-colors flex items-center gap-1 truncate"
+                                    title="Send gift"
+                                >
                                     {msg.user_profiles?.username || 'User'}
-                                </span>
+                                </button>
                                 <span className="truncate">{msg.content}</span>
                             </div>
                         );
                     }
                     
                     if (isGift) {
-                        // Parse gift info from message
+                        // Parse gift info from message - check for GIFT_EVENT format or gift_type field
                         let giftType = msg.gift_type || 'gift';
                         let giftAmount = msg.gift_amount || 1;
+                        // Use sender_name from message data, user_profiles, or enriched data
                         let senderName = msg.sender_name || msg.user_profiles?.username || 'Someone';
                         
                         // If not already parsed, try to parse from content
                         if (!msg.gift_type && msg.content) {
-                            const parsed = parseGiftMessage(msg.content);
+                            const parsed = parseGiftMessage(msg.content, senderName);
                             if (parsed) {
                                 giftType = parsed.giftType;
                                 giftAmount = parsed.amount;
@@ -515,7 +588,14 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                             >
                                 <Gift size={14} className="text-yellow-400 flex-shrink-0" />
                                 <span className="text-xs">
-                                    <span className="font-bold text-yellow-400">{senderName}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => openGiftForUser(msg.user_id)}
+                                        className="font-bold text-yellow-400 hover:text-yellow-300 transition-colors"
+                                        title="Send gift"
+                                    >
+                                        {senderName}
+                                    </button>
                                     <span className="text-zinc-400"> {giftText}</span>
                                     {giftAmount > 1 && (
                                         <span className="text-yellow-400 ml-1">x{giftAmount}</span>
@@ -538,9 +618,14 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                                 )}
                             </div>
                             <div className="flex-1 min-w-0 flex items-center gap-1">
-                                <span className="font-bold text-yellow-400 text-xs truncate">
+                                <button
+                                    type="button"
+                                    onClick={() => openGiftForUser(msg.user_id)}
+                                    className="font-bold text-yellow-400 text-xs truncate hover:text-yellow-300 transition-colors"
+                                    title="Send gift"
+                                >
                                     {msg.user_profiles?.username || 'User'}:
-                                </span>
+                                </button>
                                 <span className="text-white text-xs truncate">{msg.content}</span>
                             </div>
                         </div>
@@ -565,19 +650,37 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                             navigate('/auth?mode=signup');
                         }
                     }}
-                    placeholder={isGuest ? "Sign up to chat..." : "Type a message..."}
+                    placeholder={
+                      hostChatDisabledByOfficer
+                        ? "Chat disabled by officer control"
+                        : isGuest
+                          ? "Sign up to chat..."
+                          : "Type a message..."
+                    }
+                    disabled={hostChatDisabledByOfficer}
                     className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
                 />
 
                 <button 
                     type="submit"  
-                    disabled={!isGuest && !input.trim()}
+                    disabled={hostChatDisabledByOfficer || isGuest || !input.trim()}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
                 >
                     <Send size={16} />
                 </button>
             </div>
         </form>
+
+        <GiftBoxModal
+          isOpen={isGiftModalOpen}
+          onClose={() => {
+            setIsGiftModalOpen(false);
+            setGiftRecipientId(null);
+          }}
+          recipientId={giftRecipientId || hostId}
+          streamId={streamId}
+        />
     </div>
   );
 }
+

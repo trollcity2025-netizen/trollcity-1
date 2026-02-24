@@ -42,15 +42,19 @@ function BroadcastPage() {
   const params = useParams()
   const streamId = params.id || params.streamId
 
-  const { user } = useAuthStore()
+  const { user, profile } = useAuthStore()
   const navigate = useNavigate()
 
   const [stream, setStream] = useState<Stream | null>(null)
+  const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [localTracks, setLocalTracks] =
-    useState<[IMicrophoneAudioTrack, ICameraVideoTrack] | null>(null)
+    useState<[IMicrophoneAudioTrack, ICameraVideoTrack, ICameraVideoTrack?, ICameraVideoTrack?] | null>(null)
+
+  // Camera overlay state for screen share PiP
+  const [isScreenSharing, setIsScreenSharing] = useState(false)
 
   const [remoteUsers, setRemoteUsers] =
     useState<IAgoraRTCRemoteUser[]>([])
@@ -63,6 +67,7 @@ function BroadcastPage() {
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isBattleMode, setIsBattleMode] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
+  const [hostMicMutedByOfficer, setHostMicMutedByOfficer] = useState(false)
   
   // Mux WHIP streaming ref
   const muxWhipPcRef = useRef<RTCPeerConnection | null>(null)
@@ -71,6 +76,7 @@ function BroadcastPage() {
   
   // Gift system state
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
+  const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null)
   const [recentGifts, setRecentGifts] = useState<BroadcastGift[]>([])
   const [giftUserPositions, setGiftUserPositions] = useState<Record<string, { top: number; left: number; width: number; height: number }>>({})
   const getGiftUserPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}))
@@ -153,10 +159,33 @@ function BroadcastPage() {
 
   /** STREAM SEATS */
   const { seats, mySession: userSeat, joinSeat, leaveSeat } =
-    useStreamSeats(stream?.id, user?.id)
+    useStreamSeats(stream?.id, user?.id, broadcasterProfile, stream)
 
   const canPublish = isHost || !!userSeat
   const mode = userSeat ? 'stage' : 'viewer'
+
+  // Track if user just joined a seat (for triggering Agora init)
+  const justJoinedSeatRef = useRef(false);
+
+  // Effect to handle Agora initialization when guest joins a seat
+  useEffect(() => {
+    // If user has a seat and just joined (wasn't there before), trigger Agora init
+    if (userSeat && justJoinedSeatRef.current) {
+      console.log('[BroadcastPage] Guest joined seat - resetting hasJoinedRef to allow Agora init');
+      justJoinedSeatRef.current = false;
+      hasJoinedRef.current = false;
+      
+      // Force re-render to trigger Agora init effect
+      setStream((prev: any) => prev ? { ...prev } : prev);
+    }
+  }, [userSeat]);
+
+  // Wrap joinSeat to track when user joins
+  const handleJoinSeat = useCallback(async (index: number, price: number) => {
+    console.log('[BroadcastPage] handleJoinSeat called for seat', index, 'price:', price);
+    justJoinedSeatRef.current = true;
+    return joinSeat(index, price);
+  }, [joinSeat]);
 
   /** FETCH STREAM */
   useEffect(() => {
@@ -183,6 +212,20 @@ function BroadcastPage() {
       console.log('[BroadcastPage] Fetched stream, initial box_count:', data.box_count);
       setStream(data)
 
+      // Fetch broadcaster profile
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', data.user_id)
+        .single()
+      
+      if (profileData) {
+        setBroadcasterProfile(profileData)
+        if (data.user_id === user?.id) {
+          setHostMicMutedByOfficer(!!profileData.broadcast_mic_muted)
+        }
+      }
+
       // Set initial mux playback id if available
       if (data.mux_playback_id) {
         setMuxPlaybackId(data.mux_playback_id)
@@ -190,7 +233,7 @@ function BroadcastPage() {
 
       if (data.status === 'ended') {
         stopLocalTracks();
-        navigate(`/summary/${streamId}`)
+        navigate(`/broadcast/summary/${streamId}`)
       }
 
       setIsLoading(false)
@@ -198,6 +241,40 @@ function BroadcastPage() {
 
     fetchStream()
   }, [streamId, navigate])
+
+  useEffect(() => {
+    if (!isHost || !stream?.user_id) return;
+
+    const moderationChannel = supabase
+      .channel(`host-moderation:${stream.user_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${stream.user_id}`
+        },
+        async (payload: any) => {
+          const muted = !!payload?.new?.broadcast_mic_muted;
+          setHostMicMutedByOfficer(muted);
+
+          if (muted && localTracks?.[0]?.enabled) {
+            try {
+              await localTracks[0].setEnabled(false);
+              toast.error('Host microphone was muted by officer control');
+            } catch (err) {
+              console.error('[BroadcastPage] Failed to enforce host mic mute:', err);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(moderationChannel);
+    };
+  }, [isHost, stream?.user_id, localTracks]);
 
   /** POLL FOR MUX PLAYBACK ID & BOX COUNT - for all users as realtime fallback */
   useEffect(() => {
@@ -215,10 +292,10 @@ function BroadcastPage() {
     
     const pollInterval = setInterval(async () => {
       try {
-        // Always poll for box_count updates
+        // Always poll for box_count, has_rgb_effect, and battle status updates
         const { data, error } = await supabase
           .from('streams')
-          .select('mux_playback_id, status, box_count')
+          .select('mux_playback_id, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked')
           .eq('id', streamId)
           .single();
         
@@ -233,12 +310,37 @@ function BroadcastPage() {
           setMuxPlaybackId(data.mux_playback_id);
         }
         
-        // Always check for box_count updates
+        // Check if battle ended - if is_battle changed from true to false, reload
+        if (stream.is_battle === true && data.is_battle === false) {
+          console.log('[BroadcastPage] Battle ended, reloading page...');
+          window.location.reload();
+          return;
+        }
+        
+        // Always check for box_count and has_rgb_effect updates
         if (data?.box_count !== undefined && data.box_count !== streamRef.current?.box_count) {
           console.log('[BroadcastPage] POLL: Detected box_count change:', data.box_count);
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, box_count: data.box_count };
+          });
+        }
+        
+        // Check for has_rgb_effect changes
+        if (data?.has_rgb_effect !== undefined && data.has_rgb_effect !== streamRef.current?.has_rgb_effect) {
+          console.log('[BroadcastPage] POLL: Detected has_rgb_effect change:', data.has_rgb_effect);
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, has_rgb_effect: data.has_rgb_effect };
+          });
+        }
+        
+        // Check for are_seats_locked changes
+        if (data?.are_seats_locked !== undefined && data.are_seats_locked !== streamRef.current?.are_seats_locked) {
+          console.log('[BroadcastPage] POLL: Detected are_seats_locked change:', data.are_seats_locked);
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, are_seats_locked: data.are_seats_locked };
           });
         }
         
@@ -312,22 +414,35 @@ function BroadcastPage() {
           
           console.log('[Realtime] VIEWER: Received postgres stream update:', payload.new);
           console.log('[Realtime] VIEWER: Current box_count:', streamRef.current?.box_count, 'New box_count:', payload.new.box_count);
+          console.log('[Realtime] VIEWER: Current has_rgb_effect:', streamRef.current?.has_rgb_effect, 'New has_rgb_effect:', payload.new.has_rgb_effect);
+          console.log('[Realtime] VIEWER: Current are_seats_locked:', streamRef.current?.are_seats_locked, 'New are_seats_locked:', payload.new.are_seats_locked);
           
           try {
-            // Skip update if box_count hasn't actually changed (use ref to avoid stale closure)
-            if (streamRef.current && streamRef.current.box_count === payload.new.box_count) {
-              console.log('[Realtime] VIEWER: Skipping update - box_count unchanged');
+            // Skip update if nothing actually changed
+            if (streamRef.current && 
+                streamRef.current.box_count === payload.new.box_count &&
+                streamRef.current.has_rgb_effect === payload.new.has_rgb_effect &&
+                streamRef.current.are_seats_locked === payload.new.are_seats_locked) {
+              console.log('[Realtime] VIEWER: Skipping update - no changes detected');
               return;
             }
             
             console.log('[Realtime] VIEWER: Applying stream update via postgres_changes');
-            setStream(payload.new as Stream);
+            setStream((prev: any) => {
+              if (!prev) return prev;
+              return { 
+                ...prev, 
+                box_count: payload.new.box_count,
+                has_rgb_effect: payload.new.has_rgb_effect,
+                are_seats_locked: payload.new.are_seats_locked
+              };
+            });
             // Navigate to summary when stream ends - for ALL clients
             if (payload.new.status === 'ended') {
               console.log('[BroadcastPage] Stream ended, navigating to summary');
               // Stop local camera and mic for broadcaster/guest
               stopLocalTracks();
-              navigate(`/summary/${streamId}`);
+              navigate(`/broadcast/summary/${streamId}`);
             }
           } catch (err) {
             console.error('[Realtime] Error processing stream update:', err);
@@ -365,6 +480,7 @@ function BroadcastPage() {
           try {
             const giftData = payload.payload;
             console.log('[BroadcastPage] Gift received:', giftData);
+            console.log('[BroadcastPage] Current user is host:', isHost);
             
             const newGift: BroadcastGift = {
               id: giftData.id || `gift-${Date.now()}`,
@@ -378,6 +494,7 @@ function BroadcastPage() {
               created_at: giftData.timestamp || new Date().toISOString(),
             };
             
+            console.log('[BroadcastPage] Adding gift to recentGifts:', newGift);
             setRecentGifts(prev => [...prev, newGift]);
           } catch (err) {
             console.error('[BroadcastPage] Error processing gift:', err);
@@ -410,9 +527,10 @@ function BroadcastPage() {
           // Track presence to keep channel alive
           channel.track({
             user_id: user?.id || 'viewer',
-            username: user?.email || 'Viewer',
+            username: profile?.username || user?.email || 'Viewer',
             is_host: isHost,
-            online_at: new Date().toISOString()
+            online_at: new Date().toISOString(),
+            avatar_url: profile?.avatar_url || ''
           }).catch(console.error);
         } else if (status === 'CHANNEL_ERROR') {
           console.error('[Realtime] ❌ Subscription FAILED - viewers will NOT receive updates!');
@@ -427,9 +545,10 @@ function BroadcastPage() {
             // Re-track presence after reconnect
             channel.track({
               user_id: user?.id || 'viewer',
-              username: user?.email || 'Viewer',
+              username: profile?.username || user?.email || 'Viewer',
               is_host: isHost,
-              online_at: new Date().toISOString()
+              online_at: new Date().toISOString(),
+              avatar_url: profile?.avatar_url || ''
             }).catch(console.error);
             
             // Increase delay for next potential retry
@@ -443,15 +562,20 @@ function BroadcastPage() {
           const baseDelay = 5000;
           let currentDelay = baseDelay;
           
-          const retry = () => {
+          const retry = async () => {
             console.log('[BroadcastPage] Attempting to reconnect after close (delay: ' + currentDelay + 'ms)...');
-            channel.subscribe();
+            try {
+              await channel.subscribe();
+            } catch (subErr) {
+              console.warn('[BroadcastPage] Resubscribe error:', subErr);
+            }
             // Re-track presence after reconnect
             channel.track({
               user_id: user?.id || 'viewer',
-              username: user?.email || 'Viewer',
+              username: profile?.username || user?.email || 'Viewer',
               is_host: isHost,
-              online_at: new Date().toISOString()
+              online_at: new Date().toISOString(),
+              avatar_url: profile?.avatar_url || ''
             }).catch(console.error);
             
             // Increase delay for next potential retry (exponential backoff)
@@ -471,9 +595,10 @@ function BroadcastPage() {
             // Re-track presence after reconnect
             channel.track({
               user_id: user?.id || 'viewer',
-              username: user?.email || 'Viewer',
+              username: profile?.username || user?.email || 'Viewer',
               is_host: isHost,
-              online_at: new Date().toISOString()
+              online_at: new Date().toISOString(),
+              avatar_url: profile?.avatar_url || ''
             }).catch(console.error);
             
             // Increase delay for next potential retry (exponential backoff)
@@ -490,7 +615,10 @@ function BroadcastPage() {
 
   /** AGORA INIT */
   useEffect(() => {
-    if (!stream || !user) return
+    if (!stream || !user) {
+      console.log('[BroadcastPage] Agora init skipped: no stream or user');
+      return;
+    }
 
     // Prevent re-initialization if user has already joined
     if (hasJoinedRef.current) {
@@ -498,12 +626,38 @@ function BroadcastPage() {
       return;
     }
 
+    console.log('[BroadcastPage] Agora init effect running, canPublish:', canPublish);
+
     // Check for pre-existing Agora client from SetupPage
     const preflightClient = PreflightStore.getAgoraClient();
     const preflightTracks = PreflightStore.getLocalTracks();
+    
+    console.log('[BroadcastPage] Preflight check:', {
+      hasClient: !!preflightClient,
+      hasTracks: !!preflightTracks,
+      trackCount: preflightTracks?.length || 0
+    });
 
     if (preflightClient && preflightTracks) {
       console.log('[BroadcastPage] Using pre-existing Agora client from SetupPage');
+      console.log('[BroadcastPage] Preflight tracks:', {
+        audio: preflightTracks[0]?.getType?.() || 'none',
+        video: preflightTracks[1]?.getType?.() || 'none',
+        cameraAudio: preflightTracks[2]?.getType?.() || 'none',
+        cameraVideo: preflightTracks[3]?.getType?.() || 'none'
+      });
+      
+      // Check if this is screen sharing with camera overlay
+      const hasScreenShare = preflightTracks[1]?.getType?.() === 'video' && 
+                            preflightTracks[1]?.getMediaStreamTrack?.()?.label?.includes('screen');
+      const hasCameraOverlay = !!preflightTracks[3];
+      
+      // Set screen sharing state for UI
+      if (hasCameraOverlay) {
+        setIsScreenSharing(true);
+      }
+      
+      console.log('[BroadcastPage] Screen share mode:', { hasScreenShare, hasCameraOverlay });
       
       // Use existing client and tracks
       agoraClientRef.current = preflightClient;
@@ -548,6 +702,11 @@ function BroadcastPage() {
     let mounted = true
 
     const initAgora = async () => {
+      // Check if we're on mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      console.log('[BroadcastPage] Device type:', isMobile ? 'mobile' : 'desktop');
+      console.log('[BroadcastPage] initAgora called, canPublish:', canPublish, 'isHost:', isHost, 'hasUserSeat:', !!userSeat);
+      
       const client = AgoraRTC.createClient({
         mode: 'rtc',
         codec: 'vp8'
@@ -653,16 +812,40 @@ function BroadcastPage() {
 
           console.log("Agora joined")
 
-          // Request browser permissions first
+          // Request browser permissions FIRST with explicit user interaction handling
+          // This is critical for mobile browsers which require user gesture
           try {
-            await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            console.log("Browser permissions granted")
-          } catch (permErr) {
-            console.warn("Browser permission request failed:", permErr)
-            // Continue anyway - Agora will handle permissions
+            console.log('[BroadcastPage] Requesting camera/mic permissions...');
+            toast.info('Requesting camera & microphone access...');
+            const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+              video: true, 
+              audio: true 
+            });
+            console.log('[BroadcastPage] Browser permissions granted', mediaStream.getTracks().map(t => t.kind));
+            toast.success('Camera & mic access granted!');
+            // Stop the test stream - Agora will create its own
+            mediaStream.getTracks().forEach(track => track.stop());
+          } catch (permErr: any) {
+            console.error('[BroadcastPage] Browser permission request failed:', permErr.message);
+            // Show error to user - they need to grant permissions
+            toast.error('Camera/mic permission required. Please allow access and try again.');
+            // Continue anyway - Agora will try to create tracks
           }
 
           // Create tracks with AEC enabled for echo cancellation
+          // Use lower resolution for mobile to improve compatibility
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          const videoConfig = isMobile ? {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 24 },
+            facingMode: 'user'  // Use front camera on mobile
+          } : {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          };
+          
           const tracks = await AgoraRTC.createMicrophoneAndCameraTracks(
             {
               AEC: true,  // Acoustic Echo Cancellation
@@ -670,11 +853,7 @@ function BroadcastPage() {
               ANS: true,  // Automatic Noise Suppression
             },
             {
-              video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 }
-              }
+              video: videoConfig
             }
           )
 
@@ -691,17 +870,23 @@ function BroadcastPage() {
           await tracks[0].setEnabled(true)
           await tracks[1].setEnabled(true)
 
+          if (isHost && hostMicMutedByOfficer) {
+            await tracks[0].setEnabled(false)
+            toast.error('Your host microphone is muted by officer control')
+          }
+
           console.log("Camera enabled:", tracks[1].enabled)
           console.log("Mic enabled:", tracks[0].enabled)
 
-          // Improve video quality
+          // Improve video quality - use lower bitrate for mobile
           try {
+            const mobileBitrate = isMobile ? 800 : 1500;
             tracks[1].setEncoderConfiguration({
-              width: 1280,
-              height: 720,
-              frameRate: 30,
-              bitrateMin: 600,
-              bitrateMax: 1500
+              width: isMobile ? 640 : 1280,
+              height: isMobile ? 480 : 720,
+              frameRate: isMobile ? 24 : 30,
+              bitrateMin: 400,
+              bitrateMax: mobileBitrate
             })
           } catch (encErr) {
             console.warn("Encoder configuration failed:", encErr)
@@ -713,6 +898,17 @@ function BroadcastPage() {
           await client.publish(tracks)
 
           console.log("Tracks published successfully")
+
+          // Mark stream as live in database when tracks are published
+          try {
+            await supabase
+              .from('streams')
+              .update({ is_live: true })
+              .eq('id', stream.id);
+            console.log('[BroadcastPage] Stream marked as live');
+          } catch (liveErr) {
+            console.warn('[BroadcastPage] Failed to mark stream as live:', liveErr);
+          }
 
           // Mark as joined to prevent re-initialization when user returns to page
           hasJoinedRef.current = true;
@@ -845,7 +1041,7 @@ function BroadcastPage() {
       setLocalTracks(null)
       setMuxPlaybackId(null)
     }
-  }, [stream, user, canPublish])
+  }, [stream, user, canPublish, hostMicMutedByOfficer])
 
   /** CAMERA / MIC */
   const toggleCamera = async () => {
@@ -855,10 +1051,23 @@ function BroadcastPage() {
 
   const toggleMicrophone = async () => {
     if (!localTracks) return
-    await localTracks[0].setEnabled(!localTracks[0].enabled)
+    const shouldEnable = !localTracks[0].enabled
+    if (isHost && hostMicMutedByOfficer && shouldEnable) {
+      toast.error('Host microphone is muted by officer control')
+      return
+    }
+    await localTracks[0].setEnabled(shouldEnable)
   }
 
+  useEffect(() => {
+    if (!isHost || !hostMicMutedByOfficer || !localTracks?.[0]?.enabled) return;
+    localTracks[0].setEnabled(false).catch((err) => {
+      console.error('[BroadcastPage] Failed to force-disable host mic:', err);
+    });
+  }, [isHost, hostMicMutedByOfficer, localTracks]);
+
   const onGift = (userId: string) => {
+    setGiftRecipientId(userId);
     setIsGiftModalOpen(true);
   }
 
@@ -968,14 +1177,58 @@ function BroadcastPage() {
     }
   };
 
-  const handleStreamEnd = () => {
+  const handleStreamEnd = async () => {
     // Stop camera and mic before leaving
     stopLocalTracks();
+    
+    // Check if there's an active battle - if so, forfeit and credit opponent as winner
+    if (stream?.battle_id && isHost) {
+      try {
+        const { data: battleData } = await supabase
+          .from('battles')
+          .select('id, status, challenger_stream_id, opponent_stream_id')
+          .eq('id', stream.battle_id)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        if (battleData) {
+          // Determine opponent stream
+          const opponentStreamId = battleData.challenger_stream_id === stream.id 
+            ? battleData.opponent_stream_id 
+            : battleData.challenger_stream_id;
+          
+          // Call leave_battle to properly credit winner and end battle
+          const { error: leaveError } = await supabase.rpc('leave_battle', {
+            p_battle_id: battleData.id,
+            p_user_id: user.id
+          });
+          
+          if (leaveError) {
+            console.warn('[BroadcastPage] Failed to leave battle:', leaveError);
+          } else {
+            console.log('[BroadcastPage] Left battle, opponent credited as winner');
+          }
+        }
+      } catch (battleErr) {
+        console.warn('[BroadcastPage] Error handling battle on stream end:', battleErr);
+      }
+    }
+    
+    // Mark stream as ended in database
+    try {
+      await supabase
+        .from('streams')
+        .update({ is_live: false, status: 'ended' })
+        .eq('id', stream.id);
+      console.log('[BroadcastPage] Stream marked as ended');
+    } catch (endErr) {
+      console.warn('[BroadcastPage] Failed to mark stream as ended:', endErr);
+    }
     
     // Immediately update local state for instant navigation
     setStream((prev: any) => prev ? { ...prev, status: 'ended', is_live: false } : null);
     // Navigate to summary page
-    navigate(`/summary/${streamId}`);
+    navigate(`/broadcast/summary/${stream?.id}`);
   };
 
   /** LOADING */
@@ -1009,6 +1262,7 @@ function BroadcastPage() {
       <BattleView
         battleId={stream.battle_id}
         currentStreamId={stream.id}
+        localTracks={localTracks}
       />
     )
   }
@@ -1032,6 +1286,14 @@ function BroadcastPage() {
           handleLike={handleLike}
           onStartBattle={isHost && categorySupportsBattles ? () => setIsBattleMode(true) : undefined}
           categoryBattleTerm={categorySupportsBattles ? categoryMatchingTerm : undefined}
+          onBack={() => {
+            // If host, stop stream before leaving
+            if (isHost) {
+              handleStreamEnd();
+            } else {
+              navigate('/');
+            }
+          }}
         />
 
         <div className="flex flex-1 overflow-hidden h-full">
@@ -1044,7 +1306,7 @@ function BroadcastPage() {
                 stream={stream}
                 seats={seats}
                 isHost={false}
-                onJoinSeat={(index) => joinSeat(index, stream.seat_price)}
+                onJoinSeat={categoryConfig.allowGuestBoxes ? (index) => handleJoinSeat(index, stream.seat_price) : undefined}
                 localTracks={[undefined, undefined]}
                 remoteUsers={remoteUsers}
                 localUserId={user?.id || ''}
@@ -1054,6 +1316,7 @@ function BroadcastPage() {
                 toggleCamera={() => {}}
                 toggleMicrophone={() => {}}
                 onGetUserPositions={handleGetUserPositions}
+                broadcasterProfile={broadcasterProfile}
               />
             ) : (
               /* Host or stage participant - show BroadcastGrid with Agora */
@@ -1061,7 +1324,7 @@ function BroadcastPage() {
                 stream={stream}
                 seats={seats}
                 onJoinSeat={(index) =>
-                  joinSeat(index, stream.seat_price)
+                  handleJoinSeat(index, stream.seat_price)
                 }
                 isHost={isHost}
                 localTracks={
@@ -1077,6 +1340,7 @@ function BroadcastPage() {
                 toggleCamera={toggleCamera}
                 toggleMicrophone={toggleMicrophone}
                 onGetUserPositions={handleGetUserPositions}
+                broadcasterProfile={broadcasterProfile}
               />
             )}
 
@@ -1120,11 +1384,27 @@ function BroadcastPage() {
       {/* Gift Modal */}
       <GiftBoxModal
         isOpen={isGiftModalOpen}
-        onClose={() => setIsGiftModalOpen(false)}
-        recipientId={stream?.user_id || ''}
+        onClose={() => {
+          setIsGiftModalOpen(false);
+          setGiftRecipientId(null);
+        }}
+        recipientId={giftRecipientId || stream?.user_id || ''}
         streamId={streamId || ''}
-        onGiftSent={(gift) => {
-          console.log('Gift sent:', gift);
+        onGiftSent={(giftData) => {
+          console.log('Gift sent:', giftData);
+          // Also show animation locally for the sender
+          const newGift: BroadcastGift = {
+            id: `local-${Date.now()}`,
+            gift_id: giftData.id,
+            gift_name: giftData.name,
+            gift_icon: giftData.icon || '🎁',
+            amount: giftData.coinCost,
+            sender_id: user?.id || '',
+            sender_name: profile?.username || 'You',
+            receiver_id: giftRecipientId || stream?.user_id || '',
+            created_at: new Date().toISOString(),
+          };
+          setRecentGifts(prev => [...prev, newGift]);
         }}
       />
 

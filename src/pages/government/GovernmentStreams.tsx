@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/store';
 import { 
   Users, 
   Radio, 
@@ -32,6 +33,7 @@ interface OfficerLog {
 interface StreamRow {
   id: string;
   broadcaster_id: string;
+  user_id?: string;
   status: string;
   is_live: boolean;
   viewer_count: number;
@@ -42,6 +44,8 @@ interface StreamRow {
   broadcaster: {
     username: string;
     avatar_url: string;
+    broadcast_chat_disabled?: boolean;
+    broadcast_mic_muted?: boolean;
   };
   active_officers?: OfficerLog[];
 }
@@ -63,9 +67,11 @@ interface PodRow {
 
 interface StreamParticipant {
   user_id: string;
+  guest_id?: string | null;
   username: string;
   avatar_url?: string;
   is_active: boolean;
+  summonable?: boolean;
 }
 
 export default function GovernmentStreams() {
@@ -89,6 +95,7 @@ export default function GovernmentStreams() {
         .select(`
           id,
           broadcaster_id,
+          user_id,
           status,
           is_live,
           hls_url,
@@ -99,7 +106,7 @@ export default function GovernmentStreams() {
           category,
           start_time,
           mux_playback_id,
-          broadcaster:user_profiles!broadcaster_id(username, avatar_url)
+          broadcaster:user_profiles!broadcaster_id(username, avatar_url, broadcast_chat_disabled, broadcast_mic_muted)
         `)
         .order('created_at', { ascending: false }) // Show newest first
         .range(0, 49); // Limit to 50 for performance
@@ -240,41 +247,85 @@ export default function GovernmentStreams() {
   };
 
   const handleMuteBroadcaster = async (stream: StreamRow) => {
-    if (!confirm(`Are you sure you want to MUTE broadcaster ${stream.broadcaster?.username || 'Unknown'}?`)) return;
+    const broadcasterId = stream.broadcaster_id || stream.user_id;
+    if (!broadcasterId) {
+      toast.error('Broadcaster not found for this stream');
+      return;
+    }
+
+    const currentlyMuted = !!stream.broadcaster?.broadcast_mic_muted;
+    const nextMuted = !currentlyMuted;
+    const actionLabel = nextMuted ? 'MUTE' : 'UNMUTE';
+
+    if (!confirm(`Are you sure you want to ${actionLabel} broadcaster ${stream.broadcaster?.username || 'Unknown'} across all streams?`)) return;
     try {
-      // Mute by disabling their chat capability in participants table (if they are a participant in their own stream logic)
-      // Or if there is a specific 'is_muted' flag. 
-      // Based on LivePage logic, we mute participants.
-      // Broadcaster is also a participant usually.
-      
-      // Calculate 10 mins mute
-      const until = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-      
-      await supabase
-        .from('streams_participants')
-        .update({ can_chat: false, chat_mute_until: until })
-        .eq('stream_id', stream.id)
-        .eq('user_id', stream.broadcaster_id);
-        
-      toast.success(`Broadcaster muted for 10 minutes`);
+      const { data, error } = await supabase.rpc('set_broadcaster_moderation_lock', {
+        p_broadcaster_id: broadcasterId,
+        p_chat_disabled: null,
+        p_mic_muted: nextMuted,
+        p_reason: `Government control: ${nextMuted ? 'mute host' : 'unmute host'}`
+      });
+
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error || 'Failed to update host mute');
+
+      setStreams(prev => prev.map((s) => {
+        const sid = s.broadcaster_id || s.user_id;
+        if (sid !== broadcasterId) return s;
+        return {
+          ...s,
+          broadcaster: {
+            ...s.broadcaster,
+            broadcast_mic_muted: nextMuted
+          }
+        };
+      }));
+
+      toast.success(nextMuted ? 'Host mic muted across all streams' : 'Host mic unmuted across all streams');
     } catch (error) {
       console.error('Error muting broadcaster:', error);
-      toast.error('Failed to mute broadcaster');
+      toast.error('Failed to update host mute');
     }
   };
 
-  const handleDisableAllChats = async (streamId: string) => {
-    if (!confirm('Are you sure you want to DISABLE ALL CHATS for this stream?')) return;
+  const handleDisableAllChats = async (stream: StreamRow) => {
+    const broadcasterId = stream.broadcaster_id || stream.user_id;
+    if (!broadcasterId) {
+      toast.error('Broadcaster not found for this stream');
+      return;
+    }
+
+    const currentlyDisabled = !!stream.broadcaster?.broadcast_chat_disabled;
+    const nextDisabled = !currentlyDisabled;
+    const actionLabel = nextDisabled ? 'DISABLE' : 'ENABLE';
+    if (!confirm(`Are you sure you want to ${actionLabel} chat for broadcaster ${stream.broadcaster?.username || 'Unknown'} across all streams?`)) return;
     try {
-      await supabase
-        .from('streams_participants')
-        .update({ can_chat: false, chat_mute_until: null }) // null means permanent/indefinite until cleared
-        .eq('stream_id', streamId);
-        
-      toast.success('All chats disabled for this stream');
+      const { data, error } = await supabase.rpc('set_broadcaster_moderation_lock', {
+        p_broadcaster_id: broadcasterId,
+        p_chat_disabled: nextDisabled,
+        p_mic_muted: null,
+        p_reason: `Government control: ${nextDisabled ? 'disable chat' : 'enable chat'}`
+      });
+
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error || 'Failed to update chat state');
+
+      setStreams(prev => prev.map((s) => {
+        const sid = s.broadcaster_id || s.user_id;
+        if (sid !== broadcasterId) return s;
+        return {
+          ...s,
+          broadcaster: {
+            ...s.broadcaster,
+            broadcast_chat_disabled: nextDisabled
+          }
+        };
+      }));
+
+      toast.success(nextDisabled ? 'Chat disabled across all streams' : 'Chat enabled across all streams');
     } catch (error) {
       console.error('Error disabling chats:', error);
-      toast.error('Failed to disable chats');
+      toast.error('Failed to update chat state');
     }
   };
 
@@ -356,7 +407,7 @@ export default function GovernmentStreams() {
                 onWatch={() => setSelectedStream(stream)}
                 onEndLive={() => handleEndLive(stream.id)}
                 onMuteBroadcaster={() => handleMuteBroadcaster(stream)}
-                onDisableChats={() => handleDisableAllChats(stream.id)}
+                onDisableChats={() => handleDisableAllChats(stream)}
                 onSummon={() => handleSummonClick(stream)}
               />
             )) : pods.map(pod => (
@@ -537,18 +588,26 @@ function StreamCard({
 
         <button 
           onClick={onMuteBroadcaster}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-yellow-900/30 hover:bg-yellow-900/50 border border-yellow-500/30 text-yellow-200 text-xs font-semibold rounded-lg transition-colors"
+          className={`flex items-center justify-center gap-1.5 px-3 py-2 border text-xs font-semibold rounded-lg transition-colors ${
+            stream.broadcaster?.broadcast_mic_muted
+              ? 'bg-emerald-900/30 hover:bg-emerald-900/50 border-emerald-500/30 text-emerald-200'
+              : 'bg-yellow-900/30 hover:bg-yellow-900/50 border-yellow-500/30 text-yellow-200'
+          }`}
         >
           <MicOff className="w-3.5 h-3.5" />
-          Mute Host
+          {stream.broadcaster?.broadcast_mic_muted ? 'Unmute Host' : 'Mute Host'}
         </button>
 
         <button 
           onClick={onDisableChats}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-500/30 text-blue-200 text-xs font-semibold rounded-lg transition-colors"
+          className={`flex items-center justify-center gap-1.5 px-3 py-2 border text-xs font-semibold rounded-lg transition-colors ${
+            stream.broadcaster?.broadcast_chat_disabled
+              ? 'bg-emerald-900/30 hover:bg-emerald-900/50 border-emerald-500/30 text-emerald-200'
+              : 'bg-blue-900/30 hover:bg-blue-900/50 border-blue-500/30 text-blue-200'
+          }`}
         >
           <MessageSquareOff className="w-3.5 h-3.5" />
-          No Chat
+          {stream.broadcaster?.broadcast_chat_disabled ? 'Enable Chat' : 'No Chat'}
         </button>
       </div>
     </div>
@@ -557,6 +616,7 @@ function StreamCard({
 
 // Summon Modal
 function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => void }) {
+  const { profile } = useAuthStore();
   const [participants, setParticipants] = useState<StreamParticipant[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -566,61 +626,125 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
   useEffect(() => {
     const loadParticipants = async () => {
       try {
-        const { data } = await supabase
-          .from('stream_participants')
-          .select('user_id, username, is_active')
-          .eq('stream_id', stream.id)
-          .eq('is_active', true);
+        const hostUserId = String(stream.broadcaster_id || stream.user_id || '').trim();
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-        if (data) {
-          // Filter valid user IDs
-          const userIds = data.map(p => p.user_id).filter(Boolean);
-          
-          let profiles: any[] = [];
-          if (userIds.length > 0) {
-            const { data: profilesData } = await supabase
-              .from('user_profiles')
-              .select('id, username, avatar_url')
-              .in('id', userIds);
-            profiles = profilesData || [];
-          }
-            
-          const merged = data.map(p => {
-            const profile = profiles.find(prof => prof.id === p.user_id);
-            // If this is the broadcaster, prefer the stream.broadcaster info which is trusted
-            if (p.user_id === stream.broadcaster_id && stream.broadcaster) {
-              return {
-                ...p,
-                username: stream.broadcaster.username,
-                avatar_url: stream.broadcaster.avatar_url
-              };
-            }
-            
-            // Fix "UN" bug: ensure we have a valid fallback
-            let username = profile?.username || p.username;
-            if (!username || username === 'UN' || username === 'Unknown User') {
-                username = p.user_id ? `User ${p.user_id.slice(0, 6)}` : 'Unknown User';
-            }
-            
-            return {
-              ...p,
-              username: username,
-              avatar_url: profile?.avatar_url || `https://ui-avatars.com/api/?name=${username}&background=random`
-            };
-          });
-          
-          // Add broadcaster if not in list
-          if (!merged.find(p => p.user_id === stream.broadcaster_id)) {
-            merged.unshift({
-              user_id: stream.broadcaster_id,
-              username: stream.broadcaster?.username || 'Unknown Broadcaster',
-              avatar_url: stream.broadcaster?.avatar_url,
-              is_active: true
-            });
-          }
-          
-          setParticipants(merged);
+        const [spRes, legacyRes, seatsRes, viewersRes] = await Promise.all([
+          supabase
+            .from('streams_participants')
+            .select('user_id, is_active')
+            .eq('stream_id', stream.id)
+            .eq('is_active', true),
+          supabase
+            .from('stream_participants')
+            .select('user_id, username, is_active')
+            .eq('stream_id', stream.id)
+            .eq('is_active', true),
+          supabase
+            .from('stream_seat_sessions')
+            .select('user_id, guest_id, status')
+            .eq('stream_id', stream.id)
+            .eq('status', 'active'),
+          supabase
+            .from('stream_viewers')
+            .select('user_id, last_seen')
+            .eq('stream_id', stream.id)
+            .gte('last_seen', fiveMinutesAgo)
+        ]);
+
+        const allUserIds = new Set<string>();
+        const allGuestIds = new Set<string>();
+        const legacyNameMap = new Map<string, string>();
+
+        (spRes.data || []).forEach((r: any) => {
+          if (r?.user_id) allUserIds.add(String(r.user_id));
+        });
+
+        (legacyRes.data || []).forEach((r: any) => {
+          if (r?.user_id) allUserIds.add(String(r.user_id));
+          if (r?.user_id && r?.username) legacyNameMap.set(String(r.user_id), String(r.username));
+        });
+
+        (seatsRes.data || []).forEach((r: any) => {
+          if (r?.user_id) allUserIds.add(String(r.user_id));
+          if (r?.guest_id) allGuestIds.add(String(r.guest_id));
+        });
+
+        (viewersRes.data || []).forEach((r: any) => {
+          if (r?.user_id) allUserIds.add(String(r.user_id));
+        });
+
+        if (hostUserId) allUserIds.add(hostUserId);
+
+        const profileIds = Array.from(allUserIds);
+        let profiles: any[] = [];
+        if (profileIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('user_profiles')
+            .select('id, username, avatar_url')
+            .in('id', profileIds);
+          profiles = profilesData || [];
         }
+
+        const profileMap = new Map<string, any>(profiles.map((p) => [String(p.id), p]));
+        const merged: StreamParticipant[] = [];
+        const seen = new Set<string>();
+
+        const pushUser = (userId: string) => {
+          if (!userId || seen.has(`u:${userId}`)) return;
+          seen.add(`u:${userId}`);
+          const p = profileMap.get(userId);
+          const legacyName = legacyNameMap.get(userId);
+
+          let username =
+            (userId === hostUserId ? stream.broadcaster?.username : undefined) ||
+            p?.username ||
+            legacyName ||
+            `User ${String(userId).slice(0, 8)}`;
+
+          if (username === 'UN' || username === 'Unknown' || username === 'Unknown User') {
+            username = `User ${String(userId).slice(0, 8)}`;
+          }
+
+          const avatar =
+            (userId === hostUserId ? stream.broadcaster?.avatar_url : undefined) ||
+            p?.avatar_url ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`;
+
+          merged.push({
+            user_id: userId,
+            username,
+            avatar_url: avatar,
+            is_active: true,
+            summonable: true
+          });
+        };
+
+        const pushGuest = (guestId: string) => {
+          if (!guestId || seen.has(`g:${guestId}`)) return;
+          seen.add(`g:${guestId}`);
+          const username = String(guestId);
+          merged.push({
+            user_id: username,
+            guest_id: username,
+            username,
+            avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`,
+            is_active: true,
+            summonable: false
+          });
+        };
+
+        // Broadcaster first
+        if (hostUserId) pushUser(hostUserId);
+        Array.from(allUserIds).forEach((id) => pushUser(id));
+        Array.from(allGuestIds).forEach((guestId) => pushGuest(guestId));
+
+        if (merged.length === 0 && hostUserId) {
+          // Final fallback: never show empty list if we at least know the host id.
+          pushUser(hostUserId);
+        }
+
+        setParticipants(merged);
       } catch (err) {
         console.error('Error loading participants', err);
       } finally {
@@ -631,33 +755,47 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
   }, [stream]);
 
   const handleSummon = async () => {
+    const canSummon =
+      profile?.is_admin === true ||
+      profile?.is_troll_officer === true ||
+      profile?.is_lead_officer === true ||
+      ['admin', 'troll_officer', 'lead_troll_officer'].includes(String(profile?.role || ''));
+
+    if (!canSummon) {
+      toast.error('Only Admin, Troll Officer, or Lead Troll Officer can issue summons.');
+      return;
+    }
+
     if (!selectedUserId) {
       toast.error('Please select a user');
       return;
     }
+
+    const selected = participants.find((p) => p.user_id === selectedUserId);
+    if (!selected?.summonable) {
+      toast.error('Guest users cannot be summoned. Select a registered user.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Create a court case docket entry
-      // Use upsert or insert. Assuming 'court_cases' is the correct table.
-      // If direct insert fails due to RLS, we might need an RPC.
-      // For now, we'll try to insert with minimal required fields.
-      
-      const { error } = await supabase.from('court_cases').insert({
-        title: `Summon from Stream: ${stream.title || 'Untitled'}`,
-        description: `User summoned by officer from stream ${stream.id}. Reason: ${reason}`,
-        defendant_id: selectedUserId,
-        status: 'waiting', 
-        case_type: 'civil', 
-        severity: '1',
-        plaintiff_id: (await supabase.auth.getUser()).data.user?.id // Ensure plaintiff is set
+      const { data, error } = await supabase.rpc('summon_user_to_court', {
+        p_defendant_id: selectedUserId,
+        p_reason: reason,
+        p_users_involved: `Government control stream ${stream.id}`,
+        p_docket_id: null
       });
 
       if (error) {
-          console.error('Summon error:', error);
-          throw error;
+        console.error('Summon error:', error);
+        throw error;
       }
 
-      toast.success('User summoned to court successfully');
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to issue summon');
+      }
+
+      toast.success('Summon issued and docketed successfully');
       onClose();
     } catch (err: any) {
       console.error(err);
@@ -713,7 +851,9 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
                     />
                     <div className="text-left">
                       <div className="font-bold text-sm">{p.username}</div>
-                      <div className="text-[10px] text-gray-400">{p.user_id?.slice(0, 8)}...</div>
+                      <div className="text-[10px] text-gray-400">
+                        {p.summonable ? `${p.user_id?.slice(0, 8)}...` : 'Guest (view only)'}
+                      </div>
                     </div>
                     {selectedUserId === p.user_id && (
                       <div className="ml-auto w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.8)]" />
@@ -741,7 +881,7 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
 
           <button
             onClick={handleSummon}
-            disabled={submitting || !selectedUserId}
+            disabled={submitting}
             className="w-full py-3 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-orange-900/20 mt-4 flex items-center justify-center gap-2"
           >
             {submitting ? (

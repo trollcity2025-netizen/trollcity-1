@@ -1,10 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { Heart, Users, Coins, Swords } from 'lucide-react';
+import { Heart, Users, Swords, ArrowLeft } from 'lucide-react';
 import { Stream } from '../../types/broadcast';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
-import { showCoinBalanceInChat } from '../../config/broadcastCategories';
 
 interface BroadcastHeaderProps {
     stream: Stream;
@@ -13,13 +13,24 @@ interface BroadcastHeaderProps {
     isHost: boolean;
     liveViewerCount?: number;
     handleLike: () => void;
+    onBack?: () => void;
 }
 
-export default function BroadcastHeader({ stream, onStartBattle, categoryBattleTerm, isHost, liveViewerCount, handleLike }: BroadcastHeaderProps) {
+export default function BroadcastHeader({ stream, onStartBattle, categoryBattleTerm, isHost, liveViewerCount, handleLike, onBack }: BroadcastHeaderProps) {
     const { profile, setProfile } = useAuthStore();
     const [likes, setLikes] = React.useState(0);
     const [isLiking, setIsLiking] = React.useState(false);
     const profileRef = React.useRef(profile);
+    const navigate = useNavigate();
+
+    // Handle back button - if onBack prop provided use it, otherwise navigate home
+    const handleBack = () => {
+        if (onBack) {
+            onBack();
+        } else {
+            navigate('/');
+        }
+    };
 
     // Keep profileRef up to date
     React.useEffect(() => {
@@ -88,33 +99,28 @@ export default function BroadcastHeader({ stream, onStartBattle, categoryBattleT
 
 
     return (
-        <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-end gap-3 pointer-events-none">
-            {/* Coin Balance - Only shown for stream categories (not live chat) */}
-            {showCoinBalanceInChat(stream.category || 'general') && (
-            <div className="pointer-events-auto bg-black/40 backdrop-blur-md border border-yellow-500/30 rounded-full px-4 py-2 flex items-center gap-2 shadow-lg shadow-black/20">
-                <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center border border-yellow-500/50">
-                    <Coins size={16} className="text-yellow-400" />
-                </div>
-                <div className="flex flex-col leading-none">
-                    <span className="text-[10px] text-yellow-500/70 font-bold uppercase tracking-wider">Balance</span>
-                    <span className="text-sm font-black text-white">
-                        {(profile?.troll_coins || 0).toLocaleString()}
-                    </span>
-                </div>
-            </div>
-            )}
+        <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-between gap-3 pointer-events-none">
+            {/* Back Button - Mobile/Immersive Mode */}
+            <button
+                onClick={handleBack}
+                className="pointer-events-auto flex items-center justify-center w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full border border-white/10 transition-all"
+            >
+                <ArrowLeft size={20} className="text-white" />
+            </button>
 
-            {isHost && onStartBattle && (
-                <button
-                    onClick={onStartBattle}
-                    className="pointer-events-auto flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white rounded-full px-4 py-2 shadow-lg shadow-red-500/20 transition-all"
-                >
-                    <Swords size={16} />
-                    <span className="text-xs font-bold">
-                        {categoryBattleTerm ? categoryBattleTerm.toUpperCase() : (stream.stream_kind === 'trollmers' ? 'HEAD TO HEAD' : 'BATTLE')}
-                    </span>
-                </button>
-            )}
+            <div className="flex items-center gap-3">
+                {isHost && onStartBattle && (
+                    <button
+                        onClick={onStartBattle}
+                        className="pointer-events-auto flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white rounded-full px-4 py-2 shadow-lg shadow-red-500/20 transition-all"
+                    >
+                        <Swords size={16} />
+                        <span className="text-xs font-bold">
+                            {categoryBattleTerm ? categoryBattleTerm.toUpperCase() : (stream.stream_kind === 'trollmers' ? 'HEAD TO HEAD' : 'BATTLE')}
+                        </span>
+                    </button>
+                )}
+            </div>
 
             {/* Right: Stream Stats - HIDDEN for now to keep header clean and avoid overlap with sidebar on desktop */}
             <div className="hidden items-center gap-3">

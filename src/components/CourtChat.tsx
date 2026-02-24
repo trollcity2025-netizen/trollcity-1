@@ -3,10 +3,13 @@ import { Send, Lock } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import GiftBoxModal from './broadcast/GiftBoxModal';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   id: string;
   user: string;
+  userId?: string;
   text: string;
   timestamp: Date;
   isSystem?: boolean;
@@ -22,8 +25,11 @@ interface CourtChatProps {
 
 export default function CourtChat({ courtId, isLocked, className = '' }: CourtChatProps) {
   const { user, profile } = useAuthStore();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
+  const [giftOpen, setGiftOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const profileCache = useRef<Record<string, string>>({});
 
@@ -65,6 +71,7 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
         return {
           id: m.id,
           user: agentRole === 'User' ? (m.user_profiles?.username || 'Unknown') : agentRole,
+          userId: m.user_id || undefined,
           text: m.content,
           timestamp: new Date(m.created_at),
           isSystem: agentRole === 'System',
@@ -113,6 +120,7 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
           const newMessage = {
             id: m.id,
             user: username,
+            userId: m.user_id || undefined,
             text: m.content,
             timestamp: new Date(m.created_at),
             isSystem: agentRole === 'System',
@@ -171,6 +179,7 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
         const newMessage: Message = {
             id: m.id,
             user: m.user_profiles?.username || 'Me',
+            userId: m.user_id || undefined,
             text: m.content,
             timestamp: new Date(m.created_at),
             isSystem: agentRole === 'System',
@@ -191,6 +200,20 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
       toast.error('Failed to send message');
       setInputValue(text); // revert on error
     }
+  };
+
+  const openGift = (targetUserId?: string) => {
+    if (!targetUserId) return;
+    if (!user) {
+      navigate('/auth?mode=signup');
+      return;
+    }
+    if (targetUserId === user.id) {
+      toast.error('You cannot gift yourself');
+      return;
+    }
+    setGiftRecipientId(targetUserId);
+    setGiftOpen(true);
   };
 
   const getRoleColor = (role?: string) => {
@@ -273,7 +296,15 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
             ) : (
               <div className="max-w-[85%]">
                 <span className={`text-xs mb-0.5 block ml-1 font-bold ${getRoleColor(msg.role)}`}>
-                  {msg.role && msg.role !== 'User' ? `[${msg.role}] ` : ''}{msg.user}
+                  {msg.role && msg.role !== 'User' ? `[${msg.role}] ` : ''}
+                  <button
+                    type="button"
+                    onClick={() => openGift(msg.userId)}
+                    className="hover:text-yellow-300 transition-colors"
+                    title="Send gift"
+                  >
+                    {msg.user}
+                  </button>
                 </span>
                 <div className={`px-3 py-2 rounded-2xl rounded-tl-none text-sm text-gray-200 border ${msg.role === 'Prosecutor' ? 'bg-red-950/30 border-red-900/50' : msg.role === 'Defense' ? 'bg-blue-950/30 border-blue-900/50' : 'bg-zinc-800 border-zinc-700/50'}`}>
                   {msg.text}
@@ -305,6 +336,16 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
           </button>
         </div>
       </form>
+
+      <GiftBoxModal
+        isOpen={giftOpen}
+        onClose={() => {
+          setGiftOpen(false);
+          setGiftRecipientId(null);
+        }}
+        recipientId={giftRecipientId || ''}
+        streamId=""
+      />
     </div>
   );
 }

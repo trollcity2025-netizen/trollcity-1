@@ -4,6 +4,37 @@ import { createClient } from '@supabase/supabase-js';
 export const TEST_PASSWORD = process.env.TEST_USER_PASSWORD || 'Test123!@#';
 
 export const TEST_USERS = {
+  // Role 1: Admin (2 users)
+  admin1: { email: 'admin1@test.com', password: TEST_PASSWORD },
+  admin2: { email: 'admin2@test.com', password: TEST_PASSWORD },
+  // Role 2: Secretary (2 users)
+  secretary1: { email: 'secretary1@test.com', password: TEST_PASSWORD },
+  secretary2: { email: 'secretary2@test.com', password: TEST_PASSWORD },
+  // Role 3: Lead Troll Officer (2 users)
+  leadOfficer1: { email: 'lead_officer1@test.com', password: TEST_PASSWORD },
+  leadOfficer2: { email: 'lead_officer2@test.com', password: TEST_PASSWORD },
+  // Role 4: Troll Officer (2 users)
+  officer1: { email: 'officer1@test.com', password: TEST_PASSWORD },
+  officer2: { email: 'officer2@test.com', password: TEST_PASSWORD },
+  // Role 5: Broadcaster (2 users)
+  broadcaster1: { email: 'broadcaster1@test.com', password: TEST_PASSWORD },
+  broadcaster2: { email: 'broadcaster2@test.com', password: TEST_PASSWORD },
+  // Role 6: Family Leader (2 users)
+  familyLeader1: { email: 'family_leader1@test.com', password: TEST_PASSWORD },
+  familyLeader2: { email: 'family_leader2@test.com', password: TEST_PASSWORD },
+  // Role 7: Troller (2 users)
+  troller1: { email: 'troller1@test.com', password: TEST_PASSWORD },
+  troller2: { email: 'troller2@test.com', password: TEST_PASSWORD },
+  // Role 8: President (2 users)
+  president1: { email: 'president1@test.com', password: TEST_PASSWORD },
+  president2: { email: 'president2@test.com', password: TEST_PASSWORD },
+  // Role 9: Pastor (2 users)
+  pastor1: { email: 'pastor1@test.com', password: TEST_PASSWORD },
+  pastor2: { email: 'pastor2@test.com', password: TEST_PASSWORD },
+  // Role 10: Member (2 users)
+  member1: { email: 'member1@test.com', password: TEST_PASSWORD },
+  member2: { email: 'member2@test.com', password: TEST_PASSWORD },
+  // Legacy users (for backward compatibility)
   admin: { email: 'admin@test.com', password: TEST_PASSWORD },
   secretary: { email: 'secretary@test.com', password: TEST_PASSWORD },
   leadOfficer: { email: 'lead.troll@test.com', password: TEST_PASSWORD },
@@ -67,6 +98,7 @@ async function ensureProfileComplete(userId: string) {
 
 export async function login(page: Page, email: string, password = TEST_PASSWORD) {
   await page.goto('/auth', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  // Auth.tsx uses "Email address" placeholder (line 618)
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByPlaceholder('Password').fill(password);
   await page.locator('form').getByRole('button', { name: 'Sign In' }).click();

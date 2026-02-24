@@ -839,27 +839,51 @@ Deno.serve(async (req) => {
             .eq("id", streamId)
             .single();
             
+        // If there's an active battle, end it first (credit opponent as winner)
         if (streamData?.battle_id) {
             const { data: battleData } = await supabaseAdmin
                 .from("battles")
-                .select("status")
+                .select("status, challenger_stream_id, opponent_stream_id")
                 .eq("id", streamData.battle_id)
                 .single();
                 
             if (battleData?.status === 'active') {
-                // Log the blocked attempt
-                await supabaseAdmin.from("audit_logs").insert({
-                    action: "admin_force_end_stream_blocked",
-                    user_id: userId,
-                    details: {
-                        streamId,
-                        battleId: streamData.battle_id,
-                        reason: reason || "No reason provided",
-                        blocked_reason: "Stream is in active battle"
-                    }
+                // Determine opponent stream to credit as winner
+                const opponentStreamId = battleData.challenger_stream_id === streamId 
+                    ? battleData.opponent_stream_id 
+                    : battleData.challenger_stream_id;
+                
+                // Get opponent's user_id
+                const { data: opponentStream } = await supabaseAdmin
+                    .from("streams")
+                    .select("user_id")
+                    .eq("id", opponentStreamId)
+                    .single();
+                
+                // End the battle, crediting opponent as winner
+                const { error: battleEndError } = await supabaseAdmin.rpc('end_battle_guarded', {
+                    p_battle_id: streamData.battle_id,
+                    p_winner_id: opponentStream?.user_id || null
                 });
                 
-                throw new Error(`Cannot force-end stream ${streamId}: Active battle in progress. End the battle first.`);
+                if (battleEndError) {
+                    console.error('Failed to end battle:', battleEndError);
+                } else {
+                    console.log('Battle ended due to admin stream end');
+                }
+                
+                // Distribute winnings
+                await supabaseAdmin.rpc('distribute_battle_winnings', { p_battle_id: streamData.battle_id });
+                
+                // Clear battle from both streams
+                await supabaseAdmin.from("streams").update({ 
+                    battle_id: null, 
+                    is_battle: false 
+                }).eq("id", battleData.challenger_stream_id);
+                await supabaseAdmin.from("streams").update({ 
+                    battle_id: null, 
+                    is_battle: false 
+                }).eq("id", battleData.opponent_stream_id);
             }
         }
         
@@ -870,7 +894,8 @@ Deno.serve(async (req) => {
             details: {
                 streamId,
                 streamOwner: streamData?.user_id,
-                reason: reason || "No reason provided"
+                reason: reason || "No reason provided",
+                battleEnded: !!streamData?.battle_id
             }
         });
         

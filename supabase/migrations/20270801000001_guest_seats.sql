@@ -29,7 +29,17 @@ DECLARE
     v_user_balance BIGINT;
     v_effective_price INTEGER := COALESCE(p_price, 0);
     v_has_paid BOOLEAN := FALSE;
+    v_are_seats_locked BOOLEAN := FALSE;
 BEGIN
+    -- Check if seats are locked for this stream
+    SELECT COALESCE(are_seats_locked, false) INTO v_are_seats_locked
+    FROM public.streams
+    WHERE id = p_stream_id;
+    
+    IF v_are_seats_locked THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Seats are currently locked');
+    END IF;
+    
     -- Validate inputs
     IF p_user_id IS NULL AND p_guest_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'User ID or Guest ID required');

@@ -9,6 +9,7 @@ import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 // import InstallButton from '../components/InstallButton';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import { generateUUID } from '../lib/uuid';
+import { trackMobileError } from '../hooks/useMobileErrorTracking';
 
 interface AuthProps {
   embedded?: boolean;
@@ -144,6 +145,16 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
 
   const executeLogin = async (loginEmail: string, loginPassword: string) => {
     console.log('Attempting email login...')
+    
+    // Track login attempt
+    try {
+      trackMobileError(
+        new Error('[Auth] executeLogin started'),
+        'Auth-login',
+        undefined
+      )
+    } catch {}
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
@@ -163,6 +174,15 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
     
     if (data.user && data.session) {
       console.log('Email login successful:', data.user.email)
+      
+      // Track successful login before profile fetch
+      try {
+        trackMobileError(
+          new Error('[Auth] Login successful, fetching profile'),
+          'Auth-login-success',
+          data.user.id
+        )
+      } catch {}
       
       const sessionId = generateUUID()
       // Store session ID for device enforcement
@@ -268,6 +288,15 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
               .from('user_profiles')
               .update({ last_known_ip: userIP, ip_address_history: updated })
               .eq('id', data.user.id)
+          } catch {}
+          
+          // Track navigation to home
+          try {
+            trackMobileError(
+              new Error('[Auth] Navigating to home'),
+              'Auth-navigate',
+              data.user.id
+            )
           } catch {}
           navigate('/')
         } else {
@@ -392,6 +421,13 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
       }
     } catch (err: any) {
       console.error('Email auth error:', err)
+      
+      // Track the error for mobile monitoring
+      const errorToTrack = err instanceof Error ? err : new Error(String(err))
+      try {
+        trackMobileError(errorToTrack, 'Auth-login', undefined)
+      } catch {}
+      
       if (err instanceof AuthApiError) {
         const msg = String(err.message || '')
         const lowerMsg = msg.toLowerCase()

@@ -14,6 +14,7 @@ import { Mic, MicOff, Video, VideoOff, User } from "lucide-react";
 import { Button } from "../components/ui/button";
 import CourtGeminiModal from "../components/CourtGeminiModal";
 import CourtDocketModal from "../components/CourtDocketModal";
+import GiftBoxModal from "../components/broadcast/GiftBoxModal";
 import { generateSummaryFeedback, CourtAgentRole } from "../lib/courtAi";
 import { getGlowingTextStyle } from "../lib/perkEffects";
 
@@ -78,7 +79,7 @@ type CombinedUserTrack = {
   audioTrack?: ILocalAudioTrack | IRemoteAudioTrack;
 };
 
-const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, toggleMicrophone, localUserId, courtSession }: {
+const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, toggleMicrophone, localUserId, courtSession, onGiftUser }: {
   maxTiles: number;
   localTracks: [ILocalVideoTrack | undefined, ILocalAudioTrack | undefined];
   remoteUsers: IAgoraRTCRemoteUser[];
@@ -86,6 +87,7 @@ const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, togg
   toggleMicrophone: () => void;
   localUserId: string;
   courtSession: any; // TODO: Define proper type for courtSession
+  onGiftUser?: (userId: string) => void;
 }) => {
   const localVideoTrack = localTracks[0];
   const localAudioTrack = localTracks[1];
@@ -142,8 +144,15 @@ const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, togg
     const isMicOn = audioTrack ? ('enabled' in audioTrack ? audioTrack.enabled : true) : false;
     const isCamOn = videoTrack ? ('enabled' in videoTrack ? videoTrack.enabled : true) : false;
 
+    const targetUid = String(uid || '');
+    const canGift = isValidUuid(targetUid) && targetUid !== localUserId;
     return (
-      <div className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group`}>
+      <div
+        className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group ${canGift ? 'cursor-pointer hover:border-yellow-400/70' : ''}`}
+        onClick={() => {
+          if (canGift && onGiftUser) onGiftUser(targetUid);
+        }}
+      >
         <div className={`absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 backdrop-blur-sm ${colorClass.replace('border-', 'text-')}`}>
           {title}
           <div className="flex gap-1 ml-2">
@@ -513,6 +522,8 @@ export default function CourtRoom() {
   const [defenseCounselEnabled, setDefenseCounselEnabled] = useState(false);
   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
   const [showDocketModal, setShowDocketModal] = useState(false);
+  const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
+  const [giftOpen, setGiftOpen] = useState(false);
 
 
 
@@ -829,6 +840,18 @@ export default function CourtRoom() {
           toggleMicrophone={toggleMicrophone}
           localUserId={user?.id || ''}
           courtSession={courtSession}
+          onGiftUser={(targetUserId) => {
+            if (!user) {
+              navigate('/auth?mode=signup');
+              return;
+            }
+            if (targetUserId === user.id) {
+              toast.error('You cannot gift yourself');
+              return;
+            }
+            setGiftRecipientId(targetUserId);
+            setGiftOpen(true);
+          }}
         />
 
         <div className="flex justify-center gap-4 mt-4">
@@ -921,6 +944,16 @@ export default function CourtRoom() {
             </div>
           </div>
         )}
+
+        <GiftBoxModal
+          isOpen={giftOpen}
+          onClose={() => {
+            setGiftOpen(false);
+            setGiftRecipientId(null);
+          }}
+          recipientId={giftRecipientId || ''}
+          streamId=""
+        />
 
       </div>
     </RequireRole>

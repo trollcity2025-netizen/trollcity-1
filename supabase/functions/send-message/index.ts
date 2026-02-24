@@ -23,13 +23,31 @@ class SupabaseTransportAdapter implements TransportAdapter {
   constructor(private supabase: any) {}
   async publish(channel: string, event: string, payload: any) {
     const chan = this.supabase.channel(channel);
-    await chan.send({
-      type: "broadcast",
-      event: event,
-      payload: payload,
+    // MUST wait until channel is subscribed before sending broadcast.
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Realtime subscribe timeout")), 5000);
+      chan.subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          clearTimeout(timeout);
+          resolve();
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          clearTimeout(timeout);
+          reject(new Error(`Realtime subscribe failed: ${status}`));
+        }
+      });
     });
-    // Note: Supabase broadcast is fire-and-forget in some client libs, 
-    // but here we just ensure the call is made.
+
+    try {
+      await chan.send({
+        type: "broadcast",
+        event: event,
+        payload: payload,
+      });
+    } finally {
+      await this.supabase.removeChannel(chan);
+    }
   }
 }
 
@@ -217,7 +235,7 @@ serve(async (req) => {
       { data: ban },
       { data: viewerCount }
     ] = await Promise.all([
-      supabase.from("streams").select("id, is_live").eq("id", stream_id).single(),
+      supabase.from("streams").select("id, is_live, user_id, broadcaster_id").eq("id", stream_id).single(),
       supabase.from("user_profiles").select("*").eq("id", user.id).single(),
       supabase.from("stream_mutes").select("id").eq("stream_id", stream_id).eq("user_id", user.id).maybeSingle(),
       supabase.from("stream_bans").select("id, expires_at").eq("stream_id", stream_id).eq("user_id", user.id).maybeSingle(),
@@ -338,6 +356,8 @@ serve(async (req) => {
     ];
     if (redis) adapters.push(new RedisStreamAdapter(redis));
 
+    const publishChannels = Array.from(new Set([`stream:${stream_id}`, stream_id]));
+
     // B2) Hot Stream Protection (Sys Event for High Traffic)
     if (currentViewerCount >= HOT_STREAM_THRESHOLD && redis) {
       const lastNotifyKey = `notified_high_traffic:${stream_id}`;
@@ -350,13 +370,37 @@ serve(async (req) => {
           ts: Date.now(),
           d: { mode: "high_traffic", sample_rate: SAMPLE_RATE_DEFAULT }
         };
-        await Promise.all(adapters.map(a => a.publish(stream_id, "message", sysEvent)));
+        await Promise.all(
+          publishChannels.flatMap((channelName) =>
+            adapters.map((a) => a.publish(channelName, "message", sysEvent))
+          )
+        );
         await redis.set(lastNotifyKey, "1", { ex: 300 }); // Notify every 5 mins
       }
     }
 
+    if (type === "chat") {
+      const hostId = stream.user_id || stream.broadcaster_id;
+      if (hostId) {
+        const { data: hostModerationLock } = await supabase
+          .from("user_profiles")
+          .select("broadcast_chat_disabled")
+          .eq("id", hostId)
+          .maybeSingle();
+
+        if (hostModerationLock?.broadcast_chat_disabled) {
+          return new Response(JSON.stringify({ error: "Chat is disabled for this broadcaster", code: "CHAT_DISABLED" }), {
+            status: 403,
+            headers: { ...headers, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     await Promise.allSettled(
-      adapters.map(a => a.publish(stream_id, "message", envelope))
+      publishChannels.flatMap((channelName) =>
+        adapters.map((a) => a.publish(channelName, "message", envelope))
+      )
     );
 
     console.log(`[SUCCESS] Message signed and published: txn_id=${txn_id} type=${type} user_id=${user.id}`);

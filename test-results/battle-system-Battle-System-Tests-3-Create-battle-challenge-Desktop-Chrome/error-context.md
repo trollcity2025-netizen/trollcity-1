@@ -1,0 +1,238 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "T TrollCity" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]: T
+          - generic [ref=e9]: TrollCity
+        - button [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+      - generic [ref=e13]:
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - img "broadcaster_test_1" [ref=e17]
+            - generic [ref=e18]: "1"
+          - generic [ref=e19]:
+            - generic [ref=e20]:
+              - heading "broadcaster_test_1" [level=3] [ref=e21]
+              - img [ref=e22]
+            - generic [ref=e27]: Citizen
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - generic [ref=e30]: Level Progress
+            - generic [ref=e31]: 1 → 2
+          - generic [ref=e33]: 0% to next level
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - img [ref=e36]
+            - generic [ref=e41]: 10,000
+          - generic [ref=e42]:
+            - img [ref=e43]
+            - generic [ref=e45]: "0"
+      - generic [ref=e46]:
+        - link "Go Live" [ref=e48] [cursor=pointer]:
+          - /url: /broadcast/setup
+          - img [ref=e49]
+          - generic [ref=e52]: Go Live
+        - button "City Center" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]: City Center
+          - img [ref=e57]
+        - button "Public Services" [ref=e60] [cursor=pointer]:
+          - generic [ref=e61]: Public Services
+          - img [ref=e63]
+        - button "Social" [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]: Social
+          - img [ref=e69]
+        - button "City Registry" [ref=e72] [cursor=pointer]:
+          - generic [ref=e73]: City Registry
+          - img [ref=e75]
+      - link "Stats" [ref=e78] [cursor=pointer]:
+        - /url: /stats
+        - img [ref=e79]
+        - generic [ref=e84]: Stats
+    - generic [ref=e85]:
+      - banner [ref=e87]:
+        - generic [ref=e89]:
+          - img [ref=e90]
+          - textbox "Search users..." [ref=e93]
+        - generic [ref=e94]:
+          - link "2" [ref=e95] [cursor=pointer]:
+            - /url: /trollifications
+            - img [ref=e96]
+            - generic [ref=e99]: "2"
+          - link "B" [ref=e102] [cursor=pointer]:
+            - /url: /profile/broadcaster_test_1
+            - generic [ref=e104]: B
+          - button "Logout" [ref=e106] [cursor=pointer]:
+            - img [ref=e107]
+      - main [ref=e110]:
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - generic [ref=e123]:
+              - heading "City Feed" [level=1] [ref=e124]
+              - paragraph [ref=e125]: Live streams happening right now.
+            - generic [ref=e127]:
+              - generic [ref=e128] [cursor=pointer]:
+                - generic [ref=e129]:
+                  - img [ref=e131]
+                  - generic [ref=e135]: LIVE
+                  - generic [ref=e137]:
+                    - img [ref=e138]
+                    - text: "0"
+                - generic [ref=e144]:
+                  - generic [ref=e147]: B
+                  - generic [ref=e148]:
+                    - paragraph [ref=e149]: broadcaster_test_1's Live
+                    - paragraph [ref=e150]: broadcaster_test_1
+              - generic [ref=e151] [cursor=pointer]:
+                - generic [ref=e152]:
+                  - img [ref=e154]
+                  - generic [ref=e158]: LIVE
+                  - generic [ref=e160]:
+                    - img [ref=e161]
+                    - text: "0"
+                - generic [ref=e167]:
+                  - generic [ref=e170]: B
+                  - generic [ref=e171]:
+                    - paragraph [ref=e172]: broadcaster_test_1's Live
+                    - paragraph [ref=e173]: broadcaster_test_1
+          - generic [ref=e174]:
+            - generic [ref=e176]:
+              - generic [ref=e178]:
+                - heading "Wall" [level=2] [ref=e179]
+                - paragraph [ref=e180]: The city timeline. Share updates and join the conversation.
+              - generic [ref=e182]:
+                - generic [ref=e184]: B
+                - generic [ref=e185]:
+                  - textbox "What's happening in the City?" [ref=e186]
+                  - generic [ref=e187]:
+                    - generic [ref=e188]:
+                      - button [ref=e189] [cursor=pointer]:
+                        - img [ref=e190]
+                      - button [ref=e195] [cursor=pointer]:
+                        - img [ref=e196]
+                    - button "Post" [ref=e199] [cursor=pointer]
+              - generic [ref=e204]:
+                - generic [ref=e208]:
+                  - img "Stoner_4_ever" [ref=e210]
+                  - generic [ref=e211]:
+                    - generic [ref=e212]:
+                      - generic [ref=e213]:
+                        - generic [ref=e214]:
+                          - generic "View Stoner_4_ever's profile" [ref=e215] [cursor=pointer]: "@Stoner_4_ever"
+                          - generic "OG User - All users until Jan 1, 2026" [ref=e216]:
+                            - img [ref=e217]
+                            - text: OG
+                        - 'generic "Account Age: 3 days" [ref=e219]': • 3d
+                      - generic [ref=e220]: 2/22/2026, 1:28:16 PM
+                    - paragraph [ref=e221]: I’m stuck on live brother ima need sum help troll
+                    - generic [ref=e222]:
+                      - button "1" [ref=e223] [cursor=pointer]:
+                        - img [ref=e224]
+                        - text: "1"
+                      - button "Reply" [ref=e226] [cursor=pointer]:
+                        - img [ref=e227]
+                        - text: Reply
+                    - generic [ref=e232]:
+                      - img "MaiCorp" [ref=e234]
+                      - generic [ref=e235]:
+                        - generic [ref=e236]:
+                          - generic [ref=e237]:
+                            - generic [ref=e238]:
+                              - generic "View MaiCorp's profile" [ref=e239] [cursor=pointer]: "@MaiCorp"
+                              - generic "Admin" [ref=e240]:
+                                - img [ref=e241]
+                                - text: Admin
+                              - generic "OG User - All users until Jan 1, 2026" [ref=e243]:
+                                - img [ref=e244]
+                                - text: OG
+                            - 'generic "Account Age: 91 days" [ref=e246]': • 91d
+                          - generic [ref=e247]: 2/22/2026, 2:40:00 PM
+                        - paragraph [ref=e248]: Troll was sleeping buddy lol
+                        - button "0" [ref=e250] [cursor=pointer]:
+                          - img [ref=e251]
+                          - text: "0"
+                - generic [ref=e256]:
+                  - img "Stoner_4_ever" [ref=e258]
+                  - generic [ref=e259]:
+                    - generic [ref=e260]:
+                      - generic [ref=e261]:
+                        - generic [ref=e262]:
+                          - generic "View Stoner_4_ever's profile" [ref=e263] [cursor=pointer]: "@Stoner_4_ever"
+                          - generic "OG User - All users until Jan 1, 2026" [ref=e264]:
+                            - img [ref=e265]
+                            - text: OG
+                        - 'generic "Account Age: 3 days" [ref=e267]': • 3d
+                      - generic [ref=e268]: 2/22/2026, 1:13:16 PM
+                    - paragraph [ref=e269]: Let’s get fuckin fried bois
+                    - generic [ref=e270]:
+                      - button "1" [ref=e271] [cursor=pointer]:
+                        - img [ref=e272]
+                        - text: "1"
+                      - button "Reply" [ref=e274] [cursor=pointer]:
+                        - img [ref=e275]
+                        - text: Reply
+                - generic [ref=e281]:
+                  - img "starqueen" [ref=e283]
+                  - generic [ref=e284]:
+                    - generic [ref=e285]:
+                      - generic [ref=e286]:
+                        - generic [ref=e287]:
+                          - generic "View starqueen's profile" [ref=e288] [cursor=pointer]: "@starqueen"
+                          - generic "OG User - All users until Jan 1, 2026" [ref=e289]:
+                            - img [ref=e290]
+                            - text: OG
+                        - 'generic "Account Age: 24 days" [ref=e292]': • 24d
+                      - generic [ref=e293]: 2/22/2026, 2:20:05 AM
+                    - paragraph [ref=e294]: <3
+                    - generic [ref=e295]:
+                      - button "1" [ref=e296] [cursor=pointer]:
+                        - img [ref=e297]
+                        - text: "1"
+                      - button "Reply" [ref=e299] [cursor=pointer]:
+                        - img [ref=e300]
+                        - text: Reply
+                    - generic [ref=e305]:
+                      - img "MaiCorp" [ref=e307]
+                      - generic [ref=e308]:
+                        - generic [ref=e309]:
+                          - generic [ref=e310]:
+                            - generic [ref=e311]:
+                              - generic "View MaiCorp's profile" [ref=e312] [cursor=pointer]: "@MaiCorp"
+                              - generic "Admin" [ref=e313]:
+                                - img [ref=e314]
+                                - text: Admin
+                              - generic "OG User - All users until Jan 1, 2026" [ref=e316]:
+                                - img [ref=e317]
+                                - text: OG
+                            - 'generic "Account Age: 91 days" [ref=e319]': • 91d
+                          - generic [ref=e320]: 2/22/2026, 2:53:34 AM
+                        - paragraph [ref=e321]: <3
+                        - button "0" [ref=e323] [cursor=pointer]:
+                          - img [ref=e324]
+                          - text: "0"
+            - generic [ref=e326]:
+              - generic [ref=e327]:
+                - generic [ref=e328]:
+                  - img [ref=e329]
+                  - heading "Top Rent Payers" [level=3] [ref=e332]
+                - generic [ref=e333]: No rent payment data yet.
+              - generic [ref=e334]:
+                - generic [ref=e335]:
+                  - img [ref=e336]
+                  - heading "Pods" [level=3] [ref=e338]
+                - generic [ref=e340]:
+                  - generic [ref=e342]: U
+                  - generic [ref=e343]:
+                    - paragraph [ref=e344]: Test Pod
+                    - paragraph [ref=e345]: "Host: user71933c96"
+                  - generic [ref=e346]:
+                    - generic [ref=e347]: LIVE
+                    - button "Join" [ref=e348] [cursor=pointer]
+                - button "View all pods" [ref=e349] [cursor=pointer]
+  - region "Notifications alt+T"
+```

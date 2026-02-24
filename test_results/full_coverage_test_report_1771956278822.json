@@ -1,0 +1,238 @@
+{
+  "startedAt": "2026-02-24T18:04:38.822Z",
+  "scope": "full-coverage-test",
+  "environment": "production",
+  "config": {
+    "testUsers": 8,
+    "adminUser": true,
+    "livekit": "not used"
+  },
+  "actions": [
+    {
+      "time": "2026-02-24T18:04:40.411Z",
+      "type": "create_users",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:40.503Z",
+      "type": "seed_profiles",
+      "detail": {
+        "count": 8
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:40.640Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "a301ab36-22ac-49c8-a22f-4f1ab4a504bd",
+        "role": "admin"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:40.731Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "266a815c-df17-4ebd-8b2f-6fc0dbf69cc8",
+        "role": "secretary"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:40.820Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "027c4c4d-5e62-46c3-934c-14637506a03c",
+        "role": "lead_troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:40.910Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "2bafb977-2b07-4254-ac82-312ea8df21ab",
+        "role": "troll_officer"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:40.988Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "bb2fecc8-4b0d-422f-9bbb-c23dcbf24696",
+        "role": "troller"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:41.081Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "dcc6338a-1f42-4127-bc2f-99f4004d63e5",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:41.160Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "03ee2d16-31b8-4905-a82c-8f7500787b4c",
+        "role": "pastor"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:41.246Z",
+      "type": "set_role",
+      "detail": {
+        "userId": "1501ba82-c2cf-4605-a1dc-0b0041de3100",
+        "role": "user"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:43.521Z",
+      "type": "create_streams",
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:43.609Z",
+      "type": "create_battle",
+      "detail": {
+        "battleId": "bfafd425-67c3-433b-b552-1b352c7f7774"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:43.749Z",
+      "type": "chat_test",
+      "detail": {
+        "messages": 3
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:43.832Z",
+      "type": "chat_visibility",
+      "detail": {
+        "visible": true
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:44.227Z",
+      "type": "gift_test",
+      "detail": {
+        "senderId": "266a815c-df17-4ebd-8b2f-6fc0dbf69cc8",
+        "receiverId": "027c4c4d-5e62-46c3-934c-14637506a03c",
+        "streamId": "2123566e-1316-4713-92f5-fba54fa9ea0d"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:54.397Z",
+      "type": "admin_toggle_broadcast_lockdown",
+      "detail": {
+        "skipped": true,
+        "reason": "Could not find the function public.admin_toggle_broadcast_lockdown(p_enable) in the schema cache"
+      }
+    },
+    {
+      "time": "2026-02-24T18:04:54.573Z",
+      "type": "battle_gift_test",
+      "detail": {
+        "score_challenger": 10,
+        "score_opponent": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "time": "2026-02-24T18:04:45.664Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:45.759Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:46.922Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:47.011Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:48.141Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:48.232Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:49.380Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:49.462Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:50.552Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:50.665Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:51.803Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:51.894Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:52.992Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:53.079Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:54.221Z",
+      "step": "purchase_house",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    },
+    {
+      "time": "2026-02-24T18:04:54.316Z",
+      "step": "purchase_landlord_license",
+      "warning": "insert or update on table \"notifications\" violates foreign key constraint \"notifications_user_id_fkey\""
+    }
+  ],
+  "errors": [],
+  "cleanup": [
+    {
+      "usersDeleted": 8,
+      "streamsDeleted": 2,
+      "battleDeleted": true
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 16,
+    "actions": 17
+  }
+}

@@ -39,8 +39,8 @@ BEGIN
     WHERE id = p_battle_id;
 
     -- 5. Set battle_id on both streams
-    UPDATE public.streams SET battle_id = p_battle_id WHERE id = v_battle.challenger_stream_id;
-    UPDATE public.streams SET battle_id = p_battle_id WHERE id = v_battle.opponent_stream_id;
+    UPDATE public.streams SET battle_id = p_battle_id, is_battle = true WHERE id = v_battle.challenger_stream_id;
+    UPDATE public.streams SET battle_id = p_battle_id, is_battle = true WHERE id = v_battle.opponent_stream_id;
 
     -- 6. Snapshot Battle Hosts
     INSERT INTO public.battle_participants (battle_id, user_id, team, role, source_stream_id)

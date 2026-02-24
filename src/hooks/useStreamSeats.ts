@@ -22,7 +22,7 @@ export interface SeatSession {
   joined_at: string;
 }
 
-export function useStreamSeats(streamId: string | undefined, userId?: string, broadcasterProfile?: any) {
+export function useStreamSeats(streamId: string | undefined, userId?: string, broadcasterProfile?: any, streamData?: any) {
   const [seats, setSeats] = useState<Record<number, SeatSession>>({});
   const { user, profile } = useAuthStore();
   const [mySession, setMySession] = useState<SeatSession | null>(null);
@@ -134,6 +134,12 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
   const joinSeat = async (seatIndex: number, price: number) => {
     if (!effectiveUserId || !streamId) return false;
 
+    // Check if seats are locked
+    if (streamData?.are_seats_locked) {
+      toast.error("Seats are currently locked");
+      return false;
+    }
+
     // Check Restrictions
     if (profile?.live_restricted_until) {
         const restrictedUntil = new Date(profile.live_restricted_until);
@@ -171,7 +177,9 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
       if (!data || !data.success) throw new Error(data?.message || 'Failed to join seat');
 
       toast.success('Joined seat!');
-      await fetchSeats();
+      
+      // Just update local state - don't trigger a full refetch that could cause re-renders
+      // The realtime subscription will handle keeping seats in sync
       return true;
     } catch (err: any) {
       toast.error(err.message || 'Failed to join seat');
@@ -196,7 +204,7 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
 
       toast.success('Left seat');
       setMySession(null);
-      await fetchSeats();
+      // Don't call fetchSeats here - the realtime subscription will update state
     } catch (err: any) {
       console.error('Leave seat failed:', err);
       toast.error(err.message || 'Failed to leave seat');
@@ -220,7 +228,7 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
       if (!data || !data.success) throw new Error(data?.message || 'User kicked failed');
 
       toast.success('User kicked');
-      await fetchSeats();
+      // Don't call fetchSeats - the realtime subscription will handle state update
     } catch (e: any) {
       toast.error(e.message || 'Failed to kick user');
     }

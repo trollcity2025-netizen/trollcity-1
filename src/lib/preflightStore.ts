@@ -2,16 +2,18 @@ import type { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
 
 interface PreflightState {
   stream: MediaStream | null;
+  cameraStream: MediaStream | null; // Camera stream for overlay when screen sharing
   token: string | null;
   roomName: string | null;
   url: string | null;
   // Agora client and tracks for seamless handoff to BroadcastPage
   agoraClient: IAgoraRTCClient | null;
-  localTracks: [any, any] | null; // [audioTrack, videoTrack]
+  localTracks: [any, any, any, any] | null; // [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?]
 }
 
 const state: PreflightState = {
   stream: null,
+  cameraStream: null,
   token: null,
   roomName: null,
   url: null,
@@ -28,6 +30,15 @@ export const PreflightStore = {
     return state.stream;
   },
 
+  // Store camera stream for overlay when screen sharing
+  setCameraStream(stream: MediaStream | null) {
+    state.cameraStream = stream;
+  },
+
+  getCameraStream() {
+    return state.cameraStream;
+  },
+
   setToken(token: string | null, roomName: string | null, url: string | null) {
     state.token = token;
     state.roomName = roomName;
@@ -39,7 +50,8 @@ export const PreflightStore = {
   },
 
   // Set Agora client and tracks for handoff to BroadcastPage
-  setAgoraClient(client: IAgoraRTCClient | null, tracks: [any, any] | null) {
+  // tracks: [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?]
+  setAgoraClient(client: IAgoraRTCClient | null, tracks: [any, any, any, any] | null) {
     state.agoraClient = client;
     state.localTracks = tracks;
   },
@@ -54,6 +66,7 @@ export const PreflightStore = {
 
   clear() {
     state.stream = null;
+    state.cameraStream = null;
     state.token = null;
     state.roomName = null;
     state.url = null;

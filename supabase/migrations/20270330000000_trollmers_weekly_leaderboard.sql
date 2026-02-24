@@ -477,7 +477,7 @@ BEGIN
     FROM public.user_follows
     WHERE following_id = p_user_id;
 
-    RETURN v_followers_count >= 100;
+    RETURN v_followers_count >= 1;
 END;
 $$;
 
@@ -623,7 +623,7 @@ BEGIN
     WHERE status IN ('pending', 'active');
 
     -- 3. Return a random stream meeting criteria
-    -- If Trollmers stream, only match with other Trollmers streams with camera ready and eligible users
+    -- If Trollmers stream, only match with other Trollmers streams and eligible users
     IF COALESCE(v_my_kind, 'regular') = 'trollmers' THEN
         RETURN QUERY
         SELECT s.id::UUID, s.user_id::UUID, s.title::TEXT, s.viewer_count::INTEGER
@@ -631,7 +631,6 @@ BEGIN
         WHERE s.is_live = TRUE
           AND s.is_battle = FALSE
           AND COALESCE(s.stream_kind, 'regular') = 'trollmers'
-          AND COALESCE(s.camera_ready, false) = true
           AND s.id != p_stream_id
           AND (v_recent_opponent_ids IS NULL OR NOT (s.id = ANY(v_recent_opponent_ids)))
           AND (v_busy_stream_ids IS NULL OR NOT (s.id = ANY(v_busy_stream_ids)))

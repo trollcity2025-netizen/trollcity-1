@@ -379,7 +379,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     layoutMode: 'grid',
     defaultBoxCount: 2,
     maxBoxCount: 2,
-    allowGuestBoxes: false,
+    allowGuestBoxes: true,
     allowAddBox: false,
     allowDeductBox: false,
     hostRoleLabel: 'Challenger',

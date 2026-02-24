@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import { Video, VideoOff, Mic, MicOff, AlertTriangle, RefreshCw, Radio, Youtube, Users, BookOpen, Dumbbell, Briefcase, Heart, Swords } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, AlertTriangle, RefreshCw, Radio, Youtube, Users, BookOpen, Dumbbell, Briefcase, Heart, Swords, Monitor, MonitorOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { MobileErrorLogger } from '@/lib/MobileErrorLogger';
 import { generateUUID } from '../../lib/uuid';
@@ -72,6 +72,12 @@ export default function SetupPage() {
       // ignore
     }
   }, [location.search]);
+
+  useEffect(() => {
+    if (!title.trim() && profile?.username) {
+      setTitle(`${profile.username}'s Live`);
+    }
+  }, [profile?.username, title]);
   
   // Category-specific state
   const [selectedReligion, setSelectedReligion] = useState<string>('');
@@ -102,13 +108,14 @@ export default function SetupPage() {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
   const [followerCount, setFollowerCount] = useState<number>(0);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
-  // Generate stream key for gaming category
+  // Get Agora RTMP URL and stream key for gaming category
   useEffect(() => {
     if (category === 'gaming') {
-      // Generate a random stream key
-      const key = `troll_${generateUUID().substring(0, 8)}`;
-      setStreamKey(key);
+      // For gaming, we use Agora RTMP - show the OBS panel
+      // The stream key will be the channel/room ID when they start streaming
       setShowOBSPanel(true);
     } else {
       setShowOBSPanel(false);
@@ -266,6 +273,66 @@ export default function SetupPage() {
     }
   };
 
+  const toggleScreenShare = async () => {
+    if (isScreenSharing && screenStream) {
+      // Stop screen sharing
+      screenStream.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+      setIsScreenSharing(false);
+      
+      // Restore camera stream to video element
+      if (stream && videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      toast.success('Screen sharing stopped');
+    } else {
+      // Start screen sharing
+      try {
+        // Check if getDisplayMedia is supported
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          toast.error('Screen sharing is not supported in this browser');
+          return;
+        }
+        
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: true // Attempt to capture system audio
+        });
+        
+        // Handle user stopping share via browser UI
+        displayStream.getVideoTracks()[0].onended = () => {
+          setScreenStream(null);
+          setIsScreenSharing(false);
+          if (stream && videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+          toast.warning('Screen sharing ended');
+        };
+        
+        setScreenStream(displayStream);
+        setIsScreenSharing(true);
+        
+        // Show screen in video element
+        if (videoRef.current) {
+          videoRef.current.srcObject = displayStream;
+        }
+        
+        toast.success('Screen sharing started! 🎮');
+      } catch (err: any) {
+        if (err.name === 'NotAllowedError') {
+          toast.error('Screen sharing was cancelled');
+        } else {
+          console.error('Screen share error:', err);
+          toast.error('Failed to start screen sharing');
+        }
+      }
+    }
+  };
+
   const toggleAudio = () => {
     if (stream) {
       stream.getAudioTracks().forEach(track => track.enabled = !isAudioEnabled);
@@ -415,50 +482,139 @@ export default function SetupPage() {
           );
           console.log('[SetupPage] Joined Agora channel');
 
-          // Use existing local tracks from the preview
-          // The stream state contains our local media stream
-          const localTracks = stream; // This is the MediaStream from useState
+  // Media source priority: screen share takes precedence over camera
+  const mediaSource = isScreenSharing && screenStream ? screenStream : stream;
+  
+  console.log("[MEDIA SOURCE]", {
+    screen: isScreenSharing,
+    hasScreenStream: !!screenStream,
+    hasCameraStream: !!stream,
+    source: isScreenSharing ? 'screen' : 'camera',
+    tracks: mediaSource?.getTracks().length || 0
+  });
           
-          if (localTracks && localTracks.getAudioTracks().length > 0) {
-            // Convert MediaStream tracks to Agora tracks
-            const audioTrack = localTracks.getAudioTracks()[0];
-            const videoTrack = localTracks.getVideoTracks()[0] || null;
-
-            // Create Agora tracks from the existing MediaStreamTrack
-            const agoraAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-              AEC: true,
-              AGC: true,
-              ANS: true
-            });
+          // Check for either audio OR video tracks - screen streams often don't have audio
+          const hasMedia = mediaSource && (mediaSource.getAudioTracks().length > 0 || mediaSource.getVideoTracks().length > 0);
+          
+          if (hasMedia) {
+            // Get tracks from BOTH screen and camera streams when screen sharing
+            // This ensures camera continues publishing when screen share ends
+            const audioTrack = mediaSource?.getAudioTracks()[0];
+            const videoTrack = mediaSource?.getVideoTracks()[0];
             
+            // Also get camera stream tracks for overlay (if screen sharing)
+            const cameraAudioTrack = stream?.getAudioTracks()[0];
+            const cameraVideoTrack = stream?.getVideoTracks()[0];
+
+            // Create custom Agora tracks from existing MediaStream tracks
+            // This ensures we use the PRE-EXISTING tracks from SetupPage (including screen share)
+            let agoraAudioTrack: any = null;
             let agoraVideoTrack: any = null;
-            if (videoTrack && isVideoEnabled) {
-              agoraVideoTrack = await AgoraRTC.createCameraVideoTrack({
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 }
-              });
+            
+            // For camera overlay tracks (used when screen sharing)
+            let cameraAudioCustomTrack: any = null;
+            let cameraVideoCustomTrack: any = null;
+            
+            try {
+              // Create custom audio track from existing stream's audio track
+              if (audioTrack) {
+                agoraAudioTrack = AgoraRTC.createCustomAudioTrack({
+                  mediaStreamTrack: audioTrack
+                });
+                console.log('[SetupPage] Created custom audio track from existing stream');
+              }
+            } catch (audioErr) {
+              console.warn('[SetupPage] Could not create custom audio track:', audioErr);
+            }
+            
+            try {
+              // Create custom video track from existing stream's video track
+              if (videoTrack) {
+                agoraVideoTrack = AgoraRTC.createCustomVideoTrack({
+                  mediaStreamTrack: videoTrack
+                });
+                console.log('[SetupPage] Created custom video track from existing stream:', isScreenSharing ? 'screen share' : 'camera');
+              }
+            } catch (videoErr) {
+              console.warn('[SetupPage] Could not create custom video track:', videoErr);
             }
 
-            // Publish tracks
-            const tracksToPublish = agoraVideoTrack 
-              ? [agoraAudioTrack, agoraVideoTrack] 
-              : [agoraAudioTrack];
-            
-            await agoraClient.publish(tracksToPublish);
-            console.log('[SetupPage] Published to Agora');
+            // When screen sharing, also create camera tracks for overlay
+            if (isScreenSharing) {
+              try {
+                if (cameraAudioTrack) {
+                  cameraAudioCustomTrack = AgoraRTC.createCustomAudioTrack({
+                    mediaStreamTrack: cameraAudioTrack
+                  });
+                  console.log('[SetupPage] Created camera audio track for overlay');
+                }
+              } catch (err) {
+                console.warn('[SetupPage] Could not create camera audio track:', err);
+              }
+              
+              try {
+                if (cameraVideoTrack) {
+                  cameraVideoCustomTrack = AgoraRTC.createCustomVideoTrack({
+                    mediaStreamTrack: cameraVideoTrack
+                  });
+                  console.log('[SetupPage] Created camera video track for overlay');
+                }
+              } catch (err) {
+                console.warn('[SetupPage] Could not create camera video track:', err);
+              }
+            }
 
-            // Wait 2 seconds for Agora to establish media flow
+            // Build tracks array for publishing
+            // When screen sharing: publish BOTH screen tracks AND camera tracks
+            // This allows seamless transition when stopping screen share
+            const tracksToPublish: any[] = [];
+            
+            if (agoraAudioTrack) tracksToPublish.push(agoraAudioTrack);
+            if (agoraVideoTrack) tracksToPublish.push(agoraVideoTrack);
+            
+            // Add camera overlay tracks when screen sharing
+            if (isScreenSharing) {
+              if (cameraAudioCustomTrack) tracksToPublish.push(cameraAudioCustomTrack);
+              if (cameraVideoCustomTrack) tracksToPublish.push(cameraVideoCustomTrack);
+            }
+            
+            if (tracksToPublish.length > 0) {
+              await agoraClient.publish(tracksToPublish);
+              console.log('[SetupPage] Published to Agora:', tracksToPublish.map(t => t.getType?.() || 'unknown'));
+            } else {
+              console.warn('[SetupPage] No tracks to publish');
+            }
+
+            // Wait briefly for Agora to establish media flow
             console.log('[SetupPage] Waiting for Agora media flow...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             // Using Agora only - no Mux needed
-            console.log('[SetupPage] Broadcast is live via Agora!');
-            toast.success('Live on Troll City! 🏙️');
+            console.log('[BroadcastPage] Broadcast is live via Agora!');
+            toast.success(isScreenSharing ? 'Live with screen share! 🎮' : 'Live on Troll City! 🏙️');
 
             // Store Agora client and tracks in PreflightStore for BroadcastPage
-            PreflightStore.setAgoraClient(agoraClient, tracksToPublish);
-            console.log('[SetupPage] Stored Agora client in PreflightStore');
+            // IMPORTANT: Store as [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?] for BroadcastPage compatibility
+            // When screen sharing: [screenAudio, screenVideo, cameraAudio, cameraVideo]
+            // When no screen share: [audio, video, null, null]
+            const tracksTuple: [any, any, any, any] = [
+              agoraAudioTrack, 
+              agoraVideoTrack,
+              isScreenSharing ? cameraAudioCustomTrack : null,
+              isScreenSharing ? cameraVideoCustomTrack : null
+            ];
+            PreflightStore.setAgoraClient(agoraClient, tracksTuple);
+            
+            // Also store the media source stream for BroadcastPage to use
+            PreflightStore.setStream(mediaSource);
+            
+            // Store camera stream for overlay when screen sharing
+            if (isScreenSharing && stream) {
+              PreflightStore.setCameraStream(stream);
+            }
+            
+            console.log('[SetupPage] Stored Agora client and tracks in PreflightStore:', 
+              tracksTuple.map(t => t ? t.getType?.() || 'track' : 'null'));
           }
         }
       } catch (agoraErr) {
@@ -481,43 +637,68 @@ export default function SetupPage() {
     toast.success('Stream key copied!');
   };
 
-  // Render OBS Panel for Gaming category
+  // Render OBS Panel for Gaming category - Agora RTMP
   const renderOBSPanel = () => {
     if (!showOBSPanel) return null;
     
+    // For gaming, we use Agora RTMP
+    // Note: Agora requires Cloud Recording to be enabled for RTMP ingest
+    // Format: rtmp://[projectID].agora.io/live/[channel]
+    const agoraRTMPUrl = 'rtmp://rtmp.agora.io/live';
+    const agoraStreamKey = streamId; // The stream/room ID is used as the channel name
+    
     return (
-      <div className="bg-slate-950/80 border border-blue-500/30 rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 text-blue-400">
-          <Radio size={18} />
-          <span className="font-semibold">OBS Streaming Setup</span>
+      <div className="bg-slate-950/80 border border-purple-500/30 rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2 text-purple-400">
+          <Monitor size={18} />
+          <span className="font-semibold">🎮 Stream Your Game</span>
         </div>
         
-        <div className="space-y-2 text-sm">
-          <div>
-            <span className="text-gray-400">RTMP Ingest URL:</span>
-            <code className="block bg-black/50 p-2 rounded text-blue-300 text-xs mt-1">
-              rtmp://global-live.mux.com:5222/app
-            </code>
-          </div>
-          
-          <div>
-            <span className="text-gray-400">Stream Key:</span>
-            <div className="flex gap-2 mt-1">
-              <code className="flex-1 bg-black/50 p-2 rounded text-green-400 text-xs break-all">
-                {streamKey}
-              </code>
-              <button
-                onClick={copyStreamKey}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white"
-              >
-                Copy
-              </button>
+        <div className="space-y-3 text-sm">
+          {/* Quick Start - In Browser */}
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-green-400 mb-1">
+              <span className="font-semibold">✅ Easiest: In-Browser</span>
             </div>
+            <p className="text-xs text-gray-400">
+              Click the 🎮 <Monitor size={12} className="inline" /> icon above your camera preview to share your screen directly!
+            </p>
           </div>
           
-          <p className="text-xs text-gray-500">
-            Use these settings in OBS Studio → Settings → Stream
-          </p>
+          {/* OBS Option */}
+          <div className="border-t border-white/10 pt-3">
+            <p className="text-xs text-gray-400 mb-2">
+              Or use OBS Studio for advanced streaming:
+            </p>
+            <div>
+              <span className="text-gray-400">RTMP Ingest URL:</span>
+              <code className="block bg-black/50 p-2 rounded text-blue-300 text-xs mt-1">
+                {agoraRTMPUrl}
+              </code>
+            </div>
+            
+            <div className="mt-2">
+              <span className="text-gray-400">Stream Key (Channel):</span>
+              <div className="flex gap-2 mt-1">
+                <code className="flex-1 bg-black/50 p-2 rounded text-green-400 text-xs break-all">
+                  {agoraStreamKey}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(agoraStreamKey);
+                    toast.success('Stream key copied!');
+                  }}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            
+            <p className="text-xs text-gray-500 mt-2">
+              Use these settings in OBS Studio → Settings → Stream
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -662,14 +843,15 @@ export default function SetupPage() {
               autoPlay 
               muted 
               playsInline 
-              className="w-full h-full object-cover transform scale-x-[-1]" 
+              className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`} 
             />
             
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
               <button 
                 onClick={toggleVideo}
-                className={`p-3 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
-                disabled={categoryConfig.requiresCamera && !isVideoEnabled}
+                className={`p-3 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'} ${isScreenSharing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isScreenSharing}
+                title={isScreenSharing ? 'Disable screen share to toggle camera' : (categoryConfig.requiresCamera && !isVideoEnabled ? 'Camera required for this category' : 'Toggle camera')}
               >
                 {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
               </button>
@@ -688,6 +870,17 @@ export default function SetupPage() {
                   >
                     <RefreshCw size={20} />
                   </button>
+              )}
+              
+              {/* Screen Share Button for Gaming */}
+              {category === 'gaming' && (
+                <button 
+                  onClick={toggleScreenShare}
+                  className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'bg-green-500/80 hover:bg-green-600/80' : 'bg-purple-500/80 hover:bg-purple-600/80'}`}
+                  title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen (Gaming)'}
+                >
+                  {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
+                </button>
               )}
               
               {/* Show warning if front camera not allowed */}
@@ -716,9 +909,10 @@ export default function SetupPage() {
               <label className="block text-sm font-medium text-gray-300 mb-1">Stream Title</label>
               <input
                 type="text"
+                name="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex: Late Night Chill & Trolling"
+                placeholder="Enter stream title"
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all placeholder:text-gray-600"
               />
             </div>
@@ -726,6 +920,7 @@ export default function SetupPage() {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
               <select
+                name="category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as BroadcastCategoryId)}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-gray-300"
