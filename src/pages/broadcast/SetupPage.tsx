@@ -540,25 +540,21 @@ export default function SetupPage() {
             }
 
             // When screen sharing, also create camera tracks for overlay
-            if (isScreenSharing) {
+            if (isScreenSharing && cameraAudioTrack && cameraVideoTrack) {
               try {
-                if (cameraAudioTrack) {
-                  cameraAudioCustomTrack = AgoraRTC.createCustomAudioTrack({
-                    mediaStreamTrack: cameraAudioTrack
-                  });
-                  console.log('[SetupPage] Created camera audio track for overlay');
-                }
+                cameraAudioCustomTrack = AgoraRTC.createCustomAudioTrack({
+                  mediaStreamTrack: cameraAudioTrack
+                });
+                console.log('[SetupPage] Created camera audio track for overlay');
               } catch (err) {
                 console.warn('[SetupPage] Could not create camera audio track:', err);
               }
               
               try {
-                if (cameraVideoTrack) {
-                  cameraVideoCustomTrack = AgoraRTC.createCustomVideoTrack({
-                    mediaStreamTrack: cameraVideoTrack
-                  });
-                  console.log('[SetupPage] Created camera video track for overlay');
-                }
+                cameraVideoCustomTrack = AgoraRTC.createCustomVideoTrack({
+                  mediaStreamTrack: cameraVideoTrack
+                });
+                console.log('[SetupPage] Created camera video track for overlay');
               } catch (err) {
                 console.warn('[SetupPage] Could not create camera video track:', err);
               }
