@@ -27,7 +27,6 @@ import { autoUnlockPayouts } from "./lib/supabase";
 import { initTelemetry } from "./lib/telemetry";
 import GlobalPresenceTracker from "./components/GlobalPresenceTracker";
 import { useIsMobile } from "./hooks/useIsMobile";
-import { trackMobileError } from "./hooks/useMobileErrorTracking";
 
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
@@ -75,7 +74,6 @@ const TrollPodsListing = lazyWithRetry(() => import("./pages/pods/TrollPodsListi
 const TrollPodRoom = lazyWithRetry(() => import("./pages/pods/TrollPodRoom"));
 
 // Lazy-loaded pages
-const MobileShell = lazyWithRetry(() => import("./pages/MobileShell"));
 const Following = lazyWithRetry(() => import("./pages/Following"));
 const ExploreFeed = lazyWithRetry(() => import("./pages/ExploreFeed"));
 const CoinStore = lazyWithRetry(() => import("./pages/CoinStore"));
@@ -793,12 +791,6 @@ function AppContent() {
         url: window.location.pathname,
         component: 'global'
       })
-      
-      // Also track for mobile errors - handle any error type
-      const errorToTrack = event.error instanceof Error ? event.error : new Error(event.message || 'Unknown window error')
-      try {
-        trackMobileError(errorToTrack, 'App-global', user?.id || undefined)
-      } catch {}
     }
     const onRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason
@@ -810,14 +802,6 @@ function AppContent() {
         useAuthStore.getState().logout()
         return
       }
-
-      // Track for mobile errors - handle any reason type (not just Error instances)
-      const errorToTrack = reason instanceof Error 
-        ? reason 
-        : new Error(String(reason) || 'Unhandled Promise Rejection')
-      try {
-        trackMobileError(errorToTrack, 'App-unhandledRejection', user?.id || undefined)
-      } catch {}
 
       void reportError({
         message: (reason?.message || String(reason) || 'unhandledrejection'),
@@ -1797,15 +1781,7 @@ function AppContent() {
     </>
   );
 
-  // Determine if we should show mobile shell
-  // Don't use mobile shell for auth pages, landing, and public routes
-  const isAuthPage = location.pathname === '/auth' || 
-                     location.pathname.startsWith('/auth/') ||
-                     location.pathname === '/reset-password' ||
-                     location.pathname.startsWith('/legal/')
-  const showMobileShell = isMobileUI && !isAuthPage && user
-
-  return <>{showMobileShell ? <MobileShell>{appShell}</MobileShell> : appShell}</>;
+  return appShell;
 }
 
 function App() {
