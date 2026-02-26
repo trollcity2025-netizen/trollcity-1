@@ -189,16 +189,16 @@ export default function CoinStore() {
   const showLiveSnacks = Boolean(activeStreamId && liveStreamIsLive);
   const callPackages = {
     audio: [
-      { id: 'audio_60', name: 'Base Audio', minutes: 60, totalCost: 1000 },
-      { id: 'audio_150', name: 'Standard Audio', minutes: 150, totalCost: 2000 },
-      { id: 'audio_400', name: 'Premium Audio', minutes: 400, totalCost: 5000 },
-      { id: 'audio_1000', name: 'Ultra Audio', minutes: 1000, totalCost: 10000 },
+      { id: 'audio_100', name: 'Basic Audio', minutes: 100, totalCost: 100 },
+      { id: 'audio_200', name: 'Standard Audio', minutes: 200, totalCost: 200 },
+      { id: 'audio_500', name: 'Premium Audio', minutes: 500, totalCost: 500 },
+      { id: 'audio_1000', name: 'Ultra Audio', minutes: 1000, totalCost: 1000 },
     ],
     video: [
-      { id: 'video_30', name: 'Base Video', minutes: 30, totalCost: 1000 },
-      { id: 'video_75', name: 'Standard Video', minutes: 75, totalCost: 2000 },
-      { id: 'video_200', name: 'Premium Video', minutes: 200, totalCost: 5000 },
-      { id: 'video_500', name: 'Ultra Video', minutes: 500, totalCost: 10000 },
+      { id: 'video_100', name: 'Basic Video', minutes: 100, totalCost: 100 },
+      { id: 'video_200', name: 'Standard Video', minutes: 200, totalCost: 200 },
+      { id: 'video_500', name: 'Premium Video', minutes: 500, totalCost: 500 },
+      { id: 'video_1000', name: 'Ultra Video', minutes: 1000, totalCost: 1000 },
     ],
   };
 

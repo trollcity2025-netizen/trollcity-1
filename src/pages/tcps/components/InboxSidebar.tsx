@@ -45,6 +45,7 @@ export default function InboxSidebar({
   const [searchQuery, setSearchQuery] = useState('')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [isUserOfficer, setIsUserOfficer] = useState(false)
+  const [newMessagesMap, setNewMessagesMap] = useState<Record<string, boolean>>({})
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -334,14 +335,40 @@ export default function InboxSidebar({
     setOpenMenuId(null)
   }
 
+  // Clear new message notification when user selects a conversation
+  useEffect(() => {
+    if (activeConversation) {
+      // Clear all notifications when user selects a conversation
+      // The unread count will be updated by fetchConversations
+      setNewMessagesMap({})
+    }
+  }, [activeConversation])
+
   useEffect(() => {
     fetchConversations()
     
     // Subscribe to new messages to update sidebar ordering/preview
     const messagesChannel = supabase
       .channel('sidebar-messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (_payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (payload) => {
          // Check if the message belongs to one of our conversations
+         const newMsg = payload.new
+         if (newMsg && user?.id) {
+           // If message is from someone else and not the active conversation, mark as new
+           if (newMsg.sender_id !== user.id) {
+             // Find conversation for this message
+             supabase
+               .from('conversation_members')
+               .select('conversation_id')
+               .eq('user_id', user.id)
+               .eq('conversation_id', newMsg.conversation_id)
+               .then(({ data }) => {
+                 if (data && data.length > 0 && activeConversation !== newMsg.conversation_id) {
+                   setNewMessagesMap(prev => ({ ...prev, [newMsg.conversation_id]: true }))
+                 }
+               })
+           }
+         }
          fetchConversations()
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, (_payload) => {
@@ -369,7 +396,7 @@ export default function InboxSidebar({
       supabase.removeChannel(messagesChannel)
       if (opsChannel) supabase.removeChannel(opsChannel)
     }
-  }, [fetchConversations, isUserOfficer])
+  }, [fetchConversations, isUserOfficer, activeConversation, user?.id])
 
   const filteredConversations = conversations.filter(c => 
     c.other_username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -459,14 +486,19 @@ export default function InboxSidebar({
                         <Shield className="w-6 h-6 text-white" />
                       </div>
                     ) : (
-                      <img 
-                        src={conv.other_avatar_url || `https://ui-avatars.com/api/?name=${conv.other_username}&background=random`}
-                        alt={conv.other_username}
-                        className="w-12 h-12 rounded-full border border-purple-500/20"
-                      />
+                      <div className={`relative w-12 h-12 rounded-full ${conv.unread_count > 0 ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-[#0F0F1A] animate-pulse' : ''}`}>
+                        <img 
+                          src={conv.other_avatar_url || `https://ui-avatars.com/api/?name=${conv.other_username}&background=random`}
+                          alt={conv.other_username}
+                          className="w-12 h-12 rounded-full border border-purple-500/20"
+                        />
+                      </div>
                     )}
                     {(isOnline || conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID) && (
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0F0F1A]" />
+                    )}
+                    {conv.unread_count > 0 && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-purple-500 rounded-full animate-bounce" />
                     )}
                   </div>
                   
@@ -547,9 +579,12 @@ export default function InboxSidebar({
                   </div>
                   
                   {conv.unread_count > 0 && (
-                    <div className="absolute right-10 top-1/2 -translate-y-1/2 w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-purple-600/50 pointer-events-none">
+                    <div className="absolute right-10 top-1/2 -translate-y-1/2 w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-purple-500/70 animate-pulse">
                       {conv.unread_count}
                     </div>
+                  )}
+                  {conv.unread_count === 0 && !isActive && (
+                    <div className="absolute right-10 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full shadow-lg shadow-purple-500/50 pointer-events-none" />
                   )}
                 </div>
               )

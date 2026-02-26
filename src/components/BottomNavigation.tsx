@@ -15,6 +15,7 @@ export default function BottomNavigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isLiveMenuOpen, setIsLiveMenuOpen] = useState(false)
   const hasActiveContent = useActiveBroadcasts()
+  const [tcpsUnreadCount, setTcpsUnreadCount] = useState(0)
 
   useEffect(() => {
     if (isMenuOpen || isLiveMenuOpen) {
@@ -26,6 +27,45 @@ export default function BottomNavigation() {
       document.body.classList.remove('no-scroll')
     }
   }, [isMenuOpen, isLiveMenuOpen])
+
+  // Fetch TCPS unread count
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const fetchUnreadCount = async () => {
+      const { data } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id)
+      
+      if (!data || data.length === 0) return
+      const convIds = data.map(d => d.conversation_id)
+      
+      const { count } = await supabase
+        .from('conversation_messages')
+        .select('*', { count: 'exact', head: true })
+        .in('conversation_id', convIds)
+        .neq('sender_id', user.id)
+        .is('read_at', null)
+      
+      setTcpsUnreadCount(count || 0)
+    }
+    
+    fetchUnreadCount()
+    
+    // Subscribe to new messages for real-time updates
+    const channel = supabase
+      .channel('nav-unread-count')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, () => {
+        fetchUnreadCount()
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, () => {
+        fetchUnreadCount()
+      })
+      .subscribe()
+    
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
 
   useEffect(() => {
     setIsMenuOpen(false)
@@ -40,7 +80,6 @@ export default function BottomNavigation() {
       'general',
       'just_chatting',
       'gaming',
-      'music',
       'irl',
       'debate',
       'education',
@@ -54,7 +93,6 @@ export default function BottomNavigation() {
       general: Video,
       just_chatting: MessageSquare,
       gaming: Gamepad2,
-      music: Music,
       irl: Camera,
       debate: Gavel,
       education: FileText,
@@ -147,7 +185,7 @@ export default function BottomNavigation() {
       glow: hasActiveContent
     },
     { isCenter: true, ...centerBtn },
-    { icon: MessageSquare, label: 'TCPS', path: '/tcps', active: isActive('/tcps') },
+    { icon: MessageSquare, label: 'TCPS', path: '/tcps', active: isActive('/tcps'), glow: tcpsUnreadCount > 0 },
     { icon: User, label: 'Profile', path: `/profile/${profile?.username || profile?.id}`, active: isActive('/profile') }
   ]
 

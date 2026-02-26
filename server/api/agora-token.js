@@ -8,7 +8,7 @@ const generateAgoraToken = async (req, res) => {
 
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    return res.status(204).send('');
+    return res.status(200).json({ message: 'Preflight OK' });
   }
 
   try {
@@ -23,7 +23,11 @@ const generateAgoraToken = async (req, res) => {
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
 
     if (!appId || !appCertificate) {
-      return res.status(500).json({ error: 'Agora App ID or App Certificate not configured on server' });
+      console.error('CRITICAL: Agora environment variables not set.');
+      return res.status(500).json({ 
+        error: 'Agora credentials not configured on the server.', 
+        message: 'The server is missing AGORA_APP_ID or AGORA_APP_CERTIFICATE. Please check your .env file.'
+      });
     }
 
     // Set token expiration time
@@ -34,8 +38,10 @@ const generateAgoraToken = async (req, res) => {
     // Set Agora user role
     const agoraRole = (role === 'host' || role === 'stage') ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
+    console.log('Generating Agora token with:', { room, identity, role, appId: !!appId, appCertificate: !!appCertificate });
+
     // Generate the token
-    const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, room, 0, agoraRole, privilegeExpiredTs);
+    const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, room, identity, agoraRole, privilegeExpiredTs);
 
     return res.status(200).json({ token });
   } catch (error) {

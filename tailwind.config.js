@@ -30,6 +30,11 @@ export default {
         'troll-green-dark': 'var(--troll-green-glow)',
         'troll-dark-bg': 'var(--troll-dark-bg)',
         'troll-dark-card': 'var(--troll-dark-card)',
+        gold: {
+          '500': '#FFD700',
+          '700': '#B8860B',
+          '900': '#8B4513'
+        },
         troll: {
           purple: {
             50: 'var(--troll-purple-950)',
@@ -84,6 +89,8 @@ export default {
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'bounce-glow': 'bounce 1s infinite, glow 2s ease-in-out infinite alternate',
         'fadeIn': 'fadeIn 0.3s ease-out',
+        'tilt': 'tilt 10s infinite linear',
+        'marquee-continuous': 'marquee-continuous 80s linear infinite',
       },
       keyframes: {
         glow: {
@@ -99,6 +106,21 @@ export default {
             opacity: '1',
             transform: 'translateY(0)',
           },
+        },
+        tilt: {
+          '0%, 50%, 100%': {
+            transform: 'rotate(0deg)',
+          },
+          '25%': {
+            transform: 'rotate(0.5deg)',
+          },
+          '75%': {
+            transform: 'rotate(-0.5deg)',
+          },
+        },
+        'marquee-continuous': {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-100%)' },
         },
       },
       boxShadow: {

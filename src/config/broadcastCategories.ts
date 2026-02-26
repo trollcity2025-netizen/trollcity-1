@@ -10,7 +10,6 @@ export type BroadcastCategoryId =
   | 'general' 
   | 'just_chatting' 
   | 'gaming' 
-  | 'music' 
   | 'irl' 
   | 'debate' 
   | 'education' 
@@ -172,35 +171,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 4. Music - YouTube player as guest box
-  music: {
-    id: 'music',
-    name: 'Music',
-    icon: '🎵',
-    description: 'Stream music with YouTube player integration',
-    layoutMode: 'grid',
-    defaultBoxCount: 1,
-    maxBoxCount: 4,
-    allowGuestBoxes: true,
-    allowAddBox: true,
-    allowDeductBox: true,
-    hostRoleLabel: 'Broadcaster',
-    allowFrontCamera: true,
-    allowRearCamera: true,
-    forceRearCamera: false,
-    hasOBSIntegration: false,
-    hasYouTubePlayer: true,
-    maxYouTubePlayerBoxes: 4, // Max 4 total including YouTube player
-    hasMatchingSystem: false,
-    matchingTerminology: 'Battle',
-    requiresReligion: false,
-    supportsBattles: false,
-    battleType: 'none',
-    isOneWayBroadcast: false,
-    showCoinBalanceInChat: true, // Stream category - show coin balance
-  },
-
-  // 5. IRL / Lifestyle - Rear camera only
+  // 4. IRL / Lifestyle - Rear camera only
   irl: {
     id: 'irl',
     name: 'IRL / Lifestyle',
@@ -228,7 +199,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 6. Debate & Discussion - Split screen, 2 boxes only
+  // 5. Debate & Discussion - Split screen, 2 boxes only
   debate: {
     id: 'debate',
     name: 'Debate & Discussion',
@@ -256,7 +227,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: false, // Live chat category - no coin balance
   },
 
-  // 7. Education - Classroom layout
+  // 6. Education - Classroom layout
   education: {
     id: 'education',
     name: 'Education',
@@ -284,7 +255,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: false, // Live chat category - no coin balance
   },
 
-  // 8. Fitness & Sports - One-way broadcast
+  // 7. Fitness & Sports - One-way broadcast
   fitness: {
     id: 'fitness',
     name: 'Fitness & Sports',
@@ -312,7 +283,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 9. Business & Finance - Matching system with business terminology
+  // 8. Business & Finance - Matching system with business terminology
   business: {
     id: 'business',
     name: 'Business & Finance',
@@ -340,7 +311,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 10. Spiritual / Church - Religion matching
+  // 9. Spiritual / Church - Religion matching
   spiritual: {
     id: 'spiritual',
     name: 'Spiritual / Church',
@@ -370,7 +341,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 11. Trollmers - Head-to-head battles (unchanged from current)
+  // 10. Trollmers - Head-to-head battles (unchanged from current)
   trollmers: {
     id: 'trollmers',
     name: '🏆 Trollmers Head-to-Head',
@@ -400,7 +371,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 12. President Elections - Special category for elections (admin, secretary, lead troll officer, troll officers only)
+  // 11. President Elections - Special category for elections (admin, secretary, lead troll officer, troll officers only)
   election: {
     id: 'election',
     name: '🗳️ President Elections',

@@ -11,6 +11,7 @@ import { useAuthStore } from '../../lib/store';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
+import { getCategoryConfig } from '../../config/broadcastCategories';
 
 interface BroadcastControlsProps {
   stream: Stream;
@@ -51,6 +52,16 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   const [hasRgb, setHasRgb] = useState(stream.has_rgb_effect || false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
+
+  // Get category config to check if boxes can be added/removed
+  const categoryConfig = getCategoryConfig(stream.category || 'general');
+  const canModifyBoxes = categoryConfig.allowAddBox || categoryConfig.allowDeductBox;
+  
+  // For election category, only officers/admins can modify boxes
+  const isElectionCategory = stream.category === 'election';
+  const allowedRoles = ['admin', 'secretary', 'lead_troll_officer', 'troll_officer'];
+  const isOfficerOrAdmin = profile?.role && allowedRoles.includes(profile.role);
+  const canEditElectionBoxes = !isElectionCategory || isOfficerOrAdmin;
 
   // Stable box count to prevent unnecessary rerenders
   const boxCount = stream.box_count || 1;
@@ -586,7 +597,8 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         className="overflow-hidden"
                     >
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
-                            {/* Box Layout Control */}
+                            {/* Box Layout Control - Only show if category allows adding/removing boxes and user has permission */}
+                            {canModifyBoxes && canEditElectionBoxes && (
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
                         <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
                             <LayoutGrid size={16} />
@@ -596,7 +608,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             <button 
                                 type="button"
                                 onClick={() => updateBoxCount(boxCount - 1)}
-                                disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes)}
+                                disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes) || !categoryConfig.allowDeductBox}
                                 className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
                             >
                                 <Minus size={16} />
@@ -605,13 +617,14 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             <button 
                                 type="button"
                                 onClick={() => updateBoxCount(boxCount + 1)}
-                                disabled={!canEditStream || boxCount >= 6}
+                                disabled={!canEditStream || boxCount >= 6 || !categoryConfig.allowAddBox}
                                 className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
                             >
                                 <Plus size={16} />
                             </button>
                         </div>
                     </div>
+                            )}
 
                     {/* Seat Pricing & Locking - Only visible to Host & Staff */}
                     {canManageStream && (

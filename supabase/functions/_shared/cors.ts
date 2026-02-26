@@ -24,6 +24,8 @@ const allowedOrigins = [
   'http://localhost:5177',
   'http://localhost:3001',
   'http://localhost:3000',
+  'http://localhost:5180',
+  'http://localhost:5181',
   'https://matrollcity.com',
   'https://www.matrollcity.com',
   'https://maitrollcity.com',

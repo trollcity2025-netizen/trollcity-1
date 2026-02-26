@@ -6,7 +6,6 @@ import { PreflightStore } from '@/lib/preflightStore';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import { Video, VideoOff, Mic, MicOff, AlertTriangle, RefreshCw, Radio, Youtube, Users, BookOpen, Dumbbell, Briefcase, Heart, Swords, Monitor, MonitorOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { MobileErrorLogger } from '@/lib/MobileErrorLogger';
 import { generateUUID } from '../../lib/uuid';
 import {
   BROADCAST_CATEGORIES,
@@ -40,7 +39,6 @@ function CategoryIcon({ categoryId }: { categoryId: string }) {
     case 'general': return <span className="text-2xl">💬</span>;
     case 'just_chatting': return <span className="text-2xl">☕</span>;
     case 'gaming': return <span className="text-2xl">🎮</span>;
-    case 'music': return <span className="text-2xl">🎵</span>;
     case 'irl': return <span className="text-2xl">📍</span>;
     case 'debate': return <span className="text-2xl">⚖️</span>;
     case 'education': return <span className="text-2xl">📚</span>;
@@ -85,7 +83,7 @@ export default function SetupPage() {
   const [showOBSPanel, setShowOBSPanel] = useState(false);
   
   // Pre-generate stream ID for token optimization
-  const [streamId] = useState(() => generateUUID());
+  const [streamId, setStreamId] = useState(() => generateUUID());
 
   // Track if we are navigating to broadcast to prevent cleanup
   const isStartingStream = useRef(false);
@@ -110,6 +108,7 @@ export default function SetupPage() {
   const [followerCount, setFollowerCount] = useState<number>(0);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
 
   // Get Agora RTMP URL and stream key for gaming category
   useEffect(() => {
@@ -164,8 +163,6 @@ export default function SetupPage() {
         const errorMsg = 'getUserMedia not supported in this browser/context';
         console.error(`[SetupPage] ${errorMsg}`);
         const isSecure = window.isSecureContext;
-        
-        MobileErrorLogger.logError(new Error(errorMsg), 'SetupPage:getUserMediaCheck');
 
         if (!isSecure) {
            toast.error(
@@ -231,7 +228,6 @@ export default function SetupPage() {
         
       } catch (err: any) {
         console.warn("Error accessing media devices, trying audio only.", err);
-        MobileErrorLogger.logError(err, 'SetupPage:getUserMedia');
 
         if (err.name === 'NotAllowedError') {
              toast.error("Camera permission denied. Please allow access in browser settings.");
@@ -415,209 +411,94 @@ export default function SetupPage() {
 
       if (error) throw error;
 
-      let muxStreamKey: string | null = null;
-
-      // Create Mux stream and get RTMP credentials for all broadcast types
-      try {
-        const { data: muxData, error: muxError } = await supabase.functions.invoke('create-mux-stream', {
-          body: {
-            type: 'broadcast',
-            room_id: streamId,
-            room_name: title,
-            title: title
-          }
-        });
-
-        if (muxError) {
-          console.warn('Failed to create Mux stream:', muxError);
-        } else if (muxData?.success) {
-          muxStreamKey = muxData.stream_key;
-          // Update the stream with Mux credentials
-          await supabase
-            .from('streams')
-            .update({
-              mux_playback_id: muxData.playback_id,
-              mux_stream_key: muxData.stream_key,
-              mux_rtmp_url: muxData.rtmp_url
-            })
-            .eq('id', streamId);
-
-          // For gaming category, show OBS panel with stream key
-          if (category === 'gaming' && muxData.stream_key) {
-            setStreamKey(muxData.stream_key);
-            setShowOBSPanel(true);
-          }
+      // =====================================================
+      // MANUAL AGORA SETUP - Production pattern
+      // =====================================================
+      
+      // 1. Generate numeric UID for Agora
+      const numericUid = Math.floor(Math.random() * 100000);
+      
+      // 2. Fetch token from supabase edge function
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
+        body: {
+          channel: streamId,
+          uid: numericUid
         }
-      } catch (muxErr) {
-        console.warn('Mux stream creation failed:', muxErr);
+      });
+      
+      if (tokenError) {
+        console.error('[SetupPage] Token fetch error:', tokenError);
+        throw new Error('Failed to get streaming token');
       }
-
-      // Now start Agora and Mux WHIP streaming BEFORE navigating
-      toast.success('Starting broadcast...');
-      isStartingStream.current = true;
-
-      try {
-        // Get Agora token
-        const numericUid = Math.floor(Math.random() * 100000);
-        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
-          body: { channel: streamId, uid: numericUid, role: 'publisher' }
+      
+      if (!tokenData?.token) {
+        throw new Error('No token available for streaming');
+      }
+      
+      // 3. Create Agora client
+      const agoraClient = AgoraRTC.createClient({
+        mode: 'rtc',
+        codec: 'vp8'
+      });
+      
+      // 4. Join the channel
+      await agoraClient.join(
+        import.meta.env.VITE_AGORA_APP_ID!,
+        streamId,
+        tokenData.token,
+        numericUid
+      );
+      
+      console.log('[SetupPage] Joined Agora channel:', streamId, 'with UID:', numericUid);
+      
+      // 5. Create tracks from existing MediaStream (NOT new tracks)
+      const localStream = PreflightStore.getStream();
+      if (!localStream) {
+        throw new Error('Media stream not available');
+      }
+      
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      });
+      
+      const videoTrack = await AgoraRTC.createCameraVideoTrack({
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: 30, max: 60 }
+      });
+      
+      // Handle screen sharing if active
+      let cameraVideoTrack: any = null;
+      let cameraAudioTrack: any = null;
+      
+      if (isScreenSharing && screenStream) {
+        // Create camera tracks for overlay
+        cameraVideoTrack = await AgoraRTC.createCameraVideoTrack({
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 15 }
         });
-
-        if (tokenError || !tokenData?.token) {
-          console.warn('Failed to get Agora token:', tokenError);
-          // Continue anyway - viewers can still use Mux
-        } else {
-          // Create Agora client
-          const agoraClient = AgoraRTC.createClient({
-            mode: 'rtc',
-            codec: 'vp8'
-          });
-
-          // Join Agora channel
-          await agoraClient.join(
-            import.meta.env.VITE_AGORA_APP_ID!,
-            streamId,
-            tokenData.token,
-            numericUid
-          );
-          console.log('[SetupPage] Joined Agora channel');
-
-  // Media source priority: screen share takes precedence over camera
-  const mediaSource = isScreenSharing && screenStream ? screenStream : stream;
-  
-  console.log("[MEDIA SOURCE]", {
-    screen: isScreenSharing,
-    hasScreenStream: !!screenStream,
-    hasCameraStream: !!stream,
-    source: isScreenSharing ? 'screen' : 'camera',
-    tracks: mediaSource?.getTracks().length || 0
-  });
-          
-          // Check for either audio OR video tracks - screen streams often don't have audio
-          const hasMedia = mediaSource && (mediaSource.getAudioTracks().length > 0 || mediaSource.getVideoTracks().length > 0);
-          
-          if (hasMedia) {
-            // Get tracks from BOTH screen and camera streams when screen sharing
-            // This ensures camera continues publishing when screen share ends
-            const audioTrack = mediaSource?.getAudioTracks()[0];
-            const videoTrack = mediaSource?.getVideoTracks()[0];
-            
-            // Also get camera stream tracks for overlay (if screen sharing)
-            const cameraAudioTrack = stream?.getAudioTracks()[0];
-            const cameraVideoTrack = stream?.getVideoTracks()[0];
-
-            // Create custom Agora tracks from existing MediaStream tracks
-            // This ensures we use the PRE-EXISTING tracks from SetupPage (including screen share)
-            let agoraAudioTrack: any = null;
-            let agoraVideoTrack: any = null;
-            
-            // For camera overlay tracks (used when screen sharing)
-            let cameraAudioCustomTrack: any = null;
-            let cameraVideoCustomTrack: any = null;
-            
-            try {
-              // Create custom audio track from existing stream's audio track
-              if (audioTrack) {
-                agoraAudioTrack = AgoraRTC.createCustomAudioTrack({
-                  mediaStreamTrack: audioTrack
-                });
-                console.log('[SetupPage] Created custom audio track from existing stream');
-              }
-            } catch (audioErr) {
-              console.warn('[SetupPage] Could not create custom audio track:', audioErr);
-            }
-            
-            try {
-              // Create custom video track from existing stream's video track
-              if (videoTrack) {
-                agoraVideoTrack = AgoraRTC.createCustomVideoTrack({
-                  mediaStreamTrack: videoTrack
-                });
-                console.log('[SetupPage] Created custom video track from existing stream:', isScreenSharing ? 'screen share' : 'camera');
-              }
-            } catch (videoErr) {
-              console.warn('[SetupPage] Could not create custom video track:', videoErr);
-            }
-
-            // When screen sharing, also create camera tracks for overlay
-            if (isScreenSharing && cameraAudioTrack && cameraVideoTrack) {
-              try {
-                cameraAudioCustomTrack = AgoraRTC.createCustomAudioTrack({
-                  mediaStreamTrack: cameraAudioTrack
-                });
-                console.log('[SetupPage] Created camera audio track for overlay');
-              } catch (err) {
-                console.warn('[SetupPage] Could not create camera audio track:', err);
-              }
-              
-              try {
-                cameraVideoCustomTrack = AgoraRTC.createCustomVideoTrack({
-                  mediaStreamTrack: cameraVideoTrack
-                });
-                console.log('[SetupPage] Created camera video track for overlay');
-              } catch (err) {
-                console.warn('[SetupPage] Could not create camera video track:', err);
-              }
-            }
-
-            // Build tracks array for publishing
-            // When screen sharing: publish BOTH screen tracks AND camera tracks
-            // This allows seamless transition when stopping screen share
-            const tracksToPublish: any[] = [];
-            
-            if (agoraAudioTrack) tracksToPublish.push(agoraAudioTrack);
-            if (agoraVideoTrack) tracksToPublish.push(agoraVideoTrack);
-            
-            // Add camera overlay tracks when screen sharing
-            if (isScreenSharing) {
-              if (cameraAudioCustomTrack) tracksToPublish.push(cameraAudioCustomTrack);
-              if (cameraVideoCustomTrack) tracksToPublish.push(cameraVideoCustomTrack);
-            }
-            
-            if (tracksToPublish.length > 0) {
-              await agoraClient.publish(tracksToPublish);
-              console.log('[SetupPage] Published to Agora:', tracksToPublish.map(t => t.getType?.() || 'unknown'));
-            } else {
-              console.warn('[SetupPage] No tracks to publish');
-            }
-
-            // Wait briefly for Agora to establish media flow
-            console.log('[SetupPage] Waiting for Agora media flow...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Using Agora only - no Mux needed
-            console.log('[BroadcastPage] Broadcast is live via Agora!');
-            toast.success(isScreenSharing ? 'Live with screen share! 🎮' : 'Live on Troll City! 🏙️');
-
-            // Store Agora client and tracks in PreflightStore for BroadcastPage
-            // IMPORTANT: Store as [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?] for BroadcastPage compatibility
-            // When screen sharing: [screenAudio, screenVideo, cameraAudio, cameraVideo]
-            // When no screen share: [audio, video, null, null]
-            const tracksTuple: [any, any, any, any] = [
-              agoraAudioTrack, 
-              agoraVideoTrack,
-              isScreenSharing ? cameraAudioCustomTrack : null,
-              isScreenSharing ? cameraVideoCustomTrack : null
-            ];
-            PreflightStore.setAgoraClient(agoraClient, tracksTuple);
-            
-            // Also store the media source stream for BroadcastPage to use
-            PreflightStore.setStream(mediaSource);
-            
-            // Store camera stream for overlay when screen sharing
-            if (isScreenSharing && stream) {
-              PreflightStore.setCameraStream(stream);
-            }
-            
-            console.log('[SetupPage] Stored Agora client and tracks in PreflightStore:', 
-              tracksTuple.map(t => t ? t.getType?.() || 'track' : 'null'));
-          }
-        }
-      } catch (agoraErr) {
-        console.error('[SetupPage] Error with Agora:', agoraErr);
-        // Continue anyway - stream will work without Agora, just viewers need to use Mux
+        cameraAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        
+        console.log('[SetupPage] Screen sharing detected, created camera overlay tracks');
       }
-
+      
+      // 6. Publish tracks
+      const tracksToPublish = [audioTrack, videoTrack];
+      if (cameraVideoTrack) tracksToPublish.push(cameraAudioTrack, cameraVideoTrack);
+      
+      await agoraClient.publish(tracksToPublish);
+      console.log('[SetupPage] Published tracks to Agora');
+      
+      // 7. Store client and tracks in PreflightStore for BroadcastPage
+      const localTracks: [any, any, any, any] = cameraVideoTrack 
+        ? [audioTrack, videoTrack, cameraAudioTrack, cameraVideoTrack]
+        : [audioTrack, videoTrack, null, null];
+      
+      PreflightStore.setAgoraClient(agoraClient, localTracks);
+      
       // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
     } catch (err: any) {
@@ -816,12 +697,6 @@ export default function SetupPage() {
             <p className="text-pink-300">📍 Rear camera only for first-person streaming</p>
           </div>
         );
-      case 'music':
-        return (
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 text-sm">
-            <p className="text-purple-300">🎵 Add up to 4 guest boxes (YouTube player counts as one)</p>
-          </div>
-        );
       default:
         return null;
     }
@@ -924,7 +799,6 @@ export default function SetupPage() {
                 <option value="general">💬 General Chat</option>
                 <option value="just_chatting">☕ Just Chatting</option>
                 <option value="gaming">🎮 Gaming</option>
-                <option value="music">🎵 Music</option>
                 <option value="irl">📍 IRL / Lifestyle</option>
                 <option value="debate">⚖️ Debate & Discussion</option>
                 <option value="education">📚 Education</option>

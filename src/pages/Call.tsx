@@ -455,24 +455,28 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
 
   const toggleMute = async () => {
     if (!localAudioTrackRef.current) return;
-    const enabled = !isMuted;
-    if (enabled) {
-      await localAudioTrackRef.current.setMuted(false);
-    } else {
+    // isMuted = true means audio is currently muted
+    // We want to toggle: if muted, unmute; if not muted, mute
+    const shouldMute = !isMuted;
+    if (shouldMute) {
       await localAudioTrackRef.current.setMuted(true);
+    } else {
+      await localAudioTrackRef.current.setMuted(false);
     }
-    setIsMuted(enabled);
+    setIsMuted(shouldMute);
   };
 
   const toggleVideo = async () => {
     if (!localVideoTrackRef.current || callType === 'audio') return;
-    const enabled = isVideoOff;
-    if (enabled) {
+    // isVideoOff = true means video is currently off
+    // We want to toggle: if off, turn on; if on, turn off
+    const shouldTurnOn = isVideoOff;
+    if (shouldTurnOn) {
       await localVideoTrackRef.current.setMuted(false);
     } else {
       await localVideoTrackRef.current.setMuted(true);
     }
-    setIsVideoOff(!enabled);
+    setIsVideoOff(!shouldTurnOn);
   };
 
   const formatDuration = (seconds: number) => {

@@ -319,7 +319,6 @@ function BroadcastPage() {
         
         // Always check for box_count and has_rgb_effect updates
         if (data?.box_count !== undefined && data.box_count !== streamRef.current?.box_count) {
-          console.log('[BroadcastPage] POLL: Detected box_count change:', data.box_count);
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, box_count: data.box_count };
@@ -328,7 +327,6 @@ function BroadcastPage() {
         
         // Check for has_rgb_effect changes
         if (data?.has_rgb_effect !== undefined && data.has_rgb_effect !== streamRef.current?.has_rgb_effect) {
-          console.log('[BroadcastPage] POLL: Detected has_rgb_effect change:', data.has_rgb_effect);
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, has_rgb_effect: data.has_rgb_effect };
@@ -337,7 +335,6 @@ function BroadcastPage() {
         
         // Check for are_seats_locked changes
         if (data?.are_seats_locked !== undefined && data.are_seats_locked !== streamRef.current?.are_seats_locked) {
-          console.log('[BroadcastPage] POLL: Detected are_seats_locked change:', data.are_seats_locked);
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, are_seats_locked: data.are_seats_locked };
@@ -392,7 +389,6 @@ function BroadcastPage() {
         }
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.log('[Realtime] User joined:', newPresences);
         for (const p of newPresences as any[]) {
           if (p.is_host) {
             console.log('[Realtime] Broadcaster joined - stream is live!');
@@ -412,23 +408,16 @@ function BroadcastPage() {
         (payload) => {
           if (!payload.new) return;
           
-          console.log('[Realtime] VIEWER: Received postgres stream update:', payload.new);
-          console.log('[Realtime] VIEWER: Current box_count:', streamRef.current?.box_count, 'New box_count:', payload.new.box_count);
-          console.log('[Realtime] VIEWER: Current has_rgb_effect:', streamRef.current?.has_rgb_effect, 'New has_rgb_effect:', payload.new.has_rgb_effect);
-          console.log('[Realtime] VIEWER: Current are_seats_locked:', streamRef.current?.are_seats_locked, 'New are_seats_locked:', payload.new.are_seats_locked);
+          // Skip update if nothing actually changed
+          if (streamRef.current && 
+              streamRef.current.box_count === payload.new.box_count &&
+              streamRef.current.has_rgb_effect === payload.new.has_rgb_effect &&
+              streamRef.current.are_seats_locked === payload.new.are_seats_locked) {
+            return;
+          }
           
           try {
-            // Skip update if nothing actually changed
-            if (streamRef.current && 
-                streamRef.current.box_count === payload.new.box_count &&
-                streamRef.current.has_rgb_effect === payload.new.has_rgb_effect &&
-                streamRef.current.are_seats_locked === payload.new.are_seats_locked) {
-              console.log('[Realtime] VIEWER: Skipping update - no changes detected');
-              return;
-            }
-            
-            console.log('[Realtime] VIEWER: Applying stream update via postgres_changes');
-            setStream((prev: any) => {
+          setStream((prev: any) => {
               if (!prev) return prev;
               return { 
                 ...prev, 
@@ -460,7 +449,6 @@ function BroadcastPage() {
             console.log('[Realtime] VIEWER: Current stream box_count:', streamRef.current?.box_count);
             
             if (boxData && boxData.box_count !== undefined) {
-              console.log('[Realtime] VIEWER: Updating box_count from', streamRef.current?.box_count, 'to', boxData.box_count);
               setStream((prev: any) => {
                 if (!prev) return prev;
                 return { ...prev, box_count: boxData.box_count };

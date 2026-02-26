@@ -20,7 +20,8 @@ import {
   Trophy as TrophyIcon, 
   Navigation as NavigationIcon, 
   CheckCircle2 as CheckCircleIcon, 
-  XCircle as XCircleIcon 
+  XCircle as XCircleIcon,
+  RefreshCw as RefreshCwIcon
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -80,6 +81,23 @@ const NeighborsPage = () => {
   
   // Business registration form state
   const [creatingBusiness, setCreatingBusiness] = useState(false);
+  const [businessSuccess, setBusinessSuccess] = useState(false);
+  const [myBusinesses, setMyBusinesses] = useState<any[]>([]);
+  const [myEvents, setMyEvents] = useState<any[]>([]);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [hiringPosts, setHiringPosts] = useState<any[]>([]);
+  const [creatingHiring, setCreatingHiring] = useState(false);
+  const [hiringFormData, setHiringFormData] = useState({
+    business_id: '',
+    title: '',
+    description: '',
+    requirements: '',
+    contact_email: '',
+    contact_phone: '',
+    location: '',
+    job_type: 'full-time',
+    pay_rate: ''
+  });
   const [businessFormData, setBusinessFormData] = useState({
     business_name: '',
     description: '',
@@ -163,7 +181,7 @@ const NeighborsPage = () => {
         const { data, error } = await supabase
           .from('neighbors_businesses')
           .select('*')
-          .eq('verified', true);
+          .eq('approval_status', 'approved');
 
         if (error) {
           console.error('Error fetching nearby businesses:', error);
@@ -243,7 +261,8 @@ const NeighborsPage = () => {
             ...eventFormData,
             created_by_user_id: userData.user?.id,
             start_time: new Date(eventFormData.start_time).toISOString(),
-            end_time: new Date(eventFormData.end_time).toISOString()
+            end_time: new Date(eventFormData.end_time).toISOString(),
+            approval_status: 'pending'
           }
         ])
         .select()
@@ -296,7 +315,9 @@ const NeighborsPage = () => {
         .insert([
           {
             ...businessFormData,
-            owner_user_id: userData.user?.id
+            owner_user_id: userData.user?.id,
+            approval_status: 'pending',
+            verified: false
           }
         ])
         .select()
@@ -320,12 +341,13 @@ const NeighborsPage = () => {
         logo_url: ''
       });
       setCreatingBusiness(false);
+      setBusinessSuccess(true);
 
-      // Refresh businesses list
+      // Refresh businesses list - show only approved
       const { data: allBusinesses } = await supabase
         .from('neighbors_businesses')
         .select('*')
-        .eq('verified', true);
+        .eq('approval_status', 'approved');
 
       const nearbyBusinesses = allBusinesses.filter(business => {
         const distance = getDistanceFromLatLonInKm(
@@ -575,14 +597,75 @@ const NeighborsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 animate-gradient-shift" />
+        <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_20%_20%,rgba(147,51,234,0.18),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(140%_140%_at_80%_0%,rgba(45,212,191,0.14),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(140%_140%_at_90%_90%,rgba(236,72,153,0.12),transparent)]" />
+      </div>
+      <style>
+        {`
+          @keyframes gradient-shift {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+          }
+          .animate-gradient-shift {
+            animation: gradient-shift 12s ease-in-out infinite;
+          }
+        `}
+      </style>
+      
+      {/* Floating particles */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {Array.from({ length: 15 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-cyan-400/40 rounded-full shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animation: `float-particle ${5 + Math.random() * 10}s ease-in-out infinite`,
+              animationDelay: `${Math.random() * 5}s`,
+            }}
+          />
+        ))}
+        <style>
+          {`
+            @keyframes float-particle {
+              0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0; }
+              10% { opacity: 0.6; }
+              90% { opacity: 0.6; }
+              50% { transform: translateY(-100px) translateX(50px); }
+            }
+          `}
+        </style>
+      </div>
+
+      <div className="relative z-10">
       <div className="container mx-auto p-4">
+        {/* Success Message */}
+        {businessSuccess && (
+          <div className="mb-4 p-4 bg-green-900/50 border border-green-500 rounded-lg flex justify-between items-center">
+            <div className="text-green-200">
+              <p className="font-semibold">Business registered successfully!</p>
+              <p className="text-sm">Your business is pending verification and will appear once approved.</p>
+            </div>
+            <button 
+              onClick={() => setBusinessSuccess(false)}
+              className="text-green-400 hover:text-green-200"
+            >
+              <XCircleIcon className="w-5 h-5" />
+            </button>
+          </div>
+        )}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Neighbors</h1>
+          <h1 className="text-3xl font-bold text-white">Neighbors</h1>
           <div className="flex space-x-2">
             <Button 
               onClick={() => setCreatingEvent(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-purple-600 hover:bg-purple-700 text-white"
             >
               <PlusIcon className="w-4 h-4 mr-2" />
               Create Event
@@ -590,7 +673,7 @@ const NeighborsPage = () => {
             <Button 
               onClick={() => setCreatingBusiness(true)}
               variant="outline"
-              className="border-blue-600 text-blue-600 hover:bg-blue-50"
+              className="border-purple-500 text-purple-400 hover:bg-purple-900/30"
             >
               <BriefcaseIcon className="w-4 h-4 mr-2" />
               Register Business
@@ -599,14 +682,14 @@ const NeighborsPage = () => {
         </div>
 
         <Tabs defaultValue="nearby" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-6 mb-6">
-            <TabsTrigger value="nearby">
+          <TabsList className="grid grid-cols-8 mb-6 bg-slate-800/50">
+            <TabsTrigger value="nearby" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-slate-300">
               <CalendarIcon className="w-4 h-4 mr-2" />
-              Nearby Events
+              Nearby
             </TabsTrigger>
             <TabsTrigger value="map">
               <MapIcon className="w-4 h-4 mr-2" />
-              Map View
+              Map
             </TabsTrigger>
             <TabsTrigger value="my-events">
               <UsersIcon className="w-4 h-4 mr-2" />
@@ -614,22 +697,30 @@ const NeighborsPage = () => {
             </TabsTrigger>
             <TabsTrigger value="create-event">
               <PlusIcon className="w-4 h-4 mr-2" />
-              Create Event
+              Create
             </TabsTrigger>
             <TabsTrigger value="businesses">
               <BriefcaseIcon className="w-4 h-4 mr-2" />
-              Businesses
+              Biz
+            </TabsTrigger>
+            <TabsTrigger value="my-profile">
+              <UsersIcon className="w-4 h-4 mr-2" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="hiring">
+              <BriefcaseIcon className="w-4 h-4 mr-2" />
+              Hiring
             </TabsTrigger>
             <TabsTrigger value="leaderboard">
               <TrophyIcon className="w-4 h-4 mr-2" />
-              Leaderboard
+              Top
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="nearby" className="space-y-4">
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Nearby Events</h2>
+                <h2 className="text-xl font-semibold text-white">Nearby Events</h2>
                 <div className="flex items-center space-x-2">
                   <Label className="text-sm text-gray-600">Radius:</Label>
                   <div className="flex items-center space-x-2 w-48">
@@ -654,9 +745,9 @@ const NeighborsPage = () => {
                 </div>
               ) : events.length === 0 ? (
                 <div className="text-center py-12">
-                  <CalendarIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No events nearby</h3>
-                  <p className="text-gray-500">Try increasing your search radius or check back later.</p>
+                  <CalendarIcon className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-white mb-2">No events nearby</h3>
+                  <p className="text-slate-400">Try increasing your search radius or check back later.</p>
                   <Button 
                     onClick={() => setCreatingEvent(true)}
                     className="mt-4 bg-blue-600 hover:bg-blue-700 text-white"
@@ -667,33 +758,33 @@ const NeighborsPage = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {events.map(event => (
-                    <Card key={event.id} className="overflow-hidden">
+                    <Card key={event.id} className="overflow-hidden bg-slate-800/60 border-slate-700">
                       <div className="p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <h3 className="font-bold text-lg">{event.title}</h3>
-                            <p className="text-sm text-gray-600">{event.description}</p>
+                            <h3 className="font-bold text-lg text-white">{event.title}</h3>
+                            <p className="text-sm text-slate-300">{event.description}</p>
                           </div>
-                          <Badge variant="secondary" className="ml-2">
+                          <Badge variant="secondary" className="ml-2 bg-purple-600">
                             {event.category}
                           </Badge>
                         </div>
                         
-                        <div className="space-y-1 text-sm text-gray-600 mb-4">
-                          <div>
-                            <CalendarIcon className="w-4 h-4 inline mr-1" />
+                        <div className="space-y-1 text-sm text-slate-300 mb-4">
+                          <div className="flex items-center">
+                            <CalendarIcon className="w-4 h-4 mr-2" />
                             {new Date(event.start_time).toLocaleString()}
                           </div>
                           <div>
-                            <NavigationIcon className="w-4 h-4 inline mr-1" />
+                            <NavigationIcon className="w-4 h-4 mr-2" />
                             {event.city}, {event.state}
                           </div>
-                          <div>
-                            <UsersIcon className="w-4 h-4 inline mr-1" />
+                          <div className="flex items-center">
+                            <UsersIcon className="w-4 h-4 mr-2" />
                             {getParticipantCount(event.id)} participants
                           </div>
-                          <div>
-                            <TrophyIcon className="w-4 h-4 inline mr-1" />
+                          <div className="flex items-center">
+                            <TrophyIcon className="w-4 h-4 mr-2" />
                             {event.reward_coins} coins
                           </div>
                         </div>
@@ -719,9 +810,9 @@ const NeighborsPage = () => {
           </TabsContent>
 
           <TabsContent value="map" className="space-y-4">
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Map View</h2>
+                <h2 className="text-xl font-semibold text-white">Map View</h2>
                 <div className="flex items-center space-x-2">
                   <Label className="text-sm text-gray-600">Radius:</Label>
                   <div className="flex items-center space-x-2 w-48">
@@ -774,8 +865,8 @@ const NeighborsPage = () => {
           </TabsContent>
 
           <TabsContent value="my-events" className="space-y-4">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">My Events</h2>
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
+              <h2 className="text-xl font-semibold text-white mb-4">My Events</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* TODO: Implement my events list */}
@@ -795,8 +886,8 @@ const NeighborsPage = () => {
           </TabsContent>
 
           <TabsContent value="create-event" className="space-y-4">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Create Event</h2>
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
+              <h2 className="text-xl font-semibold text-white mb-4">Create Event</h2>
               
               <form onSubmit={handleCreateEvent} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -820,7 +911,7 @@ const NeighborsPage = () => {
                       <SelectTrigger id="event-category">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-slate-800 text-white">
                         {eventCategories.map(category => (
                           <SelectItem key={category} value={category}>
                             {category}
@@ -982,8 +1073,8 @@ const NeighborsPage = () => {
           </TabsContent>
 
           <TabsContent value="businesses" className="space-y-4">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Businesses</h2>
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
+              <h2 className="text-xl font-semibold text-white mb-4">Businesses</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {businesses.length === 0 ? (
@@ -1052,30 +1143,412 @@ const NeighborsPage = () => {
             </div>
           </TabsContent>
 
+          {/* My Profile Tab - Shows user's businesses and events */}
+          <TabsContent value="my-profile" className="space-y-4">
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">My Profile</h2>
+                <button
+                  onClick={async () => {
+                    setLoadingProfile(true);
+                    try {
+                      const { data: userData } = await supabase.auth.getUser();
+                      if (userData?.user) {
+                        // Fetch user's businesses
+                        const { data: businesses } = await supabase
+                          .from('neighbors_businesses')
+                          .select('*')
+                          .eq('owner_user_id', userData.user.id);
+                        setMyBusinesses(businesses || []);
+                        
+                        // Fetch user's events
+                        const { data: events } = await supabase
+                          .from('neighbors_events')
+                          .select('*')
+                          .eq('created_by_user_id', userData.user.id);
+                        setMyEvents(events || []);
+                      }
+                    } catch (err) {
+                      console.error('Error loading profile:', err);
+                    } finally {
+                      setLoadingProfile(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center"
+                >
+                  <RefreshCwIcon className="w-4 h-4 mr-2" />
+                  Refresh
+                </button>
+              </div>
+
+              {loadingProfile ? (
+                <div className="flex justify-center items-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                </div>
+              ) : (
+                <>
+                  {/* My Businesses */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-medium text-white mb-3">My Businesses</h3>
+                    {myBusinesses.length === 0 ? (
+                      <p className="text-slate-400">You haven't registered any businesses yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {myBusinesses.map(business => (
+                          <div key={business.id} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-white">{business.business_name}</h4>
+                              {business.approval_status === 'approved' ? (
+                                <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full flex items-center">
+                                  <CheckCircleIcon className="w-3 h-3 mr-1" />
+                                  Approved
+                                </span>
+                              ) : business.approval_status === 'rejected' ? (
+                                <span className="px-2 py-1 bg-red-600 text-white text-xs rounded-full">
+                                  Rejected
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 bg-yellow-600 text-white text-xs rounded-full">
+                                  Pending Review
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-300 mb-2">{business.description}</p>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              <span className="px-2 py-1 bg-slate-600 text-slate-200 text-xs rounded">
+                                {business.category}
+                              </span>
+                              {business.phone && (
+                                <span className="px-2 py-1 bg-slate-600 text-slate-200 text-xs rounded">
+                                  📞 {business.phone}
+                                </span>
+                              )}
+                              {business.email && (
+                                <span className="px-2 py-1 bg-slate-600 text-slate-200 text-xs rounded">
+                                  📧 {business.email}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              📍 {business.address}, {business.city}, {business.state}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* My Events */}
+                  <div>
+                    <h3 className="text-lg font-medium text-white mb-3">My Events</h3>
+                    {myEvents.length === 0 ? (
+                      <p className="text-slate-400">You haven't created any events yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {myEvents.map(event => (
+                          <div key={event.id} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-white">{event.title}</h4>
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                event.status === 'active' ? 'bg-green-600 text-white' : 'bg-slate-600 text-slate-300'
+                              }`}>
+                                {event.status || 'active'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-300 mb-2">{event.description}</p>
+                            <div className="text-xs text-slate-400">
+                              📅 {event.start_time ? new Date(event.start_time).toLocaleDateString() : 'TBD'}
+                              {event.city && ` • 📍 ${event.city}, ${event.state}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Hiring Tab - Job postings from businesses */}
+          <TabsContent value="hiring" className="space-y-4">
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">Hiring & Jobs</h2>
+                {myBusinesses.filter(b => b.verified).length > 0 && (
+                  <button
+                    onClick={() => setCreatingHiring(true)}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center"
+                  >
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    Post Job
+                  </button>
+                )}
+              </div>
+
+              {myBusinesses.filter(b => b.verified).length === 0 ? (
+                <p className="text-slate-400">
+                  You need a verified business to post jobs. Register a business first!
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {hiringPosts.length === 0 ? (
+                    <p className="text-slate-400 col-span-2">No job postings yet. Be the first to post!</p>
+                  ) : (
+                    hiringPosts.map(post => (
+                      <div key={post.id} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-bold text-white">{post.title}</h4>
+                          <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded">
+                            {post.job_type}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-300 mb-2">{post.description}</p>
+                        {post.requirements && (
+                          <p className="text-xs text-slate-400 mb-2">Requirements: {post.requirements}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {post.contact_email && (
+                            <span className="px-2 py-1 bg-slate-600 text-slate-200 text-xs rounded">
+                              📧 {post.contact_email}
+                            </span>
+                          )}
+                          {post.contact_phone && (
+                            <span className="px-2 py-1 bg-slate-600 text-slate-200 text-xs rounded">
+                              📞 {post.contact_phone}
+                            </span>
+                          )}
+                          {post.pay_rate && (
+                            <span className="px-2 py-1 bg-green-600/50 text-green-200 text-xs rounded">
+                              💰 {post.pay_rate}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Create Hiring Modal */}
+            {creatingHiring && (
+              <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
+                <div className="bg-slate-800 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-700">
+                  <div className="p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-2xl font-bold text-white">Post a Job</h2>
+                      <button
+                        onClick={() => setCreatingHiring(false)}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        <XCircleIcon className="w-6 h-6" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const { data: userData } = await supabase.auth.getUser();
+                        if (!userData?.user) return;
+
+                        const { error } = await supabase
+                          .from('neighbors_hiring')
+                          .insert([{
+                            ...hiringFormData,
+                            owner_user_id: userData.user.id
+                          }]);
+
+                        if (error) throw error;
+
+                        setCreatingHiring(false);
+                        setHiringFormData({
+                          business_id: '',
+                          title: '',
+                          description: '',
+                          requirements: '',
+                          contact_email: '',
+                          contact_phone: '',
+                          location: '',
+                          job_type: 'full-time',
+                          pay_rate: ''
+                        });
+
+                        // Refresh hiring posts
+                        const { data: posts } = await supabase
+                          .from('neighbors_hiring')
+                          .select('*, neighbors_businesses(business_name)')
+                          .eq('is_active', true);
+                        setHiringPosts(posts || []);
+                      } catch (err) {
+                        console.error('Error posting job:', err);
+                      }
+                    }} className="space-y-4">
+                      <div>
+                        <Label htmlFor="hiring-business" className="text-white">Business</Label>
+                        <Select
+                          value={hiringFormData.business_id}
+                          onValueChange={(value) => setHiringFormData({...hiringFormData, business_id: value})}
+                        >
+                          <SelectTrigger id="hiring-business" className="bg-slate-700 text-white">
+                            <SelectValue placeholder="Select your business" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 text-white">
+                            {myBusinesses.filter(b => b.verified).map(b => (
+                              <SelectItem key={b.id} value={b.id}>
+                                {b.business_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hiring-title" className="text-white">Job Title</Label>
+                        <Input
+                          id="hiring-title"
+                          value={hiringFormData.title}
+                          onChange={(e) => setHiringFormData({...hiringFormData, title: e.target.value})}
+                          placeholder="e.g., Server, Manager, Cook"
+                          required
+                          className="bg-slate-700 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hiring-description" className="text-white">Description</Label>
+                        <Textarea
+                          id="hiring-description"
+                          value={hiringFormData.description}
+                          onChange={(e) => setHiringFormData({...hiringFormData, description: e.target.value})}
+                          placeholder="Describe the job responsibilities..."
+                          className="bg-slate-700 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hiring-requirements" className="text-white">Requirements</Label>
+                        <Textarea
+                          id="hiring-requirements"
+                          value={hiringFormData.requirements}
+                          onChange={(e) => setHiringFormData({...hiringFormData, requirements: e.target.value})}
+                          placeholder="Required skills, experience..."
+                          className="bg-slate-700 text-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="hiring-type" className="text-white">Job Type</Label>
+                          <Select
+                            value={hiringFormData.job_type}
+                            onValueChange={(value) => setHiringFormData({...hiringFormData, job_type: value})}
+                          >
+                            <SelectTrigger id="hiring-type" className="bg-slate-700 text-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-800 text-white">
+                              <SelectItem value="full-time">Full-time</SelectItem>
+                              <SelectItem value="part-time">Part-time</SelectItem>
+                              <SelectItem value="contract">Contract</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="hiring-pay" className="text-white">Pay Rate</Label>
+                          <Input
+                            id="hiring-pay"
+                            value={hiringFormData.pay_rate}
+                            onChange={(e) => setHiringFormData({...hiringFormData, pay_rate: e.target.value})}
+                            placeholder="e.g., $15-20/hr"
+                            className="bg-slate-700 text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="hiring-email" className="text-white">Contact Email</Label>
+                          <Input
+                            id="hiring-email"
+                            type="email"
+                            value={hiringFormData.contact_email}
+                            onChange={(e) => setHiringFormData({...hiringFormData, contact_email: e.target.value})}
+                            placeholder="contact@business.com"
+                            className="bg-slate-700 text-white"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="hiring-phone" className="text-white">Contact Phone</Label>
+                          <Input
+                            id="hiring-phone"
+                            value={hiringFormData.contact_phone}
+                            onChange={(e) => setHiringFormData({...hiringFormData, contact_phone: e.target.value})}
+                            placeholder="(555) 123-4567"
+                            className="bg-slate-700 text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="hiring-location" className="text-white">Location</Label>
+                        <Input
+                          id="hiring-location"
+                          value={hiringFormData.location}
+                          onChange={(e) => setHiringFormData({...hiringFormData, location: e.target.value})}
+                          placeholder="Address or area"
+                          className="bg-slate-700 text-white"
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-4">
+                        <Button
+                          type="button"
+                          onClick={() => setCreatingHiring(false)}
+                          variant="outline"
+                          className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          Post Job
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="leaderboard" className="space-y-4">
-            <div className="bg-white rounded-lg shadow p-4">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Leaderboard (Coming Soon)</h2>
+            <div className="bg-slate-800/60 backdrop-blur rounded-lg shadow p-4 border border-slate-700">
+              <h2 className="text-xl font-semibold text-white mb-4">Leaderboard (Coming Soon)</h2>
               
               <div className="text-center py-12">
-                <TrophyIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Leaderboard Coming Soon</h3>
-                <p className="text-gray-500">Check back later to see the top participants in your area.</p>
+                <TrophyIcon className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-white mb-2">Leaderboard Coming Soon</h3>
+                <p className="text-slate-400">Check back later to see the top participants in your area.</p>
               </div>
             </div>
           </TabsContent>
         </Tabs>
       </div>
+      </div>
 
       {/* Create Event Modal */}
       {creatingEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
+          <div className="bg-slate-800 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-700">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Create New Event</h2>
+                <h2 className="text-2xl font-bold text-white">Create New Event</h2>
                 <button
                   onClick={() => setCreatingEvent(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-slate-400 hover:text-white"
                 >
                   <XCircleIcon className="w-6 h-6" />
                 </button>
@@ -1103,7 +1576,7 @@ const NeighborsPage = () => {
                       <SelectTrigger id="modal-event-category">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-slate-800 text-white">
                         {eventCategories.map(category => (
                           <SelectItem key={category} value={category}>
                             {category}
@@ -1271,14 +1744,14 @@ const NeighborsPage = () => {
 
       {/* Register Business Modal */}
       {creatingBusiness && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
+          <div className="bg-slate-800 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-700">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Register Business</h2>
+                <h2 className="text-2xl font-bold text-white">Register Business</h2>
                 <button
                   onClick={() => setCreatingBusiness(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-slate-400 hover:text-white"
                 >
                   <XCircleIcon className="w-6 h-6" />
                 </button>
@@ -1305,7 +1778,7 @@ const NeighborsPage = () => {
                     <SelectTrigger id="business-category">
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-slate-800 text-white">
                       {businessCategories.map(category => (
                         <SelectItem key={category} value={category}>
                           {category}

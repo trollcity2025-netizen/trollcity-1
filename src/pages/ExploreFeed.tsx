@@ -29,7 +29,7 @@ export default function ExploreFeed() {
   const navigate = useNavigate();
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'gaming' | 'irl' | 'music' | 'podcast'>('all');
+  const [filter, setFilter] = useState<'all' | 'gaming' | 'irl' | 'podcast'>('all');
 
   // Auto-scroll to top on page load
   useEffect(() => {
@@ -240,7 +240,7 @@ export default function ExploreFeed() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-3">
-            {['all', 'irl', 'music', 'podcast'].map((cat) => (
+            {['all', 'irl', 'podcast'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setFilter(cat as typeof filter)}

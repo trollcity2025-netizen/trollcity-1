@@ -24,7 +24,6 @@ const SeasonalGoals = lazy(() => import('./SeasonalGoals'))
 const PayoutBatches = lazy(() => import('./PayoutBatches'))
 const LoadLab = lazy(() => import('../../components/admin/LoadLab'))
 const SellerManagement = lazy(() => import('./SellerManagement'))
-const MobileErrors = lazy(() => import('./MobileErrors'))
 
 export interface AdminRoute {
   id: string
@@ -66,19 +65,6 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileColor: 'text-yellow-200',
     tileBgColor: 'bg-yellow-500/10',
     tileBorderColor: 'border-yellow-500/30',
-    category: 'system'
-  },
-  {
-    id: 'mobile-errors',
-    title: 'Mobile Errors',
-    path: '/admin/mobile-errors',
-    component: MobileErrors,
-    roles: [UserRole.ADMIN],
-    description: 'Track and debug mobile shell errors',
-    icon: <Smartphone className="w-5 h-5 text-purple-200" />,
-    tileColor: 'text-purple-200',
-    tileBgColor: 'bg-purple-500/10',
-    tileBorderColor: 'border-purple-500/30',
     category: 'system'
   },
   {

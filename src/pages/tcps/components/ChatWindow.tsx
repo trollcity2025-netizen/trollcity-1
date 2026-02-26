@@ -67,7 +67,7 @@ const ChatWindow = ({ otherUserInfo }: ChatWindowProps) => {
         id: m.id,
         conversation_id: m.conversation_id,
         sender_id: m.sender_id,
-        content: m.body,
+        content: m.body || m.content,
         created_at: m.created_at,
         read_at: (m as any).read_at ?? null,
         sender_username: senderMap[m.sender_id]?.username,
@@ -300,20 +300,35 @@ const ChatWindow = ({ otherUserInfo }: ChatWindowProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-grow">
+      {/* Header with user info */}
+      {otherUserInfo && (
+        <div className="flex items-center gap-3 p-4 bg-white/5 border-b border-white/10">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold">
+            {otherUserInfo.username?.[0]?.toUpperCase() || '?'}
+          </div>
+          <div>
+            <div className="font-semibold text-white">{otherUserInfo.username || 'Unknown User'}</div>
+          </div>
+        </div>
+      )}
+      <div className="flex-grow overflow-auto">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-500">No messages yet</div>
         ) : (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={messages}
-            itemContent={(_index, msg) => (
-              <div key={msg.id} className="p-4">
-                <strong>{msg.sender_username || 'Unknown'}: </strong>
-                <span>{msg.content}</span>
-              </div>
-            )}
-          />
+          <div className="h-full overflow-auto">
+            <Virtuoso
+              ref={virtuosoRef}
+              data={messages}
+              initialTopMostItemIndex={messages.length - 1}
+              followOutput="smooth"
+              itemContent={(_index, msg) => (
+                <div key={msg.id} className="p-4 border-b border-white/5">
+                  <strong>{msg.sender_username || 'Unknown'}: </strong>
+                  <span className="text-gray-300">{msg.content}</span>
+                </div>
+              )}
+            />
+          </div>
         )}
       </div>
       <MessageInput

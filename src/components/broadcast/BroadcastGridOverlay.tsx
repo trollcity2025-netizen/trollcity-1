@@ -75,10 +75,12 @@ export default function BroadcastGridOverlay({
           const hasGold = displayProfile?.is_gold;
           const hasRgbProfile = displayProfile?.rgb_username_expires_at && new Date(displayProfile.rgb_username_expires_at) > new Date();
           const hasStreamRgb = (seatIndex === 0 && stream.has_rgb_effect);
+          // Check if this is the local user's box (broadcaster viewing their own stream)
+          const isLocal = userId && user?.id && userId === user.id;
 
           if (hasGold) {
              boxClass = "relative rounded-xl overflow-hidden aspect-video pointer-events-auto border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]";
-          } else if (hasRgbProfile || hasStreamRgb) {
+          } else if (hasRgbProfile || (hasStreamRgb && !isLocal)) {
              boxClass = "relative rounded-xl overflow-hidden aspect-video pointer-events-auto rgb-box";
           }
 

@@ -39,31 +39,27 @@ export default function AppLayout({
     
     const cleanup = setupGlobalMessageNotifications(
       user.id,
-      (senderId, senderUsername, senderAvatar, isOpsMessage) => {
-        const { openChatBubble, isOpen } = useChatStore.getState()
-        // Don't auto-open if bubble already open
-        if (isOpen) return
+      (senderId, senderUsername, senderAvatar, isOpsMessage, messageBody) => {
+        const { openChatBubble } = useChatStore.getState()
         
-        // Show toast notification
+        // Show toast notification with message content and open chat bubble
         if (isOpsMessage) {
-          toast.info(`🛡️ Officer Operations: New message from ${senderUsername}`, {
+          toast.info(`🛡️ Officer Operations: ${messageBody ? messageBody.substring(0, 50) + (messageBody.length > 50 ? '...' : '') : 'New message'}`, {
             duration: 4000,
             action: {
               label: 'Open',
               onClick: () => openChatBubble(OFFICER_GROUP_CONVERSATION_ID, '🛡️ Officer Operations', null)
             }
           })
-          // Auto-open OPS bubble
           openChatBubble(OFFICER_GROUP_CONVERSATION_ID, '🛡️ Officer Operations', null)
         } else {
-          toast.info(`💬 New message from ${senderUsername}`, {
+          toast.info(`💬 ${senderUsername}: ${messageBody ? messageBody.substring(0, 50) + (messageBody.length > 50 ? '...' : '') : 'New message'}`, {
             duration: 4000,
             action: {
               label: 'Open',
               onClick: () => openChatBubble(senderId, senderUsername, senderAvatar)
             }
           })
-          // Auto-open DM bubble
           openChatBubble(senderId, senderUsername, senderAvatar)
         }
       }

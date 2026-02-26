@@ -31,7 +31,7 @@ import { useIsMobile } from "./hooks/useIsMobile";
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
-import GlobalUserCounter from "./components/admin/GlobalUserCounter";
+
 
 import AdminErrors from "./pages/admin/AdminErrors";
 import ProfileSetupModal from "./components/ProfileSetupModal";
@@ -116,7 +116,10 @@ const AdminDashboard = lazyWithRetry(() => import("./pages/admin/AdminDashboard"
 const ApplicationsPage = lazyWithRetry(() => import("./pages/admin/Applications"));
 const AdminMarketplace = lazyWithRetry(() => import("./pages/admin/AdminMarketplace"));
 const AdminOfficerReports = lazyWithRetry(() => import("./pages/admin/AdminOfficerReports"));
-const MaiTalentPage = lazyWithRetry(() => import("./pages/MaiTalentPage"));
+const MaiTalentStage = lazyWithRetry(() => import("./pages/MaiTalentStage"));
+const MaiTalentTop10 = lazyWithRetry(() => import("./pages/MaiTalentTop10"));
+const MaiTalentTraining = lazyWithRetry(() => import("./pages/MaiTalentTraining"));
+const MaiTalentAdmin = lazyWithRetry(() => import("./pages/MaiTalentAdmin"));
 const StoreDebug = lazyWithRetry(() => import("./pages/admin/StoreDebug"));
 const Changelog = lazyWithRetry(() => import("./pages/Changelog"));
 const AccessDenied = lazyWithRetry(() => import("./pages/AccessDenied"));
@@ -323,6 +326,8 @@ const LoadingScreen = () => (
 import ChatBubble from "./components/ChatBubble";
 import AdminPoolTab from './pages/admin/components/AdminPoolTab'
 
+import { useSidebarStore } from './stores/useSidebarStore';
+
 function AppContent() {
   // Lightweight render counter (dev only)
   if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
@@ -338,6 +343,8 @@ function AppContent() {
 
   // Some legacy logic needs the full profile object in several effects
   const profile = useAuthStore((s) => s.profile);
+
+  const { expandGroup } = useSidebarStore();
 
 
   const location = useLocation();
@@ -639,13 +646,40 @@ function AppContent() {
         );
         return
       }
+
+      // General navigation shortcuts
+      if (event.key === 'c' || event.key === 'C') {
+        navigate('/city-hall');
+        expandGroup('City Center');
+        return;
+      }
+      if (event.key === 'p' || event.key === 'P') {
+        navigate('/pool');
+        expandGroup('Social');
+        return;
+      }
+      if (event.key === 's' || event.key === 'S') {
+        navigate('/marketplace');
+        expandGroup('City Center');
+        return;
+      }
+      if (event.key === 'g' || event.key === 'G') {
+        navigate('/government/streams');
+        expandGroup('Government Sector');
+        return;
+      }
+      if (event.key === 'r' || event.key === 'R') {
+        navigate('/city-registry');
+        expandGroup('City Registry');
+        return;
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [navigate, profile])
+  }, [navigate, profile, expandGroup])
 
   // 🔹 Check if user is kicked or banned and route to fee pages
   useEffect(() => {
@@ -908,7 +942,7 @@ function AppContent() {
   const appShell = (
     <>
       <SessionMonitor />
-      <GlobalUserCounter />
+      
       {updateAvailable && (
         <div className="fixed bottom-0 inset-x-0 z-[60] flex items-center justify-between bg-purple-900 text-white px-4 py-3">
           <span className="text-sm">A new version of Troll City is available.</span>
@@ -1053,8 +1087,11 @@ function AppContent() {
                   <Route path="/trollifieds" element={<Trollifieds />} />
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/pool" element={<PublicPool />} />
-                  <Route path="/social/mai-talent" element={<MaiTalentPage />} />
-                  <Route path="/mai-talent" element={<Navigate to="/social/mai-talent" replace />} />
+                  <Route path="/mai-talent/stage" element={<MaiTalentStage />} />
+                  <Route path="/mai-talent/top10" element={<MaiTalentTop10 />} />
+                  <Route path="/mai-talent/training" element={<MaiTalentTraining />} />
+                  <Route path="/mai-talent/admin" element={<RequireRole roles={[UserRole.ADMIN]}><MaiTalentAdmin /></RequireRole>} />
+                  <Route path="/mai-talent" element={<Navigate to="/mai-talent/stage" replace />} />
                   <Route path="/shop/:username" element={<ShopView />} />
                   <Route path="/inventory" element={<UserInventory />} />
           <Route path="/troting" element={<Troting />} />

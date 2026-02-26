@@ -51,7 +51,7 @@ export default function SummonModal({ isOpen, onClose, userId, username }: Summo
       const { data, error } = await supabase.rpc('summon_user_to_court', {
         p_defendant_id: userId,
         p_reason: reason,
-        p_users_involved: usersInvolved || null,
+        p_users_involved: usersInvolved || '',
         p_docket_id: selectedDocketId || null
       })
 

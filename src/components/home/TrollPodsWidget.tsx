@@ -17,6 +17,9 @@ interface PodRoom {
   }
 }
 
+import { useAuthStore } from '@/lib/store';
+import { toast } from 'sonner';
+
 interface TrollPodsWidgetProps {
   onRequireAuth: (intent?: string) => boolean
 }
@@ -25,6 +28,19 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
   const [pods, setPods] = useState<PodRoom[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const { profile } = useAuthStore();
+
+  const handleDelete = async (podId: string) => {
+    if (window.confirm('Are you sure you want to end this pod? This will remove it from the list.')) {
+      const { error } = await supabase.rpc('end_pod', { pod_id_to_end: podId });
+      if (error) {
+        toast.error(`Failed to end pod: ${error.message}`);
+      } else {
+        toast.success('Pod has been ended.');
+        // The real-time subscription will handle the UI update
+      }
+    }
+  };
 
   useEffect(() => {
     let mounted = true
@@ -72,9 +88,18 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
     fetchPods()
     const interval = setInterval(fetchPods, 15000)
 
+    const channel = supabase.channel('pod-rooms-widget')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pod_rooms' }, (payload) => {
+        if (payload.new.ended_at) {
+          setPods(pods => pods.filter(p => p.id !== payload.new.id));
+        }
+      })
+      .subscribe();
+
     return () => {
       mounted = false
       clearInterval(interval)
+      supabase.removeChannel(channel);
     }
   }, [])
 
@@ -131,6 +156,18 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
                 >
                   {pod.is_live ? 'Join' : 'Listen'}
                 </button>
+                {profile?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDelete(pod.id);
+                    }}
+                    className="text-xs font-semibold px-3 py-1 rounded-lg bg-red-600/80 text-white hover:bg-red-500"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))}

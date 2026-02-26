@@ -4,13 +4,22 @@ const path = require('path');
 const dotenv = require('dotenv');
 
 // Load environment variables from the root directory
-dotenv.config({ path: path.join(__dirname, '../.env') });
+const findConfig = require('find-config');
+
+dotenv.config({ path: findConfig('.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use((req, res, next) => {
+  express.json()(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: 'Invalid JSON in request body' });
+    }
+    next();
+  });
+});
 
 // Import handlers
 

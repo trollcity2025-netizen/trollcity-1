@@ -367,6 +367,7 @@ export function useCoins() {
     optimisticDebit,
     // Convenience getters
     troll_coins: balances.troll_coins,
+    paidBalance: balances.paid_coins,
     totalEarned: balances.total_earned_coins,
     totalSpent: balances.total_spent_coins,
   }

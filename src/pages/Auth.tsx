@@ -9,7 +9,6 @@ import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 // import InstallButton from '../components/InstallButton';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import { generateUUID } from '../lib/uuid';
-import { trackMobileError } from '../hooks/useMobileErrorTracking';
 
 interface AuthProps {
   embedded?: boolean;
@@ -146,15 +145,6 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
   const executeLogin = async (loginEmail: string, loginPassword: string) => {
     console.log('Attempting email login...')
     
-    // Track login attempt
-    try {
-      trackMobileError(
-        new Error('[Auth] executeLogin started'),
-        'Auth-login',
-        undefined
-      )
-    } catch {}
-    
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
@@ -174,15 +164,6 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
     
     if (data.user && data.session) {
       console.log('Email login successful:', data.user.email)
-      
-      // Track successful login before profile fetch
-      try {
-        trackMobileError(
-          new Error('[Auth] Login successful, fetching profile'),
-          'Auth-login-success',
-          data.user.id
-        )
-      } catch {}
       
       const sessionId = generateUUID()
       // Store session ID for device enforcement
@@ -426,7 +407,9 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
       const errorToTrack = err instanceof Error ? err : new Error(String(err))
       try {
         trackMobileError(errorToTrack, 'Auth-login', undefined)
-      } catch {}
+      } catch (err) {
+        console.error('Error tracking mobile error:', err)
+      }
       
       if (err instanceof AuthApiError) {
         const msg = String(err.message || '')
@@ -434,10 +417,14 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
         if (lowerMsg.includes('invalid refresh token') || lowerMsg.includes('refresh token not found')) {
           try {
             await supabase.auth.signOut()
-          } catch {}
+          } catch (err) {
+            console.error('Error signing out:', err)
+          }
           try {
             useAuthStore.getState().logout()
-          } catch {}
+          } catch (err) {
+            console.error('Error logging out:', err)
+          }
           toast.error('Your session has expired. Please sign in again.')
           navigate('/auth')
           return

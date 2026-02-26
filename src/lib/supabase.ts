@@ -1203,7 +1203,7 @@ export async function sendOfficerMessage(content: string, priority: string = 'no
 // Global Message Notification Listener
 export function setupGlobalMessageNotifications(
   userId: string,
-  onNewMessage: (senderId: string, senderUsername: string, senderAvatar: string | null, isOpsMessage: boolean) => void
+  onNewMessage: (senderId: string, senderUsername: string, senderAvatar: string | null, isOpsMessage: boolean, messageBody?: string) => void
 ) {
   // Subscribe to new DMs
   const dmChannel = supabase
@@ -1229,6 +1229,9 @@ export function setupGlobalMessageNotifications(
         if (!membership) return // Not in this conversation
         if (newMsg.sender_id === userId) return // Don't notify for own messages
         
+        // Get message content
+        const messageBody = newMsg.body || newMsg.content || ''
+        
         // Fetch sender info
         const { data: sender } = await supabase
           .from('user_profiles')
@@ -1237,7 +1240,7 @@ export function setupGlobalMessageNotifications(
           .single()
         
         if (sender) {
-          onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, false)
+          onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, false, messageBody)
         }
       }
     )
@@ -1263,6 +1266,9 @@ export function setupGlobalMessageNotifications(
           const newMsg = payload.new
           if (newMsg.sender_id === userId) return // Don't notify for own messages
 
+          // Get message content
+          const messageBody = newMsg.body || newMsg.content || ''
+
           // Fetch sender info
           const { data: sender } = await supabase
             .from('user_profiles')
@@ -1271,7 +1277,7 @@ export function setupGlobalMessageNotifications(
             .single()
 
           if (sender) {
-            onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, true)
+            onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, true, messageBody)
           }
         }
       )

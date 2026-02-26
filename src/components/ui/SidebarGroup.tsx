@@ -5,7 +5,8 @@ import { ChevronDown } from 'lucide-react'
 interface SidebarGroupProps {
   title: string
   children: React.ReactNode
-  defaultExpanded?: boolean
+  isExpanded?: boolean
+  onToggle?: () => void
   isCollapsed?: boolean // Sidebar itself is collapsed
   highlight?: boolean
 }
@@ -13,11 +14,11 @@ interface SidebarGroupProps {
 export default function SidebarGroup({ 
   title, 
   children, 
-  defaultExpanded = false,
+  isExpanded = false,
+  onToggle,
   isCollapsed = false,
   highlight = false
 }: SidebarGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [hoverExpanded, setHoverExpanded] = useState(false)
 
   if (isCollapsed) {
@@ -31,17 +32,14 @@ export default function SidebarGroup({
     )
   }
 
-  // Show expanded state if either clicked open OR hovering
-  const shouldShow = isExpanded || hoverExpanded
+  const shouldShow = isExpanded
 
   return (
     <div 
       className="py-2 border-t border-white/5 first:border-0"
-      onMouseEnter={() => setHoverExpanded(true)}
-      onMouseLeave={() => setHoverExpanded(false)}
     >
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={onToggle}
         className={`w-full flex items-center justify-between px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all duration-300 group ${
           highlight 
             ? 'text-white shadow-[0_0_15px_rgba(255,255,255,0.3)] bg-gradient-to-r from-red-500/20 via-green-500/20 to-blue-500/20 border-y border-white/20 animate-pulse' 

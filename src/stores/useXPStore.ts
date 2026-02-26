@@ -36,32 +36,16 @@ export const useXPStore = create<XPState>((set) => {
     current_level?: number; current_xp?: number; buyer_level?: number; buyer_xp?: number; stream_level?: number; stream_xp?: number;
     [key: string]: any;
   }) => {
-    // Prefer primary level columns, but use buyer_level/stream_level from user_level table
-    // For now, prioritize buyer_level as the main level
-    const levelValue = data.level
-      ?? data.current_level
-      ?? data.buyer_level
-      ?? data.stream_level
-      ?? 1
+    const levelValue = data.level || data.current_level || data.buyer_level || 1;
+    const absoluteXp = data.total_xp || data.xp || 0;
+    const nextLevelAbsolute = data.next_level_xp || (levelValue * 100) + 100;
+    const prevLevelAbsolute = levelValue * 100;
 
-    // Prefer buyer_xp from user_level table as main XP source
-    const absoluteXp = data.total_xp
-      ?? data.xp
-      ?? data.current_xp
-      ?? data.buyer_xp
-      ?? data.stream_xp
-      ?? 0
+    const xpIntoLevel = Math.max(0, absoluteXp - prevLevelAbsolute);
+    const xpNeededThisLevel = Math.max(1, nextLevelAbsolute - prevLevelAbsolute);
+    const progressValue = Math.min(100, (xpIntoLevel / xpNeededThisLevel) * 100);
 
-    const nextLevelAbsolute = data.next_level_xp ?? (levelValue + 1) * 100
-    const prevLevelAbsolute = Math.max(0, levelValue * 100)
-
-    // If absoluteXp already looks like within-level XP, don't subtract a base
-    const looksLikeSegmentXp = absoluteXp <= nextLevelAbsolute && absoluteXp <= 100000 // guard against huge subtraction
-    const xpIntoLevel = looksLikeSegmentXp ? Math.max(0, absoluteXp) : Math.max(0, absoluteXp - prevLevelAbsolute)
-    const xpNeededThisLevel = Math.max(1, nextLevelAbsolute - prevLevelAbsolute)
-    const progressValue = Math.min(1, xpIntoLevel / xpNeededThisLevel)
-
-    console.log('XP Store computed:', { levelValue, absoluteXp, xpIntoLevel, xpNeededThisLevel, progressValue })
+    console.log('XP Store computed:', { levelValue, absoluteXp, xpIntoLevel, xpNeededThisLevel, progressValue });
 
     return {
       levelValue,
@@ -69,8 +53,8 @@ export const useXPStore = create<XPState>((set) => {
       xpToNext: Math.max(0, xpNeededThisLevel - xpIntoLevel),
       progressValue,
       nextLevelAbsolute,
-    }
-  }
+    };
+  };
 
   return {
     xpTotal: 0,
@@ -112,24 +96,19 @@ export const useXPStore = create<XPState>((set) => {
         if (error && error.code !== 'PGRST116') throw error
         
         if (data) {
-          const level = data.level || 1
-          const xpTotal = data.xp_total || 0
-          const progress = data.xp_progress || 0
-          const nextLevelTotal = data.xp_to_next_level || 100
-          
-          const xpToNext = Math.max(0, nextLevelTotal - xpTotal)
+          const { levelValue, totalXp, xpToNext, progressValue, nextLevelAbsolute } = _computeXpState(data);
 
           set({
-            xpTotal,
-            level,
-            buyerLevel: level,
-            streamLevel: level,
-            xpToNext,
-            progress,
+            xpTotal: totalXp,
+            level: levelValue,
+            buyerLevel: levelValue,
+            streamLevel: levelValue,
+            xpToNext: xpToNext,
+            progress: progressValue,
             isLoading: false
-          })
+          });
           
-          syncAuthProfile(level, xpTotal, nextLevelTotal)
+          syncAuthProfile(levelValue, totalXp, nextLevelAbsolute);
         } else {
             console.log('No user_stats found, initializing...')
              const { data: _newData, error: insertError } = await supabase
@@ -177,20 +156,16 @@ export const useXPStore = create<XPState>((set) => {
           (payload) => {
             console.log('XP Update received:', payload)
             if (payload.new) {
-               const data = payload.new as any
-               const level = data.level || 1
-               const xpTotal = data.xp_total || 0
-               const progress = data.xp_progress || 0
-               const nextLevelTotal = data.xp_to_next_level || 100
-               const xpToNext = Math.max(0, nextLevelTotal - xpTotal)
+              const data = payload.new as any;
+              const { levelValue, totalXp, xpToNext, progressValue, nextLevelAbsolute } = _computeXpState(data);
 
-               set({
-                 xpTotal,
-                 level,
-                 xpToNext,
-                 progress
-               })
-               syncAuthProfile(level, xpTotal, nextLevelTotal)
+              set({
+                xpTotal: totalXp,
+                level: levelValue,
+                xpToNext: xpToNext,
+                progress: progressValue
+              });
+              syncAuthProfile(levelValue, totalXp, nextLevelAbsolute);
             } else {
                 set({
                     xpTotal: 0,
