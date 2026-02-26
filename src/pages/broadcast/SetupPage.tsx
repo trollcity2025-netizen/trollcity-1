@@ -146,121 +146,132 @@ export default function SetupPage() {
     fetchFollowerCount();
   }, [user?.id]);
 
+  const acquireMediaStream = async (videoFacingMode: 'user' | 'environment', enableVideo: boolean): Promise<MediaStream | null> => {
+    console.log('[acquireMediaStream] Attempting to acquire media stream...');
+
+    // Check for getUserMedia support
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const errorMsg = 'getUserMedia not supported in this browser/context';
+      console.error(`[acquireMediaStream] ${errorMsg}`);
+      const isSecure = window.isSecureContext;
+
+      if (!isSecure) {
+         toast.error(
+           <div className="flex flex-col gap-1">
+             <span className="font-bold">Camera Blocked by Browser Security</span>
+             <span className="text-xs">
+               Browsers block camera access on HTTP (http://{window.location.host}).
+               <br/><br/>
+               <strong>FIX for Chrome/Edge:</strong>
+               <br/>
+               1. Go to <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>
+               <br/>
+               2. Add <code>http://{window.location.hostname}:5176</code>
+               <br/>
+               3. Enable & Relaunch
+             </span>
+           </div>,
+           { duration: 10000 }
+         );
+      } else {
+         toast.error('Camera access is not supported in this browser.');
+      }
+      return null;
+    }
+
+    try {
+      const constraints = {
+        video: enableVideo ? { facingMode: videoFacingMode } : false,
+        audio: true
+      };
+      console.log('[acquireMediaStream] Requesting media with constraints:', constraints);
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('[acquireMediaStream] Successfully acquired media stream.');
+      return mediaStream;
+    } catch (err: any) {
+      console.warn("[acquireMediaStream] Error accessing media devices, trying audio only.", err);
+
+      if (err.name === 'NotAllowedError') {
+           toast.error("Camera permission denied. Please allow access in browser settings.");
+           return null;
+      }
+
+      try {
+          console.log('[acquireMediaStream] Attempting to acquire audio only stream.');
+          const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          setIsVideoEnabled(false);
+          toast.warning("Camera not found. Audio only mode.");
+          console.log('[acquireMediaStream] Successfully acquired audio only stream.');
+          return audioStream;
+      } catch (audioErr) {
+          console.error("[acquireMediaStream] No media devices found.", audioErr);
+          toast.error("Could not access microphone either.");
+          return null;
+      }
+    }
+  };
+
   useEffect(() => {
-    let localStream: MediaStream | null = null;
+    console.log('[SetupPage] Media acquisition useEffect triggered. facingMode:', facingMode, 'isVideoEnabled:', isVideoEnabled);
+    let currentLocalStream: MediaStream | null = null;
     const isMounted = { current: true };
 
-    // Check for multiple cameras
     navigator.mediaDevices?.enumerateDevices().then(devices => {
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
         setHasMultipleCameras(videoDevices.length > 1);
     });
 
-    // Request camera access on mount
-    async function getMedia() {
-      // Check for getUserMedia support
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        const errorMsg = 'getUserMedia not supported in this browser/context';
-        console.error(`[SetupPage] ${errorMsg}`);
-        const isSecure = window.isSecureContext;
+    async function getInitialMedia() {
+      console.log('[SetupPage] getInitialMedia called. Existing stream state:', stream ? 'available' : 'not available');
+      // Stop previous tracks if any
+      if (stream) {
+          console.log('[SetupPage] Stopping previous media tracks.');
+          stream.getTracks().forEach(track => track.stop());
+      }
 
-        if (!isSecure) {
-           toast.error(
-             <div className="flex flex-col gap-1">
-               <span className="font-bold">Camera Blocked by Browser Security</span>
-               <span className="text-xs">
-                 Browsers block camera access on HTTP (http://{window.location.host}).
-                 <br/><br/>
-                 <strong>FIX for Chrome/Edge:</strong>
-                 <br/>
-                 1. Go to <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>
-                 <br/>
-                 2. Add <code>http://{window.location.hostname}:5176</code>
-                 <br/>
-                 3. Enable & Relaunch
-               </span>
-             </div>,
-             { duration: 10000 }
-           );
-        } else {
-           toast.error('Camera access is not supported in this browser.');
-        }
+      const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
+      
+      if (!isMounted.current) {
+        console.log('[SetupPage] Component unmounted before media acquisition completed.');
+        mediaStream?.getTracks().forEach(track => track.stop());
         return;
       }
 
-      try {
-        // Stop previous tracks if any
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
+      if (!mediaStream) {
+        console.error('[SetupPage] getInitialMedia: Failed to acquire media stream.');
+        return;
+      }
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode }, 
-          audio: true 
-        });
-        
-        if (!isMounted.current) {
-          mediaStream.getTracks().forEach(track => track.stop());
-          return;
-        }
-        
-        localStream = mediaStream;
-        setStream(mediaStream);
-        
-        // Track if we've already attached to prevent multiple flashes
-        let videoAttached = false;
-        
-        // Attach to video element - try immediately and also set up observer
-        const attachToVideo = () => {
-          if (videoRef.current && !videoAttached) {
-            videoRef.current.srcObject = mediaStream;
-            videoAttached = true;
-          }
-        };
-        
-        // Try immediately
-        attachToVideo();
-        
-        // Also try after a short delay in case element isn't mounted yet (only if not already attached)
-        if (!videoAttached) {
-          setTimeout(attachToVideo, 100);
-        }
-        
-      } catch (err: any) {
-        console.warn("Error accessing media devices, trying audio only.", err);
+      console.log('[SetupPage] getInitialMedia: Media stream successfully acquired, setting state.');
+      currentLocalStream = mediaStream;
+      setStream(mediaStream);
 
-        if (err.name === 'NotAllowedError') {
-             toast.error("Camera permission denied. Please allow access in browser settings.");
-             return;
+      let videoAttached = false;
+      const attachToVideo = () => {
+        if (videoRef.current && !videoAttached) {
+          videoRef.current.srcObject = mediaStream;
+          videoAttached = true;
+          console.log('[SetupPage] Media stream attached to video element.');
         }
-
-        try {
-            const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            if (!isMounted.current) return;
-            localStream = audioStream;
-            setStream(audioStream);
-            setIsVideoEnabled(false);
-            toast.warning("Camera not found. Audio only mode.");
-        } catch (audioErr) {
-            console.error("No media devices found.", audioErr);
-            toast.error("Could not access microphone either.");
-        }
+      };
+      attachToVideo();
+      if (!videoAttached) {
+        setTimeout(attachToVideo, 100);
       }
     }
-    getMedia();
+    getInitialMedia();
 
     return () => {
       isMounted.current = false;
-      // Cleanup stream only if NOT starting stream
-      if (localStream && !isStartingStream.current) {
-        console.log('[SetupPage] Cleaning up media stream');
-        localStream.getTracks().forEach(track => track.stop());
-      } else if (isStartingStream.current && localStream) {
-        console.log('[SetupPage] Preserving media stream for broadcast');
-        PreflightStore.setStream(localStream);
+      if (currentLocalStream && !isStartingStream.current) {
+        console.log('[SetupPage] Cleanup: Cleaning up media stream.');
+        currentLocalStream.getTracks().forEach(track => track.stop());
+      } else if (isStartingStream.current && currentLocalStream) {
+        console.log('[SetupPage] Cleanup: Preserving media stream for broadcast.');
+        PreflightStore.setStream(currentLocalStream);
       }
     };
-  }, [facingMode]); // Only re-run when facing mode changes
+  }, [facingMode, isVideoEnabled]);
 
   const toggleVideo = () => {
     if (stream) {
@@ -396,9 +407,8 @@ export default function SetupPage() {
           category,
           stream_kind: category === 'trollmers' ? 'trollmers' : 'regular',
           camera_ready: isVideoEnabled,
-          status: 'starting',
-          is_live: true,
-          started_at: new Date().toISOString(),
+          status: 'pending',
+          is_live: false,
           box_count: categoryConfig.defaultBoxCount,
           layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' : 
                        categoryConfig.layoutMode === 'classroom' ? 'grid' :
@@ -415,14 +425,23 @@ export default function SetupPage() {
       // MANUAL AGORA SETUP - Production pattern
       // =====================================================
       
-      // 1. Generate numeric UID for Agora
-      const numericUid = Math.floor(Math.random() * 100000);
+      // 1. Generate numeric UID for Agora (consistent hash)
+      const stringToUid = (str: string): number => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          hash = (hash << 5) - hash + str.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      };
+      const numericUid = stringToUid(user.id);
       
       // 2. Fetch token from supabase edge function
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
         body: {
           channel: streamId,
-          uid: numericUid
+          uid: numericUid,
+          role: 'publisher'
         }
       });
       
@@ -435,6 +454,9 @@ export default function SetupPage() {
         throw new Error('No token available for streaming');
       }
       
+      console.log("TOKEN APP ID:", tokenData?.appId);
+      console.log("TOKEN LENGTH:", tokenData?.token?.length);
+      
       // 3. Create Agora client
       const agoraClient = AgoraRTC.createClient({
         mode: 'rtc',
@@ -442,8 +464,19 @@ export default function SetupPage() {
       });
       
       // 4. Join the channel
+      const appIdFromToken = (tokenData as any)?.appId || (tokenData as any)?.app_id || null;
+      const appIdEnv = import.meta.env.VITE_AGORA_APP_ID ? String(import.meta.env.VITE_AGORA_APP_ID).trim() : '';
+      const effectiveAppId = (appIdFromToken || appIdEnv || '').trim();
+      if (!effectiveAppId) {
+        throw new Error('Agora App ID is missing or invalid');
+      }
+      console.log("RAW VITE_AGORA_APP_ID from env:", import.meta.env.VITE_AGORA_APP_ID);
+      console.log("App ID from tokenData:", appIdFromToken);
+      console.log("Effective App ID used for join:", effectiveAppId);
+      console.log("SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
+      
       await agoraClient.join(
-        import.meta.env.VITE_AGORA_APP_ID!,
+        effectiveAppId,
         streamId,
         tokenData.token,
         numericUid
@@ -452,22 +485,30 @@ export default function SetupPage() {
       console.log('[SetupPage] Joined Agora channel:', streamId, 'with UID:', numericUid);
       
       // 5. Create tracks from existing MediaStream (NOT new tracks)
-      const localStream = PreflightStore.getStream();
+      let localStream = PreflightStore.getStream();
+      console.log('[handleStartStream] Stream from PreflightStore:', localStream ? 'available' : 'not available');
+
+      // Fallback: If no stream from PreflightStore, try to acquire it directly
       if (!localStream) {
-        throw new Error('Media stream not available');
+        toast.info('Attempting to re-acquire media stream...');
+        localStream = await acquireMediaStream(facingMode, isVideoEnabled);
+        console.log('[handleStartStream] Stream after fallback acquisition:', localStream ? 'available' : 'not available');
+      }
+
+      if (!localStream) {
+        throw new Error('Media stream not available. Please ensure camera and microphone permissions are granted.');
       }
       
-      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      });
+      const baseAudio = localStream.getAudioTracks()[0] || null;
+      const baseVideo = isVideoEnabled ? (localStream.getVideoTracks()[0] || null) : null;
       
-      const videoTrack = await AgoraRTC.createCameraVideoTrack({
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 720, max: 1080 },
-        frameRate: { ideal: 30, max: 60 }
-      });
+      const audioTrack = baseAudio 
+        ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
+        : null;
+      
+      const videoTrack = baseVideo 
+        ? await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: baseVideo })
+        : null;
       
       // Handle screen sharing if active
       let cameraVideoTrack: any = null;
@@ -486,7 +527,9 @@ export default function SetupPage() {
       }
       
       // 6. Publish tracks
-      const tracksToPublish = [audioTrack, videoTrack];
+      const tracksToPublish: any[] = [];
+      if (audioTrack) tracksToPublish.push(audioTrack);
+      if (videoTrack) tracksToPublish.push(videoTrack);
       if (cameraVideoTrack) tracksToPublish.push(cameraAudioTrack, cameraVideoTrack);
       
       await agoraClient.publish(tracksToPublish);
@@ -498,6 +541,16 @@ export default function SetupPage() {
         : [audioTrack, videoTrack, null, null];
       
       PreflightStore.setAgoraClient(agoraClient, localTracks);
+      
+      // Update stream status after successful join/publish
+      await supabase
+        .from('streams')
+        .update({
+          status: 'starting',
+          is_live: true,
+          started_at: new Date().toISOString()
+        })
+        .eq('id', streamId);
       
       // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
