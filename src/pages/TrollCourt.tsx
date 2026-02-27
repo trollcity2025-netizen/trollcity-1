@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase, UserRole } from '../lib/supabase'
 import { startCourtSession } from '../lib/courtSessions'
-import { Scale, Gavel, Users, Clock, AlertTriangle, CheckCircle, Search, X } from 'lucide-react'
+import { Scale, Gavel, Users, Clock, AlertTriangle, CheckCircle, Search, X, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
 import FileLawsuitModal from '../components/FileLawsuitModal'
 import JudgeRulingModal from '../components/JudgeRulingModal'
@@ -50,6 +50,15 @@ export default function TrollCourt() {
   const [_isSearchingUsers, setIsSearchingUsers] = useState(false)
   const [selectedCaseType, setSelectedCaseType] = useState<string>('')
   const [showDropdown, setShowDropdown] = useState(false)
+  
+  // Calendar state
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
+  const [docketCases, setDocketCases] = useState<any[]>([])
+  const [allDockets, setAllDockets] = useState<any[]>([])
+  const [showCaseDetailsModal, setShowCaseDetailsModal] = useState(false)
+  const [selectedDateCases, setSelectedDateCases] = useState<any[]>([])
 
   const CASE_TYPES = [
     'Harassment / Threats',
@@ -116,7 +125,49 @@ export default function TrollCourt() {
       }
     }
     fetchMyCivilCases()
-  }, [user, isFileLawsuitModalOpen, selectedCaseForRuling]) // Reload when modal closes (potentially filed new case)
+  }, [user, isFileLawsuitModalOpen, selectedCaseForRuling, profile?.role]) // Reload when modal closes (potentially filed new case)
+
+  // Fetch dockets for calendar
+  useEffect(() => {
+    const fetchDockets = async () => {
+      // Use local year/month to create proper date strings
+      // Format as YYYY-MM-DD to avoid timezone conversion issues
+      const year = calendarYear
+      const month = calendarMonth
+      
+      // Create date strings in local timezone
+      const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
+      // Last day of month - get from Date object
+      const lastDay = new Date(year, month + 1, 0).getDate()
+      const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      
+      const { data } = await supabase
+        .from('court_dockets')
+        .select('*, court_cases(*, defendant:defendant_id(username), plaintiff:plaintiff_id(username))')
+        .gte('court_date', startStr)
+        .lte('court_date', endStr)
+        .order('court_date', { ascending: true })
+      
+      if (data) setAllDockets(data)
+    }
+    fetchDockets()
+  }, [calendarMonth, calendarYear])
+
+  // Fetch cases for selected date
+  useEffect(() => {
+    const fetchSelectedDateCases = async () => {
+      if (!selectedCalendarDate) return
+      
+      // Query court_cases that are linked to dockets with the selected date
+      const { data } = await supabase
+        .from('court_cases')
+        .select('*, defendant:defendant_id(username), plaintiff:plaintiff_id(username), court_dockets(court_date, status)')
+        .eq('court_dockets.court_date', selectedCalendarDate)
+      
+      if (data) setSelectedDateCases(data)
+    }
+    fetchSelectedDateCases()
+  }, [selectedCalendarDate])
 
   useEffect(() => { 
    // ✅ Do NOT search if query too short 
@@ -131,7 +182,7 @@ export default function TrollCourt() {
      setIsSearchingUsers(true) 
  
      try { 
-       const { data, error } = await supabase 
+       const { data } = await supabase 
          .from('user_profiles') 
          .select('id, username, avatar_url') 
          .ilike('username', `%${searchQuery.trim()}%`) 
@@ -202,14 +253,50 @@ export default function TrollCourt() {
       }
     } finally {
       if (user?.id) {
+        // Fetch pending summons from court_summons with court date
         const { data: summons } = await supabase
           .from('court_summons')
-          .select('*')
+          .select(`
+            *,
+            court_cases!inner(
+              docket_id,
+              court_dockets!inner(court_date)
+            )
+          `)
           .eq('summoned_user_id', user.id)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
 
-        setPendingSummons(summons || [])
+        // Also fetch pending cases where user is defendant
+        const { data: cases } = await supabase
+          .from('court_cases')
+          .select(`
+            *,
+            court_dockets!inner(court_date)
+          `)
+          .eq('defendant_id', user.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+
+        // Transform court_summons data to extract court_date
+        const transformedSummons = (summons || []).map((s: any) => ({
+          ...s,
+          reason: s.reason,
+          court_date: s.court_cases?.court_dockets?.court_date || s.scheduled_for || null,
+          source: 'summons'
+        }))
+
+        // Transform court_cases data
+        const transformedCases = (cases || []).map((c: any) => ({
+          id: c.id,
+          reason: c.reason,
+          court_date: c.court_dockets?.court_date || null,
+          source: 'case'
+        }))
+
+        // Combine both sources
+        const allPending = [...transformedSummons, ...transformedCases]
+        setPendingSummons(allPending)
       } else {
         setPendingSummons([])
       }
@@ -504,6 +591,12 @@ export default function TrollCourt() {
                   <div className={`text-sm ${trollCityTheme.text.muted}`}>
                     {pendingSummons[0]?.reason ? pendingSummons[0].reason : 'You have been summoned to Troll Court.'}
                   </div>
+                  {pendingSummons[0]?.court_date && (
+                    <div className="mt-2 text-sm font-semibold text-yellow-400 flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      Court Date: {new Date(pendingSummons[0].court_date).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="bg-gray-900/50 border border-gray-500/30 rounded-lg p-4">
@@ -696,6 +789,131 @@ export default function TrollCourt() {
           </div>
         )}
 
+        {/* Court Calendar */}
+        <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
+          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-orange-400" />
+            Court Docket Calendar
+          </h3>
+          
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-4">
+            <button 
+              onClick={() => {
+                if (calendarMonth === 0) {
+                  setCalendarMonth(11)
+                  setCalendarYear(calendarYear - 1)
+                } else {
+                  setCalendarMonth(calendarMonth - 1)
+                }
+              }}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="font-semibold text-lg">
+              {new Date(calendarYear, calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </span>
+            <button 
+              onClick={() => {
+                if (calendarMonth === 11) {
+                  setCalendarMonth(0)
+                  setCalendarYear(calendarYear + 1)
+                } else {
+                  setCalendarMonth(calendarMonth + 1)
+                }
+              }}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+          
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {/* Day names */}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center text-xs font-semibold text-gray-400 py-2">
+                {day}
+              </div>
+            ))}
+            
+            {/* Calendar days */}
+            {(() => {
+              const firstDay = new Date(calendarYear, calendarMonth, 1).getDay()
+              const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
+              const days = []
+              
+              // Get dates with cases
+              const datesWithCases = allDockets
+                .filter(d => d.court_cases && d.court_cases.length > 0)
+                .map(d => {
+                  // Extract the date string from the docket - should be in YYYY-MM-DD format
+                  const dateStr = d.court_date
+                  if (typeof dateStr === 'string' && dateStr.includes('-')) {
+                    return dateStr // Already in YYYY-MM-DD format
+                  }
+                  // Fallback: convert from Date object
+                  return new Date(d.court_date).toISOString().split('T')[0]
+                })
+              
+              // Empty cells before first day
+              for (let i = 0; i < firstDay; i++) {
+                days.push(<div key={`empty-${i}`} className="p-2"></div>)
+              }
+              
+              // Days of month
+              for (let day = 1; day <= daysInMonth; day++) {
+                // Create date string in YYYY-MM-DD format for comparison
+                const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                const hasCases = datesWithCases.includes(dateStr)
+                const isToday = new Date().getDate() === day && 
+                  new Date().getMonth() === calendarMonth && 
+                  new Date().getFullYear() === calendarYear
+                const isSelected = selectedCalendarDate === dateStr
+                
+                days.push(
+                  <button
+                    key={day}
+                    onClick={() => {
+                      // Create date in local timezone to avoid offset issues
+                      const year = calendarYear
+                      const month = String(calendarMonth + 1).padStart(2, '0')
+                      const dayStr = String(day).padStart(2, '0')
+                      const dateStr = `${year}-${month}-${dayStr}`
+                      setSelectedCalendarDate(dateStr)
+                      setShowCaseDetailsModal(true)
+                    }}
+                    className={`p-2 text-sm rounded-lg transition-all relative ${
+                      hasCases 
+                        ? 'bg-orange-900/40 hover:bg-orange-800/60 border border-orange-500/30 text-orange-200' 
+                        : 'hover:bg-white/10 text-gray-300'
+                    } ${isToday ? 'ring-2 ring-yellow-400' : ''} ${isSelected ? 'ring-2 ring-white' : ''}`}
+                  >
+                    {day}
+                    {hasCases && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+                    )}
+                  </button>
+                )
+              }
+              return days
+            })()}
+          </div>
+          
+          {/* Legend */}
+          <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
+            <div className="flex items-center gap-1">
+              <span className="w-3 h-3 bg-orange-500 rounded"></span>
+              <span>Dates with cases</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-3 h-3 ring-2 ring-yellow-400 rounded"></span>
+              <span>Today</span>
+            </div>
+          </div>
+        </div>
+
         {/* Recent Cases */}
         <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6`}>
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -882,6 +1100,94 @@ export default function TrollCourt() {
             // We should add a refresh trigger to dependency array of useEffect if we want auto-refresh
          }}
        />
+
+       {/* Case Details Modal */}
+       {showCaseDetailsModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+           <div className="bg-zinc-900 border border-orange-500/50 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+             {/* Header */}
+             <div className="bg-gradient-to-r from-orange-950 to-zinc-900 p-4 border-b border-orange-900/30 flex items-center justify-between">
+               <div className="flex items-center gap-2 text-orange-400 font-bold text-lg">
+                 <Calendar className="w-5 h-5" />
+                 Cases for {selectedCalendarDate ? new Date(selectedCalendarDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Selected Date'}
+               </div>
+               <button 
+                 onClick={() => setShowCaseDetailsModal(false)} 
+                 className="text-gray-400 hover:text-white transition p-1"
+               >
+                 <X className="w-5 h-5" />
+               </button>
+             </div>
+             
+             {/* Content */}
+             <div className="p-4 overflow-y-auto max-h-[60vh]">
+               {selectedDateCases.length > 0 ? (
+                 <div className="space-y-4">
+                   {selectedDateCases.map((c) => (
+                     <div key={c.id} className="bg-orange-900/20 border border-orange-500/30 rounded-lg p-4">
+                       <div className="flex items-center justify-between mb-2">
+                         <span className="font-semibold text-orange-200">
+                           Case #{c.id.slice(0, 8)}
+                         </span>
+                         <span className={`text-xs px-2 py-1 rounded-full ${
+                           c.status === 'resolved' ? 'bg-green-600' : 
+                           c.status === 'in_session' ? 'bg-purple-600' : 'bg-yellow-600'
+                         }`}>
+                           {c.status === 'in_session' ? 'In Session' : 
+                            c.status === 'resolved' ? 'Resolved' : 'Pending'}
+                         </span>
+                       </div>
+                       
+                       <div className="space-y-2 text-sm">
+                         <div className="flex justify-between">
+                           <span className="text-gray-400">Plaintiff:</span>
+                           <span className="text-white">{c.plaintiff?.username || 'Unknown'}</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span className="text-gray-400">Defendant:</span>
+                           <span className="text-white">{c.defendant?.username || 'Unknown'}</span>
+                         </div>
+                         {c.reason && (
+                           <div className="mt-2 pt-2 border-t border-gray-700">
+                             <span className="text-gray-400">Case Details:</span>
+                             <p className="text-white mt-1">{c.reason}</p>
+                           </div>
+                         )}
+                         {c.category && (
+                           <div className="flex justify-between">
+                             <span className="text-gray-400">Category:</span>
+                             <span className="text-orange-200">{c.category}</span>
+                           </div>
+                         )}
+                       </div>
+                       
+                       {canStartCourt && (
+                         <div className="mt-3 pt-3 border-t border-gray-700">
+                           <button 
+                             onClick={() => {
+                               setSelectedCaseForRuling(c)
+                               setShowCaseDetailsModal(false)
+                             }}
+                             className="text-xs bg-orange-900/40 hover:bg-orange-800 border border-orange-500/30 px-3 py-1 rounded text-orange-200"
+                           >
+                             View Full Case Details
+                           </button>
+                         </div>
+                       )}
+                     </div>
+                   ))}
+                 </div>
+               ) : (
+                 <div className="text-center py-8 text-gray-400">
+                   <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                   <p>No cases found for this date.</p>
+                   <p className="text-sm mt-1">Try clicking on a date marked with orange dots.</p>
+                 </div>
+               )}
+             </div>
+           </div>
+         </div>
+       )}
      </div>
    )
  }

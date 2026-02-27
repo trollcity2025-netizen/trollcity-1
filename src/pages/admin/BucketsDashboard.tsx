@@ -178,8 +178,9 @@ export default function BucketsDashboard() {
   const loadTransactions = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('ledger_recent')
-        .select('*')
+        .from('coin_transactions')
+        .select('id, user_id, type, amount, coin_type, description, created_at')
+        .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) {

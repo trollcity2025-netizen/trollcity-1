@@ -32,6 +32,15 @@ BEGIN
     INSERT INTO public.user_houses (user_id, house_catalog_id, purchase_price, next_due_at, status, condition, influence_active)
     VALUES (v_user_id, p_house_catalog_id, v_price, NOW() + INTERVAL '1 day', 'active', 100, true);
 
+    -- Send global event
+    INSERT INTO public.global_events (type, title, icon, metadata)
+    VALUES (
+        'property',
+        (SELECT username FROM public.user_profiles WHERE id = v_user_id) || ' just purchased ' || v_house.name,
+        'property',
+        jsonb_build_object('user_id', v_user_id, 'house_id', p_house_catalog_id)
+    );
+
     RETURN jsonb_build_object('success', true, 'message', 'House purchased successfully');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -181,7 +181,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
     } finally {
       // Force a hard refresh to ensure all video/audio contexts are completely cleared
       // This prevents the "blue screen" / leftover UI glitch
-      window.location.href = '/messages';
+      navigate('/messages');
     }
   }, [roomId, user, otherUserId, callType, isEnding]);
 

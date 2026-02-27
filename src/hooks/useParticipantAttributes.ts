@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { supabase } from '../lib/supabase';
 import { PerkKey } from '../lib/perkSystem';
+import { persistentGiftStore, type PersistentGift } from '../lib/persistentGiftStore';
 
 export interface ParticipantAttributes {
   username: string;

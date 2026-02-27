@@ -33,23 +33,24 @@ interface BroadcastControlsProps {
   toggleCamera: () => void;
   toggleMicrophone: () => void;
   onPinProduct?: () => void;
+  onRgbToggle?: (enabled: boolean) => void;
 }
 
-export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, onStreamEnd, handleLike, liveViewerCount, localTracks, toggleCamera, toggleMicrophone, onPinProduct }: BroadcastControlsProps) {
+export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, onStreamEnd, handleLike, liveViewerCount, localTracks, toggleCamera, toggleMicrophone, onPinProduct, onRgbToggle }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
   const isMicOn = audioTrack ? audioTrack.enabled : false;
   const isCamOn = videoTrack ? videoTrack.enabled : false;
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
-  const [locked, setLocked] = useState(stream.are_seats_locked || false);
+
   const [debouncedPrice, setDebouncedPrice] = useState(seatPrice);
-  const [showEffects, setShowEffects] = useState(false);
+
   const [showBannedList, setShowBannedList] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [likes, setLikes] = useState(0); // Local like count for immediate feedback
   const [isLiking, setIsLiking] = useState(false);
-  const [hasRgb, setHasRgb] = useState(stream.has_rgb_effect || false);
+
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
 
@@ -66,15 +67,9 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   // Stable box count to prevent unnecessary rerenders
   const boxCount = stream.box_count || 1;
 
-  // Sync locked state from stream - only when are_seats_locked changes
-  useEffect(() => {
-    setLocked(stream.are_seats_locked || false);
-  }, [stream.are_seats_locked]);
 
-  // Sync RGB effect from stream - only when has_rgb_effect changes
-  useEffect(() => {
-    setHasRgb(stream.has_rgb_effect || false);
-  }, [stream.has_rgb_effect]);
+
+
 
   // Sync likes from stream - only when total_likes changes
   useEffect(() => {
@@ -143,19 +138,15 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
     }
   };
 
-  // Sync local state with stream data
-  useEffect(() => {
-    setLocked(stream.are_seats_locked || false);
-    setHasRgb(stream.has_rgb_effect || false);
-  }, [stream]);
 
 
-  const updateStreamConfig = React.useCallback(async (price: number, isLocked: boolean, showToast: boolean = true) => {
+
+  const updateStreamConfig = React.useCallback(async (price: number, showToast: boolean = true) => {
     if (!canEditStream) return;
     try {
         await supabase
         .from('streams')
-        .update({ seat_price: price, are_seats_locked: isLocked })
+        .update({ seat_price: price })
         .eq('id', stream.id);
         if (showToast) {
             toast.success("Stream settings updated");
@@ -172,10 +163,10 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
 
     const timer = setTimeout(() => {
       // Don't show toast for auto-updates
-      updateStreamConfig(debouncedPrice, locked, false);
+      updateStreamConfig(debouncedPrice, false);
     }, 1000);
     return () => clearTimeout(timer);
-  }, [debouncedPrice, stream.seat_price, locked, updateStreamConfig]);
+  }, [debouncedPrice, stream.seat_price, updateStreamConfig]);
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only Host can change price (Prompt: Host only)
@@ -193,11 +184,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
     setDebouncedPrice(val);
   };
 
-  const toggleLock = () => {
-    const newLocked = !locked;
-    setLocked(newLocked);
-    updateStreamConfig(seatPrice, newLocked, true); // Explicitly show toast for manual action
-  };
+
   
   const updateBoxCount = (newCount: number) => {
     if (!canEditStream) return;
@@ -228,7 +215,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
      // Only Host can toggle RGB (Prompt: Host only)
      if (!isHost) return;
      
-     const enabling = !hasRgb;
+     const enabling = !stream.has_rgb_effect;
      
      try {
         // If enabling, we might be purchasing. 
@@ -246,7 +233,9 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
         if (!result || !result.success) throw new Error(result?.error || "Failed to update RGB");
         
         // Update local state based on success
-        setHasRgb(enabling);
+        if (onRgbToggle) {
+          onRgbToggle(enabling);
+        }
         
         if (result.message === 'Purchased and Enabled') {
              toast.success("RGB Unlocked! (-10 Coins)");
@@ -260,51 +249,9 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
      }
   };
 
-  const handleEndStream = async () => {
-    // if (!confirm("Are you sure you want to END the broadcast?")) return; // Removed confirmation as requested
-    try {
-        // Use p_stream_id to match RPC parameter name
-        const { data, error } = await supabase.rpc('end_stream', { p_stream_id: stream.id });
-        
-        if (error) throw error;
-        // Check if data is array or object
-        const result = Array.isArray(data) ? data[0] : data;
-        if (result && result.success === false) throw new Error(result.message || "Failed to end stream");
-
-        toast.success("Broadcast ended");
-        // Trigger callback for instant navigation
-        if (onStreamEnd) onStreamEnd();
-    } catch (e: any) {
-        console.error("End Stream RPC Error:", e);
-        
-        // Fallback for legacy support if RPC fails or doesn't exist yet
-        // Covers: "function end_stream does not exist", "Could not find the function... in the schema cache"
-        const msg = (e?.message || JSON.stringify(e) || '').toLowerCase();
-        
-        if (
-            msg.includes('function') || 
-            msg.includes('schema cache') || 
-            msg.includes('could not find') ||
-            e?.code === '42883' || // Undefined function
-            e?.code === 'PGRST202' // Function not found
-        ) {
-             const { error: updateError } = await supabase
-                .from('streams')
-                .update({ 
-                    status: 'ended', 
-                    is_live: false,
-                    ended_at: new Date().toISOString() 
-                })
-                .eq('id', stream.id);
-             
-             if (updateError) {
-                 toast.error("Failed to end broadcast (DB Error)");
-             } else {
-                 toast.success("Broadcast ended");
-             }
-        } else {
-             toast.error(e?.message || "Failed to end broadcast");
-        }
+  const handleEndStream = () => {
+    if (onStreamEnd) {
+      onStreamEnd();
     }
   };
 
@@ -327,57 +274,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
              <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Controls</span>
         ) : (
         <>
-        <AnimatePresence>
-        {showEffects && (
-            <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-                className="absolute bottom-full right-0 w-64 mb-4 bg-zinc-900 border border-white/10 rounded-xl p-4 shadow-2xl z-[100]"
-            >
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white flex items-center gap-2">
-                        <Sparkles size={16} className="text-yellow-400" />
-                        My Effects
-                    </h3>
-                    <button onClick={() => setShowEffects(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
-                </div>
-                
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between p-2 bg-black/40 rounded-lg border border-white/5">
-                        <span className="text-sm text-zinc-300 font-medium">RGB Border</span>
-                        <button 
-                            onClick={() => togglePerk('perk_rgb_username')}
-                            className={cn("w-10 h-5 rounded-full transition-colors relative", 
-                                activePerks.includes('perk_rgb_username' as any) ? "bg-green-500" : "bg-zinc-700"
-                            )}
-                        >
-                            <div className={cn("absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform shadow-sm", 
-                                activePerks.includes('perk_rgb_username' as any) && "translate-x-5"
-                            )} />
-                        </button>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-black/40 rounded-lg border border-white/5">
-                        <span className="text-sm text-zinc-300 font-medium">Neon Glow</span>
-                        <button 
-                            onClick={() => togglePerk('perk_global_highlight')}
-                            className={cn("w-10 h-5 rounded-full transition-colors relative", 
-                                activePerks.includes('perk_global_highlight' as any) ? "bg-green-500" : "bg-zinc-700"
-                            )}
-                        >
-                            <div className={cn("absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform shadow-sm", 
-                                activePerks.includes('perk_global_highlight' as any) && "translate-x-5"
-                            )} />
-                        </button>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 text-center mt-2">
-                        Effects visible to everyone in the room
-                    </p>
-                </div>
-            </motion.div>
-        )}
-        </AnimatePresence>
+
 
         {showBannedList && (
             <BannedUsersList streamId={stream.id} onClose={() => setShowBannedList(false)} />
@@ -398,22 +295,24 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                     Controls
                 </h3>
                 
-                {/* Viewer Count */}
-                <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                    <Eye size={16} className="text-blue-400" />
-                    <span className="text-sm font-bold text-white">
-                        {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
-                    </span>
-                </div>
 
-                {/* Like Count */}
-                <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                    <Heart size={16} className="text-pink-500 fill-pink-500/20" />
-                    <span className="text-sm font-bold text-white">{likes}</span>
-                </div>
             </div>
 
             <div className="flex items-center gap-2">
+                 {/* Viewer Count */}
+                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                     <Eye size={16} className="text-blue-400" />
+                     <span className="text-sm font-bold text-white">
+                         {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
+                     </span>
+                 </div>
+
+                 {/* Like Count */}
+                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
+                     <Heart size={16} className="text-pink-500 fill-pink-500/20" />
+                     <span className="text-sm font-bold text-white">{likes}</span>
+                 </div>
+
                  {/* Mic & Cam Controls (Stage Only) */}
                  {isOnStage && (
                     <>
@@ -488,7 +387,6 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         onClick={(e) => {
                             e.stopPropagation();
                             setShowBannedList(!showBannedList);
-                            setShowEffects(false);
                             setShowThemeSelector(false);
                         }}
                         className={cn("p-2 rounded-lg transition-colors", showBannedList ? "bg-red-500/20 text-red-400" : "hover:bg-white/5 text-zinc-400")}
@@ -500,7 +398,6 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                         onClick={(e) => {
                             e.stopPropagation();
                             setShowThemeSelector(!showThemeSelector);
-                            setShowEffects(false);
                             setShowBannedList(false);
                         }}
                         className={cn("p-2 rounded-lg transition-colors", showThemeSelector ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-zinc-400")}
@@ -511,24 +408,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                     </>
                  )}
 
-                 {/* Effects Toggle (HOST ONLY per requirement) */}
-                 {isHost && (
-                    <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setShowEffects(!showEffects);
-                            setShowThemeSelector(false);
-                            setShowBannedList(false);
-                        }}
-                        className={cn(
-                            "p-2 rounded-lg transition-colors flex items-center gap-2",
-                            showEffects ? "bg-yellow-500/20 text-yellow-400" : "hover:bg-white/5 text-zinc-400"
-                        )}
-                        title="My Effects"
-                    >
-                        <Sparkles size={20} />
-                    </button>
-                 )}
+
 
                  {/* Pin Product (Host Only) */}
                  {isHost && onPinProduct && (
@@ -546,10 +426,10 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
 
                  {/* End Stream (Host Only) */}
                  {isHost && (
-                     <button 
-                        onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
-                        className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors relative z-50"
-                     >
+                     <button
+                    onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
+                    className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors relative z-50"
+                >
                         <Power size={16} />
                         End Stream
                      </button>
@@ -571,10 +451,10 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
         {/* Stream Controls - Host & Staff */}
         {canManageStream && (
             <div className="flex flex-col gap-4">
-                <div 
-                    className="flex items-center justify-between border-t border-white/10 pt-4 cursor-pointer hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
-                    onClick={() => setShowStreamControls(!showStreamControls)}
-                >
+                <div
+                className="flex items-center justify-between border-t border-white/10 pt-4 cursor-pointer hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
+                onClick={() => setShowStreamControls(!showStreamControls)}
+              >
                     <h3 className="text-white font-bold text-lg flex items-center gap-2">
                         <Settings2 className="text-yellow-500" />
                         Stream Controls
@@ -626,7 +506,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                     </div>
                             )}
 
-                    {/* Seat Pricing & Locking - Only visible to Host & Staff */}
+                    {/* Seat Pricing - Only visible to Host & Staff */}
                     {canManageStream && (
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center gap-4">
                         <div className="flex-1">
@@ -649,19 +529,7 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             />
                         </div>
                         
-                        <div className="flex flex-col justify-end">
-                            <button 
-                                onClick={toggleLock}
-                                className={cn(
-                                    "p-2 rounded-lg transition flex items-center gap-2 text-sm font-bold",
-                                    locked ? "bg-red-500/20 text-red-400 border border-red-500/50" : "bg-green-500/20 text-green-400 border border-green-500/50"
-                                )}
-                                title={locked ? "Seats Locked" : "Seats Open"}
-                            >
-                                {locked ? <Lock size={16} /> : <Unlock size={16} />}
-                                {locked ? "Locked" : "Open"}
-                            </button>
-                        </div>
+
                     </div>
                     )}
 
@@ -672,22 +540,9 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             <Palette size={16} className="text-purple-400" />
                             Visuals
                          </span>
-                         <button 
-                            onClick={toggleStreamRgb}
-                            className={cn(
-                                "w-12 h-6 rounded-full transition-colors relative flex items-center", 
-                                hasRgb ? "bg-green-500" : "bg-zinc-700"
-                            )}
-                            title={
-                                 hasRgb 
-                                     ? "Disable RGB Effect" 
-                                     : (stream.rgb_purchased ? "Enable RGB Effect" : "Unlock RGB Effect (10 Coins)")
-                             }
-                         >
-                            <div className={cn("absolute left-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm", 
-                                hasRgb && "translate-x-6"
-                            )} />
-                         </button>
+                         <button onClick={() => toggleStreamRgb()} className={cn("p-1 px-2 rounded-full", stream.has_rgb_effect ? "bg-purple-500" : "bg-zinc-700")}>
+              <div className={cn("w-4 h-4 rounded-full", stream.has_rgb_effect ? "bg-white" : "bg-zinc-500")}></div>
+            </button>
                     </div>
                     )}
                 </div>

@@ -124,9 +124,20 @@ const Header = () => {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
       },
-      (_payload) => {
-        // Update event - fetch to get accurate count
-        fetchNotifications();
+      (payload) => {
+        // Update event - need to check if we should decrement
+        // Supabase provides both old and new in the payload
+        const oldNotif = payload.old as any;
+        const newNotif = payload.new as any;
+        
+        // Check if notification was previously unread and is now read or dismissed
+        const wasUnread = !oldNotif?.is_read && !oldNotif?.is_dismissed;
+        const isNowReadOrDismissed = newNotif.is_read || newNotif.is_dismissed;
+        
+        if (wasUnread && isNowReadOrDismissed) {
+          setUnreadNotifications(prev => Math.max(0, prev - 1));
+        }
+
       }
     )
     .on(
@@ -137,12 +148,16 @@ const Header = () => {
         table: 'notifications',
         filter: `user_id=eq.${user.id}`
       },
-      (_payload) => {
-        // Delete event - decrement count immediately
+      (payload) => {
+        // Delete event - need to check if the deleted notification was unread
+        const deletedNotif = payload.old as any;
+        
+        // Only decrement if the deleted notification was unread and not dismissed
+        if (deletedNotif && !deletedNotif.is_read && !deletedNotif.is_dismissed) {
           setUnreadNotifications(prev => Math.max(0, prev - 1));
-          // Also fetch to ensure sync
-          fetchNotifications();
         }
+
+      }
       )
       .subscribe()
 
@@ -219,7 +234,7 @@ const Header = () => {
   }
 
   return (
-    <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-4 md:px-8 backdrop-blur-lg relative z-50">
+    <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-4 md:px-8 backdrop-blur-lg sticky top-0 z-50">
       <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5 pointer-events-none"></div>
 
       {/* Left: Search Bar */}

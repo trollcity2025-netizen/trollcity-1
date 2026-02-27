@@ -10,7 +10,6 @@ import {
   Settings,
   Monitor,
   CreditCard,
-  Camera,
   Play,
   Zap
 } from 'lucide-react'

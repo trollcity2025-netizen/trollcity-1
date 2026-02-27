@@ -238,7 +238,7 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
                   <p className="text-sm text-red-400 font-bold flex items-start gap-2">
                     <AlertCircle className="h-5 w-5 shrink-0" />
                     <span>
-                      You MUST send as &quot;Friend/Family&quot; transaction.
+                      You MUST send as "Friend/Family" transaction.
                       <br />
                       <span className="text-red-500 uppercase">Failure to do so will result in court summon.</span>
                     </span>

@@ -9,8 +9,6 @@ import {
   CheckCircle, 
   XCircle, 
   Clock,
-  MapPin,
-  User,
   Filter
 } from 'lucide-react'
 
@@ -35,11 +33,7 @@ export default function NeighborApprovals() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    fetchPendingApprovals()
-  }, [])
-
-  const fetchPendingApprovals = async () => {
+  const fetchPendingApprovals = useCallback(async () => {
     try {
       setLoading(true)
       
@@ -72,7 +66,11 @@ export default function NeighborApprovals() {
     } finally {
       setLoading(false)
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingApprovals()
+  }, [fetchPendingApprovals])
 
   const handleApprove = async (item: PendingItem) => {
     try {

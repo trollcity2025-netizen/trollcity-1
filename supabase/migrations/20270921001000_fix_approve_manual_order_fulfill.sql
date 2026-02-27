@@ -141,6 +141,10 @@ BEGIN
         updated_at = now()
   WHERE id = p_order_id;
 
+  -- Send notification
+  INSERT INTO public.notifications (user_id, type, title, message, metadata)
+  VALUES (v_order.user_id, 'coin_purchase', 'Coins Credited', 'Your manual coin purchase of ' || v_order.coins || ' coins has been approved and credited to your account.', jsonb_build_object('order_id', p_order_id));
+
   SELECT troll_coins INTO v_balance FROM public.user_profiles WHERE id = v_order.user_id;
   RETURN QUERY SELECT true, v_balance, NULL::text;
 END;

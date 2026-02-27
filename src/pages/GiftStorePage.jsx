@@ -5,6 +5,8 @@ import { useAuthStore } from '../lib/store'
 import { purchaseGift } from '../lib/giftEngine'
 import { giftCategories, giftTiers, tierPriority } from '../lib/giftCatalog'
 import { usePurchasableItems } from '../hooks/usePurchasableItems'
+import TrollzBalanceDisplay from '../components/gifts/TrollzBalanceDisplay'
+import TrollzWheel from '../components/gifts/TrollzWheel'
 
 const priceFilters = [
   { label: 'Any price', value: 'any' },
@@ -128,6 +130,19 @@ export default function GiftStorePage() {
             </div>
           </div>
         </header>
+
+        {/* Trollz Section - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Trollz Balance and Wheel */}
+          <div className="lg:col-span-2 space-y-6">
+            <TrollzWheel />
+          </div>
+          
+          {/* Trollz Balance Display */}
+          <div>
+            <TrollzBalanceDisplay showConversion={true} />
+          </div>
+        </div>
 
         <div className="bg-[#060510]/80 border border-yellow-500/20 rounded-3xl p-5 shadow-[0_0_30px_rgba(255,201,60,0.2)] space-y-4">
           <div className="relative">

@@ -1,24 +1,77 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { toast } from 'sonner';
-import { Upload, Camera, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import CoverPhotoEditor from './CoverPhotoEditor';
+import { Area } from 'react-easy-crop';
 
 interface CoverPhotoUploadProps {
-  onUploadComplete?: (url: string, positionX: number, positionY: number, zoom: number) => void;
+  onUploadComplete?: (url: string | null) => void;
   currentCoverUrl?: string | null;
-  currentPositionX?: number;
-  currentPositionY?: number;
-  currentZoom?: number;
+  userId?: string; // Optional: if not provided, uses current user
+}
+
+// Utility function to create a cropped image blob
+async function createCroppedImage(
+  imageSrc: string,
+  croppedAreaPixels: Area
+): Promise<Blob> {
+  const image = new Image();
+  const url = imageSrc.startsWith('data:') ? imageSrc : imageSrc;
+  
+  return new Promise((resolve, reject) => {
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
+      
+      canvas.width = croppedAreaPixels.width * scaleX;
+      canvas.height = croppedAreaPixels.height * scaleY;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+      
+      ctx.drawImage(
+        image,
+        croppedAreaPixels.x * scaleX,
+        croppedAreaPixels.y * scaleY,
+        croppedAreaPixels.width * scaleX,
+        croppedAreaPixels.height * scaleY,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create blob'));
+          }
+        },
+        'image/jpeg',
+        0.9 // High quality JPEG
+      );
+    };
+    
+    image.onerror = () => {
+      reject(new Error('Failed to load image'));
+    };
+    
+    image.src = url;
+  });
 }
 
 export default function CoverPhotoUpload({
   onUploadComplete,
   currentCoverUrl,
-  currentPositionX = 50,
-  currentPositionY = 50,
-  currentZoom = 1
+  userId: propUserId
 }: CoverPhotoUploadProps) {
   const { user } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -26,6 +79,9 @@ export default function CoverPhotoUpload({
   const [showEditor, setShowEditor] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Use provided userId or fall back to current user
+  const effectiveUserId = propUserId || user?.id;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -37,9 +93,9 @@ export default function CoverPhotoUpload({
       return;
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image must be less than 10MB');
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
       return;
     }
 
@@ -57,57 +113,55 @@ export default function CoverPhotoUpload({
     }
   };
 
-  const handleSave = async (crop: { x: number; y: number }, zoom: number) => {
-    if (!user || !selectedImage) return;
+  const handleSave = async (croppedAreaPixels: Area) => {
+    if (!effectiveUserId || !selectedImage) {
+      toast.error('You must be logged in to upload a cover photo');
+      return;
+    }
 
     setIsSaving(true);
     try {
-      // Convert base64 to blob
-      const response = await fetch(selectedImage);
-      const blob = await response.blob();
+      // Create cropped image blob
+      const croppedBlob = await createCroppedImage(selectedImage, croppedAreaPixels);
       
-      // Generate unique filename
+      // Generate unique file path: covers/{userId}/{timestamp}.jpg
       const timestamp = Date.now();
-      const fileName = `covers/${user.id}/${timestamp}.jpg`;
+      const filePath = `${effectiveUserId}/${timestamp}.jpg`;
 
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage 'covers' bucket
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('profiles')
-        .upload(fileName, blob, {
+        .from('covers')
+        .upload(filePath, croppedBlob, {
           contentType: 'image/jpeg',
-          upsert: true
+          upsert: false
         });
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        toast.error('Failed to upload cover photo');
+        toast.error('Failed to upload cover photo: ' + uploadError.message);
         return;
       }
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('profiles')
-        .getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage
+        .from('covers')
+        .getPublicUrl(filePath);
 
-      // Calculate crop percentages (convert from pixels to percentage)
-      // The crop.x and crop.y are in pixels, we need to convert to percentages
-      const positionX = currentPositionX; // Default to center
-      const positionY = currentPositionY;
-      
-      // Update user profile
+      const publicUrl = urlData?.publicUrl;
+      if (!publicUrl) {
+        toast.error('Failed to get public URL');
+        return;
+      }
+
+      // Update user profile with cover_url
       const { error: profileError } = await supabase
-        .from('user_profiles')
-        .update({
-          cover_photo_url: publicUrl,
-          cover_position_x: positionX,
-          cover_position_y: positionY,
-          cover_zoom: zoom
-        })
-        .eq('id', user.id);
+        .from('profiles')
+        .update({ cover_url: publicUrl })
+        .eq('id', effectiveUserId);
 
       if (profileError) {
         console.error('Profile update error:', profileError);
-        toast.error('Failed to save cover photo');
+        toast.error('Failed to save cover photo to profile');
         return;
       }
 
@@ -116,7 +170,7 @@ export default function CoverPhotoUpload({
       setSelectedImage(null);
       
       // Callback
-      onUploadComplete?.(publicUrl, positionX, positionY, zoom);
+      onUploadComplete?.(publicUrl);
     } catch (err) {
       console.error('Error saving cover photo:', err);
       toast.error('Failed to save cover photo');
@@ -131,23 +185,18 @@ export default function CoverPhotoUpload({
   };
 
   const handleRemoveCover = async () => {
-    if (!user) return;
+    if (!effectiveUserId) return;
 
     try {
       const { error } = await supabase
-        .from('user_profiles')
-        .update({
-          cover_photo_url: null,
-          cover_position_x: 50,
-          cover_position_y: 50,
-          cover_zoom: 1
-        })
-        .eq('id', user.id);
+        .from('profiles')
+        .update({ cover_url: null })
+        .eq('id', effectiveUserId);
 
       if (error) throw error;
       
       toast.success('Cover photo removed');
-      onUploadComplete?.(null, 50, 50, 1);
+      onUploadComplete?.(null);
     } catch (err) {
       console.error('Error removing cover photo:', err);
       toast.error('Failed to remove cover photo');
@@ -156,7 +205,7 @@ export default function CoverPhotoUpload({
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-4 p-4 bg-slate-900/50 rounded-xl border border-purple-500/20">
         {/* Upload Button */}
         <div className="flex items-center gap-3">
           <input
@@ -169,8 +218,8 @@ export default function CoverPhotoUpload({
           
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium transition-colors disabled:opacity-50"
+            disabled={isUploading || !effectiveUserId}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:from-pink-400 hover:via-purple-400 hover:to-pink-400 text-white font-semibold transition-all transform hover:scale-105 shadow-lg shadow-purple-500/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             {isUploading ? (
               <>
@@ -180,7 +229,7 @@ export default function CoverPhotoUpload({
             ) : (
               <>
                 <Upload size={18} />
-                Upload Cover Photo
+                Change Cover
               </>
             )}
           </button>
@@ -188,16 +237,16 @@ export default function CoverPhotoUpload({
           {currentCoverUrl && (
             <button
               onClick={handleRemoveCover}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 font-medium transition-all"
             >
-              Remove
+              🗑️ Remove
             </button>
           )}
         </div>
 
         {/* Help Text */}
-        <p className="text-sm text-gray-400">
-          Recommended: 1500x500 pixels (3:1 ratio). JPG or PNG up to 10MB.
+        <p className="text-sm text-purple-200/60">
+          📐 Recommended: 1500x500 pixels (3:1 ratio) • JPG or PNG up to 5MB
         </p>
       </div>
 

@@ -5,22 +5,12 @@ import { useAuthStore } from '../../lib/store';
 import { toast } from 'sonner';
 import { 
   FileText, 
-  AlertTriangle, 
-  Clock, 
   CheckCircle, 
   XCircle, 
-  Package,
-  DollarSign,
   Search,
-  Filter,
   RefreshCw,
   Eye,
-  Scale,
-  Gavel,
-  User,
-  MessageSquare,
-  ChevronDown,
-  Send
+  Scale
 } from 'lucide-react';
 import { trollCityTheme } from '../../styles/trollCityTheme';
 
@@ -106,7 +96,7 @@ const STATUS_COLORS: Record<AppealStatus, string> = {
 };
 
 export default function AppealManagement() {
-  const { user, profile } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(true);
@@ -295,7 +285,7 @@ export default function AppealManagement() {
         <div className="text-center">
           <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
-          <p className="text-gray-400">You don't have permission to access this page.</p>
+          <p className="text-gray-400">You don&apos;t have permission to access this page.</p>
         </div>
       </div>
     );

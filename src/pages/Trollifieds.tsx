@@ -6,10 +6,9 @@ import { toast } from 'sonner'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import {
-  Search, MapPin, Filter, Grid, List, Car, Wrench, ShoppingBag, 
-  MessageCircle, DollarSign, Clock, Star, CheckCircle, AlertTriangle,
-  ChevronDown, X, Image as ImageIcon, Send, Phone, Mail, Globe,
-  Navigation, Heart, Eye, ChevronLeft, ChevronRight, Zap, Pin, Palette, Tv
+  Search, MapPin, Grid, Car, Wrench, ShoppingBag, 
+  MessageCircle, DollarSign, Clock, Star,
+  X, Image as ImageIcon, Send, Heart, Zap, Pin, Palette, Tv
 } from 'lucide-react'
 
 // Premium feature pricing
@@ -47,13 +46,6 @@ const SERVICE_CATEGORIES = [
   { id: 'contractor', label: 'Contractors', icon: '🏗️' },
   { id: 'freelancer', label: 'Freelancers', icon: '💼' },
   { id: 'other', label: 'Other', icon: '🔨' },
-]
-
-const VEHICLE_MAKES = [
-  'Acura', 'Audi', 'BMW', 'Buick', 'Cadillac', 'Chevrolet', 'Chrysler',
-  'Dodge', 'Ford', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Jaguar',
-  'Jeep', 'Kia', 'Lexus', 'Lincoln', 'Mazda', 'Mercedes-Benz', 'Nissan',
-  'Porsche', 'Ram', 'Subaru', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo'
 ]
 
 // Helper function to calculate distance between two coordinates (Haversine formula)
@@ -168,27 +160,6 @@ interface VehicleListing {
   distance_km?: number
 }
 
-interface BusinessProfile {
-  id: string
-  owner_id: string
-  business_name: string
-  description: string
-  category: string
-  phone: string
-  email: string
-  website: string
-  city: string
-  state: string
-  logo_url: string
-  banner_url: string
-  verified: boolean
-  rating: number
-  total_reviews: number
-  status: string
-  created_at: string
-  distance_km?: number
-}
-
 interface ServiceListing {
   id: string
   business_id: string
@@ -220,19 +191,15 @@ export default function Trollifieds() {
   // Filter state
   const [searchQuery, setSearchQuery] = useState('')
   const [category, setCategory] = useState<string | null>(null)
-  const [condition, setCondition] = useState<string | null>(null)
-  const [deliveryType, setDeliveryType] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'newest' | 'price_low' | 'price_high' | 'distance'>('newest')
   
   // Data state
   const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceItem[]>([])
   const [vehicleListings, setVehicleListings] = useState<VehicleListing[]>([])
-  const [businesses, setBusinesses] = useState<BusinessProfile[]>([])
   const [services, setServices] = useState<ServiceListing[]>([])
   
   // Loading state
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   
   // Map state
   const [showMap, setShowMap] = useState(false)
@@ -246,10 +213,6 @@ export default function Trollifieds() {
   const [messageModal, setMessageModal] = useState<{open: boolean, recipientId?: string, listingId?: string, listingType?: string}>({open: false})
   const [messageText, setMessageText] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
-  
-  // Legal disclaimer
-  const [showDisclaimer, setShowDisclaimer] = useState(false)
-  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
 
   // Premium features state
   const [premiumModal, setPremiumModal] = useState<{open: boolean, listingId?: string, listingType?: string}>({open: false})
@@ -343,14 +306,7 @@ export default function Trollifieds() {
         if (error) throw error
         setVehicleListings(data || [])
       } else if (activeTab === 'services') {
-        // Load businesses and services
-        const { data: businessesData } = await supabase
-          .from('business_profiles')
-          .select('*')
-          .eq('status', 'active')
-          .order('rating', { ascending: false })
-          .limit(50)
-
+        // Load services
         const { data: servicesData } = await supabase
           .from('service_listings')
           .select('*')
@@ -376,7 +332,6 @@ export default function Trollifieds() {
           business_rating: businessMap[s.business_id]?.rating
         }))
 
-        setBusinesses(businessesData || [])
         setServices(servicesWithBusiness)
       }
     } catch (err) {

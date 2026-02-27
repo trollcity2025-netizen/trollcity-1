@@ -17,6 +17,7 @@ interface BroadcastGridProps {
   stream: Stream;
   isHost: boolean;
   isModerator?: boolean;
+  streamStatus: Stream['status'];
   maxItems?: number;
   onGift: (userId: string) => void;
   onGiftAll: (ids: string[]) => void;
@@ -151,6 +152,7 @@ export default function BroadcastGrid({
   toggleMicrophone,
   userIdToAgoraUid = {},
   onGetUserPositions,
+  streamStatus,
 }: BroadcastGridProps) {
   const { profile } = useAuthStore();
   
@@ -330,7 +332,7 @@ export default function BroadcastGrid({
   return (
     <div
       className={cn(
-        'grid gap-2 w-full h-full p-2',
+        'grid gap-2 w-full h-full p-2 min-w-0 overflow-hidden max-w-full',
         effectiveBoxCount === 1 && 'grid-cols-1 grid-rows-1',
         effectiveBoxCount === 2 && 'grid-cols-1 md:grid-cols-2 grid-rows-1',
         effectiveBoxCount === 3 && 'grid-cols-2 grid-rows-2',
@@ -338,7 +340,6 @@ export default function BroadcastGrid({
         effectiveBoxCount >= 5 && 'grid-cols-2 grid-rows-3',
         effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
       )}
-      style={{ minHeight: '300px' }}
     >
       {boxes.map((seatIndex) => {
         const seat = seats[seatIndex];
@@ -368,7 +369,7 @@ export default function BroadcastGrid({
         // Use real-time attributes if available
         const userAttrs = userId ? attributes[userId] : null;
 
-        let boxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300';
+        const baseBoxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300 min-w-0';
 
         const hasGold =
           !!displayProfile?.is_gold || userAttrs?.activePerks?.includes('perk_gold_username' as any);
@@ -380,12 +381,11 @@ export default function BroadcastGrid({
 
         const hasStreamRgb = !!stream.has_rgb_effect;
 
-        if (hasGold) {
-          boxClass =
-            'relative bg-black/50 rounded-xl overflow-hidden border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)] transition-all duration-300';
-        } else if (hasRgbProfile || (hasStreamRgb && !isLocal)) {
-          boxClass = 'relative bg-black/50 rounded-xl overflow-hidden rgb-box transition-all duration-300';
-        }
+        const boxClass = cn(
+          baseBoxClass,
+          hasGold && 'border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]',
+          !hasGold && (hasRgbProfile || (hasStreamRgb && !isLocal)) && 'rgb-box'
+        );
 
         return (
           <div
@@ -442,7 +442,7 @@ export default function BroadcastGrid({
                   Camera Off
                 </span>
               </div>
-            ) : userId && !participant ? (
+            ) : userId && !participant && streamStatus !== 'ended' ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="animate-pulse bg-zinc-800 w-full h-full" />
                 <span className="absolute text-xs text-white/50">
@@ -631,4 +631,4 @@ export default function BroadcastGrid({
       )}
     </div>
   );
-}
+} 

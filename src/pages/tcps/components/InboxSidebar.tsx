@@ -498,94 +498,59 @@ export default function InboxSidebar({
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0F0F1A]" />
                     )}
                     {conv.unread_count > 0 && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-purple-500 rounded-full animate-bounce" />
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-600 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-[#0F0F1A]">
+                        {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                      </div>
                     )}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0 pointer-events-none">
-                    <div className="flex items-center justify-between mb-1 overflow-hidden">
-                      <div className={`font-medium ${isActive ? 'text-purple-300' : 'text-gray-200'} whitespace-nowrap overflow-hidden text-ellipsis`}>
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-white truncate">
                         <UserNameWithAge 
-                          user={{
-                            username: conv.other_username,
-                            id: conv.other_user_id,
-                            created_at: conv.other_created_at,
-                            glowing_username_color: conv.glowing_username_color
-                          }}
-                          className="pointer-events-none" // Parent is button
+                          username={conv.other_username} 
+                          createdAt={conv.other_created_at}
+                          rgbUsernameExpiresAt={conv.rgb_username_expires_at}
+                          glowingUsernameColor={conv.glowing_username_color}
                         />
                       </div>
-                      {conv.last_timestamp && (
-                        <span className="text-[10px] text-gray-500 flex-shrink-0">
-                          {new Date(conv.last_timestamp).toLocaleDateString()}
-                        </span>
-                      )}
+                      <time className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                        {conv.last_timestamp ? new Date(conv.last_timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+                      </time>
                     </div>
-                    <p className="text-sm text-gray-400 truncate pr-8">
-                      {conv.last_message || 'Start a conversation'}
+                    <p className={`text-sm text-gray-400 truncate mt-1 ${conv.unread_count > 0 ? 'font-bold text-white' : ''}`}>
+                      {conv.last_message}
                     </p>
                   </div>
-                  
-                  {/* Menu Button */}
-                  <div className="relative z-10">
-                    <button
-                      onClick={(e) => {
+
+                  <div className="absolute z-10 top-2 right-2">
+                    <button 
+                      onClick={(e) => { 
                         e.stopPropagation()
                         setOpenMenuId(openMenuId === conv.other_user_id ? null : conv.other_user_id)
                       }}
-                      className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="p-1 rounded-full hover:bg-white/10 text-gray-400"
                     >
                       <MoreVertical className="w-4 h-4" />
                     </button>
 
-                    {/* Dropdown Menu */}
                     {openMenuId === conv.other_user_id && (
-                      <div 
-                        ref={menuRef}
-                        className="absolute right-0 top-full mt-1 w-48 bg-[#1F1F2E] border border-purple-500/20 rounded-lg shadow-xl z-50 overflow-hidden"
-                      >
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenBubble(conv.other_user_id, conv.other_username, conv.other_avatar_url)
-                          }}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/5 flex items-center gap-2"
-                        >
+                      <div ref={menuRef} className="absolute right-0 mt-2 w-48 bg-[#1F1F2E] border border-purple-500/30 rounded-lg shadow-xl z-20">
+                        <button onClick={() => handleOpenBubble(conv.other_user_id, conv.other_username, conv.other_avatar_url)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
                           <MessageSquare className="w-4 h-4" />
-                          Open Chat Bubble
+                          Open in Bubble
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleHideChat(conv.other_user_id)
-                          }}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-white/5 flex items-center gap-2"
-                        >
+                        <button onClick={() => handleHideChat(conv.other_user_id)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
                           <EyeOff className="w-4 h-4" />
                           Hide Chat
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleBlockUser(conv.other_user_id)
-                          }}
-                          className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
-                        >
+                        <button onClick={() => handleBlockUser(conv.other_user_id)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10">
                           <Ban className="w-4 h-4" />
                           Block User
                         </button>
                       </div>
                     )}
                   </div>
-                  
-                  {conv.unread_count > 0 && (
-                    <div className="absolute right-10 top-1/2 -translate-y-1/2 w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-purple-500/70 animate-pulse">
-                      {conv.unread_count}
-                    </div>
-                  )}
-                  {conv.unread_count === 0 && !isActive && (
-                    <div className="absolute right-10 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full shadow-lg shadow-purple-500/50 pointer-events-none" />
-                  )}
                 </div>
               )
             })}

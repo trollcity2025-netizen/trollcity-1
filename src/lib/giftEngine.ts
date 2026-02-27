@@ -9,6 +9,29 @@ const PLATFORM_SHARE = 1 - BROADCASTER_SHARE;
 const INVENTORY_TABLE = 'gifts_owned';
 const TRANSACTION_TABLE = 'gift_transactions';
 
+// Award Trollz bonus to sender (50% of gift value)
+async function awardTrollzBonus(senderId: string, giftValue: number): Promise<boolean> {
+  try {
+    const trollzBonus = Math.floor(giftValue * 0.5);
+    if (trollzBonus <= 0) return true;
+
+    const { data, error } = await supabase.rpc('award_trollz_for_gift', {
+      p_user_id: senderId,
+      p_gift_coins: giftValue
+    });
+
+    if (error) {
+      console.warn('Failed to award Trollz bonus:', error);
+      return false;
+    }
+
+    return data?.success === true;
+  } catch (err) {
+    console.warn('Trollz bonus award error:', err);
+    return false;
+  }
+}
+
 export interface GiftProcessingResult {
   creatorId: string;
   baseAmount: number;
@@ -324,6 +347,13 @@ export async function sendGiftFromInventory({
     } catch (err) {
       console.warn('Failed to credit broadcaster', err);
     }
+  }
+
+  // Award Trollz bonus to sender (50% of gift value)
+  try {
+    await awardTrollzBonus(senderId, sentValue);
+  } catch (err) {
+    console.warn('Failed to award Trollz bonus', err);
   }
  
   try {

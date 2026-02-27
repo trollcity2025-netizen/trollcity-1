@@ -108,7 +108,7 @@ export default function BroadcastHeader({ stream, onStartBattle, categoryBattleT
                 <ArrowLeft size={20} className="text-white" />
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3">
                 {isHost && onStartBattle && (
                     <button
                         onClick={onStartBattle}
@@ -122,8 +122,8 @@ export default function BroadcastHeader({ stream, onStartBattle, categoryBattleT
                 )}
             </div>
 
-            {/* Right: Stream Stats - HIDDEN for now to keep header clean and avoid overlap with sidebar on desktop */}
-            <div className="hidden items-center gap-3">
+            {/* Right: Stream Stats */}
+            <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/5">
                     <Users size={14} className="text-zinc-400" />
                     <span className="text-xs font-bold text-white">{displayViewerCount}</span>

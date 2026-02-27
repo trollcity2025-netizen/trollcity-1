@@ -4,8 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { useAgoraRoom } from '@/hooks/useAgoraRoom';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
-import PerformerBox from '@/components/maitalent/PerformerBox'; // Reusing for video display
+import { PhoneOff } from 'lucide-react';
 
 import MaiTalentNav from '@/components/maitalent/MaiTalentNav';
 
@@ -31,7 +30,7 @@ const TrainingSlot = ({ title, user, localVideoTrack, localAudioTrack, agoraClie
 const MaiTalentTraining = () => {
   const { roomId: urlRoomId } = useParams();
   const navigate = useNavigate();
-  const [roomId, setRoomId] = useState(urlRoomId);
+  const [roomId] = useState(urlRoomId);
   const [isCallActive, setIsCallActive] = useState(!!urlRoomId);
 
   const { 

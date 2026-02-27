@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
-import { Bell, Check, Trash2, Gift, Trophy, AlertCircle, Shield, DollarSign, Sword, Zap } from 'lucide-react'
+import { Bell, Check, Trash2, Gift, Trophy, AlertCircle, Shield, DollarSign, Sword, Zap, Home, ShieldOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Notification, NotificationType } from '../types/notifications'
 import { useAdminVoiceNotifications } from '../hooks/useAdminVoiceNotifications'
@@ -213,6 +213,10 @@ export default function Trollifications() {
       case 'battle_result': return <Sword className="w-5 h-5 text-purple-400" />
       case 'officer_update': return <Shield className="w-5 h-5 text-blue-400" />
       case 'system_announcement': return <Zap className="w-5 h-5 text-cyan-400" />
+      case 'coin_received': return <DollarSign className="w-5 h-5 text-green-400" />
+      case 'coin_gifted': return <DollarSign className="w-5 h-5 text-green-400" />
+      case 'property_purchased': return <Home className="w-5 h-5 text-blue-400" />
+      case 'jail_sentence': return <ShieldOff className="w-5 h-5 text-red-400" />
       default: return <Bell className="w-5 h-5 text-purple-400" />
     }
   }

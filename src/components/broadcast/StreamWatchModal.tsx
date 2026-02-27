@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 
 import { useAuthStore } from '../../lib/store';

@@ -90,7 +90,7 @@ export default {
         'bounce-glow': 'bounce 1s infinite, glow 2s ease-in-out infinite alternate',
         'fadeIn': 'fadeIn 0.3s ease-out',
         'tilt': 'tilt 10s infinite linear',
-        'marquee-continuous': 'marquee-continuous 80s linear infinite',
+        'marquee-continuous': 'marquee-continuous 10s linear infinite',
       },
       keyframes: {
         glow: {
@@ -119,7 +119,7 @@ export default {
           },
         },
         'marquee-continuous': {
-          '0%': { transform: 'translateX(0%)' },
+          '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(-100%)' },
         },
       },

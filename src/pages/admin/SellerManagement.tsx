@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { SellerTier, SellerStats } from '../../lib/sellerTiers';
+import type { SellerTier } from '../../lib/sellerTiers';
 import { evaluateSellerTier, recordFraudFlag, recordDispute } from '../../lib/sellerApi';
 import { notifySellerTierUpgraded, notifySellerTierDowngraded } from '../../lib/notifications';
 import SellerTierBadge from '../../components/SellerTierBadge';
@@ -31,11 +31,7 @@ export default function SellerManagement() {
   const [selectedSeller, setSelectedSeller] = useState<SellerProfile | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  useEffect(() => {
-    loadSellers();
-  }, [selectedTier]);
-
-  const loadSellers = async () => {
+  const loadSellers = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase
@@ -73,7 +69,11 @@ export default function SellerManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedTier]);
+
+  useEffect(() => {
+    loadSellers();
+  }, [selectedTier, loadSellers]);
 
   const handleManualTierChange = async (sellerId: string, newTier: SellerTier) => {
     setActionLoading(true);

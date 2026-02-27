@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import { Video, VideoOff, Mic, MicOff, AlertTriangle, RefreshCw, Radio, Youtube, Users, BookOpen, Dumbbell, Briefcase, Heart, Swords, Monitor, MonitorOff } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Monitor, MonitorOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateUUID } from '../../lib/uuid';
 import {
@@ -20,36 +20,7 @@ import {
   BroadcastCategoryId
 } from '../../config/broadcastCategories';
 
-// Format time as HH:MM or MM:SS
-function formatTime(seconds: number) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
-}
 
-// Category icon component
-function CategoryIcon({ categoryId }: { categoryId: string }) {
-  const config = getCategoryConfig(categoryId);
-  switch (categoryId) {
-    case 'general': return <span className="text-2xl">💬</span>;
-    case 'just_chatting': return <span className="text-2xl">☕</span>;
-    case 'gaming': return <span className="text-2xl">🎮</span>;
-    case 'irl': return <span className="text-2xl">📍</span>;
-    case 'debate': return <span className="text-2xl">⚖️</span>;
-    case 'education': return <span className="text-2xl">📚</span>;
-    case 'fitness': return <span className="text-2xl">💪</span>;
-    case 'business': return <span className="text-2xl">💼</span>;
-    case 'spiritual': return <span className="text-2xl">✝️</span>;
-    case 'trollmers': return <span className="text-2xl">🏆</span>;
-    case 'election': return <span className="text-2xl">🗳️</span>;
-    default: return <span className="text-2xl">💬</span>;
-  }
-}
 
 export default function SetupPage() {
   const location = useLocation();
@@ -78,25 +49,24 @@ export default function SetupPage() {
   }, [profile?.username, title]);
   
   // Category-specific state
-  const [selectedReligion, setSelectedReligion] = useState<string>('');
-  const [streamKey, setStreamKey] = useState<string>('');
+  const [selectedReligion, setSelectedReligion] = useState('');
   const [showOBSPanel, setShowOBSPanel] = useState(false);
   
   // Pre-generate stream ID for token optimization
-  const [streamId, setStreamId] = useState(() => generateUUID());
+  const [streamId] = useState(() => generateUUID());
 
   // Track if we are navigating to broadcast to prevent cleanup
   const isStartingStream = useRef(false);
-  const hasPrefetched = useRef<string | null>(null);
+
 
   // Get category config
   const categoryConfig = getCategoryConfig(category);
-  const categorySupportsBattles = supportsBattles(category);
-  const categoryMatchingTerm = getMatchingTerminology(category);
   const categoryRequiresReligion = requiresReligion(category);
   const shouldForceRearCamera = forceRearCamera(category);
   const canUseFrontCamera = allowFrontCamera(category);
-  const maxBoxes = getMaxBoxCount(category);
+  const categorySupportsBattles = supportsBattles(category);
+  const categoryMatchingTerm = getMatchingTerminology(category);
+
 
   // Media state
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -105,9 +75,9 @@ export default function SetupPage() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [hasRearCamera, setHasRearCamera] = useState(false); // New state for rear camera detection
   const [followerCount, setFollowerCount] = useState<number>(0);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
 
 
   // Get Agora RTMP URL and stream key for gaming category
@@ -131,7 +101,24 @@ export default function SetupPage() {
         setFacingMode('environment');
       }
     }
-  }, [category, shouldForceRearCamera, canUseFrontCamera]);
+    }, [category, shouldForceRearCamera, canUseFrontCamera, facingMode]);
+
+  // Effect to detect available cameras
+  useEffect(() => {
+    const enumerateCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        setHasMultipleCameras(videoDevices.length > 1);
+        setHasRearCamera(videoDevices.some(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear')));
+      } catch (err) {
+        console.error('Error enumerating devices:', err);
+        setHasMultipleCameras(false);
+        setHasRearCamera(false);
+      }
+    };
+    enumerateCameras();
+  }, []); // Run once on mount
 
   // Fetch follower count for Trollmers eligibility
   useEffect(() => {
@@ -261,12 +248,13 @@ export default function SetupPage() {
     }
     getInitialMedia();
 
+    const isStartingStreamValue = isStartingStream.current;
     return () => {
       isMounted.current = false;
-      if (currentLocalStream && !isStartingStream.current) {
+      if (currentLocalStream && !isStartingStreamValue) {
         console.log('[SetupPage] Cleanup: Cleaning up media stream.');
         currentLocalStream.getTracks().forEach(track => track.stop());
-      } else if (isStartingStream.current && currentLocalStream) {
+      } else if (isStartingStreamValue && currentLocalStream) {
         console.log('[SetupPage] Cleanup: Preserving media stream for broadcast.');
         PreflightStore.setStream(currentLocalStream);
       }
@@ -280,65 +268,7 @@ export default function SetupPage() {
     }
   };
 
-  const toggleScreenShare = async () => {
-    if (isScreenSharing && screenStream) {
-      // Stop screen sharing
-      screenStream.getTracks().forEach(track => track.stop());
-      setScreenStream(null);
-      setIsScreenSharing(false);
-      
-      // Restore camera stream to video element
-      if (stream && videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      toast.success('Screen sharing stopped');
-    } else {
-      // Start screen sharing
-      try {
-        // Check if getDisplayMedia is supported
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-          toast.error('Screen sharing is not supported in this browser');
-          return;
-        }
-        
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 }
-          },
-          audio: true // Attempt to capture system audio
-        });
-        
-        // Handle user stopping share via browser UI
-        displayStream.getVideoTracks()[0].onended = () => {
-          setScreenStream(null);
-          setIsScreenSharing(false);
-          if (stream && videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-          toast.warning('Screen sharing ended');
-        };
-        
-        setScreenStream(displayStream);
-        setIsScreenSharing(true);
-        
-        // Show screen in video element
-        if (videoRef.current) {
-          videoRef.current.srcObject = displayStream;
-        }
-        
-        toast.success('Screen sharing started! 🎮');
-      } catch (err: any) {
-        if (err.name === 'NotAllowedError') {
-          toast.error('Screen sharing was cancelled');
-        } else {
-          console.error('Screen share error:', err);
-          toast.error('Failed to start screen sharing');
-        }
-      }
-    }
-  };
+
 
   const toggleAudio = () => {
     if (stream) {
@@ -356,6 +286,13 @@ export default function SetupPage() {
   };
 
   const handleStartStream = async () => {
+    // Check if user is admin or lead_troll_officer - only they can start broadcasts
+    const allowedBroadcastRoles = ['admin', 'lead_troll_officer'];
+    if (!profile?.role || !allowedBroadcastRoles.includes(profile.role)) {
+      toast.error('Only admins and lead troll officers can start broadcasts');
+      return;
+    }
+
     if (!title.trim()) {
       toast.error('Please enter a stream title');
       return;
@@ -388,7 +325,7 @@ export default function SetupPage() {
       }
     }
 
-    // Check camera requirement for categories that need it
+    // Check camera requirement for categories that need it, unless screen sharing is active
     if (categoryConfig.requiresCamera && !isVideoEnabled) {
       toast.error(`Camera is required for ${categoryConfig.name}`);
       return;
@@ -410,7 +347,7 @@ export default function SetupPage() {
           status: 'pending',
           is_live: false,
           box_count: categoryConfig.defaultBoxCount,
-          layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' : 
+          layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' :
                        categoryConfig.layoutMode === 'classroom' ? 'grid' :
                        categoryConfig.layoutMode === 'spotlight' ? 'spotlight' : 'grid',
           // Store category-specific data
@@ -499,47 +436,34 @@ export default function SetupPage() {
         throw new Error('Media stream not available. Please ensure camera and microphone permissions are granted.');
       }
       
-      const baseAudio = localStream.getAudioTracks()[0] || null;
-      const baseVideo = isVideoEnabled ? (localStream.getVideoTracks()[0] || null) : null;
-      
-      const audioTrack = baseAudio 
+      const baseAudio = localStream?.getAudioTracks()[0] || null;
+      const baseVideo = isVideoEnabled ? (localStream?.getVideoTracks()[0] || null) : null;
+
+      const audioTrack = baseAudio
         ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
         : null;
-      
-      const videoTrack = baseVideo 
+
+      const videoTrack = baseVideo
         ? await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: baseVideo })
         : null;
-      
-      // Handle screen sharing if active
-      let cameraVideoTrack: any = null;
-      let cameraAudioTrack: any = null;
-      
-      if (isScreenSharing && screenStream) {
-        // Create camera tracks for overlay
-        cameraVideoTrack = await AgoraRTC.createCameraVideoTrack({
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 15 }
-        });
-        cameraAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        
-        console.log('[SetupPage] Screen sharing detected, created camera overlay tracks');
-      }
-      
+
+
+
       // 6. Publish tracks
       const tracksToPublish: any[] = [];
       if (audioTrack) tracksToPublish.push(audioTrack);
       if (videoTrack) tracksToPublish.push(videoTrack);
-      if (cameraVideoTrack) tracksToPublish.push(cameraAudioTrack, cameraVideoTrack);
+
+      
+      if (tracksToPublish.length === 0) {
+        throw new Error('No media tracks available to publish. Please check your camera/microphone setup.');
+      }
       
       await agoraClient.publish(tracksToPublish);
       console.log('[SetupPage] Published tracks to Agora');
       
       // 7. Store client and tracks in PreflightStore for BroadcastPage
-      const localTracks: [any, any, any, any] = cameraVideoTrack 
-        ? [audioTrack, videoTrack, cameraAudioTrack, cameraVideoTrack]
-        : [audioTrack, videoTrack, null, null];
-      
+      const localTracks: [any, any, null, null] = [audioTrack, videoTrack, null, null];
       PreflightStore.setAgoraClient(agoraClient, localTracks);
       
       // Update stream status after successful join/publish
@@ -554,6 +478,10 @@ export default function SetupPage() {
       
       // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
+
+      supabase.from('global_events').insert([
+        { title: `${profile.username} just went live!`, icon: 'live', priority: 2 },
+      ]).then();
     } catch (err: any) {
       console.error('Error creating stream:', err);
       toast.error(err.message || 'Failed to start stream');
@@ -562,16 +490,13 @@ export default function SetupPage() {
     }
   };
 
-  const copyStreamKey = () => {
-    navigator.clipboard.writeText(streamKey);
-    toast.success('Stream key copied!');
-  };
+
 
   // Render OBS Panel for Gaming category - Agora RTMP
   const renderOBSPanel = () => {
     if (!showOBSPanel) return null;
     
-    // For gaming, we use Agora RTMP
+    // For gaming, we use Agora RTMP - show the OBS panel
     // Note: Agora requires Cloud Recording to be enabled for RTMP ingest
     // Format: rtmp://[projectID].agora.io/live/[channel]
     const agoraRTMPUrl = 'rtmp://rtmp.agora.io/live';
@@ -654,7 +579,7 @@ export default function SetupPage() {
           ))}
         </select>
         <p className="text-xs text-gray-500">
-          You'll only be matched with broadcasters of the same faith
+          You&apos;ll only be matched with broadcasters of the same faith
         </p>
       </div>
     );
@@ -773,9 +698,11 @@ export default function SetupPage() {
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
               <button 
                 onClick={toggleVideo}
-                className={`p-3 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'} ${isScreenSharing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={isScreenSharing}
-                title={isScreenSharing ? 'Disable screen share to toggle camera' : (categoryConfig.requiresCamera && !isVideoEnabled ? 'Camera required for this category' : 'Toggle camera')}
+                className={`p-3 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
+
+                disabled={false}
+
+                title={categoryConfig.requiresCamera && !isVideoEnabled ? 'Camera required for this category' : 'Toggle camera'}
               >
                 {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
               </button>
@@ -796,16 +723,7 @@ export default function SetupPage() {
                   </button>
               )}
               
-              {/* Screen Share Button for Gaming */}
-              {category === 'gaming' && (
-                <button 
-                  onClick={toggleScreenShare}
-                  className={`p-3 rounded-full transition-colors ${isScreenSharing ? 'bg-green-500/80 hover:bg-green-600/80' : 'bg-purple-500/80 hover:bg-purple-600/80'}`}
-                  title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen (Gaming)'}
-                >
-                  {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
-                </button>
-              )}
+
               
               {/* Show warning if front camera not allowed */}
               {shouldForceRearCamera && (
@@ -877,7 +795,7 @@ export default function SetupPage() {
 
             <button
               onClick={handleStartStream}
-              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion)}
+              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera)}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-lg hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-500/20"
             >
               {loading ? (
@@ -889,6 +807,9 @@ export default function SetupPage() {
                 'Start Broadcast'
               )}
             </button>
+            {shouldForceRearCamera && !hasRearCamera && (
+              <p className="text-red-400 text-sm text-center mt-2">A rear camera is required for this category but none was detected.</p>
+            )}
           </div>
         </div>
       </div>

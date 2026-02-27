@@ -8,7 +8,7 @@ import { useAllCreditScores } from '../lib/hooks/useAllCreditScores';
 // import { toast } from 'sonner';
 import { Coins, ShoppingCart, CreditCard, Landmark, History, CheckCircle, AlertCircle, AlertTriangle, ChevronDown, X } from 'lucide-react';
 import { formatCoins, COIN_PACKAGES } from '../lib/coinMath';
-import { ENTRANCE_EFFECTS_DATA } from '../lib/entranceEffects';
+import { ENTRANCE_EFFECTS_DATA, purchaseEntranceEffect } from '../lib/entranceEffects';
 import { deductCoins } from '@/lib/coinTransactions';
 import { purchaseCallMinutes } from '@/lib/callMinutes';
 import { useLiveContextStore } from '../lib/liveContextStore';
@@ -416,50 +416,19 @@ export default function CoinStore() {
 
   const buyEffect = async (effect) => {
    try {
-     const price = effect.price_troll_coins || effect.coin_cost || 0
-     if (price <= 0) {
-       toast.error('Invalid effect price')
-       return
-     }
+     const { success, error } = await purchaseEntranceEffect(user.id, effect.id);
      
-     if (!useCredit && troll_coins < price) {
-       toast.error(`Not enough Troll Coins. Need ${price}, have ${troll_coins}`)
-       return
-     }
-     if (useCredit && (creditInfo?.available || 0) < price) {
-       toast.error(`Not enough Credit. Need ${price}, available ${creditInfo?.available}`)
-       return
-     }
-
-     const { success, error: deductError } = await deductCoins({
-        userId: user.id,
-        amount: price,
-        type: 'entrance_effect',
-        description: `Purchased ${effect.name} entrance effect`,
-        metadata: { effect_id: effect.id, effect_name: effect.name },
-        useCredit,
-        supabaseClient: supabase
-     });
-
      if (!success) {
-        throw new Error(deductError || 'Payment failed');
+       throw new Error(error || 'Purchase failed');
      }
 
-     const { error } = await supabase
-       .from('user_entrance_effects')
-       .upsert({
-         user_id: user.id,
-         effect_id: effect.id,
-         purchased_at: new Date().toISOString()
-       }, { onConflict: 'user_id, effect_id' });
+     // Also set the effect as active
+     await supabase
+        .from('user_profiles')
+        .update({ active_entrance_effect: effect.id })
+        .eq('id', user.id);
      
-     if (error) {
-       console.error('Effect purchase error:', error)
-       toast.error(error.message || 'Failed to purchase effect')
-       return
-     }
-     
-      toast.success('Entrance effect purchased')
+      toast.success('Entrance effect purchased and activated!')
      showPurchaseCompleteOverlay()
      await loadWalletData(false)
    } catch (err) {

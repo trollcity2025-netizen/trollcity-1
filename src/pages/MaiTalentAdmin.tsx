@@ -174,7 +174,7 @@ const JudgeManagementTab = () => {
               </AccordionTrigger>
               <AccordionContent>
                 <div className="p-4 bg-slate-800/50 rounded-b-lg">
-                  <p className="text-sm text-slate-400 mb-4">Use the button below to manage this user's judge status.</p>
+                  <p className="text-sm text-slate-400 mb-4">Use the button below to manage this user&apos;s judge status.</p>
                   <Button onClick={() => toggleJudgeRole(user)} variant={user.is_judge ? 'secondary' : 'default'}>
                     {user.is_judge ? 'Revoke Judge' : 'Make Judge'}
                   </Button>

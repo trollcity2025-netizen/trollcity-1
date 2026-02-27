@@ -16,6 +16,7 @@ export function useLiveStreams() {
   return useQuery({
     queryKey: queryKeys.liveStreams,
     queryFn: async () => {
+      if (!userId) return null; // Add this line to prevent querying with a null/empty ID
       // Use Scalable RPC
       const { data, error } = await supabase.rpc('get_active_streams_paged', {
         p_limit: 20,

@@ -118,9 +118,7 @@ export interface ShippingCarrierInfo {
   is_active: boolean;
 }
 
-export interface Profile extends UserProfile {
-  // Extended profile properties
-}
+export type Profile = UserProfile;
 
 // Purchase flow types
 export interface PurchaseRequest {

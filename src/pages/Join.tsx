@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase'
 export default function JoinPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { profile } = useAuthStore()
 
   const [token, setToken] = useState<string | null>(null)
   const [room, setRoom] = useState<string | null>(null)

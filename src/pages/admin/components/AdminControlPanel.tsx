@@ -233,6 +233,11 @@ export default function AdminControlPanel() {
       if (!result.success && result.error) {
         setMessage(result.error)
         toast.error(result.error)
+      } else if (result.success && result.message) {
+        const adminUsername = profile?.username || 'An admin';
+        supabase.from('global_events').insert([
+          { title: `${adminUsername}: ${result.message}`, icon: 'admin', priority: 1 },
+        ]).then();
       }
     } catch (error: unknown) {
       console.error('Error performing admin action:', error)

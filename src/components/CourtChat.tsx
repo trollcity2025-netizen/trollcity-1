@@ -141,7 +141,7 @@ export default function CourtChat({ courtId, isLocked, className = '' }: CourtCh
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [courtId, user?.id, profile?.username]);
+  }, [courtId, user, profile]);
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();

@@ -708,6 +708,8 @@ Deno.serve(async (req) => {
         const { targetUserId, title, message } = params;
         if (!targetUserId || !message) throw new Error("Missing required fields");
 
+        console.log(`Sending notification to ${targetUserId}: ${title}`);
+
         const { error } = await supabaseAdmin.rpc('notify_user_rpc', {
             p_target_user_id: targetUserId,
             p_type: 'system_alert',
@@ -715,7 +717,11 @@ Deno.serve(async (req) => {
             p_message: message
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error(`Failed to send notification to ${targetUserId}:`, error);
+          throw error;
+        }
+
         result = { success: true };
         break;
       }

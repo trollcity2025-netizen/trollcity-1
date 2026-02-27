@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -44,9 +43,6 @@ const businessCategories = [
   'Restaurant', 'Retail', 'Healthcare', 'Education', 'Entertainment',
   'Service', 'Other'
 ];
-
-// Participant statuses
-const participantStatuses = ['joined', 'checked_in', 'completed', 'verified'];
 
 // Main Neighbors page component
 const NeighborsPage = () => {
@@ -174,6 +170,23 @@ const NeighborsPage = () => {
 
   // Fetch nearby businesses
   useEffect(() => {
+    const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371; // Radius of the earth in km
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c; // Distance in km
+      return distance;
+    };
+  
+    const deg2rad = (deg: number) => {
+      return deg * (Math.PI / 180);
+    };
+
     const fetchNearbyBusinesses = async () => {
       if (!userLocation) return;
 
@@ -254,7 +267,7 @@ const NeighborsPage = () => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
 
-      const { data: eventData, error: eventError } = await supabase
+      const { error: eventError } = await supabase
         .from('neighbors_events')
         .insert([
           {
@@ -310,7 +323,7 @@ const NeighborsPage = () => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
 
-      const { data: businessData, error: businessError } = await supabase
+      const { error: businessError } = await supabase
         .from('neighbors_businesses')
         .insert([
           {
@@ -371,7 +384,7 @@ const NeighborsPage = () => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('neighbors_participants')
         .insert([
           {
@@ -392,96 +405,6 @@ const NeighborsPage = () => {
       setParticipants(updatedParticipants || []);
     } catch (error) {
       console.error('Error joining event:', error);
-    }
-  };
-
-  // Leave event
-  const handleLeaveEvent = async (eventId: string) => {
-    try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-
-      const { error } = await supabase
-        .from('neighbors_participants')
-        .delete()
-        .eq('event_id', eventId)
-        .eq('user_id', userData.user?.id);
-
-      if (error) throw error;
-
-      // Refresh participants list
-      const { data: updatedParticipants } = await supabase
-        .from('neighbors_participants')
-        .select('*');
-      setParticipants(updatedParticipants || []);
-    } catch (error) {
-      console.error('Error leaving event:', error);
-    }
-  };
-
-  // Check in to event
-  const handleCheckIn = async (participantId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('neighbors_participants')
-        .update({ status: 'checked_in' })
-        .eq('id', participantId)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Refresh participants list
-      const { data: updatedParticipants } = await supabase
-        .from('neighbors_participants')
-        .select('*');
-      setParticipants(updatedParticipants || []);
-    } catch (error) {
-      console.error('Error checking in:', error);
-    }
-  };
-
-  // Mark event as complete
-  const handleMarkComplete = async (participantId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('neighbors_participants')
-        .update({ 
-          status: 'completed',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', participantId)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Refresh participants list
-      const { data: updatedParticipants } = await supabase
-        .from('neighbors_participants')
-        .select('*');
-      setParticipants(updatedParticipants || []);
-    } catch (error) {
-      console.error('Error marking as complete:', error);
-    }
-  };
-
-  // Verify participant completion
-  const handleVerifyParticipation = async (participantId: string) => {
-    try {
-      const { data, error } = await supabase.rpc('verify_event_participation', {
-        participant_id: participantId
-      });
-
-      if (error) throw error;
-
-      // Refresh participants list
-      const { data: updatedParticipants } = await supabase
-        .from('neighbors_participants')
-        .select('*');
-      setParticipants(updatedParticipants || []);
-    } catch (error) {
-      console.error('Error verifying participation:', error);
     }
   };
 
@@ -1191,7 +1114,7 @@ const NeighborsPage = () => {
                   <div className="mb-6">
                     <h3 className="text-lg font-medium text-white mb-3">My Businesses</h3>
                     {myBusinesses.length === 0 ? (
-                      <p className="text-slate-400">You haven't registered any businesses yet.</p>
+                      <p className="text-slate-400">You haven&apos;t registered any businesses yet.</p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {myBusinesses.map(business => (
@@ -1242,7 +1165,7 @@ const NeighborsPage = () => {
                   <div>
                     <h3 className="text-lg font-medium text-white mb-3">My Events</h3>
                     {myEvents.length === 0 ? (
-                      <p className="text-slate-400">You haven't created any events yet.</p>
+                      <p className="text-slate-400">You haven&apos;t created any events yet.</p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {myEvents.map(event => (

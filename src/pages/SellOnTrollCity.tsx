@@ -19,10 +19,7 @@ export default function SellOnTrollCity() {
   const [existingApplication, setExistingApplication] = useState<any>(null)
   const isVerifiedSeller = existingApplication?.status === 'approved'
   const [products, setProducts] = useState<any[]>([])
-  const [marketplaceListings, setMarketplaceListings] = useState<any[]>([])
-  const [vehicleListings, setVehicleListings] = useState<any[]>([])
-  const [serviceListings, setServiceListings] = useState<any[]>([])
-  const [businessProfiles, setBusinessProfiles] = useState<any[]>([])
+
   
   // Seller application form state
   const [storeName, setStoreName] = useState('')

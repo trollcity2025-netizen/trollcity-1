@@ -79,6 +79,86 @@ type CombinedUserTrack = {
   audioTrack?: ILocalAudioTrack | IRemoteAudioTrack;
 };
 
+const isValidUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
+
+const ParticipantBox = ({ title, colorClass, videoTrack, audioTrack, isLocal, uid, username, onGiftUser, localUserId, toggleCamera, toggleMicrophone }: any) => {
+  const videoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && videoTrack) {
+      videoTrack.play(videoRef.current);
+    }
+    return () => {
+      if (videoTrack) {
+        videoTrack.stop();
+      }
+    };
+  }, [videoTrack]);
+
+  useEffect(() => {
+    if (audioTrack && !isLocal) {
+      audioTrack.play();
+    }
+    return () => {
+      if (audioTrack && !isLocal) {
+        audioTrack.stop();
+      }
+    };
+  }, [audioTrack, isLocal]);
+
+  const isMicOn = audioTrack ? ('enabled' in audioTrack ? audioTrack.enabled : true) : false;
+  const isCamOn = videoTrack ? ('enabled' in videoTrack ? videoTrack.enabled : true) : false;
+
+  const targetUid = String(uid || '');
+  const canGift = isValidUuid(targetUid) && targetUid !== localUserId;
+  return (
+    <div
+      className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group ${canGift ? 'cursor-pointer hover:border-yellow-400/70' : ''}`}
+      onClick={() => {
+        if (canGift && onGiftUser) onGiftUser(targetUid);
+      }}
+    >
+      <div className={`absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 backdrop-blur-sm ${colorClass.replace('border-', 'text-')}`}>
+        {title}
+        <div className="flex gap-1 ml-2">
+          {isMicOn ? <Mic size={14} className="text-green-400" /> : <MicOff size={14} className="text-red-400" />}
+        </div>
+      </div>
+
+      {videoTrack ? (
+        <div ref={videoRef} className="w-full h-full object-cover"></div>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-gray-500 flex-col gap-2">
+          <User size={48} />
+          <p>Waiting for {username}...</p>
+        </div>
+      )}
+
+      {isLocal && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-full backdrop-blur-sm">
+          <Button
+            size="icon"
+            variant={isMicOn ? "ghost" : "destructive"}
+            className="h-10 w-10 rounded-full"
+            onClick={toggleMicrophone}
+          >
+            {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+          </Button>
+          <Button
+            size="icon"
+            variant={isCamOn ? "ghost" : "destructive"}
+            className="h-10 w-10 rounded-full"
+            onClick={toggleCamera}
+          >
+            {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
+          </Button>
+        </div>
+      )}
+      <CourtParticipantLabel uid={uid as string} username={username} />
+    </div>
+  );
+};
+
 const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, toggleMicrophone, localUserId, courtSession, onGiftUser }: {
   maxTiles: number;
   localTracks: [ILocalVideoTrack | undefined, ILocalAudioTrack | undefined];
@@ -99,7 +179,7 @@ const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, togg
   const defendantUser: CombinedUserTrack | undefined = remoteUsers.find(user => user.uid === courtSession?.defendant_id) ||
                         (localUserId === courtSession?.defendant_id ? { uid: localUserId, videoTrack: localVideoTrack, audioTrack: localAudioTrack } : undefined);
 
-  let participantUsers: CombinedUserTrack[] = remoteUsers.filter(user =>
+  const participantUsers: CombinedUserTrack[] = remoteUsers.filter(user =>
     user.uid !== courtSession?.judge_id &&
     user.uid !== courtSession?.defendant_id
   );
@@ -107,92 +187,6 @@ const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, togg
   if (localUserId !== courtSession?.judge_id && localUserId !== courtSession?.defendant_id) {
     participantUsers.unshift({ uid: localUserId, videoTrack: localVideoTrack, audioTrack: localAudioTrack });
   }
-
-  const renderParticipantBox = (
-    title: string,
-    colorClass: string,
-    videoTrack: ILocalVideoTrack | IRemoteVideoTrack | undefined,
-    audioTrack: ILocalAudioTrack | IRemoteAudioTrack | undefined,
-    isLocal: boolean,
-    uid: string | number,
-    username: string,
-  ) => {
-    const videoRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      if (videoRef.current && videoTrack) {
-        videoTrack.play(videoRef.current);
-      }
-      return () => {
-        if (videoTrack) {
-          videoTrack.stop();
-        }
-      };
-    }, [videoTrack]);
-
-    useEffect(() => {
-      if (audioTrack && !isLocal) {
-        audioTrack.play();
-      }
-      return () => {
-        if (audioTrack && !isLocal) {
-          audioTrack.stop();
-        }
-      };
-    }, [audioTrack, isLocal]);
-
-    const isMicOn = audioTrack ? ('enabled' in audioTrack ? audioTrack.enabled : true) : false;
-    const isCamOn = videoTrack ? ('enabled' in videoTrack ? videoTrack.enabled : true) : false;
-
-    const targetUid = String(uid || '');
-    const canGift = isValidUuid(targetUid) && targetUid !== localUserId;
-    return (
-      <div
-        className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group ${canGift ? 'cursor-pointer hover:border-yellow-400/70' : ''}`}
-        onClick={() => {
-          if (canGift && onGiftUser) onGiftUser(targetUid);
-        }}
-      >
-        <div className={`absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 backdrop-blur-sm ${colorClass.replace('border-', 'text-')}`}>
-          {title}
-          <div className="flex gap-1 ml-2">
-            {isMicOn ? <Mic size={14} className="text-green-400" /> : <MicOff size={14} className="text-red-400" />}
-          </div>
-        </div>
-
-        {videoTrack ? (
-          <div ref={videoRef} className="w-full h-full object-cover"></div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500 flex-col gap-2">
-            <User size={48} />
-            <p>Waiting for {username}...</p>
-          </div>
-        )}
-
-        {isLocal && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-full backdrop-blur-sm">
-            <Button
-              size="icon"
-              variant={isMicOn ? "ghost" : "destructive"}
-              className="h-10 w-10 rounded-full"
-              onClick={toggleMicrophone}
-            >
-              {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
-            </Button>
-            <Button
-              size="icon"
-              variant={isCamOn ? "ghost" : "destructive"}
-              className="h-10 w-10 rounded-full"
-              onClick={toggleCamera}
-            >
-              {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
-            </Button>
-          </div>
-        )}
-        <CourtParticipantLabel uid={uid as string} username={username} />
-      </div>
-    );
-  };
 
   const getCols = () => {
     const totalParticipants = (judgeUser ? 1 : 0) + (defendantUser ? 1 : 0) + participantUsers.length;
@@ -236,17 +230,21 @@ const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, togg
         gridTemplateColumns: `repeat(${getCols()}, minmax(0, 1fr))`
       }}
     >
-      {participantsToRender.slice(0, maxTiles).map((p, index) => (
+      {participantsToRender.slice(0, maxTiles).map((p) => (
         <div key={p.user.uid} className="tc-neon-frame relative">
-          {renderParticipantBox(
-            p.title,
-            p.colorClass,
-            p.user.videoTrack,
-            p.user.audioTrack,
-            p.user.uid === localUserId,
-            p.user.uid,
-            p.username
-          )}
+          <ParticipantBox
+            title={p.title}
+            colorClass={p.colorClass}
+            videoTrack={p.user.videoTrack}
+            audioTrack={p.user.audioTrack}
+            isLocal={p.user.uid === localUserId}
+            uid={p.user.uid}
+            username={p.username}
+            onGiftUser={onGiftUser}
+            localUserId={localUserId}
+            toggleCamera={toggleCamera}
+            toggleMicrophone={toggleMicrophone}
+          />
         </div>
       ))}
       {Array.from({ length: Math.max(0, maxTiles - participantsToRender.length) }).map((_, i) => (
@@ -261,8 +259,6 @@ const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, togg
     </div>
   );
 }
-
-const isValidUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
 
 function uidFromString(str: string) {
   let hash = 0;
@@ -314,218 +310,27 @@ export default function CourtRoom() {
    const { user, profile } = useAuthStore();
    const { courtId } = useParams();
    const navigate = useNavigate();
-
-
-
-   const [_participantsAllowed, _setParticipantsAllowed] = useState([]);
-   const [courtSession, setCourtSession] = useState(null);
+   const [courtSession, setCourtSession] = useState<any>(null);
    const [boxCount, setBoxCount] = useState(2);
    const [joinBoxRequested, setJoinBoxRequested] = useState(false);
    const [joinBoxLoading, setJoinBoxLoading] = useState(false);
-   const [activeBoxCount, setActiveBoxCount] = useState(0);
-
    const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
    const [localTracks, setLocalTracks] = useState<[ILocalVideoTrack | undefined, ILocalAudioTrack | undefined]>([undefined, undefined]);
    const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([]);
+   const [activeCase, setActiveCase] = useState<any>(null);
+   const [courtState, setCourtState] = useState<any>(null);
+   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
+   const [showDocketModal, setShowDocketModal] = useState(false);
+   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
+   const [giftOpen, setGiftOpen] = useState(false);
+   const [isSubmittingSummary, setIsSubmittingSummary] = useState(false);
+   const [summaries, setSummaries] = useState<any[]>([]);
+   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
+   const [evidence, setEvidence] = useState<any[]>([]);
+   const [verdict, setVerdict] = useState<any>(null);
 
-   const isJudge =
-     profile?.role === 'admin' ||
-     profile?.role === 'lead_troll_officer' ||
-     profile?.is_admin ||
-     profile?.is_lead_officer;
-  const isOfficer = profile?.role === 'troll_officer' || profile?.is_troll_officer;
-  const roleCanPublish = Boolean(isJudge) || Boolean(isOfficer) ||
-                         ["defendant", "accuser", "witness", "attorney"].includes(profile?.role);
-  const canPublish = roleCanPublish || joinBoxRequested;
-
-  const handleConnectionStateChange = (
-    curState: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTING',
-    revState: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTING'
-  ) => {
-    console.log(`[CourtRoom] Connection state change: ${revState} -> ${curState}`);
-
-    if (curState === 'RECONNECTING') {
-      toast.info('Connection lost. Attempting to reconnect...');
-    } else if (curState === 'CONNECTED' && revState === 'RECONNECTING') {
-      toast.success('Reconnected to the court session.');
-    } else if (curState === 'DISCONNECTED') {
-      toast.warning('You have been disconnected. The app will try to reconnect automatically.');
-      console.log(
-        '[CourtRoom] Temporarily disconnected. The Agora SDK will handle the reconnection process.'
-      );
-    }
-  };
-
-  // Agora connection management
-  useEffect(() => {
-    if (!courtId || !user) return;
-
-    let isCancelled = false;
-    const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-    setAgoraClient(client);
-
-    const localTracksToPublish: (ILocalVideoTrack | ILocalAudioTrack)[] = [];
-
-    const handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: 'audio' | 'video') => {
-      await client.subscribe(user, mediaType);
-      setRemoteUsers((prev) => [...prev.filter(u => u.uid !== user.uid), user]);
-    };
-
-    const handleUserUnpublished = (user: IAgoraRTCRemoteUser) => {
-      setRemoteUsers((prev) => prev.filter(u => u.uid !== user.uid));
-    };
-
-    client.on('user-published', handleUserPublished);
-    client.on('user-unpublished', handleUserUnpublished);
-    client.on('connection-state-change', handleConnectionStateChange);
-
-    const joinAndPublish = async () => {
-      try {
-        const token = canPublish ? await getAgoraToken(courtId, user.id) : null;
-        const uid = canPublish ? user.id : null;
-
-        await client.join(import.meta.env.VITE_AGORA_APP_ID!, courtId, token, uid);
-        if (isCancelled) return;
-        console.log("[CourtRoom] Joined channel");
-
-        if (canPublish) {
-          let audioTrack: ILocalAudioTrack | undefined;
-          let videoTrack: ILocalVideoTrack | undefined;
-
-          try {
-            audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-            localTracksToPublish.push(audioTrack);
-          } catch (err) {
-            console.warn("Mic not available — continuing without audio", err);
-            if ((err as any).code === 'DEVICE_NOT_FOUND') {
-              toast.warning("Microphone not found. You will join as a listener.");
-            }
-          }
-
-          try {
-            videoTrack = await AgoraRTC.createCameraVideoTrack();
-            localTracksToPublish.push(videoTrack);
-          } catch (err) {
-            console.warn("Camera not available — continuing without video", err);
-            if ((err as any).code === 'DEVICE_NOT_FOUND') {
-              toast.warning("Camera not found. You will join without video.");
-            }
-          }
-          
-          if (isCancelled) return;
-          setLocalTracks([videoTrack, audioTrack]);
-
-          if (localTracksToPublish.length > 0) {
-            await client.publish(localTracksToPublish);
-          }
-          console.log("[CourtRoom] Tracks published:", localTracksToPublish.length);
-        }
-      } catch (error: any) {
-        if (error.code === 'OPERATION_ABORTED') {
-          console.warn('Agora join operation was aborted, likely due to a fast re-render. This is being handled.');
-          return;
-        }
-        console.error("Agora connection failed:", error);
-        toast.error("Failed to connect to the court session. Please try again.");
-        navigate("/troll-court");
-      }
-    };
-
-    joinAndPublish();
-
-    return () => {
-      isCancelled = true;
-      client.off('user-published', handleUserPublished);
-      client.off('user-unpublished', handleUserUnpublished);
-      client.off('connection-state-change', handleConnectionStateChange);
-      
-      for (const track of localTracksToPublish) {
-        track.stop();
-        track.close();
-      }
-      
-      client.leave();
-    };
-  }, [courtId, user, canPublish, navigate]);
-
-  const roomIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (courtId && !roomIdRef.current) {
-      roomIdRef.current = courtId;
-      console.log('[CourtRoom] Room ID stabilized:', courtId);
-    }
-  }, [courtId]);
-  
-  // Court functionality state
-  const [activeCase, setActiveCase] = useState<any>(null);
-  const [courtState, setCourtState] = useState<any>(null);
-  const [evidence, setEvidence] = useState([]);
-  const [defendant, setDefendant] = useState(null);
-  const [judge, setJudge] = useState(null);
-  const [verdict, setVerdict] = useState(null);
-  const [showEvidencePanel, setShowEvidencePanel] = useState(false);
-  const [showJudgeControls, setShowJudgeControls] = useState(false);
-  const [showNewCaseModal, setShowNewCaseModal] = useState(false);
-  const [newCaseData, setNewCaseData] = useState({
-    title: '',
-    defendant: '',
-    accuser: '',
-    description: '',
-    severity: 'Low'
-  });
-  const [judgeControls, setJudgeControls] = useState({
-    autoLockChat: false,
-    requireLeadApproval: false,
-    forceCaseRecord: false
-  });
-  const [showVerdictModal, setShowVerdictModal] = useState(false);
-  const [verdictData, setVerdictData] = useState({
-    verdict: 'not_guilty',
-    penalty: '',
-    reasoning: ''
-  });
-  const [availableJudges, setAvailableJudges] = useState<Array<{
-    id: string
-    username: string
-    role: string
-    is_admin?: boolean
-    is_lead_officer?: boolean
-  }>>([]);
-  const [showJudgeSelection, setShowJudgeSelection] = useState(false);
-  const [showSentencingOptions, setShowSentencingOptions] = useState(false);
-  const [showPaymentTab, setShowPaymentTab] = useState(false);
-  const [sentencingOptions, setSentencingOptions] = useState({
-    fines: [],
-    bans: [],
-    communityService: [],
-    otherPenalties: []
-  });
-  const [paymentData, setPaymentData] = useState({
-    amount: 0,
-    reason: '',
-    recipient: '',
-    status: 'pending'
-  });
-  const [showRoleManagement, setShowRoleManagement] = useState(false);
-  const [roleChangeRequest, setRoleChangeRequest] = useState({
-    userId: '',
-    currentRole: '',
-    newRole: '',
-    reason: ''
-  });
-  const [showSummonModal, setShowSummonModal] = useState(false);
-  const [summonQuery, setSummonQuery] = useState('');
-  const [summaries, setSummaries] = useState<any[]>([]);
-  const [feedback, setFeedback] = useState<any[]>([]);
-  const [summaryText, setSummaryText] = useState('');
-  const [isSubmittingSummary, setIsSubmittingSummary] = useState(false);
-  const [defenseCounselEnabled, setDefenseCounselEnabled] = useState(false);
-  const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
-  const [showDocketModal, setShowDocketModal] = useState(false);
-  const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
-  const [giftOpen, setGiftOpen] = useState(false);
-
-
+  const isJudge = user?.id === courtSession?.judge_id;
+  const isOfficer = profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.is_admin;
 
 
   // Duration Limit (1 hour)

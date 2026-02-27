@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Scale, AlertCircle, LogOut, Send, Gavel } from "lucide-react";
 import { courtSystem, CourtSession } from "@/lib/courtSystem";

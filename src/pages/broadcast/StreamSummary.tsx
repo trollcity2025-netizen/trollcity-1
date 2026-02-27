@@ -21,7 +21,7 @@ export default function StreamSummary() {
       try {
         const { data: stream, error } = await supabase
           .from('streams')
-          .select('title, viewer_count, current_viewers')
+          .select('title, viewer_count, current_viewers, likes_count, gifts_value')
           .eq('id', streamId)
           .single();
 
@@ -32,8 +32,8 @@ export default function StreamSummary() {
         setStats({
           title: stream.title || 'Broadcast Ended',
           viewers: stream.current_viewers || stream.viewer_count || 0,
-          likes: 0, // Not stored on streams table by default usually
-          gifts: 0  // Would need aggregation query
+          likes: stream.likes_count || 0,
+          gifts: stream.gifts_value || 0
         });
       } catch (err) {
         console.error('Error fetching stream stats:', err);

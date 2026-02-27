@@ -28,7 +28,7 @@ export default function PinnedProductOverlay({
     zip: '',
   });
 
-  const activeProduct = pinnedProducts.find((p) => p.is_active && p.product);
+  const activeProduct = Array.isArray(pinnedProducts) ? pinnedProducts.find((p) => p.is_active && p.product) : undefined;
 
   if (!activeProduct || !activeProduct.product) return null;
 

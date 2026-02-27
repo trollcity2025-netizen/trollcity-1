@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { TrollEvent, TrollEventType } from './useTrollEngine';
+import { TrollEvent } from './useTrollEngine';
 import TrollJumpScare from './events/TrollJumpScare';
 import FakeBanScreen from './events/FakeBanScreen';
 import FakeVirusScan from './events/FakeVirusScan';

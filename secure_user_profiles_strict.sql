@@ -94,6 +94,7 @@ BEGIN
     email,
     terms_accepted,
     onboarding_completed,
+    credit_score, -- Added credit_score
     created_at,
     updated_at
   ) VALUES (
@@ -109,7 +110,8 @@ BEGIN
     0,
     v_email,
     v_terms_accepted,
-    false, -- Default onboarding
+    false,
+    400, -- Default credit score
     NOW(),
     NOW()
   )

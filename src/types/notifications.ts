@@ -32,6 +32,10 @@ export type NotificationType =
   | 'new_review_received'
   | 'appeal_submitted'
   | 'appeal_decision'
+  | 'coin_received'
+  | 'coin_gifted'
+  | 'property_purchased'
+  | 'jail_sentence'
 
 export interface Notification {
   id: string

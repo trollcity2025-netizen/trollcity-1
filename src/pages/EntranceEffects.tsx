@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { CreditCard, Coins, DollarSign, Check, Star } from 'lucide-react'
 import { STORE_USD_PER_COIN } from '../lib/coinMath'
 import { useAuthStore } from '../lib/store'
-import { supabase, UserProfile } from '../lib/supabase'
-import { deductCoins } from '../lib/coinTransactions'
+import { supabase } from '../lib/supabase'
 import { useCoins } from '../lib/hooks/useCoins'
 import { toast } from 'sonner'
 
@@ -36,18 +35,24 @@ const EntranceEffects = () => {
         // Fallback to hardcoded defaults if table doesn't exist
         setEffects(DEFAULT_EFFECTS)
       } else if (data && data.length > 0) {
-        // Map database rows to EntranceEffect type
-        const dbEffects = data.map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          coin_cost: row.coin_cost,
-          rarity: row.rarity || 'Standard',
-          animation_type: row.animation_type || 'default',
-          icon: '✨',
-          description: `${row.rarity || 'Standard'} effect`,
-          image_url: `https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(row.name)}&image_size=square`
-        } as EntranceEffect))
-        setEffects(dbEffects)
+        // Map database rows to EntranceEffect type and filter out effects not present in hardcoded data
+          const validDbEffects = data.map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            coin_cost: row.coin_cost,
+            rarity: row.rarity || 'Standard',
+            animation_type: row.animation_type || 'default',
+            icon: '✨', // Default icon, as it's not in DB schema
+            description: `${row.rarity || 'Standard'} effect`, // Default description
+            image_url: `https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(row.name)}&image_size=square`
+          } as EntranceEffect)).filter(dbEffect => DEFAULT_EFFECTS.some(defaultEffect => defaultEffect.id === dbEffect.id));
+          
+          if (validDbEffects.length > 0) {
+            setEffects(validDbEffects);
+          } else {
+            // Fallback to hardcoded defaults if no valid effects from DB
+            setEffects(DEFAULT_EFFECTS);
+          }
       } else {
         // Use defaults if table is empty
         setEffects(DEFAULT_EFFECTS)
@@ -76,83 +81,24 @@ const EntranceEffects = () => {
     try {
       setPurchasing(effect.id)
 
-      // Deduct coins using the proper coin transaction system
-      const deductResult = await deductCoins({
-        userId: profile.id,
-        amount: effect.coin_cost,
-        type: 'entrance_effect',
-        description: `Purchased ${effect.name} entrance effect`,
-        metadata: {
-          effect_id: effect.id,
-          effect_name: effect.name
-        }
-      })
+      const { error } = await supabase.rpc('purchase_entrance_effect', {
+        p_effect_id: effect.id,
+        p_cost: effect.coin_cost,
+        p_name: effect.name
+      });
 
-      if (!deductResult.success) {
-        toast.error('Failed to process payment')
-        return
-      }
-
-      // Add effect to user's purchased effects
-      const { error: purchaseError } = await supabase
-        .from('user_entrance_effects')
-        .upsert({
-          user_id: profile.id,
-          effect_id: effect.id,
-          purchased_at: new Date().toISOString()
-        }, { onConflict: 'user_id, effect_id' })
-
-      if (purchaseError) throw purchaseError
+      if (error) throw error;
 
       await refreshCoins().catch(err => console.warn('Failed to refresh coins after purchase:', err))
       toast.success(`Successfully purchased ${effect.name}!`)
 
-      // Update local profile immediately (optimistic)
-      const optimisticProfile = {
-        ...profile,
-        troll_coins: Number(deductResult.newBalance ?? 0)
-      }
-      useAuthStore.getState().setProfile(optimisticProfile as UserProfile)
-
-      // Refresh profile from DB in background (silent, with delay)
-      refreshProfileBackground()
-
-    } catch (error: any) {
-      toast.error('Failed to purchase effect')
-      console.error('Purchase error:', error)
+    } catch (err: any) {
+      console.error('Purchase error:', err);
+      toast.error(err.message || 'Failed to purchase effect');
     } finally {
       setPurchasing(null)
     }
-  }
-
-  const refreshProfileBackground = async () => {
-    // Wait 500ms to allow database replication
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', profile?.id)
-        .single()
-      
-      if (!error && data) {
-        const currentProfile = useAuthStore.getState().profile
-        
-        // Only update if coins actually changed (prevent flickering)
-        if (currentProfile &&
-            currentProfile.troll_coins === data.troll_coins &&
-            currentProfile.total_earned_coins === data.total_earned_coins &&
-            currentProfile.total_spent_coins === data.total_spent_coins) {
-          return
-        }
-        
-        useAuthStore.getState().setProfile(data)
-      }
-    } catch (error) {
-      console.error('Background profile refresh error:', error)
-    }
-  }
+  };
 
   const getRarityColor = (rarity: string) => {
     const r = rarity.toLowerCase()

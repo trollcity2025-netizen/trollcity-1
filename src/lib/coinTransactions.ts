@@ -6,6 +6,7 @@ import { supabase, ensureSupabaseSession } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
 import { trackCoinEarning } from './familyTasks'
 import { trackWarActivity } from './familyWars'
+import { sendNotification } from './sendNotification'
 
 const _safeNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -328,6 +329,27 @@ export async function deductCoins(params: {
         }
       } catch (e) { console.warn('Store update failed', e) }
 
+      // Send notification
+      if (type === 'gift_sent') {
+        sendNotification({
+          user_id: userId,
+          type: 'coin_gifted',
+          title: 'Coins Gifted',
+          message: `You gifted ${normalizedAmount} coins!`,
+          metadata: { ...metadata, amount: normalizedAmount, type }
+        })
+      }
+
+      // Global event for large gifts
+      if (type === 'gift_sent' && normalizedAmount > 1000) {
+        supabase.from('global_events').insert({
+            type: 'gift',
+            title: `Someone just gifted ${normalizedAmount} coins!`,
+            icon: 'gift',
+            metadata: { ...metadata, amount: normalizedAmount, type }
+        })
+      }
+
       return {
         success: true,
         newBalance: newBalance,
@@ -514,6 +536,27 @@ export async function addCoins(params: {
         console.warn('Family coin allocation failed:', familyErr)
         // Don't fail the main transaction for family allocation errors
       }
+    }
+
+    // Send notification
+    if (type === 'gift_received') {
+      sendNotification({
+        user_id: userId,
+        type: 'coin_received',
+        title: 'Coins Received',
+        message: `You received ${amount} coins!`,
+        metadata: { ...metadata, amount, type }
+      })
+    }
+
+    // Global event for large gifts
+    if (type === 'gift_received' && amount > 1000) {
+        supabase.from('global_events').insert({
+            type: 'gift',
+            title: `Someone just received a gift of ${amount} coins!`,
+            icon: 'gift',
+            metadata: { ...metadata, amount, type }
+        })
     }
 
     return {

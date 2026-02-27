@@ -3,15 +3,96 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useAgoraRoom } from '../hooks/useRoom'
-import AgoraRTC, { IRemoteUser, ILocalVideoTrack, ILocalAudioTrack } from 'agora-rtc-sdk-ng'
+import AgoraRTC, { IRemoteUser } from 'agora-rtc-sdk-ng'
 import { Button } from '../components/ui/button'
 import { toast } from 'sonner'
 import { User, DollarSign, CheckCircle, XCircle, Trash2, Mic, MicOff, Video, VideoOff } from 'lucide-react'
-import { IRemoteAudioTrack } from 'agora-rtc-sdk-ng'
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+
+const ParticipantBox = ({
+  title,
+  colorClass,
+  videoTrack,
+  audioTrack,
+  isLocal,
+  username,
+  toggleCamera,
+  toggleMicrophone,
+}) => {
+  const videoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && videoTrack) {
+      videoTrack.play(videoRef.current);
+    }
+    return () => {
+      if (videoTrack) {
+        videoTrack.stop();
+      }
+    };
+  }, [videoTrack]);
+
+  useEffect(() => {
+    if (audioTrack && !isLocal) {
+      // Remote audio tracks need to be played explicitly
+      audioTrack.play();
+    }
+    return () => {
+      if (audioTrack && !isLocal) {
+        audioTrack.stop();
+      }
+    };
+  }, [audioTrack, isLocal]);
+
+  const isMicOn = audioTrack && !audioTrack.muted;
+  const isCamOn = videoTrack && !videoTrack.muted;
+
+  return (
+    <div className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group`}>
+      <div className={`absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 backdrop-blur-sm ${colorClass.replace('border-', 'text-')}`}>
+        {title}
+        <div className="flex gap-1 ml-2">
+           {isMicOn ? <Mic size={14} className="text-green-400" /> : <MicOff size={14} className="text-red-400" />}
+        </div>
+      </div>
+      
+      {videoTrack ? (
+        <div ref={videoRef} className="w-full h-full object-cover"></div>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-gray-500 flex-col gap-2">
+          <User size={48} />
+          <p>Waiting for {username}...</p>
+        </div>
+      )}
+
+      {/* Local Controls Overlay */}
+      {isLocal && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-full backdrop-blur-sm">
+           <Button 
+             size="icon" 
+             variant={isMicOn ? "ghost" : "destructive"} 
+             className="h-10 w-10 rounded-full"
+             onClick={toggleMicrophone}
+           >
+             {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+           </Button>
+           <Button 
+             size="icon" 
+             variant={isCamOn ? "ghost" : "destructive"} 
+             className="h-10 w-10 rounded-full"
+             onClick={toggleCamera}
+           >
+             {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
+           </Button>
+        </div>
+      )}
+    </div>
+  );
+};
 
   type Interview = {
   id: string
@@ -64,105 +145,28 @@ function InterviewGrid({
     ? { user: { username: interview.interviewer_id || 'Interviewer' }, videoTrack: localVideoTrack, audioTrack: localAudioTrack, isLocal: true }
     : (interviewerRemoteUser ? { user: { username: 'Interviewer' }, videoTrack: interviewerRemoteUser.videoTrack, audioTrack: interviewerRemoteUser.audioTrack, isLocal: false } : undefined);
 
-
-
-  const renderParticipantBox = (
-    title: string,
-    colorClass: string,
-    videoTrack: ILocalVideoTrack | IRemoteVideoTrack | undefined,
-    audioTrack: ILocalAudioTrack | IRemoteAudioTrack | undefined,
-    isLocal: boolean,
-    username: string,
-  ) => {
-    const videoRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      if (videoRef.current && videoTrack) {
-        videoTrack.play(videoRef.current);
-      }
-      return () => {
-        if (videoTrack) {
-          videoTrack.stop();
-        }
-      };
-    }, [videoTrack]);
-
-    useEffect(() => {
-      if (audioTrack && !isLocal) {
-        // Remote audio tracks need to be played explicitly
-        audioTrack.play();
-      }
-      return () => {
-        if (audioTrack && !isLocal) {
-          audioTrack.stop();
-        }
-      };
-    }, [audioTrack, isLocal]);
-
-    const isMicOn = audioTrack && !audioTrack.muted;
-    const isCamOn = videoTrack && !videoTrack.muted;
-
-    return (
-      <div className={`bg-gray-900 rounded-xl overflow-hidden border ${colorClass} aspect-video relative group`}>
-        <div className={`absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 backdrop-blur-sm ${colorClass.replace('border-', 'text-')}`}>
-          {title}
-          <div className="flex gap-1 ml-2">
-             {isMicOn ? <Mic size={14} className="text-green-400" /> : <MicOff size={14} className="text-red-400" />}
-          </div>
-        </div>
-        
-        {videoTrack ? (
-          <div ref={videoRef} className="w-full h-full object-cover"></div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500 flex-col gap-2">
-            <User size={48} />
-            <p>Waiting for {username}...</p>
-          </div>
-        )}
-
-        {/* Local Controls Overlay */}
-        {isLocal && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 p-2 rounded-full backdrop-blur-sm">
-             <Button 
-               size="icon" 
-               variant={isMicOn ? "ghost" : "destructive"} 
-               className="h-10 w-10 rounded-full"
-               onClick={toggleMicrophone}
-             >
-               {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
-             </Button>
-             <Button 
-               size="icon" 
-               variant={isCamOn ? "ghost" : "destructive"} 
-               className="h-10 w-10 rounded-full"
-               onClick={toggleCamera}
-             >
-               {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
-             </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl flex-1">
-      {interviewerDisplay && renderParticipantBox(
-        "Interviewer (Admin/Lead)", 
-        "border-purple-800", 
-        interviewerDisplay.videoTrack,
-        interviewerDisplay.audioTrack,
-        interviewerDisplay.isLocal,
-        interviewerDisplay.user.username
-      )}
-      {applicantDisplay && renderParticipantBox(
-        "Applicant", 
-        "border-blue-800", 
-        applicantDisplay.videoTrack,
-        applicantDisplay.audioTrack,
-        applicantDisplay.isLocal,
-        applicantDisplay.user.username
-      )}
+      {interviewerDisplay && <ParticipantBox
+        title="Interviewer (Admin/Lead)"
+        colorClass="border-purple-800"
+        videoTrack={interviewerDisplay.videoTrack}
+        audioTrack={interviewerDisplay.audioTrack}
+        isLocal={interviewerDisplay.isLocal}
+        username={interviewerDisplay.user.username}
+        toggleCamera={toggleCamera}
+        toggleMicrophone={toggleMicrophone}
+      />}
+      {applicantDisplay && <ParticipantBox
+        title="Applicant"
+        colorClass="border-blue-800"
+        videoTrack={applicantDisplay.videoTrack}
+        audioTrack={applicantDisplay.audioTrack}
+        isLocal={applicantDisplay.isLocal}
+        username={applicantDisplay.user.username}
+        toggleCamera={toggleCamera}
+        toggleMicrophone={toggleMicrophone}
+      />}
     </div>
   );
 }
@@ -173,7 +177,7 @@ export default function InterviewRoom() {
   const { profile } = useAuthStore()
   const [interview, setInterview] = useState<Interview | null>(null)
   const [loading, setLoading] = useState(true)
-  const { join, localTracks, remoteUsers, leave, toggleCamera, toggleMicrophone } = useAgoraRoom()
+  const { join, localTracks, remoteUsers, toggleCamera, toggleMicrophone } = useAgoraRoom()
   const [connection, setConnection] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
   
@@ -245,7 +249,7 @@ export default function InterviewRoom() {
     }
 
     checkAccess()
-  }, [roomId, profile, navigate])
+  }, [roomId, profile, navigate, join])
 
   // Real-time status updates
   useEffect(() => {

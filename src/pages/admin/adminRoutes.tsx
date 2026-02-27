@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { Database, Shield, RefreshCw, Settings, Video, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap, MapPin, ShoppingCart, Smartphone } from 'lucide-react'
+import { Database, Shield, RefreshCw, Settings, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap, MapPin, ShoppingCart } from 'lucide-react'
 import { UserRole } from '../../lib/supabase'
 
 const DatabaseBackup = lazy(() => import('./DatabaseBackup'))
@@ -216,8 +216,8 @@ export const systemManagementRoutes: AdminRoute[] = [
     title: 'Court Dockets',
     path: '/admin/court-dockets',
     component: CourtDocketsManager,
-    roles: [UserRole.ADMIN, UserRole.TROLL_OFFICER, UserRole.LEAD_TROLL_OFFICER],
-    description: 'Manage court dockets and cases',
+    roles: [], // Viewable by all users
+    description: 'View court dockets and cases',
     icon: <Gavel className="w-5 h-5 text-red-200" />,
     tileColor: 'text-red-200',
     tileBgColor: 'bg-red-500/10',

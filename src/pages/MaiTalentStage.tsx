@@ -11,7 +11,6 @@ import GiftAnnouncements from '@/components/maitalent/GiftAnnouncements';
 import { Button } from '@/components/ui/button';
 import GiftButton from '@/components/maitalent/GiftButton';
 import { useGoldenBuzzer } from '@/lib/useGoldenBuzzer';
-import { audioManager } from '@/lib/audioManager';
 import { StageEnvironment } from '@/components/maitalent/StageEnvironment';
 import { StageLighting } from '@/components/maitalent/StageLighting';
 import PerformerFrame from '@/components/maitalent/PerformerFrame';
@@ -101,7 +100,7 @@ const PerformerStage = ({ performer, slot, isJudge, showId, localVideoTrack, loc
 }
 
 const MaiTalentStage = () => {
-  const { active: isExploding, trigger: triggerGoldenBuzzer } = useGoldenBuzzer();
+  const { active: isExploding } = useGoldenBuzzer();
   const { isJudge } = useJudgeRole();
   const [isQueueOpen, setIsQueueOpen] = useState(true);
   const [curtainsOpen, setCurtainsOpen] = useState(false);
@@ -113,7 +112,7 @@ const MaiTalentStage = () => {
   const [isInQueue, setIsInQueue] = useState(false);
   const { profile } = useAuthStore();
 
-  const { localVideoTrack, localAudioTrack, remoteUsers, client, publishTracks, unpublishTracks } = useAgoraRoom({
+  const { localVideoTrack, localAudioTrack, remoteUsers, client } = useAgoraRoom({
     roomId: session?.id || 'maitalent-stage', // Use session ID for room
     role: 'publisher',
     publish: false, // Control publishing manually

@@ -79,6 +79,8 @@ const ExploreFeed = lazyWithRetry(() => import("./pages/ExploreFeed"));
 const CoinStore = lazyWithRetry(() => import("./pages/CoinStore"));
 const Marketplace = lazyWithRetry(() => import("./pages/Marketplace"));
 const PublicPool = lazyWithRetry(() => import("./pages/PublicPool"));
+const TrollGamesPage = lazyWithRetry(() => import("./pages/TrollGamesPage"));
+const GiveawaysPage = lazyWithRetry(() => import("./pages/GiveawaysPage"));
 const UserInventory = lazyWithRetry(() => import("./pages/UserInventory"));
 const Troting = lazyWithRetry(() => import("./pages/Troting"));
 const ProfileSettings = lazyWithRetry(() => import("./pages/ProfileSettings"));
@@ -1087,6 +1089,9 @@ function AppContent() {
                   <Route path="/trollifieds" element={<Trollifieds />} />
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/pool" element={<PublicPool />} />
+                  <Route path="/troll-games" element={<TrollGamesPage />} />
+                  <Route path="/troll-games/:gameType/:matchId" element={<TrollGamesPage />} />
+                  <Route path="/troll-games/giveaways" element={<GiveawaysPage />} />
                   <Route path="/mai-talent/stage" element={<MaiTalentStage />} />
                   <Route path="/mai-talent/top10" element={<MaiTalentTop10 />} />
                   <Route path="/mai-talent/training" element={<MaiTalentTraining />} />

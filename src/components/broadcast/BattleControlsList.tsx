@@ -158,8 +158,6 @@ export default function BattleControlsList({ currentStream, onBattleAccepted }: 
                     // Battle is active, refresh the page to show battle view
                     if (onBattleAccepted) {
                         onBattleAccepted();
-                    } else {
-                        window.location.reload();
                     }
                     return true;
                 }

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { useTrollEngine, TrollEvent, TriggerTrollContext } from './useTrollEngine';
+import { useTrollEngine, TrollEvent } from './useTrollEngine';
 import TrollOverlay from './TrollOverlay';
 
 interface TrollContextType {
@@ -29,7 +29,7 @@ export const TrollProvider = ({ children }: TrollProviderProps) => {
         completeTroll();
       }, event.duration);
     }
-  }, [engineTriggerTroll, completeTroll]);
+  }, [engineTriggerTroll]);
 
   return (
     <TrollContext.Provider value={{ triggerTroll }}>

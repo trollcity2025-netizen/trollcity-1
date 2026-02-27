@@ -194,8 +194,11 @@ serve(async (req) => {
     const { type, stream_id, txn_id, data } = body;
 
     // 2. Validate input
-    if (!type || !stream_id || !txn_id || !data) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+    const requiredFields = ['type', 'stream_id', 'txn_id', 'data'];
+    const missingFields = requiredFields.filter(field => !(field in body));
+
+    if (missingFields.length > 0) {
+      return new Response(JSON.stringify({ error: `Missing required fields: ${missingFields.join(', ')}` }), {
         status: 400,
         headers: { ...headers, "Content-Type": "application/json" },
       });
@@ -356,7 +359,7 @@ serve(async (req) => {
     ];
     if (redis) adapters.push(new RedisStreamAdapter(redis));
 
-    const publishChannels = Array.from(new Set([`stream:${stream_id}`, stream_id]));
+    const publishChannels = [`stream-chat:${stream_id}`];
 
     // B2) Hot Stream Protection (Sys Event for High Traffic)
     if (currentViewerCount >= HOT_STREAM_THRESHOLD && redis) {
@@ -399,9 +402,34 @@ serve(async (req) => {
 
     await Promise.allSettled(
       publishChannels.flatMap((channelName) =>
-        adapters.map((a) => a.publish(channelName, "message", envelope))
+        adapters.map((a) => a.publish(channelName, "chat", envelope))
       )
     );
+
+    // 9. Insert message into database for persistence and visibility to other users
+    const { error: insertError } = await supabase
+      .from("stream_messages")
+      .insert({
+        stream_id: stream_id,
+        user_id: user.id,
+        content: data.content,
+        type: type,
+        txn_id: txn_id,
+        user_name: profile.username,
+        user_avatar: profile.avatar_url,
+        user_role: profile.role,
+        user_troll_role: profile.troll_role,
+        user_created_at: profile.created_at,
+        user_rgb_expires_at: profile.rgb_username_expires_at,
+        user_glowing_username_color: profile.glowing_username_color,
+      });
+
+    if (insertError) {
+      console.error("[ERROR] Failed to insert message into database:", insertError);
+      // Don't fail the request - message was already published via realtime
+    } else {
+      console.log("[SUCCESS] Message inserted into stream_messages table:", txn_id);
+    }
 
     console.log(`[SUCCESS] Message signed and published: txn_id=${txn_id} type=${type} user_id=${user.id}`);
 

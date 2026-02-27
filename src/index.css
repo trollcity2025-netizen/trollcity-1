@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .text-gold-outline {
+    color: #FFD700 !important; /* gold */
+    -webkit-text-stroke: 1px black;
+    text-stroke: 1px black;
+    paint-order: stroke fill;
+  }
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -30,6 +39,13 @@
   --troll-green-glow: #00ff00;
   --troll-dark-bg: #020617;
   --troll-dark-card: #0f172a;
+}
+
+.text-gold-outline {
+  color: #FFD700; /* gold */
+  -webkit-text-stroke: 1px black;
+  text-stroke: 1px black;
+  paint-order: stroke fill;
 }
 
 a {

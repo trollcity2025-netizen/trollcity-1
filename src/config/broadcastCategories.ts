@@ -305,8 +305,8 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     hasMatchingSystem: true,
     matchingTerminology: 'Connect', // Business terminology
     requiresReligion: false,
-    supportsBattles: true,
-    battleType: 'business',
+    supportsBattles: false,
+    battleType: 'none',
     isOneWayBroadcast: false,
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
@@ -334,8 +334,8 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     matchingTerminology: 'Fellowship',
     requiresReligion: true,
     availableReligions: AVAILABLE_RELIGIONS,
-    supportsBattles: true,
-    battleType: 'spiritual',
+    supportsBattles: false,
+    battleType: 'none',
     filterByReligion: true, // Match only same religion
     isOneWayBroadcast: false,
     showCoinBalanceInChat: true, // Stream category - show coin balance
@@ -378,11 +378,11 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     icon: '🗳️',
     description: 'Live election debates and voting streams',
     layoutMode: 'split',
-    defaultBoxCount: 2,
-    maxBoxCount: 4,
-    allowGuestBoxes: true,
-    allowAddBox: true,
-    allowDeductBox: true,
+    defaultBoxCount: 1,
+    maxBoxCount: 1,
+    allowGuestBoxes: false,
+    allowAddBox: false,
+    allowDeductBox: false,
     hostRoleLabel: 'Host',
     allowFrontCamera: true,
     allowRearCamera: true,
@@ -459,6 +459,12 @@ export function getMaxBoxCount(categoryId: string): number {
 export function allowFrontCamera(categoryId: string): boolean {
   const config = getCategoryConfig(categoryId);
   return config.allowFrontCamera;
+}
+
+// Helper to check if category requires camera
+export function requiresCamera(categoryId: string): boolean {
+  const config = getCategoryConfig(categoryId);
+  return !!config.requiresCamera;
 }
 
 // Helper to check if category shows coin balance in chat

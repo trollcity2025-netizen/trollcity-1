@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
-import AgoraRTC, { IAgoraRTCClient, ILocalAudioTrack, ILocalVideoTrack, IRemoteUser } from 'agora-rtc-sdk-ng';
+import AgoraRTC, { ILocalAudioTrack, ILocalVideoTrack, IRemoteUser } from 'agora-rtc-sdk-ng';
 import { toast } from 'sonner';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 
@@ -30,7 +30,7 @@ const JailVisitRoom: React.FC = () => {
     const { visitId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuthStore();
-        const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
+
     const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
     const [localVideoTrack, setLocalVideoTrack] = useState<ILocalVideoTrack | null>(null);
     const [remoteUser, setRemoteUser] = useState<IRemoteUser | null>(null);
@@ -44,18 +44,17 @@ const JailVisitRoom: React.FC = () => {
         }
 
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-        setAgoraClient(client);
 
         const joinCall = async () => {
             setIsJoining(true);
             try {
                 const { data, error } = await supabase.functions.invoke('get-agora-token', {
-                    body: { channelName: roomName, userId: user.id },
+                    body: { channelName: visitId, userId: user.id },
                 });
 
                 if (error) throw new Error('Failed to get token');
 
-                await client.join(process.env.NEXT_PUBLIC_AGORA_APP_ID!, roomName, data.token, user.id);
+                await client.join(process.env.NEXT_PUBLIC_AGORA_APP_ID!, visitId, data.token, user.id);
 
                 const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
                 const videoTrack = await AgoraRTC.createCameraVideoTrack();
@@ -96,7 +95,7 @@ const JailVisitRoom: React.FC = () => {
             localVideoTrack?.close();
             client.leave();
         };
-    }, [visitId, user, navigate, roomName]);
+    }, [visitId, user, navigate, localAudioTrack, localVideoTrack]);
 
 
 

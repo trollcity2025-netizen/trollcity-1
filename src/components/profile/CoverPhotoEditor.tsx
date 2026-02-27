@@ -1,11 +1,11 @@
-import React, { useState, useCallback } from 'react';
-import Cropper from 'react-easy-crop';
+import React, { useState, useCallback, useRef } from 'react';
+import Cropper, { Area } from 'react-easy-crop';
 import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface CoverPhotoEditorProps {
   image: string;
-  onSave: (crop: { x: number; y: number }, zoom: number) => void;
+  onSave: (croppedAreaPixels: Area) => void;
   onCancel: () => void;
   isSaving?: boolean;
 }
@@ -17,17 +17,20 @@ export default function CoverPhotoEditor({
   isSaving = false 
 }: CoverPhotoEditorProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1); // Always 1 - cover photos auto-crop to fill
+  const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const croppedAreaRef = useRef<Area | null>(null);
 
   const aspectRatio = 3 / 1; // 3:1 aspect ratio for cover photos
 
-  const onCropComplete = useCallback((_croppedArea: any, _croppedAreaPixels: any) => {
-    // Can be used for further processing if needed
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    croppedAreaRef.current = croppedAreaPixels;
   }, []);
 
   const handleSave = () => {
-    onSave(crop, zoom);
+    if (croppedAreaRef.current) {
+      onSave(croppedAreaRef.current);
+    }
   };
 
   const handleZoomIn = () => {
@@ -45,12 +48,12 @@ export default function CoverPhotoEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-slate-900 rounded-2xl border border-purple-500/30 shadow-2xl w-full max-w-4xl mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
+      <div className="bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 rounded-3xl border-2 border-purple-400/50 shadow-2xl shadow-purple-500/20 w-full max-w-4xl mx-4 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-slate-950/50">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Edit Cover Photo
+        <div className="flex items-center justify-between p-5 border-b border-purple-500/20 bg-black/30">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300 bg-clip-text text-transparent">
+            ✨ Edit Cover Photo
           </h2>
           <button
             onClick={onCancel}
@@ -61,7 +64,7 @@ export default function CoverPhotoEditor({
         </div>
 
         {/* Cropper Container */}
-        <div className="relative h-[400px] bg-black">
+        <div className="relative h-[450px] bg-gradient-to-b from-black to-slate-900">
           <Cropper
             image={image}
             crop={crop}
@@ -86,30 +89,31 @@ export default function CoverPhotoEditor({
         </div>
 
         {/* Controls */}
-        <div className="p-4 bg-slate-950/80 border-t border-white/10">
+        <div className="p-5 bg-black/40 border-t border-purple-500/20">
           <div className="flex items-center justify-between gap-4">
-            {/* Info - No zoom needed, cover photos auto-crop to fill */}
-            <div className="text-sm text-gray-400">
+            {/* Info */}
+            <div className="text-sm text-purple-200/70 flex items-center gap-2">
+              <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
               Drag to reposition • Cover auto-fills area
             </div>
 
             {/* Reset Button */}
             <button
               onClick={handleReset}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors text-gray-300"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 transition-all text-purple-200"
             >
               <RotateCcw size={16} />
-              <span className="text-sm">Reset</span>
+              <span className="text-sm font-medium">Reset</span>
             </button>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t border-white/10 bg-slate-950/50">
+        <div className="flex items-center justify-end gap-3 p-5 border-t border-purple-500/20 bg-black/30">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors text-gray-300 font-medium disabled:opacity-50"
+            className="px-6 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-600 transition-all text-gray-200 font-medium disabled:opacity-50"
           >
             Cancel
           </button>
@@ -117,10 +121,10 @@ export default function CoverPhotoEditor({
             onClick={handleSave}
             disabled={isSaving}
             className={cn(
-              "px-6 py-2 rounded-xl font-medium transition-all transform",
-              "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400",
-              "text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
+              "px-8 py-2.5 rounded-xl font-bold transition-all transform hover:scale-105",
+              "bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:from-pink-400 hover:to-pink-400",
+              "text-white shadow-lg shadow-pink-500/30 hover:shadow-pink-500/50",
+              "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             )}
           >
             {isSaving ? (
@@ -129,7 +133,7 @@ export default function CoverPhotoEditor({
                 Saving...
               </span>
             ) : (
-              'Save Cover Photo'
+              '💾 Save Cover Photo'
             )}
           </button>
         </div>

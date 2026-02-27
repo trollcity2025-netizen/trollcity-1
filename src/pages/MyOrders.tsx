@@ -4,7 +4,7 @@ import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { 
-  Package, Truck, Check, Clock, X, Search, 
+  Package, Truck, Clock, Search, 
   ExternalLink, Coins, MapPin, Calendar,
   ChevronDown, ChevronUp, CheckCircle
 } from 'lucide-react';
@@ -32,12 +32,7 @@ export default function MyOrders() {
   const [confirmingDelivery, setConfirmingDelivery] = useState<string | null>(null);
 
   // Fetch orders
-  useEffect(() => {
-    if (!user) return;
-    fetchOrders();
-  }, [user]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('shop_orders')
@@ -53,7 +48,12 @@ export default function MyOrders() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchOrders();
+  }, [user, fetchOrders]);
 
   const handleConfirmDelivery = async (orderId: string) => {
     setConfirmingDelivery(orderId);
@@ -286,7 +286,7 @@ export default function MyOrders() {
                       <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-lg p-3 mb-4">
                         <p className="text-yellow-400 text-sm">
                           <Clock className="w-4 h-4 inline mr-2" />
-                          Your order will be automatically confirmed after 7 days if you don't confirm manually.
+                          Your order will be automatically confirmed after 7 days if you don&apos;t confirm manually.
                         </p>
                       </div>
                     )}

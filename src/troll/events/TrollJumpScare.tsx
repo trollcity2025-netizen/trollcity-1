@@ -78,7 +78,7 @@ const TrollJumpScare: React.FC<TrollJumpScareProps> = ({ rarity }) => {
             }
           </p>
           {rarity === 'LEGENDARY' && (
-            <p className="text-sm text-yellow-300 mt-1">You've been trolled!</p>
+            <p className="text-sm text-yellow-300 mt-1">You&apos;ve been trolled!</p>
           )}
         </div>
       </div>

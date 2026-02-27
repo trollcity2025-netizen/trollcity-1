@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, Gavel, Users, AlertCircle, Calendar } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
+import { normalizeTextArray } from '../lib/courtUtils'
 
 interface SummonModalProps {
   isOpen: boolean
@@ -48,10 +49,15 @@ export default function SummonModal({ isOpen, onClose, userId, username }: Summo
 
     setLoading(true)
     try {
+      // Parse comma-separated usernames into array and normalize for PostgreSQL
+      const usersArray = usersInvolved
+        ? usersInvolved.split(',').map(u => u.trim()).filter(Boolean)
+        : [];
+      
       const { data, error } = await supabase.rpc('summon_user_to_court', {
         p_defendant_id: userId,
         p_reason: reason,
-        p_users_involved: usersInvolved || '',
+        p_users_involved: normalizeTextArray(usersArray),
         p_docket_id: selectedDocketId || null
       })
 

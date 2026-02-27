@@ -70,8 +70,6 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
         // Battle is active - challenger should also navigate to battle view
         if (onBattleAccepted) {
           onBattleAccepted();
-        } else {
-          window.location.reload();
         }
       } else if (battle?.status === 'ended' || battle?.status === 'cancelled') {
         // Battle was cancelled or ended without acceptance
@@ -105,7 +103,7 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
         
         const opponent = Array.isArray(target) && target.length > 0 ? target[0] : null;
 
-        if (!opponent) {
+        if (!opponent || !opponent.id) {
             throw new Error("No suitable opponents found. Try again later!");
         }
 
@@ -135,7 +133,7 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
   };
 
   const handleSkipMatch = async () => {
-    if (!outgoingBattleId || !currentStream.user_id) return;
+    if (!outgoingBattleId || !currentStream || !currentStream.user_id) return;
 
     setSkipLoading(true);
     try {
@@ -167,7 +165,7 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
   };
 
   const handleAccept = async () => {
-    if (!pendingBattle) return;
+    if (!pendingBattle || !pendingBattle.id) return;
     setLoading(true);
     try {
         const { error } = await supabase.rpc('accept_battle', {
@@ -193,8 +191,6 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
                     // Battle is active, refresh the page to show battle view
                     if (onBattleAccepted) {
                         onBattleAccepted();
-                    } else {
-                        window.location.reload();
                     }
                     return true;
                 }

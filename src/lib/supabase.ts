@@ -189,6 +189,9 @@ export interface UserProfile {
   // Profile view price
   profile_view_price?: number
 
+  // Cover photo URL
+  cover_url?: string | null
+
   // Application fields
   court_recording_consent?: boolean
   application_required?: boolean

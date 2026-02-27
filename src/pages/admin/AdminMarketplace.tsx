@@ -104,7 +104,7 @@ export default function AdminMarketplace() {
           .map((p: any) => p.item_id)
           .filter((v: any): v is string => typeof v === 'string' && v.length > 0)
       )
-      let itemMap: Record<string, any> = {}
+      const itemMap: Record<string, any> = {}
       for (const group of chunk(itemIds, 200)) {
         if (!group.length) continue
         const { data, error } = await supabase.from('marketplace_items').select('id, title').in('id', group)

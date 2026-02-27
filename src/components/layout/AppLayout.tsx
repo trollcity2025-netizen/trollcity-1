@@ -12,6 +12,8 @@ import ChatBubble from '../ChatBubble'
 import { toast } from 'sonner'
 
 
+import GlobalTicker from '../header/GlobalTicker';
+
 interface AppLayoutProps {
   children: React.ReactNode
   showSidebar?: boolean

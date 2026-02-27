@@ -170,20 +170,20 @@ export default function UserActionModal({
       }
       if (!confirm("Permanently BAN this user from your broadcasts?")) return;
       
-      const { error } = await supabase.from('stream_bans').insert({
-          stream_id: streamId,
-          user_id: userId,
-          banned_by: (await supabase.auth.getUser()).data.user?.id,
-          reason: 'Manual Ban'
-      }); // Permanent ban (no expires_at)
+      const { data, error } = await supabase.rpc('ban_user_from_stream', { 
+          p_stream_id: streamId, 
+          p_user_id: userId,
+          p_reason: 'Manual Ban'
+      });
 
       if (error) {
           toast.error("Failed to ban user");
+          console.error(error);
+      } else if (data && !data.success) {
+          toast.error(data.message || "Failed to ban user");
       } else {
-           // Also remove from viewers
-           await supabase.from('stream_viewers').delete().match({ stream_id: streamId, user_id: userId });
-           toast.success("User banned");
-           onClose();
+          toast.success("User banned");
+          onClose();
       }
   };
   

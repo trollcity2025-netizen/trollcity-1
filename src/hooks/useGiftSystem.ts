@@ -122,26 +122,38 @@ export function useGiftSystem(
         const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.id);
         const giftIcon = officialGift?.icon || '🎁';
         
-        // Broadcast event for animations (Optimistic + RPC backup)
-        // Use the SAME channel as the stream subscription for consistent delivery
-        const channel = supabase.channel(`stream:${streamId}`);
-        await channel.subscribe();
-        await channel.send({
-            type: 'broadcast',
-            event: 'gift_sent',
-            payload: {
-                id: generateUUID(),
-                gift_id: gift.id,
-                gift_slug: gift.slug,
-                gift_name: gift.name,
-                gift_icon: giftIcon,
-                amount: gift.coinCost * quantity,
-                sender_id: user.id,
-                sender_name: senderName,
-                receiver_id: finalRecipientId,
-                timestamp: new Date().toISOString()
-            }
-        });
+        // Broadcast event for animations via edge function
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                type: 'broadcast',
+                event: 'gift_sent',
+                channel: `stream:${streamId}`,
+                payload: {
+                    id: generateUUID(),
+                    gift_id: gift.id,
+                    gift_slug: gift.slug,
+                    gift_name: gift.name,
+                    gift_icon: giftIcon,
+                    amount: gift.coinCost * quantity,
+                    sender_id: user.id,
+                    sender_name: senderName,
+                    receiver_id: finalRecipientId,
+                    timestamp: new Date().toISOString()
+                }
+              })
+            });
+          }
+        } catch (broadcastErr) {
+          console.warn('[GiftSystem] Could not broadcast gift event:', broadcastErr);
+        }
         
         // Also send a chat message so it appears in the live chat with username
         try {

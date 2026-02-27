@@ -47,16 +47,25 @@ export const useAuthStore = create<AuthState>()(
           // ignore and continue
         }
         if ((import.meta as any).env?.DEV) {
-          console.log('Auth updated', { user: !!user })
+          console.log('Auth updated', { user: !!user });
         }
-        set({ user, session, isLoading: false, isAdmin: user ? null : null })
+        set({ user, session, isLoading: false, isAdmin: user ? null : null });
       },
 
       // Sets profile AND applies admin overrides with production validation
       setProfile: (profile) => {
+        const prevProfile = get().profile;
+
         if (!profile) {
           set({ profile: null, isAdmin: null })
           return
+        }
+
+        // Announce login when profile is first loaded
+        if (!prevProfile && profile.username) {
+          supabase.from('global_events').insert([
+            { title: `${profile.username} just logged in!`, icon: 'login', priority: 1 },
+          ]).then();
         }
 
         // Avoid unnecessary updates: compare with current profile
@@ -241,9 +250,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        console.log('Logging out')
+        console.log('Logging out');
+        const currentState = get();
+
+        if (currentState.profile?.username) {
+          supabase.from('global_events').insert([
+            { title: `${currentState.profile.username} just logged out!`, icon: 'logout', priority: 1 },
+          ]).then();
+        }
          
-        const currentState = get()
         const userId = currentState.user?.id
         const sessionId = (currentState.session as any)?.access_token
          

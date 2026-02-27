@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { 
-  Package, Truck, Check, Clock, X, Search, 
-  ExternalLink, Coins, MapPin, User, Calendar,
+  Package, Truck, Check, Search, 
+  ExternalLink, Coins, MapPin, Calendar,
   ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -35,7 +34,7 @@ const CARRIERS: { id: ShippingCarrier; name: string }[] = [
 
 export default function SellerOrders() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
+
   
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,12 +50,7 @@ export default function SellerOrders() {
   const [isShipping, setIsShipping] = useState(false);
 
   // Fetch orders
-  useEffect(() => {
-    if (!user) return;
-    fetchOrders();
-  }, [user]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('shop_orders')
@@ -72,7 +66,12 @@ export default function SellerOrders() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchOrders();
+  }, [user, fetchOrders]);
 
   const handleShipOrder = async () => {
     if (!selectedOrder || !trackingNumber.trim()) return;

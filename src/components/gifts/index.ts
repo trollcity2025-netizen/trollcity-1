@@ -13,3 +13,7 @@ export { sendGift, fetchGiftCatalog, hasEnoughCoins, getCoinBalance } from '@/li
 export { default as GlobalGiftRenderer } from './GlobalGiftRenderer';
 export { default as GiftModel } from './GiftModel';
 export { default as SendGiftButton } from './SendGiftButton';
+
+// Trollz System Components
+export { default as TrollzWheel } from './TrollzWheel';
+export { default as TrollzBalanceDisplay } from './TrollzBalanceDisplay';

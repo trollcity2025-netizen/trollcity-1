@@ -478,7 +478,7 @@ export default function CityRegistry() {
                   <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} p-12 rounded-2xl text-center`}>
                     <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-gray-400">No Appeals Filed</h3>
-                    <p className="text-gray-500 mt-2">You haven't filed any appeals yet.</p>
+                    <p className="text-gray-500 mt-2">You haven&apos;t filed any appeals yet.</p>
                     <button
                       onClick={() => setActiveTab('file')}
                       className="mt-4 px-4 py-2 bg-cyan-600 rounded-lg hover:bg-cyan-500 transition-colors"
@@ -548,7 +548,7 @@ export default function CityRegistry() {
           </h3>
           <ul className="text-sm text-gray-400 space-y-1">
             <li>• When you buy items with Troll Coins, coins are held in escrow until delivery is confirmed</li>
-            <li>• You can file an appeal if there's an issue with your order</li>
+            <li>• You can file an appeal if there&apos;s an issue with your order</li>
             <li>• Appeals are reviewed by Admins and Secretaries</li>
             <li>• If approved, coins are refunded to your balance</li>
             <li>• If denied, coins are released to the seller</li>

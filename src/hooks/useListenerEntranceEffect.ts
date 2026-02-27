@@ -41,9 +41,7 @@ export function useListenerEntranceEffect({
     if (!streamId) return;
     if (!userId) return;
 
-    // If you truly want it only for listeners, keep this.
-    // If you want it for everyone, delete this block.
-    if (isHost || isGuest || canPublish) return;
+
 
     const key = getKey(streamId);
 

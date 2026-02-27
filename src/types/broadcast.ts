@@ -72,6 +72,8 @@ export interface ChatMessage {
   user?: {
     username: string;
     avatar_url: string;
+    role?: string;
+    troll_role?: string;
   };
   user_profiles?: {
     username: string;

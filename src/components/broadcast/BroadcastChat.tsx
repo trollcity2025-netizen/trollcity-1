@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, User, Trash2, Shield, Crown, Sparkles, Gift } from 'lucide-react';
+import { Send, User, Shield, Crown, Sparkles, Gift } from 'lucide-react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
@@ -47,41 +47,22 @@ interface BroadcastChatProps {
     isGuest?: boolean;
 }
 
-// Helper to parse gift messages from content
-// Format: "GIFT_EVENT:giftName:amount" or "userId sent a/giftName"
-function parseGiftMessage(content: string, senderName?: string): { giftType: string; amount: number; senderName: string } | null {
-  // Check for GIFT_EVENT format: GIFT_EVENT:Clown:1
-  if (content.startsWith('GIFT_EVENT:')) {
-    const parts = content.split(':');
-    if (parts.length >= 3) {
-      const giftType = parts[1];
-      const amount = parseInt(parts[2], 10) || 1;
-      // Use the provided senderName if available, otherwise default to 'Someone'
-      return { giftType, amount, senderName: senderName || 'Someone' };
-    }
-  }
-  
-  // Check for "userId sent a Clown" or "userId sent Clowns" format
-  const sentMatch = content.match(/^user([a-f0-9]+)\s+(sent\s+a?|sent)\s+(.+)$/i);
-  if (sentMatch) {
-    const senderId = sentMatch[1];
-    const giftName = sentMatch[3];
-    // Check if plural (e.g., "Clowns")
-    const isPlural = giftName.toLowerCase().endsWith('s');
-    const giftType = isPlural ? giftName.slice(0, -1) : giftName;
-    const amount = isPlural ? Math.floor(Math.random() * 10) + 2 : 1; // Estimate for plural
-    return { giftType, amount, senderName: `User${senderId}` };
-  }
-  
-  return null;
-}
-
 export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false }: BroadcastChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
+
+  const parseGiftMessage = (content: string) => {
+    if (!content.startsWith('GIFT_EVENT:')) return null;
+    const parts = content.split(':');
+    if (parts.length < 3) return null;
+    return {
+      giftName: parts[1],
+      quantity: parseInt(parts[2], 10) || 1,
+    };
+  };
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
@@ -224,43 +205,40 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         });
     }, FLUSH_INTERVAL);
 
-    // Subscribe to Chat Messages via Server-Signed Broadcast
     const chatChannel = supabase
-        .channel(`stream:${streamId}`)
-        .on('broadcast', { event: 'message' }, (payload) => {
-            const envelope = payload.payload;
-            
-            // Check if this is a message for this stream and version 1
-            if (envelope.v !== 1 || envelope.stream_id !== streamId) return;
+        .channel(`stream-chat-${streamId}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'stream_messages',
+                filter: `stream_id=eq.${streamId}`
+            },
+            async (payload: any) => {
+                const newMessage = payload.new;
 
-            const newMsg: Message = {
-                id: envelope.txn_id,
-                user_id: envelope.s,
-                content: envelope.d.content,
-                created_at: new Date(envelope.ts).toISOString(),
-                type: envelope.t === 'gift' ? 'gift' : 'chat',
-                // Preserve gift-specific fields if present
-                gift_type: envelope.d.gift_type,
-                gift_amount: envelope.d.gift_amount,
-                sender_name: envelope.d.sender_name,
-                user_profiles: {
-                    username: envelope.d.user_name || 'Unknown',
-                    avatar_url: envelope.d.user_avatar || '',
-                    role: envelope.d.user_role,
-                    troll_role: envelope.d.user_troll_role,
-                    created_at: envelope.d.user_created_at,
-                    rgb_username_expires_at: envelope.d.user_rgb_expires_at,
-                    glowing_username_color: envelope.d.user_glowing_username_color
+                // Fetch user profile for the new message
+                const { data: profile } = await supabase
+                    .from('user_profiles')
+                    .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
+                    .eq('id', newMessage.user_id)
+                    .single();
+
+                const newMsg: Message = {
+                    ...newMessage,
+                    type: 'chat',
+                    user_profiles: profile
+                };
+
+                messageBufferRef.current.push(newMsg);
+
+                // Increment unread count if chat not focused and message from someone else
+                if (!isChatFocused && newMsg.user_id !== user?.id) {
+                    setUnreadCount(prev => prev + 1);
                 }
-            };
-
-            messageBufferRef.current.push(newMsg);
-            
-            // Increment unread count if chat not focused and message from someone else
-            if (!isChatFocused && newMsg.user_id !== user?.id) {
-                setUnreadCount(prev => prev + 1);
             }
-        })
+        )
         .subscribe();
 
     // Subscribe to room presence to show join/leave messages in chat
@@ -569,11 +547,10 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                         
                         // If not already parsed, try to parse from content
                         if (!msg.gift_type && msg.content) {
-                            const parsed = parseGiftMessage(msg.content, senderName);
+                            const parsed = parseGiftMessage(msg.content);
                             if (parsed) {
-                                giftType = parsed.giftType;
-                                giftAmount = parsed.amount;
-                                senderName = parsed.senderName;
+                                giftType = parsed.giftName;
+                                giftAmount = parsed.quantity;
                             }
                         }
                         

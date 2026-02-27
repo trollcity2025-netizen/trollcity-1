@@ -44,7 +44,7 @@ const GIFTS = [
 const MAX_POSTS = 100 // Memory cap for the wall feed
 
 export default function TrollCityWall() {
-  const { user, profile, isAdmin } = useAuthStore()
+  const { user, isAdmin } = useAuthStore()
   const navigate = useNavigate()
   const [posts, setPosts] = useState<WallPost[]>([])
   const postBufferRef = useRef<WallPost[]>([])
@@ -467,10 +467,7 @@ export default function TrollCityWall() {
         .delete()
         .eq('id', postId)
 
-      if (isAdmin) {
-        // Admins can delete any post without user_id check
-        query = query
-      } else {
+      if (!isAdmin) {
         // Only the post author can delete their own posts
         query = query.eq('user_id', user.id)
       }
@@ -491,42 +488,7 @@ export default function TrollCityWall() {
     }
   }
 
-  const handlePin = async (post: WallPost) => {
-    if (!user?.id) return
 
-    try {
-      const { data, error } = await supabase
-        .rpc('toggle_wall_post_pin', {
-          p_post_id: post.id,
-          p_user_id: user.id
-        })
-
-      if (error) throw error
-
-      const newPinnedStatus = data as boolean
-      
-      setPosts(prev => 
-        prev.map(p => 
-          p.id === post.id 
-            ? { ...p, is_pinned: newPinnedStatus } 
-            : p
-        ).sort((a, b) => {
-          // Re-sort: Pinned first, then by date
-          if (a.id === post.id) a.is_pinned = newPinnedStatus // Ensure current item has updated status for sort
-          
-          if (a.is_pinned === b.is_pinned) {
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          }
-          return (a.is_pinned ? -1 : 1)
-        })
-      )
-
-      toast.success(newPinnedStatus ? 'Post pinned' : 'Post unpinned')
-    } catch (err: any) {
-      console.error('Error toggling pin:', err)
-      toast.error('Failed to update pin status')
-    }
-  }
 
   const handleShare = (post: WallPost) => {
     const url = `${window.location.origin}/wall/${post.id}`

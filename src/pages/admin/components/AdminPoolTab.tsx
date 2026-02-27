@@ -122,7 +122,7 @@ export default function AdminPoolTab() {
       const second = buckets.find((b) => b.bucket_name !== first)?.bucket_name
       setMoveTarget(second || first)
     }
-  }, [buckets])
+  }, [buckets, moveSource, moveTarget])
 
   // Cashout State
   const [cashoutRequests, setCashoutRequests] = useState<CashoutRequest[]>([])

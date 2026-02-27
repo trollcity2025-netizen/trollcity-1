@@ -38,7 +38,8 @@ import {
   Mic,
   Globe,
   Lock,
-  Files
+  Files,
+  Gamepad2
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -93,7 +94,7 @@ export default function Sidebar() {
   const isSecretary = profile?.role === UserRole.SECRETARY || profile?.troll_role === UserRole.SECRETARY;
   const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
   const isOfficer = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.TROLL_OFFICER || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
-  const canSeeCourt = isOfficer || isSecretary;
+  const canSeeCourt = true; // Show court dockets for all users
   
   const needsLicense = useMemo(() => {
     if (!profile) return false
@@ -170,7 +171,7 @@ export default function Sidebar() {
     checkAccess()
   }, [profile, isOfficer, isAdmin, isSecretary])
 
-  const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court']
+  const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
   const socialPaths = ['/tcps', '/pool', '/universe-event']
   if (canSeeFamilyLounge) socialPaths.push('/family/lounge')
@@ -345,6 +346,15 @@ export default function Sidebar() {
                 collapsed={isSidebarCollapsed}
                 highlight={isUpdated('/universe-event')} onClick={() => markAsViewed('/universe-event')}
                 className="text-indigo-400 hover:text-indigo-300"
+              />
+              <SidebarItem 
+                icon={Gamepad2} 
+                label="Troll Games" 
+                to="/troll-games" 
+                active={isActive('/troll-games')} 
+                collapsed={isSidebarCollapsed}
+                highlight={isUpdated('/troll-games')} onClick={() => markAsViewed('/troll-games')}
+                className="text-green-400 hover:text-green-300"
               />
               {canSeeFamilyLounge && (
                 <SidebarItem 

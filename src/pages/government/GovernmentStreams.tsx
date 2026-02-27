@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
+import { normalizeTextArray } from '@/lib/courtUtils';
 import { 
   Users, 
   Radio, 
@@ -782,7 +783,7 @@ function SummonModal({ stream, onClose }: { stream: StreamRow; onClose: () => vo
       const { data, error } = await supabase.rpc('summon_user_to_court', {
         p_defendant_id: selectedUserId,
         p_reason: reason,
-        p_users_involved: `Government control stream ${stream.id}`,
+        p_users_involved: normalizeTextArray([`Government control stream ${stream.id}`]),
         p_docket_id: null
       });
 
