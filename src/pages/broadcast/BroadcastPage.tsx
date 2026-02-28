@@ -317,10 +317,10 @@ function BroadcastPage() {
       }
 
       setIsLoading(false)
-    }, [streamId, streamSlug, navigate, user?.id, stopLocalTracks]);
+    }
 
     fetchStream()
-  }, [streamId, navigate])
+  }, [streamId, navigate, user?.id, stopLocalTracks])
 
   useEffect(() => {
     if (!isHost || !stream?.user_id) return;

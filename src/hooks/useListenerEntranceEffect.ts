@@ -22,7 +22,7 @@ export function useListenerEntranceEffect({
   username?: string;
 }) {
   
-  const isConnected = true; // Temporarily set to true for refactoring, will be replaced with Mux logic
+  const isConnected = true;
   const location = useLocation();
 
   const isBroadcastPage =
@@ -69,7 +69,7 @@ export function useListenerEntranceEffect({
       console.error("Entrance effect error:", e);
       // keep it marked; requirement is “once and done”
     }
-  }, [isBroadcastPage, isConnected, streamId, userId, isHost, isGuest, canPublish]);
+  }, [isBroadcastPage, isConnected, streamId, userId]);
 
   useEffect(() => {
     if (!isBroadcastPage) return;

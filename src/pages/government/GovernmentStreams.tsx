@@ -41,7 +41,7 @@ interface StreamRow {
   current_viewers?: number;
   title: string;
   hls_url?: string;
-  mux_playback_id?: string; // Add mux_playback_id
+  agora_channel?: string; // Add agora_channel
   broadcaster: {
     username: string;
     avatar_url: string;
@@ -106,7 +106,7 @@ export default function GovernmentStreams() {
           room_name,
           category,
           start_time,
-          mux_playback_id,
+          agora_channel,
           broadcaster:user_profiles!broadcaster_id(username, avatar_url, broadcast_chat_disabled, broadcast_mic_muted)
         `)
         .order('created_at', { ascending: false }) // Show newest first
@@ -150,6 +150,15 @@ export default function GovernmentStreams() {
       }));
 
       setStreams(streamsWithOfficers);
+
+      // If a stream is currently selected, update its reference to the new object
+      // from the fetched data to prevent stale references and unnecessary re-renders
+      if (selectedStream) {
+        const updatedSelectedStream = streamsWithOfficers.find(s => s.id === selectedStream.id);
+        if (updatedSelectedStream && updatedSelectedStream !== selectedStream) {
+          setSelectedStream(updatedSelectedStream);
+        }
+      }
     } catch (error) {
       console.error('Error fetching streams:', error);
       toast.error('Failed to load streams');
