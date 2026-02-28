@@ -86,10 +86,25 @@ function BroadcastPage() {
     getGiftUserPositionsRef.current = getPositions;
   }, []);
 
-  // Stop local camera and mic tracks
-  const stopLocalTracks = useCallback(() => {
+  // Stop local camera and mic tracks and leave Agora channel (async)
+  const stopLocalTracks = useCallback(async () => {
     console.log('[BroadcastPage] stopLocalTracks called, localTracks:', localTracks ? 'exists' : 'null');
-    
+
+    // Attempt to unpublish before stopping/closing tracks
+    const client = agoraClientRef.current;
+    if (client && localTracks && localTracks.length > 0) {
+      try {
+        console.log('[BroadcastPage] Unpublishing local tracks before stop');
+        // Unpublish accepts array of tracks
+        // @ts-ignore - sdk typings may vary
+        await client.unpublish(localTracks).catch((e: any) => {
+          console.warn('[BroadcastPage] unpublish error:', e);
+        });
+      } catch (e) {
+        console.warn('[BroadcastPage] Error during unpublish:', e);
+      }
+    }
+
     // Stop any tracks that might be stored elsewhere
     if (localTracks) {
       console.log('[BroadcastPage] Stopping local tracks, count:', localTracks.length);
@@ -98,7 +113,7 @@ function BroadcastPage() {
           try {
             console.log('[BroadcastPage] Stopping track', index);
             track.stop();
-            track.close();
+            if (typeof track.close === 'function') track.close();
           } catch (e) {
             console.warn('[BroadcastPage] Error stopping track:', e);
           }
@@ -106,12 +121,15 @@ function BroadcastPage() {
       });
       setLocalTracks(null);
     }
-    
+
     // Also leave the Agora channel
-    const client = agoraClientRef.current;
     if (client) {
-      console.log('[BroadcastPage] Leaving Agora channel');
-      client.leave().catch(console.error);
+      try {
+        console.log('[BroadcastPage] Leaving Agora channel');
+        await client.leave();
+      } catch (leaveErr) {
+        console.warn('[BroadcastPage] Error leaving Agora channel:', leaveErr);
+      }
     }
   }, [localTracks]);
 
@@ -133,6 +151,44 @@ function BroadcastPage() {
     console.log('[BroadcastPage] Refreshed stream data, box_count:', data.box_count);
     setStream(data);
   }, [streamId, supabase]);
+
+  // Async variant to ensure we unpublish and leave Agora before proceeding
+  // Using ref to avoid dependency issues
+  const stopLocalTracksAsync = useCallback(async () => {
+    const client = agoraClientRef.current;
+    try {
+      if (client && localTracks && localTracks.length > 0) {
+        try {
+          // @ts-ignore
+          await client.unpublish(localTracks).catch((e: any) => console.warn('[stopLocalTracksAsync] unpublish error', e));
+        } catch (e) {
+          console.warn('[stopLocalTracksAsync] unpublish thrown', e);
+        }
+      }
+
+      if (localTracks) {
+        localTracks.forEach(track => {
+          try {
+            track.stop();
+            if (typeof track.close === 'function') track.close();
+          } catch (e) {
+            console.warn('[stopLocalTracksAsync] track stop error', e);
+          }
+        });
+        setLocalTracks(null);
+      }
+
+      if (client) {
+        try {
+          await client.leave();
+        } catch (e) {
+          console.warn('[stopLocalTracksAsync] leave error', e);
+        }
+      }
+    } catch (err) {
+      console.warn('[stopLocalTracksAsync] unexpected error', err);
+    }
+  }, []); // No dependencies - use ref for tracks
 
   // Pin product modal state
   const [isPinProductModalOpen, setIsPinProductModalOpen] = useState(false)
@@ -166,26 +222,50 @@ function BroadcastPage() {
 
   // Track if user just joined a seat (for triggering Agora init)
   const justJoinedSeatRef = useRef(false);
+  const previousUserSeatRef = useRef(userSeat);
 
   // Effect to handle Agora initialization when guest joins a seat
+  // Only trigger when userSeat goes from null to a value (new seat join)
   useEffect(() => {
-    // If user has a seat and just joined (wasn't there before), trigger Agora init
-    if (userSeat && justJoinedSeatRef.current) {
-      console.log('[BroadcastPage] Guest joined seat - resetting hasJoinedRef to allow Agora init');
+    const hadNoSeat = !previousUserSeatRef.current;
+    const hasSeatNow = !!userSeat;
+    
+    // Only trigger Agora init when user first gets a seat (not on initial load or seat changes)
+    if (hadNoSeat && hasSeatNow && justJoinedSeatRef.current) {
+      console.log('[BroadcastPage] Guest joined seat - allowing Agora init');
       justJoinedSeatRef.current = false;
-      hasJoinedRef.current = false;
-      
-      // Force re-render to trigger Agora init effect
-      setStream((prev: any) => prev ? { ...prev } : prev);
+      // Don't reset hasJoinedRef here - let the Agora init effect handle it naturally
+      // by using a separate trigger mechanism
     }
+    
+    previousUserSeatRef.current = userSeat;
   }, [userSeat]);
 
-  // Wrap joinSeat to track when user joins
+  // Handle guest joining - prevent page refresh and redirect to signup
+  const handleGuestJoinAttempt = useCallback(() => {
+    // If no user, redirect to signup (this prevents page refresh)
+    if (!user) {
+      // Use replace to avoid adding to history stack and prevent refresh behavior
+      navigate('/auth?mode=signup&redirect=' + encodeURIComponent(window.location.pathname), { replace: true });
+      return;
+    }
+    // If user exists but tries to join as guest, show message
+    toast.info('Please sign up or log in to join the stage');
+  }, [user, navigate]);
+
+  // Wrap joinSeat to track when user joins and handle guests properly
   const handleJoinSeat = useCallback(async (index: number, price: number) => {
     console.log('[BroadcastPage] handleJoinSeat called for seat', index, 'price:', price);
+    
+    // Check if user is logged in
+    if (!user) {
+      handleGuestJoinAttempt();
+      return;
+    }
+    
     justJoinedSeatRef.current = true;
     return joinSeat(index, price);
-  }, [joinSeat]);
+  }, [joinSeat, user, handleGuestJoinAttempt]);
 
   /** FETCH STREAM */
   useEffect(() => {
@@ -341,10 +421,11 @@ function BroadcastPage() {
           });
         }
         
-        // Stop polling if stream has ended
+        // Stop polling and navigate to summary if stream has ended
         if (data?.status === 'ended') {
-          console.log('[BroadcastPage] Stream ended, stopping poll');
+          console.log('[BroadcastPage] Stream ended, stopping poll and navigating to summary');
           clearInterval(pollInterval);
+          navigate(`/broadcast/summary/${streamId}`);
         }
       } catch (err) {
         console.warn('[BroadcastPage] Poll exception:', err);
@@ -355,7 +436,7 @@ function BroadcastPage() {
       console.log('[BroadcastPage] Stopping poll');
       clearInterval(pollInterval);
     };
-  }, [streamId, stream, isHost, muxPlaybackId, supabase]);
+  }, [streamId, stream, isHost, muxPlaybackId, supabase, navigate]);
 
   /** REALTIME STREAM UPDATES */
   useEffect(() => {
@@ -429,9 +510,11 @@ function BroadcastPage() {
             // Navigate to summary when stream ends - for ALL clients
             if (payload.new.status === 'ended') {
               console.log('[BroadcastPage] Stream ended, navigating to summary');
-              // Stop local camera and mic for broadcaster/guest
-              stopLocalTracks();
-              navigate(`/broadcast/summary/${streamId}`);
+              // Stop local camera and mic for broadcaster/guest - wrap in async IIFE
+              (async () => {
+                await stopLocalTracks();
+                navigate(`/broadcast/summary/${streamId}`);
+              })();
             }
           } catch (err) {
             console.error('[Realtime] Error processing stream update:', err);
@@ -460,7 +543,7 @@ function BroadcastPage() {
           }
         }
       )
-      // Listen for gift events
+      // Listen for gift events - this works for ALL users including broadcaster
       .on(
         'broadcast',
         { event: 'gift_sent' },
@@ -469,7 +552,11 @@ function BroadcastPage() {
             const giftData = payload.payload;
             console.log('[BroadcastPage] Gift received:', giftData);
             console.log('[BroadcastPage] Current user is host:', isHost);
+            console.log('[BroadcastPage] Receiver ID:', giftData.receiver_id);
+            console.log('[BroadcastPage] Current user ID:', user?.id);
             
+            // Always show gift animations - for viewers when they send gifts,
+            // and for broadcaster when they receive gifts
             const newGift: BroadcastGift = {
               id: giftData.id || `gift-${Date.now()}`,
               gift_id: giftData.gift_id,
@@ -1166,8 +1253,8 @@ function BroadcastPage() {
   };
 
   const handleStreamEnd = async () => {
-    // Stop camera and mic before leaving
-    stopLocalTracks();
+    // Stop camera and mic before leaving - await for instant disconnect
+    await stopLocalTracks();
     
     // Check if there's an active battle - if so, forfeit and credit opponent as winner
     if (stream?.battle_id && isHost) {
@@ -1286,50 +1373,55 @@ function BroadcastPage() {
 
         <div className="flex flex-1 overflow-hidden h-full">
 
-          <div className="flex-1 flex flex-col h-full">
+          {/* Main content area with proper constraints - grid takes available space but respects chat width */}
+          <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
 
             {/* VIEWER LOGIC - Use Agora to watch the broadcast */}
             {(!isHost && !userSeat) ? (
-              <BroadcastGrid
-                stream={stream}
-                seats={seats}
-                isHost={false}
-                onJoinSeat={categoryConfig.allowGuestBoxes ? (index) => handleJoinSeat(index, stream.seat_price) : undefined}
-                localTracks={[undefined, undefined]}
-                remoteUsers={remoteUsers}
-                localUserId={user?.id || ''}
-                userIdToAgoraUid={userIdToAgoraUid}
-                onGift={onGift}
-                onGiftAll={onGiftAll}
-                toggleCamera={() => {}}
-                toggleMicrophone={() => {}}
-                onGetUserPositions={handleGetUserPositions}
-                broadcasterProfile={broadcasterProfile}
-              />
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <BroadcastGrid
+                  stream={stream}
+                  seats={seats}
+                  isHost={false}
+                  onJoinSeat={categoryConfig.allowGuestBoxes ? (index) => handleJoinSeat(index, stream.seat_price) : undefined}
+                  localTracks={[undefined, undefined]}
+                  remoteUsers={remoteUsers}
+                  localUserId={user?.id || ''}
+                  userIdToAgoraUid={userIdToAgoraUid}
+                  onGift={onGift}
+                  onGiftAll={onGiftAll}
+                  toggleCamera={() => {}}
+                  toggleMicrophone={() => {}}
+                  onGetUserPositions={handleGetUserPositions}
+                  broadcasterProfile={broadcasterProfile}
+                />
+              </div>
             ) : (
               /* Host or stage participant - show BroadcastGrid with Agora */
-              <BroadcastGrid
-                stream={stream}
-                seats={seats}
-                onJoinSeat={(index) =>
-                  handleJoinSeat(index, stream.seat_price)
-                }
-                isHost={isHost}
-                localTracks={
-                  localTracks
-                    ? [localTracks[1], localTracks[0]]
-                    : [undefined, undefined]
-                }
-                remoteUsers={remoteUsers}
-                localUserId={user?.id}
-                userIdToAgoraUid={userIdToAgoraUid}
-                onGift={onGift}
-                onGiftAll={onGiftAll}
-                toggleCamera={toggleCamera}
-                toggleMicrophone={toggleMicrophone}
-                onGetUserPositions={handleGetUserPositions}
-                broadcasterProfile={broadcasterProfile}
-              />
+              <div className="flex-1 flex flex-col h-full">
+                <BroadcastGrid
+                  stream={stream}
+                  seats={seats}
+                  onJoinSeat={(index) =>
+                    handleJoinSeat(index, stream.seat_price)
+                  }
+                  isHost={isHost}
+                  localTracks={
+                    localTracks
+                      ? [localTracks[1], localTracks[0]]
+                      : [undefined, undefined]
+                  }
+                  remoteUsers={remoteUsers}
+                  localUserId={user?.id}
+                  userIdToAgoraUid={userIdToAgoraUid}
+                  onGift={onGift}
+                  onGiftAll={onGiftAll}
+                  toggleCamera={toggleCamera}
+                  toggleMicrophone={toggleMicrophone}
+                  onGetUserPositions={handleGetUserPositions}
+                  broadcasterProfile={broadcasterProfile}
+                />
+              </div>
             )}
 
           {isBattleMode && <BattleControls currentStream={stream} />}
@@ -1355,7 +1447,7 @@ function BroadcastPage() {
           </div>
 
           {isChatOpen && (
-            <div className="w-80 flex-shrink-0 h-full">
+            <div className="w-80 flex-shrink-0 h-full overflow-hidden border-l border-white/10">
               <BroadcastChat
                 streamId={streamId!}
                 hostId={stream.user_id}
@@ -1396,7 +1488,7 @@ function BroadcastPage() {
         }}
       />
 
-      {/* Gift Animation Overlay */}
+      {/* Gift Animation Overlay - always rendered to receive gift events */}
       <GiftAnimationOverlay
         gifts={recentGifts}
         userPositions={giftUserPositions}

@@ -180,9 +180,32 @@ async function request<T = any>(
     // For signup endpoint, use anon key as auth token since user doesn't exist yet
     // For other endpoints, add user auth token if available
     if (isSignupEndpoint) {
+      // Validate that anon key exists before using it for signup auth
+      if (!supabaseAnonKey) {
+        console.error('[API] VITE_SUPABASE_ANON_KEY is not configured');
+        return {
+          success: false,
+          error: 'Authentication configuration error. Please contact support.',
+          debug: {
+            requestId,
+            message: 'VITE_SUPABASE_ANON_KEY is missing'
+          }
+        };
+      }
       requestHeaders['Authorization'] = `Bearer ${supabaseAnonKey}`;
     } else if (token) {
       requestHeaders['Authorization'] = `Bearer ${token}`;
+    } else if (!isSignupEndpoint) {
+      // Non-signup requests without a token should fail gracefully
+      console.warn(`[API ${requestId}] No auth token available for ${endpoint}`);
+      return {
+        success: false,
+        error: 'Authentication required. Please log in again.',
+        debug: {
+          requestId,
+          endpoint
+        }
+      };
     }
 
     if (isBroadcastEndpoint) {

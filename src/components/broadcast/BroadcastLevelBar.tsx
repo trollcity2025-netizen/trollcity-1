@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+vimport React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
 import { Trophy } from 'lucide-react';
@@ -22,23 +22,30 @@ export default function BroadcastLevelBar({ broadcasterId, className }: Broadcas
         .eq('user_id', broadcasterId)
         .single();
       
-      if (data) setStats(data);
+      if (data) {
+        console.log('[BroadcastLevelBar] Fetched stats:', data);
+        setStats(data);
+      } else {
+        // Initialize with 0 if no stats exist
+        setStats({ total_gifts_all_time: 0 });
+      }
     };
 
     fetchStats();
 
-    // Subscribe to changes
+    // Subscribe to changes - listen for ANY update to broadcaster_stats
     const channel = supabase
       .channel(`broadcast_level_${broadcasterId}`)
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'broadcaster_stats',
           filter: `user_id=eq.${broadcasterId}`
         },
         (payload) => {
+          console.log('[BroadcastLevelBar] Received update:', payload);
           if (payload.new) {
             setStats(payload.new as any);
           }

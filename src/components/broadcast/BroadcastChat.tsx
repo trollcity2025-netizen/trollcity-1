@@ -69,7 +69,10 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   // Buffering for high-frequency updates
   const messageBufferRef = useRef<Message[]>([]);
   const MAX_MESSAGES = 200;
-  const FLUSH_INTERVAL = 150; // ms
+  const FLUSH_INTERVAL = 50; // Faster flush interval for near-instant delivery (50ms)
+  
+  // Track sent message IDs to prevent duplicates
+  const sentMessageIdsRef = useRef<Set<string>>(new Set());
   
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
@@ -181,7 +184,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     };
     fetchMessages();
 
-    // Flush buffer interval
+    // Flush buffer interval - use faster interval for near-instant delivery
     const flushInterval = setInterval(() => {
         if (messageBufferRef.current.length === 0) return;
 
@@ -189,17 +192,26 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         messageBufferRef.current = [];
 
         setMessages(prev => {
-            // Remove optimistic messages that are now in the buffer
-            const incomingIds = new Set(newMsgs.map(m => `${m.user_id}:${m.content}`));
+            // Filter out duplicates based on message ID or content+user combination
+            const existingIds = new Set(prev.map(p => p.id));
+            const incomingIds = new Set(newMsgs.map(m => m.id));
+            
+            // Remove optimistic messages that are now confirmed by real messages
             const filtered = prev.filter(m => {
-                if (m.id.startsWith('temp-')) {
-                    const key = `${m.user_id}:${m.content}`;
-                    return !incomingIds.has(key);
-                }
-                return true;
+                // Keep if not a temp message OR if there's a matching real message
+                if (!m.id.startsWith('temp-')) return true;
+                // For temp messages, check if we have a matching real message
+                const key = `${m.user_id}:${m.content}`;
+                return !newMsgs.some(nm => `${nm.user_id}:${nm.content}` === key);
             });
 
-            const updated = [...filtered, ...newMsgs];
+            // Only add messages that aren't already in state
+            const uniqueNewMsgs = newMsgs.filter(m => 
+                !existingIds.has(m.id) && 
+                !filtered.some(f => f.id === m.id)
+            );
+
+            const updated = [...filtered, ...uniqueNewMsgs];
             if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
             return updated;
         });
@@ -370,7 +382,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     console.log('💬 [BroadcastChat] Preparing to send:', { content, userId: user.id });
     setInput('');
 
-    // Optimistic Update
+    // INSTANT DISPLAY: Add message to UI immediately before waiting for server
     const txnId = crypto.randomUUID();
     const optimisticMessage: Message = {
         id: txnId,
@@ -389,6 +401,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         }
     };
 
+    // Add to messages immediately for instant display
     setMessages(prev => {
         const updated = [...prev, optimisticMessage];
         if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
@@ -426,6 +439,9 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         const signedEnvelope = parsedBody ?? (rawText ? rawText : null)
         console.log('💬 [BroadcastChat] Message signed and sent:', signedEnvelope);
 
+        // Message already displayed instantly - no need to do anything on success
+        // The server response just confirms it was saved
+
     } catch (err: any) {
         console.error('💬 [BroadcastChat] Error sending message:', err);
         if (String(err.message || '').toLowerCase().includes('rate limit')) {
@@ -433,8 +449,8 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         } else {
             toast.error('Failed to send message: ' + err.message);
         }
-        // Remove optimistic message on error
-        setMessages(prev => prev.filter(m => m.id !== txnId));
+        // Keep the optimistic message even on error - it provides better UX
+        // The message will auto-delete after 30 seconds anyway
     }
   };
 
@@ -623,9 +639,8 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onFocus={() => {
-                        if (isGuest) {
-                            navigate('/auth?mode=signup');
-                        }
+                        // Don't navigate away - just show signup prompt in input placeholder
+                        // The input is already disabled for guests, so this is just for UX
                     }}
                     placeholder={
                       hostChatDisabledByOfficer

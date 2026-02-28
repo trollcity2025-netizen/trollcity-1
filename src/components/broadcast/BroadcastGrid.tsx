@@ -39,7 +39,7 @@ interface BroadcastGridProps {
   onGetUserPositions?: (getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => void;
 }
 
-const AgoraVideoPlayer = memo(({ videoTrack }: { videoTrack: ILocalVideoTrack | IRemoteVideoTrack }) => {
+const AgoraVideoPlayer = memo(({ videoTrack, isLocal = false }: { videoTrack: ILocalVideoTrack | IRemoteVideoTrack; isLocal?: boolean }) => {
   const videoRef = useRef<HTMLDivElement>(null);
   const isPlayingRef = useRef(false);
 
@@ -75,6 +75,7 @@ const AgoraVideoPlayer = memo(({ videoTrack }: { videoTrack: ILocalVideoTrack | 
 
   // Use absolute positioning to fill parent container completely
   // This ensures video renders even when parent has flex/grid layout
+  // Apply mirror transform for local video (self-view) to make it natural
   return (
     <div 
       ref={videoRef} 
@@ -84,7 +85,9 @@ const AgoraVideoPlayer = memo(({ videoTrack }: { videoTrack: ILocalVideoTrack | 
         top: 0,
         left: 0,
         right: 0,
-        bottom: 0
+        bottom: 0,
+        // Mirror local video horizontally for natural self-view
+        transform: isLocal ? 'scaleX(-1)' : undefined
       }}
     />
   );
@@ -213,7 +216,7 @@ export default function BroadcastGrid({
       }
     }, 100);
     return () => clearTimeout(timeoutId);
-  }, [seats, stream.user_id]);
+  }, [seats, stream.user_id, stream.box_count]);
 
   // Deduplicate user IDs (prevents redundant attribute lookups)
   const userIds = useMemo(() => {
@@ -417,6 +420,7 @@ export default function BroadcastGrid({
             {videoTrack && isCamOn ? (
               <AgoraVideoPlayer
                 videoTrack={videoTrack}
+                isLocal={isLocal}
               />
             ) : userId && participant ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90">

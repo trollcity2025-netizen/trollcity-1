@@ -184,8 +184,9 @@ export function useGiftSystem(
           console.warn('[GiftSystem] Could not send chat message:', chatErr);
         }
         
-        // Refresh profile to update balance (Optimistic)
-        refreshProfile(); 
+        // Refresh profile to update balance (Optimistic) - but don't trigger full re-render
+        // Just update the local balance directly to avoid disrupting Agora connection
+        // refreshProfile(); 
         
         // XP is now granted server-side within send_premium_gift to prevent farming exploits
         // Client-side XP calls removed.

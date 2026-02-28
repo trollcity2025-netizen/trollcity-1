@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TrollmersBattleControls from './TrollmersBattleControls';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
-import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package } from 'lucide-react';
+import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
+import { getCategoryConfig } from '../../config/broadcastCategories';
 import BannedUsersList from './BannedUsersList';
 import ThemeSelector from './ThemeSelector';
 import { useAuthStore } from '../../lib/store';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
-import { getCategoryConfig } from '../../config/broadcastCategories';
 
 interface BroadcastControlsProps {
   stream: Stream;
@@ -541,8 +542,19 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                             Visuals
                          </span>
                          <button onClick={() => toggleStreamRgb()} className={cn("p-1 px-2 rounded-full", stream.has_rgb_effect ? "bg-purple-500" : "bg-zinc-700")}>
-              <div className={cn("w-4 h-4 rounded-full", stream.has_rgb_effect ? "bg-white" : "bg-zinc-500")}></div>
-            </button>
+           <div className={cn("w-4 h-4 rounded-full", stream.has_rgb_effect ? "bg-white" : "bg-zinc-500")}></div>
+         </button>
+                    </div>
+                    )}
+
+                    {/* Trollmers Battle Controls - Only for trollmers head to head category */}
+                    {stream.category === 'trollmers head to head' && (
+                    <div className="bg-black/40 rounded-xl p-3 border border-white/5">
+                         <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
+                            <Swords size={16} className="text-amber-500" />
+                            Trollmers Battles
+                         </span>
+                         <TrollmersBattleControls currentStream={stream} />
                     </div>
                     )}
                 </div>

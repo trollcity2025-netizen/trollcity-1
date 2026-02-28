@@ -406,6 +406,15 @@ serve(async (req) => {
       )
     );
 
+    // Also publish gift events to the main stream channel for gift animations
+    if (type === "gift") {
+      const streamChannel = `stream:${stream_id}`;
+      await Promise.allSettled(
+        adapters.map((a) => a.publish(streamChannel, "gift_sent", envelope))
+      );
+      console.log(`[GIFT] Also published to stream channel: ${streamChannel}`);
+    }
+
     // 9. Insert message into database for persistence and visibility to other users
     const { error: insertError } = await supabase
       .from("stream_messages")

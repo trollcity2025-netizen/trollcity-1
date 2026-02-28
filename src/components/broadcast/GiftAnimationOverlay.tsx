@@ -13,8 +13,9 @@ interface GiftAnimationOverlayProps {
   getUserPositions?: () => Record<string, { top: number; left: number; width: number; height: number }>;
 }
 
-// Configuration - only show one gift at a time, new gifts replace old ones
+// Configuration - show multiple gifts simultaneously
 const GIFT_DISPLAY_DURATION = 3000; // 3 seconds for all gifts
+const MAX_VISIBLE_GIFTS = 5; // Maximum gifts shown at once
 
 // Helper function to get proper gift name and icon
 const getGiftDetails = (gift: BroadcastGift): { name: string; icon: string; cost: number } => {
@@ -132,9 +133,9 @@ export default function GiftAnimationOverlay({
         console.log('[GiftOverlay] Gift processed:', gift.gift_name, 'tier:', tier, 'cost:', details.cost, 'sender:', gift.sender_name);
       });
       
-      // Keep only the latest gift (new replaces old)
+      // Keep all new gifts, limit to MAX_VISIBLE_GIFTS
       const combined = [...prev, ...newGifts];
-      return combined.slice(-1);
+      return combined.slice(-MAX_VISIBLE_GIFTS);
     });
   }, [gifts]);
   
@@ -187,6 +188,12 @@ export default function GiftAnimationOverlay({
   // Always use document.body for portal
   const target = document.body;
   
+  // Get user positions from callback if available
+  const userPositionsFromCallback = getUserPositions ? getUserPositions() : {};
+  
+  // Merge user positions from props and callback (callback takes precedence)
+  const mergedUserPositions = { ...userPositions, ...userPositionsFromCallback };
+  
   return createPortal(
     <div 
       className="fixed inset-0 pointer-events-none z-[99999]"
@@ -198,16 +205,31 @@ export default function GiftAnimationOverlay({
           const tier = getGiftTier(details.cost);
           const combo = processCombo(gift.sender_id);
           
+          // Get user position for this gift
+          const userPosition = mergedUserPositions[gift.sender_id];
+          const positionStyle = userPosition 
+            ? {
+                position: 'absolute',
+                top: `${userPosition.top + userPosition.height / 2}px`,
+                left: `${userPosition.left + userPosition.width / 2}px`,
+                transform: 'translate(-50%, -50%)'
+              }
+            : { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+          
           return (
-            <GiftAnimation
+            <motion.div
               key={gift.id}
-              gift={gift}
-              details={details}
-              tier={tier}
-              combo={combo}
-              index={index}
-              onDismiss={() => dismissGift(gift.id)}
-            />
+              style={positionStyle}
+            >
+              <GiftAnimation
+                gift={gift}
+                details={details}
+                tier={tier}
+                combo={combo}
+                index={index}
+                onDismiss={() => dismissGift(gift.id)}
+              />
+            </motion.div>
           );
         })}
       </AnimatePresence>

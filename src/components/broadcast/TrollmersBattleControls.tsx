@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
-import { Swords, Loader2, SkipForward, Trophy, Crown, Shield, LightningBolt } from 'lucide-react';
+import { Swords, Loader2, SkipForward, Trophy, Crown, Shield, Users, Zap, Fire, Heart, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
 import { getCategoryConfig } from '../../config/broadcastCategories';
@@ -11,15 +11,16 @@ interface BattleControlsProps {
   onBattleAccepted?: () => void;
 }
 
-export default function BattleControls({ currentStream, onBattleAccepted }: BattleControlsProps) {
+export default function TrollmersBattleControls({ currentStream, onBattleAccepted }: BattleControlsProps) {
   const [loading, setLoading] = useState(false);
   const [pendingBattle, setPendingBattle] = useState<any>(null);
   const [matchStatus, setMatchStatus] = useState<string>(''); // 'searching', 'found', 'none'
-    const [outgoingBattleId, setOutgoingBattleId] = useState<string | null>(null);
-    const [skipLoading, setSkipLoading] = useState(false);
-    const [waitingForAccept, setWaitingForAccept] = useState(false);
+  const [outgoingBattleId, setOutgoingBattleId] = useState<string | null>(null);
+  const [skipLoading, setSkipLoading] = useState(false);
+  const [waitingForAccept, setWaitingForAccept] = useState(false);
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [trollmersStats, setTrollmersStats] = useState<any>(null);
 
   // Poll for pending challenges
   useEffect(() => {
@@ -38,15 +39,25 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
     const fetchLeaderboard = async () => {
         const { data } = await supabase
             .from('user_profiles')
-            .select('id, username, battle_wins, created_at')
+            .select('id, username, battle_wins, created_at, troll_role')
             .order('battle_wins', { ascending: false })
             .limit(5);
         setLeaderboard(data || []);
     };
 
+    const fetchTrollmersStats = async () => {
+      const { data } = await supabase
+        .from('trollmers_stats')
+        .select('*')
+        .eq('stream_id', currentStream.id)
+        .maybeSingle();
+      setTrollmersStats(data || null);
+    };
+
     const interval = setInterval(fetchPending, 3000);
     fetchPending();
     fetchLeaderboard();
+    fetchTrollmersStats();
 
     return () => clearInterval(interval);
   }, [currentStream.id]);
@@ -218,11 +229,43 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
     }
   };
 
+  // Enhanced trollmers-specific features
+  const handleTrollmersSpecial = async () => {
+    if (!trollmersStats) return;
+    
+    // Trollmers special abilities
+    if (trollmersStats.special_ability_cooldown > Date.now()) {
+      toast.error(`Special ability on cooldown! Available in ${Math.ceil((trollmersStats.special_ability_cooldown - Date.now()) / 1000)}s`);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('activate_trollmers_ability', {
+        p_stream_id: currentStream.id,
+        p_ability_type: 'chaos_field'
+      });
+
+      if (error) {
+        toast.error(error.message || "Failed to activate ability");
+        return;
+      }
+
+      toast.success("Chaos Field Activated! Disrupting opponent's controls...");
+      
+      // Update stats
+      setTrollmersStats(prev => prev ? { ...prev, special_ability_cooldown: Date.now() + 30000 } : null);
+    } catch (e: any) {
+      console.error("Trollmers ability error:", e);
+      toast.error("Failed to activate ability");
+    }
+  };
+
   return (
     <div className="bg-zinc-900/90 border border-white/10 rounded-xl p-4 mt-4 backdrop-blur-sm">
         <div className="flex items-center gap-2 mb-4 text-amber-500">
             <Swords size={20} />
-            <h3 className="font-bold text-lg">Troll Battles</h3>
+            <h3 className="font-bold text-lg">Trollmers Head to Head</h3>
+            <Crown size={16} className="text-yellow-400 animate-pulse" />
         </div>
 
         {pendingBattle ? (
@@ -239,7 +282,7 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
         ) : (
             <div className="space-y-4">
                 <p className="text-sm text-zinc-400">
-                    Find a worthy opponent! The system will match you with a random broadcaster you haven&apos;t battled yet.
+                    Find a worthy opponent! The system will match you with a random broadcaster you haven't battled yet.
                 </p>
                 
                 <button 
@@ -306,6 +349,31 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
                     </button>
                 )}
 
+                {/* Trollmers Special Abilities */}
+                {trollmersStats && (
+                  <div className="mt-4 border-t border-white/10 pt-3">
+                    <h4 className="text-zinc-400 font-bold text-xs uppercase mb-2 flex items-center gap-2">
+                      <Zap size={12} className="text-amber-500" />
+                      Trollmers Abilities
+                    </h4>
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleTrollmersSpecial}
+                        disabled={loading || (trollmersStats.special_ability_cooldown > Date.now())}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-2 rounded-lg transition disabled:opacity-50"
+                      >
+                        <Zap size={16} className="mr-2" />
+                        Activate Chaos Field
+                        {trollmersStats.special_ability_cooldown > Date.now() && (
+                          <span className="ml-2 text-xs bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            {Math.ceil((trollmersStats.special_ability_cooldown - Date.now()) / 1000)}s
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Leaderboard */}
                 {leaderboard.length > 0 && (
                     <div className="mt-6 border-t border-white/10 pt-4">
@@ -332,6 +400,11 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
                                             }}
                                             className="text-zinc-300 font-medium truncate max-w-[120px]"
                                         />
+                                        {p.troll_role && (
+                                          <span className="ml-1 text-xs bg-purple-500/20 px-1 py-0.5 rounded">
+                                            {p.troll_role}
+                                          </span>
+                                        )}
                                     </div>
                                     <span className="text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                                         {p.battle_wins} Wins
