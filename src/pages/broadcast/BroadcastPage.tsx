@@ -39,8 +39,9 @@ import AgoraRTC, {
 
 function BroadcastPage() {
   /** ROUTER PARAM FIX */
-  const params = useParams()
-  const streamId = params.id || params.streamId
+  const params = useParams<{ id: string; slug?: string }>()
+  const streamId = params.id
+  const streamSlug = params.slug
 
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
@@ -275,52 +276,66 @@ function BroadcastPage() {
       return
     }
 
-    const fetchStream = async () => {
+    const fetchStream = useCallback(async () => {
+      if (!streamId) {
+        setError('Stream ID is missing.');
+        toast.error('Stream ID is missing.');
+        navigate('/');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('streams')
-        .select('*')
+        .select('*, stream_slug')
         .eq('id', streamId)
-        .maybeSingle()
+        .maybeSingle();
 
       if (error || !data) {
-        setError('Stream not found.')
-        toast.error('Stream not found.')
-        navigate('/')
-        return
+        setError('Stream not found.');
+        toast.error('Stream not found.');
+        navigate('/');
+        return;
+      }
+
+      // If a slug is provided in the URL and it doesn't match the fetched slug, redirect to canonical URL
+      if (streamSlug && data.stream_slug && streamSlug !== data.stream_slug) {
+        console.log('[BroadcastPage] Slug mismatch, redirecting to canonical URL');
+        navigate(`/broadcast/${data.id}/${data.stream_slug}`, { replace: true });
+        return;
       }
 
       console.log('[BroadcastPage] Fetched stream, initial box_count:', data.box_count);
-      setStream(data)
+      setStream(data);
 
       // Fetch broadcaster profile
       const { data: profileData } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', data.user_id)
-        .single()
+        .single();
       
       if (profileData) {
-        setBroadcasterProfile(profileData)
+        setBroadcasterProfile(profileData);
         if (data.user_id === user?.id) {
-          setHostMicMutedByOfficer(!!profileData.broadcast_mic_muted)
+          setHostMicMutedByOfficer(!!profileData.broadcast_mic_muted);
         }
       }
 
       // Set initial mux playback id if available
       if (data.mux_playback_id) {
-        setMuxPlaybackId(data.mux_playback_id)
+        setMuxPlaybackId(data.mux_playback_id);
       }
 
       if (data.status === 'ended') {
         stopLocalTracks();
-        navigate(`/broadcast/summary/${streamId}`)
+        navigate(`/broadcast/summary/${streamId}`);
       }
 
-      setIsLoading(false)
-    }
+      setIsLoading(false);
+    }, [streamId, streamSlug, navigate, user?.id, stopLocalTracks]);
 
     fetchStream()
-  }, [streamId, navigate])
+  }, [streamId, streamSlug, navigate, user?.id, stopLocalTracks])
 
   useEffect(() => {
     if (!isHost || !stream?.user_id) return;
