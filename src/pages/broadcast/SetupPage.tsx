@@ -7,7 +7,6 @@ import AgoraRTC from 'agora-rtc-sdk-ng';
 import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Monitor, MonitorOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateUUID } from '../../lib/uuid';
-import { slugify } from '../../lib/utils/slugify';
 import {
   BROADCAST_CATEGORIES,
   getCategoryConfig,
@@ -331,15 +330,12 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      const streamSlug = slugify(title);
-
       const { data, error } = await supabase
         .from('streams')
         .insert({
           id: streamId,
           user_id: user.id,
           title,
-          stream_slug: streamSlug,
           category,
           stream_kind: category === 'trollmers' ? 'trollmers' : 'regular',
           camera_ready: isVideoEnabled,
@@ -476,7 +472,7 @@ export default function SetupPage() {
         .eq('id', streamId);
       
       // Navigate to broadcast page
-      navigate(`/broadcast/${data.id}/${streamSlug}`);
+      navigate(`/broadcast/${data.id}`);
 
       supabase.from('global_events').insert([
         { title: `${profile.username} just went live!`, icon: 'live', priority: 2 },

@@ -1053,7 +1053,7 @@ function AppContent() {
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<LandingHome />} />
                   <Route path="/broadcast/setup" element={<SetupPage />} />
-                  <Route path="/broadcast/:id/:slug?" element={<BroadcastPage />} />
+                  <Route path="/broadcast/:id" element={<BroadcastPage />} />
                   <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
                   <Route path="/broadcast/summary/:streamId" element={<StreamSummary />} />
                   
