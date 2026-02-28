@@ -286,12 +286,7 @@ export default function SetupPage() {
   };
 
   const handleStartStream = async () => {
-    // Check if user is admin or lead_troll_officer - only they can start broadcasts
-    const allowedBroadcastRoles = ['admin', 'lead_troll_officer'];
-    if (!profile?.role || !allowedBroadcastRoles.includes(profile.role)) {
-      toast.error('Only admins and lead troll officers can start broadcasts');
-      return;
-    }
+
 
     if (!title.trim()) {
       toast.error('Please enter a stream title');
