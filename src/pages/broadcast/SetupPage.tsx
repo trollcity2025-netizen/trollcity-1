@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Monitor, MonitorOff } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Monitor, MonitorOff, Gamepad2, Camera } from 'lucide-react';
+import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
 import { toast } from 'sonner';
 import { generateUUID } from '../../lib/uuid';
 import {
@@ -78,6 +79,11 @@ export default function SetupPage() {
   const [hasRearCamera, setHasRearCamera] = useState(false); // New state for rear camera detection
   const [followerCount, setFollowerCount] = useState<number>(0);
 
+  // Stream mode for gaming category (camera vs screen share)
+  const [streamMode, setStreamMode] = useState<StreamMode>('camera');
+  const screenShare = useScreenShare();
+  const [screenTrack, setScreenTrack] = useState<any>(null);
+
   // Permission state - track if camera/mic permissions need to be requested
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
@@ -90,8 +96,14 @@ export default function SetupPage() {
       // For gaming, we use Agora RTMP - show the OBS panel
       // The stream key will be the channel/room ID when they start streaming
       setShowOBSPanel(true);
+      // Auto-set to screen mode for gaming if supported
+      if (canScreenShare()) {
+        setStreamMode('screen');
+      }
     } else {
       setShowOBSPanel(false);
+      // Reset to camera mode for other categories
+      setStreamMode('camera');
     }
   }, [category]);
 
@@ -379,6 +391,34 @@ export default function SetupPage() {
     setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   };
 
+  // Toggle screen sharing for gaming mode
+  const toggleScreenShare = async () => {
+    if (streamMode === 'screen') {
+      // Switch back to camera mode
+      screenShare.stopScreenShare();
+      setScreenTrack(null);
+      setStreamMode('camera');
+      toast.info('Switched to camera mode');
+    } else {
+      // Switch to screen share mode
+      const track = await screenShare.startScreenShare();
+      if (track) {
+        setScreenTrack(track);
+        setStreamMode('screen');
+        toast.success('Screen sharing started!');
+        
+        // Handle when user stops sharing via browser UI
+        screenShare.onScreenShareEnded(() => {
+          setScreenTrack(null);
+          setStreamMode('camera');
+          toast.info('Screen sharing ended');
+        });
+      } else {
+        toast.error(screenShare.error || 'Failed to start screen sharing');
+      }
+    }
+  };
+
   const handleStartStream = async () => {
 
 
@@ -514,27 +554,47 @@ export default function SetupPage() {
       let localStream = PreflightStore.getStream();
       console.log('[handleStartStream] Stream from PreflightStore:', localStream ? 'available' : 'not available');
 
-      // Fallback: If no stream from PreflightStore, try to acquire it directly
-      if (!localStream) {
-        toast.info('Attempting to re-acquire media stream...');
-        localStream = await acquireMediaStream(facingMode, isVideoEnabled);
-        console.log('[handleStartStream] Stream after fallback acquisition:', localStream ? 'available' : 'not available');
+      let audioTrack: any = null;
+      let videoTrack: any = null;
+
+      // Check if we're in screen share mode for gaming
+      if (category === 'gaming' && streamMode === 'screen' && screenTrack) {
+        // Use screen share track
+        videoTrack = screenTrack;
+        
+        // Still need audio from microphone
+        if (!localStream) {
+          localStream = await acquireMediaStream(facingMode, false); // Audio only
+        }
+        const baseAudio = localStream?.getAudioTracks()[0] || null;
+        audioTrack = baseAudio
+          ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
+          : null;
+          
+        console.log('[handleStartStream] Using screen share track for gaming');
+      } else {
+        // Fallback: If no stream from PreflightStore, try to acquire it directly
+        if (!localStream) {
+          toast.info('Attempting to re-acquire media stream...');
+          localStream = await acquireMediaStream(facingMode, isVideoEnabled);
+          console.log('[handleStartStream] Stream after fallback acquisition:', localStream ? 'available' : 'not available');
+        }
+
+        if (!localStream) {
+          throw new Error('Media stream not available. Please ensure camera and microphone permissions are granted.');
+        }
+        
+        const baseAudio = localStream?.getAudioTracks()[0] || null;
+        const baseVideo = isVideoEnabled ? (localStream?.getVideoTracks()[0] || null) : null;
+
+        audioTrack = baseAudio
+          ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
+          : null;
+
+        videoTrack = baseVideo
+          ? await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: baseVideo })
+          : null;
       }
-
-      if (!localStream) {
-        throw new Error('Media stream not available. Please ensure camera and microphone permissions are granted.');
-      }
-      
-      const baseAudio = localStream?.getAudioTracks()[0] || null;
-      const baseVideo = isVideoEnabled ? (localStream?.getVideoTracks()[0] || null) : null;
-
-      const audioTrack = baseAudio
-        ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
-        : null;
-
-      const videoTrack = baseVideo
-        ? await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: baseVideo })
-        : null;
 
 
 
@@ -591,11 +651,66 @@ export default function SetupPage() {
     const agoraRTMPUrl = 'rtmp://rtmp.agora.io/live';
     const agoraStreamKey = streamId; // The stream/room ID is used as the channel name
     
+    // Mobile fallback - phones often cannot screen share
+    if (!screenShare.isSupported) {
+      return (
+        <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2 text-amber-400">
+            <Monitor size={18} />
+            <span className="font-semibold">🎮 Gaming Mode</span>
+          </div>
+          
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+            <p className="text-xs text-amber-300">
+              📱 Screen sharing is not supported on this device/browser.
+              You can still stream using your camera.
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStreamMode('camera')}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${streamMode === 'camera' ? 'bg-amber-500 text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            >
+              <Camera size={16} className="inline mr-2" />
+              Camera
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div className="bg-slate-950/80 border border-purple-500/30 rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-2 text-purple-400">
           <Monitor size={18} />
           <span className="font-semibold">🎮 Stream Your Game</span>
+        </div>
+        
+        {/* Mode Toggle */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setStreamMode('camera')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${streamMode === 'camera' ? 'bg-purple-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+          >
+            <Camera size={16} className="inline mr-2" />
+            Camera
+          </button>
+          <button
+            onClick={() => {
+              if (streamMode !== 'screen') {
+                toggleScreenShare();
+              } else {
+                setStreamMode('camera');
+                screenShare.stopScreenShare();
+                setScreenTrack(null);
+              }
+            }}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${streamMode === 'screen' ? 'bg-purple-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+          >
+            <Gamepad2 size={16} className="inline mr-2" />
+            Screen
+          </button>
         </div>
         
         <div className="space-y-3 text-sm">
@@ -859,7 +974,7 @@ export default function SetupPage() {
               </button>
               
               {hasMultipleCameras && canUseFrontCamera && (
-                  <button 
+                  <button
                     onClick={flipCamera}
                     className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                     title="Flip Camera"
@@ -868,7 +983,16 @@ export default function SetupPage() {
                   </button>
               )}
               
-
+              {/* Screen Share Button for Gaming Category */}
+              {category === 'gaming' && screenShare.isSupported && (
+                <button
+                  onClick={toggleScreenShare}
+                  className={`p-3 rounded-full transition-colors ${streamMode === 'screen' ? 'bg-purple-500/80 hover:bg-purple-600/80' : 'bg-white/10 hover:bg-white/20'}`}
+                  title={streamMode === 'screen' ? 'Stop Screen Share' : 'Share Screen'}
+                >
+                  {streamMode === 'screen' ? <Monitor size={20} /> : <Gamepad2 size={20} />}
+                </button>
+              )}
               
               {/* Show warning if front camera not allowed */}
               {shouldForceRearCamera && (
