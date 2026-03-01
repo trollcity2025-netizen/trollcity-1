@@ -35,13 +35,46 @@ interface BroadcastControlsProps {
   toggleMicrophone: () => void;
   onPinProduct?: () => void;
   onRgbToggle?: (enabled: boolean) => void;
+  // New props for UI state tracking
+  isMicOn?: boolean;
+  isCamOn?: boolean;
+  // Box count from parent for instant sync
+  boxCount?: number;
+  setBoxCount?: (count: number) => void;
 }
 
-export default function BroadcastControls({ stream, isHost, isModerator = false, isOnStage, chatOpen, toggleChat, onGiftHost, onLeave, onShare, requiredBoxes = 1, onBoxCountUpdate, onStreamEnd, handleLike, liveViewerCount, localTracks, toggleCamera, toggleMicrophone, onPinProduct, onRgbToggle }: BroadcastControlsProps) {
+export default function BroadcastControls({
+  stream,
+  isHost,
+  isModerator = false,
+  isOnStage,
+  chatOpen,
+  toggleChat,
+  onGiftHost,
+  onLeave,
+  onShare,
+  requiredBoxes = 1,
+  onBoxCountUpdate,
+  onStreamEnd,
+  handleLike,
+  toggleBattleMode,
+  liveViewerCount,
+  localTracks,
+  toggleCamera,
+  toggleMicrophone,
+  onPinProduct,
+  onRgbToggle,
+  isMicOn: propMicOn,
+  isCamOn: propCamOn,
+  boxCount: parentBoxCount,
+  setBoxCount: parentSetBoxCount
+}: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
-  const isMicOn = audioTrack ? audioTrack.enabled : false;
-  const isCamOn = videoTrack ? videoTrack.enabled : false;
+
+  // Use props if provided (from parent state), otherwise derive from localTracks
+  const isMicOn = propMicOn !== undefined ? propMicOn : (audioTrack ? audioTrack.enabled : false);
+  const isCamOn = propCamOn !== undefined ? propCamOn : (videoTrack ? videoTrack.enabled : false);
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
 
@@ -65,12 +98,12 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
   const isOfficerOrAdmin = profile?.role && allowedRoles.includes(profile.role);
   const canEditElectionBoxes = !isElectionCategory || isOfficerOrAdmin;
 
-  // Stable box count to prevent unnecessary rerenders
-  const boxCount = stream.box_count || 1;
-
-
-
-
+  // Use parent boxCount if provided, otherwise use local state
+  const [localBoxCount, setLocalBoxCount] = useState(stream.box_count || 1);
+  
+  // Use parent state if available, otherwise fall back to local
+  const boxCount = parentBoxCount !== undefined ? parentBoxCount : localBoxCount;
+  const setBoxCount = parentSetBoxCount !== undefined ? parentSetBoxCount : setLocalBoxCount;
 
   // Sync likes from stream - only when total_likes changes
   useEffect(() => {
@@ -78,6 +111,13 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
         setLikes((stream as any).total_likes);
     }
   }, [(stream as any).total_likes]);
+
+  // Sync box count when stream updates (only if no parent control)
+  useEffect(() => {
+    if (parentBoxCount === undefined) {
+      setLocalBoxCount(stream.box_count || 1);
+    }
+  }, [stream.box_count, parentBoxCount]);
   const attributes = useParticipantAttributes(user ? [user.id] : [], stream.id);
   const myAttributes = user ? attributes[user.id] : null;
   const activePerks = myAttributes?.activePerks || [];
@@ -187,28 +227,50 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
 
 
   
-  const updateBoxCount = (newCount: number) => {
+  const updateBoxCount = async (newCount: number) => {
     if (!canEditStream) return;
 
-    // Enforce limits
     const minLimit = Math.max(1, requiredBoxes);
+
     if (newCount < minLimit) {
       toast.error("Cannot reduce boxes below occupied seats");
       return;
     }
+
     if (newCount > 6) {
       toast.error("Maximum 6 boxes allowed");
       return;
     }
 
-    // Call the parent handler with error handling
+    // Update local state immediately for instant UI feedback (optimistic update)
+    setBoxCount(newCount);
+
+    // notify parent for any additional handling (broadcast to viewers)
+    if (onBoxCountUpdate) {
+      onBoxCountUpdate(newCount);
+    }
+
+    // Update database asynchronously (viewers will get realtime update)
     try {
-      if (onBoxCountUpdate) {
-        onBoxCountUpdate(newCount);
+      console.log('[BroadcastControls] Updating database with box_count:', newCount);
+      const { error } = await supabase
+        .from('streams')
+        .update({ box_count: newCount })
+        .eq('id', stream.id);
+      
+      if (error) {
+        console.error('[BroadcastControls] Error updating box count:', error);
+        toast.error("Failed to update box count");
+        // Revert UI on error
+        setBoxCount(stream.box_count || 1);
+        return;
       }
-    } catch (err) {
-      console.error("Box count update error:", err);
-      // Prevent error from propagating
+      
+      console.log('[BroadcastControls] Box count updated in database to:', newCount);
+    } catch (e) {
+      console.error('[BroadcastControls] Exception updating box count:', e);
+      toast.error("Failed to update box count");
+      setBoxCount(stream.box_count || 1);
     }
   };
 
@@ -547,14 +609,14 @@ export default function BroadcastControls({ stream, isHost, isModerator = false,
                     </div>
                     )}
 
-                    {/* Trollmers Battle Controls - Only for trollmers head to head category */}
-                    {stream.category === 'trollmers head to head' && (
+                    {/* Trollmers Battle Controls - Only for trollmers category */}
+                    {(stream.category === 'trollmers' || stream.category === 'trollmers head to head') && (
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5">
                          <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
                             <Swords size={16} className="text-amber-500" />
                             Trollmers Battles
                          </span>
-                         <TrollmersBattleControls currentStream={stream} />
+                          <TrollmersBattleControls currentStream={stream} onBattleAccepted={toggleBattleMode} />
                     </div>
                     )}
                 </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties, useRef, useEffect, memo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ILocalVideoTrack, ILocalAudioTrack, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import { Stream } from '../../types/broadcast';
 import { User, Coins, Plus, MicOff, VideoOff } from 'lucide-react';
@@ -241,8 +241,8 @@ export default function BroadcastGrid({
     if (userId === localUserId) {
       // Local user
       isLocal = true;
-      videoTrack = localTracks[0];
-      audioTrack = localTracks[1];
+      videoTrack = localTracks[1];
+      audioTrack = localTracks[0];
       // For local participant, we don't have an IRemoteUser object, so we'll use a dummy one for consistent typing
       // and to carry the identity for attribute lookup
       participant = { uid: localUserId, hasAudio: !!audioTrack, hasVideo: !!videoTrack, audioTrack, videoTrack } as IRemoteUser;
@@ -283,17 +283,28 @@ export default function BroadcastGrid({
 
   // Calculate how many boxes we must render (never hide occupied seats)
   const seatKeys = Object.keys(seats);
-  const maxOccupiedSeatIndex = seatKeys.length ? Math.max(...seatKeys.map(Number)) : -1;
+  const occupiedSeatIndices = seatKeys
+    .map(Number)
+    .filter(idx => seats[idx]?.user_id);
+  const maxOccupiedSeatIndex = occupiedSeatIndices.length > 0 ? Math.max(...occupiedSeatIndices) : -1;
   const requiredBoxes = Math.max(1, maxOccupiedSeatIndex + 1); // 0-indexed
 
   const streamBoxCount = Math.max(1, Number(stream.box_count || 1));
-  console.log('[BroadcastGrid] Box count calculation:', { 
-    streamBoxCount, 
-    requiredBoxes, 
-    seatKeys,
-    maxOccupiedSeatIndex 
+  
+  // ALWAYS ensure we have enough boxes for all occupied seats PLUS the configured box_count
+  // This ensures guests in higher seats are always visible
+  const totalRequiredBoxes = Math.max(streamBoxCount, requiredBoxes);
+  
+  console.log('[BroadcastGrid] Box count calculation:', {
+    streamBoxCount,
+    requiredBoxes,
+    totalRequiredBoxes,
+    occupiedSeatIndices,
+    maxOccupiedSeatIndex,
+    seatKeys: seatKeys.map(k => ({ key: k, userId: seats[Number(k)]?.user_id }))
   });
-  const baseCount = Math.max(streamBoxCount, requiredBoxes);
+  
+  const baseCount = totalRequiredBoxes;
 
   const HARD_CAP = 6;
 
@@ -308,10 +319,9 @@ export default function BroadcastGrid({
     // Slot 0 (Host) is always included
     const activeIndices = [0];
     
-    // Add occupied seat indices
-    seatKeys.forEach((key) => {
-      const index = Number(key);
-      if (seats[index]?.user_id) {
+    // Add ALL occupied seat indices (not just up to box_count)
+    occupiedSeatIndices.forEach((index) => {
+      if (!activeIndices.includes(index)) {
         activeIndices.push(index);
       }
     });
@@ -325,10 +335,8 @@ export default function BroadcastGrid({
     effectiveBoxCount = visibleIndices.length;
     boxes = visibleIndices;
   } else {
-    effectiveBoxCount =
-      typeof maxItems === 'number' && maxCap < requiredBoxes
-        ? Math.min(baseCount, HARD_CAP) // ignore maxItems if it would hide an occupied seat
-        : Math.min(baseCount, maxCap);
+    // Standard mode: render boxes based on stream config, but NEVER hide occupied seats
+    effectiveBoxCount = Math.min(baseCount, HARD_CAP);
     boxes = Array.from({ length: effectiveBoxCount }, (_, i) => i);
   }
 
@@ -344,286 +352,293 @@ export default function BroadcastGrid({
         effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
       )}
     >
-      {boxes.map((seatIndex) => {
-        const seat = seats[seatIndex];
-        let userId = seat?.user_id;
+      <AnimatePresence>
+        {boxes.map((seatIndex) => {
+          const seat = seats[seatIndex];
+          let userId = seat?.user_id;
 
-        // FORCE HOST INTO BOX 0
-        if (seatIndex === 0) {
-          userId = stream.user_id;
-        }
+          // FORCE HOST INTO BOX 0
+          if (seatIndex === 0) {
+            userId = stream.user_id;
+          }
 
-        const isStreamHost = userId === stream.user_id;
+          const isStreamHost = userId === stream.user_id;
 
-        // Find participant + tracks
-        const { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn } = getParticipantAndTracks(userId);
+          // Find participant + tracks
+          const { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn } = getParticipantAndTracks(userId);
 
-        // Debug logging
-        if (userId && !isLocal) {
-          console.log('[BroadcastGrid] Remote user:', userId, { participant: !!participant, videoTrack: !!videoTrack, audioTrack: !!audioTrack, isCamOn, remoteUsersCount: remoteUsers.length });
-        }
+          // Debug logging
+          if (userId && !isLocal) {
+            console.log('[BroadcastGrid] Remote user:', userId, { participant: !!participant, videoTrack: !!videoTrack, audioTrack: !!audioTrack, isCamOn, remoteUsersCount: remoteUsers.length });
+          }
 
-        // Determine profile used for visuals
-        let displayProfile = seat?.user_profile;
-        if (seatIndex === 0 && isStreamHost) {
-          displayProfile = broadcasterProfile;
-        }
+          // Determine profile used for visuals
+          let displayProfile = seat?.user_profile;
+          if (seatIndex === 0 && isStreamHost) {
+            displayProfile = broadcasterProfile;
+          }
 
-        // Use real-time attributes if available
-        const userAttrs = userId ? attributes[userId] : null;
+          // Use real-time attributes if available
+          const userAttrs = userId ? attributes[userId] : null;
 
-        const baseBoxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300 min-w-0';
+          const baseBoxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300 min-w-0';
 
-        const hasGold =
-          !!displayProfile?.is_gold || userAttrs?.activePerks?.includes('perk_gold_username' as any);
+          const hasGold =
+            !!displayProfile?.is_gold || userAttrs?.activePerks?.includes('perk_gold_username' as any);
 
-        const hasRgbProfile =
-          (!!displayProfile?.rgb_username_expires_at &&
-            new Date(displayProfile.rgb_username_expires_at) > new Date()) ||
-          userAttrs?.activePerks?.includes('perk_rgb_username' as any);
+          const hasRgbProfile =
+            (!!displayProfile?.rgb_username_expires_at &&
+              new Date(displayProfile.rgb_username_expires_at) > new Date()) ||
+            userAttrs?.activePerks?.includes('perk_rgb_username' as any);
 
-        const hasStreamRgb = !!stream.has_rgb_effect;
+          const hasStreamRgb = !!stream.has_rgb_effect;
 
-        const boxClass = cn(
-          baseBoxClass,
-          hasGold && 'border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]',
-          !hasGold && (hasRgbProfile || (hasStreamRgb && !isLocal)) && 'rgb-box'
-        );
+          const boxClass = cn(
+            baseBoxClass,
+            hasGold && 'border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]',
+            !hasGold && (hasRgbProfile || hasStreamRgb) && 'rgb-box'
+          );
 
-        return (
-          <div
-            key={seatIndex}
-            className={boxClass}
-            ref={(el) => {
-              if (userId) {
-                boxRefs.current[userId] = el;
-              }
-            }}
-            onClick={() => {
-              if (isStreamHost && seatIndex === 0) {
-                 setShowHostStats(true);
-              } else if (userId) {
-                 setSelectedUserForAction(userId);
-              }
-            }}
-            role={userId ? 'button' : undefined}
-            tabIndex={userId ? 0 : -1}
-            onKeyDown={(e) => {
-              if (!userId) return;
-              if (e.key === 'Enter' || e.key === ' ') {
-                 if (isStreamHost && seatIndex === 0) setShowHostStats(true);
-                 else setSelectedUserForAction(userId);
-              }
-            }}
-          >
-            {/* Render Video if Participant Exists and Track is active */}
-            {videoTrack && isCamOn ? (
-              <AgoraVideoPlayer
-                videoTrack={videoTrack}
-                isLocal={isLocal}
-              />
-            ) : userId && participant ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90">
-                <div className="relative">
-                  <img
-                    src={
-                      displayProfile?.avatar_url ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        displayProfile?.username || 'User'
-                      )}&background=random`
-                    }
-                    alt={displayProfile?.username}
-                    className="w-16 h-16 rounded-full border-2 border-white/20"
-                  />
-                  {!isMicOn && (
-                    <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-1">
-                      <MicOff size={12} className="text-white" />
+          return (
+            <motion.div
+              layout
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              transition={{ duration: 0.3 }}
+              key={seatIndex}
+              className={boxClass}
+              ref={(el) => {
+                if (userId) {
+                  boxRefs.current[userId] = el;
+                }
+              }}
+              onClick={() => {
+                if (isStreamHost && seatIndex === 0) {
+                   setShowHostStats(true);
+                } else if (userId) {
+                   setSelectedUserForAction(userId);
+                }
+              }}
+              role={userId ? 'button' : undefined}
+              tabIndex={userId ? 0 : -1}
+              onKeyDown={(e) => {
+                if (!userId) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                   if (isStreamHost && seatIndex === 0) setShowHostStats(true);
+                   else setSelectedUserForAction(userId);
+                }
+              }}
+            >
+              {/* Render Video if Participant Exists and Track is active */}
+              {videoTrack && isCamOn ? (
+                <AgoraVideoPlayer
+                  videoTrack={videoTrack}
+                  isLocal={isLocal}
+                />
+              ) : userId && participant ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90">
+                  <div className="relative">
+                    <img
+                      src={
+                        displayProfile?.avatar_url ||
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                          displayProfile?.username || 'User'
+                        )}&background=random`
+                      }
+                      alt={displayProfile?.username}
+                      className="w-16 h-16 rounded-full border-2 border-white/20"
+                    />
+                    {!isMicOn && (
+                      <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-1">
+                        <MicOff size={12} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="mt-2 text-xs text-zinc-400 flex items-center gap-1">
+                    <VideoOff size={10} />
+                    Camera Off
+                  </span>
+                </div>
+              ) : userId && !participant && streamStatus !== 'ended' ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-pulse bg-zinc-800 w-full h-full" />
+                  <span className="absolute text-xs text-white/50">
+                    {isStreamHost ? 'Host Connecting...' : 'Connecting...'}
+                  </span>
+                </div>
+              ) : null}
+
+              {audioTrack && !isLocal && <AgoraAudioPlayer audioTrack={audioTrack} />}
+
+              {/* Empty Seat */}
+              {!userId && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {onJoinSeat ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Allow host to click to trigger onJoinSeat (which might open invite menu or similar)
+                        // if (isHost && seatIndex !== 0) {
+                        //     toast.info("Seat is open for guests to join!");
+                        //     return;
+                        // }
+                        onJoinSeat(seatIndex);
+                      }}
+                      className="flex flex-col items-center text-zinc-500 hover:text-white transition-colors"
+                    >
+                      <div className="p-3 rounded-full border border-dashed border-zinc-600 hover:border-white mb-2">
+                        <Plus size={24} />
+                      </div>
+                      <span className="text-xs font-medium">Join Stage</span>
+                      {(typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price) > 0 && (
+                        <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30">
+                          <Coins size={12} className="text-yellow-500" />
+                          <span className="text-xs font-bold text-yellow-400">
+                            {typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price}
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="text-zinc-600 flex flex-col items-center">
+                      <User size={24} className="opacity-20" />
+                      <span className="text-xs mt-2">Empty</span>
                     </div>
                   )}
                 </div>
-                <span className="mt-2 text-xs text-zinc-400 flex items-center gap-1">
-                  <VideoOff size={10} />
-                  Camera Off
-                </span>
-              </div>
-            ) : userId && !participant && streamStatus !== 'ended' ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="animate-pulse bg-zinc-800 w-full h-full" />
-                <span className="absolute text-xs text-white/50">
-                  {isStreamHost ? 'Host Connecting...' : 'Connecting...'}
-                </span>
-              </div>
-            ) : null}
+              )}
 
-            {audioTrack && !isLocal && <AgoraAudioPlayer audioTrack={audioTrack} />}
+              {/* Metadata Overlay (Bubble Style) - Moved to Top Left to avoid controls */}
+              {userId && (
+                <div className="absolute top-3 left-3 flex items-center gap-2 max-w-[85%] z-10 pointer-events-none">
+                  <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 shadow-lg">
+                    <div className="flex flex-col min-w-0">
+                      <div className="text-white text-sm font-bold truncate flex items-center gap-2">
+                          {(() => {
+                          const profile =
+                              isStreamHost && broadcasterProfile ? broadcasterProfile : seat?.user_profile;
 
-            {/* Empty Seat */}
-            {!userId && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                {onJoinSeat ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Allow host to click to trigger onJoinSeat (which might open invite menu or similar)
-                      // if (isHost && seatIndex !== 0) {
-                      //     toast.info("Seat is open for guests to join!");
-                      //     return;
-                      // }
-                      onJoinSeat(seatIndex);
-                    }}
-                    className="flex flex-col items-center text-zinc-500 hover:text-white transition-colors"
-                  >
-                    <div className="p-3 rounded-full border border-dashed border-zinc-600 hover:border-white mb-2">
-                      <Plus size={24} />
-                    </div>
-                    <span className="text-xs font-medium">Join Stage</span>
-                    {(typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price) > 0 && (
-                      <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30">
-                        <Coins size={12} className="text-yellow-500" />
-                        <span className="text-xs font-bold text-yellow-400">
-                          {typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price}
-                        </span>
+                          const name = isStreamHost
+                              ? broadcasterProfile?.username || 'Host'
+                              : participant?.name || profile?.username || 'User';
+
+                          let className = 'text-white';
+                          let style: CSSProperties | undefined = undefined;
+
+                          if (profile) {
+                              if (profile.is_gold) {
+                              className = 'gold-username';
+                              } else if (
+                              profile.rgb_username_expires_at &&
+                              new Date(profile.rgb_username_expires_at) > new Date()
+                              ) {
+                              className = 'rgb-username';
+                              } else if (profile.glowing_username_color) {
+                              style = getGlowingTextStyle(profile.glowing_username_color);
+                              className = 'font-bold';
+                              } else if (userAttrs?.activePerks?.includes('perk_global_highlight' as any)) {
+                              className = 'glowing-username';
+                              } else if (['admin', 'moderator', 'secretary'].includes(profile.role || '')) {
+                              className = 'silver-username';
+                              }
+                          }
+
+                          return (
+                              <span className={className} style={style}>
+                              {name}
+                              </span>
+                          );
+                          })()}
+                          
+                          {isStreamHost && (
+                              <span className="text-[9px] bg-red-600 px-1 rounded text-white font-bold uppercase tracking-wider">
+                              HOST
+                              </span>
+                          )}
                       </div>
-                    )}
-                  </button>
-                ) : (
-                  <div className="text-zinc-600 flex flex-col items-center">
-                    <User size={24} className="opacity-20" />
-                    <span className="text-xs mt-2">Empty</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Metadata Overlay (Bubble Style) - Moved to Top Left to avoid controls */}
-            {userId && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 max-w-[85%] z-10 pointer-events-none">
-                <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 shadow-lg">
-                  <div className="flex flex-col min-w-0">
-                    <div className="text-white text-sm font-bold truncate flex items-center gap-2">
-                        {(() => {
-                        const profile =
-                            isStreamHost && broadcasterProfile ? broadcasterProfile : seat?.user_profile;
-
-                        const name = isStreamHost
-                            ? broadcasterProfile?.username || 'Host'
-                            : participant?.name || profile?.username || 'User';
-
-                        let className = 'text-white';
-                        let style: CSSProperties | undefined = undefined;
-
-                        if (profile) {
-                            if (profile.is_gold) {
-                            className = 'gold-username';
-                            } else if (
-                            profile.rgb_username_expires_at &&
-                            new Date(profile.rgb_username_expires_at) > new Date()
-                            ) {
-                            className = 'rgb-username';
-                            } else if (profile.glowing_username_color) {
-                            style = getGlowingTextStyle(profile.glowing_username_color);
-                            className = 'font-bold';
-                            } else if (userAttrs?.activePerks?.includes('perk_global_highlight' as any)) {
-                            className = 'glowing-username';
-                            } else if (['admin', 'moderator', 'secretary'].includes(profile.role || '')) {
-                            className = 'silver-username';
-                            }
-                        }
-
-                        return (
-                            <span className={className} style={style}>
-                            {name}
-                            </span>
-                        );
-                        })()}
-                        
-                        {isStreamHost && (
-                            <span className="text-[9px] bg-red-600 px-1 rounded text-white font-bold uppercase tracking-wider">
-                            HOST
-                            </span>
-                        )}
                     </div>
+                    
+                    {/* Coins in Bubble - REMOVED as per request (duplicate of header) */}
+                    {/* <div className="flex items-center gap-1 text-yellow-500 text-xs border-l border-white/10 pl-2 ml-1">
+                      <Coins size={10} />
+                      <span>{(displayProfile?.troll_coins || 0).toLocaleString()}</span>
+                    </div> */}
                   </div>
-                  
-                  {/* Coins in Bubble - REMOVED as per request (duplicate of header) */}
-                  {/* <div className="flex items-center gap-1 text-yellow-500 text-xs border-l border-white/10 pl-2 ml-1">
-                    <Coins size={10} />
-                    <span>{(displayProfile?.troll_coins || 0).toLocaleString()}</span>
-                  </div> */}
+
+                  {/* Mic Status Indicator (Outside Bubble) */}
+                  {!isMicOn && (
+                    <div
+                      className="bg-red-500/90 p-1.5 rounded-full backdrop-blur-md shadow-sm animate-in zoom-in duration-200"
+                      title="Mic Muted"
+                    >
+                      <MicOff size={14} className="text-white" />
+                    </div>
+                  )}
                 </div>
+              )}
 
-                {/* Mic Status Indicator (Outside Bubble) */}
-                {!isMicOn && (
-                  <div
-                    className="bg-red-500/90 p-1.5 rounded-full backdrop-blur-md shadow-sm animate-in zoom-in duration-200"
-                    title="Mic Muted"
-                  >
-                    <MicOff size={14} className="text-white" />
+              {/* Coin Balance in Top Right */}
+              {userId && (
+                <div className="absolute top-3 right-3 z-10 pointer-events-none">
+                  <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+                    <Coins size={12} className="text-yellow-400" />
+                    <span className="text-sm font-bold text-white">
+                      {(displayProfile?.troll_coins || 0).toLocaleString()}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Coin Balance in Top Right */}
-            {userId && (
-              <div className="absolute top-3 right-3 z-10 pointer-events-none">
-                <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
-                  <Coins size={12} className="text-yellow-400" />
-                  <span className="text-sm font-bold text-white">
-                    {(displayProfile?.troll_coins || 0).toLocaleString()}
-                  </span>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Persistent Gifts Badge */}
-            {userId && persistentGifts.get(userId) && persistentGifts.get(userId)!.length > 0 && (
-              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1">
-                {persistentGifts.get(userId)!.slice(0, 3).map((gift, idx) => (
-                  <motion.div
-                    key={`${gift.giftId}-${gift.expiresAt}-${idx}`}
-                    initial={{ scale: 0, y: 20 }}
-                    animate={{ scale: 1, y: 0 }}
-                    exit={{ scale: 0, y: 20 }}
-                    className={cn(
-                      "flex items-center gap-1 px-2 py-1 rounded-full font-bold text-xs shadow-lg",
-                      gift.amount >= 10000 
-                        ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-black"
-                        : gift.amount >= 5000
-                        ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                        : "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                    )}
-                  >
-                    <span>{gift.giftIcon}</span>
-                    <span>x{gift.amount >= 1000 ? Math.floor(gift.amount / 1000) : 1}</span>
-                  </motion.div>
-                ))}
-                {persistentGifts.get(userId)!.length > 3 && (
-                  <div className="text-xs text-yellow-400 font-bold">
-                    +{persistentGifts.get(userId)!.length - 3} more
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Persistent Gifts Badge */}
+              {userId && persistentGifts.get(userId) && persistentGifts.get(userId)!.length > 0 && (
+                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1">
+                  {persistentGifts.get(userId)!.slice(0, 3).map((gift, idx) => (
+                    <motion.div
+                      key={`${gift.giftId}-${gift.expiresAt}-${idx}`}
+                      initial={{ scale: 0, y: 20 }}
+                      animate={{ scale: 1, y: 0 }}
+                      exit={{ scale: 0, y: 20 }}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded-full font-bold text-xs shadow-lg",
+                        gift.amount >= 10000 
+                          ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-black"
+                          : gift.amount >= 5000
+                          ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                          : "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                      )}
+                    >
+                      <span>{gift.giftIcon}</span>
+                      <span>x{gift.amount >= 1000 ? Math.floor(gift.amount / 1000) : 1}</span>
+                    </motion.div>
+                  ))}
+                  {persistentGifts.get(userId)!.length > 3 && (
+                    <div className="text-xs text-yellow-400 font-bold">
+                      +{persistentGifts.get(userId)!.length - 3} more
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* Action Modal -> Now UserStatsModal */}
-            {selectedUserForAction && selectedUserForAction === userId && userId && (
-              <UserActionModal
-                onClose={() => setSelectedUserForAction(null)}
-                userId={userId}
-                streamId={stream.id}
-                username={displayProfile?.username}
-                role={displayProfile?.role || displayProfile?.troll_role}
-                createdAt={displayProfile?.created_at}
-                isHost={isHost}
-                isModerator={isModerator}
-                onGift={() => onGift(userId)}
-                onKickStage={onKick ? () => onKick(userId) : undefined}
-              />
-            )}
-          </div>
-        );
-      })}
+              {/* Action Modal -> Now UserStatsModal */}
+              {selectedUserForAction && selectedUserForAction === userId && userId && (
+                <UserActionModal
+                  onClose={() => setSelectedUserForAction(null)}
+                  userId={userId}
+                  streamId={stream.id}
+                  username={displayProfile?.username}
+                  role={displayProfile?.role || displayProfile?.troll_role}
+                  createdAt={displayProfile?.created_at}
+                  isHost={isHost}
+                  isModerator={isModerator}
+                  onGift={() => onGift(userId)}
+                  onKickStage={onKick ? () => onKick(userId) : undefined}
+                />
+              )}
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
       
       {/* Broadcaster Stats Modal */}
       {showHostStats && isHost && (

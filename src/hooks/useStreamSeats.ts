@@ -106,7 +106,8 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
     fetchSeats();
 
     // Polling fallback to ensure consistency even if Realtime fails
-    const interval = setInterval(fetchSeats, 5000);
+    // Reduced to 2 seconds for faster updates
+    const interval = setInterval(fetchSeats, 2000);
 
     const channel = supabase
       .channel(`seats:${streamId}`)
@@ -118,18 +119,77 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
           table: 'stream_seat_sessions',
           filter: `stream_id=eq.${streamId}`,
         },
-        () => {
+        (payload) => {
+          console.log('[useStreamSeats] Realtime update received:', payload);
           // Always rely on server truth via RPC
           fetchSeats();
         }
       )
-      .subscribe();
+      // Also listen for stream updates (box_count changes, status changes)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'streams',
+          filter: `id=eq.${streamId}`,
+        },
+        (payload) => {
+          console.log('[useStreamSeats] Stream update received:', payload);
+          // Re-fetch seats when stream config changes
+          fetchSeats();
+          
+          // If stream ended, automatically leave seat for stage users
+          if (payload.new?.status === 'ended' && mySession) {
+            console.log('[useStreamSeats] Stream ended, auto-leaving seat');
+            leaveSeat();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[useStreamSeats] Channel subscription status:', status);
+      });
 
     return () => {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [streamId, fetchSeats]);
+  }, [streamId, fetchSeats, mySession]);
+
+  // Cleanup effect: leave seat when component unmounts or stream ends
+  useEffect(() => {
+    return () => {
+      // Only leave seat if we have an active session and stream is ending
+      if (mySession && streamData?.status === 'ended') {
+        console.log('[useStreamSeats] Cleanup: leaving seat due to stream end');
+        leaveSeat();
+      }
+    };
+  }, [mySession, streamData?.status]);
+
+  // Effect to handle stream end - remove all stage users
+  useEffect(() => {
+    if (streamData?.status === 'ended') {
+      console.log('[useStreamSeats] Stream ended, cleaning up all seats');
+      
+      // Clear local seats state immediately
+      setSeats({});
+      setMySession(null);
+      
+      // Call RPC to leave seat if user had a session
+      if (mySession?.id) {
+        supabase.rpc('leave_seat_atomic', {
+          p_session_id: mySession.id,
+        }).then(({ error }) => {
+          if (error) {
+            console.warn('[useStreamSeats] Error leaving seat on stream end:', error);
+          } else {
+            console.log('[useStreamSeats] Successfully left seat on stream end');
+          }
+        });
+      }
+    }
+  }, [streamData?.status, mySession?.id]);
 
   const joinSeat = async (seatIndex: number, price: number) => {
     if (!effectiveUserId || !streamId) return false;

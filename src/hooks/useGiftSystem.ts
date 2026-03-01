@@ -122,21 +122,16 @@ export function useGiftSystem(
         const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.id);
         const giftIcon = officialGift?.icon || '🎁';
         
-        // Broadcast event for animations via edge function
+        // Broadcast event for animations via Supabase realtime channel (more reliable than edge function)
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                type: 'broadcast',
-                event: 'gift_sent',
-                channel: `stream:${streamId}`,
-                payload: {
+          if (streamId) {
+            const channel = supabase.channel(`stream:${streamId}`);
+            await channel.subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                channel.send({
+                  type: 'broadcast',
+                  event: 'gift_sent',
+                  payload: {
                     id: generateUUID(),
                     gift_id: gift.id,
                     gift_slug: gift.slug,
@@ -147,37 +142,51 @@ export function useGiftSystem(
                     sender_name: senderName,
                     receiver_id: finalRecipientId,
                     timestamp: new Date().toISOString()
-                }
-              })
+                  }
+                });
+                // Unsubscribe after sending
+                setTimeout(() => {
+                  supabase.removeChannel(channel);
+                }, 1000);
+              }
             });
           }
         } catch (broadcastErr) {
           console.warn('[GiftSystem] Could not broadcast gift event:', broadcastErr);
         }
         
-        // Also send a chat message so it appears in the live chat with username
+        // Also send a chat message via Supabase broadcast
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
+          if (streamId) {
             const txnId = generateUUID();
-            await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                type: 'gift',
-                stream_id: streamId,
-                txn_id: txnId,
-                data: {
-                  content: `GIFT_EVENT:${gift.name}:${quantity}`,
-                  gift_type: gift.slug,
-                  gift_amount: quantity,
-                  sender_name: senderName,
-                  is_gift_message: true
-                }
-              })
+            const chatChannel = supabase.channel(`stream:${streamId}`);
+            await chatChannel.subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                chatChannel.send({
+                  type: 'broadcast',
+                  event: 'message',
+                  payload: {
+                    v: 1,
+                    txn_id: txnId,
+                    s: user.id,
+                    ts: Date.now(),
+                    stream_id: streamId,
+                    d: {
+                      content: `${senderName} sent ${gift.name} x${quantity}`,
+                      gift_type: gift.slug,
+                      gift_amount: quantity,
+                      sender_name: senderName,
+                      is_gift_message: true,
+                      user_name: senderName,
+                      user_avatar: null
+                    }
+                  }
+                });
+                // Unsubscribe after sending
+                setTimeout(() => {
+                  supabase.removeChannel(chatChannel);
+                }, 1000);
+              }
             });
           }
         } catch (chatErr) {

@@ -207,8 +207,8 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* User Profile Summary */}
-      {!isSidebarCollapsed && profile && (isAdmin || isOfficer || isSecretary) && (
+      {/* User Profile Summary - Show for all logged-in users */}
+      {!isSidebarCollapsed && profile && (
         <div className="p-4">
             <UserProfileWidget />
           </div>

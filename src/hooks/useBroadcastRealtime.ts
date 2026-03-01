@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { generateUUID } from '../lib/uuid';
 
 export interface BroadcastRealtimeState {
   // Stream data
@@ -354,7 +355,7 @@ export function useBroadcastRealtime({
   const sendMessage = useCallback(async (content: string, userProfile: any) => {
     if (!userId || !content.trim()) return;
 
-    const txnId = crypto.randomUUID();
+    const txnId = generateUUID();
     
     // Optimistic update
     const optimisticMessage: BroadcastMessage = {

@@ -65,6 +65,36 @@ export const PreflightStore = {
   },
 
   clear() {
+    // Stop all tracks in the stored stream before clearing
+    if (state.stream) {
+      state.stream.getTracks().forEach(track => track.stop());
+    }
+    if (state.cameraStream) {
+      state.cameraStream.getTracks().forEach(track => track.stop());
+    }
+    // Stop Agora tracks if any
+    if (state.localTracks) {
+      state.localTracks.forEach(track => {
+        if (track && typeof track.stop === 'function') {
+          try {
+            track.stop();
+            if (typeof track.close === 'function') {
+              track.close();
+            }
+          } catch (e) {
+            console.warn('Error stopping track in PreflightStore.clear():', e);
+          }
+        }
+      });
+    }
+    // Leave Agora client if connected
+    if (state.agoraClient) {
+      try {
+        state.agoraClient.leave();
+      } catch (e) {
+        console.warn('Error leaving Agora client in PreflightStore.clear():', e);
+      }
+    }
     state.stream = null;
     state.cameraStream = null;
     state.token = null;

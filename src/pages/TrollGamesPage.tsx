@@ -112,14 +112,42 @@ const games: Game[] = [
 const getGameById = (id: string): Game | undefined =>
   games.find(g => g.id === id)
 
+// Under Construction component for non-admin users
+function UnderConstructionScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
+      <div className="max-w-md w-full text-center">
+        <div className="p-6 bg-slate-900/80 backdrop-blur-sm border border-white/10 rounded-2xl">
+          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center">
+            <Gamepad2 className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            🚧 Under Construction
+          </h1>
+          <p className="text-slate-400 mb-6">
+            Troll Games is currently being upgraded. Check back soon for exciting new games and features!
+          </p>
+          <button
+            onClick={onBack}
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transition-all"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TrollGamesPage() {
   const { gameType, matchId } = useParams<{ gameType?: GameType, matchId?: string }>();
-  const { profile } = useAuthStore();
+  const { profile, isAdmin, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const [waitingMatches, setWaitingMatches] = useState<WaitingMatch[]>([]); // New state for waiting matches
   const [, setActiveMatchId] = useState<string | null>(null);
   const [, setActiveGameType] = useState<GameType | null>(null);
   const [activeTab] = useState<PageTab>('games');
+  const [hoveredGame, setHoveredGame] = useState<string | null>(null);
 
   // Note: Giveaways are now handled by a dedicated route at /troll-games/giveaways
   // This effect is kept for potential future use but currently not needed
@@ -199,6 +227,24 @@ export default function TrollGamesPage() {
     setActiveGameType(null);
     navigate('/troll-games');
   };
+
+  // Show loading while auth is initializing
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show under construction for non-admin users
+  // isAdmin must be explicitly true (not null, not undefined, not false)
+  if (isAdmin !== true) {
+    return <UnderConstructionScreen onBack={() => navigate('/')} />;
+  }
 
   // If gameType and matchId are present, render the specific game
   if (gameType && matchId) {

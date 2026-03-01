@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
+import { generateUUID } from '../lib/uuid';
 import { toast } from 'sonner';
 
 export interface Message {
@@ -276,7 +277,7 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
     lastSentRef.current = now;
     setIsSendingMessage(true);
 
-    const txnId = crypto.randomUUID();
+    const txnId = generateUUID();
     const optimisticMessage: Message = {
         id: `temp-${txnId}`,
         user_id: user.id,

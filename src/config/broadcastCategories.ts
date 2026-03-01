@@ -151,10 +151,10 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     description: 'Stream games via OBS with RTMP ingest',
     layoutMode: 'grid',
     defaultBoxCount: 1,
-    maxBoxCount: 4,
+    maxBoxCount: 6,
     allowGuestBoxes: true,
-    allowAddBox: false,
-    allowDeductBox: false,
+    allowAddBox: true,
+    allowDeductBox: true,
     hostRoleLabel: 'Broadcaster',
     allowFrontCamera: true,
     allowRearCamera: true,
@@ -179,10 +179,10 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     description: 'First-person streaming with rear camera',
     layoutMode: 'spotlight',
     defaultBoxCount: 1,
-    maxBoxCount: 1,
+    maxBoxCount: 6,
     allowGuestBoxes: true,
-    allowAddBox: false,
-    allowDeductBox: false,
+    allowAddBox: true,
+    allowDeductBox: true,
     hostRoleLabel: 'Broadcaster',
     allowFrontCamera: false, // Disabled for IRL
     allowRearCamera: true,
@@ -341,7 +341,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 10. Trollmers - Head-to-head battles (unchanged from current)
+  // 10. Trollmers - Head-to-head battles
   trollmers: {
     id: 'trollmers',
     name: '🏆 Trollmers Head-to-Head',
@@ -349,10 +349,10 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     description: 'Competitive head-to-head streaming battles',
     layoutMode: 'grid',
     defaultBoxCount: 2,
-    maxBoxCount: 2,
+    maxBoxCount: 6,
     allowGuestBoxes: true,
-    allowAddBox: false,
-    allowDeductBox: false,
+    allowAddBox: true,
+    allowDeductBox: true,
     hostRoleLabel: 'Challenger',
     allowFrontCamera: true,
     allowRearCamera: true,

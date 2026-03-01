@@ -9,7 +9,7 @@ import PWAInstallPrompt from '../components/PWAInstallPrompt'
 import EventCountdown from '@/components/EventCountdown'
 import LiveStreamsModule from '@/components/home/LiveStreamsModule'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
-import TopRentPayersWidget from '@/components/home/TopRentPayersWidget'
+
 import TrollPodsWidget from '@/components/home/TrollPodsWidget'
 
 // Animated gradient background
@@ -118,7 +118,6 @@ export default function Home() {
               <TrollWallFeed onRequireAuth={requireAuth} />
             </div>
             <div className="lg:col-span-4 space-y-6">
-              <TopRentPayersWidget onRequireAuth={requireAuth} />
               <TrollPodsWidget onRequireAuth={requireAuth} />
             </div>
           </div>

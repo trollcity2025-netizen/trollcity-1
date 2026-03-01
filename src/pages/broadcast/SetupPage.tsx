@@ -78,6 +78,10 @@ export default function SetupPage() {
   const [hasRearCamera, setHasRearCamera] = useState(false); // New state for rear camera detection
   const [followerCount, setFollowerCount] = useState<number>(0);
 
+  // Permission state - track if camera/mic permissions need to be requested
+  const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
+  const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
+
 
 
   // Get Agora RTMP URL and stream key for gaming category
@@ -132,6 +136,90 @@ export default function SetupPage() {
     }
     fetchFollowerCount();
   }, [user?.id]);
+
+  // Check camera/mic permissions when component mounts
+  useEffect(() => {
+    const checkPermissions = async () => {
+      // Admins can bypass camera/mic requirements
+      if (profile?.role === 'admin') {
+        setPermissionStatus('granted');
+        setShowPermissionPrompt(false);
+        return;
+      }
+
+      // Check if we have a stored permission flag
+      const permissionFlag = localStorage.getItem('tc_camera_permissions_granted');
+      
+      // If no flag (localStorage cleared or first visit), show permission prompt
+      if (!permissionFlag) {
+        setShowPermissionPrompt(true);
+        setPermissionStatus('prompt');
+        return;
+      }
+
+      // Check actual browser permission status if supported
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const cameraPerm = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          const micPerm = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          
+          if (cameraPerm.state === 'granted' && micPerm.state === 'granted') {
+            setPermissionStatus('granted');
+            setShowPermissionPrompt(false);
+          } else if (cameraPerm.state === 'denied' || micPerm.state === 'denied') {
+            setPermissionStatus('denied');
+            setShowPermissionPrompt(true);
+          } else {
+            setPermissionStatus('prompt');
+            setShowPermissionPrompt(true);
+          }
+        } catch (e) {
+          // permissions.query might not be supported for camera/mic in some browsers
+          // Fall back to trying getUserMedia
+          setShowPermissionPrompt(false);
+        }
+      } else {
+        // Browser doesn't support permissions API, assume granted if flag exists
+        setPermissionStatus('granted');
+        setShowPermissionPrompt(false);
+      }
+    };
+
+    checkPermissions();
+  }, [profile?.role]);
+
+  // Request camera and microphone permissions
+  const requestPermissions = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      
+      // Stop the test stream immediately - we just wanted the permission
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Store permission granted flag
+      localStorage.setItem('tc_camera_permissions_granted', 'true');
+      localStorage.setItem('tc_camera_permissions_timestamp', Date.now().toString());
+      
+      setPermissionStatus('granted');
+      setShowPermissionPrompt(false);
+      
+      toast.success('Camera and microphone permissions granted!');
+      
+      // Trigger the media acquisition effect
+      // The existing useEffect will pick up the permission change
+    } catch (err: any) {
+      console.error('Permission request failed:', err);
+      
+      if (err.name === 'NotAllowedError') {
+        setPermissionStatus('denied');
+        toast.error('Camera permission denied. Please allow access in your browser settings.');
+      } else if (err.name === 'NotFoundError') {
+        toast.error('No camera or microphone found. Please check your devices.');
+      } else {
+        toast.error('Could not access camera or microphone: ' + err.message);
+      }
+    }
+  };
 
   const acquireMediaStream = async (videoFacingMode: 'user' | 'environment', enableVideo: boolean): Promise<MediaStream | null> => {
     console.log('[acquireMediaStream] Attempting to acquire media stream...');
@@ -199,6 +287,12 @@ export default function SetupPage() {
   };
 
   useEffect(() => {
+    // Only acquire media if permissions have been granted
+    if (showPermissionPrompt) {
+      console.log('[SetupPage] Waiting for user to grant permissions.');
+      return;
+    }
+
     console.log('[SetupPage] Media acquisition useEffect triggered. facingMode:', facingMode, 'isVideoEnabled:', isVideoEnabled);
     let currentLocalStream: MediaStream | null = null;
     const isMounted = { current: true };
@@ -259,7 +353,7 @@ export default function SetupPage() {
         PreflightStore.setStream(currentLocalStream);
       }
     };
-  }, [facingMode, isVideoEnabled]);
+  }, [facingMode, isVideoEnabled, showPermissionPrompt]);
 
   const toggleVideo = () => {
     if (stream) {
@@ -682,13 +776,69 @@ export default function SetupPage() {
         {/* Preview Section */}
         <div className="space-y-4">
           <div className="aspect-video bg-black rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl">
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              muted 
-              playsInline 
-              className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`} 
-            />
+            {showPermissionPrompt && profile?.role !== 'admin' ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-6 text-center">
+                <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4">
+                  <Video size={32} className="text-yellow-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Camera & Microphone Access Required</h3>
+                <p className="text-sm text-gray-400 mb-4 max-w-xs">
+                  We need permission to access your camera and microphone for streaming. 
+                  This is required to go live.
+                </p>
+                {permissionStatus === 'denied' ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-red-400">
+                      Permission was denied. Please enable camera/microphone access in your browser settings.
+                    </p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={requestPermissions}
+                    className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold rounded-xl hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95"
+                  >
+                    Allow Camera & Microphone
+                  </button>
+                )}
+              </div>
+            ) : profile?.role === 'admin' && !stream ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-6 text-center">
+                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
+                  <Video size={32} className="text-green-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Admin Mode</h3>
+                <p className="text-sm text-gray-400 mb-4 max-w-xs">
+                  You can start streaming without camera and microphone access.
+                  Regular users must grant permissions to stream.
+                </p>
+                <button
+                  onClick={() => {
+                    // For admin, just set permissions as granted without actually requesting
+                    localStorage.setItem('tc_camera_permissions_granted', 'true');
+                    localStorage.setItem('tc_camera_permissions_timestamp', Date.now().toString());
+                    setPermissionStatus('granted');
+                    setShowPermissionPrompt(false);
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-green-400 to-emerald-600 text-black font-bold rounded-xl hover:from-green-300 hover:to-emerald-500 transition-all transform active:scale-95"
+                >
+                  Continue Without Camera
+                </button>
+              </div>
+            ) : (
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                muted 
+                playsInline 
+                className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`} 
+              />
+            )}
             
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
               <button 
@@ -788,9 +938,25 @@ export default function SetupPage() {
             {/* Battle/Match Info */}
             {renderBattleInfo()}
 
+            {showPermissionPrompt && profile?.role !== 'admin' && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
+                <p className="text-amber-300 text-sm">
+                  ⚠️ Camera and microphone permissions are required to start streaming.
+                </p>
+              </div>
+            )}
+
+            {profile?.role === 'admin' && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
+                <p className="text-green-300 text-sm">
+                  🛡️ Admin Mode: You can start streaming without camera and microphone.
+                </p>
+              </div>
+            )}
+
             <button
               onClick={handleStartStream}
-              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera)}
+              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera && profile?.role !== 'admin') || (showPermissionPrompt && profile?.role !== 'admin')}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-lg hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-500/20"
             >
               {loading ? (
@@ -798,6 +964,8 @@ export default function SetupPage() {
                   <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></span>
                   Creating your stream...
                 </span>
+              ) : (showPermissionPrompt && profile?.role !== 'admin') ? (
+                'Grant Permissions to Start'
               ) : (
                 'Start Broadcast'
               )}

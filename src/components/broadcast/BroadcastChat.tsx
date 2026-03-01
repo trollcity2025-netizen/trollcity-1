@@ -1,15 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Send, User, Shield, Crown, Sparkles, Gift } from 'lucide-react';
-import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
-import UserNameWithAge from '../UserNameWithAge';
+import { generateUUID } from '../../lib/uuid';
 import { toast } from 'sonner';
 import GiftBoxModal from './GiftBoxModal';
 
 interface Message {
   id: string;
+  txn_id?: string;
   user_id: string;
   content: string;
   created_at: string;
@@ -45,9 +45,10 @@ interface BroadcastChatProps {
     isHost?: boolean;
     isViewer?: boolean;
     isGuest?: boolean;
+    onStreamEnd?: () => void;
 }
 
-export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false }: BroadcastChatProps) {
+export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false, onStreamEnd }: BroadcastChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -63,16 +64,12 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
       quantity: parseInt(parts[2], 10) || 1,
     };
   };
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
-  // Buffering for high-frequency updates
-  const messageBufferRef = useRef<Message[]>([]);
   const MAX_MESSAGES = 200;
-  const FLUSH_INTERVAL = 50; // Faster flush interval for near-instant delivery (50ms)
   
-  // Track sent message IDs to prevent duplicates
-  const sentMessageIdsRef = useRef<Set<string>>(new Set());
+  // Track sent message txn_ids to prevent duplicates
+  const receivedTxnIdsRef = useRef<Set<string>>(new Set());
   
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
@@ -80,10 +77,14 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
   const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
-  
+  const [streamEnded, setStreamEnded] = useState(false);
+
   // Rate limiting
   const lastSentRef = useRef<number>(0);
   const RATE_LIMIT_MS = 1000; // 1 message per second
+
+  // Realtime broadcast channel ref
+  const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Fetch Stream Mods
   useEffect(() => {
@@ -137,11 +138,68 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     };
   }, [hostId]);
 
-  // Fetch initial messages (last 50)
+  // Stream end listener
   useEffect(() => {
+    if (!streamId) return;
+
+    const channel = supabase
+      .channel(`stream-status-${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'streams',
+          filter: `id=eq.${streamId}`
+        },
+        (payload: any) => {
+          const newStatus = payload.new?.status;
+
+          if (newStatus === 'ended') {
+            console.log('📴 Stream ended — disabling chat');
+
+            // Disable input
+            setInput('');
+            setStreamEnded(true);
+
+            // Push system message
+            const systemMsg: Message = {
+              id: `sys-end-${Date.now()}`,
+              user_id: 'system',
+              content: 'Stream has ended',
+              created_at: new Date().toISOString(),
+              type: 'system',
+              user_profiles: {
+                username: 'System',
+                avatar_url: ''
+              }
+            };
+
+            setMessages(prev => {
+              const updated = [...prev, systemMsg];
+              if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+              return updated;
+            });
+
+            // Notify parent to show summary
+            onStreamEnd?.();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, onStreamEnd]);
+
+  // Fetch initial messages (last 50) and setup realtime broadcast
+  useEffect(() => {
+    if (!streamId) return;
+
+    // Fetch historical messages
     const fetchMessages = async () => {
         // Thundering Herd Prevention: Jitter on initial chat load (0-800ms)
-        // High-traffic broadcast entry points are the most likely to cause a DB spike
         await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
 
         const { data } = await supabase
@@ -165,6 +223,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                     glowing_username_color: m.user_glowing_username_color || m.user_profiles?.glowing_username_color
                 };
 
+                // Track txn_ids from historical messages
+                if (m.txn_id) {
+                    receivedTxnIdsRef.current.add(m.txn_id);
+                }
+
                 return {
                     ...m,
                     type: 'chat',
@@ -184,74 +247,51 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     };
     fetchMessages();
 
-    // Flush buffer interval - use faster interval for near-instant delivery
-    const flushInterval = setInterval(() => {
-        if (messageBufferRef.current.length === 0) return;
-
-        const newMsgs = [...messageBufferRef.current];
-        messageBufferRef.current = [];
-
-        setMessages(prev => {
-            // Filter out duplicates based on message ID or content+user combination
-            const existingIds = new Set(prev.map(p => p.id));
-            const incomingIds = new Set(newMsgs.map(m => m.id));
-            
-            // Remove optimistic messages that are now confirmed by real messages
-            const filtered = prev.filter(m => {
-                // Keep if not a temp message OR if there's a matching real message
-                if (!m.id.startsWith('temp-')) return true;
-                // For temp messages, check if we have a matching real message
-                const key = `${m.user_id}:${m.content}`;
-                return !newMsgs.some(nm => `${nm.user_id}:${nm.content}` === key);
-            });
-
-            // Only add messages that aren't already in state
-            const uniqueNewMsgs = newMsgs.filter(m => 
-                !existingIds.has(m.id) && 
-                !filtered.some(f => f.id === m.id)
-            );
-
-            const updated = [...filtered, ...uniqueNewMsgs];
-            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
-            return updated;
-        });
-    }, FLUSH_INTERVAL);
-
-    const chatChannel = supabase
+    // Setup Realtime Broadcast Channel for INSTANT message delivery
+    const broadcastChannel = supabase
         .channel(`stream-chat-${streamId}`)
         .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'stream_messages',
-                filter: `stream_id=eq.${streamId}`
-            },
-            async (payload: any) => {
-                const newMessage = payload.new;
+            'broadcast',
+            { event: 'chat-message' },
+            (payload: any) => {
+                const msg = payload.payload as Message;
+                
+                // Skip if this is our own message (already shown via optimistic update)
+                if (msg.user_id === user?.id) {
+                    return;
+                }
 
-                // Fetch user profile for the new message
-                const { data: profile } = await supabase
-                    .from('user_profiles')
-                    .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
-                    .eq('id', newMessage.user_id)
-                    .single();
+                // Deduplicate using txn_id
+                if (msg.txn_id && receivedTxnIdsRef.current.has(msg.txn_id)) {
+                    return;
+                }
 
-                const newMsg: Message = {
-                    ...newMessage,
-                    type: 'chat',
-                    user_profiles: profile
-                };
+                // Track this txn_id
+                if (msg.txn_id) {
+                    receivedTxnIdsRef.current.add(msg.txn_id);
+                }
 
-                messageBufferRef.current.push(newMsg);
+                // Add message to UI immediately
+                setMessages(prev => {
+                    // Double-check for duplicates
+                    if (msg.txn_id && prev.some(m => m.txn_id === msg.txn_id)) {
+                        return prev;
+                    }
+                    
+                    const updated = [...prev, msg];
+                    if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+                    return updated;
+                });
 
-                // Increment unread count if chat not focused and message from someone else
-                if (!isChatFocused && newMsg.user_id !== user?.id) {
+                // Increment unread count if chat not focused
+                if (!isChatFocused) {
                     setUnreadCount(prev => prev + 1);
                 }
             }
         )
         .subscribe();
+
+    broadcastChannelRef.current = broadcastChannel;
 
     // Subscribe to room presence to show join/leave messages in chat
     const presenceChannel = supabase
@@ -272,7 +312,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                         troll_role: p.troll_role
                     }
                 };
-                messageBufferRef.current.push(systemMsg);
+                setMessages(prev => {
+                    const updated = [...prev, systemMsg];
+                    if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+                    return updated;
+                });
             });
         })
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
@@ -291,7 +335,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                         troll_role: p.troll_role
                     }
                 };
-                messageBufferRef.current.push(systemMsg);
+                setMessages(prev => {
+                    const updated = [...prev, systemMsg];
+                    if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+                    return updated;
+                });
             });
         })
         .subscribe();
@@ -301,7 +349,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         const now = Date.now();
         const thirtySecondsAgo = new Date(now - 30000).toISOString();
         setMessages(prev => prev.filter(msg => {
-            // Keep system messages (join/leave) for 60 seconds
+            // Keep system messages (join/leave) for 30 seconds
             if (msg.type === 'system') {
                 return msg.created_at > thirtySecondsAgo;
             }
@@ -311,10 +359,10 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     }, 5000); // Check every 5 seconds
 
     return () => {
-        clearInterval(flushInterval);
         clearInterval(autoDeleteInterval);
-        supabase.removeChannel(chatChannel);
+        supabase.removeChannel(broadcastChannel);
         supabase.removeChannel(presenceChannel);
+        broadcastChannelRef.current = null;
     };
   }, [streamId, isViewer, user, profile, isChatFocused]);
 
@@ -342,9 +390,6 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
       };
     }
   }, []);
-
-  // Removed aggressive auto-delete loop to prevent messages from disappearing due to clock skew
-
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,10 +427,14 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     console.log('💬 [BroadcastChat] Preparing to send:', { content, userId: user.id });
     setInput('');
 
-    // INSTANT DISPLAY: Add message to UI immediately before waiting for server
-    const txnId = crypto.randomUUID();
-    const optimisticMessage: Message = {
+    // INSTANT DELIVERY ARCHITECTURE
+    // 1. Generate txnId for deduplication
+    const txnId = generateUUID();
+    
+    // 2. Create message object with full profile data
+    const msg: Message = {
         id: txnId,
+        txn_id: txnId,
         user_id: user.id,
         content,
         created_at: new Date().toISOString(),
@@ -401,18 +450,32 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
         }
     };
 
-    // Add to messages immediately for instant display
+    // 3. Add to UI immediately for instant display (0ms latency for sender)
     setMessages(prev => {
-        const updated = [...prev, optimisticMessage];
+        const updated = [...prev, msg];
         if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
         return updated;
     });
 
+    // 4. Track txn_id to prevent duplicates
+    receivedTxnIdsRef.current.add(txnId);
+
+    // 5. Broadcast over realtime channel for instant delivery to all viewers
+    if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.send({
+            type: 'broadcast',
+            event: 'chat-message',
+            payload: msg
+        });
+    }
+
+    // 6. Save to database asynchronously (fire and forget)
+    // No UI wait - database is background only
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Not authenticated');
 
-        const response = await fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
+        fetch(`${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-message`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${session.access_token}`,
@@ -424,26 +487,13 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 txn_id: txnId,
                 data: { content }
             })
+        }).catch(err => {
+            // Silently handle DB write failures - message already shown in UI
+            console.warn('💬 [BroadcastChat] Background DB write failed:', err);
         });
 
-        const contentType = response.headers.get('content-type') || ''
-        const rawText = await response.text()
-        const hasJsonBody = contentType.toLowerCase().includes('application/json') && rawText.trim().length > 0
-        const parsedBody = hasJsonBody ? JSON.parse(rawText) : undefined
-
-        if (!response.ok) {
-            const msg = (parsedBody as any)?.error || (parsedBody as any)?.message || rawText || response.statusText
-            throw new Error(`Failed to send message (${response.status}): ${msg}`)
-        }
-
-        const signedEnvelope = parsedBody ?? (rawText ? rawText : null)
-        console.log('💬 [BroadcastChat] Message signed and sent:', signedEnvelope);
-
-        // Message already displayed instantly - no need to do anything on success
-        // The server response just confirms it was saved
-
     } catch (err: any) {
-        console.error('💬 [BroadcastChat] Error sending message:', err);
+        console.error('💬 [BroadcastChat] Error initiating message send:', err);
         if (String(err.message || '').toLowerCase().includes('rate limit')) {
             toast.error('You are sending messages too fast. Please slow down.');
         } else {
@@ -559,7 +609,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                         let giftType = msg.gift_type || 'gift';
                         let giftAmount = msg.gift_amount || 1;
                         // Use sender_name from message data, user_profiles, or enriched data
-                        let senderName = msg.sender_name || msg.user_profiles?.username || 'Someone';
+                        const senderName = msg.sender_name || msg.user_profiles?.username || 'Someone';
                         
                         // If not already parsed, try to parse from content
                         if (!msg.gift_type && msg.content) {
@@ -643,19 +693,21 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                         // The input is already disabled for guests, so this is just for UX
                     }}
                     placeholder={
-                      hostChatDisabledByOfficer
-                        ? "Chat disabled by officer control"
-                        : isGuest
-                          ? "Sign up to chat..."
-                          : "Type a message..."
+                      streamEnded
+                        ? "Stream ended"
+                        : hostChatDisabledByOfficer
+                          ? "Chat disabled by officer control"
+                          : isGuest
+                            ? "Sign up to chat..."
+                            : "Type a message..."
                     }
-                    disabled={hostChatDisabledByOfficer}
+                    disabled={hostChatDisabledByOfficer || isGuest || streamEnded}
                     className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
                 />
 
-                <button 
-                    type="submit"  
-                    disabled={hostChatDisabledByOfficer || isGuest || !input.trim()}
+                <button
+                    type="submit"
+                    disabled={hostChatDisabledByOfficer || isGuest || streamEnded || !input.trim()}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
                 >
                     <Send size={16} />
@@ -675,4 +727,3 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     </div>
   );
 }
-

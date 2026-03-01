@@ -135,6 +135,8 @@ interface BattleArenaProps {
   opponentStreamId: string;
   challengerHostId: string;
   opponentHostId: string;
+  challengerBoxCount?: number;
+  opponentBoxCount?: number;
 }
 
 const BattleArena = ({
@@ -146,7 +148,9 @@ const BattleArena = ({
   challengerStreamId,
   opponentStreamId,
   challengerHostId,
-  opponentHostId
+  opponentHostId,
+  challengerBoxCount = 1,
+  opponentBoxCount = 1
 }: BattleArenaProps) => {
   const { user } = useAuthStore();
   const [allBattleParticipants, setAllBattleParticipants] = useState<AgoraBattleParticipant[]>([]);
@@ -228,8 +232,8 @@ const BattleArena = ({
 
   const categorized = useMemo(() => {
     const teams = {
-      challenger: { host: null as AgoraBattleParticipant | null, guests: [] as AgoraBattleParticipant[] },
-      opponent: { host: null as AgoraBattleParticipant | null, guests: [] as AgoraBattleParticipant[] }
+      challenger: { host: null as AgoraBattleParticipant | null, guests: [] as AgoraBattleParticipant[], boxCount: Math.max(1, Math.min(challengerBoxCount, 6)) },
+      opponent: { host: null as AgoraBattleParticipant | null, guests: [] as AgoraBattleParticipant[], boxCount: Math.max(1, Math.min(opponentBoxCount, 6)) }
     };
 
     allBattleParticipants.forEach(p => {
@@ -250,7 +254,7 @@ const BattleArena = ({
     teams.opponent.guests.sort(sortBySeat);
 
     return teams;
-  }, [allBattleParticipants]);
+  }, [allBattleParticipants, challengerBoxCount, opponentBoxCount]);
 
   const handleGiftClick = (p: AgoraBattleParticipant) => {
     const resolvedStreamId =
@@ -268,6 +272,36 @@ const BattleArena = ({
     onGift(hostId, streamId);
   };
 
+  // Generate placeholder slots based on box_count for each team
+  // Each side supports: Host + up to 5 guests (6 total per side)
+  const generateSlots = (team: 'challenger' | 'opponent') => {
+    const teamData = categorized[team];
+    const boxCount = Math.min(teamData.boxCount, 6); // Cap at 6 boxes max
+    const slots: Array<{ type: 'host' | 'guest'; participant?: AgoraBattleParticipant; index?: number }> = [];
+    
+    // Add host slot (always first, index 0)
+    slots.push({ type: 'host', participant: teamData.host || undefined });
+    
+    // Add guest slots based on box_count (box_count includes host, so subtract 1 for guests)
+    const guestSlots = Math.max(0, boxCount - 1);
+    for (let i = 0; i < guestSlots; i++) {
+      const guest = teamData.guests[i];
+      slots.push({ type: 'guest', participant: guest, index: i + 1 }); // +1 because seat 0 is host
+    }
+    
+    return slots;
+  };
+
+  const challengerSlots = generateSlots('challenger');
+  const opponentSlots = generateSlots('opponent');
+
+  // Calculate grid layout based on slot count
+  const getGridClass = (slotCount: number) => {
+    if (slotCount <= 2) return 'grid-cols-1';
+    if (slotCount <= 4) return 'grid-cols-2';
+    return 'grid-cols-2 grid-rows-3';
+  };
+
   return (
     <div className="flex-1 flex overflow-hidden p-4 gap-4 bg-black/40">
       {/* Challenger Side */}
@@ -278,21 +312,51 @@ const BattleArena = ({
         >
           Gift Side A
         </button>
-        {categorized.challenger.host && (
+        
+        {/* Host - Always full width */}
+        {challengerSlots[0]?.participant ? (
           <div
             onClick={(e) => {
               e.stopPropagation();
-              handleGiftClick(categorized.challenger.host!);
+              handleGiftClick(challengerSlots[0].participant!);
             }}
             className="cursor-pointer"
           >
-            <BattleParticipantTile {...categorized.challenger.host} side="challenger" />
+            <BattleParticipantTile {...challengerSlots[0].participant} side="challenger" />
+          </div>
+        ) : (
+          <div className="relative bg-zinc-900/30 rounded-xl overflow-hidden border border-white/5 h-64 flex items-center justify-center">
+            <span className="text-zinc-600 text-sm">Waiting for host...</span>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
-          {categorized.challenger.guests.map(p => (
+        
+        {/* Guests - Grid layout */}
+        <div className={`grid gap-2 ${getGridClass(challengerSlots.length - 1)}`}>
+          {challengerSlots.slice(1).map((slot, idx) => (
+            <div key={`challenger-guest-${idx}`}>
+              {slot.participant ? (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGiftClick(slot.participant!);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <BattleParticipantTile {...slot.participant} side="challenger" />
+                </div>
+              ) : (
+                <div className="relative bg-zinc-900/30 rounded-xl overflow-hidden border border-dashed border-white/10 h-40 flex items-center justify-center">
+                  <span className="text-zinc-600 text-xs">Empty Seat</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        {/* Render any additional guests that joined beyond box_count */}
+        {categorized.challenger.guests.slice(challengerSlots.length - 1).map(p => (
+          <div key={p.identity} className="grid grid-cols-2 gap-4">
             <div
-              key={p.identity}
               onClick={(e) => {
                 e.stopPropagation();
                 handleGiftClick(p);
@@ -301,8 +365,8 @@ const BattleArena = ({
             >
               <BattleParticipantTile {...p} side="challenger" />
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
       {/* VS Divider (Visual Only) */}
@@ -316,21 +380,51 @@ const BattleArena = ({
         >
           Gift Side B
         </button>
-        {categorized.opponent.host && (
+        
+        {/* Host - Always full width */}
+        {opponentSlots[0]?.participant ? (
           <div
             onClick={(e) => {
               e.stopPropagation();
-              handleGiftClick(categorized.opponent.host!);
+              handleGiftClick(opponentSlots[0].participant!);
             }}
             className="cursor-pointer"
           >
-            <BattleParticipantTile {...categorized.opponent.host} side="opponent" />
+            <BattleParticipantTile {...opponentSlots[0].participant} side="opponent" />
+          </div>
+        ) : (
+          <div className="relative bg-zinc-900/30 rounded-xl overflow-hidden border border-white/5 h-64 flex items-center justify-center">
+            <span className="text-zinc-600 text-sm">Waiting for host...</span>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
-          {categorized.opponent.guests.map(p => (
+        
+        {/* Guests - Grid layout */}
+        <div className={`grid gap-2 ${getGridClass(opponentSlots.length - 1)}`}>
+          {opponentSlots.slice(1).map((slot, idx) => (
+            <div key={`opponent-guest-${idx}`}>
+              {slot.participant ? (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGiftClick(slot.participant!);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <BattleParticipantTile {...slot.participant} side="opponent" />
+                </div>
+              ) : (
+                <div className="relative bg-zinc-900/30 rounded-xl overflow-hidden border border-dashed border-white/10 h-40 flex items-center justify-center">
+                  <span className="text-zinc-600 text-xs">Empty Seat</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        {/* Render any additional guests that joined beyond box_count */}
+        {categorized.opponent.guests.slice(opponentSlots.length - 1).map(p => (
+          <div key={p.identity} className="grid grid-cols-2 gap-4">
             <div
-              key={p.identity}
               onClick={(e) => {
                 e.stopPropagation();
                 handleGiftClick(p);
@@ -339,8 +433,8 @@ const BattleArena = ({
             >
               <BattleParticipantTile {...p} side="opponent" />
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -870,7 +964,6 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
         if (leaveError || leaveResult?.success === false) {
           toast.error(leaveResult?.message || leaveError?.message || 'Failed to leave battle');
-          // Still navigate away even if RPC fails
         } else {
           // Distribute winnings
           try {
@@ -881,17 +974,29 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           toast.success('You left the battle. Opponent wins.');
         }
         
-        // Navigate to summary when leaving battle
-        navigate(`/summary/${currentStreamId}`);
+        // Show battle summary instead of navigating - state-driven UI
+        setShowBattleSummary(true);
+        
+        // Cleanup media
+        if (localAudioTrack) {
+          localAudioTrack.stop();
+          localAudioTrack.close();
+        }
+        if (localVideoTrack) {
+          localVideoTrack.stop();
+          localVideoTrack.close();
+        }
+        if (agoraClient) {
+          agoraClient.leave();
+        }
       } catch (e) {
         console.error(e);
         toast.error('Failed to leave battle');
-        // Navigate to summary even on error
-        navigate(`/summary/${currentStreamId}`);
+        setShowBattleSummary(true);
       } finally {
         setLeaveLoading(false);
       }
-    }, [battle, user, navigate, currentStreamId, supabase]);
+    }, [battle, user, localAudioTrack, localVideoTrack, agoraClient]);
 
   useEffect(() => {
     if (!battle?.started_at || battle.status !== 'active' || !arenaReady) {
@@ -932,16 +1037,32 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Navigate to summary when battle ends (ALL users, ALL categories)
+  // Handle battle end - show StreamSummary inline instead of navigating
+  // This maintains state-driven UI without page reloads
+  const [showBattleSummary, setShowBattleSummary] = useState(false);
+  
   useEffect(() => {
-    if (showResults && battle?.status === 'ended') {
+    if (showResults && battle?.status === 'ended' && !showBattleSummary) {
       const timer = setTimeout(() => {
-        // Navigate to summary page when battle ends - ALL users, ALL categories
-        navigate(`/summary/${currentStreamId}`);
+        // Show battle summary inline instead of navigating
+        setShowBattleSummary(true);
+        
+        // Cleanup media when battle ends
+        if (localAudioTrack) {
+          localAudioTrack.stop();
+          localAudioTrack.close();
+        }
+        if (localVideoTrack) {
+          localVideoTrack.stop();
+          localVideoTrack.close();
+        }
+        if (agoraClient) {
+          agoraClient.leave();
+        }
       }, 5000); // 5 seconds to see results
       return () => clearTimeout(timer);
     }
-  }, [showResults, battle?.status, navigate, currentStreamId]);
+  }, [showResults, battle?.status, showBattleSummary, localAudioTrack, localVideoTrack, agoraClient]);
 
   if (loading || !battle || !challengerStream || !opponentStream) {
     return (
@@ -1050,9 +1171,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
         {/* SHARED LIVEKIT ROOM */}
 
-            <MemoBattleArena 
-            onGift={handleGiftSelect} 
-            battleId={battleId} 
+            <MemoBattleArena
+            onGift={handleGiftSelect}
+            battleId={battleId}
             localAudioTrack={localAudioTrack}
             localVideoTrack={localVideoTrack}
             remoteUsers={remoteUsers}
@@ -1060,6 +1181,8 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             opponentStreamId={opponentStream.id}
             challengerHostId={challengerStream.user_id}
             opponentHostId={opponentStream.user_id}
+            challengerBoxCount={challengerStream.box_count || 1}
+            opponentBoxCount={opponentStream.box_count || 1}
           />
 
             {/* Central Floating Timer */}
