@@ -298,6 +298,23 @@ export default function SetupPage() {
     }
   };
 
+  // Prevent page refresh/close when on setup page
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only prevent if not currently starting the stream
+      if (!isStartingStream.current) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   useEffect(() => {
     // Only acquire media if permissions have been granted
     if (showPermissionPrompt) {
