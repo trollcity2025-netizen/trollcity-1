@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, useRef, useEffect, memo, useCallback } from 'react';
+import { useMemo, useState, type CSSProperties, useRef, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ILocalVideoTrack, ILocalAudioTrack, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import { Stream } from '../../types/broadcast';
@@ -28,7 +28,7 @@ interface BroadcastGridProps {
   broadcasterProfile?: any;
   hideEmptySeats?: boolean;
   seatPriceOverride?: number;
-  localTracks: [ILocalVideoTrack | undefined, ILocalAudioTrack | undefined];
+  localTracks: [ILocalAudioTrack | undefined, ILocalVideoTrack | undefined];
   remoteUsers: IRemoteUser[];
   localUserId: string;
   toggleCamera: () => void;
@@ -39,61 +39,103 @@ interface BroadcastGridProps {
   onGetUserPositions?: (getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => void;
 }
 
-const AgoraVideoPlayer = memo(({ videoTrack, isLocal = false }: { videoTrack: ILocalVideoTrack | IRemoteVideoTrack; isLocal?: boolean }) => {
-  const videoRef = useRef<HTMLDivElement>(null);
-  const isPlayingRef = useRef(false);
+function AgoraVideoPlayer({
+  videoTrack,
+  isLocal = false,
+}: {
+  videoTrack: ILocalVideoTrack | IRemoteVideoTrack | undefined;
+  isLocal?: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasPlayedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   useEffect(() => {
-    // Defensive: ensure we have a valid container and track
-    if (!videoRef.current || !videoTrack) {
-      console.log('[AgoraVideoPlayer] Skipping play - no container or track:', { hasContainer: !!videoRef.current, hasTrack: !!videoTrack });
+    if (!videoTrack || !containerRef.current) {
+      console.log('[AgoraVideoPlayer] Skipping - missing track or container');
       return;
     }
 
-    // Already playing - just return to avoid re-creating video element
-    if (isPlayingRef.current) {
+    if (hasPlayedRef.current) {
+      console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
       return;
     }
 
-    try {
-      videoTrack.play(videoRef.current);
-      isPlayingRef.current = true;
-      console.log('[AgoraVideoPlayer] Video playing successfully');
-    } catch (err) {
-      console.error('[AgoraVideoPlayer] Failed to play video:', err);
-    }
+    const playWithRetry = () => {
+      if (!containerRef.current) return;
+
+      try {
+        console.log('[AgoraVideoPlayer] Calling play() - attempt', retryCountRef.current + 1);
+        videoTrack.play(containerRef.current);
+        hasPlayedRef.current = true;
+        console.log('[AgoraVideoPlayer] play() called successfully');
+
+        // Inspect injected video after Agora has time to inject it
+        setTimeout(() => {
+          const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
+          console.log('[AgoraVideoPlayer] Inner <video> inspection:', {
+            exists: !!inner,
+            width: inner?.videoWidth ?? 0,
+            height: inner?.videoHeight ?? 0,
+            readyState: inner?.readyState ?? -1, // 0=NOTHING, 1=metadata, 2=current, 3=future, 4=enough
+            paused: inner?.paused ?? false,
+            muted: inner?.muted ?? false,
+            srcObjectPresent: !!inner?.srcObject,
+          });
+
+          // If no frames or not ready → retry
+          if (inner && (inner.videoWidth === 0 || inner.readyState < 2)) {
+            if (retryCountRef.current < maxRetries) {
+              retryCountRef.current++;
+              console.warn(`[AgoraVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
+              hasPlayedRef.current = false; // allow re-play
+              setTimeout(playWithRetry, 400);
+            } else {
+              console.error('[AgoraVideoPlayer] Max retries reached - no frames flowing');
+            }
+          }
+        }, 600); // give Agora time to create <video> + start frames
+
+      } catch (err) {
+        console.error('[AgoraVideoPlayer] play() threw error:', err);
+        if (retryCountRef.current < maxRetries) {
+          retryCountRef.current++;
+          setTimeout(playWithRetry, 500);
+        }
+      }
+    };
+
+    // Slight delay to ensure container is painted
+    const initialTimer = setTimeout(playWithRetry, 150);
 
     return () => {
-      try {
-        videoTrack.stop();
-        isPlayingRef.current = false;
-      } catch (err) {
-        console.warn('[AgoraVideoPlayer] Error stopping video:', err);
+      clearTimeout(initialTimer);
+      if (videoTrack) {
+        console.log('[AgoraVideoPlayer] Cleanup - stopping track');
+        try {
+          videoTrack.stop();
+        } catch (e) {}
       }
     };
   }, [videoTrack]);
 
-  // Use absolute positioning to fill parent container completely
-  // This ensures video renders even when parent has flex/grid layout
-  // Apply mirror transform for local video (self-view) to make it natural
   return (
-    <div 
-      ref={videoRef} 
-      className="absolute inset-0 w-full h-full"
-      style={{ 
+    <div
+      ref={containerRef}
+      className="absolute inset-0 w-full h-full bg-black overflow-hidden"
+      style={{
+        minWidth: '100%',
+        minHeight: '100%',
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        // Mirror local video horizontally for natural self-view
-        transform: isLocal ? 'scaleX(-1)' : undefined
+        inset: 0,
+        // TEMPORARILY DISABLE mirroring to rule it out (re-enable after test)
+        // transform: isLocal ? 'scaleX(-1)' : undefined,
+        zIndex: 1,
       }}
     />
   );
-});
-
-AgoraVideoPlayer.displayName = 'AgoraVideoPlayer';
+}
 
 const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: ILocalAudioTrack | IRemoteAudioTrack }) => {
   const audioRef = useRef<HTMLDivElement>(null);
@@ -230,7 +272,7 @@ export default function BroadcastGrid({
 
   const attributes = useParticipantAttributes(userIds, stream.id);
 
-  const getParticipantAndTracks = useCallback((userId: string | undefined) => {
+  const getParticipantAndTracks = (userId: string | undefined) => {
     if (!userId) return { participant: undefined, videoTrack: undefined, audioTrack: undefined, isLocal: false };
 
     let participant: IRemoteUser | undefined;
@@ -239,47 +281,83 @@ export default function BroadcastGrid({
     let isLocal = false;
 
     if (userId === localUserId) {
-      // Local user
+      // Local user - use array index since we know the structure is [audio, video]
+      // Note: localTracks doesn't have trackMediaType property (only remote tracks do)
       isLocal = true;
-      videoTrack = localTracks[1];
-      audioTrack = localTracks[0];
+      audioTrack = localTracks[0] as ILocalAudioTrack | undefined;
+      videoTrack = localTracks[1] as ILocalVideoTrack | undefined;
+      console.log('[BroadcastGrid] Local user tracks for', userId?.substring(0, 8), ':', {
+        hasVideoTrack: !!videoTrack,
+        hasAudioTrack: !!audioTrack,
+        localTracksLength: localTracks.length,
+        localTracks0: localTracks[0]?.constructor?.name,
+        localTracks1: localTracks[1]?.constructor?.name,
+        videoTrackId: videoTrack?.getTrackId?.(),
+        videoEnabled: (videoTrack as any)?.enabled,
+      });
       // For local participant, we don't have an IRemoteUser object, so we'll use a dummy one for consistent typing
       // and to carry the identity for attribute lookup
       participant = { uid: localUserId, hasAudio: !!audioTrack, hasVideo: !!videoTrack, audioTrack, videoTrack } as IRemoteUser;
     } else {
-      // Remote user - use the userIdToAgoraUid mapping if available
+      // Remote user - try to find by any available method
+      // First: use the userIdToAgoraUid mapping if available
       const agoraUid = userIdToAgoraUid[userId];
       if (agoraUid !== undefined) {
         participant = remoteUsers.find(u => u.uid === agoraUid);
-      } else {
-        // Fallback: try to find by matching numeric Agora UID with user ID patterns
+        console.log('[BroadcastGrid] Looking up remote by agoraUid:', agoraUid, 'found:', !!participant);
+      }
+      
+      // Second: try to find by matching numeric Agora UID with user ID patterns
+      if (!participant) {
         participant = remoteUsers.find(u => {
           const uidStr = String(u.uid);
           return uidStr === userId || uidStr === userId.replace(/-/g, '').substring(0, 8);
         });
+        if (participant) {
+          console.log('[BroadcastGrid] Found remote by userId pattern match');
+        }
+      }
+      
+      // Third: if this is the host user and we still don't have a participant,
+      // the host might be publishing as a remote user (different connection)
+      if (!participant && userId === stream.user_id) {
+        // Host should be found - try to find any user that might be the host
+        participant = remoteUsers.find(u => u.hasVideo || u.hasAudio);
+        if (participant) {
+          console.log('[BroadcastGrid] Using fallback for host - found remote with media:', participant.uid);
+        }
       }
       
       if (participant) {
         videoTrack = participant.videoTrack;
         audioTrack = participant.audioTrack;
+        console.log('[BroadcastGrid] Remote user tracks:', {
+          uid: participant.uid,
+          hasVideoTrack: !!videoTrack,
+          hasAudioTrack: !!audioTrack,
+          hasVideo: participant.hasVideo,
+          hasAudio: participant.hasAudio
+        });
       } else {
-        // Last resort: find any remote user with video (for host case)
-        const remoteWithVideo = remoteUsers.find(u => u.videoTrack);
-        if (remoteWithVideo) {
-          participant = remoteWithVideo;
-          videoTrack = participant.videoTrack;
-          audioTrack = participant.audioTrack;
-        }
+        console.log('[BroadcastGrid] No participant found for userId:', userId?.substring(0, 8), 'remoteUsers count:', remoteUsers.length);
       }
     }
     
     // For remote users, we assume camera is on if we have a video track
-    // The enabled property works differently for remote vs local tracks
-    const isMicOn = isLocal ? (audioTrack ? (audioTrack as any).enabled !== false : false) : !!audioTrack;
-    const isCamOn = isLocal ? (videoTrack ? (videoTrack as any).enabled !== false : false) : !!videoTrack;
+    // For local users, check if track exists and is enabled (default to true if enabled is undefined)
+    const isMicOn = isLocal 
+      ? (audioTrack ? (audioTrack as any).enabled !== false : false) 
+      : !!audioTrack;
+    const isCamOn = isLocal 
+      ? (videoTrack ? ((videoTrack as any).enabled === true || (videoTrack as any).enabled === undefined) : false) 
+      : !!videoTrack;
+
+    if (isLocal) {
+      console.log('[BroadcastGrid] Local track states:', { isMicOn, isCamOn, videoTrackExists: !!videoTrack, audioTrackExists: !!audioTrack });
+    }
 
     return { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn };
-  }, [localUserId, localTracks, remoteUsers, userIdToAgoraUid]);
+  };
 
   // Calculate how many boxes we must render (never hide occupied seats)
   const seatKeys = Object.keys(seats);
@@ -301,7 +379,9 @@ export default function BroadcastGrid({
     totalRequiredBoxes,
     occupiedSeatIndices,
     maxOccupiedSeatIndex,
-    seatKeys: seatKeys.map(k => ({ key: k, userId: seats[Number(k)]?.user_id }))
+    localUserId: localUserId?.substring(0, 8),
+    streamUserId: stream.user_id?.substring(0, 8),
+    seatKeys: seatKeys.map(k => ({ key: k, userId: seats[Number(k)]?.user_id?.substring(0, 8) }))
   });
   
   const baseCount = totalRequiredBoxes;
@@ -367,9 +447,18 @@ export default function BroadcastGrid({
           // Find participant + tracks
           const { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn } = getParticipantAndTracks(userId);
 
-          // Debug logging
-          if (userId && !isLocal) {
-            console.log('[BroadcastGrid] Remote user:', userId, { participant: !!participant, videoTrack: !!videoTrack, audioTrack: !!audioTrack, isCamOn, remoteUsersCount: remoteUsers.length });
+          // Debug logging for ALL users (local and remote)
+          if (userId) {
+            console.log(`[BroadcastGrid] User ${userId.substring(0, 8)}... (isLocal=${isLocal}):`, { 
+              hasParticipant: !!participant, 
+              hasVideoTrack: !!videoTrack, 
+              hasAudioTrack: !!audioTrack, 
+              isCamOn, 
+              isMicOn,
+              videoEnabled: (videoTrack as any)?.enabled,
+              audioEnabled: (audioTrack as any)?.enabled,
+              remoteUsersCount: remoteUsers.length 
+            });
           }
 
           // Determine profile used for visuals
@@ -430,11 +519,40 @@ export default function BroadcastGrid({
                 }
               }}
             >
+              {/* DEBUG: Red circle for broadcaster or TrollCityAdmin - indicates component is rendering */}
+              {(isStreamHost && seatIndex === 0) || displayProfile?.username === 'TrollCityAdmin' && (
+                <div 
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-4 border-red-500 bg-red-500/20 z-30 pointer-events-none flex items-center justify-center"
+                  title="Broadcaster Test Indicator"
+                >
+                  <span className="text-red-500 font-bold text-xs">{displayProfile?.username === 'TrollCityAdmin' ? 'ADMIN' : 'HOST'}</span>
+                </div>
+              )}
+
               {/* Render Video if Participant Exists and Track is active */}
-              {videoTrack && isCamOn ? (
+              {(() => {
+                console.log(`[BroadcastGrid] Box ${seatIndex} video render check:`, {
+                  userId: userId?.substring(0, 8),
+                  isLocal,
+                  hasVideoTrack: !!videoTrack,
+                  videoTrackType: videoTrack?.trackMediaType,
+                  videoEnabled: (videoTrack as any)?.enabled,
+                  isCamOn,
+                  shouldRenderVideo: !!(videoTrack && isCamOn),
+                  isLocalUser: userId === localUserId
+                });
+                return null;
+              })()}
+              {/* Always render video player for local user - it handles undefined track internally */}
+              {userId === localUserId ? (
                 <AgoraVideoPlayer
                   videoTrack={videoTrack}
-                  isLocal={isLocal}
+                  isLocal={true}
+                />
+              ) : videoTrack && isCamOn ? (
+                <AgoraVideoPlayer
+                  videoTrack={videoTrack}
+                  isLocal={false}
                 />
               ) : userId && participant ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90">

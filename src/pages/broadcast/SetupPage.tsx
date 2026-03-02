@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
-import AgoraRTC from 'agora-rtc-sdk-ng';
-import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Monitor, MonitorOff, Gamepad2, Camera } from 'lucide-react';
+import { useStreamStore } from '@/lib/streamStore';
+import AgoraRTC, { ILocalAudioTrack, ILocalVideoTrack } from 'agora-rtc-sdk-ng';
+import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Camera, Monitor } from 'lucide-react';
 import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
+import { GamingSetup } from '../../components/broadcast/GamingSetup';
 import { toast } from 'sonner';
 import { generateUUID } from '../../lib/uuid';
 import {
@@ -51,13 +53,15 @@ export default function SetupPage() {
   
   // Category-specific state
   const [selectedReligion, setSelectedReligion] = useState('');
-  const [showOBSPanel, setShowOBSPanel] = useState(false);
   
   // Pre-generate stream ID for token optimization
   const [streamId] = useState(() => generateUUID());
 
   // Track if we are navigating to broadcast to prevent cleanup
   const isStartingStream = useRef(false);
+  // Track page visibility to prevent refresh on tab switch
+  const isPageVisible = useRef(true);
+  const isTabSwitching = useRef(false);
 
 
   // Get category config
@@ -70,8 +74,10 @@ export default function SetupPage() {
 
 
   // Media state
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // Changed from HTMLVideoElement to HTMLDivElement - Agora will create the video element
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [agoraTracks, setAgoraTracks] = useState<[ILocalAudioTrack | null, ILocalVideoTrack | null]>([null, null]);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
@@ -80,9 +86,39 @@ export default function SetupPage() {
   const [followerCount, setFollowerCount] = useState<number>(0);
 
   // Stream mode for gaming category (camera vs screen share)
-  const [streamMode, setStreamMode] = useState<StreamMode>('camera');
   const screenShare = useScreenShare();
-  const [screenTrack, setScreenTrack] = useState<any>(null);
+  
+  // Use global stream store for persistence across navigation
+  const {
+    screenTrack,
+    setScreenTrack,
+    streamMode,
+    setStreamMode,
+    screenPreviewStream,
+    setScreenPreviewStream,
+    clearTracks,
+  } = useStreamStore();
+
+  // Persist screen share state in sessionStorage for tab switch restoration
+  useEffect(() => {
+    if (screenTrack) {
+      console.log('[SetupPage] Screen track active - storing state');
+      sessionStorage.setItem('tc_screen_share_active', 'true');
+      sessionStorage.setItem('tc_stream_mode', 'screen');
+    } else {
+      sessionStorage.removeItem('tc_screen_share_active');
+      sessionStorage.setItem('tc_stream_mode', streamMode);
+    }
+  }, [screenTrack, streamMode]);
+
+  // Restore screen share state when returning to tab
+  useEffect(() => {
+    const wasScreenSharing = sessionStorage.getItem('tc_screen_share_active') === 'true';
+    if (wasScreenSharing && streamMode === 'camera' && !screenTrack) {
+      console.log('[SetupPage] Restoring screen share mode from session storage');
+      setStreamMode('screen');
+    }
+  }, []);
 
   // Permission state - track if camera/mic permissions need to be requested
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
@@ -90,21 +126,13 @@ export default function SetupPage() {
 
 
 
-  // Get Agora RTMP URL and stream key for gaming category
+  // Set stream mode based on category
   useEffect(() => {
-    if (category === 'gaming') {
-      // For gaming, we use Agora RTMP - show the OBS panel
-      // The stream key will be the channel/room ID when they start streaming
-      setShowOBSPanel(true);
-      // Auto-set to screen mode for gaming if supported
-      if (canScreenShare()) {
-        setStreamMode('screen');
-      }
-    } else {
-      setShowOBSPanel(false);
-      // Reset to camera mode for other categories
+    if (category !== 'gaming') {
+      // Reset to camera mode for non-gaming categories
       setStreamMode('camera');
     }
+    // Note: For gaming, we don't auto-switch - let user choose between camera/screen
   }, [category]);
 
   // Handle camera facing mode based on category
@@ -152,53 +180,30 @@ export default function SetupPage() {
   // Check camera/mic permissions when component mounts
   useEffect(() => {
     const checkPermissions = async () => {
-      // Admins can bypass camera/mic requirements
-      if (profile?.role === 'admin') {
+      // Try to get media directly first - this is the most reliable way to check
+      // and allows the browser's native permission flow to work
+      try {
+        const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        // If successful, stop the test stream and proceed
+        testStream.getTracks().forEach(track => track.stop());
         setPermissionStatus('granted');
         setShowPermissionPrompt(false);
+        localStorage.setItem('tc_camera_permissions_granted', 'true');
         return;
-      }
-
-      // Check if we have a stored permission flag
-      const permissionFlag = localStorage.getItem('tc_camera_permissions_granted');
-      
-      // If no flag (localStorage cleared or first visit), show permission prompt
-      if (!permissionFlag) {
-        setShowPermissionPrompt(true);
-        setPermissionStatus('prompt');
-        return;
-      }
-
-      // Check actual browser permission status if supported
-      if (navigator.permissions && navigator.permissions.query) {
-        try {
-          const cameraPerm = await navigator.permissions.query({ name: 'camera' as PermissionName });
-          const micPerm = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          
-          if (cameraPerm.state === 'granted' && micPerm.state === 'granted') {
-            setPermissionStatus('granted');
-            setShowPermissionPrompt(false);
-          } else if (cameraPerm.state === 'denied' || micPerm.state === 'denied') {
-            setPermissionStatus('denied');
-            setShowPermissionPrompt(true);
-          } else {
-            setPermissionStatus('prompt');
-            setShowPermissionPrompt(true);
-          }
-        } catch (e) {
-          // permissions.query might not be supported for camera/mic in some browsers
-          // Fall back to trying getUserMedia
-          setShowPermissionPrompt(false);
+      } catch (err: any) {
+        // If permission denied, show our custom prompt
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setPermissionStatus('denied');
+          setShowPermissionPrompt(true);
+          return;
         }
-      } else {
-        // Browser doesn't support permissions API, assume granted if flag exists
-        setPermissionStatus('granted');
+        // For other errors (no devices, etc.), don't block - let the main flow handle it
         setShowPermissionPrompt(false);
       }
     };
 
     checkPermissions();
-  }, [profile?.role]);
+  }, []);
 
   // Request camera and microphone permissions
   const requestPermissions = async () => {
@@ -267,34 +272,72 @@ export default function SetupPage() {
     }
 
     try {
-      const constraints = {
-        video: enableVideo ? { facingMode: videoFacingMode } : false,
-        audio: true
-      };
-      console.log('[acquireMediaStream] Requesting media with constraints:', constraints);
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('[acquireMediaStream] Successfully acquired media stream.');
+      // Create Agora tracks instead of raw MediaStream
+      console.log('[acquireMediaStream] Creating Agora tracks...');
+      
+      let audioTrack: ILocalAudioTrack | null = null;
+      let videoTrack: ILocalVideoTrack | null = null;
+
+      // Create audio track
+      try {
+        audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        console.log('[acquireMediaStream] Audio track created:', audioTrack.getTrackId?.());
+      } catch (audioErr) {
+        console.warn('[acquireMediaStream] Failed to create audio track:', audioErr);
+      }
+
+      // Create video track if enabled
+      if (enableVideo) {
+        try {
+          videoTrack = await AgoraRTC.createCameraVideoTrack({
+            facingMode: videoFacingMode,
+          });
+          console.log('[acquireMediaStream] Video track created:', videoTrack.getTrackId?.());
+        } catch (videoErr) {
+          console.warn('[acquireMediaStream] Failed to create video track:', videoErr);
+          toast.warning('Camera not found. Audio only mode.');
+          setIsVideoEnabled(false);
+        }
+      }
+
+      // Store Agora tracks for reuse in BroadcastPage
+      setAgoraTracks([audioTrack, videoTrack]);
+      
+      // Also store in PreflightStore for handoff
+      PreflightStore.setAgoraClient(null, [audioTrack, videoTrack, null, null]);
+      console.log('[acquireMediaStream] Agora tracks stored in PreflightStore');
+
+      // IMPORTANT: Use Agora's play() method instead of manually creating MediaStream
+      // This ensures proper playback management by Agora SDK
+      if (videoTrack && videoContainerRef.current) {
+        console.log('[acquireMediaStream] Playing video track in container using Agora play()');
+        videoTrack.play(videoContainerRef.current, {
+          fit: 'cover',
+          // Mirror local video for better user experience (self-view)
+          mirror: videoFacingMode === 'user'
+        });
+      }
+
+      // Create a MediaStream from Agora tracks for compatibility with existing code
+      // This is used for state management but the actual playback is handled by Agora
+      const mediaStream = new MediaStream();
+      if (audioTrack) {
+        mediaStream.addTrack(audioTrack.getMediaStreamTrack());
+      }
+      if (videoTrack) {
+        mediaStream.addTrack(videoTrack.getMediaStreamTrack());
+      }
+      
+      console.log('[acquireMediaStream] MediaStream created from Agora tracks:', {
+        audioTracks: mediaStream.getAudioTracks().length,
+        videoTracks: mediaStream.getVideoTracks().length
+      });
+      
       return mediaStream;
     } catch (err: any) {
-      console.warn("[acquireMediaStream] Error accessing media devices, trying audio only.", err);
-
-      if (err.name === 'NotAllowedError') {
-           toast.error("Camera permission denied. Please allow access in browser settings.");
-           return null;
-      }
-
-      try {
-          console.log('[acquireMediaStream] Attempting to acquire audio only stream.');
-          const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-          setIsVideoEnabled(false);
-          toast.warning("Camera not found. Audio only mode.");
-          console.log('[acquireMediaStream] Successfully acquired audio only stream.');
-          return audioStream;
-      } catch (audioErr) {
-          console.error("[acquireMediaStream] No media devices found.", audioErr);
-          toast.error("Could not access microphone either.");
-          return null;
-      }
+      console.error('[acquireMediaStream] Error creating Agora tracks:', err);
+      toast.error('Failed to access camera/microphone: ' + err.message);
+      return null;
     }
   };
 
@@ -315,6 +358,62 @@ export default function SetupPage() {
     };
   }, []);
 
+  // Cleanup session storage when component unmounts (user leaves setup page)
+  useEffect(() => {
+    return () => {
+      // Only clear if not starting stream and not in a tab switch
+      // Tab switches are handled by the visibilitychange listener
+      if (!isStartingStream.current && !isTabSwitching.current) {
+        console.log('[SetupPage] Cleanup: Clearing session storage flags (actual page leave)');
+        sessionStorage.removeItem('tc_setup_initialized');
+        sessionStorage.removeItem('tc_tab_switching');
+        sessionStorage.removeItem('tc_screen_share_active');
+        sessionStorage.removeItem('tc_stream_mode');
+      } else {
+        console.log('[SetupPage] Cleanup: Preserving session storage (tab switch or stream start)');
+      }
+    };
+  }, []);
+
+  // Track page visibility to prevent stream cleanup on tab switch
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const wasVisible = isPageVisible.current;
+      isPageVisible.current = document.visibilityState === 'visible';
+      
+      console.log(`[SetupPage] Visibility changed: ${wasVisible ? 'visible' : 'hidden'} -> ${isPageVisible.current ? 'visible' : 'hidden'}`);
+      
+      // Track if this is a tab switch (was visible, now hidden, or vice versa)
+      if (wasVisible !== isPageVisible.current) {
+        isTabSwitching.current = true;
+        // Store in sessionStorage to persist across the tab switch
+        if (!isPageVisible.current) {
+          sessionStorage.setItem('tc_tab_switching', 'true');
+        }
+        // Reset after a short delay
+        setTimeout(() => {
+          isTabSwitching.current = false;
+        }, 500);
+      }
+      
+      // When tab becomes visible again, don't re-acquire media if we already have it
+      // This prevents screen share from being lost when switching tabs
+      if (isPageVisible.current && wasVisible === false) {
+        console.log('[SetupPage] Tab became visible - checking if stream needs restoration');
+        
+        // If we have a screen share track but lost the stream state, try to restore it
+        if (streamMode === 'screen' && !stream && screenTrack) {
+          console.log('[SetupPage] Screen share mode active but no stream - state may have been lost');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [streamMode, stream, screenTrack]);
+
   useEffect(() => {
     // Only acquire media if permissions have been granted
     if (showPermissionPrompt) {
@@ -322,7 +421,26 @@ export default function SetupPage() {
       return;
     }
 
-    console.log('[SetupPage] Media acquisition useEffect triggered. facingMode:', facingMode, 'isVideoEnabled:', isVideoEnabled);
+    // Check sessionStorage for tab switch state (persists across tab visibility changes)
+    const wasInitialized = sessionStorage.getItem('tc_setup_initialized') === 'true';
+    const isReturningFromTabSwitch = sessionStorage.getItem('tc_tab_switching') === 'true';
+    
+    // Skip re-initialization if:
+    // 1. We've already initialized (sessionStorage flag is set)
+    // 2. We have an existing stream
+    // 3. We're returning from a tab switch
+    // This prevents the camera from refreshing when switching tabs
+    if (wasInitialized && stream && isReturningFromTabSwitch) {
+      console.log('[SetupPage] Returning from tab switch with existing stream, skipping re-acquisition');
+      // Clear the tab switching flag
+      sessionStorage.removeItem('tc_tab_switching');
+      return;
+    }
+
+    // Mark as initialized immediately to prevent duplicate runs
+    sessionStorage.setItem('tc_setup_initialized', 'true');
+    
+    console.log('[SetupPage] Media acquisition useEffect triggered. facingMode:', facingMode, 'isVideoEnabled:', isVideoEnabled, 'wasInitialized:', wasInitialized);
     let currentLocalStream: MediaStream | null = null;
     const isMounted = { current: true };
 
@@ -333,10 +451,18 @@ export default function SetupPage() {
 
     async function getInitialMedia() {
       console.log('[SetupPage] getInitialMedia called. Existing stream state:', stream ? 'available' : 'not available');
-      // Stop previous tracks if any
-      if (stream) {
-          console.log('[SetupPage] Stopping previous media tracks.');
+      
+      // For camera mode: Stop previous tracks if any (but only if we're actually changing camera settings)
+      // For screen mode: Don't stop - the screen share should persist
+      if (stream && streamMode === 'camera') {
+          console.log('[SetupPage] Stopping previous camera media tracks.');
           stream.getTracks().forEach(track => track.stop());
+      }
+
+      // If we're in screen share mode and already have a screen track, don't re-acquire camera
+      if (streamMode === 'screen' && screenTrack) {
+        console.log('[SetupPage] Screen share mode active with track - skipping camera acquisition');
+        return;
       }
 
       const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
@@ -356,56 +482,111 @@ export default function SetupPage() {
       currentLocalStream = mediaStream;
       setStream(mediaStream);
 
-      let videoAttached = false;
-      const attachToVideo = () => {
-        if (videoRef.current && !videoAttached) {
-          videoRef.current.srcObject = mediaStream;
-          videoAttached = true;
-          console.log('[SetupPage] Media stream attached to video element.');
-        }
-      };
-      attachToVideo();
-      if (!videoAttached) {
-        setTimeout(attachToVideo, 100);
-      }
+      // Note: Video is now played via Agora's play() method in acquireMediaStream
+      // No need to manually attach srcObject - Agora manages the video element
+      console.log('[SetupPage] Video playback handled by Agora SDK via play() method');
     }
     getInitialMedia();
 
-    const isStartingStreamValue = isStartingStream.current;
     return () => {
       isMounted.current = false;
-      if (currentLocalStream && !isStartingStreamValue) {
-        console.log('[SetupPage] Cleanup: Cleaning up media stream.');
-        currentLocalStream.getTracks().forEach(track => track.stop());
-      } else if (isStartingStreamValue && currentLocalStream) {
-        console.log('[SetupPage] Cleanup: Preserving media stream for broadcast.');
+      // Stop Agora video track playback when component unmounts or re-renders
+      // This prevents duplicate video elements and memory leaks
+      if (agoraTracks[1]) {
+        console.log('[SetupPage] Cleanup: Stopping Agora video track playback');
+        agoraTracks[1].stop();
+      }
+      
+      // Don't cleanup on tab switches - only on actual unmount or stream start
+      // Use the current ref value, not a captured one, to get latest state
+      if (currentLocalStream && !isStartingStream.current) {
+        // Check if this is a tab switch (isTabSwitching will be true for 500ms after visibility change)
+        if (isTabSwitching.current || !isPageVisible.current) {
+          console.log('[SetupPage] Cleanup: Tab switch detected - preserving media stream.');
+          PreflightStore.setStream(currentLocalStream);
+        } else {
+          console.log('[SetupPage] Cleanup: Cleaning up media stream on unmount.');
+          currentLocalStream.getTracks().forEach(track => track.stop());
+        }
+      } else if (isStartingStream.current && currentLocalStream) {
+        console.log('[SetupPage] Cleanup: Preserving media stream for broadcast (natural unmount).');
         PreflightStore.setStream(currentLocalStream);
       }
     };
-  }, [facingMode, isVideoEnabled, showPermissionPrompt]);
+  }, [facingMode, isVideoEnabled, showPermissionPrompt, streamMode, screenTrack]);
 
-  const toggleVideo = () => {
-    if (stream) {
-      stream.getVideoTracks().forEach(track => track.enabled = !isVideoEnabled);
-      setIsVideoEnabled(!isVideoEnabled);
+  const toggleVideo = async () => {
+    const newState = !isVideoEnabled;
+    if (agoraTracks[1]) {
+      await agoraTracks[1].setEnabled(newState);
+      console.log('[SetupPage] Video track enabled set to:', newState);
     }
+    setIsVideoEnabled(newState);
   };
 
-
-
-  const toggleAudio = () => {
-    if (stream) {
-      stream.getAudioTracks().forEach(track => track.enabled = !isAudioEnabled);
-      setIsAudioEnabled(!isAudioEnabled);
+  const toggleAudio = async () => {
+    const newState = !isAudioEnabled;
+    if (agoraTracks[0]) {
+      await agoraTracks[0].setEnabled(newState);
+      console.log('[SetupPage] Audio track enabled set to:', newState);
     }
+    setIsAudioEnabled(newState);
   };
 
-  const flipCamera = () => {
+  const flipCamera = async () => {
     if (!canUseFrontCamera && facingMode === 'environment') {
       toast.error('Front camera is not available for this category');
       return;
     }
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+    
+    const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newFacingMode);
+    
+    // Recreate video track with new facing mode
+    if (agoraTracks[1]) {
+      try {
+        console.log('[SetupPage] Recreating video track with facing mode:', newFacingMode);
+        // Stop and close current video track
+        agoraTracks[1].stop();
+        agoraTracks[1].close();
+        
+        // Create new video track with new facing mode
+        const newVideoTrack = await AgoraRTC.createCameraVideoTrack({
+          facingMode: newFacingMode,
+        });
+        
+        // Update state
+        setAgoraTracks([agoraTracks[0], newVideoTrack]);
+        PreflightStore.setAgoraClient(null, [agoraTracks[0], newVideoTrack, null, null]);
+        
+        // Update preview stream
+        const newStream = new MediaStream();
+        if (agoraTracks[0]) {
+          newStream.addTrack(agoraTracks[0].getMediaStreamTrack());
+        }
+        newStream.addTrack(newVideoTrack.getMediaStreamTrack());
+        setStream(newStream);
+        
+        // Use Agora's play() method instead of srcObject
+        if (videoContainerRef.current) {
+          // Stop any previous video track playback
+          if (agoraTracks[1]) {
+            agoraTracks[1].stop();
+          }
+          // Play new track in container
+          newVideoTrack.play(videoContainerRef.current, {
+            fit: 'cover',
+            mirror: newFacingMode === 'user'
+          });
+          console.log('[SetupPage] New video track playing via Agora play()');
+        }
+        
+        console.log('[SetupPage] Video track recreated successfully');
+      } catch (err) {
+        console.error('[SetupPage] Failed to recreate video track:', err);
+        toast.error('Failed to switch camera');
+      }
+    }
   };
 
   // Toggle screen sharing for gaming mode
@@ -414,30 +595,85 @@ export default function SetupPage() {
       // Switch back to camera mode
       screenShare.stopScreenShare();
       setScreenTrack(null);
+      setScreenPreviewStream(null);
       setStreamMode('camera');
+      // Re-acquire camera stream
+      const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
+      if (mediaStream) {
+        setStream(mediaStream);
+        // Video is now played via Agora's play() method in acquireMediaStream
+      }
       toast.info('Switched to camera mode');
     } else {
       // Switch to screen share mode
+      // First, stop camera stream to free up resources
+      if (stream) {
+        console.log('[toggleScreenShare] Stopping camera stream before screen share');
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+
       const track = await screenShare.startScreenShare();
       if (track) {
         setScreenTrack(track);
         setStreamMode('screen');
+
+        // Use Agora's play() method for screen share preview
+        if (videoContainerRef.current) {
+          track.play(videoContainerRef.current, {
+            fit: 'contain', // Use contain for screen share to show full screen
+            mirror: false   // Don't mirror screen share
+          });
+          console.log('[SetupPage] Screen track playing via Agora play()');
+        }
+
+        // Create preview stream for state management
+        const mediaStreamTrack = track.getMediaStreamTrack();
+        if (mediaStreamTrack) {
+          const previewStream = new MediaStream([mediaStreamTrack]);
+          setScreenPreviewStream(previewStream);
+        }
+
         toast.success('Screen sharing started!');
-        
+
         // Handle when user stops sharing via browser UI
         screenShare.onScreenShareEnded(() => {
           setScreenTrack(null);
+          setScreenPreviewStream(null);
           setStreamMode('camera');
+          // Stop screen track playback
+          track.stop();
+          // Re-acquire camera stream when screen share ends
+          acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
+            if (mediaStream) {
+              setStream(mediaStream);
+              // Video will be played via Agora's play() in acquireMediaStream
+            }
+          });
           toast.info('Screen sharing ended');
         });
       } else {
         toast.error(screenShare.error || 'Failed to start screen sharing');
+        // Re-acquire camera stream on failure
+        const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
+        if (mediaStream) {
+          setStream(mediaStream);
+          // Video will be played via Agora's play() in acquireMediaStream
+        }
       }
     }
   };
 
   const handleStartStream = async () => {
+    // Mark that we're starting the stream to prevent cleanup from stopping tracks
+    isStartingStream.current = true;
+    console.log('[SetupPage] Starting stream - isStartingStream set to true');
 
+    // Clear session storage flags when starting stream
+    sessionStorage.removeItem('tc_setup_initialized');
+    sessionStorage.removeItem('tc_tab_switching');
+    sessionStorage.removeItem('tc_screen_share_active');
+    sessionStorage.removeItem('tc_stream_mode');
 
     if (!title.trim()) {
       toast.error('Please enter a stream title');
@@ -452,11 +688,11 @@ export default function SetupPage() {
 
     // Check Trollmers requirements
     if (category === 'trollmers') {
-      if (followerCount < 1 && profile?.role !== 'admin') {
+      if (followerCount < 1) {
         toast.error('Trollmers requires 1+ followers');
         return;
       }
-      if (!isVideoEnabled && profile?.role !== 'admin') {
+      if (!isVideoEnabled) {
         toast.error('Trollmers requires camera enabled');
         return;
       }
@@ -539,100 +775,40 @@ export default function SetupPage() {
       
       console.log("TOKEN APP ID:", tokenData?.appId);
       console.log("TOKEN LENGTH:", tokenData?.token?.length);
-      
-      // 3. Create Agora client
-      const agoraClient = AgoraRTC.createClient({
-        mode: 'rtc',
-        codec: 'vp8'
-      });
-      
-      // 4. Join the channel
-      const appIdFromToken = (tokenData as any)?.appId || (tokenData as any)?.app_id || null;
-      const appIdEnv = import.meta.env.VITE_AGORA_APP_ID ? String(import.meta.env.VITE_AGORA_APP_ID).trim() : '';
-      const effectiveAppId = (appIdFromToken || appIdEnv || '').trim();
-      if (!effectiveAppId) {
-        throw new Error('Agora App ID is missing or invalid');
+
+      // NOTE: Do NOT join Agora channel in SetupPage - BroadcastPage will handle joining
+      // This prevents UID_CONFLICT errors when BroadcastPage creates its own fresh client
+      console.log('[SetupPage] Skipping Agora join - BroadcastPage will handle connection');
+
+      // Store stream info in sessionStorage for BroadcastPage to use
+      sessionStorage.setItem('tc_stream_token', tokenData.token);
+      sessionStorage.setItem('tc_stream_uid', numericUid.toString());
+
+      // Store App ID if provided by token endpoint
+      if (tokenData?.appId) {
+        sessionStorage.setItem('tc_stream_app_id', tokenData.appId);
       }
-      console.log("RAW VITE_AGORA_APP_ID from env:", import.meta.env.VITE_AGORA_APP_ID);
-      console.log("App ID from tokenData:", appIdFromToken);
-      console.log("Effective App ID used for join:", effectiveAppId);
-      console.log("SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
-      
-      await agoraClient.join(
-        effectiveAppId,
-        streamId,
-        tokenData.token,
-        numericUid
-      );
-      
-      console.log('[SetupPage] Joined Agora channel:', streamId, 'with UID:', numericUid);
-      
-      // 5. Create tracks from existing MediaStream (NOT new tracks)
-      let localStream = PreflightStore.getStream();
-      console.log('[handleStartStream] Stream from PreflightStore:', localStream ? 'available' : 'not available');
 
-      let audioTrack: any = null;
-      let videoTrack: any = null;
-
-      // Check if we're in screen share mode for gaming
-      if (category === 'gaming' && streamMode === 'screen' && screenTrack) {
-        // Use screen share track
-        videoTrack = screenTrack;
-        
-        // Still need audio from microphone
-        if (!localStream) {
-          localStream = await acquireMediaStream(facingMode, false); // Audio only
-        }
-        const baseAudio = localStream?.getAudioTracks()[0] || null;
-        audioTrack = baseAudio
-          ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
-          : null;
-          
-        console.log('[handleStartStream] Using screen share track for gaming');
+      // Store screen share state in sessionStorage for BroadcastPage to read
+      // Note: The actual screenTrack is stored in the global streamStore and will persist across navigation
+      if (streamMode === 'screen' && screenTrack) {
+        sessionStorage.setItem('tc_broadcast_screen_mode', 'true');
+        console.log('[handleStartStream] Screen share mode active - storing for BroadcastPage', {
+          category,
+          streamMode,
+          hasScreenTrack: !!screenTrack,
+          trackId: screenTrack.getTrackId?.()
+        });
       } else {
-        // Fallback: If no stream from PreflightStore, try to acquire it directly
-        if (!localStream) {
-          toast.info('Attempting to re-acquire media stream...');
-          localStream = await acquireMediaStream(facingMode, isVideoEnabled);
-          console.log('[handleStartStream] Stream after fallback acquisition:', localStream ? 'available' : 'not available');
-        }
-
-        if (!localStream) {
-          throw new Error('Media stream not available. Please ensure camera and microphone permissions are granted.');
-        }
-        
-        const baseAudio = localStream?.getAudioTracks()[0] || null;
-        const baseVideo = isVideoEnabled ? (localStream?.getVideoTracks()[0] || null) : null;
-
-        audioTrack = baseAudio
-          ? await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: baseAudio })
-          : null;
-
-        videoTrack = baseVideo
-          ? await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: baseVideo })
-          : null;
+        sessionStorage.removeItem('tc_broadcast_screen_mode');
+        console.log('[handleStartStream] Screen share mode NOT active', {
+          category,
+          streamMode,
+          hasScreenTrack: !!screenTrack
+        });
       }
 
-
-
-      // 6. Publish tracks
-      const tracksToPublish: any[] = [];
-      if (audioTrack) tracksToPublish.push(audioTrack);
-      if (videoTrack) tracksToPublish.push(videoTrack);
-
-      
-      if (tracksToPublish.length === 0) {
-        throw new Error('No media tracks available to publish. Please check your camera/microphone setup.');
-      }
-      
-      await agoraClient.publish(tracksToPublish);
-      console.log('[SetupPage] Published tracks to Agora');
-      
-      // 7. Store client and tracks in PreflightStore for BroadcastPage
-      const localTracks: [any, any, null, null] = [audioTrack, videoTrack, null, null];
-      PreflightStore.setAgoraClient(agoraClient, localTracks);
-      
-      // Update stream status after successful join/publish
+      // Update stream status
       await supabase
         .from('streams')
         .update({
@@ -641,7 +817,46 @@ export default function SetupPage() {
           started_at: new Date().toISOString()
         })
         .eq('id', streamId);
+
+      // Ensure video state reflects actual track state before storing
+      const hasVideoTrack = agoraTracks[1] !== null;
+      const videoTrackEnabled = agoraTracks[1]?.enabled ?? false;
+      const actualVideoEnabled = isVideoEnabled && hasVideoTrack && videoTrackEnabled;
       
+      console.log('[SetupPage] Storing track enabled states:', {
+        isVideoEnabled,
+        isAudioEnabled,
+        hasVideoTrack,
+        videoTrackEnabled,
+        actualVideoEnabled
+      });
+      
+      // Store the actual state, not just the toggle state
+      PreflightStore.setTrackEnabledStates(actualVideoEnabled, isAudioEnabled);
+
+      // Update Agora track enabled states to match UI
+      if (agoraTracks[0]) {
+        await agoraTracks[0].setEnabled(isAudioEnabled);
+        console.log('[SetupPage] Audio track enabled set to:', isAudioEnabled);
+      }
+      if (agoraTracks[1]) {
+        await agoraTracks[1].setEnabled(isVideoEnabled);
+        console.log('[SetupPage] Video track enabled set to:', isVideoEnabled);
+      }
+
+      // Store Agora tracks in PreflightStore for BroadcastPage to use
+      // IMPORTANT: We don't stop the tracks - they will be reused
+      PreflightStore.setAgoraClient(null, [agoraTracks[0], agoraTracks[1], null, null]);
+      console.log('[SetupPage] Agora tracks stored for BroadcastPage reuse:', {
+        hasAudio: !!agoraTracks[0],
+        hasVideo: !!agoraTracks[1],
+        audioEnabled: agoraTracks[0]?.enabled,
+        videoEnabled: agoraTracks[1]?.enabled
+      });
+
+      // DO NOT stop the tracks - they will be reused by BroadcastPage
+      // The tracks are stored in PreflightStore and will persist across navigation
+
       // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
 
@@ -658,127 +873,7 @@ export default function SetupPage() {
 
 
 
-  // Render OBS Panel for Gaming category - Agora RTMP
-  const renderOBSPanel = () => {
-    if (!showOBSPanel) return null;
-    
-    // For gaming, we use Agora RTMP - show the OBS panel
-    // Note: Agora requires Cloud Recording to be enabled for RTMP ingest
-    // Format: rtmp://[projectID].agora.io/live/[channel]
-    const agoraRTMPUrl = 'rtmp://rtmp.agora.io/live';
-    const agoraStreamKey = streamId; // The stream/room ID is used as the channel name
-    
-    // Mobile fallback - phones often cannot screen share
-    if (!screenShare.isSupported) {
-      return (
-        <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2 text-amber-400">
-            <Monitor size={18} />
-            <span className="font-semibold">🎮 Gaming Mode</span>
-          </div>
-          
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-            <p className="text-xs text-amber-300">
-              📱 Screen sharing is not supported on this device/browser.
-              You can still stream using your camera.
-            </p>
-          </div>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => setStreamMode('camera')}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${streamMode === 'camera' ? 'bg-amber-500 text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
-            >
-              <Camera size={16} className="inline mr-2" />
-              Camera
-            </button>
-          </div>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="bg-slate-950/80 border border-purple-500/30 rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 text-purple-400">
-          <Monitor size={18} />
-          <span className="font-semibold">🎮 Stream Your Game</span>
-        </div>
-        
-        {/* Mode Toggle */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setStreamMode('camera')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${streamMode === 'camera' ? 'bg-purple-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-          >
-            <Camera size={16} className="inline mr-2" />
-            Camera
-          </button>
-          <button
-            onClick={() => {
-              if (streamMode !== 'screen') {
-                toggleScreenShare();
-              } else {
-                setStreamMode('camera');
-                screenShare.stopScreenShare();
-                setScreenTrack(null);
-              }
-            }}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${streamMode === 'screen' ? 'bg-purple-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-          >
-            <Gamepad2 size={16} className="inline mr-2" />
-            Screen
-          </button>
-        </div>
-        
-        <div className="space-y-3 text-sm">
-          {/* Quick Start - In Browser */}
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-            <div className="flex items-center gap-2 text-green-400 mb-1">
-              <span className="font-semibold">✅ Easiest: In-Browser</span>
-            </div>
-            <p className="text-xs text-gray-400">
-              Click the 🎮 <Monitor size={12} className="inline" /> icon above your camera preview to share your screen directly!
-            </p>
-          </div>
-          
-          {/* OBS Option */}
-          <div className="border-t border-white/10 pt-3">
-            <p className="text-xs text-gray-400 mb-2">
-              Or use OBS Studio for advanced streaming:
-            </p>
-            <div>
-              <span className="text-gray-400">RTMP Ingest URL:</span>
-              <code className="block bg-black/50 p-2 rounded text-blue-300 text-xs mt-1">
-                {agoraRTMPUrl}
-              </code>
-            </div>
-            
-            <div className="mt-2">
-              <span className="text-gray-400">Stream Key (Channel):</span>
-              <div className="flex gap-2 mt-1">
-                <code className="flex-1 bg-black/50 p-2 rounded text-green-400 text-xs break-all">
-                  {agoraStreamKey}
-                </code>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(agoraStreamKey);
-                    toast.success('Stream key copied!');
-                  }}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-            
-            <p className="text-xs text-gray-500 mt-2">
-              Use these settings in OBS Studio → Settings → Stream
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
+
 
   // Render Religion Selector for Spiritual category
   const renderReligionSelector = () => {
@@ -819,15 +914,10 @@ export default function SetupPage() {
         
         {category === 'trollmers' && (
           <>
-            {profile?.role === 'admin' && (
-              <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-2 mb-2">
-                <p className="text-xs text-green-300 font-bold">🛡️ ADMIN MODE: Follower requirement bypassed for testing</p>
-              </div>
-            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-300">Followers:</span>
-              <span className={`font-bold ${followerCount >= 1 || profile?.role === 'admin' ? 'text-green-400' : 'text-red-400'}`}>
-                {followerCount} / 1 {profile?.role === 'admin' && '(Admin Bypass ✓)'}
+              <span className={`font-bold ${followerCount >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+                {followerCount} / 1
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -836,12 +926,12 @@ export default function SetupPage() {
                 {isVideoEnabled ? '✓ Yes' : '✗ No'}
               </span>
             </div>
-            {(followerCount < 1 && profile?.role !== 'admin') && !isVideoEnabled && (
+            {followerCount < 1 && !isVideoEnabled && (
               <p className="text-xs text-amber-300 mt-2">
                 ⚠️ Trollmers requires 1+ followers and camera enabled
               </p>
             )}
-            {(followerCount < 1 && profile?.role !== 'admin') && isVideoEnabled && (
+            {followerCount < 1 && isVideoEnabled && (
               <p className="text-xs text-amber-300 mt-2">
                 ⚠️ Trollmers requires 1+ followers
               </p>
@@ -908,14 +998,14 @@ export default function SetupPage() {
         {/* Preview Section */}
         <div className="space-y-4">
           <div className="aspect-video bg-black rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl">
-            {showPermissionPrompt && profile?.role !== 'admin' ? (
+            {showPermissionPrompt ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-6 text-center">
                 <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4">
                   <Video size={32} className="text-yellow-400" />
                 </div>
                 <h3 className="text-lg font-bold text-white mb-2">Camera & Microphone Access Required</h3>
                 <p className="text-sm text-gray-400 mb-4 max-w-xs">
-                  We need permission to access your camera and microphone for streaming. 
+                  We need permission to access your camera and microphone for streaming.
                   This is required to go live.
                 </p>
                 {permissionStatus === 'denied' ? (
@@ -924,6 +1014,7 @@ export default function SetupPage() {
                       Permission was denied. Please enable camera/microphone access in your browser settings.
                     </p>
                     <button
+                      type="button"
                       onClick={() => window.location.reload()}
                       className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white transition-colors"
                     >
@@ -932,6 +1023,7 @@ export default function SetupPage() {
                   </div>
                 ) : (
                   <button
+                    type="button"
                     onClick={requestPermissions}
                     className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold rounded-xl hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95"
                   >
@@ -939,41 +1031,22 @@ export default function SetupPage() {
                   </button>
                 )}
               </div>
-            ) : profile?.role === 'admin' && !stream ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-6 text-center">
-                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
-                  <Video size={32} className="text-green-400" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Admin Mode</h3>
-                <p className="text-sm text-gray-400 mb-4 max-w-xs">
-                  You can start streaming without camera and microphone access.
-                  Regular users must grant permissions to stream.
-                </p>
-                <button
-                  onClick={() => {
-                    // For admin, just set permissions as granted without actually requesting
-                    localStorage.setItem('tc_camera_permissions_granted', 'true');
-                    localStorage.setItem('tc_camera_permissions_timestamp', Date.now().toString());
-                    setPermissionStatus('granted');
-                    setShowPermissionPrompt(false);
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-green-400 to-emerald-600 text-black font-bold rounded-xl hover:from-green-300 hover:to-emerald-500 transition-all transform active:scale-95"
-                >
-                  Continue Without Camera
-                </button>
-              </div>
             ) : (
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                muted 
-                playsInline 
-                className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`} 
+              // Container div for Agora video playback
+              // Agora SDK will create and manage the video element inside this container
+              <div
+                ref={videoContainerRef}
+                className="absolute inset-0 w-full h-full bg-black overflow-hidden"
+                style={{
+                  zIndex: 1,
+                  // Mirror effect for front camera is handled by Agora's play() method
+                }}
               />
             )}
             
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
-              <button 
+              <button
+                type="button"
                 onClick={toggleVideo}
                 className={`p-3 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
 
@@ -983,7 +1056,8 @@ export default function SetupPage() {
               >
                 {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
               </button>
-              <button 
+              <button
+                type="button"
                 onClick={toggleAudio}
                 className={`p-3 rounded-full transition-colors ${isAudioEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
               >
@@ -992,6 +1066,7 @@ export default function SetupPage() {
               
               {hasMultipleCameras && canUseFrontCamera && (
                   <button
+                    type="button"
                     onClick={flipCamera}
                     className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                     title="Flip Camera"
@@ -1003,6 +1078,7 @@ export default function SetupPage() {
               {/* Screen Share Button for Gaming Category */}
               {category === 'gaming' && screenShare.isSupported && (
                 <button
+                  type="button"
                   onClick={toggleScreenShare}
                   className={`p-3 rounded-full transition-colors ${streamMode === 'screen' ? 'bg-purple-500/80 hover:bg-purple-600/80' : 'bg-white/10 hover:bg-white/20'}`}
                   title={streamMode === 'screen' ? 'Stop Screen Share' : 'Share Screen'}
@@ -1021,6 +1097,11 @@ export default function SetupPage() {
           </div>
           <p className="text-center text-sm text-gray-400">
             Check your camera and microphone before going live
+            {category === 'gaming' && (
+              <span className="block text-xs text-amber-400 mt-1">
+                💡 Chromebook/Chrome users: When screen sharing, select &quot;Window&quot; instead of &quot;Chrome Tab&quot; for best results
+              </span>
+            )}
           </p>
         </div>
 
@@ -1070,8 +1151,16 @@ export default function SetupPage() {
             {/* Category-specific info */}
             {renderCategoryInfo()}
 
-            {/* OBS Panel for Gaming */}
-            {renderOBSPanel()}
+            {/* Gaming Setup Panel */}
+            {category === 'gaming' && (
+              <GamingSetup
+                streamId={streamId}
+                acquireMediaStream={acquireMediaStream}
+                facingMode={facingMode}
+                isVideoEnabled={isVideoEnabled}
+                setStream={setStream}
+              />
+            )}
 
             {/* Religion Selector for Spiritual */}
             {renderReligionSelector()}
@@ -1079,7 +1168,7 @@ export default function SetupPage() {
             {/* Battle/Match Info */}
             {renderBattleInfo()}
 
-            {showPermissionPrompt && profile?.role !== 'admin' && (
+            {showPermissionPrompt && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
                 <p className="text-amber-300 text-sm">
                   ⚠️ Camera and microphone permissions are required to start streaming.
@@ -1087,17 +1176,10 @@ export default function SetupPage() {
               </div>
             )}
 
-            {profile?.role === 'admin' && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
-                <p className="text-green-300 text-sm">
-                  🛡️ Admin Mode: You can start streaming without camera and microphone.
-                </p>
-              </div>
-            )}
-
             <button
+              type="button"
               onClick={handleStartStream}
-              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera && profile?.role !== 'admin') || (showPermissionPrompt && profile?.role !== 'admin')}
+              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera) || showPermissionPrompt}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-lg hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-500/20"
             >
               {loading ? (
@@ -1105,7 +1187,7 @@ export default function SetupPage() {
                   <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></span>
                   Creating your stream...
                 </span>
-              ) : (showPermissionPrompt && profile?.role !== 'admin') ? (
+              ) : showPermissionPrompt ? (
                 'Grant Permissions to Start'
               ) : (
                 'Start Broadcast'

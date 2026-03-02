@@ -9,6 +9,9 @@ interface PreflightState {
   // Agora client and tracks for seamless handoff to BroadcastPage
   agoraClient: IAgoraRTCClient | null;
   localTracks: [any, any, any, any] | null; // [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?]
+  // Track enabled states from setup page
+  isVideoEnabled: boolean;
+  isAudioEnabled: boolean;
 }
 
 const state: PreflightState = {
@@ -19,6 +22,8 @@ const state: PreflightState = {
   url: null,
   agoraClient: null,
   localTracks: null,
+  isVideoEnabled: true,
+  isAudioEnabled: true,
 };
 
 export const PreflightStore = {
@@ -64,6 +69,16 @@ export const PreflightStore = {
     return state.localTracks;
   },
 
+  // Track enabled states from setup page
+  setTrackEnabledStates(isVideoEnabled: boolean, isAudioEnabled: boolean) {
+    state.isVideoEnabled = isVideoEnabled;
+    state.isAudioEnabled = isAudioEnabled;
+  },
+
+  getTrackEnabledStates() {
+    return { isVideoEnabled: state.isVideoEnabled, isAudioEnabled: state.isAudioEnabled };
+  },
+
   clear() {
     // Stop all tracks in the stored stream before clearing
     if (state.stream) {
@@ -102,5 +117,7 @@ export const PreflightStore = {
     state.url = null;
     state.agoraClient = null;
     state.localTracks = null;
+    state.isVideoEnabled = true;
+    state.isAudioEnabled = true;
   }
 };

@@ -30,17 +30,13 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
 
         client.on("user-published", async (user, mediaType) => {
           await client.subscribe(user, mediaType);
-          if (mediaType === "video") {
-            const remoteVideoTrack = user.videoTrack;
-            // Play the remote video track
-            // FIXME: Pass a valid HTML element to play the video
-            remoteVideoTrack?.play(null as any);
-          }
           if (mediaType === "audio") {
             const remoteAudioTrack = user.audioTrack;
-            // Play the remote audio track
+            // Audio can play immediately (no DOM element needed)
             remoteAudioTrack?.play();
           }
+          // Video is NOT played here - the component using this hook (e.g., BroadcastGrid)
+          // will handle playing video in the correct DOM container
           setRemoteUsers((prev) => {
             if (prev.find((p) => p.uid === user.uid)) return prev;
             return [...prev, user];

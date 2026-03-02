@@ -75,6 +75,26 @@ export default function BroadcastControls({
   // Use props if provided (from parent state), otherwise derive from localTracks
   const isMicOn = propMicOn !== undefined ? propMicOn : (audioTrack ? audioTrack.enabled : false);
   const isCamOn = propCamOn !== undefined ? propCamOn : (videoTrack ? videoTrack.enabled : false);
+  
+  // Check if tracks are available
+  const hasAudioTrack = !!audioTrack;
+  const hasVideoTrack = !!videoTrack;
+  const tracksReady = hasAudioTrack || hasVideoTrack;
+  
+  // Debug logging
+  console.log('[BroadcastControls] Track states:', {
+    propMicOn,
+    propCamOn,
+    isMicOn,
+    isCamOn,
+    hasAudioTrack,
+    hasVideoTrack,
+    tracksReady,
+    isOnStage,
+    audioEnabled: audioTrack?.enabled,
+    videoEnabled: videoTrack?.enabled
+  });
+  
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
 
@@ -376,30 +396,42 @@ export default function BroadcastControls({
                      <span className="text-sm font-bold text-white">{likes}</span>
                  </div>
 
-                 {/* Mic & Cam Controls (Stage Only) */}
-                 {isOnStage && (
+                 {/* Mic & Cam Controls (Stage Only, when tracks ready) */}
+                 {isOnStage && tracksReady && (
                     <>
                         <button
                             onClick={(e) => { e.stopPropagation(); toggleMicrophone(); }}
+                            disabled={!hasAudioTrack}
                             className={cn(
                                 "p-2 rounded-lg transition-colors group relative",
-                                isMicOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                                isMicOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30",
+                                !hasAudioTrack && "opacity-50 cursor-not-allowed"
                             )}
-                            title={isMicOn ? "Mute Microphone" : "Unmute Microphone"}
+                            title={hasAudioTrack ? (isMicOn ? "Mute Microphone" : "Unmute Microphone") : "Microphone not available"}
                         >
                             {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
                         </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); toggleCamera(); }}
+                            disabled={!hasVideoTrack}
                             className={cn(
                                 "p-2 rounded-lg transition-colors group relative mr-2",
-                                isCamOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                                isCamOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30",
+                                !hasVideoTrack && "opacity-50 cursor-not-allowed"
                             )}
-                            title={isCamOn ? "Turn Camera Off" : "Turn Camera On"}
+                            title={hasVideoTrack ? (isCamOn ? "Turn Camera Off" : "Turn Camera On") : "Camera not available"}
                         >
                             {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
                         </button>
                     </>
+                 )}
+                 
+                 {/* Loading indicator when on stage but tracks not ready */}
+                 {isOnStage && !tracksReady && (
+                    <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/10 rounded-full border border-yellow-500/20">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                        <span className="text-xs text-yellow-500">Initializing...</span>
+                    </div>
                  )}
 
                  {/* Gift Button - Show for EVERYONE (except host maybe, but usually everyone can open tray) */}

@@ -16,28 +16,99 @@ import { cn } from '../../lib/utils';
 
 // --- Sub-components for the new architecture ---
 
-const AgoraVideoPlayer = ({ videoTrack, isLocal }: { videoTrack?: ILocalVideoTrack | IRemoteVideoTrack; isLocal: boolean }) => {
-  const videoRef = useRef<HTMLDivElement>(null);
+const AgoraVideoPlayer = ({
+  videoTrack,
+  isLocal = false,
+}: {
+  videoTrack?: ILocalVideoTrack | IRemoteVideoTrack;
+  isLocal?: boolean;
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasPlayedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   useEffect(() => {
-    if (videoTrack && videoRef.current) {
-      videoTrack.play(videoRef.current);
-      if (isLocal) {
-        // Apply mirror effect for local video
-        videoRef.current.style.transform = 'scaleX(-1)';
-      } else {
-        videoRef.current.style.transform = '';
-      }
+    if (!videoTrack || !containerRef.current) {
+      console.log('[AgoraVideoPlayer] Skipping - missing track or container');
+      return;
     }
 
-    return () => {
-      if (videoTrack) {
-        videoTrack.stop();
+    if (hasPlayedRef.current) {
+      console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
+      return;
+    }
+
+    const playWithRetry = () => {
+      if (!containerRef.current) return;
+
+      try {
+        console.log('[AgoraVideoPlayer] Calling play() - attempt', retryCountRef.current + 1);
+        videoTrack.play(containerRef.current);
+        hasPlayedRef.current = true;
+        console.log('[AgoraVideoPlayer] play() called successfully');
+
+        // Inspect injected video after Agora has time to inject it
+        setTimeout(() => {
+          const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
+          console.log('[AgoraVideoPlayer] Inner <video> inspection:', {
+            exists: !!inner,
+            width: inner?.videoWidth ?? 0,
+            height: inner?.videoHeight ?? 0,
+            readyState: inner?.readyState ?? -1, // 0=NOTHING, 1=metadata, 2=current, 3=future, 4=enough
+            paused: inner?.paused ?? false,
+            muted: inner?.muted ?? false,
+            srcObjectPresent: !!inner?.srcObject,
+          });
+
+          // If no frames or not ready → retry
+          if (inner && (inner.videoWidth === 0 || inner.readyState < 2)) {
+            if (retryCountRef.current < maxRetries) {
+              retryCountRef.current++;
+              console.warn(`[AgoraVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
+              hasPlayedRef.current = false; // allow re-play
+              setTimeout(playWithRetry, 400);
+            } else {
+              console.error('[AgoraVideoPlayer] Max retries reached - no frames flowing');
+            }
+          }
+        }, 600); // give Agora time to create <video> + start frames
+
+      } catch (err) {
+        console.error('[AgoraVideoPlayer] play() threw error:', err);
+        if (retryCountRef.current < maxRetries) {
+          retryCountRef.current++;
+          setTimeout(playWithRetry, 500);
+        }
       }
     };
-  }, [videoTrack, isLocal]);
 
-  return <div ref={videoRef} className="w-full h-full object-cover"></div>;
+    // Slight delay to ensure container is painted
+    const initialTimer = setTimeout(playWithRetry, 150);
+
+    return () => {
+      clearTimeout(initialTimer);
+      if (videoTrack) {
+        console.log('[AgoraVideoPlayer] Cleanup - stopping track');
+        try {
+          videoTrack.stop();
+        } catch (e) {}
+      }
+    };
+  }, [videoTrack]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full object-cover overflow-hidden"
+      style={{
+        minWidth: '100%',
+        minHeight: '100%',
+        // TEMPORARILY DISABLE mirroring to rule it out (re-enable after test)
+        // transform: isLocal ? 'scaleX(-1)' : undefined,
+      }}
+    />
+  );
 };
 
 interface AgoraBattleParticipant {

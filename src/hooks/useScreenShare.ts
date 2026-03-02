@@ -50,52 +50,44 @@ export function useScreenShare() {
   
   const screenStreamRef = useRef<MediaStream | null>(null);
   const onEndedCallbackRef = useRef<(() => void) | null>(null);
+  const isPageVisible = useRef(true);
+  const isUnmounting = useRef(false);
 
   /**
-   * Start screen sharing
+   * Start screen sharing using official Agora API
    */
   const startScreenShare = useCallback(async (): Promise<ILocalVideoTrack | null> => {
-    if (!canScreenShare()) {
-      setState(prev => ({ ...prev, error: 'Screen sharing not supported in this browser' }));
-      return null;
-    }
-
     try {
       setState(prev => ({ ...prev, error: null }));
-      
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          frameRate: { ideal: 60, max: 60 },
-          width: { ideal: 1920, max: 1920 },
-          height: { ideal: 1080, max: 1080 }
-        },
-        audio: true
-      });
 
-      screenStreamRef.current = stream;
-      
-      // Handle user clicking "Stop sharing" in browser
-      stream.getVideoTracks()[0].onended = () => {
-        console.log('[useScreenShare] Screen share ended by user');
+      const screenTrack = await AgoraRTC.createScreenVideoTrack(
+        {
+          encoderConfig: "1080p_1",
+          optimizationMode: "detail"
+        },
+        "auto"
+      ) as ILocalVideoTrack;
+
+      screenTrack.on("track-ended", () => {
+        console.log("[useScreenShare] Screen share ended by user");
         setState(prev => ({ ...prev, isSharing: false }));
         if (onEndedCallbackRef.current) {
           onEndedCallbackRef.current();
         }
-      };
-
-      const videoTrack = await AgoraRTC.createCustomVideoTrack({
-        mediaStreamTrack: stream.getVideoTracks()[0]
       });
 
       setState(prev => ({ ...prev, isSharing: true }));
-      return videoTrack;
+
+      return screenTrack;
     } catch (err: any) {
-      console.error('[useScreenShare] Error starting screen share:', err);
-      setState(prev => ({ 
-        ...prev, 
-        error: err.message || 'Failed to start screen sharing',
-        isSharing: false 
+      console.error("[useScreenShare] Error starting screen share:", err);
+
+      setState(prev => ({
+        ...prev,
+        error: err.message || "Failed to start screen sharing",
+        isSharing: false
       }));
+
       return null;
     }
   }, []);
@@ -119,11 +111,52 @@ export function useScreenShare() {
   }, []);
 
   /**
-   * Cleanup on unmount
+   * Track page visibility to prevent cleanup on tab switch
+   */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const wasVisible = isPageVisible.current;
+      isPageVisible.current = document.visibilityState === 'visible';
+      
+      console.log(`[useScreenShare] Visibility changed: ${wasVisible ? 'visible' : 'hidden'} -> ${isPageVisible.current ? 'visible' : 'hidden'}`);
+      
+      // If becoming visible again and we were sharing, check if stream still exists
+      if (isPageVisible.current && state.isSharing && screenStreamRef.current) {
+        const tracks = screenStreamRef.current.getTracks();
+        const hasActiveTracks = tracks.some(track => track.readyState === 'live');
+        
+        if (!hasActiveTracks) {
+          console.log('[useScreenShare] Screen share tracks ended while hidden');
+          setState(prev => ({ ...prev, isSharing: false }));
+          if (onEndedCallbackRef.current) {
+            onEndedCallbackRef.current();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [state.isSharing]);
+
+  /**
+   * Cleanup on unmount - only if actually unmounting (not tab switch)
    */
   useEffect(() => {
     return () => {
-      stopScreenShare();
+      isUnmounting.current = true;
+      // Small delay to check if this is a real unmount or just tab switch
+      setTimeout(() => {
+        if (isUnmounting.current && document.visibilityState !== 'hidden') {
+          console.log('[useScreenShare] Real unmount - stopping screen share');
+          stopScreenShare();
+        } else {
+          console.log('[useScreenShare] Tab switch detected - preserving screen share');
+        }
+      }, 100);
     };
   }, [stopScreenShare]);
 
