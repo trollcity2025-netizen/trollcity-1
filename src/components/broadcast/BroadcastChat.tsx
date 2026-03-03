@@ -71,6 +71,13 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
   // Track sent message txn_ids to prevent duplicates
   const receivedTxnIdsRef = useRef<Set<string>>(new Set());
   
+  // Track processed message IDs to prevent duplicates from broadcast
+  const processedMessageIds = useRef<Set<string>>(new Set());
+  
+  // Track recent presence events to prevent join/leave flickering
+  const recentPresenceRef = useRef<Map<string, number>>(new Map());
+  const PRESENCE_DEBOUNCE_MS = 5000; // 5 seconds between showing same user's join/leave
+  
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
   const [isChatFocused, setIsChatFocused] = useState(true);
@@ -195,10 +202,11 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
 
   // Fetch initial messages (last 50) and setup realtime broadcast
   useEffect(() => {
-    if (!streamId) return;
+      if (!streamId) return;
 
-    // Fetch historical messages
-    const fetchMessages = async () => {
+      // Fetch historical messages - only get messages from last 2 minutes to prevent old messages from reappearing
+      const fetchMessages = async () => {
+          const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
         // Thundering Herd Prevention: Jitter on initial chat load (0-800ms)
         await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
 
@@ -206,6 +214,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             .from('stream_messages')
             .select('*, user_profiles(username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color)')
             .eq('stream_id', streamId)
+            .gte('created_at', twoMinutesAgo)
             .order('created_at', { ascending: false })
             .limit(50);
         
@@ -227,6 +236,10 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 if (m.txn_id) {
                     receivedTxnIdsRef.current.add(m.txn_id);
                 }
+                // Track message IDs
+                if (m.id) {
+                    processedMessageIds.current.add(m.id);
+                }
 
                 return {
                     ...m,
@@ -238,9 +251,16 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             setMessages(prev => {
                 // Merge with existing messages (which might be system messages or realtime messages received while fetching)
                 // processedMessages are historical (older).
-                // Filter out duplicates based on ID
+                // Filter out duplicates based on ID AND txn_id
                 const existingIds = new Set(prev.map(p => p.id));
-                const newHistory = processedMessages.filter(m => !existingIds.has(m.id));
+                const existingTxnIds = new Set(prev.map(p => p.txn_id).filter(Boolean));
+                const newHistory = processedMessages.filter(m => {
+                    // Skip if ID already exists
+                    if (existingIds.has(m.id)) return false;
+                    // Skip if txn_id already exists (for optimistically added messages)
+                    if (m.txn_id && existingTxnIds.has(m.txn_id)) return false;
+                    return true;
+                });
                 return [...newHistory, ...prev];
             });
         }
@@ -265,16 +285,36 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 if (msg.txn_id && receivedTxnIdsRef.current.has(msg.txn_id)) {
                     return;
                 }
+                
+                // Also check by message ID
+                if (msg.id && processedMessageIds.current.has(msg.id)) {
+                    return;
+                }
 
-                // Track this txn_id
+                // Track this txn_id and id
                 if (msg.txn_id) {
                     receivedTxnIdsRef.current.add(msg.txn_id);
+                }
+                if (msg.id) {
+                    processedMessageIds.current.add(msg.id);
                 }
 
                 // Add message to UI immediately
                 setMessages(prev => {
-                    // Double-check for duplicates
+                    // Triple-check for duplicates by txn_id, id, and content+user+timestamp
                     if (msg.txn_id && prev.some(m => m.txn_id === msg.txn_id)) {
+                        return prev;
+                    }
+                    if (msg.id && prev.some(m => m.id === msg.id)) {
+                        return prev;
+                    }
+                    // Final check: same user, same content, within 5 seconds
+                    const isDuplicate = prev.some(m =>
+                        m.user_id === msg.user_id &&
+                        m.content === msg.content &&
+                        Math.abs(new Date(m.created_at).getTime() - new Date(msg.created_at).getTime()) < 5000
+                    );
+                    if (isDuplicate) {
                         return prev;
                     }
                     
@@ -297,9 +337,20 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     const presenceChannel = supabase
         .channel(`stream:${streamId}`)
         .on('presence', { event: 'join' }, ({ newPresences }) => {
+            const now = Date.now();
             newPresences.forEach((p: any) => {
+                // Skip showing join message for ourselves (we track our own presence)
+                if (p.user_id === user?.id) return;
+                
+                // Debounce: Don't show join if we recently showed leave for same user
+                const lastEvent = recentPresenceRef.current.get(p.user_id);
+                if (lastEvent && (now - lastEvent) < PRESENCE_DEBOUNCE_MS) {
+                    return; // Skip this join - too soon after previous event
+                }
+                recentPresenceRef.current.set(p.user_id, now);
+                
                 const systemMsg: Message = {
-                    id: `sys-${Date.now()}-${Math.random()}`,
+                    id: `sys-join-${p.user_id}-${now}`,
                     user_id: p.user_id,
                     content: 'joined the broadcast',
                     created_at: new Date().toISOString(),
@@ -320,9 +371,19 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
             });
         })
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+            const now = Date.now();
             leftPresences.forEach((p: any) => {
+                // Debounce: Don't show leave if we recently showed join for same user
+                const lastEvent = recentPresenceRef.current.get(p.user_id);
+                if (lastEvent && (now - lastEvent) < PRESENCE_DEBOUNCE_MS) {
+                    // Remove the join message if it was just added
+                    setMessages(prev => prev.filter(m => !(m.type === 'system' && m.user_id === p.user_id && m.content === 'joined the broadcast')));
+                    return; // Don't show the leave either
+                }
+                recentPresenceRef.current.set(p.user_id, now);
+                
                 const systemMsg: Message = {
-                    id: `sys-${Date.now()}-${Math.random()}`,
+                    id: `sys-leave-${p.user_id}-${now}`,
                     user_id: p.user_id,
                     content: 'left the broadcast',
                     created_at: new Date().toISOString(),
@@ -342,21 +403,38 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 });
             });
         })
-        .subscribe();
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED' && user?.id && profile) {
+                // Track our presence once subscribed
+                await presenceChannel.track({
+                    user_id: user.id,
+                    username: profile.username,
+                    avatar_url: profile.avatar_url,
+                    role: profile.role,
+                    troll_role: profile.troll_role,
+                    joined_at: new Date().toISOString(),
+                });
+            }
+        });
 
-    // Auto-delete messages after 30 seconds
+    // Auto-delete messages after 30 seconds (faster removal for better UX)
+    const MESSAGE_LIFETIME_MS = 30000; // 30 seconds
     const autoDeleteInterval = setInterval(() => {
         const now = Date.now();
-        const thirtySecondsAgo = new Date(now - 30000).toISOString();
-        setMessages(prev => prev.filter(msg => {
-            // Keep system messages (join/leave) for 30 seconds
-            if (msg.type === 'system') {
-                return msg.created_at > thirtySecondsAgo;
+        setMessages(prev => {
+            const filtered = prev.filter(msg => {
+                const msgTime = new Date(msg.created_at).getTime();
+                const age = now - msgTime;
+                // Keep messages younger than 30 seconds
+                return age < MESSAGE_LIFETIME_MS;
+            });
+            // Only update state if messages were actually removed
+            if (filtered.length !== prev.length) {
+                return filtered;
             }
-            // Keep chat messages for 30 seconds
-            return msg.created_at > thirtySecondsAgo;
-        }));
-    }, 5000); // Check every 5 seconds
+            return prev;
+        });
+    }, 3000); // Check every 3 seconds for faster removal
 
     return () => {
         clearInterval(autoDeleteInterval);

@@ -410,10 +410,36 @@ DECLARE
   v_battle_type TEXT := 'standard';
   v_challenger_user_id UUID;
   v_opponent_user_id UUID;
+  v_challenger_stream RECORD;
+  v_opponent_stream RECORD;
   v_tournament_battle_id UUID;
 BEGIN
-  SELECT stream_kind, user_id INTO v_challenger_kind, v_challenger_user_id FROM public.streams WHERE id = p_challenger_id;
-  SELECT stream_kind, user_id INTO v_opponent_kind, v_opponent_user_id FROM public.streams WHERE id = p_opponent_id;
+  -- Validate both streams exist and are live BEFORE creating battle
+  SELECT * INTO v_challenger_stream
+  FROM public.streams
+  WHERE id = p_challenger_id
+    AND status = 'live'
+    AND is_live = TRUE;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Challenger stream not found or not live: %', p_challenger_id;
+  END IF;
+  
+  SELECT * INTO v_opponent_stream
+  FROM public.streams
+  WHERE id = p_opponent_id
+    AND status = 'live'
+    AND is_live = TRUE;
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Opponent stream not found or not live: %', p_opponent_id;
+  END IF;
+
+  -- Get stream kinds and user IDs from validated streams
+  v_challenger_kind := v_challenger_stream.stream_kind;
+  v_challenger_user_id := v_challenger_stream.user_id;
+  v_opponent_kind := v_opponent_stream.stream_kind;
+  v_opponent_user_id := v_opponent_stream.user_id;
 
   IF COALESCE(v_challenger_kind, 'regular') = 'trollmers'
      AND COALESCE(v_opponent_kind, 'regular') = 'trollmers' THEN
@@ -1089,33 +1115,44 @@ DECLARE
     v_winner_user_id UUID;
     v_challenger_user_id UUID;
     v_opponent_user_id UUID;
+    v_has_winner_stream_id BOOLEAN;
 BEGIN
+    -- Check if winner_stream_id column exists
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'battles' AND column_name = 'winner_stream_id'
+    ) INTO v_has_winner_stream_id;
+
     -- Only process if battle is Trollmers type and ended with winner
-    IF NEW.battle_type = 'trollmers' AND NEW.status = 'ended' AND NEW.winner_stream_id IS NOT NULL THEN
-        -- Check if this battle is linked to a tournament
-        SELECT tb.id INTO v_tournament_battle_id
-        FROM public.trollmers_tournament_battles tb
-        WHERE tb.battle_id = NEW.id;
+    -- Use column existence check to avoid errors
+    IF NEW.battle_type = 'trollmers' AND NEW.status = 'ended' THEN
+        -- Check winner based on available columns
+        IF v_has_winner_stream_id AND NEW.winner_stream_id IS NOT NULL THEN
+            -- Check if this battle is linked to a tournament
+            SELECT tb.id INTO v_tournament_battle_id
+            FROM public.trollmers_tournament_battles tb
+            WHERE tb.battle_id = NEW.id;
 
-        IF v_tournament_battle_id IS NOT NULL THEN
-            -- Get user IDs from streams
-            SELECT s.user_id INTO v_challenger_user_id
-            FROM public.streams s
-            WHERE s.id = NEW.challenger_stream_id;
+            IF v_tournament_battle_id IS NOT NULL THEN
+                -- Get user IDs from streams
+                SELECT s.user_id INTO v_challenger_user_id
+                FROM public.streams s
+                WHERE s.id = NEW.challenger_stream_id;
 
-            SELECT s.user_id INTO v_opponent_user_id
-            FROM public.streams s
-            WHERE s.id = NEW.opponent_stream_id;
+                SELECT s.user_id INTO v_opponent_user_id
+                FROM public.streams s
+                WHERE s.id = NEW.opponent_stream_id;
 
-            -- Determine winner user ID based on winner stream
-            IF NEW.winner_stream_id = NEW.challenger_stream_id THEN
-                v_winner_user_id := v_challenger_user_id;
-            ELSE
-                v_winner_user_id := v_opponent_user_id;
+                -- Determine winner user ID based on winner stream
+                IF NEW.winner_stream_id = NEW.challenger_stream_id THEN
+                    v_winner_user_id := v_challenger_user_id;
+                ELSE
+                    v_winner_user_id := v_opponent_user_id;
+                END IF;
+
+                -- Complete tournament battle and advance bracket
+                PERFORM public.complete_trollmers_tournament_battle(v_tournament_battle_id, v_winner_user_id);
             END IF;
-
-            -- Complete tournament battle and advance bracket
-            PERFORM public.complete_trollmers_tournament_battle(v_tournament_battle_id, v_winner_user_id);
         END IF;
     END IF;
 
@@ -1123,13 +1160,18 @@ BEGIN
 END;
 $$;
 
--- Create trigger to auto-process tournament battles
-DROP TRIGGER IF EXISTS trigger_process_tournament_battle ON public.battles;
-CREATE TRIGGER trigger_process_tournament_battle
-AFTER UPDATE OF status, winner_stream_id ON public.battles
-FOR EACH ROW
-WHEN (NEW.status = 'ended' AND NEW.winner_stream_id IS NOT NULL)
-EXECUTE FUNCTION public.process_tournament_battle_result();
+-- Create trigger to auto-process tournament battles (only if winner_stream_id column exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'battles' AND column_name = 'winner_stream_id') THEN
+        DROP TRIGGER IF EXISTS trigger_process_tournament_battle ON public.battles;
+        CREATE TRIGGER trigger_process_tournament_battle
+        AFTER UPDATE OF status, winner_stream_id ON public.battles
+        FOR EACH ROW
+        WHEN (NEW.status = 'ended' AND NEW.winner_stream_id IS NOT NULL)
+        EXECUTE FUNCTION public.process_tournament_battle_result();
+    END IF;
+END $$;
 
 -- 13. Schedule monthly tournament start (1st of each month at 00:05 America/Denver => 07:05 UTC)
 DO $$

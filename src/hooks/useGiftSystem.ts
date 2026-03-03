@@ -138,6 +138,7 @@ export function useGiftSystem(
                     gift_name: gift.name,
                     gift_icon: giftIcon,
                     amount: gift.coinCost * quantity,
+                    quantity: quantity,
                     sender_id: user.id,
                     sender_name: senderName,
                     receiver_id: finalRecipientId,
@@ -193,9 +194,11 @@ export function useGiftSystem(
           console.warn('[GiftSystem] Could not send chat message:', chatErr);
         }
         
-        // Refresh profile to update balance (Optimistic) - but don't trigger full re-render
-        // Just update the local balance directly to avoid disrupting Agora connection
-        // refreshProfile(); 
+        // Refresh profile to update balance in real-time
+        // Use non-blocking refresh to avoid disrupting Agora connection
+        refreshProfile().catch(err => {
+          console.warn('[GiftSystem] Profile refresh failed:', err);
+        });
         
         // XP is now granted server-side within send_premium_gift to prevent farming exploits
         // Client-side XP calls removed.

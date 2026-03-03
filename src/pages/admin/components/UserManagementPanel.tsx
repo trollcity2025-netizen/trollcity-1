@@ -308,7 +308,7 @@ export default function UserManagementPanel({
                         ? 'bg-blue-900 text-blue-300'
                         : 'bg-gray-700 text-gray-300'
                     }`}>
-                      {(user.is_lead_officer || user.role === 'lead_troll_officer') ? 'lead_troll_officer' : (user.role || 'user')}
+                      {(user.is_lead_officer || user.role === 'lead_troll_officer') ? 'lead_troll_officer' : (user.role === 'admin' ? 'CEO' : (user.role || 'user'))}
                     </span>
                   </td>
                   <td className="py-3 text-white">{user.level || 1}</td>
@@ -404,7 +404,7 @@ export default function UserManagementPanel({
                   <option value="secretary">Secretary</option>
                   <option value="troll_officer">Troll Officer</option>
                   <option value="troller">Troller</option>
-                  <option value="admin">Admin</option>
+                  <option value="admin">CEO</option>
                 </select>
               </div>
 

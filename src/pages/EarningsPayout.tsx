@@ -135,11 +135,11 @@ export default function EarningsPayout() {
       const day = mtDate.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, ...
       const hour = mtDate.getHours();
       
-      // Mon (1) or Fri (5), 14:00-14:59 (2 PM MST 1 hour window)
-      const isWindowOpen = (day === 1 || day === 5) && hour === 14;
+      // Fri (5), 14:00-14:59 (2 PM MST 1 hour window)
+      const isWindowOpen = day === 5 && hour === 14;
       
       if (!isWindowOpen) {
-          toast.error("Cashouts are only open Monday & Friday between 2:00 PM - 3:00 PM MST.");
+          toast.error("Cashouts are only open Fridays between 2:00 PM - 3:00 PM MST.");
           return;
       }
 

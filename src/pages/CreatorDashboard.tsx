@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+timport React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { Crown } from 'lucide-react';
@@ -172,7 +172,9 @@ export default function CreatorDashboard() {
             <p className="text-sm text-gray-400">Status</p>
             <p className="font-semibold">
               {profile?.role
-                ? profile.role.replace(/_/g, ' ')
+                ? profile.role === 'admin'
+                  ? 'CEO'
+                  : profile.role.replace(/_/g, ' ')
                 : 'Creator'}
             </p>
             {profile?.created_at && (

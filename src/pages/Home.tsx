@@ -11,6 +11,7 @@ import LiveStreamsModule from '@/components/home/LiveStreamsModule'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
 
 import TrollPodsWidget from '@/components/home/TrollPodsWidget'
+import TCNNWidget from '@/components/tcnn/TCNNWidget'
 
 // Animated gradient background
 const AnimatedGradient = () => {
@@ -118,6 +119,7 @@ export default function Home() {
               <TrollWallFeed onRequireAuth={requireAuth} />
             </div>
             <div className="lg:col-span-4 space-y-6">
+              <TCNNWidget onRequireAuth={requireAuth} />
               <TrollPodsWidget onRequireAuth={requireAuth} />
             </div>
           </div>

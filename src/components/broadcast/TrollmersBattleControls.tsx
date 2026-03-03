@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
-import { Swords, Loader2, SkipForward, Trophy, Crown, Shield, Users, Zap, Fire, Heart, Star } from 'lucide-react';
+import { Swords, Loader2, SkipForward, Crown, Users, Zap, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import UserNameWithAge from '../UserNameWithAge';
 import { getCategoryConfig } from '../../config/broadcastCategories';
+
+interface OnlineUser {
+  id: string;
+  username: string;
+  avatar_url?: string;
+  role?: string;
+  stream_id?: string;
+}
 
 interface BattleControlsProps {
   currentStream: Stream;
@@ -21,8 +28,10 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [trollmersStats, setTrollmersStats] = useState<any>(null);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
 
-  // Poll for pending challenges
+  // Poll for pending challenges and online users
   useEffect(() => {
     const fetchPending = async () => {
         // Check if I have been challenged (opponent_stream_id = my id)
@@ -54,13 +63,56 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
       setTrollmersStats(data || null);
     };
 
+    // Fetch online trollmers users
+    const fetchOnlineUsers = async () => {
+      // Get live trollmers streams
+      const { data: liveStreams } = await supabase
+        .from('streams')
+        .select('id, user_id, title, category')
+        .eq('status', 'live')
+        .eq('category', 'trollmers')
+        .neq('user_id', currentStream.user_id);
+      
+      if (liveStreams && liveStreams.length > 0) {
+        const userIds = liveStreams.map(s => s.user_id);
+        
+        // Get profiles for these users
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, username, avatar_url, role')
+          .in('id', userIds);
+        
+        const users: OnlineUser[] = liveStreams.map(stream => {
+          const profile = profiles?.find(p => p.id === stream.user_id);
+          return {
+            id: stream.user_id,
+            username: profile?.username || 'Unknown',
+            avatar_url: profile?.avatar_url,
+            role: profile?.role,
+            stream_id: stream.id,
+          };
+        });
+        
+        setOnlineUsers(users);
+      } else {
+        setOnlineUsers([]);
+      }
+    };
+
     const interval = setInterval(fetchPending, 3000);
     fetchPending();
     fetchLeaderboard();
     fetchTrollmersStats();
+    fetchOnlineUsers();
+    
+    // Refresh online users every 10 seconds
+    const onlineUsersInterval = setInterval(fetchOnlineUsers, 10000);
 
-    return () => clearInterval(interval);
-  }, [currentStream.id]);
+    return () => {
+      clearInterval(interval);
+      clearInterval(onlineUsersInterval);
+    };
+  }, [currentStream.id, currentStream.user_id]);
 
   // Poll for outgoing battle status - for challenger to detect when battle becomes active
   useEffect(() => {
@@ -136,6 +188,7 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
 
     } catch (e: any) {
         console.error("Matchmaking error:", e);
+        // Show the actual error message from the server
         toast.error(e.message || "Failed to find match");
         setMatchStatus('');
         setOutgoingBattleId(null);
@@ -180,10 +233,14 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
     if (!pendingBattle || !pendingBattle.id) return;
     setLoading(true);
     try {
+        console.log('[TrollmersBattleControls] Accepting battle:', pendingBattle.id);
         const { error } = await supabase.rpc('accept_battle', {
             p_battle_id: pendingBattle.id
         });
-        if (error) throw error;
+        if (error) {
+            console.error('[TrollmersBattleControls] accept_battle error:', error);
+            throw error;
+        }
         toast.success("Battle Accepted! Loading Arena...");
         
         // Poll for battle status to become active, then refresh the page
@@ -195,9 +252,11 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
                 attempts++;
                 const { data: battle } = await supabase
                     .from('battles')
-                    .select('status')
+                    .select('status, challenger_stream_id, opponent_stream_id')
                     .eq('id', pendingBattle.id)
                     .maybeSingle();
+                
+                console.log('[TrollmersBattleControls] Poll battle status:', battle?.status, 'attempt:', attempts);
                 
                 if (battle?.status === 'active') {
                     // Battle is active, refresh the page to show battle view
@@ -214,18 +273,66 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
                 if (isActive) break;
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
+            
+            // If we exit the loop without battle becoming active, show error
+            if (attempts >= maxAttempts) {
+                toast.error('Battle did not become active. The challenger may have ended their stream.');
+                setPendingBattle(null);
+            }
         };
         
         pollBattleStatus();
         
     } catch (e: any) {
-        // Don't show "no suitable" errors - it means it actually connected
+        console.error('[TrollmersBattleControls] handleAccept error:', e);
         const errorMsg = e.message || "";
-        if (errorMsg && !errorMsg.includes("Battl")) {
-            toast.error(errorMsg);
+        
+        // Handle specific error cases
+        if (errorMsg.includes('Challenger stream not found') || errorMsg.includes('Opponent stream not found')) {
+            toast.error('Cannot accept battle - the other streamer has ended their broadcast.');
+            // Clear the pending battle since it can't be accepted
+            setPendingBattle(null);
+        } else if (errorMsg.includes('not live')) {
+            toast.error('Cannot accept battle - the other streamer is no longer live.');
+            setPendingBattle(null);
+        } else if (errorMsg.includes('not pending')) {
+            toast.error('This battle has already been accepted or cancelled.');
+            setPendingBattle(null);
+        } else {
+            // Show other error messages
+            toast.error(errorMsg || 'Failed to accept battle');
         }
     } finally {
         setLoading(false);
+    }
+  };
+
+  // Invite a specific user to battle
+  const inviteUserToBattle = async (user: OnlineUser) => {
+    if (!user.stream_id) {
+      toast.error('User is not currently streaming');
+      return;
+    }
+    
+    setInvitingUserId(user.id);
+    try {
+      const { data: battleId, error: challengeError } = await supabase.rpc('create_battle_challenge', {
+        p_challenger_id: currentStream.id,
+        p_opponent_id: user.stream_id
+      });
+      
+      if (challengeError) throw challengeError;
+
+      if (battleId) {
+        setOutgoingBattleId(battleId);
+        setMatchStatus('found');
+        toast.success(`Invited ${user.username} to battle! Waiting for accept...`);
+      }
+    } catch (e: any) {
+      console.error('Invite error:', e);
+      toast.error(e.message || 'Failed to send invite');
+    } finally {
+      setInvitingUserId(null);
     }
   };
 
@@ -261,161 +368,165 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
   };
 
   return (
-    <div className="bg-zinc-900/90 border border-white/10 rounded-xl p-4 mt-4 backdrop-blur-sm">
-        <div className="flex items-center gap-2 mb-4 text-amber-500">
-            <Swords size={20} />
-            <h3 className="font-bold text-lg">Trollmers Head to Head</h3>
-            <Crown size={16} className="text-yellow-400 animate-pulse" />
-        </div>
+    <div className="bg-zinc-900/90 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
+        {/* Horizontal Layout Container */}
+        <div className="flex flex-col lg:flex-row gap-4">
+            {/* Left Side: Battle Actions */}
+            <div className="flex-1">
+                <div className="flex items-center gap-2 mb-3 text-amber-500">
+                    <Swords size={18} />
+                    <h3 className="font-bold">Trollmers Head to Head</h3>
+                    <Crown size={14} className="text-yellow-400 animate-pulse" />
+                </div>
 
-        {pendingBattle ? (
-            <div className="bg-amber-500/10 border border-amber-500/50 p-4 rounded-lg animate-pulse">
-                <p className="text-amber-200 font-bold mb-2">Incoming Challenge!</p>
-                <button 
-                    onClick={handleAccept}
-                    disabled={loading}
-                    className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 rounded-lg transition"
-                >
-                    {loading ? <Loader2 className="animate-spin mx-auto" /> : "ACCEPT BATTLE"}
-                </button>
-            </div>
-        ) : (
-            <div className="space-y-4">
-                <p className="text-sm text-zinc-400">
-                    Find a worthy opponent! The system will match you with a random broadcaster you haven't battled yet.
-                </p>
-                
-                <button 
-                    onClick={findAndChallengeRandom}
-                    disabled={loading || matchStatus === 'searching'}
-                    className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 transition-all active:scale-95"
-                >
-                    {loading ? (
-                        <>
-                            <Loader2 className="animate-spin" />
-                            Finding Match...
-                        </>
-                    ) : (
-                        <>
-                            <Swords size={20} />
-                            FIND RANDOM MATCH
-                        </>
-                    )}
-                </button>
-
-                {matchStatus === 'found' && (
-                    <div className="text-center text-xs text-green-400 animate-pulse">
-                        {waitingForAccept ? 'Waiting for opponent to accept...' : 'Challenge sent! Waiting for opponent to accept...'}
+                {pendingBattle ? (
+                    <div className="bg-amber-500/10 border border-amber-500/50 p-3 rounded-lg animate-pulse">
+                        <p className="text-amber-200 font-bold mb-2 text-sm">Incoming Challenge!</p>
+                        <button 
+                            onClick={handleAccept}
+                            disabled={loading}
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 rounded-lg transition text-sm"
+                        >
+                            {loading ? <Loader2 className="animate-spin mx-auto" size={16} /> : "ACCEPT BATTLE"}
+                        </button>
                     </div>
-                )}
+                ) : (
+                    <div className="space-y-3">
+                        <p className="text-xs text-zinc-400">
+                            Find a worthy opponent! The system will match you with a random broadcaster.
+                        </p>
+                        
+                        <div className="flex flex-wrap gap-2">
+                            <button 
+                                onClick={findAndChallengeRandom}
+                                disabled={loading || matchStatus === 'searching'}
+                                className="flex-1 min-w-[140px] bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 transition-all active:scale-95 text-sm"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Finding...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Swords size={16} />
+                                        FIND MATCH
+                                    </>
+                                )}
+                            </button>
 
-                {matchStatus === 'found' && outgoingBattleId && !waitingForAccept && (
-                    <button
-                        onClick={handleSkipMatch}
-                        disabled={skipLoading}
-                        className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 rounded-lg border border-white/10 flex items-center justify-center gap-2 transition-all"
-                    >
-                        {skipLoading ? <Loader2 className="animate-spin" size={16} /> : <SkipForward size={16} />}
-                        Skip Opponent
-                    </button>
-                )}
+                            {matchStatus === 'found' && outgoingBattleId && !waitingForAccept && (
+                                <button
+                                    onClick={handleSkipMatch}
+                                    disabled={skipLoading}
+                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-lg border border-white/10 flex items-center justify-center gap-2 transition-all text-sm"
+                                >
+                                    {skipLoading ? <Loader2 className="animate-spin" size={14} /> : <SkipForward size={14} />}
+                                    Skip
+                                </button>
+                            )}
 
-                {matchStatus === 'found' && outgoingBattleId && waitingForAccept && (
-                    <button
-                        onClick={async () => {
-                            if (!outgoingBattleId || !currentStream.user_id) return;
-                            setSkipLoading(true);
-                            try {
-                                const { error: cancelError } = await supabase.rpc('cancel_battle_challenge', {
-                                    p_battle_id: outgoingBattleId,
-                                    p_user_id: currentStream.user_id
-                                });
-                                if (cancelError) throw cancelError;
-                                setMatchStatus('');
-                                setOutgoingBattleId(null);
-                                setWaitingForAccept(false);
-                                toast.success('Challenge cancelled. Find a new match!');
-                            } catch (e: any) {
-                                toast.error(e.message || 'Failed to cancel challenge');
-                            } finally {
-                                setSkipLoading(false);
-                            }
-                        }}
-                        disabled={skipLoading}
-                        className="w-full bg-red-900/50 hover:bg-red-800 text-red-200 font-bold py-2 rounded-lg border border-red-500/30 flex items-center justify-center gap-2 transition-all"
-                    >
-                        {skipLoading ? <Loader2 className="animate-spin" size={16} /> : <SkipForward size={16} />}
-                        Cancel Challenge
-                    </button>
-                )}
-
-                {/* Trollmers Special Abilities */}
-                {trollmersStats && (
-                  <div className="mt-4 border-t border-white/10 pt-3">
-                    <h4 className="text-zinc-400 font-bold text-xs uppercase mb-2 flex items-center gap-2">
-                      <Zap size={12} className="text-amber-500" />
-                      Trollmers Abilities
-                    </h4>
-                    <div className="space-y-2">
-                      <button
-                        onClick={handleTrollmersSpecial}
-                        disabled={loading || (trollmersStats.special_ability_cooldown > Date.now())}
-                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        <Zap size={16} className="mr-2" />
-                        Activate Chaos Field
-                        {trollmersStats.special_ability_cooldown > Date.now() && (
-                          <span className="ml-2 text-xs bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
-                            {Math.ceil((trollmersStats.special_ability_cooldown - Date.now()) / 1000)}s
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Leaderboard */}
-                {leaderboard.length > 0 && (
-                    <div className="mt-6 border-t border-white/10 pt-4">
-                        <h4 className="text-zinc-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">
-                            <Swords size={12} className="text-amber-500" />
-                            Top Battlers
-                        </h4>
-                        <div className="space-y-2">
-                            {leaderboard.map((p, i) => (
-                                <div key={i} className="flex justify-between items-center bg-black/20 p-2 rounded text-sm border border-white/5">
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn("font-mono font-bold w-4 text-center", 
-                                            i === 0 ? "text-yellow-400" : 
-                                            i === 1 ? "text-zinc-400" : 
-                                            i === 2 ? "text-amber-700" : "text-zinc-600"
-                                        )}>
-                                            {i+1}
-                                        </span>
-                                        <UserNameWithAge 
-                                            user={{
-                                                username: p.username || 'Unknown',
-                                                id: p.id,
-                                                created_at: p.created_at
-                                            }}
-                                            className="text-zinc-300 font-medium truncate max-w-[120px]"
-                                        />
-                                        {p.troll_role && (
-                                          <span className="ml-1 text-xs bg-purple-500/20 px-1 py-0.5 rounded">
-                                            {p.troll_role}
-                                          </span>
-                                        )}
-                                    </div>
-                                    <span className="text-amber-500 font-bold text-xs bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                                        {p.battle_wins} Wins
-                                    </span>
-                                </div>
-                            ))}
+                            {matchStatus === 'found' && outgoingBattleId && waitingForAccept && (
+                                <button
+                                    onClick={async () => {
+                                        if (!outgoingBattleId || !currentStream.user_id) return;
+                                        setSkipLoading(true);
+                                        try {
+                                            const { error: cancelError } = await supabase.rpc('cancel_battle_challenge', {
+                                                p_battle_id: outgoingBattleId,
+                                                p_user_id: currentStream.user_id
+                                            });
+                                            if (cancelError) throw cancelError;
+                                            setMatchStatus('');
+                                            setOutgoingBattleId(null);
+                                            setWaitingForAccept(false);
+                                            toast.success('Challenge cancelled. Find a new match!');
+                                        } catch (e: any) {
+                                            toast.error(e.message || 'Failed to cancel challenge');
+                                        } finally {
+                                            setSkipLoading(false);
+                                        }
+                                    }}
+                                    disabled={skipLoading}
+                                    className="px-4 py-2 bg-red-900/50 hover:bg-red-800 text-red-200 font-bold rounded-lg border border-red-500/30 flex items-center justify-center gap-2 transition-all text-sm"
+                                >
+                                    {skipLoading ? <Loader2 className="animate-spin" size={14} /> : <SkipForward size={14} />}
+                                    Cancel
+                                </button>
+                            )}
                         </div>
+
+                        {matchStatus === 'found' && (
+                            <div className="text-center text-xs text-green-400 animate-pulse">
+                                {waitingForAccept ? 'Waiting for opponent to accept...' : 'Challenge sent! Waiting for opponent to accept...'}
+                            </div>
+                        )}
+
+                        {/* Trollmers Special Abilities */}
+                        {trollmersStats && (
+                          <div className="pt-2 border-t border-white/10 mt-2">
+                            <button
+                              onClick={handleTrollmersSpecial}
+                              disabled={loading || (trollmersStats.special_ability_cooldown > Date.now())}
+                              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-2 px-4 rounded-lg transition disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+                            >
+                              <Zap size={14} />
+                              Activate Chaos Field
+                              {trollmersStats.special_ability_cooldown > Date.now() && (
+                                <span className="ml-2 text-xs bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                                  {Math.ceil((trollmersStats.special_ability_cooldown - Date.now()) / 1000)}s
+                                </span>
+                              )}
+                            </button>
+                          </div>
+                        )}
                     </div>
                 )}
             </div>
-        )}
+
+            {/* Right Side: Online Users to Invite */}
+            <div className="lg:w-64 xl:w-72 border-t lg:border-t-0 lg:border-l border-white/10 pt-3 lg:pt-0 lg:pl-4">
+                <h4 className="text-zinc-400 font-bold text-xs uppercase mb-2 flex items-center gap-2">
+                    <Users size={12} className="text-green-500" />
+                    Online Trollmers ({onlineUsers.length})
+                </h4>
+                <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-hide">
+                    {onlineUsers.length === 0 ? (
+                        <div className="text-xs text-zinc-500 text-center py-4">
+                            No other live Trollmers streams
+                        </div>
+                    ) : (
+                        onlineUsers.map((user) => (
+                            <div key={user.id} className="flex justify-between items-center bg-black/20 p-2 rounded text-xs border border-white/5">
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                    <span className="text-zinc-300 font-medium truncate">
+                                        {user.username}
+                                    </span>
+                                    {user.role && (
+                                      <span className="text-[10px] bg-purple-500/20 px-1 py-0.5 rounded text-zinc-400">
+                                        {user.role}
+                                      </span>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => inviteUserToBattle(user)}
+                                    disabled={invitingUserId === user.id || matchStatus === 'found'}
+                                    className="ml-2 px-2 py-1 bg-green-600/80 hover:bg-green-500 text-white rounded text-[10px] font-bold transition disabled:opacity-50 flex items-center gap-1"
+                                >
+                                    {invitingUserId === user.id ? (
+                                        <Loader2 className="animate-spin" size={10} />
+                                    ) : (
+                                        <UserPlus size={10} />
+                                    )}
+                                    Invite
+                                </button>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { PreflightStore } from '../../lib/preflightStore'
+import { useStreamStore } from '../../lib/streamStore'
 
 import { Stream } from '../../types/broadcast'
 import StreamLayout from '../../components/broadcast/StreamLayout'
@@ -14,12 +15,13 @@ import BroadcastHeader from '../../components/broadcast/BroadcastHeader'
 import BattleView from '../../components/broadcast/BattleView'
 import BattleControls from '../../components/broadcast/BattleControls'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import GiftBoxModal from '../../components/broadcast/GiftBoxModal'
+import GiftBoxModal, { GiftTarget, GiftItem } from '../../components/broadcast/GiftBoxModal'
 import GiftAnimationOverlay from '../../components/broadcast/GiftAnimationOverlay'
 import PinnedProductOverlay from '../../components/broadcast/PinnedProductOverlay'
 import PinProductModal from '../../components/broadcast/PinProductModal'
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime'
 import { useBroadcastPinnedProducts } from '../../hooks/useBroadcastPinnedProducts'
+import { useBoxCount } from '../../hooks/useBoxCount'
 import {
   getCategoryConfig,
   supportsBattles,
@@ -44,6 +46,7 @@ function BroadcastPage() {
 
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
+  const { clearTracks } = useStreamStore()
 
   const [stream, setStream] = useState<Stream | null>(null)
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null)
@@ -89,7 +92,7 @@ function BroadcastPage() {
   // Stop local camera and mic tracks
   const stopLocalTracks = useCallback(() => {
     console.log('[BroadcastPage] stopLocalTracks called, localTracks:', localTracks ? 'exists' : 'null');
-    
+
     // Stop any tracks that might be stored elsewhere
     if (localTracks) {
       console.log('[BroadcastPage] Stopping local tracks, count:', localTracks.length);
@@ -106,14 +109,22 @@ function BroadcastPage() {
       });
       setLocalTracks(null);
     }
-    
+
     // Also leave the Agora channel
     const client = agoraClientRef.current;
     if (client) {
       console.log('[BroadcastPage] Leaving Agora channel');
       client.leave().catch(console.error);
     }
-  }, [localTracks]);
+
+    // Clear PreflightStore to stop any tracks stored there
+    console.log('[BroadcastPage] Clearing PreflightStore');
+    PreflightStore.clear();
+
+    // Clear streamStore to stop any screen share or camera tracks
+    console.log('[BroadcastPage] Clearing streamStore');
+    clearTracks();
+  }, [localTracks, clearTracks]);
 
   // Manual refresh function to force reload stream data
   const refreshStream = useCallback(async () => {
@@ -121,7 +132,7 @@ function BroadcastPage() {
     console.log('[BroadcastPage] Manual refresh - fetching stream data');
     const { data, error } = await supabase
       .from('streams')
-      .select('*')
+      .select('*, total_likes')
       .eq('id', streamId)
       .single();
     
@@ -130,7 +141,7 @@ function BroadcastPage() {
       return;
     }
     
-    console.log('[BroadcastPage] Refreshed stream data, box_count:', data.box_count);
+    console.log('[BroadcastPage] Refreshed stream data, box_count:', data.box_count, 'total_likes:', data.total_likes);
     setStream(data);
   }, [streamId, supabase]);
 
@@ -156,6 +167,18 @@ function BroadcastPage() {
   useEffect(() => {
     streamRef.current = stream
   }, [stream])
+
+  // Use isolated box count hook to prevent camera re-initialization when boxes change
+  const {
+    boxCount,
+    setBoxCount: updateBoxCount,
+    incrementBoxCount,
+    decrementBoxCount,
+  } = useBoxCount({
+    streamId: streamId || '',
+    initialBoxCount: stream?.box_count || 1,
+    isHost,
+  });
 
   /** STREAM SEATS */
   const { seats, mySession: userSeat, joinSeat, leaveSeat } =
@@ -198,7 +221,7 @@ function BroadcastPage() {
     const fetchStream = async () => {
       const { data, error } = await supabase
         .from('streams')
-        .select('*')
+        .select('*, total_likes')
         .eq('id', streamId)
         .maybeSingle()
 
@@ -292,10 +315,10 @@ function BroadcastPage() {
     
     const pollInterval = setInterval(async () => {
       try {
-        // Always poll for box_count, has_rgb_effect, and battle status updates
+        // Always poll for box_count, has_rgb_effect, total_likes, and battle status updates
         const { data, error } = await supabase
           .from('streams')
-          .select('mux_playback_id, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked')
+          .select('mux_playback_id, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked, total_likes')
           .eq('id', streamId)
           .single();
         
@@ -341,10 +364,21 @@ function BroadcastPage() {
           });
         }
         
-        // Stop polling if stream has ended
-        if (data?.status === 'ended') {
-          console.log('[BroadcastPage] Stream ended, stopping poll');
+        // Check for total_likes changes
+        if (data?.total_likes !== undefined && data.total_likes !== streamRef.current?.total_likes) {
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, total_likes: data.total_likes };
+          });
+        }
+        
+        // Stop polling and navigate away if stream has ended
+        if (data?.status === 'ended' || data?.is_live === false) {
+          console.log('[BroadcastPage] Stream ended detected in poll, navigating to summary');
           clearInterval(pollInterval);
+          stopLocalTracks();
+          navigate(`/broadcast/summary/${streamId}`);
+          return;
         }
       } catch (err) {
         console.warn('[BroadcastPage] Poll exception:', err);
@@ -409,29 +443,36 @@ function BroadcastPage() {
           if (!payload.new) return;
           
           // Skip update if nothing actually changed
-          if (streamRef.current && 
+          if (streamRef.current &&
               streamRef.current.box_count === payload.new.box_count &&
               streamRef.current.has_rgb_effect === payload.new.has_rgb_effect &&
-              streamRef.current.are_seats_locked === payload.new.are_seats_locked) {
+              streamRef.current.are_seats_locked === payload.new.are_seats_locked &&
+              streamRef.current.total_likes === payload.new.total_likes) {
             return;
           }
           
           try {
           setStream((prev: any) => {
               if (!prev) return prev;
-              return { 
-                ...prev, 
+              return {
+                ...prev,
                 box_count: payload.new.box_count,
                 has_rgb_effect: payload.new.has_rgb_effect,
-                are_seats_locked: payload.new.are_seats_locked
+                are_seats_locked: payload.new.are_seats_locked,
+                total_likes: payload.new.total_likes,
+                status: payload.new.status,
+                is_live: payload.new.is_live
               };
             });
-            // Navigate to summary when stream ends - for ALL clients
-            if (payload.new.status === 'ended') {
-              console.log('[BroadcastPage] Stream ended, navigating to summary');
+            // Navigate to summary when stream ends - for ALL clients (including broadcaster)
+            if (payload.new.status === 'ended' || payload.new.is_live === false) {
+              console.log('[BroadcastPage] Stream ended (status: ended or is_live: false), navigating to summary');
               // Stop local camera and mic for broadcaster/guest
               stopLocalTracks();
-              navigate(`/broadcast/summary/${streamId}`);
+              // Small delay to ensure cleanup happens before navigation
+              setTimeout(() => {
+                navigate(`/broadcast/summary/${streamId}`);
+              }, 100);
             }
           } catch (err) {
             console.error('[Realtime] Error processing stream update:', err);
@@ -476,6 +517,7 @@ function BroadcastPage() {
               gift_name: giftData.gift_name,
               gift_icon: giftData.gift_icon || '🎁',
               amount: giftData.amount,
+              quantity: giftData.quantity || 1,
               sender_id: giftData.sender_id,
               sender_name: giftData.sender_name || 'Someone',
               receiver_id: giftData.receiver_id,
@@ -495,9 +537,17 @@ function BroadcastPage() {
         { event: 'like_sent' },
         (payload) => {
           try {
-            console.log('[BroadcastPage] Like received:', payload.payload);
-            // Trigger a UI update for likes - the stream subscription will handle the actual count
-            setStream((prev: any) => prev ? { ...prev, total_likes: (prev.total_likes || 0) + 1 } : null);
+            const likeData = payload.payload;
+            console.log('[BroadcastPage] Like received:', likeData);
+            
+            // Use the total_likes from the server if available, otherwise increment
+            setStream((prev: any) => {
+              if (!prev) return prev;
+              const newTotal = likeData.total_likes !== undefined
+                ? likeData.total_likes
+                : (prev.total_likes || 0) + 1;
+              return { ...prev, total_likes: newTotal };
+            });
           } catch (err) {
             console.error('[BroadcastPage] Error processing like:', err);
           }
@@ -596,12 +646,26 @@ function BroadcastPage() {
         }
       });
 
+    // Heartbeat to keep connection alive - prevents Supabase from dropping connection after inactivity
+    const heartbeatInterval = setInterval(() => {
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'ping',
+          payload: { timestamp: Date.now(), user_id: user?.id }
+        }).catch(() => {
+          // Ignore errors, just trying to keep connection alive
+        });
+      }
+    }, 30000); // Send heartbeat every 30 seconds
+
     return () => {
+      clearInterval(heartbeatInterval);
       supabase.removeChannel(channel);
     };
-  }, [streamId, navigate, stopLocalTracks]);
+  }, [streamId, navigate, stopLocalTracks, user?.id]);
 
-  /** AGORA INIT */
+  /** AGORA INIT - Only runs once when stream and user are available */
   useEffect(() => {
     if (!stream || !user) {
       console.log('[BroadcastPage] Agora init skipped: no stream or user');
@@ -614,7 +678,11 @@ function BroadcastPage() {
       return;
     }
 
-    console.log('[BroadcastPage] Agora init effect running, canPublish:', canPublish);
+    // For hosts, always initialize. For guests, only initialize if they have a seat
+    // Use a ref to capture the value at mount time to avoid re-runs
+    const shouldPublish = isHost || !!userSeat;
+    
+    console.log('[BroadcastPage] Agora init effect running, shouldPublish:', shouldPublish, 'isHost:', isHost, 'hasUserSeat:', !!userSeat);
 
     // Check for pre-existing Agora client from SetupPage
     const preflightClient = PreflightStore.getAgoraClient();
@@ -693,7 +761,7 @@ function BroadcastPage() {
       // Check if we're on mobile
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       console.log('[BroadcastPage] Device type:', isMobile ? 'mobile' : 'desktop');
-      console.log('[BroadcastPage] initAgora called, canPublish:', canPublish, 'isHost:', isHost, 'hasUserSeat:', !!userSeat);
+      console.log('[BroadcastPage] initAgora called, shouldPublish:', shouldPublish, 'isHost:', isHost, 'hasUserSeat:', !!userSeat);
       
       const client = AgoraRTC.createClient({
         mode: 'rtc',
@@ -746,7 +814,7 @@ function BroadcastPage() {
       })
 
       /** HOST OR GUEST → AGORA */
-      if (canPublish) {
+      if (shouldPublish) {
         setIsJoining(true)
 
         // Convert UUID string to numeric UID for Agora token compatibility
@@ -1029,7 +1097,10 @@ function BroadcastPage() {
       setLocalTracks(null)
       setMuxPlaybackId(null)
     }
-  }, [stream, user, canPublish, hostMicMutedByOfficer])
+  // IMPORTANT: We intentionally don't include canPublish/userSeat in dependencies
+  // to prevent re-initialization when guests join/leave. The hasJoinedRef check
+  // ensures we only initialize once.
+  }, [stream?.id, user?.id, isHost, hostMicMutedByOfficer])
 
   /** CAMERA / MIC */
   const toggleCamera = async () => {
@@ -1063,78 +1134,29 @@ function BroadcastPage() {
     toast.info(`Gift sent to ${ids.length} users`)
   }
 
-  const handleBoxCountChange = useCallback(async (newCount: number) => {
-    try {
-      // Use streamRef to get the current stream
-      const currentStream = streamRef.current;
-      if (!currentStream) {
-        console.log('[BoxCount] ERROR: No current stream');
-        return;
-      }
+  // Box count is now managed by useBoxCount hook to prevent camera re-initialization
 
-      // Don't update if the value hasn't changed
-      if (currentStream.box_count === newCount) {
-        console.log('[BoxCount] No change needed - same value');
-        return;
-      }
+  // Click rate tracking for autoclicker detection
+  const clickHistoryRef = useRef<number[]>([]);
+  const [isClickBlocked, setIsClickBlocked] = useState(false);
+  const CLICK_WINDOW_MS = 2000; // 2 second window
+  const MAX_CLICKS_IN_WINDOW = 5; // Max 5 clicks in 2 seconds
+  const BLOCK_DURATION_MS = 30000; // Block for 30 seconds if autoclicking detected
 
-      console.log('[BoxCount] === BROADCASTER: Button clicked - updating from', currentStream.box_count, 'to', newCount);
-
-      // Immediately update local state for instant UI feedback
-      setStream((prev: any) => {
-        if (!prev) return null;
-        const updated = { ...prev, box_count: newCount };
-        console.log('[BoxCount] BROADCASTER: Local state updated:', updated.box_count);
-        return updated;
-      });
-
-      // Use the channel from the ref - this is the SAME channel used for receiving
-      // This channel should already be subscribed with all the listeners
-      let broadcastChannel = channelRef.current;
-      
-      console.log('[BoxCount] BROADCASTER: Current channel state:', { 
-        hasChannel: !!broadcastChannel, 
-        isInitialized: channelRefInitializedRef.current 
-      });
-
-      // If channel exists and is initialized, use it
-      if (broadcastChannel && channelRefInitializedRef.current) {
-        try {
-          // Send the broadcast - this goes to ALL clients on the same channel
-          await broadcastChannel.send({
-            type: 'broadcast',
-            event: 'box_count_changed',
-            payload: { box_count: newCount, stream_id: currentStream.id }
-          });
-          console.log('[BoxCount] BROADCASTER: Broadcast sent via existing channel');
-        } catch (sendErr) {
-          console.error('[BoxCount] BROADCASTER: Error sending broadcast:', sendErr);
-        }
-      } else {
-        console.warn('[BoxCount] BROADCASTER: Channel not ready, skipping broadcast');
-      }
-
-      // Also update database - viewers should get this via postgres_changes
-      try {
-        console.log('[BoxCount] BROADCASTER: Updating database with box_count:', newCount);
-        const { error } = await supabase
-          .from('streams')
-          .update({ box_count: newCount })
-          .eq('id', currentStream.id);
-
-        if (error) {
-          console.error('[BoxCount] BROADCASTER: Database error:', error);
-          return;
-        }
-        
-        console.log('[BoxCount] BROADCASTER: Database updated successfully');
-      } catch (dbErr) {
-        console.error('[BoxCount] BROADCASTER: Database exception:', dbErr);
-      }
-    } catch (err) {
-      console.error('[BoxCount] BROADCASTER: Top-level exception:', err);
+  const checkClickRate = () => {
+    const now = Date.now();
+    // Remove clicks older than the window
+    clickHistoryRef.current = clickHistoryRef.current.filter(
+      timestamp => now - timestamp < CLICK_WINDOW_MS
+    );
+    // Add current click
+    clickHistoryRef.current.push(now);
+    // Check if too many clicks in window
+    if (clickHistoryRef.current.length > MAX_CLICKS_IN_WINDOW) {
+      return false; // Too many clicks - autoclicker detected
     }
-  }, [supabase]);
+    return true; // Click allowed
+  };
 
   const handleLike = async () => {
     if (!user) {
@@ -1146,22 +1168,118 @@ function BroadcastPage() {
         return;
     }
 
+    // Check for autoclicker
+    if (isClickBlocked) {
+        toast.error('Clicking too fast! Please wait a moment.');
+        return;
+    }
+
+    if (!checkClickRate()) {
+        // Autoclicker detected
+        setIsClickBlocked(true);
+        toast.error('🛑 Autoclicker detected! You are blocked from liking for 30 seconds.');
+        console.warn('[BroadcastPage] Autoclicker detected for user:', user.id);
+        
+        // Unblock after duration
+        setTimeout(() => {
+            setIsClickBlocked(false);
+            clickHistoryRef.current = []; // Clear history
+            toast.info('You can now like again.');
+        }, BLOCK_DURATION_MS);
+        return;
+    }
+
     try {
-        // Try to insert into stream_likes if table exists
-        const { error } = await supabase.from('stream_likes').insert({
-            stream_id: stream.id,
-            user_id: user.id
+        // Get session for authorization
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            toast.error('Please sign in to like');
+            return;
+        }
+
+        // Check if stream exists
+        if (!stream?.id) {
+            toast.error('Stream not found');
+            return;
+        }
+
+        // Call the edge function to process like and award coins
+        const edgeUrl = `${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-like`;
+        console.log('[BroadcastPage] Sending like to:', edgeUrl);
+        
+        const response = await fetch(edgeUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                stream_id: stream.id
+            })
         });
 
-        if (error) {
-            // If duplicate like (unique constraint), maybe just ignore or toggle?
-            // Assuming we just want to count likes, we might ignore unique constraint errors
-            if (error.code !== '23505') { // 23505 is unique violation
-                console.error("Like error:", error);
-            }
+        // Handle 404 error specifically
+        if (response.status === 404) {
+            console.error('[BroadcastPage] Like endpoint not found (404). Edge function may not be deployed.');
+            toast.error('Like feature temporarily unavailable. Please try again later.');
+            return;
         }
+
+        let result;
+        try {
+            result = await response.json();
+        } catch (parseError) {
+            console.error('[BroadcastPage] Failed to parse like response:', parseError);
+            toast.error('Failed to process like. Please try again.');
+            return;
+        }
+
+        if (!response.ok) {
+            console.error('Like error:', result);
+            toast.error(result?.error || 'Failed to send like');
+            return;
+        }
+
+        // Broadcast like event to all viewers in real-time
+        const channel = channelRef.current;
+        if (channel) {
+            await channel.send({
+                type: 'broadcast',
+                event: 'like_sent',
+                payload: {
+                    user_id: user.id,
+                    stream_id: stream.id,
+                    total_likes: result.total_likes,
+                    timestamp: Date.now()
+                }
+            });
+            console.log('[BroadcastPage] Like broadcast sent');
+        }
+
+        // Update local state with actual count from server
+        setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, total_likes: result.total_likes };
+        });
+
+        // Show coin reward notification if coins were awarded
+        if (result.coins_awarded > 0) {
+            toast.success(
+                `🎉 You earned ${result.coins_awarded} Troll Coin${result.coins_awarded !== 1 ? 's' : ''}! ` +
+                `(${result.user_like_count.toLocaleString()} likes)`,
+                { duration: 5000 }
+            );
+        }
+
+        console.log('[BroadcastPage] Like processed:', {
+            total_likes: result.total_likes,
+            user_likes: result.user_like_count,
+            coins_awarded: result.coins_awarded
+        });
+
     } catch (e) {
-        console.error(e);
+        console.error('Like error:', e);
+        toast.error('Failed to send like');
     }
   };
 
@@ -1218,6 +1336,43 @@ function BroadcastPage() {
     // Navigate to summary page
     navigate(`/broadcast/summary/${stream?.id}`);
   };
+
+  // Compute active user IDs and profiles for gift recipient selection (MUST be before early returns)
+  const activeUserIds = useMemo(() => {
+    if (!stream) return [];
+    const ids: string[] = [];
+    Object.values(seats).forEach((seat: any) => {
+      if (seat?.user_id && seat.user_id !== stream.user_id) {
+        ids.push(seat.user_id);
+      }
+    });
+    return ids;
+  }, [seats, stream?.user_id]);
+
+  const userProfiles = useMemo(() => {
+    if (!stream) return {};
+    const profiles: Record<string, { username: string; avatar_url?: string }> = {};
+    
+    // Add broadcaster
+    if (broadcasterProfile) {
+      profiles[stream.user_id] = {
+        username: broadcasterProfile.username || 'Broadcaster',
+        avatar_url: broadcasterProfile.avatar_url,
+      };
+    }
+    
+    // Add seat users
+    Object.values(seats).forEach((seat: any) => {
+      if (seat?.user_id && seat.user_profile) {
+        profiles[seat.user_id] = {
+          username: seat.user_profile.username || 'User',
+          avatar_url: seat.user_profile.avatar_url,
+        };
+      }
+    });
+    
+    return profiles;
+  }, [seats, broadcasterProfile, stream?.user_id]);
 
   /** LOADING */
   if (isLoading) {
@@ -1308,6 +1463,7 @@ function BroadcastPage() {
             onGetUserPositions={handleGetUserPositions}
             broadcasterProfile={broadcasterProfile}
             streamStatus={stream.status}
+            boxCount={boxCount}
           />
         }
         
@@ -1321,7 +1477,7 @@ function BroadcastPage() {
             toggleChat={() => setIsChatOpen(!isChatOpen)}
             onGiftHost={() => onGift(stream.user_id)}
             onLeave={leaveSeat}
-            onBoxCountUpdate={handleBoxCountChange}
+            onBoxCountUpdate={updateBoxCount}
             onStreamEnd={handleStreamEnd}
             handleLike={handleLike}
             toggleBattleMode={() => setIsBattleMode(!isBattleMode)}
@@ -1329,6 +1485,8 @@ function BroadcastPage() {
             toggleCamera={toggleCamera}
             toggleMicrophone={toggleMicrophone}
             onPinProduct={() => setIsPinProductModalOpen(true)}
+            boxCount={boxCount}
+            setBoxCount={updateBoxCount}
           />
         }
         
@@ -1370,19 +1528,48 @@ function BroadcastPage() {
               }}
               recipientId={giftRecipientId || stream?.user_id || ''}
               streamId={streamId || ''}
-              onGiftSent={(giftData) => {
-                const newGift: BroadcastGift = {
-                  id: `local-${Date.now()}`,
-                  gift_id: giftData.id,
-                  gift_name: giftData.name,
-                  gift_icon: giftData.icon || '🎁',
-                  amount: giftData.coinCost,
-                  sender_id: user?.id || '',
-                  sender_name: profile?.username || 'You',
-                  receiver_id: giftRecipientId || stream?.user_id || '',
-                  created_at: new Date().toISOString(),
-                };
-                setRecentGifts(prev => [...prev, newGift]);
+              broadcasterId={stream.user_id}
+              activeUserIds={activeUserIds}
+              userProfiles={userProfiles}
+              onGiftSent={(giftData: GiftItem, target: GiftTarget) => {
+                const quantity = target.quantity || 1;
+                // Handle gift target for animation positioning
+                if (target.type === 'all') {
+                  // Send to all users - create multiple gift animations
+                  const allRecipients = [stream.user_id, ...activeUserIds];
+                  allRecipients.forEach((recipientId, index) => {
+                    setTimeout(() => {
+                      const newGift: BroadcastGift = {
+                        id: `local-${Date.now()}-${index}`,
+                        gift_id: giftData.id,
+                        gift_name: giftData.name,
+                        gift_icon: giftData.icon || '🎁',
+                        amount: giftData.coinCost * quantity,
+                        quantity,
+                        sender_id: user?.id || '',
+                        sender_name: profile?.username || 'You',
+                        receiver_id: recipientId,
+                        created_at: new Date().toISOString(),
+                      };
+                      setRecentGifts(prev => [...prev, newGift]);
+                    }, index * 200); // Stagger animations
+                  });
+                } else {
+                  // Single recipient
+                  const newGift: BroadcastGift = {
+                    id: `local-${Date.now()}`,
+                    gift_id: giftData.id,
+                    gift_name: giftData.name,
+                    gift_icon: giftData.icon || '🎁',
+                    amount: giftData.coinCost * quantity,
+                    quantity,
+                    sender_id: user?.id || '',
+                    sender_name: profile?.username || 'You',
+                    receiver_id: target.userId || giftRecipientId || stream?.user_id || '',
+                    created_at: new Date().toISOString(),
+                  };
+                  setRecentGifts(prev => [...prev, newGift]);
+                }
               }}
             />
             

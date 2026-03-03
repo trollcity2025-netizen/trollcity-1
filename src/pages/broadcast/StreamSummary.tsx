@@ -2,13 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Home, Trophy, Users, Heart, Gift, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../lib/store';
 
 export default function StreamSummary() {
   const navigate = useNavigate();
   const location = useLocation();
   const { streamId } = useParams();
+  const { user } = useAuthStore();
   const [stats, setStats] = useState(location.state || null);
   const [loading, setLoading] = useState(!location.state);
+  const [myGifts, setMyGifts] = useState(0);
 
   useEffect(() => {
     if (stats) return;
@@ -21,30 +24,55 @@ export default function StreamSummary() {
       try {
         const { data: stream, error } = await supabase
           .from('streams')
-          .select('title, viewer_count, current_viewers, likes_count, gifts_value')
+          .select('title, viewer_count, current_viewers, total_likes')
           .eq('id', streamId)
           .single();
 
         if (error) throw error;
 
-        // Try to fetch extended stats if available, otherwise default to 0
-        // Since we don't have a guaranteed stats table for every stream yet, we use what we have
+        // Fetch individual user's received gifts for this stream
+        let userGifts = 0;
+        if (user?.id) {
+          // Try gift_ledger first (more accurate for stream gifts)
+          const { data: giftData } = await supabase
+            .from('gift_ledger')
+            .select('amount')
+            .eq('stream_id', streamId)
+            .eq('receiver_id', user.id)
+            .eq('status', 'processed');
+          
+          if (giftData && giftData.length > 0) {
+            userGifts = giftData.reduce((sum, g) => sum + (g.amount || 0), 0);
+          } else {
+            // Fallback to gifts table
+            const { data: fallbackGifts } = await supabase
+              .from('gifts')
+              .select('coins_spent')
+              .eq('stream_id', streamId)
+              .eq('receiver_id', user.id);
+            
+            if (fallbackGifts && fallbackGifts.length > 0) {
+              userGifts = fallbackGifts.reduce((sum, g) => sum + (g.coins_spent || 0), 0);
+            }
+          }
+        }
+
         setStats({
           title: stream.title || 'Broadcast Ended',
           viewers: stream.current_viewers || stream.viewer_count || 0,
-          likes: stream.likes_count || 0,
-          gifts: stream.gifts_value || 0
+          likes: stream.total_likes || 0
         });
+        setMyGifts(userGifts);
       } catch (err) {
         console.error('Error fetching stream stats:', err);
-        setStats({ title: 'Stream Ended', viewers: 0, likes: 0, gifts: 0 });
+        setStats({ title: 'Stream Ended', viewers: 0, likes: 0 });
       } finally {
         setLoading(false);
       }
     };
 
     fetchStreamStats();
-  }, [streamId, stats]);
+  }, [streamId, stats, user?.id]);
 
   if (loading) {
     return (
@@ -54,7 +82,7 @@ export default function StreamSummary() {
     );
   }
 
-  const displayStats = stats || { viewers: 0, likes: 0, gifts: 0, title: 'Stream Ended' };
+  const displayStats = stats || { viewers: 0, likes: 0, title: 'Stream Ended' };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
@@ -79,8 +107,8 @@ export default function StreamSummary() {
             </div>
             <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
                 <Gift className="text-yellow-500 mb-2" size={24} />
-                <span className="text-2xl font-bold">{displayStats.gifts || 0}</span>
-                <span className="text-xs text-zinc-500 uppercase tracking-wider">Gifts</span>
+                <span className="text-2xl font-bold">{myGifts || 0}</span>
+                <span className="text-xs text-zinc-500 uppercase tracking-wider">My Gifts</span>
             </div>
         </div>
 

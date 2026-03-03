@@ -2,9 +2,10 @@ import { useMemo, useState, type CSSProperties, useRef, useEffect, memo } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import { ILocalVideoTrack, ILocalAudioTrack, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, MicOff, VideoOff } from 'lucide-react';
+import { User, Coins, Plus, MicOff, VideoOff, Gift } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
+import { supabase } from '../../lib/supabase';
 
 import BroadcasterStatsModal from './BroadcasterStatsModal';
 import { SeatSession } from '../../hooks/useStreamSeats';
@@ -37,6 +38,8 @@ interface BroadcastGridProps {
   userIdToAgoraUid?: Record<string, number>;
   // Callback to get user box positions for gift animations
   onGetUserPositions?: (getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => void;
+  // Optional box count override (from useBoxCount hook for performance)
+  boxCount?: number;
 }
 
 function AgoraVideoPlayer({
@@ -198,6 +201,7 @@ export default function BroadcastGrid({
   userIdToAgoraUid = {},
   onGetUserPositions,
   streamStatus,
+  boxCount: boxCountProp,
 }: BroadcastGridProps) {
   const { profile } = useAuthStore();
   
@@ -214,6 +218,7 @@ export default function BroadcastGrid({
   const [showHostStats, setShowHostStats] = useState(false);
   const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [persistentGifts, setPersistentGifts] = useState<Map<string, PersistentGift[]>>(new Map());
+  const [userReceivedGifts, setUserReceivedGifts] = useState<Record<string, number>>({});
 
   // Update persistent gifts periodically
   useEffect(() => {
@@ -222,6 +227,51 @@ export default function BroadcastGrid({
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch received gifts for all users in this stream
+  useEffect(() => {
+    if (!stream?.id) return;
+
+    const fetchUserGifts = async () => {
+      // Get all user IDs currently in seats
+      const userIdsInStream = Object.values(seats)
+        .filter((seat): seat is SeatSession & { user_id: string } => !!seat?.user_id)
+        .map(seat => seat.user_id);
+      
+      // Also include host
+      if (stream.user_id && !userIdsInStream.includes(stream.user_id)) {
+        userIdsInStream.push(stream.user_id);
+      }
+
+      if (userIdsInStream.length === 0) return;
+
+      try {
+        // Fetch gifts from gift_ledger for this stream
+        const { data: giftData } = await supabase
+          .from('gift_ledger')
+          .select('receiver_id, amount')
+          .eq('stream_id', stream.id)
+          .eq('status', 'processed')
+          .in('receiver_id', userIdsInStream);
+
+        if (giftData) {
+          // Sum gifts per user
+          const giftsByUser: Record<string, number> = {};
+          giftData.forEach((gift: { receiver_id: string; amount: number }) => {
+            giftsByUser[gift.receiver_id] = (giftsByUser[gift.receiver_id] || 0) + (gift.amount || 0);
+          });
+          setUserReceivedGifts(giftsByUser);
+        }
+      } catch (err) {
+        console.error('[BroadcastGrid] Error fetching user gifts:', err);
+      }
+    };
+
+    fetchUserGifts();
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchUserGifts, 10000);
+    return () => clearInterval(interval);
+  }, [stream?.id, stream?.user_id, seats]);
 
   // Expose positions when callback is provided
   const getPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}));
@@ -367,7 +417,8 @@ export default function BroadcastGrid({
   const maxOccupiedSeatIndex = occupiedSeatIndices.length > 0 ? Math.max(...occupiedSeatIndices) : -1;
   const requiredBoxes = Math.max(1, maxOccupiedSeatIndex + 1); // 0-indexed
 
-  const streamBoxCount = Math.max(1, Number(stream.box_count || 1));
+  // Use boxCount prop if provided (from useBoxCount hook), otherwise fall back to stream.box_count
+  const streamBoxCount = Math.max(1, Number(boxCountProp !== undefined ? boxCountProp : (stream.box_count || 1)));
   
   // ALWAYS ensure we have enough boxes for all occupied seats PLUS the configured box_count
   // This ensures guests in higher seats are always visible
@@ -432,7 +483,7 @@ export default function BroadcastGrid({
         effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
       )}
     >
-      <AnimatePresence>
+      <AnimatePresence mode="popLayout">
         {boxes.map((seatIndex) => {
           const seat = seats[seatIndex];
           let userId = seat?.user_id;
@@ -488,13 +539,16 @@ export default function BroadcastGrid({
             !hasGold && (hasRgbProfile || hasStreamRgb) && 'rgb-box'
           );
 
+          // Get received gifts for this user
+          const userGiftAmount = userId ? (userReceivedGifts[userId] || 0) : 0;
+
           return (
             <motion.div
               layout
-              initial={{ opacity: 0, scale: 0.5 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              transition={{ duration: 0.3 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
               key={seatIndex}
               className={boxClass}
               ref={(el) => {
@@ -708,6 +762,18 @@ export default function BroadcastGrid({
                 </div>
               )}
 
+              {/* Received Gifts Badge */}
+              {userId && userGiftAmount > 0 && (
+                <div className="absolute bottom-20 left-3 z-10 pointer-events-none">
+                  <div className="bg-gradient-to-r from-pink-500/20 to-purple-500/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-pink-500/30 flex items-center gap-2 shadow-lg">
+                    <Gift size={12} className="text-pink-400" />
+                    <span className="text-xs font-bold text-white">
+                      +{userGiftAmount.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Persistent Gifts Badge */}
               {userId && persistentGifts.get(userId) && persistentGifts.get(userId)!.length > 0 && (
                 <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1">
@@ -768,4 +834,4 @@ export default function BroadcastGrid({
       )}
     </div>
   );
-} 
+}

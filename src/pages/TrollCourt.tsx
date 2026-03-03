@@ -321,7 +321,17 @@ export default function TrollCourt() {
       )
       .subscribe()
 
+    // Heartbeat to keep connection alive
+    const heartbeatInterval = setInterval(() => {
+      channel.send({
+        type: 'broadcast',
+        event: 'ping',
+        payload: { timestamp: Date.now(), page: 'troll-court' }
+      }).catch(() => {});
+    }, 30000); // Every 30 seconds
+
     return () => {
+      clearInterval(heartbeatInterval);
       supabase.removeChannel(channel)
     }
   }, [user?.id])

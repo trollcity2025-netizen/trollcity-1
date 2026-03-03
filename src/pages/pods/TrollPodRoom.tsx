@@ -231,7 +231,17 @@ export default function TrollPodRoom() {
       })
       .subscribe();
 
+    // Heartbeat to keep connection alive
+    const roomHeartbeat = setInterval(() => {
+      roomChannel.send({
+        type: 'broadcast',
+        event: 'ping',
+        payload: { timestamp: Date.now(), room_id: roomId }
+      }).catch(() => {});
+    }, 30000); // Every 30 seconds
+
     return () => {
+      clearInterval(roomHeartbeat);
       supabase.removeChannel(roomChannel);
     };
   }, [roomId, navigate]);
@@ -317,7 +327,26 @@ export default function TrollPodRoom() {
         })
         .subscribe();
 
+    // Heartbeat to keep connections alive
+    const participantsHeartbeat = setInterval(() => {
+      participantsChannel.send({
+        type: 'broadcast',
+        event: 'ping',
+        payload: { timestamp: Date.now(), room_id: roomId, channel: 'participants' }
+      }).catch(() => {});
+    }, 30000); // Every 30 seconds
+
+    const bansHeartbeat = setInterval(() => {
+      bansChannel.send({
+        type: 'broadcast',
+        event: 'ping',
+        payload: { timestamp: Date.now(), room_id: roomId, channel: 'bans' }
+      }).catch(() => {});
+    }, 30000); // Every 30 seconds
+
     return () => {
+        clearInterval(participantsHeartbeat);
+        clearInterval(bansHeartbeat);
         supabase.removeChannel(participantsChannel);
         supabase.removeChannel(bansChannel);
     };

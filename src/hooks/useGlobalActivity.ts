@@ -4,10 +4,15 @@ import { supabase } from '../lib/supabase';
 
 export interface ActivityEvent {
   id: string;
-  type: 'live' | 'gift' | 'battle' | 'system';
+  type: 'live' | 'gift' | 'battle' | 'system' | 'tcnn_breaking' | 'tcnn_live' | 'tcnn_article';
   message: string;
-  priority: 'high' | 'medium' | 'low';
+  priority: 'high' | 'medium' | 'low' | 'breaking';
   created_at: string;
+  metadata?: {
+    category?: string;
+    url?: string;
+    author?: string;
+  };
 }
 
 const useGlobalActivity = () => {
@@ -112,10 +117,107 @@ const useGlobalActivity = () => {
         console.log('[GlobalTicker] Battles subscription status:', status);
       });
 
+    // TCNN Breaking News Handler
+    const handleTCNNBreakingNews = async (payload: any) => {
+      const ticker = payload.new as any;
+      if (ticker.status === 'active' && ticker.priority === 'breaking') {
+        const event: ActivityEvent = {
+          id: ticker.id,
+          type: 'tcnn_breaking',
+          message: `🚨 BREAKING: ${ticker.message}`,
+          priority: 'breaking',
+          created_at: ticker.created_at,
+          metadata: {
+            category: 'breaking_news'
+          }
+        };
+        setEvents((prevEvents) => {
+          const filtered = prevEvents.filter(e => !(e.id === ticker.id && e.type === 'tcnn_breaking'));
+          return [event, ...filtered].slice(0, 50);
+        });
+      }
+    };
+
+    // TCNN Live Broadcast Handler
+    const handleTCNNLiveBroadcast = async (payload: any) => {
+      const broadcast = payload.new as any;
+      if (broadcast.category === 'tcnn' && (broadcast.is_live || broadcast.status === 'live')) {
+        const username = await fetchUsername(broadcast.user_id);
+        const event: ActivityEvent = {
+          id: broadcast.id,
+          type: 'tcnn_live',
+          message: `📺 TCNN LIVE: ${username} is broadcasting news now`,
+          priority: 'high',
+          created_at: broadcast.created_at,
+          metadata: {
+            category: 'tcnn_broadcast',
+            url: `/tcnn`
+          }
+        };
+        setEvents((prevEvents) => {
+          const filtered = prevEvents.filter(e => !(e.id === broadcast.id && e.type === 'tcnn_live'));
+          return [event, ...filtered].slice(0, 50);
+        });
+      }
+    };
+
+    // TCNN Published Article Handler
+    const handleTCNNArticlePublished = async (payload: any) => {
+      const article = payload.new as any;
+      if (article.status === 'published') {
+        const authorName = await fetchUsername(article.author_id);
+        const event: ActivityEvent = {
+          id: article.id,
+          type: 'tcnn_article',
+          message: `📰 TCNN: "${article.title.substring(0, 50)}${article.title.length > 50 ? '...' : ''}" by ${authorName}`,
+          priority: 'medium',
+          created_at: article.published_at || article.created_at,
+          metadata: {
+            category: 'tcnn_article',
+            author: authorName,
+            url: `/tcnn/article/${article.id}`
+          }
+        };
+        setEvents((prevEvents) => {
+          const filtered = prevEvents.filter(e => !(e.id === article.id && e.type === 'tcnn_article'));
+          return [event, ...filtered].slice(0, 50);
+        });
+      }
+    };
+
+    // TCNN Ticker Queue Subscription
+    const tcnnTickerSubscription = supabase
+      .channel('tcnn-ticker-activity')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tcnn_ticker_queue' }, handleTCNNBreakingNews)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tcnn_ticker_queue' }, handleTCNNBreakingNews)
+      .subscribe((status) => {
+        console.log('[GlobalTicker] TCNN ticker subscription status:', status);
+      });
+
+    // TCNN Stream/Category Subscription
+    const tcnnStreamSubscription = supabase
+      .channel('tcnn-stream-activity')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'streams' }, handleTCNNLiveBroadcast)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'streams' }, handleTCNNLiveBroadcast)
+      .subscribe((status) => {
+        console.log('[GlobalTicker] TCNN stream subscription status:', status);
+      });
+
+    // TCNN Articles Subscription
+    const tcnnArticlesSubscription = supabase
+      .channel('tcnn-articles-activity')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tcnn_articles' }, handleTCNNArticlePublished)
+      .subscribe((status) => {
+        console.log('[GlobalTicker] TCNN articles subscription status:', status);
+      });
+
     return () => {
       streamsSubscription.unsubscribe();
       coinTransactionsSubscription.unsubscribe();
       trollBattlesSubscription.unsubscribe();
+      tcnnTickerSubscription.unsubscribe();
+      tcnnStreamSubscription.unsubscribe();
+      tcnnArticlesSubscription.unsubscribe();
     };
   }, []);
 

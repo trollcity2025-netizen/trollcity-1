@@ -46,6 +46,7 @@ export interface BroadcastGift {
   gift_name: string;
   gift_icon: string;
   amount: number;
+  quantity?: number;
   sender_id: string;
   sender_name: string;
   receiver_id: string;

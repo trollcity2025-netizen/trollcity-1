@@ -39,7 +39,10 @@ import {
   Globe,
   Lock,
   Files,
-  Gamepad2
+  Gamepad2,
+  Music,
+  Newspaper,
+  Users
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -57,6 +60,7 @@ import { getGlowingTextStyle } from '@/lib/perkEffects'
 
 import { useSidebarStore } from '@/stores/useSidebarStore';
 import UserPresenceCounter from './sidebar/UserPresenceCounter';
+import OnlineUsersModal from './sidebar/OnlineUsersModal';
 
 export default function Sidebar() {
   const { profile } = useAuthStore()
@@ -72,6 +76,7 @@ export default function Sidebar() {
 
   const [showCourtModal, setShowCourtModal] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [showOnlineUsers, setShowOnlineUsers] = useState(false)
 
   const { expandedGroups, toggleGroup, expandGroup } = useSidebarStore();
 
@@ -103,6 +108,43 @@ export default function Sidebar() {
   }, [profile])
 
   const { isJailed } = useJailMode(profile?.id)
+
+  // Real-time role change detection - refreshes profile when role changes in DB
+  useEffect(() => {
+    if (!profile?.id) return
+
+    const channel = supabase
+      .channel(`profile-role-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${profile.id}`,
+        },
+        (payload) => {
+          // Check if role-related fields changed
+          const newData = payload.new as any
+          const oldData = payload.old as any
+          
+          const roleFields = ['role', 'is_admin', 'is_lead_officer', 'is_troll_officer', 'troll_role', 'is_pastor', 'is_secretary']
+          const hasRoleChange = roleFields.some(field => newData[field] !== oldData[field])
+          
+          if (hasRoleChange) {
+            console.log('[Sidebar] Role change detected, refreshing profile...')
+            // Refresh the profile to get updated role data
+            const { refreshProfile } = useAuthStore.getState()
+            refreshProfile()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.id])
 
   useEffect(() => {
     if (profile?.id) {
@@ -173,7 +215,7 @@ export default function Sidebar() {
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
-  const socialPaths = ['/tcps', '/pool', '/universe-event']
+  const socialPaths = ['/tcps', '/pool', '/universe-event', '/media-city']
   if (canSeeFamilyLounge) socialPaths.push('/family/lounge')
   const specialAccessPaths: string[] = []
   if (canSeeCourt) specialAccessPaths.push('/admin/court-dockets')
@@ -303,22 +345,31 @@ export default function Sidebar() {
               <SidebarItem icon={Building2} label="Neighbors" to="/neighbors" active={isActive('/neighbors')} collapsed={isSidebarCollapsed} highlight={isUpdated('/neighbors')} onClick={() => markAsViewed('/neighbors')} className="text-blue-400 hover:text-blue-300" />
             </SidebarGroup>
 
-            <SidebarGroup 
-              title={isSidebarCollapsed ? '' : "Social"} 
-              isCollapsed={isSidebarCollapsed} 
+            <SidebarGroup
+              title={isSidebarCollapsed ? '' : "Social"}
+              isCollapsed={isSidebarCollapsed}
               highlight={isAnyUpdated(socialPaths)}
               isExpanded={expandedGroups.includes('Social')}
               onToggle={() => toggleGroup('Social')}
             >
               <SidebarItem icon={MessageSquare} label="Troll City Postal Service" to="/tcps" active={isActive('/tcps') || isActive('/messages')} collapsed={isSidebarCollapsed} highlight={isUpdated('/tcps')} onClick={() => markAsViewed('/tcps')} />
-              <SidebarItem 
-                icon={Mic} 
-                label="Troll Pods" 
-                to="/pods" 
-                active={isActive('/pods')} 
+              <SidebarItem
+                icon={Mic}
+                label="Troll Pods"
+                to="/pods"
+                active={isActive('/pods')}
                 collapsed={isSidebarCollapsed}
                 highlight={isUpdated('/pods')} onClick={() => markAsViewed('/pods')}
                 className="text-purple-400 hover:text-purple-300"
+              />
+              <SidebarItem
+                icon={Music}
+                label="Media City"
+                to="/media-city"
+                active={isActive('/media-city')}
+                collapsed={isSidebarCollapsed}
+                highlight={isUpdated('/media-city')} onClick={() => markAsViewed('/media-city')}
+                className="text-pink-400 hover:text-pink-300"
               />
               <SidebarItem 
                 icon={Mic} 
@@ -452,6 +503,18 @@ export default function Sidebar() {
                       className="text-pink-400 hover:text-pink-300"
                     />
                 )}
+                {/* TCNN Dashboard - Only for TCNN staff, Admins, and SuperAdmins */}
+                {(profile?.is_journalist || profile?.is_news_caster || profile?.is_chief_news_caster || isAdmin || profile?.role === 'superadmin' || profile?.is_superadmin) && (
+                   <SidebarItem 
+                      icon={Newspaper} 
+                      label="TCNN Dashboard" 
+                      to="/tcnn/dashboard" 
+                      active={location.pathname.startsWith('/tcnn/dashboard')} 
+                      collapsed={isSidebarCollapsed}
+                      highlight={isUpdated('/tcnn/dashboard')} onClick={() => markAsViewed('/tcnn/dashboard')}
+                      className="text-blue-400 hover:text-blue-300"
+                    />
+                )}
                 {isAdmin && (
                    <SidebarItem 
                       icon={FileText} 
@@ -484,18 +547,33 @@ export default function Sidebar() {
 
       {/* Footer Actions */}
       <div className="p-4 border-t border-white/10 space-y-2">
+        {/* Stats Button */}
         <Link 
           to="/stats"
           className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-white/5 text-gray-400 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
         >
           <LayoutDashboard size={20} />
           {!isSidebarCollapsed && <span className="text-sm font-medium">Stats</span>}
-          <UserPresenceCounter />
         </Link>
+        
+        {/* Online Users Button */}
+        <button
+          onClick={() => setShowOnlineUsers(true)}
+          className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-white/5 text-gray-400 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
+        >
+          <Users size={20} />
+          {!isSidebarCollapsed && (
+            <div className="flex items-center justify-between flex-1">
+              <span className="text-sm font-medium">Online</span>
+              <UserPresenceCounter />
+            </div>
+          )}
+        </button>
       </div>
 
       {/* Modals */}
       {showCourtModal && <CourtEntryModal isOpen={true} onClose={() => setShowCourtModal(false)} />}
+      <OnlineUsersModal isOpen={showOnlineUsers} onClose={() => setShowOnlineUsers(false)} />
     </div>
   )
 }

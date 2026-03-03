@@ -214,7 +214,7 @@ export default function DistrictNavigation() {
               </div>
               <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-1">
                 <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/40">
-                  {profile.role === 'admin' ? 'Admin' : profile.title || 'Citizen'}
+                  {profile.role === 'admin' ? 'CEO' : profile.title || 'Citizen'}
                 </span>
               </div>
             </div>

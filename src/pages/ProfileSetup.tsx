@@ -608,23 +608,29 @@ const ProfileSetup = () => {
 
         <details className={`${trollCityTheme.backgrounds.card} rounded-lg border ${trollCityTheme.borders.glass} mt-6`} open>
           <summary className="cursor-pointer px-6 py-4 flex items-center justify-between">
-            <span className="font-semibold">Payout Settings</span>
-            <span className={`text-sm ${trollCityTheme.gradients.button} text-white px-3 py-1 rounded`}>PayPal</span>
+            <span className="font-semibold">PayPal Payout Settings</span>
+            <span className={`text-sm ${trollCityTheme.gradients.button} text-white px-3 py-1 rounded`}>Required</span>
           </summary>
 
           <div className="px-6 pb-6 space-y-3">
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 mb-3">
+              <h4 className="font-semibold text-blue-300 mb-2">📌 PayPal Account Required</h4>
+              <p className="text-sm text-blue-200">
+                You must have a PayPal account to receive payouts. All payouts are processed via PayPal on <span className="text-white font-bold">Fridays only</span>.
+              </p>
+            </div>
             <p className="text-sm text-gray-400">
-              Set the PayPal email where you want to receive your Troll City payouts.
+              Set your PayPal email address where you want to receive your Troll City payouts.
             </p>
             <button
               type="button"
               onClick={() => navigate('/payouts/setup')}
               className={`px-4 py-2 ${trollCityTheme.gradients.button} rounded-lg font-semibold text-sm text-white`}
             >
-              Open Payout Settings
+              Setup PayPal Payout Email
             </button>
             <p className="text-xs text-gray-500">
-              Payouts are sent only to your PayPal payout email. Make sure it matches your PayPal account.
+              Payouts are sent to your PayPal account every Friday. Ensure your PayPal email is correct to avoid delays.
             </p>
           </div>
         </details>

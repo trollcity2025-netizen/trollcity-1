@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import { cn } from '../../lib/utils';
 import { OFFICIAL_GIFTS } from '../../lib/giftConstants';
@@ -14,7 +14,7 @@ interface GiftAnimationOverlayProps {
 }
 
 // Configuration - show multiple gifts simultaneously
-const GIFT_DISPLAY_DURATION = 3000; // 3 seconds for all gifts
+const GIFT_DISPLAY_DURATION = 4000; // 4 seconds for all gifts
 const MAX_VISIBLE_GIFTS = 5; // Maximum gifts shown at once
 
 // Helper function to get proper gift name and icon
@@ -73,31 +73,12 @@ const triggerScreenShake = (cost: number) => {
   }
 };
 
-// Combo tracking - per sender, resets on timeout
-interface ComboState {
-  senderId: string;
-  count: number;
-  lastTime: number;
-}
-
-const activeCombos: Map<string, ComboState> = new Map();
-const COMBO_WINDOW = 5000;
-
-const processCombo = (senderId: string): number => {
-  const now = Date.now();
-  const existing = activeCombos.get(senderId);
-  
-  // If no existing combo or window expired, start fresh at 1
-  if (!existing || (now - existing.lastTime) > COMBO_WINDOW) {
-    activeCombos.set(senderId, { senderId, count: 1, lastTime: now });
-    return 1;
-  }
-  
-  // Increment existing combo
-  existing.count += 1;
-  existing.lastTime = now;
-  activeCombos.set(senderId, existing);
-  return existing.count;
+// Get combo count from gift quantity - only show combo when quantity > 1
+const getComboCount = (gift: BroadcastGift): number => {
+  // Use the quantity field if available, otherwise default to 1
+  const qty = gift.quantity || 1;
+  // Ensure quantity is a number and at least 1
+  return Math.max(1, Number(qty) || 1);
 };
 
 export default function GiftAnimationOverlay({ 
@@ -107,7 +88,9 @@ export default function GiftAnimationOverlay({
   getUserPositions 
 }: GiftAnimationOverlayProps) {
   const [visibleGifts, setVisibleGifts] = useState<BroadcastGift[]>([]);
-  
+  // Track which gifts already have timers to avoid resetting them
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+   
   // Process new gifts when they arrive
   useEffect(() => {
     if (!gifts || gifts.length === 0) return;
@@ -121,16 +104,23 @@ export default function GiftAnimationOverlay({
       
       if (newGifts.length === 0) return prev;
       
-      // Process each new gift
+      // Process each new gift - but only trigger effects once per batch
+      const processedBatches = new Set<string>();
       newGifts.forEach(gift => {
         const details = getGiftDetails(gift);
         const tier = getGiftTier(details.cost);
         
-        // Trigger effects
-        triggerVibration(details.cost);
-        triggerScreenShake(details.cost);
+        // Extract batch ID from giftId
+        const batchId = gift.id?.split('-')[1] || gift.id;
         
-        console.log('[GiftOverlay] Gift processed:', gift.gift_name, 'tier:', tier, 'cost:', details.cost, 'sender:', gift.sender_name);
+        // Only trigger effects once per batch
+        if (!processedBatches.has(batchId)) {
+          processedBatches.add(batchId);
+          triggerVibration(details.cost);
+          triggerScreenShake(details.cost);
+        }
+        
+        console.log('[GiftOverlay] Gift processed:', gift.gift_name, 'tier:', tier, 'cost:', details.cost, 'sender:', gift.sender_name, 'batch:', batchId);
       });
       
       // Keep all new gifts, limit to MAX_VISIBLE_GIFTS
@@ -139,17 +129,26 @@ export default function GiftAnimationOverlay({
     });
   }, [gifts]);
   
-  // Auto-remove gifts after animation
+  // Auto-remove gifts after animation - only set up timers for NEW gifts
   useEffect(() => {
-    if (visibleGifts.length === 0) return;
+    if (visibleGifts.length === 0) {
+      // Clear all timers when no gifts visible
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
+      return;
+    }
     
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    
+    // Only create timers for gifts that don't already have one
     visibleGifts.forEach(gift => {
-      const details = getGiftDetails(gift);
-      const duration = GIFT_DISPLAY_DURATION;
+      if (timersRef.current.has(gift.id)) {
+        // This gift already has a timer, don't reset it
+        return;
+      }
       
       const timer = setTimeout(() => {
+        // Remove timer from ref
+        timersRef.current.delete(gift.id);
+        // Remove gift from visible gifts
         setVisibleGifts(prev => {
           const remaining = prev.filter(g => g.id !== gift.id);
           if (remaining.length !== prev.length) {
@@ -157,17 +156,44 @@ export default function GiftAnimationOverlay({
           }
           return remaining;
         });
-      }, duration);
+      }, GIFT_DISPLAY_DURATION);
       
-      timers.push(timer);
+      // Store timer in ref
+      timersRef.current.set(gift.id, timer);
     });
     
+    // Cleanup function - only clear timers for gifts that are no longer visible
     return () => {
-      timers.forEach(t => clearTimeout(t));
+      const currentIds = new Set(visibleGifts.map(g => g.id));
+      timersRef.current.forEach((timer, giftId) => {
+        if (!currentIds.has(giftId)) {
+          clearTimeout(timer);
+          timersRef.current.delete(giftId);
+        }
+      });
     };
-  }, [visibleGifts.length, onAnimationComplete]);
+  }, [visibleGifts, onAnimationComplete]); // Track visibleGifts array, not just length
+
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, []); // Empty deps - only run on unmount
+  
+  // Debug: log visible gifts
+  useEffect(() => {
+    console.log('[GiftOverlay] Visible gifts:', visibleGifts.length);
+  }, [visibleGifts.length]); // Only log when length changes, not every render
   
   const dismissGift = useCallback((giftId: string) => {
+    // Clear timer for this gift
+    const timer = timersRef.current.get(giftId);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(giftId);
+    }
     setVisibleGifts(prev => {
       const remaining = prev.filter(g => g.id !== giftId);
       if (remaining.length !== prev.length) {
@@ -175,12 +201,7 @@ export default function GiftAnimationOverlay({
       }
       return remaining;
     });
-  }, [onAnimationComplete]);
-  
-  // Debug: log visible gifts
-  useEffect(() => {
-    console.log('[GiftOverlay] Visible gifts:', visibleGifts.length);
-  }, [visibleGifts.length]);
+  }, [onAnimationComplete]); // Empty deps - dismissGift never changes
   
   // Render using portal
   if (visibleGifts.length === 0) return null;
@@ -188,97 +209,145 @@ export default function GiftAnimationOverlay({
   // Always use document.body for portal
   const target = document.body;
   
-  // Get user positions from callback if available
-  const userPositionsFromCallback = getUserPositions ? getUserPositions() : {};
-  
-  // Merge user positions from props and callback (callback takes precedence)
-  const mergedUserPositions = { ...userPositions, ...userPositionsFromCallback };
-  
   return createPortal(
-    <div 
+    <div
       className="fixed inset-0 pointer-events-none z-[99999]"
       style={{ position: 'fixed', inset: 0, zIndex: 99999 }}
     >
       <AnimatePresence>
-        {visibleGifts.map((gift, index) => {
-          const details = getGiftDetails(gift);
-          const tier = getGiftTier(details.cost);
-          const combo = processCombo(gift.sender_id);
-          
-          // Get user position for this gift
-          const userPosition = mergedUserPositions[gift.sender_id];
-          const positionStyle = userPosition 
-            ? {
-                position: 'absolute',
-                top: `${userPosition.top + userPosition.height / 2}px`,
-                left: `${userPosition.left + userPosition.width / 2}px`,
-                transform: 'translate(-50%, -50%)'
-              }
-            : { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-          
-          return (
-            <motion.div
-              key={gift.id}
-              style={positionStyle}
-            >
-              <GiftAnimation
-                gift={gift}
-                details={details}
-                tier={tier}
-                combo={combo}
-                index={index}
-                onDismiss={() => dismissGift(gift.id)}
-              />
-            </motion.div>
-          );
-        })}
+        {visibleGifts.map((gift, index) => (
+          <GiftAnimationItem
+            key={gift.id}
+            gift={gift}
+            index={index}
+            getUserPositions={getUserPositions}
+            userPositions={userPositions}
+            onDismiss={() => dismissGift(gift.id)}
+          />
+        ))}
       </AnimatePresence>
     </div>,
     target
   );
 }
 
+// Individual gift animation item that gets fresh positions on each render
+function GiftAnimationItem({
+  gift,
+  index,
+  getUserPositions,
+  userPositions,
+  onDismiss
+}: {
+  gift: BroadcastGift;
+  index: number;
+  getUserPositions?: () => Record<string, { top: number; left: number; width: number; height: number }>;
+  userPositions?: Record<string, { top: number; left: number; width: number; height: number }>;
+  onDismiss: () => void;
+}) {
+  const details = getGiftDetails(gift);
+  const tier = getGiftTier(details.cost);
+  const combo = getComboCount(gift);
+  
+  // Get fresh positions on each render
+  const freshPositions = getUserPositions ? getUserPositions() : {};
+  const mergedPositions = { ...userPositions, ...freshPositions };
+  
+  // Get user position for this gift - use receiver_id to position on recipient's box
+  const receiverPosition = mergedPositions[gift.receiver_id];
+  
+  // Debug logging to help diagnose positioning issues
+  console.log('[GiftAnimationItem] Gift positioning:', {
+    giftId: gift.id,
+    receiverId: gift.receiver_id?.substring(0, 8),
+    hasPosition: !!receiverPosition,
+    positionKeys: Object.keys(mergedPositions).map(k => k.substring(0, 8)),
+    position: receiverPosition
+  });
+  
+  // Calculate position - position inside the user's box (not centered), or center of screen if not found
+  const positionStyle: React.CSSProperties = receiverPosition
+    ? {
+        position: 'absolute',
+        top: `${receiverPosition.top}px`,
+        left: `${receiverPosition.left}px`,
+        width: `${receiverPosition.width}px`,
+        height: `${receiverPosition.height}px`,
+        maxWidth: 'none',
+        maxHeight: 'none',
+        pointerEvents: 'none'
+      }
+    : {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '100%',
+        maxWidth: '400px',
+        pointerEvents: 'none'
+      };
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.5 }}
+      transition={{ duration: 0.3, delay: index * 0.1 }}
+      style={positionStyle}
+      className="pointer-events-auto"
+    >
+      <GiftAnimation
+        gift={gift}
+        details={details}
+        tier={tier}
+        combo={combo}
+        index={index}
+        onDismiss={onDismiss}
+        hasPosition={!!receiverPosition}
+      />
+    </motion.div>
+  );
+}
+
 // Individual gift animation
-function GiftAnimation({ 
-  gift, 
-  details, 
+function GiftAnimation({
+  gift,
+  details,
   tier,
   combo,
   index,
-  onDismiss 
-}: { 
+  onDismiss,
+  hasPosition = false
+}: {
   gift: BroadcastGift;
   details: { name: string; icon: string; cost: number };
   tier: 'common' | 'rare' | 'epic' | 'legendary';
   combo: number;
   index: number;
   onDismiss: () => void;
+  hasPosition?: boolean;
 }) {
   const isEpic = tier === 'epic';
   const isLegendary = tier === 'legendary';
   const isRare = tier === 'rare';
   
   // Stagger animations for multiple gifts
-  const delay = index * 0.2;
+  const delay = index * 0.1;
   
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.5 }}
       transition={{ duration: 0.3, delay }}
-      className="absolute inset-0 flex items-center justify-center"
-      style={{ 
-        position: 'absolute', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
-        bottom: 0,
+      className="relative flex flex-col items-center justify-center w-full h-full"
+      style={{
+        padding: '10px'
       }}
     >
-      {/* Background overlay */}
+      {/* Background overlay - no border */}
       <div 
-        className="absolute inset-0"
+        className="absolute inset-0 rounded-lg overflow-hidden"
         style={{
           background: isLegendary 
             ? 'linear-gradient(135deg, rgba(234,179,8,0.3) 0%, rgba(88,28,135,0.4) 50%, rgba(0,0,0,0.9) 100%)'
@@ -287,6 +356,8 @@ function GiftAnimation({
             : isRare
             ? 'linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(6,182,212,0.2) 50%, rgba(0,0,0,0.6) 100%)'
             : 'rgba(0,0,0,0.6)',
+          border: 'none',
+          boxShadow: 'none'
         }}
       />
       
@@ -294,25 +365,25 @@ function GiftAnimation({
       <AnimatePresence>
         {combo > 1 && (
           <motion.div
-            initial={{ scale: 0, y: -50 }}
-            animate={{ scale: [1, 1.2, 1], y: 0 }}
-            exit={{ scale: 0, y: -50 }}
+            initial={{ scale: 0, y: -20 }}
+            animate={{ scale: [1, 1.1, 1], y: 0 }}
+            exit={{ scale: 0, y: -20 }}
             transition={{ repeat: Infinity, duration: 0.5 }}
-            className="absolute top-20 z-20"
+            className="absolute top-2 z-20"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-4xl">🔥</span>
+            <div className="flex items-center gap-1">
+              <span className="text-sm">🔥</span>
               <span 
-                className="text-5xl font-black"
+                className="text-sm font-bold"
                 style={{
                   background: 'linear-gradient(to right, #fbbf24, #f97316, #ef4444)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                 }}
               >
-                COMBO x{combo}
+                x{combo}
               </span>
-              <span className="text-4xl">🔥</span>
+              <span className="text-sm">🔥</span>
             </div>
           </motion.div>
         )}
@@ -323,19 +394,19 @@ function GiftAnimation({
         initial={{ scale: 0, rotate: -180 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: "spring", duration: 0.8, delay }}
-        className="relative z-10 flex flex-col items-center gap-6"
+        className="relative z-10 flex flex-col items-center justify-center gap-2 w-full h-full overflow-hidden"
       >
-        {/* Sender info */}
+          {/* Sender info */}
         <motion.div
           initial={{ y: -50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: delay + 0.3 }}
           className="text-center"
         >
-          <p className="text-white text-xl font-bold drop-shadow-lg">
+          <p className="text-white text-sm font-bold drop-shadow-lg truncate max-w-full">
             {gift.sender_name || 'Someone'}
           </p>
-          <p className="text-zinc-300">sent {details.name.toLowerCase()}!</p>
+          <p className="text-zinc-300 text-xs truncate max-w-full">sent {details.name.toLowerCase()}!</p>
         </motion.div>
         
         {/* Gift icon */}
@@ -348,8 +419,8 @@ function GiftAnimation({
             delay: delay + 0.5 
           }}
           className={cn(
-            "relative",
-            isLegendary ? "text-9xl" : isEpic ? "text-8xl" : "text-7xl"
+            "relative flex items-center justify-center",
+            isLegendary ? "text-4xl sm:text-5xl" : isEpic ? "text-3xl sm:text-4xl" : "text-2xl sm:text-3xl"
           )}
         >
           {/* Glow effect */}
@@ -380,7 +451,7 @@ function GiftAnimation({
           animate={{ scale: 1 }}
           transition={{ delay: delay + 0.6 }}
           className={cn(
-            "px-8 py-3 rounded-2xl font-bold text-2xl",
+            "px-2 py-1 rounded-lg font-bold text-xs truncate max-w-full",
             isLegendary && "bg-gradient-to-r from-yellow-500 to-orange-500 text-black",
             isEpic && "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
             isRare && "bg-gradient-to-r from-blue-500 to-cyan-500 text-white",
@@ -395,27 +466,19 @@ function GiftAnimation({
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ delay: delay + 0.8 }}
-          className="flex items-center gap-2 text-yellow-400 text-3xl font-bold"
+          className="flex items-center gap-1 text-yellow-400 text-sm font-bold"
         >
           <span>{gift.amount.toLocaleString()}</span>
           <span>🪙</span>
         </motion.div>
       </motion.div>
       
-      {/* Close button */}
-      <button
-        onClick={onDismiss}
-        className="absolute top-4 right-4 z-20 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors pointer-events-auto"
-      >
-        <X className="text-white" size={24} />
-      </button>
-      
-      {/* Progress bar */}
+      {/* Progress bar - thinner for box */}
       <motion.div
         initial={{ scaleX: 1 }}
         animate={{ scaleX: 0 }}
         transition={{ duration: GIFT_DISPLAY_DURATION / 1000, ease: "linear", delay }}
-        className="absolute bottom-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-500 via-pink-500 to-purple-500"
+        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-yellow-500 via-pink-500 to-purple-500"
         style={{ transformOrigin: "left" }}
       />
     </motion.div>

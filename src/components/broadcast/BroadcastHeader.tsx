@@ -91,10 +91,10 @@ export default function BroadcastHeader({ stream, onStartBattle, categoryBattleT
 
     // Sync likes with stream object
     React.useEffect(() => {
-        if ((stream as any).total_likes !== undefined) {
-            setLikes((stream as any).total_likes);
+        if (stream.total_likes !== undefined) {
+            setLikes(stream.total_likes);
         }
-    }, [stream]);
+    }, [stream.total_likes]);
 
 
 

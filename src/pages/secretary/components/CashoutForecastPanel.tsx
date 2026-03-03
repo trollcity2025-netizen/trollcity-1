@@ -67,7 +67,7 @@ export default function CashoutForecastPanel() {
             <TrendingUp className="w-6 h-6 text-green-400" />
             Cashout Forecast
           </h2>
-          <p className="text-slate-400">Monday/Friday Exposure Analysis</p>
+          <p className="text-slate-400">Friday Exposure Analysis</p>
         </div>
         <div className="flex items-center gap-4">
             <div className="flex flex-col items-end mr-4">
@@ -137,11 +137,11 @@ export default function CashoutForecastPanel() {
               <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                       <Users className="w-4 h-4 text-purple-400" />
-                      Top 10 High-Risk Accounts
+                      All Eligible Users ({stats.eligible_users_count} total)
                   </CardTitle>
               </CardHeader>
               <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                       {stats.top_earners.length === 0 ? (
                           <div className="text-slate-500 text-center py-4">No eligible accounts found</div>
                       ) : (
@@ -182,12 +182,12 @@ export default function CashoutForecastPanel() {
                   
                   <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                          <span className="text-slate-400">Monday Forecast (50% Load)</span>
-                          <span className="text-white">${(stats.total_exposure_usd * 0.5).toFixed(2)}</span>
+                          <span className="text-slate-400">Friday Forecast (100% Load)</span>
+                          <span className="text-white">${stats.total_exposure_usd.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                          <span className="text-slate-400">Friday Forecast (80% Load)</span>
-                          <span className="text-white">${(stats.total_exposure_usd * 0.8).toFixed(2)}</span>
+                          <span className="text-slate-400">Conservative Estimate (75%)</span>
+                          <span className="text-white">${(stats.total_exposure_usd * 0.75).toFixed(2)}</span>
                       </div>
                   </div>
               </CardContent>

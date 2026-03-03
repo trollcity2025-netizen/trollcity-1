@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { 
   Briefcase, Calendar, Clock, Users, Shield, Video, 
   CheckCircle, FileText, Star, ArrowRight,
-  Cross, X, Store
+  Cross, X, Store, Newspaper, Radio, Crown, Mic
 } from 'lucide-react'
 
 // Job position type
@@ -150,6 +150,71 @@ const jobPositions: JobPosition[] = [
     ],
     icon: <Store className="w-6 h-6" />,
     color: 'from-indigo-500 to-violet-500'
+  },
+  {
+    id: 'journalist',
+    title: 'Journalist',
+    department: 'TCNN - News',
+    description: 'Content creator for Troll City News Network. Write articles, conduct investigations, and keep the city informed with accurate reporting.',
+    requirements: [
+      'Strong writing and communication skills',
+      'Ability to research and verify facts',
+      'Understanding of journalistic ethics',
+      'Active community participation',
+      'Commitment to unbiased reporting'
+    ],
+    benefits: [
+      'Journalist badge and recognition',
+      'Earn tips from article readers',
+      'Access to TCNN content dashboard',
+      'Potential to advance to News Caster'
+    ],
+    icon: <Newspaper className="w-6 h-6" />,
+    color: 'from-blue-500 to-cyan-500'
+  },
+  {
+    id: 'news_caster',
+    title: 'News Caster',
+    department: 'TCNN - Broadcasting',
+    description: 'On-air personality for TCNN. Deliver breaking news, host live broadcasts, and engage with the community through official city news streams.',
+    requirements: [
+      'Previous journalism or broadcasting experience',
+      'Professional on-camera presence',
+      'Ability to think on your feet',
+      'Knowledge of current events',
+      'Must be at least 18 years old'
+    ],
+    benefits: [
+      'News Caster badge and recognition',
+      'Ability to go live on TCNN channel',
+      'Submit ticker messages',
+      'Earn tips from viewers',
+      'Platform-wide visibility'
+    ],
+    icon: <Mic className="w-6 h-6" />,
+    color: 'from-red-500 to-orange-500'
+  },
+  {
+    id: 'chief_news_caster',
+    title: 'Chief News Caster',
+    department: 'TCNN - Leadership',
+    description: 'Lead the TCNN news team. Manage journalists and news casters, approve breaking news, and maintain editorial standards for city-wide broadcasts.',
+    requirements: [
+      'Previous News Caster or journalism leadership experience',
+      'Strong editorial judgment',
+      'Leadership and team management skills',
+      'Deep understanding of platform community',
+      'Commitment to journalistic integrity'
+    ],
+    benefits: [
+      'Chief News Caster badge and authority',
+      'Manage TCNN team members',
+      'Approve breaking news tickers',
+      'Access to TCNN analytics dashboard',
+      'Highest level of TCNN recognition'
+    ],
+    icon: <Radio className="w-6 h-6" />,
+    color: 'from-amber-500 to-yellow-500'
   }
 ]
 
@@ -287,6 +352,12 @@ export default function Career() {
         break
       case 'pastor':
         navigate('/apply/pastor')
+        break
+      case 'journalist':
+      case 'news_caster':
+      case 'chief_news_caster':
+        // TCNN applications go through the general application system with type specified
+        navigate(`/apply?type=${position.id}`)
         break
       default:
         navigate('/apply')

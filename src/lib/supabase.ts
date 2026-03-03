@@ -621,6 +621,35 @@ export const hasRole = (
   return false
 }
 
+// Role display name formatter - maps internal role values to user-friendly labels
+export const getRoleDisplayName = (role?: string | null, isAdmin?: boolean): string => {
+  if (!role) return 'User'
+  
+  // Map internal roles to display names
+  const roleDisplayMap: Record<string, string> = {
+    'admin': 'CEO',
+    'owner': 'Owner',
+    'moderator': 'Moderator',
+    'troll_officer': 'Troll Officer',
+    'lead_troll_officer': 'Lead Officer',
+    'troll_family': 'Troll Family',
+    'troller': 'Troller',
+    'secretary': 'Secretary',
+    'president': 'President',
+    'vice_president': 'Vice President',
+    'hr_admin': 'HR Admin',
+    'temp_city_admin': 'Temp Admin',
+    'temp_admin': 'Temp Admin',
+    'executive_secretary': 'Executive Secretary',
+    'troll_city_secretary': 'City Secretary',
+    'troll_city_treasurer': 'City Treasurer',
+    'empire_partner': 'Empire Partner',
+    'user': 'User'
+  }
+  
+  return roleDisplayMap[role] || role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
 // Production-ready profile validation
 export const validateProfile = (profile: UserProfile | null): {
   isValid: boolean

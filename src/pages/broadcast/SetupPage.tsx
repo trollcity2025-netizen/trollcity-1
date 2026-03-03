@@ -32,6 +32,7 @@ export default function SetupPage() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<BroadcastCategoryId>('general');
   const [loading, setLoading] = useState(false);
+  const [broadcasterLimitInfo, setBroadcasterLimitInfo] = useState<{ current: number; max: number; canStart: boolean } | null>(null);
 
   useEffect(() => {
     try {
@@ -175,6 +176,46 @@ export default function SetupPage() {
       setFollowerCount(count || 0);
     }
     fetchFollowerCount();
+  }, [user?.id]);
+
+  // Check monthly broadcaster limit
+  useEffect(() => {
+    async function checkBroadcasterLimit() {
+      if (!user?.id) return;
+
+      // Get start of current month
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      // Count unique broadcasters who have started a stream this month
+      const { data, error } = await supabase
+        .from('streams')
+        .select('user_id')
+        .gte('started_at', startOfMonth)
+        .not('started_at', 'is', null);
+
+      if (error) {
+        console.error('Error checking broadcaster limit:', error);
+        return;
+      }
+
+      // Get unique user_ids
+      const uniqueBroadcasters = new Set(data?.map(s => s.user_id) || []);
+      const currentCount = uniqueBroadcasters.size;
+      
+      // Max limit is fixed at 50 broadcasters per month
+      const maxLimit = 50;
+
+      // Check if current user has already broadcasted this month (they get a free pass)
+      const hasUserBroadcasted = uniqueBroadcasters.has(user.id);
+
+      setBroadcasterLimitInfo({
+        current: currentCount,
+        max: maxLimit,
+        canStart: currentCount < maxLimit || hasUserBroadcasted
+      });
+    }
+    checkBroadcasterLimit();
   }, [user?.id]);
 
   // Check camera/mic permissions when component mounts
@@ -707,6 +748,29 @@ export default function SetupPage() {
       }
     }
 
+    // Check TCNN requirements - only News Casters, Chief News Casters, and Admins
+    // Regular users, Troll Officers, and Lead Troll Officers CANNOT start TCNN broadcasts
+    if (category === 'tcnn') {
+      const isNewsCaster = profile?.is_news_caster || profile?.is_chief_news_caster;
+      const isAdmin = profile?.role === 'admin' || profile?.is_admin || 
+                      profile?.role === 'superadmin' || profile?.is_superadmin;
+      
+      // Explicitly check for roles that should NOT be allowed
+      const isRestrictedRole = profile?.is_troll_officer || profile?.is_lead_troll_officer || 
+                               profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer';
+      
+      if (!isNewsCaster && !isAdmin) {
+        toast.error('TCNN category is only available to News Casters, Chief News Casters, and Admins');
+        return;
+      }
+      
+      // Extra safety check - if they have restricted roles, block them even if they have news caster flag
+      if (isRestrictedRole && !isAdmin) {
+        toast.error('Troll Officers cannot start TCNN broadcasts. Apply for News Caster role.');
+        return;
+      }
+    }
+
     // Check camera requirement for categories that need it, unless screen sharing is active
     if (categoryConfig.requiresCamera && !isVideoEnabled) {
       toast.error(`Camera is required for ${categoryConfig.name}`);
@@ -714,6 +778,12 @@ export default function SetupPage() {
     }
 
     if (!user) return;
+
+    // Check monthly broadcaster limit before starting
+    if (broadcasterLimitInfo && !broadcasterLimitInfo.canStart) {
+      toast.error(`Monthly broadcaster limit reached (${broadcasterLimitInfo.current}/${broadcasterLimitInfo.max}). Please try again next month.`);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -986,6 +1056,12 @@ export default function SetupPage() {
             <p className="text-pink-300">📍 Rear camera only for first-person streaming</p>
           </div>
         );
+      case 'tcnn':
+        return (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm">
+            <p className="text-red-300">📺 Official TCNN broadcast - News Caster role required</p>
+          </div>
+        );
       default:
         return null;
     }
@@ -1145,6 +1221,7 @@ export default function SetupPage() {
                 <option value="spiritual">✝️ Spiritual / Church</option>
                 <option value="trollmers">🏆 Trollmers Head-to-Head</option>
                 <option value="election">🗳️ President Elections</option>
+                <option value="tcnn">📺 TCNN News</option>
               </select>
             </div>
 
@@ -1176,10 +1253,33 @@ export default function SetupPage() {
               </div>
             )}
 
+            {/* Monthly Broadcaster Limit Indicator */}
+            {broadcasterLimitInfo && (
+              <div className={`rounded-xl p-4 border ${broadcasterLimitInfo.canStart ? 'bg-blue-500/10 border-blue-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-300">Monthly Broadcaster Limit</span>
+                  <span className={`text-sm font-bold ${broadcasterLimitInfo.canStart ? 'text-blue-400' : 'text-red-400'}`}>
+                    {broadcasterLimitInfo.current} / {broadcasterLimitInfo.max}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-700/50 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${broadcasterLimitInfo.canStart ? 'bg-blue-500' : 'bg-red-500'}`}
+                    style={{ width: `${Math.min((broadcasterLimitInfo.current / broadcasterLimitInfo.max) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className={`text-xs mt-2 ${broadcasterLimitInfo.canStart ? 'text-blue-300' : 'text-red-300'}`}>
+                  {broadcasterLimitInfo.canStart
+                    ? `${broadcasterLimitInfo.max - broadcasterLimitInfo.current} spots remaining this month`
+                    : 'Monthly limit reached. Please try again next month.'}
+                </p>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleStartStream}
-              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera) || showPermissionPrompt}
+              disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera) || showPermissionPrompt || (broadcasterLimitInfo && !broadcasterLimitInfo.canStart)}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-lg hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-500/20"
             >
               {loading ? (
@@ -1189,6 +1289,8 @@ export default function SetupPage() {
                 </span>
               ) : showPermissionPrompt ? (
                 'Grant Permissions to Start'
+              ) : (broadcasterLimitInfo && !broadcasterLimitInfo.canStart) ? (
+                'Monthly Limit Reached'
               ) : (
                 'Start Broadcast'
               )}

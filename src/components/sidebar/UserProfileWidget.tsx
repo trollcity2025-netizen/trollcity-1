@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuthStore } from '@/lib/store';
 import { useXPStore } from '@/stores/useXPStore';
 import { useCoins } from '@/lib/hooks/useCoins';
+import { getRoleDisplayName } from '@/lib/supabase';
 import { Crown, Coins } from 'lucide-react';
 
 const UserProfileWidget = () => {
@@ -19,7 +20,7 @@ const UserProfileWidget = () => {
         <img src={profile.avatar_url} alt={profile.username} className="w-10 h-10 rounded-full border-2 border-white/10" />
         <div>
           <h3 className="font-bold text-base text-white">{profile.username}</h3>
-          <p className="text-xs text-slate-400 capitalize bg-slate-800 px-2 py-0.5 rounded-md inline-block">{profile.role || 'User'}</p>
+          <p className="text-xs text-slate-400 capitalize bg-slate-800 px-2 py-0.5 rounded-md inline-block">{getRoleDisplayName(profile.role, profile.is_admin)}</p>
         </div>
       </div>
 

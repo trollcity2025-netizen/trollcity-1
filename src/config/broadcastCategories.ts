@@ -17,7 +17,8 @@ export type BroadcastCategoryId =
   | 'business' 
   | 'spiritual' 
   | 'trollmers'
-  | 'election';
+  | 'election'
+  | 'tcnn';
 
 // Layout modes
 export type LayoutMode = 'grid' | 'split' | 'classroom' | 'spotlight' | 'debate';
@@ -392,6 +393,36 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     maxYouTubePlayerBoxes: 0,
     hasMatchingSystem: false,
     matchingTerminology: 'Debate',
+    requiresReligion: false,
+    supportsBattles: false,
+    battleType: 'none',
+    isOneWayBroadcast: false,
+    requiresMinFollowers: 0,
+    requiresCamera: true,
+    showCoinBalanceInChat: true,
+  },
+
+  // 12. TCNN - Troll City News Network (News Casters, Chief News Casters, Admins only)
+  tcnn: {
+    id: 'tcnn',
+    name: '📺 TCNN News',
+    icon: '📺',
+    description: 'Official Troll City News Network broadcasts',
+    layoutMode: 'spotlight',
+    defaultBoxCount: 1,
+    maxBoxCount: 4,
+    allowGuestBoxes: true,
+    allowAddBox: true,
+    allowDeductBox: true,
+    hostRoleLabel: 'Broadcaster',
+    allowFrontCamera: true,
+    allowRearCamera: true,
+    forceRearCamera: false,
+    hasOBSIntegration: true,
+    hasYouTubePlayer: false,
+    maxYouTubePlayerBoxes: 0,
+    hasMatchingSystem: false,
+    matchingTerminology: 'Connect',
     requiresReligion: false,
     supportsBattles: false,
     battleType: 'none',

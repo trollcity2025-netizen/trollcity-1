@@ -36,6 +36,7 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
   const { user, profile } = useAuthStore();
   const [step, setStep] = useState('input'); // input -> processing -> success
   const [payerHandle, setPayerHandle] = useState('');
+  const [username, setUsername] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderData, setOrderData] = useState(null);
 
@@ -54,6 +55,11 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
 
     if (!payerHandle.trim()) {
       toast.error(`Please enter your ${provider.name} handle`);
+      return;
+    }
+
+    if (!username.trim()) {
+      toast.error('Please enter your Troll City username');
       return;
     }
 
@@ -121,7 +127,8 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
           cashapp_tag: payerHandle,
           cash_app_tag: payerHandle,
           purchase_type: 'manual_' + providerId,
-          username: profile?.username || user?.email?.split('@')[0]
+          username: username.trim() || profile?.username || user?.email?.split('@')[0],
+          trollcity_username: username.trim()
         }
       });
 
@@ -158,6 +165,7 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
     onClose();
     setStep('input');
     setPayerHandle('');
+    setUsername('');
     setOrderData(null);
   };
 
@@ -201,6 +209,20 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
               />
               <p className="text-xs text-zinc-500">
                 Used to verify your payment.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="username">Your Troll City Username <span className="text-red-400">*</span></Label>
+              <Input
+                id="username"
+                placeholder="Enter your Troll City username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+              />
+              <p className="text-xs text-zinc-500">
+                Required for payment verification. Current: {profile?.username || 'Not set'}
               </p>
             </div>
           </div>
@@ -251,9 +273,9 @@ export default function ManualPaymentModal({ isOpen, onClose, pkg, providerId = 
 
         <DialogFooter className="gap-2 sm:gap-0">
           {step === 'input' ? (
-            <Button 
-              onClick={handleSubmit} 
-              disabled={isSubmitting || !payerHandle}
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !payerHandle || !username.trim()}
               className={`w-full ${provider.color} hover:opacity-90 text-white`}
             >
               {isSubmitting ? (

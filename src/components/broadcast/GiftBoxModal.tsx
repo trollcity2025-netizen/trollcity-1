@@ -1,18 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Gift, Sparkles, Crown, Gem, Zap, Heart } from 'lucide-react';
+import { X, Search, Gift, Sparkles, Crown, Gem, Zap, Heart, Users, UserCircle, Radio } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useGiftSystem, GiftItem } from '../../hooks/useGiftSystem';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
+export type GiftTargetType = 'broadcaster' | 'all' | 'specific';
+
+export interface GiftTarget {
+  type: GiftTargetType;
+  userId?: string;
+  username?: string;
+  quantity?: number;
+}
+
 interface GiftBoxModalProps {
   isOpen: boolean;
   onClose: () => void;
   recipientId: string;
   streamId: string;
-  onGiftSent?: (gift: GiftItem) => void;
+  broadcasterId?: string;
+  activeUserIds?: string[];
+  userProfiles?: Record<string, { username: string; avatar_url?: string }>;
+  onGiftSent?: (gift: GiftItem, target: GiftTarget) => void;
 }
 
 type GiftCategory = 'all' | 'general' | 'cars' | 'houses' | 'boats' | 'planes' | 'luxury' | 'men' | 'women' | 'lgbt' | 'holiday' | 'smoking' | 'drinking' | 'funny' | 'seasonal';
@@ -55,7 +67,16 @@ const RARITY_LABELS: Record<Rarity, string> = {
   mythic: 'Mythic',
 };
 
-export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, onGiftSent }: GiftBoxModalProps) {
+export default function GiftBoxModal({ 
+  isOpen, 
+  onClose, 
+  recipientId, 
+  streamId, 
+  broadcasterId = recipientId,
+  activeUserIds = [],
+  userProfiles = {},
+  onGiftSent 
+}: GiftBoxModalProps) {
   const { user, profile } = useAuthStore();
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId);
   
@@ -65,6 +86,9 @@ export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, o
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Gift target selection state
+  const [giftTarget, setGiftTarget] = useState<GiftTarget>({ type: 'specific', userId: recipientId });
 
   // Fetch gifts from database
   useEffect(() => {
@@ -154,13 +178,48 @@ export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, o
     if (!selectedGift || !user) return;
 
     try {
-      const success = await sendGift(selectedGift, undefined, quantity);
+      let success = false;
+      
+      if (giftTarget.type === 'all') {
+        // Send to all active users (broadcaster + guests)
+        const allRecipients = [broadcasterId, ...activeUserIds.filter(id => id !== broadcasterId)];
+        let sentCount = 0;
+        
+        for (const targetId of allRecipients) {
+          if (targetId && targetId !== user.id) {
+            const result = await sendGift(selectedGift, targetId, quantity);
+            if (result) sentCount++;
+          }
+        }
+        
+        success = sentCount > 0;
+        if (success) {
+          toast.success(`Sent ${quantity}x ${selectedGift.name} to ${sentCount} users!`);
+          onGiftSent?.(selectedGift, { type: 'all', quantity });
+        }
+      } else if (giftTarget.type === 'broadcaster') {
+        // Send to broadcaster only
+        success = await sendGift(selectedGift, broadcasterId, quantity);
+        if (success) {
+          toast.success(`Sent ${quantity}x ${selectedGift.name} to broadcaster!`);
+          onGiftSent?.(selectedGift, { type: 'broadcaster', userId: broadcasterId, quantity });
+        }
+      } else {
+        // Send to specific user
+        const targetId = giftTarget.userId || recipientId;
+        success = await sendGift(selectedGift, targetId, quantity);
+        if (success) {
+          const targetName = userProfiles[targetId]?.username || 'user';
+          toast.success(`Sent ${quantity}x ${selectedGift.name} to ${targetName}!`);
+          onGiftSent?.(selectedGift, { type: 'specific', userId: targetId, username: targetName, quantity });
+        }
+      }
+      
       if (success) {
-        toast.success(`Sent ${quantity}x ${selectedGift.name}!`);
-        onGiftSent?.(selectedGift);
         onClose();
         setSelectedGift(null);
         setQuantity(1);
+        setGiftTarget({ type: 'specific', userId: recipientId });
       }
     } catch (err) {
       console.error('Error sending gift:', err);
@@ -317,6 +376,89 @@ export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, o
             </div>
           </div>
 
+          {/* Recipient Selection - Only show when enhanced props are provided */}
+          {selectedGift && activeUserIds.length > 0 && (
+            <div className="p-4 border-t border-white/10 bg-zinc-900/50">
+              <div className="flex items-center gap-2 mb-3">
+                <UserCircle size={18} className="text-yellow-400" />
+                <span className="text-sm font-medium text-white">Send to:</span>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {/* Broadcaster Option */}
+                <button
+                  onClick={() => setGiftTarget({ type: 'broadcaster', userId: broadcasterId })}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                    giftTarget.type === 'broadcaster'
+                      ? "bg-yellow-500/20 border-2 border-yellow-500 text-yellow-400"
+                      : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
+                  )}
+                >
+                  <Radio size={16} />
+                  <span>B (Broadcaster)</span>
+                </button>
+                
+                {/* All Users Option */}
+                <button
+                  onClick={() => setGiftTarget({ type: 'all' })}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                    giftTarget.type === 'all'
+                      ? "bg-purple-500/20 border-2 border-purple-500 text-purple-400"
+                      : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
+                  )}
+                >
+                  <Users size={16} />
+                  <span>A (All)</span>
+                </button>
+                
+                {/* Specific User Options */}
+                {activeUserIds.map((userId) => (
+                  <button
+                    key={userId}
+                    onClick={() => setGiftTarget({ type: 'specific', userId, username: userProfiles[userId]?.username })}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                      giftTarget.type === 'specific' && giftTarget.userId === userId
+                        ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
+                        : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
+                    )}
+                  >
+                    <img
+                      src={userProfiles[userId]?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfiles[userId]?.username || 'U')}&background=random`}
+                      alt=""
+                      className="w-5 h-5 rounded-full"
+                    />
+                    <span className="max-w-[100px] truncate">{userProfiles[userId]?.username || 'User'}</span>
+                  </button>
+                ))}
+                
+                {/* Current recipient if not in active list */}
+                {recipientId !== broadcasterId && !activeUserIds.includes(recipientId) && (
+                  <button
+                    onClick={() => setGiftTarget({ type: 'specific', userId: recipientId, username: userProfiles[recipientId]?.username })}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                      giftTarget.type === 'specific' && giftTarget.userId === recipientId
+                        ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
+                        : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
+                    )}
+                  >
+                    <UserCircle size={16} />
+                    <span className="max-w-[100px] truncate">{userProfiles[recipientId]?.username || 'Selected User'}</span>
+                  </button>
+                )}
+              </div>
+              
+              {giftTarget.type === 'all' && (
+                <p className="text-xs text-amber-400 mt-2">
+                  ⚠️ This will send gifts to all users (cost × {1 + activeUserIds.length} users)
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Send Button */}
           {selectedGift && (
             <div className="p-4 border-t border-white/10 bg-zinc-900/50 flex items-center justify-between">
@@ -364,7 +506,17 @@ export default function GiftBoxModal({ isOpen, onClose, recipientId, streamId, o
                 ) : (
                   <>
                     <Gift size={20} />
-                    Send {quantity}x {selectedGift.name}
+                    {activeUserIds.length > 0 ? (
+                      giftTarget.type === 'all' ? (
+                        `Send to All (${1 + activeUserIds.length})`
+                      ) : giftTarget.type === 'broadcaster' ? (
+                        'Send to Broadcaster'
+                      ) : (
+                        `Send ${quantity}x ${selectedGift.name}`
+                      )
+                    ) : (
+                      `Send ${quantity}x ${selectedGift.name}`
+                    )}
                   </>
                 )}
               </button>

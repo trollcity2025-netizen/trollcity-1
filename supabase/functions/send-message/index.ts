@@ -253,12 +253,41 @@ serve(async (req) => {
       });
     }
 
+    // If profile doesn't exist, create one (handles orphaned users from trigger issues)
+    let userProfile = profile;
     if (profileError || !profile) {
-      console.log(`[AUTH] User profile not found: ${user.id}`);
-      return new Response(JSON.stringify({ error: "User profile not found", code: "USER_NOT_FOUND" }), {
-        status: 404,
-        headers: { ...headers, "Content-Type": "application/json" },
-      });
+      console.log(`[AUTH] User profile not found, creating: ${user.id}`);
+      
+      // Create profile with ID-based username (guaranteed unique)
+      const { data: newProfile, error: createError } = await supabase
+        .from("user_profiles")
+        .insert({
+          id: user.id,
+          username: `user${user.id.slice(0, 8)}`,
+          avatar_url: user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`,
+          bio: 'New troll in the city!',
+          role: user.email === 'trollcity2025@gmail.com' ? 'admin' : 'user',
+          tier: 'Bronze',
+          paid_coins: 0,
+          troll_coins: 100,
+          total_earned_coins: 100,
+          total_spent_coins: 0,
+          email: user.email,
+          terms_accepted: false,
+        })
+        .select()
+        .single();
+
+      if (createError || !newProfile) {
+        console.error(`[ERROR] Failed to create profile for ${user.id}:`, createError);
+        return new Response(JSON.stringify({ error: "Failed to create user profile", code: "PROFILE_CREATE_FAILED" }), {
+          status: 500,
+          headers: { ...headers, "Content-Type": "application/json" },
+        });
+      }
+
+      userProfile = newProfile;
+      console.log(`[SUCCESS] Created profile for orphaned user: ${user.id}`);
     }
 
     if (mute) {
@@ -281,7 +310,7 @@ serve(async (req) => {
     }
 
     // 5. Rate Limiting (Fail-Open for availability)
-    const isMod = profile.role === "admin" || profile.role === "moderator" || profile.troll_role === "officer";
+    const isMod = userProfile.role === "admin" || userProfile.role === "moderator" || userProfile.troll_role === "officer";
     const currentViewerCount = Number(viewerCount) || 0;
 
     // B1) Deterministic Sampling
@@ -325,13 +354,13 @@ serve(async (req) => {
     // 6. Enrich Data (Denormalize server-side for security)
     const enrichedData = {
       ...data,
-      user_name: profile.username,
-      user_avatar: profile.avatar_url,
-      user_role: profile.role,
-      user_troll_role: profile.troll_role,
-      user_created_at: profile.created_at,
-      user_rgb_expires_at: profile.rgb_username_expires_at,
-      user_glowing_username_color: profile.glowing_username_color,
+      user_name: userProfile.username,
+      user_avatar: userProfile.avatar_url,
+      user_role: userProfile.role,
+      user_troll_role: userProfile.troll_role,
+      user_created_at: userProfile.created_at,
+      user_rgb_expires_at: userProfile.rgb_username_expires_at,
+      user_glowing_username_color: userProfile.glowing_username_color,
     };
 
     // 7. Canonicalize and Sign

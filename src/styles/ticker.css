@@ -57,3 +57,143 @@
     box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
   }
 }
+
+/* TCNN Ticker Styles */
+.ticker-item.tcnn-breaking {
+  color: #ef4444;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.ticker-item.tcnn-live {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.ticker-item.tcnn-article {
+  color: #10b981;
+}
+
+.ticker-item.event-live {
+  color: #ef4444;
+}
+
+.ticker-item.event-gift {
+  color: #f59e0b;
+}
+
+.ticker-item.event-battle {
+  color: #8b5cf6;
+}
+
+.ticker-item.event-system {
+  color: #9ca3af;
+}
+
+.ticker-icon {
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ticker-message {
+  display: inline;
+}
+
+.breaking-badge {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: pulse-breaking 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-breaking {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 10px 4px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.live-badge {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Breaking News Active State */
+.ticker-wrap.breaking-news-active {
+  background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.1), transparent);
+}
+
+.breaking-news-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.breaking-pulse {
+  background: #ef4444;
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 0 4px 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  animation: slide-in-breaking 0.5s ease-out;
+}
+
+@keyframes slide-in-breaking {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* Cursor pointer for clickable items */
+.ticker-item.cursor-pointer {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.ticker-item.cursor-pointer:hover {
+  opacity: 0.8;
+}
+
+.ticker-item.cursor-pointer:hover .ticker-message {
+  text-decoration: underline;
+}

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
-import { Shield, Users, Skull, Crown, Store, CheckCircle, XCircle, BookOpen } from 'lucide-react'
+import { Shield, Users, Skull, Crown, Store, CheckCircle, XCircle, BookOpen, Newspaper, Mic, Radio } from 'lucide-react'
 
-type ApplicationType = 'troll_officer' | 'troll_family' | 'troller' | 'lead_officer' | 'seller' | 'pastor' | null
+type ApplicationType = 'troll_officer' | 'troll_family' | 'troller' | 'lead_officer' | 'seller' | 'pastor' | 'journalist' | 'news_caster' | 'chief_news_caster' | null
 
 export default function Application() {
   const { user, profile } = useAuthStore()
@@ -49,6 +49,12 @@ export default function Application() {
       } else if (type === 'seller') {
         // Navigate to seller application - go to sell page
         navigate('/sell')
+      } else if (type === 'journalist') {
+        navigate('/apply/journalist')
+      } else if (type === 'news_caster') {
+        navigate('/apply/news-caster')
+      } else if (type === 'chief_news_caster') {
+        navigate('/apply/chief-news-caster')
       }
     } catch (error: any) {
       console.error('Error starting application:', error)
@@ -128,6 +134,33 @@ export default function Application() {
       color: 'green',
       disabled: false,
       disabledText: ''
+    },
+    {
+      type: 'journalist' as ApplicationType,
+      title: 'TCNN Journalist',
+      icon: Newspaper,
+      description: 'Write articles and report news for Troll City News Network',
+      color: 'blue',
+      disabled: profile?.is_journalist || profile?.role === 'journalist',
+      disabledText: 'You are already a Journalist'
+    },
+    {
+      type: 'news_caster' as ApplicationType,
+      title: 'TCNN News Caster',
+      icon: Mic,
+      description: 'Broadcast live news and host shows on TCNN',
+      color: 'red',
+      disabled: profile?.is_news_caster || profile?.role === 'news_caster',
+      disabledText: 'You are already a News Caster'
+    },
+    {
+      type: 'chief_news_caster' as ApplicationType,
+      title: 'TCNN Chief News Caster',
+      icon: Radio,
+      description: 'Lead the TCNN team and manage news operations',
+      color: 'yellow',
+      disabled: profile?.is_chief_news_caster || profile?.role === 'chief_news_caster',
+      disabledText: 'You are already a Chief News Caster'
     }
   ]
 

@@ -125,12 +125,20 @@ export default function BroadcastControls({
   const boxCount = parentBoxCount !== undefined ? parentBoxCount : localBoxCount;
   const setBoxCount = parentSetBoxCount !== undefined ? parentSetBoxCount : setLocalBoxCount;
 
+  // Sync box count when stream updates from database (for viewers)
+  useEffect(() => {
+    // Only update if we don't have parent control and stream box_count changed
+    if (parentBoxCount === undefined && stream.box_count !== undefined && stream.box_count !== localBoxCount) {
+      setLocalBoxCount(stream.box_count);
+    }
+  }, [stream.box_count, parentBoxCount, localBoxCount]);
+
   // Sync likes from stream - only when total_likes changes
   useEffect(() => {
-    if (typeof (stream as any).total_likes === 'number') {
-        setLikes((stream as any).total_likes);
+    if (typeof stream.total_likes === 'number') {
+        setLikes(stream.total_likes);
     }
-  }, [(stream as any).total_likes]);
+  }, [stream.total_likes]);
 
   // Sync box count when stream updates (only if no parent control)
   useEffect(() => {
@@ -643,12 +651,12 @@ export default function BroadcastControls({
 
                     {/* Trollmers Battle Controls - Only for trollmers category */}
                     {(stream.category === 'trollmers' || stream.category === 'trollmers head to head') && (
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/5">
-                         <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
+                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 md:col-span-3">
+                         <div className="flex items-center gap-2 mb-2">
                             <Swords size={16} className="text-amber-500" />
-                            Trollmers Battles
-                         </span>
-                          <TrollmersBattleControls currentStream={stream} onBattleAccepted={toggleBattleMode} />
+                            <span className="text-zinc-400 text-sm font-medium">Trollmers Battles</span>
+                         </div>
+                         <TrollmersBattleControls currentStream={stream} onBattleAccepted={toggleBattleMode} />
                     </div>
                     )}
                 </div>

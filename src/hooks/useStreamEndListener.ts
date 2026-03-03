@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { PreflightStore } from '../lib/preflightStore'
+import { useStreamStore } from '../lib/streamStore'
 
 interface UseStreamEndListenerProps {
   streamId: string
@@ -18,6 +20,7 @@ export function useStreamEndListener({
   redirectToSummary = true,
 }: UseStreamEndListenerProps) {
   const navigate = useNavigate()
+  const { clearTracks } = useStreamStore()
 
   useEffect(() => {
     if (!enabled || !streamId) return
@@ -40,7 +43,10 @@ export function useStreamEndListener({
           console.log('[useStreamEndListener] Stream update detected:', newRecord)
           
           if (newRecord?.status === 'ended' || newRecord?.is_live === false) {
-            console.log('[useStreamEndListener] Stream ended detected, redirecting to summary...')
+            console.log('[useStreamEndListener] Stream ended detected, stopping camera and redirecting to summary...')
+            // Stop camera and mic tracks when stream ends
+            PreflightStore.clear()
+            clearTracks()
             if (redirectToSummary) {
               navigate(`/broadcast/summary/${streamId}`)
             }
@@ -55,7 +61,10 @@ export function useStreamEndListener({
           const { streamId: endedStreamId } = payload.payload || {}
           
           if (endedStreamId === streamId) {
-            console.log('[useStreamEndListener] Stream ended via broadcast, redirecting...')
+            console.log('[useStreamEndListener] Stream ended via broadcast, stopping camera and redirecting...')
+            // Stop camera and mic tracks when stream ends
+            PreflightStore.clear()
+            clearTracks()
             if (redirectToSummary) {
               navigate(`/broadcast/summary/${streamId}`)
             }
@@ -77,6 +86,9 @@ export function useStreamEndListener({
         },
         (payload) => {
           console.log('[useStreamEndListener] Stream ended log detected:', payload)
+          // Stop camera and mic tracks when stream ends
+          PreflightStore.clear()
+          clearTracks()
           if (redirectToSummary) {
             navigate(`/broadcast/summary/${streamId}`)
           }
@@ -89,7 +101,7 @@ export function useStreamEndListener({
       streamChannel.unsubscribe()
       logChannel.unsubscribe()
     }
-  }, [streamId, enabled, redirectToSummary, navigate])
+  }, [streamId, enabled, redirectToSummary, navigate, clearTracks])
 }
 
 /**

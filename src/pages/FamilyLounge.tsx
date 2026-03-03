@@ -538,7 +538,7 @@ const FamilyLounge = ({ user: _authUser }: { user: UserProfile }) => {
                   <div className="flex-1">
                     <p className="text-sm text-gray-300">{activity.event_message}</p>
                     <div className="text-xs text-gray-500 flex items-center gap-1">
-                      {activity.profiles ? (
+                      {activity.profiles?.username ? (
                         <UserNameWithAge
                           user={{
                             username: activity.profiles.username,

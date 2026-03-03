@@ -6,6 +6,8 @@ import AgoraRTC, { IAgoraRTCClient, IRemoteUser, IRemoteVideoTrack, IRemoteAudio
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
 import { useAuthStore } from '../../lib/store';
+import { PreflightStore } from '../../lib/preflightStore';
+import { useStreamStore } from '../../lib/streamStore';
 import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus } from 'lucide-react';
 import BroadcastChat from './BroadcastChat';
 import MuteHandler from './MuteHandler';
@@ -528,6 +530,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [opponentStream, setOpponentStream] = useState<Stream | null>(null);
   const [participantInfo, setParticipantInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
   const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
@@ -540,6 +543,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { clearTracks } = useStreamStore();
   const effectiveUserId = viewerId || user?.id;
 
   // isBroadcaster needs to be defined before the useEffect that uses it
@@ -647,8 +651,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       if (createdAudioTrack) createdAudioTrack.close();
       if (createdVideoTrack) createdVideoTrack.close();
       client.leave();
+      // Clear stores to ensure all camera tracks are stopped
+      PreflightStore.clear();
+      clearTracks();
     };
-  }, [battle, effectiveUserId, isBroadcaster, passedLocalTracks]);
+  }, [battle, effectiveUserId, isBroadcaster, passedLocalTracks, clearTracks]);
 
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
   const [giftStreamId, setGiftStreamId] = useState<string | null>(null);
@@ -731,12 +738,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     }
   };
 
-  useEffect(() => {
+    useEffect(() => {
     const initBattle = async () => {
         try {
             // 1. Fetch Battle
             const { data: battleData, error: battleError } = await supabase.from('battles').select('*').eq('id', battleId).maybeSingle();
-            if (battleError || !battleData) return;
+            if (battleError || !battleData) {
+                setError('Battle not found');
+                return;
+            }
             setBattle(battleData);
 
             if (battleData.status === 'ended') {
@@ -744,14 +754,51 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             }
 
             // 2. Fetch Both Streams
-            const { data: streams } = await supabase.from('streams').select('*').in('id', [battleData.challenger_stream_id, battleData.opponent_stream_id]);
-            if (!streams) return;
+            const { data: streams, error: streamsError } = await supabase.from('streams').select('*').in('id', [battleData.challenger_stream_id, battleData.opponent_stream_id]);
+            if (streamsError || !streams) {
+                console.error('[BattleView] Failed to load streams:', streamsError);
+                setError('Failed to load battle streams: ' + (streamsError?.message || 'Unknown error'));
+                return;
+            }
+
+            console.log('[BattleView] Fetched streams:', {
+                count: streams.length,
+                streamIds: streams.map(s => s.id),
+                expectedChallengerId: battleData.challenger_stream_id,
+                expectedOpponentId: battleData.opponent_stream_id
+            });
 
             const cStream = streams.find(s => s.id === battleData.challenger_stream_id);
             const oStream = streams.find(s => s.id === battleData.opponent_stream_id);
             
-            setChallengerStream(cStream || null);
-            setOpponentStream(oStream || null);
+            // Check if both streams are found
+            if (!cStream) {
+                console.error('[BattleView] Challenger stream not found:', {
+                    challengerId: battleData.challenger_stream_id,
+                    availableStreams: streams.map(s => s.id)
+                });
+                setError('Challenger stream not found or not live. The challenger may have ended their stream.');
+                return;
+            }
+            if (!oStream) {
+                console.error('[BattleView] Opponent stream not found:', {
+                    opponentId: battleData.opponent_stream_id,
+                    availableStreams: streams.map(s => s.id)
+                });
+                setError('Opponent stream not found or not live. The opponent may have ended their stream.');
+                return;
+            }
+            
+            // Check if streams are live (is_live flag or status check)
+            if (cStream.status !== 'live' || !cStream.is_live) {
+                console.warn('[BattleView] Challenger stream is not live:', cStream.status, cStream.is_live);
+            }
+            if (oStream.status !== 'live' || !oStream.is_live) {
+                console.warn('[BattleView] Opponent stream is not live:', oStream.status, oStream.is_live);
+            }
+            
+            setChallengerStream(cStream);
+            setOpponentStream(oStream);
 
             // 3. Fetch My Participant Info
             if (effectiveUserId) {
@@ -776,6 +823,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             setParticipantSnapshots((participantData as Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>) || []);
         } catch (e) {
             console.error("[BattleView] Initialization error:", e);
+            setError('Failed to initialize battle');
         } finally {
             setLoading(false);
         }
@@ -1060,6 +1108,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         if (agoraClient) {
           agoraClient.leave();
         }
+        // Clear stores to ensure all camera tracks are stopped
+        PreflightStore.clear();
+        clearTracks();
       } catch (e) {
         console.error(e);
         toast.error('Failed to leave battle');
@@ -1067,7 +1118,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       } finally {
         setLeaveLoading(false);
       }
-    }, [battle, user, localAudioTrack, localVideoTrack, agoraClient]);
+    }, [battle, user, localAudioTrack, localVideoTrack, agoraClient, clearTracks]);
 
   useEffect(() => {
     if (!battle?.started_at || battle.status !== 'active' || !arenaReady) {
@@ -1130,10 +1181,29 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         if (agoraClient) {
           agoraClient.leave();
         }
+        // Clear stores to ensure all camera tracks are stopped
+        PreflightStore.clear();
+        clearTracks();
       }, 5000); // 5 seconds to see results
       return () => clearTimeout(timer);
     }
-  }, [showResults, battle?.status, showBattleSummary, localAudioTrack, localVideoTrack, agoraClient]);
+  }, [showResults, battle?.status, showBattleSummary, localAudioTrack, localVideoTrack, agoraClient, clearTracks]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-black text-red-500 gap-4">
+        <div className="text-6xl mb-4">⚠️</div>
+        <h2 className="text-xl font-bold text-white">Battle Error</h2>
+        <span className="font-medium">{error}</span>
+        <button 
+          onClick={() => navigate('/')}
+          className="mt-4 px-6 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-lg transition"
+        >
+          Return Home
+        </button>
+      </div>
+    );
+  }
 
   if (loading || !battle || !challengerStream || !opponentStream) {
     return (

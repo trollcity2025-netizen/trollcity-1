@@ -218,6 +218,12 @@ const LeadOfficerDashboard = lazyWithRetry(() => import("./pages/lead-officer/Le
 const ShopPartnerPage = lazyWithRetry(() => import("./pages/ShopPartnerPage"));
 const UniverseEventPage = lazyWithRetry(() => import("./pages/UniverseEventPage"));
 const NeighborsPage = lazyWithRetry(() => import("./pages/Neighbors"));
+const MediaCityPage = lazyWithRetry(() => import("./pages/media/MediaCityPage"));
+
+// TCNN - Troll City News Network
+const TCNNMainPage = lazyWithRetry(() => import("./pages/tcnn/TCNNMainPage"));
+const TCNNInternalDashboard = lazyWithRetry(() => import("./pages/tcnn/TCNNInternalDashboard"));
+const ArticleReader = lazyWithRetry(() => import("./pages/tcnn/ArticleReader"));
 
 const ShopView = lazyWithRetry(() => import("./pages/ShopView"));
 const CourtRoom = lazyWithRetry(() => import("./pages/CourtRoom"));
@@ -1079,9 +1085,15 @@ function AppContent() {
                   <Route path="/tcps" element={<TCPS />} />
           <Route path="/city-hall" element={<CityHall />} />
                   <Route path="/city-registry" element={<CityRegistry />} />
-                  <Route path="/universe-event" element={<UniverseEventPage />} />
-                  <Route path="/events/universe" element={<Navigate to="/universe-event" replace />} />
-                  <Route path="/call/:roomId/:type/:userId" element={<Call />} />
+                <Route path="/universe-event" element={<UniverseEventPage />} />
+                <Route path="/events/universe" element={<Navigate to="/universe-event" replace />} />
+                
+                {/* 📺 TCNN - Troll City News Network */}
+                <Route path="/tcnn" element={<TCNNMainPage />} />
+                <Route path="/tcnn/article/:id" element={<ArticleReader />} />
+                <Route path="/tcnn/dashboard" element={<TCNNInternalDashboard />} />
+                
+                <Route path="/call/:roomId/:type/:userId" element={<Call />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/following" element={<Following />} />
                   <Route path="/following/:userId" element={<Following />} />
@@ -1089,6 +1101,7 @@ function AppContent() {
                   <Route path="/trollifieds" element={<Trollifieds />} />
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/pool" element={<PublicPool />} />
+                  <Route path="/media-city" element={<MediaCityPage />} />
                   <Route path="/troll-games" element={<TrollGamesPage />} />
                   <Route path="/troll-games/:gameType/:matchId" element={<TrollGamesPage />} />
                   <Route path="/troll-games/giveaways" element={<GiveawaysPage />} />

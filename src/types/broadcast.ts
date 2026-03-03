@@ -14,6 +14,7 @@ export interface Stream {
   viewer_count?: number;
   current_viewers: number;
   box_count: number;
+  total_likes?: number;
   layout_mode: LayoutMode;
   started_at: string | null;
   ended_at: string | null;

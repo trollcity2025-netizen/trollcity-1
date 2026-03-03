@@ -1547,7 +1547,7 @@ function ProfileInner() {
                    <div className="flex items-center justify-between">
                      <span>System role</span>
                      <span className="px-3 py-1 rounded-full border border-purple-500/40 bg-purple-500/10 text-xs font-semibold uppercase tracking-wide">
-                       {profile.role || 'user'}
+                       {profile.role === 'admin' ? 'CEO' : (profile.role || 'user')}
                      </span>
                    </div>
                    <div className="flex items-center justify-between">

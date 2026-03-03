@@ -40,10 +40,9 @@ const UserPresenceCounter = () => {
   }, [profile]);
 
   return (
-    <div className="flex items-center gap-2 text-sm text-slate-400 px-4 py-2">
-      <Users size={16} />
-      <span>{onlineCount} Online</span>
-    </div>
+    <span className="text-xs text-slate-400">
+      {onlineCount}
+    </span>
   );
 };
 

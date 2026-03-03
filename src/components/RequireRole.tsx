@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
-import { hasRole, UserRole, validateProfile, isAdminEmail } from '../lib/supabase';
+import { hasRole, UserRole, validateProfile, isAdminEmail, supabase } from '../lib/supabase';
 
 interface RequireRoleProps {
   roles: UserRole | UserRole[];
@@ -16,7 +16,43 @@ const RequireRole: React.FC<RequireRoleProps> = ({
   fallbackPath,
   showValidationErrors = false
 }) => {
-  const { profile, user } = useAuthStore();
+  const { profile, user, refreshProfile } = useAuthStore();
+
+  // Real-time role change detection - redirects immediately if role is revoked
+  useEffect(() => {
+    if (!profile?.id) return
+
+    const channel = supabase
+      .channel(`require-role-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${profile.id}`,
+        },
+        (payload) => {
+          // Check if role-related fields changed
+          const newData = payload.new as any
+          const oldData = payload.old as any
+          
+          const roleFields = ['role', 'is_admin', 'is_lead_officer', 'is_troll_officer', 'troll_role', 'is_pastor', 'is_secretary']
+          const hasRoleChange = roleFields.some(field => newData[field] !== oldData[field])
+          
+          if (hasRoleChange) {
+            console.log('[RequireRole] Role change detected, refreshing profile...')
+            // Refresh the profile to get updated role data
+            refreshProfile()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.id, refreshProfile])
 
   // Basic authentication check
   if (!profile) {
