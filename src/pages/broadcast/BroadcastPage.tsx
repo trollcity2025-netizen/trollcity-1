@@ -1284,6 +1284,16 @@ function BroadcastPage() {
   };
 
   const handleStreamEnd = async () => {
+    // CRITICAL: Log the exact stream being ended
+    console.log('[STREAM_LIFECYCLE] Ending stream:', {
+      streamId: stream?.id,
+      userId: user?.id,
+      isHost,
+      currentStatus: stream?.status,
+      currentIsLive: stream?.is_live,
+      timestamp: new Date().toISOString()
+    });
+    
     // Stop camera and mic before leaving
     stopLocalTracks();
     
@@ -1299,9 +1309,15 @@ function BroadcastPage() {
         
         if (battleData) {
           // Determine opponent stream
-          const opponentStreamId = battleData.challenger_stream_id === stream.id 
-            ? battleData.opponent_stream_id 
+          const opponentStreamId = battleData.challenger_stream_id === stream.id
+            ? battleData.opponent_stream_id
             : battleData.challenger_stream_id;
+          
+          console.log('[STREAM_LIFECYCLE] Leaving battle on stream end:', {
+            battleId: battleData.id,
+            streamId: stream.id,
+            opponentStreamId
+          });
           
           // Call leave_battle to properly credit winner and end battle
           const { error: leaveError } = await supabase.rpc('leave_battle', {
@@ -1310,25 +1326,49 @@ function BroadcastPage() {
           });
           
           if (leaveError) {
-            console.warn('[BroadcastPage] Failed to leave battle:', leaveError);
+            console.warn('[STREAM_LIFECYCLE] Failed to leave battle:', leaveError);
           } else {
-            console.log('[BroadcastPage] Left battle, opponent credited as winner');
+            console.log('[STREAM_LIFECYCLE] Left battle, opponent credited as winner');
           }
         }
       } catch (battleErr) {
-        console.warn('[BroadcastPage] Error handling battle on stream end:', battleErr);
+        console.warn('[STREAM_LIFECYCLE] Error handling battle on stream end:', battleErr);
       }
     }
     
-    // Mark stream as ended in database
+    // Mark stream as ended in database - CRITICAL SECTION
     try {
-      await supabase
+      console.log('[STREAM_LIFECYCLE] Updating stream in DB:', { streamId: stream?.id });
+      
+      const { data: updateResult, error: updateError } = await supabase
         .from('streams')
-        .update({ is_live: false, status: 'ended' })
-        .eq('id', stream.id);
-      console.log('[BroadcastPage] Stream marked as ended');
+        .update({
+          is_live: false,
+          status: 'ended',
+          ended_at: new Date().toISOString()
+        })
+        .eq('id', stream.id)
+        .select('id, is_live, status, ended_at');
+      
+      if (updateError) {
+        console.error('[STREAM_LIFECYCLE] FAILED to mark stream as ended:', {
+          streamId: stream?.id,
+          error: updateError.message,
+          code: updateError.code
+        });
+        toast.error('Failed to end stream properly. Please try again.');
+        return;
+      }
+      
+      console.log('[STREAM_LIFECYCLE] Stream successfully marked as ended:', {
+        streamId: stream?.id,
+        updateResult
+      });
     } catch (endErr) {
-      console.warn('[BroadcastPage] Failed to mark stream as ended:', endErr);
+      console.error('[STREAM_LIFECYCLE] EXCEPTION marking stream as ended:', {
+        streamId: stream?.id,
+        error: endErr.message
+      });
     }
     
     // Immediately update local state for instant navigation

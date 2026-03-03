@@ -656,6 +656,16 @@ export default function BroadcastControls({
                             <Swords size={16} className="text-amber-500" />
                             <span className="text-zinc-400 text-sm font-medium">Trollmers Battles</span>
                          </div>
+                         {(() => {
+                           // DEBUG: Verify stream data before passing to battle controls
+                           console.log('[BroadcastControls] Passing stream to TrollmersBattleControls:', {
+                             stream_id: stream?.id,
+                             user_id: stream?.user_id,
+                             category: stream?.category,
+                             title: stream?.title
+                           });
+                           return null;
+                         })()}
                          <TrollmersBattleControls currentStream={stream} onBattleAccepted={toggleBattleMode} />
                     </div>
                     )}

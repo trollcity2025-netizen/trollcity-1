@@ -754,7 +754,16 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             }
 
             // 2. Fetch Both Streams
-            const { data: streams, error: streamsError } = await supabase.from('streams').select('*').in('id', [battleData.challenger_stream_id, battleData.opponent_stream_id]);
+            console.log('[BattleView] Fetching streams for battle:', {
+                challenger_stream_id: battleData.challenger_stream_id,
+                opponent_stream_id: battleData.opponent_stream_id
+            });
+            
+            const { data: streams, error: streamsError } = await supabase
+                .from('streams')
+                .select('*')
+                .in('id', [battleData.challenger_stream_id, battleData.opponent_stream_id]);
+                
             if (streamsError || !streams) {
                 console.error('[BattleView] Failed to load streams:', streamsError);
                 setError('Failed to load battle streams: ' + (streamsError?.message || 'Unknown error'));
@@ -763,7 +772,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
             console.log('[BattleView] Fetched streams:', {
                 count: streams.length,
-                streamIds: streams.map(s => s.id),
+                streamIds: streams.map(s => ({ id: s.id, is_live: s.is_live, status: s.status })),
                 expectedChallengerId: battleData.challenger_stream_id,
                 expectedOpponentId: battleData.opponent_stream_id
             });
@@ -789,12 +798,34 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
                 return;
             }
             
-            // Check if streams are live (is_live flag or status check)
-            if (cStream.status !== 'live' || !cStream.is_live) {
-                console.warn('[BattleView] Challenger stream is not live:', cStream.status, cStream.is_live);
+            // Check if streams are live - BOTH conditions must be true
+            // status = 'live' AND is_live = true
+            const isChallengerLive = cStream.status === 'live' && cStream.is_live === true;
+            const isOpponentLive = oStream.status === 'live' && oStream.is_live === true;
+            
+            console.log('[BattleView] Stream live status check:', {
+                challenger: { id: cStream.id, status: cStream.status, is_live: cStream.is_live, isLive: isChallengerLive },
+                opponent: { id: oStream.id, status: oStream.status, is_live: oStream.is_live, isLive: isOpponentLive }
+            });
+            
+            if (!isChallengerLive) {
+                console.error('[BattleView] Challenger stream is NOT live:', {
+                    id: cStream.id,
+                    status: cStream.status,
+                    is_live: cStream.is_live
+                });
+                setError('Challenger stream has ended. Cannot join battle.');
+                return;
             }
-            if (oStream.status !== 'live' || !oStream.is_live) {
-                console.warn('[BattleView] Opponent stream is not live:', oStream.status, oStream.is_live);
+            
+            if (!isOpponentLive) {
+                console.error('[BattleView] Opponent stream is NOT live:', {
+                    id: oStream.id,
+                    status: oStream.status,
+                    is_live: oStream.is_live
+                });
+                setError('Opponent stream has ended. Cannot join battle.');
+                return;
             }
             
             setChallengerStream(cStream);

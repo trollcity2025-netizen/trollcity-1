@@ -159,6 +159,35 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
     setMatchStatus('searching');
 
     try {
+        // DEBUG: Log the IDs before battle creation
+        console.log("[TrollmersBattleControls] User ID:", currentStream.user_id);
+        console.log("[TrollmersBattleControls] Active Stream ID:", currentStream?.id);
+        console.log("[TrollmersBattleControls] Stream Object:", {
+          id: currentStream?.id,
+          user_id: currentStream?.user_id,
+          is_live: currentStream?.is_live,
+          status: currentStream?.status,
+          category: currentStream?.category
+        });
+        
+        // Verify current stream is still live before creating battle
+        const { data: streamCheck, error: streamCheckError } = await supabase
+          .from('streams')
+          .select('id, is_live, status')
+          .eq('id', currentStream.id)
+          .maybeSingle();
+          
+        if (streamCheckError || !streamCheck) {
+          throw new Error('Could not verify your stream status. Please try again.');
+        }
+        
+        if (!streamCheck.is_live || streamCheck.status !== 'live') {
+          console.error('[TrollmersBattleControls] Current stream is not live:', streamCheck);
+          throw new Error('Your stream must be live to create a battle.');
+        }
+        
+        console.log('[TrollmersBattleControls] Stream verified as live:', streamCheck);
+        
         const { data: target, error } = await supabase.rpc('find_match_candidate', {
             p_stream_id: currentStream.id
         });
@@ -170,6 +199,10 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
         if (!opponent || !opponent.id) {
             throw new Error("No suitable opponents found. Try again later!");
         }
+
+        // DEBUG: Log opponent info
+        console.log("[TrollmersBattleControls] Opponent:", opponent);
+        console.log("[TrollmersBattleControls] Creating battle - challenger_stream_id:", currentStream.id, "opponent_stream_id:", opponent.id);
 
         // Challenge the found opponent
         const { data: battleId, error: challengeError } = await supabase.rpc('create_battle_challenge', {
