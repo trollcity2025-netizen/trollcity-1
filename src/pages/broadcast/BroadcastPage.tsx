@@ -210,6 +210,16 @@ function BroadcastPage() {
     return joinSeat(index, price);
   }, [joinSeat]);
 
+  // Get price for a specific seat - supports per-box pricing
+  const getSeatPrice = useCallback((seatIndex: number): number => {
+    // Check if per-box pricing is enabled
+    if (stream?.seat_prices && stream.seat_prices.length > seatIndex) {
+      return stream.seat_prices[seatIndex];
+    }
+    // Fall back to default seat price
+    return stream?.seat_price || 0;
+  }, [stream?.seat_prices, stream?.seat_price]);
+
   /** FETCH STREAM */
   useEffect(() => {
     if (!streamId) {
@@ -1496,7 +1506,7 @@ function BroadcastPage() {
           <BroadcastGrid
             stream={stream}
             seats={seats}
-            onJoinSeat={(index) => handleJoinSeat(index, stream.seat_price)}
+            onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
             isHost={isHost}
             localTracks={
               localTracks

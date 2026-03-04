@@ -666,14 +666,30 @@ export default function BroadcastGrid({
                         <Plus size={24} />
                       </div>
                       <span className="text-xs font-medium">Join Stage</span>
-                      {(typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price) > 0 && (
-                        <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30">
-                          <Coins size={12} className="text-yellow-500" />
-                          <span className="text-xs font-bold text-yellow-400">
-                            {typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price}
-                          </span>
-                        </div>
-                      )}
+                      {(() => {
+                        // Get price for this specific seat - supports per-box pricing
+                        const seatPrices = stream.seat_prices;
+                        const price = seatPrices && seatPrices.length > seatIndex 
+                          ? seatPrices[seatIndex] 
+                          : (typeof seatPriceOverride === 'number' ? seatPriceOverride : stream.seat_price);
+                        
+                        if (price > 0) {
+                          return (
+                            <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30">
+                              <Coins size={12} className="text-yellow-500" />
+                              <span className="text-xs font-bold text-yellow-400">
+                                {price}
+                              </span>
+                            </div>
+                          );
+                        }
+                        // Show "FREE" badge when price is 0
+                        return (
+                          <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full mt-2 border border-green-500/30">
+                            <span className="text-[10px] font-bold text-green-400">FREE</span>
+                          </div>
+                        );
+                      })()}
                     </button>
                   ) : (
                     <div className="text-zinc-600 flex flex-col items-center">

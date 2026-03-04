@@ -137,9 +137,35 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
       
       if (data?.success) {
         if (data?.status === 'active') {
-          toast.success('Battle started!');
+          toast.success('Battle started! Merging broadcasts...');
           setBattleStatus('battling');
           setBattleId(data.battle_id);
+          
+          // IMPORTANT: Update the stream to mark it as a battle
+          // This triggers the BattleView to render in BroadcastPage
+          const { error: updateError } = await supabase
+            .from('streams')
+            .update({ 
+              is_battle: true, 
+              battle_id: data.battle_id 
+            })
+            .eq('id', currentStream.id);
+          
+          if (updateError) {
+            console.error('Failed to update stream battle status:', updateError);
+          }
+          
+          // Also update opponent stream
+          if (data.opponent_stream_id) {
+            await supabase
+              .from('streams')
+              .update({ 
+                is_battle: true, 
+                battle_id: data.battle_id 
+              })
+              .eq('id', data.opponent_stream_id);
+          }
+          
           if (onBattleAccepted) onBattleAccepted();
         } else {
           toast.info('Waiting for another broadcaster...');

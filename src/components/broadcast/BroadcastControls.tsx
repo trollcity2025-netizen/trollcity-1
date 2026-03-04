@@ -97,8 +97,11 @@ export default function BroadcastControls({
   
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
+  // Per-box pricing: array of prices for each box (index 0 = host, 1+ = guests)
+  const [seatPrices, setSeatPrices] = useState<number[]>(stream.seat_prices || [0, seatPrice, seatPrice, seatPrice, seatPrice, seatPrice]);
 
   const [debouncedPrice, setDebouncedPrice] = useState(seatPrice);
+  const [debouncedSeatPrices, setDebouncedSeatPrices] = useState(seatPrices);
 
   const [showBannedList, setShowBannedList] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
@@ -211,12 +214,16 @@ export default function BroadcastControls({
 
 
 
-  const updateStreamConfig = React.useCallback(async (price: number, showToast: boolean = true) => {
+  const updateStreamConfig = React.useCallback(async (price: number, showToast: boolean = true, perBoxPrices?: number[]) => {
     if (!canEditStream) return;
     try {
+        const updates: { seat_price: number; seat_prices?: number[] } = { seat_price: price };
+        if (perBoxPrices) {
+            updates.seat_prices = perBoxPrices;
+        }
         await supabase
         .from('streams')
-        .update({ seat_price: price })
+        .update(updates)
         .eq('id', stream.id);
         if (showToast) {
             toast.success("Stream settings updated");
@@ -238,6 +245,19 @@ export default function BroadcastControls({
     return () => clearTimeout(timer);
   }, [debouncedPrice, stream.seat_price, updateStreamConfig]);
 
+  // Debounce per-box price updates to DB
+  useEffect(() => {
+    // Check if per-box prices have changed
+    const currentPrices = stream.seat_prices || [0, stream.seat_price || 0, stream.seat_price || 0, stream.seat_price || 0, stream.seat_price || 0, stream.seat_price || 0];
+    const hasChanged = debouncedSeatPrices.some((price, idx) => price !== currentPrices[idx]);
+    if (!hasChanged) return;
+
+    const timer = setTimeout(() => {
+      updateStreamConfig(seatPrice, false, debouncedSeatPrices);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [debouncedSeatPrices, stream.seat_prices, seatPrice, updateStreamConfig]);
+
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only Host can change price (Prompt: Host only)
     if (!isHost) return;
@@ -253,6 +273,23 @@ export default function BroadcastControls({
     setSeatPrice(val);
     setDebouncedPrice(val);
   };
+
+  // Handler for per-box price changes
+  const handleBoxPriceChange = (boxIndex: number, value: string) => {
+    if (!isHost) return;
+    
+    const newPrices = [...seatPrices];
+    let val = parseInt(value, 10) || 0;
+    if (val > 5000) val = 5000;
+    if (val < 0) val = 0;
+    
+    newPrices[boxIndex] = val;
+    setSeatPrices(newPrices);
+    setDebouncedSeatPrices(newPrices);
+  };
+
+  // Toggle per-box pricing mode
+  const [enablePerBoxPricing, setEnablePerBoxPricing] = useState(false);
 
 
   
@@ -612,28 +649,75 @@ export default function BroadcastControls({
 
                     {/* Seat Pricing - Only visible to Host & Staff */}
                     {canManageStream && (
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center gap-4">
-                        <div className="flex-1">
-                            <label className="text-zinc-400 text-xs font-medium flex items-center gap-1 mb-1">
+                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-zinc-400 text-xs font-medium flex items-center gap-1">
                                 <Coins size={12} className="text-yellow-500" />
-                                Price
+                                {enablePerBoxPricing ? 'Per-Box Pricing' : 'Seat Price'}
                             </label>
-                            <input 
-                                type="number" 
-                                min="0"
-                                max="5000"
-                                value={seatPrice === 0 ? '' : seatPrice}
-                                onChange={handlePriceChange}
-                                disabled={!isHost}
+                            <button
+                                onClick={() => setEnablePerBoxPricing(!enablePerBoxPricing)}
                                 className={cn(
-                                    "w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
-                                    (!isHost) && "opacity-50 cursor-not-allowed"
+                                    "text-[10px] px-2 py-1 rounded-full transition-colors",
+                                    enablePerBoxPricing 
+                                        ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" 
+                                        : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
                                 )}
-                                placeholder=""
-                            />
+                            >
+                                {enablePerBoxPricing ? 'Simple Mode' : 'Advanced Mode'}
+                            </button>
                         </div>
                         
-
+                        {!enablePerBoxPricing ? (
+                            // Simple mode - single price for all seats
+                            <div className="flex items-center gap-3">
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    max="5000"
+                                    value={seatPrice === 0 ? '' : seatPrice}
+                                    onChange={handlePriceChange}
+                                    disabled={!isHost}
+                                    className={cn(
+                                        "flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
+                                        (!isHost) && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    placeholder="0 = Free"
+                                />
+                                <span className="text-xs text-zinc-500">coins</span>
+                            </div>
+                        ) : (
+                            // Advanced mode - per-box pricing
+                            <div className="grid grid-cols-3 gap-2">
+                                {Array.from({ length: 6 }, (_, i) => (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <label className="text-[10px] text-zinc-500">
+                                            {i === 0 ? 'Host' : `Seat ${i}`}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="5000"
+                                            value={seatPrices[i] || 0}
+                                            onChange={(e) => handleBoxPriceChange(i, e.target.value)}
+                                            disabled={!isHost || i === 0} // Host seat is always free
+                                            className={cn(
+                                                "w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
+                                                (i === 0) && "opacity-50 cursor-not-allowed bg-zinc-900"
+                                            )}
+                                            placeholder="0"
+                                            title={i === 0 ? "Host seat is always free" : `Price for seat ${i}`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        
+                        <p className="text-[10px] text-zinc-500">
+                            {enablePerBoxPricing 
+                                ? "Set 0 for free seats. Host seat is always free." 
+                                : "Set to 0 for free seats, or charge coins to join."}
+                        </p>
                     </div>
                     )}
 
