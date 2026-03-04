@@ -363,13 +363,14 @@ export default function Sidebar() {
                 className="text-indigo-400 hover:text-indigo-300"
               />
               <SidebarItem 
-                icon={Gamepad2} 
-                label="Troll Games" 
+                icon={Gamepad2}
+                label="Trollopoly (Under Construction)" 
                 to="/troll-games" 
                 active={isActive('/troll-games')} 
                 collapsed={isSidebarCollapsed}
                 highlight={isUpdated('/troll-games')} onClick={() => markAsViewed('/troll-games')}
-                className="text-green-400 hover:text-green-300"
+                className="text-yellow-500 hover:text-yellow-400 opacity-70"
+                badge="🚧"
               />
               {canSeeFamilyLounge && (
                 <SidebarItem 
