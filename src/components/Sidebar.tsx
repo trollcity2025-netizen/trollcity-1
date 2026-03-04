@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import CourtEntryModal from './CourtEntryModal'
 import SidebarGroup from './ui/SidebarGroup'
@@ -109,42 +109,6 @@ export default function Sidebar() {
 
   const { isJailed } = useJailMode(profile?.id)
 
-  // Real-time role change detection - refreshes profile when role changes in DB
-  useEffect(() => {
-    if (!profile?.id) return
-
-    const channel = supabase
-      .channel(`profile-role-${profile.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'user_profiles',
-          filter: `id=eq.${profile.id}`,
-        },
-        (payload) => {
-          // Check if role-related fields changed
-          const newData = payload.new as any
-          const oldData = payload.old as any
-          
-          const roleFields = ['role', 'is_admin', 'is_lead_officer', 'is_troll_officer', 'troll_role', 'is_pastor', 'is_secretary']
-          const hasRoleChange = roleFields.some(field => newData[field] !== oldData[field])
-          
-          if (hasRoleChange) {
-            console.log('[Sidebar] Role change detected, refreshing profile...')
-            // Refresh the profile to get updated role data
-            const { refreshProfile } = useAuthStore.getState()
-            refreshProfile()
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [profile?.id])
 
   useEffect(() => {
     if (profile?.id) {

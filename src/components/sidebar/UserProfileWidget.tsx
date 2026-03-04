@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { useXPStore } from '@/stores/useXPStore';
 import { useCoins } from '@/lib/hooks/useCoins';
@@ -7,8 +7,27 @@ import { Crown, Coins } from 'lucide-react';
 
 const UserProfileWidget = () => {
   const { profile } = useAuthStore();
-  const { level, progress } = useXPStore();
-    const { troll_coins, crowns, loading: coinsLoading } = useCoins();
+  const { level, progress, xpTotal, xpToNext, fetchXP, subscribeToXP, unsubscribe } = useXPStore();
+  const { troll_coins, crowns, loading: coinsLoading } = useCoins();
+
+  // Subscribe to XP updates when profile is available
+  useEffect(() => {
+    if (profile?.id) {
+      console.log('[UserProfileWidget] Setting up XP subscription for user:', profile.id);
+      
+      // Fetch initial XP data
+      fetchXP(profile.id);
+      
+      // Subscribe to realtime updates
+      subscribeToXP(profile.id);
+      
+      // Cleanup subscription on unmount
+      return () => {
+        console.log('[UserProfileWidget] Cleaning up XP subscription');
+        unsubscribe();
+      };
+    }
+  }, [profile?.id, fetchXP, subscribeToXP, unsubscribe]);
 
   if (!profile) {
     return null; // Or a loading skeleton
@@ -26,13 +45,19 @@ const UserProfileWidget = () => {
 
       <div className="mt-3">
         <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
-          <span>Level Progress</span>
+          <span className="font-semibold text-green-400">Level {level}</span>
           <span>{level} → {level + 1}</span>
         </div>
         <div className="w-full bg-slate-800 rounded-full h-2">
           <div className="bg-green-600 h-2 rounded-full" style={{ width: `${progress}%` }}></div>
         </div>
-        <p className="text-center text-xs text-slate-500 mt-1">{progress.toFixed(0)}% to next level</p>
+        <p className="text-center text-xs text-slate-500 mt-1">
+          {xpTotal === 0 ? (
+            <span className="text-yellow-400">Send gifts to earn XP!</span>
+          ) : (
+            <span>{xpTotal.toLocaleString()} XP • {xpToNext.toLocaleString()} XP to Level {level + 1}</span>
+          )}
+        </p>
       </div>
 
       <div className="mt-3 border-t border-white/10 pt-3 space-y-2">

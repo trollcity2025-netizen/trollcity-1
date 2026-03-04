@@ -543,19 +543,22 @@ export default function BroadcastGrid({
           const userGiftAmount = userId ? (userReceivedGifts[userId] || 0) : 0;
 
           return (
+            <div
+              key={seatIndex}
+              ref={(el) => {
+                if (userId) {
+                  boxRefs.current[userId] = el;
+                }
+              }}
+              className="contents"
+            >
             <motion.div
               layout
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
-              key={seatIndex}
               className={boxClass}
-              ref={(el) => {
-                if (userId) {
-                  boxRefs.current[userId] = el;
-                }
-              }}
               onClick={() => {
                 if (isStreamHost && seatIndex === 0) {
                    setShowHostStats(true);
@@ -820,6 +823,7 @@ export default function BroadcastGrid({
                 />
               )}
             </motion.div>
+            </div>
           );
         })}
       </AnimatePresence>

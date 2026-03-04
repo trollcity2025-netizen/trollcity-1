@@ -25,6 +25,7 @@ interface GiftBoxModalProps {
   activeUserIds?: string[];
   userProfiles?: Record<string, { username: string; avatar_url?: string }>;
   onGiftSent?: (gift: GiftItem, target: GiftTarget) => void;
+  sharedChannel?: any; // Supabase realtime channel for broadcasting gifts
 }
 
 type GiftCategory = 'all' | 'general' | 'cars' | 'houses' | 'boats' | 'planes' | 'luxury' | 'men' | 'women' | 'lgbt' | 'holiday' | 'smoking' | 'drinking' | 'funny' | 'seasonal';
@@ -75,10 +76,11 @@ export default function GiftBoxModal({
   broadcasterId = recipientId,
   activeUserIds = [],
   userProfiles = {},
-  onGiftSent 
+  onGiftSent,
+  sharedChannel
 }: GiftBoxModalProps) {
   const { user, profile } = useAuthStore();
-  const { sendGift, isSending } = useGiftSystem(recipientId, streamId);
+  const { sendGift, isSending } = useGiftSystem(recipientId, streamId, null, undefined, sharedChannel);
   
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<GiftCategory>('all');

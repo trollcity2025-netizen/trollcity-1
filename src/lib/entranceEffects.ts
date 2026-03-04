@@ -284,14 +284,53 @@ export async function getUserActiveEffect(userId: string): Promise<EntranceEffec
 
 /**
  * Purchase an entrance effect
+ * Now validates against database instead of hardcoded config
  */
 export async function purchaseEntranceEffect(userId: string, effectKey: EntranceEffectKey): Promise<{success: boolean, error?: string}> {
   try {
-    const effectConfig = ENTRANCE_EFFECTS_CONFIG[effectKey];
-    if (!effectConfig) {
-      return { success: false, error: 'Invalid entrance effect' };
+    // First, validate the effect exists in the database and get its details
+    const { data: effectData, error: effectError } = await supabase
+      .from('entrance_effects')
+      .select('id, name, coin_cost, is_active')
+      .eq('id', effectKey)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (effectError) {
+      console.error('Error fetching effect from database:', effectError);
+      return { success: false, error: 'Failed to validate entrance effect' };
     }
 
+    if (!effectData) {
+      // Fallback: Check hardcoded config for backward compatibility
+      const effectConfig = ENTRANCE_EFFECTS_CONFIG[effectKey];
+      if (!effectConfig) {
+        return { success: false, error: 'Invalid entrance effect' };
+      }
+      
+      // Use hardcoded config values if DB lookup failed
+      return await executePurchase(userId, effectKey, effectConfig.cost, effectConfig.name);
+    }
+
+    // Use database values
+    return await executePurchase(userId, effectKey, effectData.coin_cost, effectData.name);
+
+  } catch (err) {
+    console.error('Entrance effect purchase error:', err);
+    return { success: false, error: 'Purchase failed' };
+  }
+}
+
+/**
+ * Helper function to execute the actual purchase
+ */
+async function executePurchase(
+  userId: string, 
+  effectKey: string, 
+  cost: number, 
+  name: string
+): Promise<{success: boolean, error?: string}> {
+  try {
     // Check if user already owns it
     const alreadyOwns = await userOwnsEntranceEffect(userId, effectKey);
     if (alreadyOwns) {
@@ -309,15 +348,15 @@ export async function purchaseEntranceEffect(userId: string, effectKey: Entrance
       return { success: false, error: 'User profile not found' };
     }
 
-    if ((userProfile.troll_coins || 0) < effectConfig.cost) {
+    if ((userProfile.troll_coins || 0) < cost) {
       return { success: false, error: 'Not enough Troll Coins' };
     }
 
     // Use Atomic Server-Side Purchase
     const { data, error } = await supabase.rpc('purchase_entrance_effect', {
       p_effect_id: effectKey,
-      p_cost: effectConfig.cost,
-      p_name: effectConfig.name
+      p_cost: cost,
+      p_name: name
     });
 
     if (error) {

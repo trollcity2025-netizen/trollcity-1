@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Loader2, UserX, Unlock, RefreshCcw, User, Eye, Shield, Crown } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,6 +39,32 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'banned' | 'active'>('banned');
     const { user: _user } = useAuthStore();
+    const popupRef = useRef<HTMLDivElement>(null);
+
+    // Handle click outside and escape key
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+
+        const handleEscapeKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        // Add event listeners
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscapeKey);
+
+        // Cleanup
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscapeKey);
+        };
+    }, [onClose]);
 
     const fetchActiveViewers = useCallback(async () => {
         try {
@@ -201,7 +227,7 @@ export default function BannedUsersList({ streamId, onClose }: BannedUsersListPr
     };
 
     return (
-        <div className="absolute bottom-full left-0 w-80 mb-4 bg-zinc-900 border border-red-900/50 rounded-xl p-4 shadow-2xl z-50 animate-in slide-in-from-bottom-2">
+        <div ref={popupRef} className="fixed bottom-24 right-4 sm:right-8 w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-hidden bg-zinc-900 border border-red-900/50 rounded-xl p-4 shadow-2xl z-[100] animate-in slide-in-from-bottom-2">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-white flex items-center gap-2">
                     <Eye size={16} className="text-purple-400" />

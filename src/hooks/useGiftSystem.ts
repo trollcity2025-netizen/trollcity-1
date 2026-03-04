@@ -18,7 +18,8 @@ export function useGiftSystem(
   recipientId: string, 
   streamId: string, 
   _battleId?: string | null,
-  _targetUserId?: string
+  _targetUserId?: string,
+  sharedChannel?: any  // Optional shared channel for broadcasting
 ) {
   const [isSending, setIsSending] = useState(false);
   const [giftsDisabled, setGiftsDisabled] = useState(false);
@@ -27,6 +28,9 @@ export function useGiftSystem(
 
   // Simple client-side circuit breaker
   const circuitRef = useRef<{ openUntil: number }>({ openUntil: 0 });
+  
+  // Track if we're currently subscribing to avoid multiple subscriptions
+  const isSubscribingRef = useRef(false);
 
   useEffect(() => {
     getSystemSettings()
@@ -122,35 +126,54 @@ export function useGiftSystem(
         const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.id);
         const giftIcon = officialGift?.icon || '🎁';
         
-        // Broadcast event for animations via Supabase realtime channel (more reliable than edge function)
+        // Broadcast event for animations via Supabase realtime channel
         try {
           if (streamId) {
-            const channel = supabase.channel(`stream:${streamId}`);
-            await channel.subscribe((status) => {
-              if (status === 'SUBSCRIBED') {
-                channel.send({
-                  type: 'broadcast',
-                  event: 'gift_sent',
-                  payload: {
-                    id: generateUUID(),
-                    gift_id: gift.id,
-                    gift_slug: gift.slug,
-                    gift_name: gift.name,
-                    gift_icon: giftIcon,
-                    amount: gift.coinCost * quantity,
-                    quantity: quantity,
-                    sender_id: user.id,
-                    sender_name: senderName,
-                    receiver_id: finalRecipientId,
-                    timestamp: new Date().toISOString()
-                  }
-                });
-                // Unsubscribe after sending
-                setTimeout(() => {
-                  supabase.removeChannel(channel);
-                }, 1000);
-              }
-            });
+            const payload = {
+              id: generateUUID(),
+              gift_id: gift.id,
+              gift_slug: gift.slug,
+              gift_name: gift.name,
+              gift_icon: giftIcon,
+              amount: gift.coinCost * quantity,
+              quantity: quantity,
+              sender_id: user.id,
+              sender_name: senderName,
+              receiver_id: finalRecipientId,
+              timestamp: new Date().toISOString()
+            };
+            
+            // Use shared channel if available, otherwise create new one
+            if (sharedChannel) {
+              // Use the shared channel that's already subscribed
+              await sharedChannel.send({
+                type: 'broadcast',
+                event: 'gift_sent',
+                payload
+              });
+              console.log('[GiftSystem] Gift broadcast via shared channel');
+            } else {
+              // Fallback: create ephemeral channel with the SAME name as the main stream channel
+              // This ensures all users receive the broadcast regardless of when they joined
+              const channel = supabase.channel(`stream:${streamId}`);
+              
+              // Subscribe and send immediately
+              channel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                  channel.send({
+                    type: 'broadcast',
+                    event: 'gift_sent',
+                    payload
+                  });
+                  console.log('[GiftSystem] Gift broadcast via ephemeral channel (stream:${streamId})');
+                  
+                  // Clean up after a short delay
+                  setTimeout(() => {
+                    supabase.removeChannel(channel);
+                  }, 500);
+                }
+              });
+            }
           }
         } catch (broadcastErr) {
           console.warn('[GiftSystem] Could not broadcast gift event:', broadcastErr);

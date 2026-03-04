@@ -32,17 +32,73 @@ export const useXPStore = create<XPState>((set) => {
   }
 
   const _computeXpState = (data: {
-    level?: number; xp?: number; total_xp?: number; next_level_xp?: number;
+    level?: number; xp?: number; total_xp?: number; next_level_xp?: number; xp_total?: number; xp_to_next_level?: number;
     current_level?: number; current_xp?: number; buyer_level?: number; buyer_xp?: number; stream_level?: number; stream_xp?: number;
     [key: string]: any;
   }) => {
-    const levelValue = data.level || data.current_level || data.buyer_level || 1;
-    const absoluteXp = data.total_xp || data.xp || 0;
-    const nextLevelAbsolute = data.next_level_xp || (levelValue * 100) + 100;
-    const prevLevelAbsolute = levelValue * 100;
+    // Use xp_total from user_stats table (as calculated by SQL migration)
+    const absoluteXp = data.xp_total || data.total_xp || data.xp || 0;
+    
+    // Calculate level based on the same thresholds as the SQL migration
+    let levelValue = 1;
+    let xpNeededThisLevel = 100;  // XP needed to reach next level
+    let prevLevelAbsolute = 0;    // XP at start of current level
+    let nextLevelAbsolute = 100;  // XP needed to reach next level
+    
+    if (absoluteXp < 100) {
+      levelValue = 1;
+      xpNeededThisLevel = 100;
+      prevLevelAbsolute = 0;
+      nextLevelAbsolute = 100;
+    } else if (absoluteXp < 250) {
+      levelValue = 2;
+      xpNeededThisLevel = 150;
+      prevLevelAbsolute = 100;
+      nextLevelAbsolute = 250;
+    } else if (absoluteXp < 500) {
+      levelValue = 3;
+      xpNeededThisLevel = 250;
+      prevLevelAbsolute = 250;
+      nextLevelAbsolute = 500;
+    } else if (absoluteXp < 800) {
+      levelValue = 4;
+      xpNeededThisLevel = 300;
+      prevLevelAbsolute = 500;
+      nextLevelAbsolute = 800;
+    } else if (absoluteXp < 1200) {
+      levelValue = 5;
+      xpNeededThisLevel = 400;
+      prevLevelAbsolute = 800;
+      nextLevelAbsolute = 1200;
+    } else if (absoluteXp < 1700) {
+      levelValue = 6;
+      xpNeededThisLevel = 500;
+      prevLevelAbsolute = 1200;
+      nextLevelAbsolute = 1700;
+    } else if (absoluteXp < 2300) {
+      levelValue = 7;
+      xpNeededThisLevel = 600;
+      prevLevelAbsolute = 1700;
+      nextLevelAbsolute = 2300;
+    } else if (absoluteXp < 3000) {
+      levelValue = 8;
+      xpNeededThisLevel = 700;
+      prevLevelAbsolute = 2300;
+      nextLevelAbsolute = 3000;
+    } else if (absoluteXp < 4000) {
+      levelValue = 9;
+      xpNeededThisLevel = 1000;
+      prevLevelAbsolute = 3000;
+      nextLevelAbsolute = 4000;
+    } else {
+      // Level 10+: Each level requires 1000 more XP
+      levelValue = 10 + Math.floor((absoluteXp - 4000) / 1000);
+      xpNeededThisLevel = 1000;
+      prevLevelAbsolute = 4000 + ((levelValue - 10) * 1000);
+      nextLevelAbsolute = prevLevelAbsolute + 1000;
+    }
 
     const xpIntoLevel = Math.max(0, absoluteXp - prevLevelAbsolute);
-    const xpNeededThisLevel = Math.max(1, nextLevelAbsolute - prevLevelAbsolute);
     const progressValue = Math.min(100, (xpIntoLevel / xpNeededThisLevel) * 100);
 
     console.log('XP Store computed:', { levelValue, absoluteXp, xpIntoLevel, xpNeededThisLevel, progressValue });
@@ -141,46 +197,86 @@ export const useXPStore = create<XPState>((set) => {
     },
 
     subscribeToXP: (userId: string) => {
-      if (channel) return
+      // Unsubscribe from any existing channel first
+      if (channel) {
+        supabase.removeChannel(channel)
+        channel = null
+      }
 
+      // Skip guest users
+      if (!userId || userId.startsWith('TC-')) {
+        console.log('[XP Store] Guest user, skipping subscription')
+        return
+      }
+
+      console.log('[XP Store] Subscribing to user_stats for user:', userId)
+
+      // Create a unique channel name for this user
+      const channelName = `user_stats_changes_${userId}_${Date.now()}`
+      
       channel = supabase
-        .channel(`public:user_stats:${userId}`)
+        .channel(channelName)
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
             schema: 'public',
             table: 'user_stats',
             filter: `user_id=eq.${userId}`
           },
           (payload) => {
-            console.log('XP Update received:', payload)
+            console.log('[XP Store] Realtime update received:', payload)
+            
+            if (payload.eventType === 'DELETE') {
+              console.log('[XP Store] User stats deleted, resetting')
+              set({
+                xpTotal: 0,
+                level: 1,
+                buyerLevel: 1,
+                streamLevel: 1,
+                xpToNext: 100,
+                progress: 0,
+                isLoading: false
+              })
+              syncAuthProfile(1, 0, 100)
+              return
+            }
+            
             if (payload.new) {
               const data = payload.new as any;
+              console.log('[XP Store] Processing new data:', data)
+              
               const { levelValue, totalXp, xpToNext, progressValue, nextLevelAbsolute } = _computeXpState(data);
+
+              console.log('[XP Store] Computed state:', { levelValue, totalXp, xpToNext, progressValue })
 
               set({
                 xpTotal: totalXp,
                 level: levelValue,
+                buyerLevel: levelValue,
+                streamLevel: levelValue,
                 xpToNext: xpToNext,
-                progress: progressValue
+                progress: progressValue,
+                isLoading: false
               });
               syncAuthProfile(levelValue, totalXp, nextLevelAbsolute);
-            } else {
-                set({
-                    xpTotal: 0,
-                    level: 1,
-                    buyerLevel: 1,
-                    streamLevel: 1,
-                    xpToNext: 100,
-                    progress: 0,
-                    isLoading: false
-                 })
-                 syncAuthProfile(1, 0, 100)
             }
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+          console.log('[XP Store] Subscription status:', status)
+          if (status === 'CHANNEL_ERROR') {
+            console.error('[XP Store] Channel error, will retry in 5s')
+            // Retry subscription after delay
+            setTimeout(() => {
+              if (channel) {
+                supabase.removeChannel(channel)
+                channel = null
+              }
+              useXPStore.getState().subscribeToXP(userId)
+            }, 5000)
+          }
+        })
     },
 
     unsubscribe: () => {

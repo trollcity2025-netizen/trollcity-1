@@ -150,11 +150,12 @@ export default function BroadcastControls({
   const myAttributes = user ? attributes[user.id] : null;
   const activePerks = myAttributes?.activePerks || [];
   
-  const isStaff = isAdmin || profile?.troll_role === 'admin' || profile?.troll_role === 'moderator' || isModerator;
-  const canManageStream = isHost || isStaff;
-  // Only Host can control stream settings (Visuals, Price, Boxes)
-  // Staff/Mods can moderate (ban users), but NOT change stream settings (unless specified)
-  const canEditStream = isHost || (isStaff && !isModerator); // Only true staff can edit stream settings, mods just moderate chat/users
+  // Only true admins can control broadcaster streams - NOT moderators
+  const isTrueAdmin = isAdmin || profile?.troll_role === 'admin';
+  const canManageStream = isHost || isTrueAdmin;
+  // Only Host and Admins can control stream settings (Visuals, Price, Boxes)
+  // Moderators can NOT control broadcaster streams
+  const canEditStream = isHost || isTrueAdmin;
 
   const togglePerk = async (perkId: string) => {
     if (!user) return;

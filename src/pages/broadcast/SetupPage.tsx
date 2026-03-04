@@ -721,6 +721,12 @@ export default function SetupPage() {
       return;
     }
 
+    // Check follower requirement for ALL broadcast categories
+    if (followerCount < 1) {
+      toast.error('You need at least 1 follower to start a broadcast');
+      return;
+    }
+
     // Check religion requirement for spiritual category
     if (categoryRequiresReligion && !selectedReligion) {
       toast.error('Please select your religion');
@@ -982,36 +988,34 @@ export default function SetupPage() {
           <span className="font-semibold">{categoryMatchingTerm} Available</span>
         </div>
         
+        {/* Follower requirement indicator for ALL categories */}
+        <div className="flex items-center justify-between text-sm border-t border-white/10 pt-2 mt-2">
+          <span className="text-gray-300">Followers Required:</span>
+          <span className={`font-bold ${followerCount >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+            {followerCount} / 1
+          </span>
+        </div>
+        
         {category === 'trollmers' && (
           <>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300">Followers:</span>
-              <span className={`font-bold ${followerCount >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-                {followerCount} / 1
-              </span>
-            </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-300">Camera Ready:</span>
               <span className={`font-bold ${isVideoEnabled ? 'text-green-400' : 'text-red-400'}`}>
                 {isVideoEnabled ? '✓ Yes' : '✗ No'}
               </span>
             </div>
-            {followerCount < 1 && !isVideoEnabled && (
-              <p className="text-xs text-amber-300 mt-2">
-                ⚠️ Trollmers requires 1+ followers and camera enabled
-              </p>
-            )}
-            {followerCount < 1 && isVideoEnabled && (
-              <p className="text-xs text-amber-300 mt-2">
-                ⚠️ Trollmers requires 1+ followers
-              </p>
-            )}
-            {followerCount >= 1 && !isVideoEnabled && (
+            {!isVideoEnabled && (
               <p className="text-xs text-amber-300 mt-2">
                 ⚠️ Trollmers requires camera enabled
               </p>
             )}
           </>
+        )}
+        
+        {followerCount < 1 && (
+          <p className="text-xs text-amber-300 mt-2">
+            ⚠️ You need at least 1 follower to start any broadcast
+          </p>
         )}
         
         {category === 'business' && (

@@ -26,8 +26,9 @@ const EntranceEffects = () => {
       // Load entrance effects from database table (not hardcoded)
       const { data, error } = await supabase
         .from('entrance_effects')
-        .select('id, name, coin_cost, rarity, animation_type, category')
+        .select('id, name, coin_cost, rarity, animation_type, category, description, icon')
         .neq('category', 'gift') // Exclude gifts that might be in the same table/view
+        .eq('is_active', true) // Only show active effects
         .order('coin_cost', { ascending: true })
       
       if (error) {
@@ -35,24 +36,20 @@ const EntranceEffects = () => {
         // Fallback to hardcoded defaults if table doesn't exist
         setEffects(DEFAULT_EFFECTS)
       } else if (data && data.length > 0) {
-        // Map database rows to EntranceEffect type and filter out effects not present in hardcoded data
-          const validDbEffects = data.map((row: any) => ({
-            id: row.id,
-            name: row.name,
-            coin_cost: row.coin_cost,
-            rarity: row.rarity || 'Standard',
-            animation_type: row.animation_type || 'default',
-            icon: '✨', // Default icon, as it's not in DB schema
-            description: `${row.rarity || 'Standard'} effect`, // Default description
-            image_url: `https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(row.name)}&image_size=square`
-          } as EntranceEffect)).filter(dbEffect => DEFAULT_EFFECTS.some(defaultEffect => defaultEffect.id === dbEffect.id));
-          
-          if (validDbEffects.length > 0) {
-            setEffects(validDbEffects);
-          } else {
-            // Fallback to hardcoded defaults if no valid effects from DB
-            setEffects(DEFAULT_EFFECTS);
-          }
+        // Map database rows to EntranceEffect type - NO LONGER FILTERING against hardcoded list
+        // This allows database-driven effects to work without code changes
+        const dbEffects = data.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          coin_cost: row.coin_cost,
+          rarity: row.rarity || 'Standard',
+          animation_type: row.animation_type || 'default',
+          icon: row.icon || '✨', // Use icon from DB or default
+          description: row.description || `${row.rarity || 'Standard'} entrance effect`,
+          image_url: `https://trae-api-us.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(row.name + ' entrance effect')}&image_size=square`
+        } as EntranceEffect));
+        
+        setEffects(dbEffects);
       } else {
         // Use defaults if table is empty
         setEffects(DEFAULT_EFFECTS)

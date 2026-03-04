@@ -315,10 +315,10 @@ function BroadcastPage() {
     
     const pollInterval = setInterval(async () => {
       try {
-        // Always poll for box_count, has_rgb_effect, total_likes, and battle status updates
+        // Always poll for box_count, has_rgb_effect, total_likes, seat_price, and battle status updates
         const { data, error } = await supabase
           .from('streams')
-          .select('mux_playback_id, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked, total_likes')
+          .select('mux_playback_id, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked, total_likes, seat_price')
           .eq('id', streamId)
           .single();
         
@@ -369,6 +369,14 @@ function BroadcastPage() {
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, total_likes: data.total_likes };
+          });
+        }
+        
+        // Check for seat_price changes
+        if (data?.seat_price !== undefined && data.seat_price !== streamRef.current?.seat_price) {
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, seat_price: data.seat_price };
           });
         }
         
@@ -447,7 +455,8 @@ function BroadcastPage() {
               streamRef.current.box_count === payload.new.box_count &&
               streamRef.current.has_rgb_effect === payload.new.has_rgb_effect &&
               streamRef.current.are_seats_locked === payload.new.are_seats_locked &&
-              streamRef.current.total_likes === payload.new.total_likes) {
+              streamRef.current.total_likes === payload.new.total_likes &&
+              streamRef.current.seat_price === payload.new.seat_price) {
             return;
           }
           
@@ -460,6 +469,7 @@ function BroadcastPage() {
                 has_rgb_effect: payload.new.has_rgb_effect,
                 are_seats_locked: payload.new.are_seats_locked,
                 total_likes: payload.new.total_likes,
+                seat_price: payload.new.seat_price,
                 status: payload.new.status,
                 is_live: payload.new.is_live
               };
@@ -959,7 +969,7 @@ function BroadcastPage() {
           try {
             await supabase
               .from('streams')
-              .update({ is_live: true })
+              .update({ is_live: true, status: 'live' })
               .eq('id', stream.id);
             console.log('[BroadcastPage] Stream marked as live');
           } catch (liveErr) {
@@ -1571,16 +1581,20 @@ function BroadcastPage() {
               broadcasterId={stream.user_id}
               activeUserIds={activeUserIds}
               userProfiles={userProfiles}
+              sharedChannel={channelRef.current}
               onGiftSent={(giftData: GiftItem, target: GiftTarget) => {
                 const quantity = target.quantity || 1;
+                console.log('[BroadcastPage] onGiftSent called:', { giftData, target, userId: user?.id });
+                
                 // Handle gift target for animation positioning
                 if (target.type === 'all') {
                   // Send to all users - create multiple gift animations
                   const allRecipients = [stream.user_id, ...activeUserIds];
+                  console.log('[BroadcastPage] Creating gift animations for all recipients:', allRecipients);
                   allRecipients.forEach((recipientId, index) => {
                     setTimeout(() => {
                       const newGift: BroadcastGift = {
-                        id: `local-${Date.now()}-${index}`,
+                        id: `local-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
                         gift_id: giftData.id,
                         gift_name: giftData.name,
                         gift_icon: giftData.icon || '🎁',
@@ -1591,13 +1605,19 @@ function BroadcastPage() {
                         receiver_id: recipientId,
                         created_at: new Date().toISOString(),
                       };
-                      setRecentGifts(prev => [...prev, newGift]);
+                      console.log('[BroadcastPage] Adding gift to recentGifts (all):', newGift);
+                      setRecentGifts(prev => {
+                        const updated = [...prev, newGift];
+                        console.log('[BroadcastPage] Updated recentGifts count:', updated.length);
+                        return updated;
+                      });
                     }, index * 200); // Stagger animations
                   });
                 } else {
                   // Single recipient
+                  const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
                   const newGift: BroadcastGift = {
-                    id: `local-${Date.now()}`,
+                    id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     gift_id: giftData.id,
                     gift_name: giftData.name,
                     gift_icon: giftData.icon || '🎁',
@@ -1605,10 +1625,15 @@ function BroadcastPage() {
                     quantity,
                     sender_id: user?.id || '',
                     sender_name: profile?.username || 'You',
-                    receiver_id: target.userId || giftRecipientId || stream?.user_id || '',
+                    receiver_id: recipientId,
                     created_at: new Date().toISOString(),
                   };
-                  setRecentGifts(prev => [...prev, newGift]);
+                  console.log('[BroadcastPage] Adding gift to recentGifts (single):', newGift);
+                  setRecentGifts(prev => {
+                    const updated = [...prev, newGift];
+                    console.log('[BroadcastPage] Updated recentGifts count:', updated.length);
+                    return updated;
+                  });
                 }
               }}
             />

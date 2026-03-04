@@ -168,10 +168,31 @@ export default function UserActionModal({
           toast.error("Cannot ban staff members.");
           return;
       }
+
+      // Check for ban insurance - only admins/moderators can ban users with insurance
+      const isProtected = await shouldBlockKick(userId);
+      
+      if (isProtected) {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          const { data: currentUserProfile } = await supabase
+              .from('user_profiles')
+              .select('role, troll_role')
+              .eq('id', currentUser?.id)
+              .maybeSingle();
+              
+          const isKickerAdmin = currentUserProfile?.role === 'admin' || currentUserProfile?.troll_role === 'admin';
+          const isKickerModerator = currentUserProfile?.role === 'moderator' || currentUserProfile?.troll_role === 'troll_officer';
+          
+          if (!isKickerAdmin && !isKickerModerator) {
+              toast.error("This user has Insurance! Only admins can ban insured users.");
+              return;
+          }
+      }
+
       if (!confirm("Permanently BAN this user from your broadcasts?")) return;
       
-      const { data, error } = await supabase.rpc('ban_user_from_stream', { 
-          p_stream_id: streamId, 
+      const { data, error } = await supabase.rpc('ban_user_from_stream', {
+          p_stream_id: streamId,
           p_user_id: userId,
           p_reason: 'Manual Ban'
       });

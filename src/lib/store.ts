@@ -3,6 +3,12 @@ import { persist } from 'zustand/middleware'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, UserProfile, UserRole, validateProfile, ensureSupabaseSession } from '../lib/supabase'
 
+// Module-level debounce tracking
+let lastProfileUpdateTime = 0
+let lastRefreshProfileTime = 0
+const PROFILE_UPDATE_DEBOUNCE_MS = 2000 // 2 seconds
+const REFRESH_PROFILE_DEBOUNCE_MS = 3000 // 3 seconds - prevents multiple full refreshes
+
 interface AuthState {
   user: User | null
   session: Session | null
@@ -56,7 +62,15 @@ export const useAuthStore = create<AuthState>()(
       setProfile: (profile) => {
         const prevProfile = get().profile;
 
+        // Debounce: prevent multiple updates within 2 seconds
+        const now = Date.now()
+        if (now - lastProfileUpdateTime < PROFILE_UPDATE_DEBOUNCE_MS) {
+          // Too soon - skip this update
+          return
+        }
+
         if (!profile) {
+          lastProfileUpdateTime = now
           set({ profile: null, isAdmin: null })
           return
         }
@@ -132,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
         if ((import.meta as any).env?.DEV) {
           console.log('Profile updated:', profile?.username, profile?.role)
         }
+        lastProfileUpdateTime = now
         set({ profile, isAdmin: hasAdminFlag })
       },
 
@@ -146,6 +161,14 @@ export const useAuthStore = create<AuthState>()(
         const state = get()
         const u = state.user
         if (!u) return
+
+        // Global debounce: prevent multiple refreshes within 3 seconds
+        const now = Date.now()
+        if (now - lastRefreshProfileTime < REFRESH_PROFILE_DEBOUNCE_MS) {
+          console.log('[refreshProfile] Skipping - refreshed too recently')
+          return
+        }
+        lastRefreshProfileTime = now
 
         // Prevent concurrent refreshes
         if (state.isRefreshing) {
@@ -205,7 +228,8 @@ export const useAuthStore = create<AuthState>()(
                   profileData = updatedProfile as any
                 }
 
-                // B. RGB Perk Sync
+                // B. RGB Perk Sync - only update if there's an actual change
+                // and avoid DB updates that would trigger postgres_changes cascade
                 const nowIso = new Date().toISOString()
                 const { data: rgbPerk } = await supabase
                   .from('user_perks')
@@ -221,16 +245,38 @@ export const useAuthStore = create<AuthState>()(
                 const desiredRgb = rgbPerk?.expires_at || null
                 const currentRgb = profileData?.rgb_username_expires_at || null
 
+                // Only update state locally without DB write if the value differs
+                // This prevents triggering postgres_changes events that cause refresh loops
                 if (desiredRgb !== currentRgb) {
-                  const { error: rgbUpdateError } = await supabase
-                    .from('user_profiles')
-                    .update({ rgb_username_expires_at: desiredRgb })
-                    .eq('id', u.id)
+                  // Check if we've recently updated this field to avoid rapid re-updates
+                  const lastRgbUpdate = (profileData as any)?._lastRgbUpdate || 0
+                  const now = Date.now()
+                  const RGB_UPDATE_COOLDOWN_MS = 60000 // 1 minute cooldown
+                  
+                  if (now - lastRgbUpdate > RGB_UPDATE_COOLDOWN_MS) {
+                    // Update DB only if enough time has passed
+                    const { error: rgbUpdateError } = await supabase
+                      .from('user_profiles')
+                      .update({ rgb_username_expires_at: desiredRgb })
+                      .eq('id', u.id)
 
-                  if (!rgbUpdateError) {
-                     const currentProfile = get().profile || profileData
-                     const updatedProfile = { ...currentProfile, rgb_username_expires_at: desiredRgb }
-                     get().setProfile(updatedProfile as UserProfile)
+                    if (!rgbUpdateError) {
+                       const currentProfile = get().profile || profileData
+                       const updatedProfile = {
+                         ...currentProfile,
+                         rgb_username_expires_at: desiredRgb,
+                         _lastRgbUpdate: now // Track when we last updated
+                       }
+                       get().setProfile(updatedProfile as UserProfile)
+                    }
+                  } else {
+                    // Just update local state without DB write
+                    const currentProfile = get().profile || profileData
+                    const updatedProfile = {
+                      ...currentProfile,
+                      rgb_username_expires_at: desiredRgb
+                    }
+                    get().setProfile(updatedProfile as UserProfile)
                   }
                 }
               } catch (secondaryErr) {
