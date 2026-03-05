@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { AuthApiError } from '@supabase/supabase-js'
 import { supabase, isAdminEmail } from '../lib/supabase'
 import { post, API_ENDPOINTS } from '../lib/api'
@@ -19,7 +19,7 @@ interface AuthProps {
 const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = {}) => {
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
-  const initialIsLogin = initialMode 
+  const initialIsLogin = initialMode
     ? initialMode === 'login'
     : searchParams.get('mode') === 'signup' ? false : true
   const [isLogin, setIsLogin] = useState(initialIsLogin)
@@ -38,6 +38,9 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
   const [queueEmail, setQueueEmail] = useState('')
   const [queueUsername, setQueueUsername] = useState('')
   const [nextWindow, setNextWindow] = useState<Date | null>(null)
+  const [virusPrank, setVirusPrank] = useState<'none' | 'virus' | 'trolled'>('none')
+  const [hasShownPrank, setHasShownPrank] = useState(false)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const navigate = useNavigate()
   const { user, profile, setAuth, setProfile } = useAuthStore()
   
@@ -117,27 +120,64 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
   const [timeLeft, setTimeLeft] = useState('')
   useEffect(() => {
     if (!nextWindow || !dailyLimitReached) return
-    
+
     const updateTimer = () => {
       const now = new Date()
       const diff = nextWindow.getTime() - now.getTime()
-      
+
       if (diff <= 0) {
         setDailyLimitReached(false)
         return
       }
-      
+
       const hours = Math.floor(diff / (1000 * 60 * 60))
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
       const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-      
+
       setTimeLeft(`${hours}h ${minutes}m ${seconds}s`)
     }
-    
+
     updateTimer()
     const interval = setInterval(updateTimer, 1000)
     return () => clearInterval(interval)
   }, [nextWindow, dailyLimitReached])
+
+  // Virus prank: Show immediately when entering signup mode
+  useEffect(() => {
+    console.log('[Virus Prank] Effect triggered. isLogin:', isLogin, 'hasShownPrank:', hasShownPrank, 'dailyLimitReached:', dailyLimitReached)
+
+    // Only trigger during signup mode, not login
+    if (isLogin) {
+      console.log('[Virus Prank] Skipped - user is in login mode')
+      return
+    }
+
+    if (hasShownPrank) {
+      console.log('[Virus Prank] Skipped - already shown this session')
+      return
+    }
+
+    // Show virus prank immediately for every user at signup
+    const showPrank = () => {
+      console.log('[Virus Prank] Showing virus alert!')
+      setVirusPrank('virus')
+      setHasShownPrank(true)
+
+      // After 1.5 seconds, switch to the "You got trolled" message
+      setTimeout(() => {
+        console.log('[Virus Prank] Switching to trolled message')
+        setVirusPrank('trolled')
+      }, 1500)
+    }
+
+    // Small delay to let the page load first
+    console.log('[Virus Prank] Setting timer to show prank in 800ms')
+    const timer = setTimeout(showPrank, 800)
+
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [isLogin, hasShownPrank, dailyLimitReached])
   
   // Get referral code from URL
   const referralCode = searchParams.get('ref') || ''
@@ -779,8 +819,47 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
           />
         </div>
         */}
+
+        {/* Virus Prank Modal */}
+        {virusPrank !== 'none' && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-4 bg-black/90 backdrop-blur-md">
+            <div className="w-full max-w-sm rounded-2xl bg-red-950/95 border-4 border-red-500 shadow-[0_0_80px_rgba(239,68,68,0.8)] p-8 text-center animate-in zoom-in duration-300">
+              {virusPrank === 'virus' ? (
+                <>
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-red-500/30 flex items-center justify-center animate-pulse">
+                    <svg className="w-14 h-14 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.824 0L3.6 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-3xl font-bold text-red-400 mb-2">⚠️ VIRUS DETECTED ⚠️</h2>
+                  <p className="text-red-300 text-lg">You have contracted a virus!</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-yellow-500/30 flex items-center justify-center">
+                    <span className="text-5xl">😂</span>
+                  </div>
+                  <h2 className="text-3xl font-bold text-yellow-400 mb-2">You Just Got Trolled!</h2>
+                  <div className="flex justify-center gap-3 text-4xl my-4">
+                    <span className="animate-bounce">😂</span>
+                    <span className="animate-bounce" style={{ animationDelay: '0.1s' }}>🤣</span>
+                    <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>😆</span>
+                    <span className="animate-bounce" style={{ animationDelay: '0.3s' }}>😂</span>
+                  </div>
+                  <button
+                    onClick={() => setVirusPrank('none')}
+                    className="mt-4 px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-bold text-lg hover:shadow-lg transition-all"
+                  >
+                    Continue to Sign Up
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       </div>
+
       {/* Alert Admin Modal */}
       {showAlertAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-4">

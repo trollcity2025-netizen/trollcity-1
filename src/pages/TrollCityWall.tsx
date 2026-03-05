@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { 
-  MessageSquare, Heart, Plus, Video, Sword, Users, Trophy, 
+import {
+  MessageSquare, Heart, Plus, Video, Sword, Users, Trophy,
   Zap, ExternalLink, Trash2, Share2, Reply, Gift, Smile, Pin
 } from 'lucide-react'
 import { WallPost, WallPostType } from '../types/trollWall'
@@ -12,6 +12,7 @@ import CreatePostModal from '../components/trollWall/CreatePostModal'
 import GiftModal from '../components/trollWall/GiftModal'
 import DailyLoginWall from '../components/trollWall/DailyLoginWall'
 import UserNameWithAge from '../components/UserNameWithAge'
+import { emitEvent } from '../lib/events'
 import { Virtuoso } from 'react-virtuoso'
 
 // Available reactions
@@ -354,6 +355,15 @@ export default function TrollCityWall() {
             return p
           })
         )
+
+        // Emit reaction event for troll system (only on add, not remove)
+        if (!data.removed && user?.id) {
+          emitEvent('reaction_added', user.id, {
+            postId,
+            reactionType,
+            targetUserId: posts.find(p => p.id === postId)?.user_id
+          })
+        }
       }
       setShowReactions(null)
     } catch (err: any) {
@@ -399,6 +409,16 @@ export default function TrollCityWall() {
                 newGifts[giftType] = {
                   count: newGifts[giftType].count + 1,
                   coins: newGifts[giftType].coins + gift.cost
+                }
+
+                // Emit coin spent event for troll system
+                if (user?.id) {
+                  emitEvent('coin_spent', user.id, {
+                    amount: gift.cost,
+                    giftType,
+                    postId,
+                    recipientId: p.user_id
+                  })
                 }
               }
               return { ...p, gifts: newGifts }

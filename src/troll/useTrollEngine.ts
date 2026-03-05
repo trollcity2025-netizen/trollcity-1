@@ -52,8 +52,8 @@ const EVENT_TYPE_PROBABILITIES: Record<Rarity, Array<{ type: TrollEventType; pro
   ],
 };
 
-// Cooldown duration (2 minutes)
-const COOLDOWN_DURATION = 2 * 60 * 1000;
+// Cooldown duration (30 seconds for testing, change to 2 * 60 * 1000 for production)
+const COOLDOWN_DURATION = 30 * 1000;
 
 // Safe contexts where trolls should not trigger
 const SAFE_CONTEXTS = [
@@ -63,6 +63,12 @@ const SAFE_CONTEXTS = [
   'authentication',
   'moderation',
   'account_settings',
+  'court',
+  'church',
+  'news',
+  'tcnn',
+  'broadcast',
+  'stream',
 ];
 
 // Hook for triggering troll events
@@ -80,9 +86,8 @@ export const useTrollEngine = () => {
       return false;
     }
 
-    // Roll probability (adjust based on rarity)
-    const roll = Math.random();
-    return roll < 0.1; // 10% chance to trigger (adjust as needed)
+    // Always allow when called (probability handled by action count in TrollProvider)
+    return true;
   }, [lastTrollTime]);
 
   // Select a random rarity based on probabilities
@@ -142,20 +147,25 @@ export const useTrollEngine = () => {
 
   // Trigger a troll event
   const triggerTroll = useCallback((context?: string, options?: { safe?: boolean }) => {
+    console.log('[TrollEngine] Trigger attempt. Context:', context, 'Safe:', options?.safe);
+
     // Check if safe mode or safe context
-    if (options?.safe || (context && SAFE_CONTEXTS.some(safeContext => 
+    if (options?.safe || (context && SAFE_CONTEXTS.some(safeContext =>
       context.toLowerCase().includes(safeContext.toLowerCase())
     ))) {
+      console.log('[TrollEngine] Blocked - safe context');
       return null;
     }
 
     // Check if a troll is already active
     if (isTrollActive) {
+      console.log('[TrollEngine] Blocked - troll already active');
       return null;
     }
 
     // Determine if we should trigger a troll
     if (!shouldTriggerTroll()) {
+      console.log('[TrollEngine] Blocked - probability check failed or cooldown');
       return null;
     }
 
@@ -163,6 +173,7 @@ export const useTrollEngine = () => {
     const event = createTrollEvent();
     setLastTrollTime(Date.now());
     setIsTrollActive(true);
+    console.log('[TrollEngine] Troll triggered:', event.type, 'Rarity:', event.rarity);
 
     return event;
   }, [isTrollActive, shouldTriggerTroll, createTrollEvent]);
@@ -172,39 +183,31 @@ export const useTrollEngine = () => {
     setIsTrollActive(false);
   }, []);
 
-  // Background troll trigger
+  // Background troll trigger - simplified and more reliable
   useEffect(() => {
-    const startBackgroundTrolling = () => {
-      const interval = setInterval(() => {
-        // Random timer between 3-10 minutes
-        const nextTrollDelay = (3 + Math.random() * 7) * 60 * 1000;
+    // Trigger a background troll check every 1-3 minutes
+    const checkInterval = setInterval(() => {
+      if (!isTrollActive) {
+        const roll = Math.random();
+        // 20% chance every 1-3 minutes for background trolls
+        if (roll < 0.2) {
+          const event = createTrollEvent();
+          setLastTrollTime(Date.now());
+          setIsTrollActive(true);
+          console.log('[TrollEngine] Background troll triggered:', event.type);
 
-        const timeout = setTimeout(() => {
-          // Trigger a random background troll
-          if (!isTrollActive && shouldTriggerTroll()) {
-            const event = createTrollEvent();
-            setLastTrollTime(Date.now());
-            setIsTrollActive(true);
-            
-            // Auto-complete the troll after duration
-            setTimeout(() => {
-              setIsTrollActive(false);
-            }, event.duration);
-          }
-        }, nextTrollDelay);
-
-        return timeout;
-      }, 0);
-
-      return interval;
-    };
-
-    const backgroundInterval = startBackgroundTrolling();
+          // Auto-complete the troll after duration
+          setTimeout(() => {
+            setIsTrollActive(false);
+          }, event.duration);
+        }
+      }
+    }, (1 + Math.random() * 2) * 60 * 1000); // 1-3 minutes
 
     return () => {
-      clearInterval(backgroundInterval);
+      clearInterval(checkInterval);
     };
-  }, [isTrollActive, shouldTriggerTroll, createTrollEvent]);
+  }, [isTrollActive, createTrollEvent]);
 
   return {
     triggerTroll,

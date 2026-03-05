@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../lib/store'
 import { useJailMode } from '../../../hooks/useJailMode'
 import { canMessageAdmin } from '../../../lib/perkEffects'
 import { chargeMessageCost } from '../../../lib/profileViewPayment'
+import { emitEvent } from '../../../lib/events'
 import { toast } from 'sonner'
 
 interface MessageInputProps {
@@ -198,7 +199,14 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
       }
       
       await sendConversationMessage(conversationId, currentMessage)
-      
+
+      // Emit chat message event for troll system
+      emitEvent('chat_message_sent', profile.id, {
+        conversationId,
+        recipientId: otherUserId,
+        messageLength: currentMessage.length
+      })
+
       // Notify the user via push/system notification
       await sendNotification(
         otherUserId,
