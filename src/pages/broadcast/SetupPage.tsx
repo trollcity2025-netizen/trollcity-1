@@ -884,11 +884,11 @@ export default function SetupPage() {
         });
       }
 
-      // Update stream status
+      // Update stream status to 'live' immediately so other broadcasters can see it
       await supabase
         .from('streams')
         .update({
-          status: 'starting',
+          status: 'live',
           is_live: true,
           started_at: new Date().toISOString()
         })
@@ -1064,6 +1064,12 @@ export default function SetupPage() {
         return (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm">
             <p className="text-red-300">📺 Official TCNN broadcast - News Caster role required</p>
+          </div>
+        );
+      case 'trollmers':
+        return (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm">
+            <p className="text-amber-300">⚔️ Battle mode - Challenge other broadcasters head-to-head!</p>
           </div>
         );
       default:

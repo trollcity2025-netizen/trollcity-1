@@ -9,7 +9,6 @@ import { useAuthStore } from '../../lib/store'
 import { useChatStore } from '../../lib/chatStore'
 import { setupGlobalMessageNotifications, OFFICER_GROUP_CONVERSATION_ID } from '../../lib/supabase'
 import ChatBubble from '../ChatBubble'
-import { toast } from 'sonner'
 
 
 import GlobalTicker from '../header/GlobalTicker';
@@ -35,33 +34,19 @@ export default function AppLayout({
   const isLivePage = location.pathname.startsWith('/live/') || location.pathname.startsWith('/broadcast/');
   const isKeyboardVisible = false;
 
-  // Setup global message notifications
+  // Setup global message notifications - opens chat bubble when message received
   useEffect(() => {
     if (!user?.id) return
     
     const cleanup = setupGlobalMessageNotifications(
       user.id,
-      (senderId, senderUsername, senderAvatar, isOpsMessage, messageBody) => {
+      (senderId, senderUsername, senderAvatar, isOpsMessage, _messageBody) => {
         const { openChatBubble } = useChatStore.getState()
         
-        // Show toast notification with message content and open chat bubble
+        // Open chat bubble directly without toast notification
         if (isOpsMessage) {
-          toast.info(`🛡️ Officer Operations: ${messageBody ? messageBody.substring(0, 50) + (messageBody.length > 50 ? '...' : '') : 'New message'}`, {
-            duration: 4000,
-            action: {
-              label: 'Open',
-              onClick: () => openChatBubble(OFFICER_GROUP_CONVERSATION_ID, '🛡️ Officer Operations', null)
-            }
-          })
           openChatBubble(OFFICER_GROUP_CONVERSATION_ID, '🛡️ Officer Operations', null)
         } else {
-          toast.info(`💬 ${senderUsername}: ${messageBody ? messageBody.substring(0, 50) + (messageBody.length > 50 ? '...' : '') : 'New message'}`, {
-            duration: 4000,
-            action: {
-              label: 'Open',
-              onClick: () => openChatBubble(senderId, senderUsername, senderAvatar)
-            }
-          })
           openChatBubble(senderId, senderUsername, senderAvatar)
         }
       }
@@ -77,10 +62,10 @@ export default function AppLayout({
   const effectiveShowSidebar = showSidebar && showLegacySidebar && !isAuthPage && !isLivePage;
   const effectiveShowHeader = showHeader && !isAuthPage && !isLivePage;
   const effectiveShowBottomNav = showBottomNav && !isAuthPage;
-  const mainPaddingClass = effectiveShowBottomNav ? 'app-content app-content--with-nav' : 'app-content app-content--no-nav';
+  const mainPaddingClass = effectiveShowBottomNav ? 'pb-[calc(var(--bottom-nav-height,64px)+env(safe-area-inset-bottom,0px))]' : '';
 
   return (
-    <div className="app-viewport w-screen overflow-hidden text-white flex relative">
+    <div className="app-viewport w-screen h-screen overflow-hidden text-white flex relative">
       <PurchaseRequiredModal />
       {/* Desktop Sidebar - Hidden on Mobile */}
       {effectiveShowSidebar && (
@@ -107,7 +92,7 @@ export default function AppLayout({
 
         {/* Mobile Bottom Navigation - Fixed at bottom */}
         {effectiveShowBottomNav && !isKeyboardVisible && (
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-30">
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100]">
             <BottomNavigation />
           </div>
         )}

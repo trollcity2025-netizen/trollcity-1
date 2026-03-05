@@ -1,3 +1,4 @@
+
 // src/App.tsx
 import React, { useEffect, Suspense, useState, useRef } from "react";
 import TrollProvider from "./troll/TrollProvider";
@@ -60,6 +61,7 @@ const BroadcastPage = lazyWithRetry(() => import("./pages/broadcast/BroadcastPag
 const StreamSummary = lazyWithRetry(() => import("./pages/broadcast/StreamSummary"));
 const BattlePreview = lazyWithRetry(() => import("./pages/dev/BattlePreview"));
 const FrontendLimitsTest = lazyWithRetry(() => import("./pages/dev/FrontendLimitsTest"));
+const TrollopolyCityDevTest = lazyWithRetry(() => import("./pages/dev/TrollopolyCityDevTest"));
 const LivingPage = lazyWithRetry(() => import("./pages/LivingPage"));
 const ChurchPage = lazyWithRetry(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazyWithRetry(() => import("./pages/church/PastorDashboard"));
@@ -361,8 +363,8 @@ function AppContent() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileModalLoading] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const { isMobile } = useIsMobile();
-  const isMobileUI = isMobile || isStandalone;
+  const { isMobile, isMobileWidth } = useIsMobile();
+  const isMobileUI = isMobileWidth || isStandalone;
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [waitingServiceWorker, setWaitingServiceWorker] = useState<ServiceWorker | null>(null);
   const [initialProfileLoaded, setInitialProfileLoaded] = useState(false);
@@ -1001,7 +1003,7 @@ function AppContent() {
         onRetry={retryLastAction}
       />
 
-      <AppLayout showSidebar={!isMobileUI} showHeader={!isMobileUI} showBottomNav={!isMobileUI}>
+      <AppLayout showSidebar={!isMobileUI} showHeader={!isMobileUI} showBottomNav={isMobileUI}>
         <GlobalPresenceTracker />
         {user && <AdminOfficerQuickMenu />}
         {user && (
@@ -1078,6 +1080,8 @@ function AppContent() {
 
                   <Route path="/dev/battle" element={<BattlePreview />} />
                   <Route path="/dev/stress-test" element={<FrontendLimitsTest />} />
+                  <Route path="/dev/trollopoly-test" element={<Navigate to="/dev/trollopoly-city" replace />} />
+                  <Route path="/dev/trollopoly-city" element={<TrollopolyCityDevTest />} />
 
                   <Route path="/mobile" element={<Navigate to="/" replace />} />
                   <Route path="/live" element={<LandingHome />} />
@@ -1103,6 +1107,9 @@ function AppContent() {
                   <Route path="/pool" element={<PublicPool />} />
                   <Route path="/media-city" element={<MediaCityPage />} />
                   <Route path="/troll-games" element={<TrollGamesPage />} />
+                  <Route path="/troll-games/queue" element={<TrollGamesPage />} />
+                  <Route path="/troll-games/live" element={<TrollGamesPage />} />
+                  <Route path="/troll-games/match/:matchId" element={<TrollGamesPage />} />
                   <Route path="/troll-games/:gameType/:matchId" element={<TrollGamesPage />} />
                   <Route path="/troll-games/giveaways" element={<GiveawaysPage />} />
                   <Route path="/mai-talent/stage" element={<MaiTalentStage />} />

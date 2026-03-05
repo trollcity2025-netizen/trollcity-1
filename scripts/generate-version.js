@@ -1,4 +1,4 @@
-import fs from 'fs';
+simport fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

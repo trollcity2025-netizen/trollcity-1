@@ -961,6 +961,10 @@ function ProfileInner() {
               <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full" title="Verified">✓</span>
             )}
 
+            {(profile as any).is_minor && (
+              <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded-full font-bold" title="Minor">🔞 MINOR</span>
+            )}
+
             <UserBadge profile={profile} />
 
             {isOwnProfile && (

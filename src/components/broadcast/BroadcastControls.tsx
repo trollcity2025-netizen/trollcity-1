@@ -41,6 +41,8 @@ interface BroadcastControlsProps {
   // Box count from parent for instant sync
   boxCount?: number;
   setBoxCount?: (count: number) => void;
+  // Stream refresh for battle mode
+  onRefreshStream?: () => void;
 }
 
 export default function BroadcastControls({
@@ -67,7 +69,8 @@ export default function BroadcastControls({
   isMicOn: propMicOn,
   isCamOn: propCamOn,
   boxCount: parentBoxCount,
-  setBoxCount: parentSetBoxCount
+  setBoxCount: parentSetBoxCount,
+  onRefreshStream
 }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
@@ -417,29 +420,29 @@ export default function BroadcastControls({
             />
         )}
 
-        <div className="flex items-center justify-between">
+        {/* Mobile: Stack title and controls vertically; Desktop: side by side */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
             <div className="flex items-center gap-4">
                 <h3 className="text-white font-bold text-lg flex items-center gap-2">
                     <Settings2 className="text-purple-400" />
                     Controls
                 </h3>
-                
-
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Mobile: full width, wrap buttons; Desktop: inline */}
+            <div className="flex items-center gap-2 flex-wrap justify-center md:justify-end w-full md:w-auto">
                  {/* Viewer Count */}
-                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                     <Eye size={16} className="text-blue-400" />
-                     <span className="text-sm font-bold text-white">
+                 <div className="flex items-center gap-1.5 md:gap-2 bg-black/40 px-2 md:px-3 py-1 rounded-full border border-white/5">
+                     <Eye size={14} className="text-blue-400" />
+                     <span className="text-xs md:text-sm font-bold text-white">
                          {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
                      </span>
                  </div>
 
                  {/* Like Count */}
-                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
-                     <Heart size={16} className="text-pink-500 fill-pink-500/20" />
-                     <span className="text-sm font-bold text-white">{likes}</span>
+                 <div className="flex items-center gap-1.5 md:gap-2 bg-black/40 px-2 md:px-3 py-1 rounded-full border border-white/5">
+                     <Heart size={14} className="text-pink-500 fill-pink-500/20" />
+                     <span className="text-xs md:text-sm font-bold text-white">{likes}</span>
                  </div>
 
                  {/* Mic & Cam Controls (Stage Only, when tracks ready) */}
@@ -751,7 +754,19 @@ export default function BroadcastControls({
                            });
                            return null;
                          })()}
-                         <TrollmersBattleControls currentStream={stream} onBattleAccepted={toggleBattleMode} />
+                         <TrollmersBattleControls
+                           currentStream={stream}
+                           onBattleAccepted={async () => {
+                             // Toggle battle mode UI
+                             toggleBattleMode();
+                             // Refresh stream data to get updated is_battle status
+                             // This triggers BattleView to render
+                             console.log('[BroadcastControls] Battle accepted, refreshing stream data...');
+                             if (onRefreshStream) {
+                               await onRefreshStream();
+                             }
+                           }}
+                         />
                     </div>
                     )}
                 </div>

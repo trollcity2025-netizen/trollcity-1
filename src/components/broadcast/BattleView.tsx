@@ -9,7 +9,7 @@ import { useAuthStore } from '../../lib/store';
 import { PreflightStore } from '../../lib/preflightStore';
 import { useStreamStore } from '../../lib/streamStore';
 import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus, Crown, Flame, ArrowLeft, Skull } from 'lucide-react';
-import BroadcastChat from './BroadcastChat';
+import BattleChat from './BattleChat';
 import MuteHandler from './MuteHandler';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
 import GiftTray from './GiftTray';
@@ -1287,74 +1287,176 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const opponentPercent = 100 - challengerPercent;
 
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden z-50">
-      {/* Troll Battle Arena Background */}
-      <TrollBattleArena isActive={battle?.status === 'active'} intensity={isSuddenDeath ? 'high' : 'medium'} />
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 overflow-hidden z-50">
+      {/* Troll Battle Royale Background Effects */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl" />
+      </div>
 
-      {/* Back Button - Positioned away from broadcast boxes */}
+      {/* Header - Troll Battle Royale */}
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
+            <span className="text-white font-black text-lg">T</span>
+          </div>
+          <h1 className="text-xl font-black text-white tracking-wide">Troll Battle Royale</h1>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/50 rounded-full">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="text-green-400 text-sm font-bold">LIVE</span>
+        </div>
+      </div>
+
+      {/* Back Button */}
       <button
         onClick={() => navigate('/')}
-        className="absolute top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white rounded-full border border-white/20 transition-all hover:scale-105"
+        className="absolute top-20 left-6 z-50 flex items-center gap-2 px-4 py-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full border border-white/10 transition-all hover:scale-105"
       >
         <ArrowLeft size={18} />
         <span className="text-sm font-medium">Home</span>
       </button>
 
       {/* Main Content Container */}
-      <div className="relative z-10 flex flex-col h-full">
-        {/* Battle Header */}
-        <div className="h-20 md:h-24 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between px-4 md:px-8 pt-2">
-          {/* Challenger Info */}
-          <div className="flex-1 flex items-center justify-end gap-3 md:gap-4">
-            <div className="text-right">
-              <div className="flex items-center justify-end gap-2">
-                <h2 className="text-lg md:text-xl font-bold text-white truncate max-w-[100px] md:max-w-[150px]">
-                  {challengerStream.title}
-                </h2>
-                {challengerCrownInfo.hasStreak && (
-                  <Crown size={16} className="text-yellow-400 fill-yellow-400" />
-                )}
-              </div>
-              <div className="font-mono text-lg md:text-xl font-bold text-purple-400">
-                {(battle?.score_challenger || 0).toLocaleString()}
+      <div className="relative z-10 flex flex-col h-full pt-20">
+        {/* Battle Arena - Two Teams */}
+        <div className="flex-1 flex items-center justify-center gap-4 px-4 pb-4">
+          {/* TEAM CHAOS - Left Side */}
+          <div className="flex-1 flex flex-col items-center max-w-md">
+            <h2 className="text-2xl font-black text-cyan-400 tracking-wider mb-2 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
+              TEAM CHAOS
+            </h2>
+            <div className="text-5xl font-black text-cyan-300 mb-4 drop-shadow-[0_0_20px_rgba(34,211,238,0.8)]">
+              {(battle?.score_challenger || 0).toLocaleString()}
+            </div>
+            
+            {/* Host Box */}
+            <div className="w-full bg-gradient-to-b from-cyan-900/40 to-cyan-950/60 border-2 border-cyan-500/50 rounded-2xl p-4 mb-4 backdrop-blur-sm">
+              <div className="flex flex-col items-center">
+                <div className="relative mb-2">
+                  <div className="w-16 h-16 rounded-xl bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center">
+                    <span className="text-cyan-300 font-black text-xl">HO</span>
+                  </div>
+                  <Crown className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400 fill-yellow-400" size={20} />
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-cyan-900" />
+                </div>
+                <span className="text-[10px] text-cyan-400/70 uppercase tracking-wider">Broadcaster</span>
+                <span className="text-cyan-200 font-bold">{challengerStream.title || 'Host Alpha'}</span>
               </div>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 border-2 border-white/20 flex items-center justify-center shadow-lg">
-              <User className="text-white" size={20} />
+
+            {/* Trolls/Guests Label */}
+            <div className="w-full text-center mb-2">
+              <span className="text-[10px] text-cyan-400/50 uppercase tracking-widest">Trolls / Guests</span>
             </div>
+
+            {/* Troll Boxes Grid */}
+            <div className="grid grid-cols-5 gap-2 w-full">
+              {Array.from({ length: Math.min(challengerStream.box_count || 1, 5) }).map((_, i) => (
+                <div key={i} className="aspect-square bg-cyan-900/30 border border-cyan-500/30 rounded-lg flex flex-col items-center justify-center relative">
+                  <span className="text-cyan-400 font-bold text-sm">TR</span>
+                  <span className="text-[8px] text-cyan-400/60">Troll #{i + 1}</span>
+                  <div className="absolute bottom-1 right-1 w-2 h-2 bg-green-500 rounded-full" />
+                </div>
+              ))}
+            </div>
+
+            {/* Box Controls */}
+            {participantInfo?.team === 'challenger' && participantInfo?.role === 'host' && (
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => updateMyStreamBoxCount((challengerStream.box_count || 1) - 1)}
+                  className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition"
+                >
+                  <Minus size={16} />
+                </button>
+                <button
+                  onClick={() => updateMyStreamBoxCount((challengerStream.box_count || 1) + 1)}
+                  className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Center: Pot & Timer */}
-          <div className="mx-4 md:mx-8 flex flex-col items-center justify-center min-w-[120px] md:min-w-[180px]">
-            <div className="flex flex-col items-center">
-              <span className="text-[10px] text-amber-500/70 uppercase tracking-widest font-bold">Pot</span>
-              <div className="flex items-center gap-1.5 text-amber-400 bg-black/50 px-3 py-0.5 rounded-full border border-amber-500/30">
-                <Coins size={14} className="fill-amber-400" />
-                <span className="font-mono text-lg md:text-xl font-black">
-                  {((battle?.pot_challenger || 0) + (battle?.pot_opponent || 0)).toLocaleString()}
+          {/* Center - Timer & VS */}
+          <div className="flex flex-col items-center justify-center gap-6">
+            {/* Circular Timer */}
+            <div className="relative">
+              <div className="w-40 h-40 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 border-4 border-slate-700 flex flex-col items-center justify-center shadow-2xl">
+                <span className="text-4xl font-black text-red-500 tabular-nums">
+                  {formatTime(timeLeft)}
                 </span>
+                <span className="text-[10px] text-red-400/70 uppercase tracking-widest mt-1">Time!</span>
               </div>
+              {/* Timer Glow Effect */}
+              <div className="absolute inset-0 rounded-full bg-red-500/10 blur-xl -z-10" />
+            </div>
+
+            {/* VS Badge */}
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
+              <span className="text-white font-black text-xl">VS</span>
             </div>
           </div>
 
-          {/* Opponent Info */}
-          <div className="flex-1 flex items-center justify-start gap-3 md:gap-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 border-2 border-white/20 flex items-center justify-center shadow-lg">
-              <User className="text-white" size={20} />
+          {/* TEAM MAYHEM - Right Side */}
+          <div className="flex-1 flex flex-col items-center max-w-md">
+            <h2 className="text-2xl font-black text-pink-400 tracking-wider mb-2 drop-shadow-[0_0_10px_rgba(236,72,153,0.5)]">
+              TEAM MAYHEM
+            </h2>
+            <div className="text-5xl font-black text-pink-300 mb-4 drop-shadow-[0_0_20px_rgba(236,72,153,0.8)]">
+              {(battle?.score_opponent || 0).toLocaleString()}
             </div>
-            <div className="text-left">
-              <div className="flex items-center gap-2">
-                {opponentCrownInfo.hasStreak && (
-                  <Crown size={16} className="text-yellow-400 fill-yellow-400" />
-                )}
-                <h2 className="text-lg md:text-xl font-bold text-white truncate max-w-[100px] md:max-w-[150px]">
-                  {opponentStream.title}
-                </h2>
-              </div>
-              <div className="font-mono text-lg md:text-xl font-bold text-emerald-400">
-                {(battle?.score_opponent || 0).toLocaleString()}
+            
+            {/* Host Box */}
+            <div className="w-full bg-gradient-to-b from-pink-900/40 to-pink-950/60 border-2 border-pink-500/50 rounded-2xl p-4 mb-4 backdrop-blur-sm">
+              <div className="flex flex-col items-center">
+                <div className="relative mb-2">
+                  <div className="w-16 h-16 rounded-xl bg-pink-500/20 border-2 border-pink-400 flex items-center justify-center">
+                    <span className="text-pink-300 font-black text-xl">HO</span>
+                  </div>
+                  <Crown className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400 fill-yellow-400" size={20} />
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-pink-900" />
+                </div>
+                <span className="text-[10px] text-pink-400/70 uppercase tracking-wider">Broadcaster</span>
+                <span className="text-pink-200 font-bold">{opponentStream.title || 'Host Beta'}</span>
               </div>
             </div>
+
+            {/* Trolls/Guests Label */}
+            <div className="w-full text-center mb-2">
+              <span className="text-[10px] text-pink-400/50 uppercase tracking-widest">Trolls / Guests</span>
+            </div>
+
+            {/* Troll Boxes Grid */}
+            <div className="grid grid-cols-5 gap-2 w-full">
+              {Array.from({ length: Math.min(opponentStream.box_count || 1, 5) }).map((_, i) => (
+                <div key={i} className="aspect-square bg-pink-900/30 border border-pink-500/30 rounded-lg flex flex-col items-center justify-center relative">
+                  <span className="text-pink-400 font-bold text-sm">TR</span>
+                  <span className="text-[8px] text-pink-400/60">Troll #{i + 6}</span>
+                  <div className="absolute bottom-1 right-1 w-2 h-2 bg-green-500 rounded-full" />
+                </div>
+              ))}
+            </div>
+
+            {/* Box Controls */}
+            {participantInfo?.team === 'opponent' && participantInfo?.role === 'host' && (
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => updateMyStreamBoxCount((opponentStream.box_count || 1) - 1)}
+                  className="w-8 h-8 rounded-lg bg-pink-500/20 border border-pink-500/50 text-pink-400 flex items-center justify-center hover:bg-pink-500/30 transition"
+                >
+                  <Minus size={16} />
+                </button>
+                <button
+                  onClick={() => updateMyStreamBoxCount((opponentStream.box_count || 1) + 1)}
+                  className="w-8 h-8 rounded-lg bg-pink-500/20 border border-pink-500/50 text-pink-400 flex items-center justify-center hover:bg-pink-500/30 transition"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1425,13 +1527,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
         <MuteHandler streamId={challengerStream.id} />
         
-        {/* Shared Chat & Gifts */}
+        {/* Unified Battle Chat - Both sides see all messages */}
         <div className="absolute bottom-0 left-0 w-full h-[200px] md:h-[250px] pointer-events-none flex gap-2 md:gap-4 px-2 md:px-4">
           <div className="flex-1 pointer-events-auto">
-            <BroadcastChat 
-              streamId={currentStreamId} 
-              hostId={currentStreamId === challengerStream.id ? challengerStream.user_id : opponentStream.user_id} 
-              isHost={participantInfo?.role === 'host'}
+            <BattleChat
+              battleId={battleId}
+              challengerStream={challengerStream}
+              opponentStream={opponentStream}
+              currentUserId={effectiveUserId}
+              participantRole={participantInfo?.role}
             />
           </div>
           <div className="flex-1 pointer-events-none">

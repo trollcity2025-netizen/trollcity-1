@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { GameState, ReactionSpeedGameState, PlayerState, MatchStatus } from './types';
 import { getGameEngine } from './GameEngine';
-import { GameType } from '@/pages/TrollGamesPage';
+import { GameType } from './gameTypes';
 
 interface MatchControllerConfig {
   matchId: string;

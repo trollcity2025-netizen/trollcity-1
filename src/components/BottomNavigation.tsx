@@ -1,24 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Store, Video, User, Shield, Gavel, Star, Zap, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Gamepad2, Music, Swords, Camera, Mic } from 'lucide-react'
+import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { useActiveBroadcasts } from '@/hooks/useActiveBroadcasts'
-import { BROADCAST_CATEGORIES, type BroadcastCategoryId } from '@/config/broadcastCategories'
 
 export default function BottomNavigation() {
   const { user, profile, logout } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isLiveMenuOpen, setIsLiveMenuOpen] = useState(false)
-  const hasActiveContent = useActiveBroadcasts()
   const [tcpsUnreadCount, setTcpsUnreadCount] = useState(0)
+  
+  // Position state for draggable bubble
+  const [bubblePosition, setBubblePosition] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
-    if (isMenuOpen || isLiveMenuOpen) {
+    if (isMenuOpen) {
       document.body.classList.add('no-scroll')
     } else {
       document.body.classList.remove('no-scroll')
@@ -26,7 +25,7 @@ export default function BottomNavigation() {
     return () => {
       document.body.classList.remove('no-scroll')
     }
-  }, [isMenuOpen, isLiveMenuOpen])
+  }, [isMenuOpen])
 
   // Fetch TCPS unread count
   useEffect(() => {
@@ -41,19 +40,27 @@ export default function BottomNavigation() {
       if (!data || data.length === 0) return
       const convIds = data.map(d => d.conversation_id)
       
-      const { count } = await supabase
-        .from('conversation_messages')
-        .select('*', { count: 'exact', head: true })
-        .in('conversation_id', convIds)
-        .neq('sender_id', user.id)
-        .is('read_at', null)
+      // Batch count queries to avoid URL length limits
+      const BATCH_SIZE = 50
+      let totalCount = 0
       
-      setTcpsUnreadCount(count || 0)
+      for (let i = 0; i < convIds.length; i += BATCH_SIZE) {
+        const batch = convIds.slice(i, i + BATCH_SIZE)
+        const { count } = await supabase
+          .from('conversation_messages')
+          .select('*', { count: 'exact', head: true })
+          .in('conversation_id', batch)
+          .neq('sender_id', user.id)
+          .is('read_at', null)
+        
+        totalCount += count || 0
+      }
+      
+      setTcpsUnreadCount(totalCount)
     }
     
     fetchUnreadCount()
     
-    // Subscribe to new messages for real-time updates
     const channel = supabase
       .channel('nav-unread-count')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, () => {
@@ -69,52 +76,10 @@ export default function BottomNavigation() {
 
   useEffect(() => {
     setIsMenuOpen(false)
-    setIsLiveMenuOpen(false)
   }, [location.pathname])
-
-  const liveCategories = useMemo(() => {
-    // The app currently routes live streams via /watch/:id and the /live page.
-    // These category routes may not exist yet, so keep navigation safe by
-    // pointing categories to the broadcast setup page for now.
-    const order: BroadcastCategoryId[] = [
-      'general',
-      'just_chatting',
-      'gaming',
-      'irl',
-      'debate',
-      'education',
-      'fitness',
-      'business',
-      'spiritual',
-      'trollmers',
-    ]
-
-    const iconMap: Record<string, any> = {
-      general: Video,
-      just_chatting: MessageSquare,
-      gaming: Gamepad2,
-      irl: Camera,
-      debate: Gavel,
-      education: FileText,
-      fitness: Zap,
-      business: Briefcase,
-      spiritual: Heart,
-      trollmers: Star,
-    }
-
-    return [
-      { label: 'All Streams', icon: Video, path: '/live' },
-      ...order.map((id) => ({
-        label: BROADCAST_CATEGORIES[id].name,
-        icon: iconMap[id] || Video,
-        path: `/broadcast/setup?category=${id}`,
-      })),
-    ]
-  }, [])
 
   const handleLogout = async () => {
     try {
-      // 1. Sign out from Supabase first
       try {
         const { error } = await supabase.auth.signOut()
         if (error) console.warn('supabase.signOut returned error:', error)
@@ -122,10 +87,8 @@ export default function BottomNavigation() {
         console.warn('Error signing out session:', e)
       }
 
-      // 2. Clear store state
       await logout()
 
-      // 3. Clear client storage
       try {
         localStorage.clear()
         sessionStorage.clear()
@@ -146,61 +109,47 @@ export default function BottomNavigation() {
   if (!user || !profile) return null
 
   // Determine Role
-  const role = profile.role || 'viewer' // viewer, broadcaster, admin, officer, vip
+  const role = profile.role || 'viewer'
 
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/' || location.pathname === '/live'
-    }
-    return location.pathname.startsWith(path)
-  }
-
-  // Define Center Button based on Role
-  const getCenterButton = () => {
+  // Get role display name and icon
+  const getRoleInfo = () => {
     switch (role as string) {
       case 'admin':
-        return { label: 'Admin Panel', icon: Shield, action: () => setIsMenuOpen(true) }
+        return { label: 'Admin', icon: Shield, color: 'from-red-500 to-orange-500' }
       case 'broadcaster':
-        return { label: 'Go Live', icon: Video, action: () => setIsMenuOpen(true) }
+        return { label: 'Broadcaster', icon: Video, color: 'from-purple-500 to-blue-500' }
       case 'officer':
-        return { label: 'Moderation', icon: Gavel, action: () => setIsMenuOpen(true) }
+        return { label: 'Officer', icon: Gavel, color: 'from-blue-500 to-cyan-500' }
       case 'vip':
-        return { label: 'Talent Tools', icon: Star, action: () => setIsMenuOpen(true) }
-      default: // viewer
-        return { label: 'Explore Live', icon: Zap, action: () => setIsMenuOpen(true) }
+        return { label: 'VIP', icon: Star, color: 'from-yellow-500 to-amber-500' }
+      default:
+        return { label: 'Menu', icon: Menu, color: 'from-purple-600 to-blue-600' }
     }
   }
 
-  const centerBtn = getCenterButton()
+  const roleInfo = getRoleInfo()
 
-  // Re-ordering to match: Home, Live, CENTER, Inbox, Profile
-  const orderedItems: any[] = [
-    { icon: Home, label: 'Home', path: '/', active: isActive('/') && location.pathname !== '/live' },
-    { 
-      icon: Video, 
-      label: 'Live', 
-      path: '/live',
-      action: () => setIsLiveMenuOpen(true), 
-      active: isActive('/live') || isLiveMenuOpen,
-      glow: hasActiveContent
-    },
-    { isCenter: true, ...centerBtn },
-    { icon: MessageSquare, label: 'TCPS', path: '/tcps', active: isActive('/tcps'), glow: tcpsUnreadCount > 0 },
-    { icon: User, label: 'Profile', path: `/profile/${profile?.username || profile?.id}`, active: isActive('/profile') }
-  ]
-
-  // Popup Menu Options
+  // Menu Options based on role
   const getMenuOptions = () => {
+    const baseOptions = [
+      { category: 'Navigation', label: 'Home', icon: Home, path: '/' },
+      { category: 'Navigation', label: 'Live Streams', icon: Video, path: '/live' },
+      { category: 'Navigation', label: 'Messages', icon: MessageSquare, path: '/tcps', badge: tcpsUnreadCount },
+      { category: 'Navigation', label: 'My Profile', icon: User, path: `/profile/${profile?.username || profile?.id}` },
+    ]
+
     switch (role as string) {
       case 'broadcaster':
         return [
+          ...baseOptions,
           { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
-          { category: 'Streaming', label: 'Summary', icon: FileText, path: '/broadcast/summary' },
+          { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
           { category: 'Finance', label: 'My Earnings', icon: DollarSign, path: '/earnings' },
           { category: 'Community', label: 'My Guests', icon: Users, path: '/guests' }
         ]
       case 'admin':
         return [
+          ...baseOptions,
           { category: 'Management', label: 'Court', icon: Gavel, path: '/troll-court' },
           { category: 'Streaming', label: 'Go Live', icon: Video, path: '/broadcast/setup' },
           { category: 'Management', label: 'Ban Management', icon: Ban, path: '/admin/ban-management' },
@@ -212,17 +161,19 @@ export default function BottomNavigation() {
         ]
       case 'officer':
         return [
+          ...baseOptions,
           { category: 'Moderation', label: 'Mute User', icon: MicOffIcon, path: '/officer/mute' },
           { category: 'Moderation', label: 'Kick User', icon: AlertTriangle, path: '/officer/kick' },
-          { category: 'Moderation', label: 'Report', icon: Shield, path: '/officer/reports' },
+          { category: 'Moderation', label: 'Reports', icon: Shield, path: '/officer/reports' },
           { category: 'Lounge', label: 'Officer Lounge', icon: Briefcase, path: '/officer/lounge' },
           { category: 'Finance', label: 'Payroll', icon: Banknote, path: '/officer/payroll' }
         ]
       case 'viewer':
       default:
         return [
+          ...baseOptions,
           { category: 'General', label: 'Go Live', icon: Video, path: '/broadcast/setup' },
-          { category: 'General', label: 'Buy Coins', icon: Store, path: '/store' },
+          { category: 'General', label: 'Store', icon: ShoppingBag, path: '/store' },
           { category: 'Creative', label: 'Troll Pods', icon: Mic, path: '/pods' },
           { category: 'General', label: 'Support', icon: Heart, path: '/support' }
         ]
@@ -231,134 +182,56 @@ export default function BottomNavigation() {
 
   // Helper for icons not in top import
   const MicOffIcon = ({ size, className }: { size: number, className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="1" y1="1" x2="23" y2="23"></line>
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+      <line x1="12" y1="19" x2="12" y2="23"></line>
+      <line x1="8" y1="23" x2="16" y2="23"></line>
+    </svg>
   )
 
   const menuOptions = getMenuOptions()
 
   return (
     <>
-      <nav className="bottom-nav bg-[#0D0D0D] border-t border-purple-700/30">
-        <div className="bottom-nav-inner flex items-center justify-around px-0">
-          {orderedItems.map((item: any, idx) => {
-            const Icon = item.icon
-            
-            if (item.isCenter) {
-               return (
-                 <button
-                   key="center-btn"
-                   onClick={item.action}
-                   className="flex flex-col items-center justify-center w-1/5 h-full -mt-4"
-                 >
-                   <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[2px] shadow-[0_0_15px_rgba(124,58,237,0.5)]">
-                     <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center hover:bg-[#1a1a1a] transition-colors">
-                       <Icon size={24} className="text-white" />
-                     </div>
-                   </div>
-                   <span className="text-[10px] font-bold mt-1 text-purple-400">{item.label}</span>
-                 </button>
-               )
-            }
-
-            if (item.action) {
-               return (
-                 <button
-                   key={idx}
-                   onClick={item.action}
-                   className={`relative flex flex-col items-center justify-center w-1/5 h-full transition-all active:scale-95 active:opacity-80 ${
-                     item.active
-                       ? 'text-troll-gold'
-                       : 'text-gray-400 hover:text-gray-200'
-                   }`}
-                 >
-                   <div className="relative">
-                     <Icon size={24} className={`mb-1 ${item.glow ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]' : ''}`} />
-                     {item.glow && (
-                       <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border-2 border-[#0D0D0D]" />
-                     )}
-                   </div>
-                   <span className={`text-[10px] font-medium truncate ${item.glow ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]' : ''}`}>{item.label}</span>
-                 </button>
-               )
-            }
-
-            return (
-              <button
-                key={idx}
-                onClick={() => navigate(item.path!)}
-                className={`relative flex flex-col items-center justify-center w-1/5 h-full transition-all active:scale-95 active:opacity-80 ${
-                  item.active
-                    ? 'text-troll-gold'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <div className="relative">
-                   <Icon size={24} className={`mb-1 ${item.glow ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]' : ''}`} />
-                   {item.glow && (
-                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border-2 border-[#0D0D0D]" />
-                   )}
-                </div>
-                <span className={`text-[10px] font-medium truncate ${item.glow ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]' : ''}`}>{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </nav>
-
-      {/* Role Action Popup */}
-      <AnimatePresence>
-        {isLiveMenuOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsLiveMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
-            />
-            
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-purple-500/30 rounded-t-3xl p-6 z-[70] safe-area-bottom"
-            >
-              <div className="w-12 h-1 bg-gray-700 rounded-full mx-auto mb-6" />
-              
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-white">Live Categories</h3>
-                <button
-                  onClick={() => setIsLiveMenuOpen(false)}
-                  className="p-2 text-gray-400 hover:text-white"
-                >
-                  <Ban size={20} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {liveCategories.map((cat, i) => {
-                  const CatIcon = cat.icon
-                  return (
-                    <Link
-                      key={i}
-                      to={cat.path}
-                      onClick={() => setIsLiveMenuOpen(false)}
-                      className="flex flex-col items-center justify-center p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors gap-2"
-                    >
-                      <div className="p-3 rounded-full bg-purple-500/20 text-purple-400">
-                        <CatIcon size={24} />
-                      </div>
-                      <span className="text-white font-medium text-sm">{cat.label}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            </motion.div>
-          </>
+      {/* Draggable Floating Menu Bubble - Mobile Only */}
+      <motion.div
+        drag
+        dragMomentum={false}
+        dragConstraints={{ left: -window.innerWidth + 80, right: 0, top: -window.innerHeight + 150, bottom: 0 }}
+        initial={{ x: 0, y: 0 }}
+        animate={{ x: bubblePosition.x, y: bubblePosition.y }}
+        onDragEnd={(_, info) => {
+          setBubblePosition({ x: info.point.x - window.innerWidth + 70, y: info.point.y - window.innerHeight + 70 })
+        }}
+        className="fixed bottom-20 right-4 z-[100] md:hidden"
+        style={{ touchAction: 'none' }}
+      >
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsMenuOpen(true)}
+          className={`w-16 h-16 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[3px] shadow-[0_0_25px_rgba(124,58,237,0.7)]`}
+        >
+          <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/10">
+            <roleInfo.icon size={28} className="text-white" />
+          </div>
+        </motion.button>
+        
+        {/* Unread indicator bubble */}
+        {tcpsUnreadCount > 0 && (
+          <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-[#0D0D0D] animate-pulse">
+            {tcpsUnreadCount > 9 ? '9+' : tcpsUnreadCount}
+          </div>
         )}
-      </AnimatePresence>
+        
+        {/* Drag hint */}
+        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap opacity-60">
+          Drag to move
+        </div>
+      </motion.div>
 
+      {/* Role-Based Menu Popup */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
@@ -368,33 +241,47 @@ export default function BottomNavigation() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
             />
             
             {/* Menu */}
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-purple-500/30 rounded-t-3xl p-6 z-[70] safe-area-bottom"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-sm bg-[#121212] border border-purple-500/30 rounded-2xl p-5 z-[70] md:hidden max-h-[80vh] overflow-y-auto shadow-2xl"
             >
-              <div className="w-12 h-1 bg-gray-700 rounded-full mx-auto mb-6" />
-              
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white text-center flex-1">
-                  {centerBtn.label} Actions
-                </h3>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
-                  title="Logout"
-                >
-                  <LogOut size={20} />
-                </button>
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[2px]`}>
+                    <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center">
+                      <roleInfo.icon size={20} className="text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{roleInfo.label}</h3>
+                    <p className="text-xs text-gray-400">Tap to navigate</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
+                    title="Logout"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                  <button
+                    onClick={() => setIsMenuOpen(false)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+              <div className="space-y-5">
                 {Object.entries(
                   menuOptions.reduce((acc: any, opt: any) => {
                     const cat = opt.category || 'General'
@@ -404,8 +291,8 @@ export default function BottomNavigation() {
                   }, {})
                 ).map(([category, options]: [string, any]) => (
                   <div key={category}>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">{category}</h4>
-                    <div className="grid grid-cols-1 gap-2">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{category}</h4>
+                    <div className="grid grid-cols-1 gap-1.5">
                       {options.map((opt: any, i: number) => {
                         const OptIcon = opt.icon
                         return (
@@ -413,12 +300,17 @@ export default function BottomNavigation() {
                             key={i}
                             to={opt.path}
                             onClick={() => setIsMenuOpen(false)}
-                            className="flex items-center gap-4 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors group"
                           >
-                            <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+                            <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
                               <OptIcon size={18} />
                             </div>
-                            <span className="text-white font-medium text-sm">{opt.label}</span>
+                            <span className="text-white font-medium text-sm flex-1">{opt.label}</span>
+                            {opt.badge > 0 && (
+                              <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
+                                {opt.badge > 9 ? '9+' : opt.badge}
+                              </span>
+                            )}
                           </Link>
                         )
                       })}

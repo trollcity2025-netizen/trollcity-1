@@ -1,4 +1,4 @@
-import { GameType } from '@//pages/TrollGamesPage';
+import { GameType } from './gameTypes';
 
 // Base interfaces
 export interface PlayerState {

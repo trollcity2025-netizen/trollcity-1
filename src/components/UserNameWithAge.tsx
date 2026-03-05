@@ -28,6 +28,7 @@ export default function UserNameWithAge({
   const now = useTimeStore((state) => state.now)
 
   const age = useMemo(() => {
+    if (!user) return 0
     if (user.age_days !== undefined) return user.age_days
     if (user.created_at) {
       const created = new Date(user.created_at)
@@ -38,7 +39,15 @@ export default function UserNameWithAge({
       return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)))
     }
     return 0
-  }, [user.age_days, user.created_at, now])
+  }, [user?.age_days, user?.created_at, now, user])
+
+  if (!user) {
+    return (
+      <span className={`inline-flex items-center gap-1 ${className}`}>
+        <span className="text-gray-400">Unknown</span>
+      </span>
+    )
+  }
 
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>

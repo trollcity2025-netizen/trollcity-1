@@ -20,6 +20,7 @@ export default function ProfileSettings() {
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
   const [bannerNotifications, setBannerNotifications] = useState(true)
+  const [isMinor, setIsMinor] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
 
   useEffect(() => {
@@ -29,6 +30,9 @@ export default function ProfileSettings() {
       setBio(profile.bio || '')
       if ((profile as any).banner_notifications_enabled !== undefined) {
           setBannerNotifications((profile as any).banner_notifications_enabled)
+      }
+      if ((profile as any).is_minor !== undefined) {
+          setIsMinor((profile as any).is_minor)
       }
     }
   }, [profile])
@@ -72,6 +76,7 @@ export default function ProfileSettings() {
           full_name: fullName.trim(),
           bio: bio.trim(),
           banner_notifications_enabled: bannerNotifications,
+          is_minor: isMinor,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id)
@@ -159,6 +164,20 @@ export default function ProfileSettings() {
                 placeholder="Tell us about yourself"
                 maxLength={160}
               />
+            </div>
+            <div className={`flex items-center justify-between p-4 ${trollCityTheme.backgrounds.glass} rounded-xl border ${trollCityTheme.borders.glass} md:col-span-2`}>
+              <div>
+                <p className="font-medium text-white flex items-center gap-2">
+                  <span className="text-lg">🔞</span> Minor Account
+                </p>
+                <p className={`text-xs ${trollCityTheme.text.muted}`}>Enable if this account belongs to a minor under 18. A badge will be shown on your profile.</p>
+              </div>
+              <button
+                onClick={() => setIsMinor(!isMinor)}
+                className={`w-12 h-6 rounded-full transition-colors relative ${isMinor ? 'bg-purple-600' : 'bg-gray-700'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isMinor ? 'left-7' : 'left-1'}`} />
+              </button>
             </div>
           </div>
           <div className="flex justify-end">

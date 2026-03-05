@@ -35,7 +35,7 @@ interface ChatWindowProps {
   onBack?: () => void
 }
 
-const ChatWindow = ({ otherUserInfo }: ChatWindowProps) => {
+const ChatWindow = ({ otherUserInfo, isOnline, onBack }: ChatWindowProps) => {
   const { user, profile } = useAuthStore()
   const [actualConversationId, setActualConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -106,16 +106,31 @@ const ChatWindow = ({ otherUserInfo }: ChatWindowProps) => {
         let targetConvId: string | null = null
 
         if (myConvIds.length > 0) {
-          const { data: shared, error: sharedError } = await supabase
-            .from('conversation_members')
-            .select('conversation_id')
-            .in('conversation_id', myConvIds)
-            .eq('user_id', otherUserId)
-            .limit(1)
+          // Batch the lookup to avoid URL length limits
+          const BATCH_SIZE = 50
+          let foundConv: string | null = null
+          
+          for (let i = 0; i < myConvIds.length && !foundConv; i += BATCH_SIZE) {
+            const batch = myConvIds.slice(i, i + BATCH_SIZE)
+            const { data: shared, error: sharedError } = await supabase
+              .from('conversation_members')
+              .select('conversation_id')
+              .in('conversation_id', batch)
+              .eq('user_id', otherUserId)
+              .limit(1)
 
-          if (sharedError) throw sharedError
-          const sharedFirst = Array.isArray(shared) ? shared[0] : null
-          if (sharedFirst) targetConvId = sharedFirst.conversation_id
+            if (sharedError) {
+              console.warn('Error in batch lookup:', sharedError)
+              continue
+            }
+            
+            const sharedFirst = Array.isArray(shared) ? shared[0] : null
+            if (sharedFirst) {
+              foundConv = sharedFirst.conversation_id
+            }
+          }
+          
+          targetConvId = foundConv
         }
 
         if (!targetConvId) {
@@ -291,23 +306,65 @@ const ChatWindow = ({ otherUserInfo }: ChatWindowProps) => {
   if (!user?.id) return null
 
   if (!otherUserId) {
-    return <div className="flex-1 flex items-center justify-center text-gray-500">Select a conversation</div>
+    return <div className="flex-1 flex items-center justify-center text-gray-500 h-full">Select a conversation</div>
   }
 
   if (!actualConversationId) {
-    return <div className="flex-1 flex items-center justify-center text-gray-500">Loading conversation...</div>
+    return (
+      <div className="flex-1 flex flex-col h-full">
+        {/* Header with user info */}
+        {otherUserInfo && (
+          <div className="flex items-center gap-3 p-4 bg-white/5 border-b border-white/10">
+            <button
+              onClick={() => window.history.back()}
+              className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white"
+            >
+              ←
+            </button>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold">
+              {otherUserInfo.username?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div>
+              <div className="font-semibold text-white">{otherUserInfo.username || 'Loading...'}</div>
+            </div>
+          </div>
+        )}
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span>Loading conversation...</span>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[#0A0A14]">
       {/* Header with user info */}
       {otherUserInfo && (
-        <div className="flex items-center gap-3 p-4 bg-white/5 border-b border-white/10">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold">
+        <div className="flex items-center gap-3 p-4 bg-white/5 border-b border-white/10 shrink-0">
+          {/* Back button for mobile */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden p-2 -ml-2 text-gray-400 hover:text-white transition-colors"
+              aria-label="Go back"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+          )}
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold shrink-0">
             {otherUserInfo.username?.[0]?.toUpperCase() || '?'}
           </div>
-          <div>
-            <div className="font-semibold text-white">{otherUserInfo.username || 'Unknown User'}</div>
+          <div className="min-w-0">
+            <div className="font-semibold text-white truncate">{otherUserInfo.username || 'Unknown User'}</div>
+            {isOnline !== undefined && (
+              <div className="text-xs flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
+                <span className={isOnline ? 'text-green-400' : 'text-gray-500'}>{isOnline ? 'Online' : 'Offline'}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

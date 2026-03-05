@@ -208,10 +208,10 @@ export default function TCPS() {
   const isOtherOnline = otherUserInfo ? safeOnlineUserIds.includes(otherUserInfo.id) : false
 
   return (
-    <div className={`w-full h-[100dvh] overflow-hidden ${backgrounds.primary} flex justify-center items-stretch px-3 py-4 md:py-8 pb-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom))] md:pb-8`}>
+    <div className={`w-full h-[calc(100dvh-var(--bottom-nav-height,64px)-env(safe-area-inset-bottom,0px))] overflow-hidden ${backgrounds.primary} flex justify-center items-stretch px-3 py-4 md:py-8`}>
         <div className={`relative flex w-full max-w-6xl ${trollCityTheme.backgrounds.card} rounded-2xl md:rounded-3xl border border-white/10 overflow-hidden flex-col md:flex-row h-full`}>
           {/* Column 1: Sidebar with Conversations */}
-          <div className={`flex-col border-r border-white/5 ${trollCityTheme.backgrounds.glass} w-full md:w-80 lg:w-96 ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
+          <div className={`flex-col border-r border-white/5 ${trollCityTheme.backgrounds.glass} w-full md:w-80 lg:w-96 h-full ${activeConversation ? 'hidden md:flex' : 'flex'}`}>
             <InboxSidebar
               activeConversation={activeConversation}
               onSelectConversation={handleSelectConversation}
@@ -224,7 +224,7 @@ export default function TCPS() {
           </div>
 
           {/* Column 2: Chat Window */}
-          <div className={`flex-1 flex-col min-w-0 bg-transparent ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
+          <div className={`flex-1 flex-col min-w-0 bg-transparent h-full ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
             <ChatWindow
               conversationId={null} // It will be derived from users or we can pass it if we have it
               otherUserInfo={otherUserInfo}

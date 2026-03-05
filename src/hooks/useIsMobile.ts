@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 const MOBILE_BREAKPOINT_PX = 768
 
@@ -8,25 +8,57 @@ function getIsTouchDevice() {
 }
 
 function getIsMobileWidth() {
-  if (typeof window === 'undefined') return false
-  return window.innerWidth < MOBILE_BREAKPOINT_PX
+  if (typeof window === 'undefined') return true // Default to mobile for SSR
+  // Use visual viewport if available for more accurate mobile sizing
+  const width = window.visualViewport?.width ?? window.innerWidth
+  return width < MOBILE_BREAKPOINT_PX
 }
 
 export function useIsMobile() {
-  const [isMobileWidth, setIsMobileWidth] = useState(getIsMobileWidth())
+  // Start with true (mobile-first) to avoid flash of desktop layout on mobile
+  const [isMobileWidth, setIsMobileWidth] = useState(true)
+  const [isTouchDevice, setIsTouchDevice] = useState(false)
+  const [hasMounted, setHasMounted] = useState(false)
 
-  useEffect(() => {
-    const handleResize = () => setIsMobileWidth(getIsMobileWidth())
-    window.addEventListener('resize', handleResize, { passive: true })
-    return () => window.removeEventListener('resize', handleResize)
+  const updateDimensions = useCallback(() => {
+    if (typeof window === 'undefined') return
+    const width = window.visualViewport?.width ?? window.innerWidth
+    setIsMobileWidth(width < MOBILE_BREAKPOINT_PX)
+    setIsTouchDevice(getIsTouchDevice())
   }, [])
 
-  const isTouchDevice = useMemo(() => getIsTouchDevice(), [])
+  useEffect(() => {
+    // Set mounted flag
+    setHasMounted(true)
+    
+    // Initial check
+    updateDimensions()
+
+    // Listen for resize events
+    window.addEventListener('resize', updateDimensions, { passive: true })
+    
+    // Listen for orientation changes (important for mobile)
+    window.addEventListener('orientationchange', updateDimensions, { passive: true })
+    
+    // Listen for visual viewport changes (handles mobile keyboard, etc)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateDimensions, { passive: true })
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateDimensions)
+      window.removeEventListener('orientationchange', updateDimensions)
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateDimensions)
+      }
+    }
+  }, [updateDimensions])
 
   return {
     isMobile: isMobileWidth && isTouchDevice,
     isMobileWidth,
     isTouchDevice,
+    hasMounted,
     breakpointPx: MOBILE_BREAKPOINT_PX,
   }
 }

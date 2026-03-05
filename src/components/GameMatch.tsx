@@ -1,8 +1,14 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { MatchController } from '@/lib/game/MatchController';
-import { GameState, ReactionSpeedGameState, PlayerState, MatchStatus, ReactionSpeedPhase, ReactionSpeedPlayerState } from '@/lib/game/types';
+import { GameState, ReactionSpeedGameState, ReactionSpeedPlayerState } from '@/lib/game/types';
 import { useAuthStore } from '@/lib/store';
-import { GameType } from '@/pages/TrollGamesPage';
+import { GameType } from '@/lib/game/gameTypes';
+import { TrollopolyGame } from './games/TrollopolyGame';
+import { TrollopolyCityBoard } from './games/TrollopolyCityBoard';
+import { InternetMatchController } from '@/lib/game/InternetMatchController';
+import { InternetGameState, GameAction } from '@/lib/game/InternetGameTypes';
+import { TrollopolyGameState } from '@/lib/game/types/TrollopolyTypes';
+import { supabase } from '@/lib/supabase';
 
 interface GameMatchProps {
   matchId: string;
@@ -11,10 +17,16 @@ interface GameMatchProps {
 }
 
 const GameMatch: React.FC<GameMatchProps> = ({ matchId, gameType, onMatchEnd }) => {
-  const { user } = useAuthStore();
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const { user, profile } = useAuthStore();
+  const [gameState, setGameState] = useState<GameState | InternetGameState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const matchControllerRef = useRef<MatchController | null>(null);
+  const [isSpectator, setIsSpectator] = useState(false);
+  const [streamId, setStreamId] = useState<string | null>(null);
+  const legacyControllerRef = useRef<MatchController | null>(null);
+  const internetControllerRef = useRef<InternetMatchController | null>(null);
+
+  // Check if this is an internet game (now only Trollopoly)
+  const isInternetGame = gameType === 'trollopoly';
 
   useEffect(() => {
     if (!user?.id) {
@@ -22,142 +34,173 @@ const GameMatch: React.FC<GameMatchProps> = ({ matchId, gameType, onMatchEnd }) 
       return;
     }
 
-    const controller = new MatchController({
-      matchId,
-      gameType,
-      userId: user.id,
-      onStateChange: (newState) => {
-        setGameState(newState);
-      },
-      onMatchEnd: (winnerId) => {
-        onMatchEnd(winnerId);
-        matchControllerRef.current?.dispose();
-      },
-    });
-    matchControllerRef.current = controller;
+    if (isInternetGame) {
+      // Check if user is a player or spectator
+      checkUserRole();
+      
+      // Create or get stream for the match
+      createBroadcastStream();
+      
+      // Use InternetMatchController for Trollopoly
+      console.log(`[GameMatch] Initializing Trollopoly game`);
+      const controller = new InternetMatchController({
+        matchId,
+        gameType: 'trollopoly',
+        userId: user.id,
+        onStateChange: (newState) => {
+          setGameState(newState);
+        },
+        onMatchEnd: (winnerId) => {
+          onMatchEnd(winnerId);
+          internetControllerRef.current?.dispose();
+        },
+      });
+      internetControllerRef.current = controller;
 
-    controller.init().catch(err => {
-      console.error('Failed to initialize MatchController:', err);
-      setError(err.message || 'Failed to initialize game.');
-    });
+      controller.init().catch((err) => {
+        console.error('[GameMatch] Failed to initialize Trollopoly:', err);
+        setError(err.message || 'Failed to initialize Trollopoly game.');
+      });
 
-    return () => {
-      controller.dispose();
-    };
-  }, [matchId, gameType, user?.id, onMatchEnd]);
+      return () => {
+        controller.dispose();
+      };
+    } else {
+      // Use legacy MatchController for existing games
+      const controller = new MatchController({
+        matchId,
+        gameType,
+        userId: user.id,
+        onStateChange: (newState) => {
+          setGameState(newState);
+        },
+        onMatchEnd: (winnerId) => {
+          onMatchEnd(winnerId);
+          legacyControllerRef.current?.dispose();
+        },
+      });
+      legacyControllerRef.current = controller;
+
+      controller.init().catch((err) => {
+        console.error('Failed to initialize MatchController:', err);
+        setError(err.message || 'Failed to initialize game.');
+      });
+
+      return () => {
+        controller.dispose();
+      };
+    }
+  }, [matchId, gameType, user?.id, onMatchEnd, isInternetGame]);
+
+  const checkUserRole = async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('internet_game_matches')
+      .select('player_ids')
+      .eq('id', matchId)
+      .single();
+    
+    if (data && !data.player_ids?.includes(user.id)) {
+      setIsSpectator(true);
+      // Add spectator to match
+      await supabase.rpc('add_trollopoly_spectator', {
+        p_match_id: matchId,
+        p_user_id: user.id,
+        p_username: profile?.username || 'Anonymous'
+      });
+    }
+  };
+
+  const createBroadcastStream = async () => {
+    // Create or get existing stream for this match
+    const { data: existingStream } = await supabase
+      .from('streams')
+      .select('id')
+      .eq('trollopoly_match_id', matchId)
+      .single();
+
+    if (existingStream) {
+      setStreamId(existingStream.id);
+    } else {
+      // Auto-create broadcast stream for the match
+      const { data: newStream } = await supabase
+        .from('streams')
+        .insert({
+          broadcaster_id: user?.id,
+          title: `Trollopoly Match - ${matchId.slice(0, 8)}`,
+          is_live: true,
+          trollopoly_match_id: matchId,
+          chat_enabled: true,
+        })
+        .select('id')
+        .single();
+      
+      if (newStream) {
+        setStreamId(newStream.id);
+      }
+    }
+  };
+
+  const handleGameAction = useCallback((action: GameAction) => {
+    if (internetControllerRef.current) {
+      internetControllerRef.current.sendGameAction(action.type, action.payload);
+    }
+  }, []);
 
   if (error) {
-    return <div className="text-red-500">Error: {error}</div>;
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-red-500 text-xl">Error: {error}</div>
+      </div>
+    );
   }
 
   if (!gameState) {
-    return <div className="text-center text-xl">Loading game...</div>;
-  }
-
-  const handleReact = async () => {
-    if (matchControllerRef.current && gameState && gameState.gameType === 'reaction-speed') {
-      const reactionSpeedState = gameState as ReactionSpeedGameState;
-      if (reactionSpeedState.phase === 'waiting_for_reaction' && reactionSpeedState.triggerTimestamp) {
-        const reactionTime = Date.now() - reactionSpeedState.triggerTimestamp;
-        const { success, error } = await matchControllerRef.current.sendGameAction('react_to_trigger', { reactionTime });
-        if (!success) {
-          console.error('Failed to send reaction:', error);
-          setError(error || 'Failed to send reaction.');
-        }
-      } else {
-        setError('Cannot react outside of reaction phase.');
-      }
-    }
-  };
-
-  const renderReactionSpeedGame = (state: ReactionSpeedGameState) => {
-    const myPlayerState = state.players.find(p => p.id === user?.id);
-    const otherPlayerState = state.players.find(p => p.id !== user?.id);
-
-    let statusMessage = '';
-    switch (state.phase) {
-      case 'countdown':
-        statusMessage = `Starting in ${state.timerRemaining}...`;
-        break;
-      case 'waiting_for_reaction':
-        if (state.triggerTimestamp === null) {
-          statusMessage = 'Get Ready...';
-        } else if (Date.now() < state.triggerTimestamp) {
-            statusMessage = 'Waiting for GO!';
-        } else {
-            statusMessage = 'GO!';
-        }
-        break;
-      case 'finished':
-        statusMessage = 'Game Over!';
-        break;
-    }
-
-    const reactionDisplay = (player: ReactionSpeedPlayerState) => {
-      if (player.reactionTime !== null) {
-        return `${player.username} reacted in ${player.reactionTime}ms`;
-      } else if (player.hasReacted) {
-        return `${player.username} reacted (time pending)`;
-      } else {
-        return `${player.username} awaiting reaction`;
-      }
-    };
-
     return (
-      <div className="flex flex-col items-center justify-center p-4">
-        <h2 className="text-3xl font-bold mb-4">Reaction Speed Arena</h2>
-        <p className="text-xl mb-4">Match ID: {matchId}</p>
-        <p className="text-2xl mb-6">{statusMessage}</p>
-
-        {state.status === 'waiting' && (
-          <p className="text-lg">Waiting for another player to join...</p>
-        )}
-
-        {state.status === 'ready' && state.phase === 'countdown' && (
-          <p className="text-lg">Match starting soon!</p>
-        )}
-
-        {state.status === 'active' && state.phase === 'waiting_for_reaction' && (
-          <button
-            onClick={handleReact}
-            disabled={myPlayerState?.hasReacted || state.triggerTimestamp === null || Date.now() < state.triggerTimestamp}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-full text-2xl mt-4"
-          >
-            {myPlayerState?.hasReacted ? 'Reacted!' : 'REACT!'}
-          </button>
-        )}
-
-        {state.status === 'finished' && (
-          <div className="text-center">
-            <p className="text-3xl font-bold mb-4">{state.winnerId === user?.id ? 'YOU WIN!' : state.winnerId ? 'You Lose!' : 'Draw!'}</p>
-            {state.winnerId && <p className="text-xl">Winner: {state.players.find(p => p.id === state.winnerId)?.username}</p>}
-            <div className="mt-4">
-              {myPlayerState && <p className="text-lg">{reactionDisplay(myPlayerState)}</p>}
-              {otherPlayerState && <p className="text-lg">{reactionDisplay(otherPlayerState)}</p>}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-8 w-full max-w-md">
-          <h3 className="text-xl font-semibold mb-2">Players:</h3>
-          <ul className="list-disc list-inside">
-            {state.players.map(player => (
-              <li key={player.id} className="text-lg">
-                {player.username} ({player.id === user?.id ? 'You' : 'Opponent'})
-                {player.isHost && ' (Host)'}
-                {player.isConnected ? ' (Connected)' : ' (Disconnected)'}
-              </li>
-            ))}
-          </ul>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+          <p className="text-slate-400">Loading Trollopoly...</p>
         </div>
       </div>
     );
-  };
+  }
 
+  // Render Trollopoly
+  if (isInternetGame && gameState) {
+    const trollopolyState = gameState as TrollopolyGameState;
+    const isHost = trollopolyState.players.find(p => p.id === user?.id)?.isHost ?? false;
+    
+    return (
+      <TrollopolyCityBoard
+        gameState={trollopolyState}
+        playerId={user?.id || ''}
+        onAction={handleGameAction}
+        isHost={isHost}
+        isSpectator={isSpectator}
+        streamId={streamId || matchId}
+      />
+    );
+  }
+
+  // Placeholder for other legacy games
   return (
-    <div className="game-match-container">
-      {gameType === 'reaction-speed' && renderReactionSpeedGame(gameState as ReactionSpeedGameState)}
-      {/* Add rendering for other game types here */}
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+      <div className="text-center max-w-md">
+        <h2 className="text-3xl font-bold text-white mb-4">
+          Trollopoly
+        </h2>
+        <p className="text-slate-400 mb-6">
+          This game is coming soon! Check back later for updates.
+        </p>
+        <button
+          onClick={() => onMatchEnd()}
+          className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold"
+        >
+          Back to Games
+        </button>
+      </div>
     </div>
   );
 };

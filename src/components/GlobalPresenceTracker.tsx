@@ -19,11 +19,13 @@ export default function GlobalPresenceTracker() {
         
         // 2. Fetch total online count and user IDs (approximate from user_presence table)
         // This replaces the expensive Realtime Presence Roster at 10k users.
+        // Includes ALL users: regular users, admins, officers, etc.
         const twoMinutesAgo = new Date(Date.now() - 120000).toISOString();
         const { data: presenceData, count, error } = await supabase
           .from('user_presence')
-          .select('user_id')
-          .gt('last_seen_at', twoMinutesAgo);
+          .select('user_id', { count: 'exact' })
+          .gt('last_seen_at', twoMinutesAgo)
+          .limit(1000); // Get up to 1000 online users to show in sidebar
         
         if (!error) {
           if (count !== null) {

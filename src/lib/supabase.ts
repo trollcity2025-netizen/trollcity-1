@@ -1248,41 +1248,68 @@ export function setupGlobalMessageNotifications(
         table: 'conversation_messages'
       },
       async (payload) => {
-        const newMsg = payload.new
+        const newMsg = payload.new as any
+        
+        // Validate message data
+        if (!newMsg?.conversation_id || !newMsg?.sender_id) {
+          console.warn('[setupGlobalMessageNotifications] Invalid message payload:', payload)
+          return
+        }
+        
+        // Don't notify for own messages
+        if (newMsg.sender_id === userId) return
         
         // Check if this message is in a conversation the user is part of
-        const { data: membership } = await supabase
+        const { data: membership, error: membershipError } = await supabase
           .from('conversation_members')
           .select('conversation_id')
           .eq('conversation_id', newMsg.conversation_id)
           .eq('user_id', userId)
-          .single()
+          .maybeSingle()
         
-        if (!membership) return // Not in this conversation
-        if (newMsg.sender_id === userId) return // Don't notify for own messages
+        if (membershipError) {
+          console.error('[setupGlobalMessageNotifications] Error checking membership:', membershipError)
+          return
+        }
+        
+        if (!membership) {
+          console.log('[setupGlobalMessageNotifications] User not in conversation, skipping')
+          return
+        }
         
         // Get message content
         const messageBody = newMsg.body || newMsg.content || ''
         
         // Fetch sender info
-        const { data: sender } = await supabase
+        const { data: sender, error: senderError } = await supabase
           .from('user_profiles')
           .select('username, avatar_url')
           .eq('id', newMsg.sender_id)
-          .single()
+          .maybeSingle()
+        
+        if (senderError) {
+          console.error('[setupGlobalMessageNotifications] Error fetching sender:', senderError)
+          return
+        }
         
         if (sender) {
+          console.log('[setupGlobalMessageNotifications] Opening chat bubble for:', sender.username)
           onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, false, messageBody)
         }
       }
     )
-    .subscribe()
+    .subscribe((status) => {
+      console.log(`[setupGlobalMessageNotifications] DM channel status: ${status}`)
+    })
 
   // Subscribe to OPS messages (if user is officer)
   let opsChannel: any | null = null
   let opsEnabled = true
   isOfficer(userId).then((isOff) => {
-    if (!isOff) return
+    if (!isOff) {
+      console.log('[setupGlobalMessageNotifications] User is not an officer, skipping OPS subscription')
+      return
+    }
     if (!opsEnabled) return
 
     opsChannel = supabase
@@ -1295,25 +1322,40 @@ export function setupGlobalMessageNotifications(
           table: 'officer_chat_messages',
         },
         async (payload) => {
-          const newMsg = payload.new
+          const newMsg = payload.new as any
+          
+          // Validate message data
+          if (!newMsg?.sender_id) {
+            console.warn('[setupGlobalMessageNotifications] Invalid OPS message payload:', payload)
+            return
+          }
+          
           if (newMsg.sender_id === userId) return // Don't notify for own messages
 
           // Get message content
           const messageBody = newMsg.body || newMsg.content || ''
 
           // Fetch sender info
-          const { data: sender } = await supabase
+          const { data: sender, error: senderError } = await supabase
             .from('user_profiles')
             .select('username, avatar_url')
             .eq('id', newMsg.sender_id)
-            .single()
+            .maybeSingle()
+
+          if (senderError) {
+            console.error('[setupGlobalMessageNotifications] Error fetching OPS sender:', senderError)
+            return
+          }
 
           if (sender) {
+            console.log('[setupGlobalMessageNotifications] Opening OPS chat bubble from:', sender.username)
             onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, true, messageBody)
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log(`[setupGlobalMessageNotifications] OPS channel status: ${status}`)
+      })
   })
   
   // Cleanup function

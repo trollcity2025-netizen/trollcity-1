@@ -1,5 +1,5 @@
 import { GameState, ReactionSpeedGameState, ReactionSpeedPhase, ReactionSpeedPlayerState } from './types';
-import { GameType } from '@/pages/TrollGamesPage';
+import { GameType } from './gameTypes';
 
 interface GameEngineInterface<T extends GameState> {
   initializeGame: (players: { id: string; username: string }[]) => T;
@@ -141,12 +141,37 @@ export class ReactionSpeedGameEngine implements GameEngineInterface<ReactionSpee
   // Add any other game-specific logic methods here
 }
 
+// Placeholder engine for games that are not yet implemented
+class PlaceholderGameEngine implements GameEngineInterface<GameState> {
+  initializeGame(players: { id: string; username: string }[]): GameState {
+    return {
+      matchId: '',
+      gameType: 'placeholder',
+      players: players.map(p => ({
+        id: p.id,
+        username: p.username,
+        score: 0,
+        isHost: false,
+        isConnected: true,
+      })),
+      status: 'waiting',
+      timerRemaining: 0,
+    };
+  }
+}
+
 // Factory function to get the correct game engine
 export function getGameEngine(gameType: GameType): GameEngineInterface<any> {
   switch (gameType) {
     case 'reaction-speed':
       return new ReactionSpeedGameEngine();
-    // Add cases for other game types
+    // Placeholder for games not yet implemented
+    case 'two-truths-lie':
+    case 'fame-shame-wheel':
+    case 'troll-identity-hunt':
+    case 'multiplayer-solitaire':
+    case 'multiplayer-dominoes':
+      return new PlaceholderGameEngine();
     default:
       throw new Error(`Unknown game type: ${gameType}`);
   }

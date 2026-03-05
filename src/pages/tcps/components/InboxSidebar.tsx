@@ -29,6 +29,9 @@ interface InboxSidebarProps {
   onConversationsLoaded: (conversations: SidebarConversation[]) => void
 }
 
+const CACHE_KEY = 'tcps_conversations_cache'
+const CACHE_DURATION_MS = 5 * 60 * 1000 // 5 minutes
+
 export default function InboxSidebar({
   activeConversation,
   onSelectConversation,
@@ -41,12 +44,36 @@ export default function InboxSidebar({
   const { user } = useAuthStore()
   const { openChatBubble } = useChatStore()
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [isUserOfficer, setIsUserOfficer] = useState(false)
   const [newMessagesMap, setNewMessagesMap] = useState<Record<string, boolean>>({})
   const menuRef = useRef<HTMLDivElement>(null)
+  const hasLoadedFromCache = useRef(false)
+
+  // Load from cache immediately on mount
+  useEffect(() => {
+    if (!user?.id || hasLoadedFromCache.current) return
+    
+    try {
+      const cached = localStorage.getItem(`${CACHE_KEY}_${user.id}`)
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached)
+        const isValid = Date.now() - timestamp < CACHE_DURATION_MS
+        
+        if (isValid && Array.isArray(data) && data.length > 0) {
+          setConversations(data)
+          onConversationsLoaded(data)
+          hasLoadedFromCache.current = true
+          setIsInitialLoad(false)
+        }
+      }
+    } catch (e) {
+      console.error('Error loading from cache:', e)
+    }
+  }, [user?.id, onConversationsLoaded])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -56,7 +83,7 @@ export default function InboxSidebar({
     }
     document.addEventListener('mousedown', handleClickOutside)
     
-    // Check if user is officer
+    // Check if user is officer - do this in background
     if (user?.id) {
       isOfficer(user.id).then(setIsUserOfficer)
     }
@@ -69,8 +96,25 @@ export default function InboxSidebar({
     setOpenMenuId(null)
   }
 
-  const fetchConversations = useCallback(async () => {
+  const saveToCache = useCallback((data: SidebarConversation[]) => {
     if (!user?.id) return
+    try {
+      localStorage.setItem(`${CACHE_KEY}_${user.id}`, JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }))
+    } catch (e) {
+      console.error('Error saving to cache:', e)
+    }
+  }, [user?.id])
+
+  const fetchConversations = useCallback(async (isBackground = false) => {
+    if (!user?.id) return
+    
+    // Only show loading state if not background refresh and we don't have cached data
+    if (!isBackground && conversations.length === 0) {
+      setLoading(true)
+    }
     
     try {
       // 1. Fetch all conversations the user is a member of
@@ -86,59 +130,67 @@ export default function InboxSidebar({
       const processedConvs: SidebarConversation[] = []
 
       if (convIds.length > 0) {
-        // 2. Fetch other members for these conversations to get their profiles
-        const { data: otherMembers, error: othersError } = await supabase
-          .from('conversation_members')
-          .select('conversation_id, user_id, user_profiles!inner(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
-          .in('conversation_id', convIds)
-          .neq('user_id', user.id)
-
-        if (othersError) {
-          console.warn('Error fetching other members, trying without !inner:', othersError)
-          // Fallback if !inner fails (though it shouldn't if relations are correct)
-          const { data: fallbackMembers } = await supabase
-            .from('conversation_members')
-            .select('conversation_id, user_id, user_profiles(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
-            .in('conversation_id', convIds)
-            .neq('user_id', user.id)
-          
-          if (fallbackMembers) {
-            // Manual filter for members that actually have profiles
-            // const validMembers = fallbackMembers.filter(m => m.user_profiles)
-            // ... continue with validMembers
+        // Helper function to batch array into chunks
+        const BATCH_SIZE = 50
+        const chunkArray = (arr: string[], size: number) => {
+          const chunks: string[][] = []
+          for (let i = 0; i < arr.length; i += size) {
+            chunks.push(arr.slice(i, i + size))
           }
+          return chunks
         }
 
-        // 3. Fetch unread counts for each conversation
-        const { data: unreadData } = await supabase
-          .from('conversation_messages')
-          .select('conversation_id')
-          .in('conversation_id', convIds)
-          .neq('sender_id', user.id)
-          .is('read_at', null)
-          .is('is_deleted', false)
+        const batches = chunkArray(convIds, BATCH_SIZE)
+
+        // Fetch all data in parallel across batches for better performance
+        const [membersResults, unreadResults, messagesResults] = await Promise.all([
+          // 2. Fetch other members for all batches in parallel
+          Promise.all(batches.map(batch =>
+            supabase
+              .from('conversation_members')
+              .select('conversation_id, user_id, user_profiles!inner(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
+              .in('conversation_id', batch)
+              .neq('user_id', user.id)
+          )),
+          
+          // 3. Fetch unread counts for all batches in parallel
+          Promise.all(batches.map(batch =>
+            supabase
+              .from('conversation_messages')
+              .select('conversation_id')
+              .in('conversation_id', batch)
+              .neq('sender_id', user.id)
+              .is('read_at', null)
+              .is('is_deleted', false)
+          )),
+          
+          // 4. Fetch recent messages for all batches in parallel
+          Promise.all(batches.map(batch =>
+            supabase
+              .from('conversation_messages')
+              .select('conversation_id, body, created_at, sender_id')
+              .in('conversation_id', batch)
+              .is('is_deleted', false)
+              .order('created_at', { ascending: false })
+              .limit(100)
+          ))
+        ])
+
+        // Combine results from all batches
+        const allOtherMembers = membersResults.flatMap(r => r.data || [])
+        const otherMembers = allOtherMembers
 
         const unreadCounts: Record<string, number> = {}
-        unreadData?.forEach(m => {
-          unreadCounts[m.conversation_id] = (unreadCounts[m.conversation_id] || 0) + 1
+        unreadResults.forEach(({ data }) => {
+          data?.forEach(m => {
+            unreadCounts[m.conversation_id] = (unreadCounts[m.conversation_id] || 0) + 1
+          })
         })
 
-        // 4. Fetch the last message for conversations (single query, avoid N+1)
         const lastMessageByConversationId: Record<string, { body: string; created_at: string | null; sender_id: string }> = {}
-        try {
-          const { data: recentMessages, error: recentMessagesError } = await supabase
-            .from('conversation_messages')
-            .select('conversation_id, body, created_at, sender_id')
-            .in('conversation_id', convIds)
-            .is('is_deleted', false)
-            .order('created_at', { ascending: false })
-            .limit(1000)
-
-          if (recentMessagesError) throw recentMessagesError
-
+        messagesResults.forEach(({ data: recentMessages }) => {
           ;(recentMessages || []).forEach((m: any) => {
             if (!m?.conversation_id) return
-            // first occurrence wins (already ordered newest->oldest)
             if (!lastMessageByConversationId[m.conversation_id]) {
               lastMessageByConversationId[m.conversation_id] = {
                 body: m.body,
@@ -147,9 +199,7 @@ export default function InboxSidebar({
               }
             }
           })
-        } catch (e) {
-          console.warn('Error fetching recent messages (batch):', e)
-        }
+        })
 
         // 2.5 Fetch blocked users to filter them out
         const { data: blockedData } = await supabase
@@ -157,7 +207,7 @@ export default function InboxSidebar({
           .select('related_user_id')
           .eq('user_id', user.id)
           .eq('status', 'blocked')
-        
+          
         const blockedUserIds = new Set(blockedData?.map(b => b.related_user_id) || [])
 
         // 2.6 Get hidden conversations from localStorage
@@ -203,7 +253,6 @@ export default function InboxSidebar({
       
       processedConvs.forEach(conv => {
         const existing = uniqueConvsMap.get(conv.other_user_id)
-        // If no existing, or this one has a message and the existing doesn't, or this one is newer
         const hasTime = (t: string) => t && t !== ''
         if (!existing) {
           uniqueConvsMap.set(conv.other_user_id, conv)
@@ -228,11 +277,6 @@ export default function InboxSidebar({
             .limit(1)
             .maybeSingle()
           
-          // Fetch OPS unread count
-          // We'll use a simple approach: messages since last seen or just any messages?
-          // For now, let's look at the officer_chat_messages table.
-          // In a real app, you'd have an 'officer_chat_read_status' table.
-          // As a workaround, we can use localStorage for 'last_seen_ops_timestamp'
           const lastSeenOps = localStorage.getItem('last_seen_ops_timestamp') || '1970-01-01T00:00:00Z'
           const { count: opsUnreadCount } = await supabase
             .from('officer_chat_messages')
@@ -269,13 +313,15 @@ export default function InboxSidebar({
       
       setConversations(finalConvs)
       onConversationsLoaded(finalConvs)
+      saveToCache(finalConvs)
 
     } catch (err) {
       console.error('Error fetching conversations:', err)
     } finally {
       setLoading(false)
+      setIsInitialLoad(false)
     }
-  }, [user?.id, isUserOfficer, onConversationsLoaded])
+  }, [user?.id, isUserOfficer, onConversationsLoaded, saveToCache, conversations.length])
 
   const handleBlockUser = async (otherUserId: string) => {
     if (!user) return
@@ -303,11 +349,9 @@ export default function InboxSidebar({
   const handleHideChat = async (otherUserId: string) => {
     if (!user) return
     
-    // We need the conversation ID for this user
     const conv = conversations.find(c => c.other_user_id === otherUserId)
     if (!conv) return
 
-    // Find the actual conversation ID for this user
     const { data: memberData } = await supabase
       .from('conversation_members')
       .select('conversation_id')
@@ -338,25 +382,30 @@ export default function InboxSidebar({
   // Clear new message notification when user selects a conversation
   useEffect(() => {
     if (activeConversation) {
-      // Clear all notifications when user selects a conversation
-      // The unread count will be updated by fetchConversations
       setNewMessagesMap({})
     }
   }, [activeConversation])
 
   useEffect(() => {
+    // Initial fetch - will use cache first, then refresh
     fetchConversations()
+    
+    // Debounce fetch for real-time updates
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    const debouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        fetchConversations(true) // Background refresh
+      }, 500)
+    }
     
     // Subscribe to new messages to update sidebar ordering/preview
     const messagesChannel = supabase
       .channel('sidebar-messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (payload) => {
-         // Check if the message belongs to one of our conversations
          const newMsg = payload.new
          if (newMsg && user?.id) {
-           // If message is from someone else and not the active conversation, mark as new
            if (newMsg.sender_id !== user.id) {
-             // Find conversation for this message
              supabase
                .from('conversation_members')
                .select('conversation_id')
@@ -369,15 +418,13 @@ export default function InboxSidebar({
                })
            }
          }
-         fetchConversations()
+         debouncedFetch()
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, (_payload) => {
-         // Handle read receipts
-         fetchConversations()
+         debouncedFetch()
       })
       .on('broadcast', { event: 'new-message' }, () => {
-         // Instant sidebar update on broadcast
-         fetchConversations()
+         debouncedFetch()
       })
       .subscribe()
 
@@ -387,12 +434,13 @@ export default function InboxSidebar({
       opsChannel = supabase
         .channel('sidebar-ops')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'officer_chat_messages' }, () => {
-           fetchConversations()
+           debouncedFetch()
         })
         .subscribe()
     }
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
       supabase.removeChannel(messagesChannel)
       if (opsChannel) supabase.removeChannel(opsChannel)
     }
@@ -400,6 +448,24 @@ export default function InboxSidebar({
 
   const filteredConversations = conversations.filter(c => 
     c.other_username.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  // Skeleton loader for better perceived performance
+  const renderSkeleton = () => (
+    <div className="divide-y divide-purple-500/10">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="p-4 flex items-start gap-3 animate-pulse">
+          <div className="w-12 h-12 rounded-full bg-gray-800 flex-shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="h-4 bg-gray-800 rounded w-24" />
+              <div className="h-3 bg-gray-800 rounded w-10" />
+            </div>
+            <div className="h-3 bg-gray-800 rounded w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 
   return (
@@ -452,7 +518,9 @@ export default function InboxSidebar({
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {isInitialLoad ? (
+          renderSkeleton()
+        ) : loading && conversations.length === 0 ? (
           <div className="flex justify-center p-8">
             <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
           </div>

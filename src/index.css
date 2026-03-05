@@ -25,6 +25,9 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  /* Layout Variables */
+  --bottom-nav-height: 64px;
+
   /* Troll City Variables */
   --troll-blue-neon: #00f3ff;
   --troll-pink-neon: #ff00ff;
@@ -337,4 +340,21 @@ button:focus-visible {
 
 .animate-pulse-red {
   animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+/* Bottom Navigation Styles */
+.bottom-nav {
+  height: var(--bottom-nav-height, 64px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-nav-inner {
+  height: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Safe area bottom padding for mobile */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

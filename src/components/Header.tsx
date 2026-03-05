@@ -268,17 +268,29 @@ const Header = () => {
 
         {user && <PresidentialToolsModal />}
 
-        <Link
-          to={user ? "/trollifications" : "/auth?mode=signup"}
+        <button
+          onClick={async () => {
+            if (user && unreadNotifications > 0) {
+              // Clear local count immediately
+              setUnreadNotifications(0)
+              // Mark all notifications as read in the background
+              try {
+                await supabase.rpc('mark_all_notifications_read', { p_user_id: user.id })
+              } catch (err) {
+                console.error('Error marking notifications as read:', err)
+              }
+            }
+            navigate(user ? '/trollifications' : '/auth?mode=signup')
+          }}
           className="relative p-3 text-purple-400 hover:text-purple-300 transition-all duration-300 group"
         >
           <Bell className="w-6 h-6" />
           {user && unreadNotifications > 0 && (
-            <span className="absolute -top-1 -right-1 text-xs px-2 py-1 rounded-full min-w-[20px] text-center bg-red-500 text-white">
+            <span className="absolute -top-1 -right-1 text-xs px-2 py-1 rounded-full min-w-[20px] text-center bg-red-500 text-white animate-pulse">
               {unreadNotifications > 99 ? '99+' : unreadNotifications}
             </span>
           )}
-        </Link>
+        </button>
 
         {user && (
           <>

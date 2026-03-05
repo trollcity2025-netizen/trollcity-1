@@ -343,10 +343,17 @@ function BroadcastPage() {
           setMuxPlaybackId(data.mux_playback_id);
         }
         
-        // Check if battle ended - if is_battle changed from true to false, reload
+        // Check if battle ended - if is_battle changed from true to false, update state
+        // This allows smooth transition back to regular broadcast view
         if (stream.is_battle === true && data.is_battle === false) {
-          console.log('[BroadcastPage] Battle ended, reloading page...');
-          window.location.reload();
+          console.log('[BroadcastPage] Battle ended, returning to regular broadcast view...');
+          // Just update the stream state - stay on the broadcast page
+          // The BattleView will unmount and show regular broadcast
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, is_battle: false, battle_id: null };
+          });
+          // Don't navigate away - stay on the broadcast page
           return;
         }
         
@@ -892,19 +899,15 @@ function BroadcastPage() {
           // This is critical for mobile browsers which require user gesture
           try {
             console.log('[BroadcastPage] Requesting camera/mic permissions...');
-            toast.info('Requesting camera & microphone access...');
-            const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-              video: true, 
-              audio: true 
+            const mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: true
             });
             console.log('[BroadcastPage] Browser permissions granted', mediaStream.getTracks().map(t => t.kind));
-            toast.success('Camera & mic access granted!');
             // Stop the test stream - Agora will create its own
             mediaStream.getTracks().forEach(track => track.stop());
           } catch (permErr: any) {
             console.error('[BroadcastPage] Browser permission request failed:', permErr.message);
-            // Show error to user - they need to grant permissions
-            toast.error('Camera/mic permission required. Please allow access and try again.');
             // Continue anyway - Agora will try to create tracks
           }
 
@@ -1466,6 +1469,17 @@ function BroadcastPage() {
         battleId={stream.battle_id}
         currentStreamId={stream.id}
         localTracks={localTracks}
+        onReturnToStream={() => {
+          // When battle ends/forfeited, return to regular broadcast view
+          console.log('[BroadcastPage] Returning from battle to regular broadcast view');
+          // Update local state to exit battle mode immediately
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, is_battle: false, battle_id: null };
+          });
+          // Also refresh from database to ensure sync
+          refreshStream();
+        }}
       />
     )
   }
@@ -1484,7 +1498,7 @@ function BroadcastPage() {
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
         
-        header={
+          header={
           <BroadcastHeader
             stream={stream}
             isHost={isHost}
@@ -1492,13 +1506,6 @@ function BroadcastPage() {
             handleLike={handleLike}
             onStartBattle={isHost && categorySupportsBattles ? () => setIsBattleMode(true) : undefined}
             categoryBattleTerm={categorySupportsBattles ? categoryMatchingTerm : undefined}
-            onBack={() => {
-              if (isHost) {
-                handleStreamEnd();
-              } else {
-                navigate('/');
-              }
-            }}
           />
         }
         
@@ -1547,6 +1554,7 @@ function BroadcastPage() {
             onPinProduct={() => setIsPinProductModalOpen(true)}
             boxCount={boxCount}
             setBoxCount={updateBoxCount}
+            onRefreshStream={refreshStream}
           />
         }
         

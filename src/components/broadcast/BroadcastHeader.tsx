@@ -1,7 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { Heart, Users, Swords, ArrowLeft } from 'lucide-react';
+import { Heart, Users, Swords } from 'lucide-react';
 import { Stream } from '../../types/broadcast';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -13,24 +12,13 @@ interface BroadcastHeaderProps {
     isHost: boolean;
     liveViewerCount?: number;
     handleLike: () => void;
-    onBack?: () => void;
 }
 
-export default function BroadcastHeader({ stream, onStartBattle, categoryBattleTerm, isHost, liveViewerCount, handleLike, onBack }: BroadcastHeaderProps) {
+export default function BroadcastHeader({ stream, onStartBattle, categoryBattleTerm, isHost, liveViewerCount, handleLike }: BroadcastHeaderProps) {
     const { profile, setProfile } = useAuthStore();
     const [likes, setLikes] = React.useState(0);
     const [isLiking, setIsLiking] = React.useState(false);
     const profileRef = React.useRef(profile);
-    const navigate = useNavigate();
-
-    // Handle back button - if onBack prop provided use it, otherwise navigate home
-    const handleBack = () => {
-        if (onBack) {
-            onBack();
-        } else {
-            navigate('/');
-        }
-    };
 
     // Keep profileRef up to date
     React.useEffect(() => {
@@ -100,13 +88,8 @@ export default function BroadcastHeader({ stream, onStartBattle, categoryBattleT
 
     return (
         <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-between gap-3 pointer-events-none">
-            {/* Back Button - Mobile/Immersive Mode */}
-            <button
-                onClick={handleBack}
-                className="pointer-events-auto flex items-center justify-center w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full border border-white/10 transition-all"
-            >
-                <ArrowLeft size={20} className="text-white" />
-            </button>
+            {/* Spacer for left side - Back button removed (using nav bubble instead) */}
+            <div className="w-10" />
 
             <div className="hidden items-center gap-3">
                 {isHost && onStartBattle && (
