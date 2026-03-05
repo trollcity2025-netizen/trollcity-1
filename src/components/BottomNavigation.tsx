@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X } from 'lucide-react'
+import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X, LogIn, UserPlus } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -106,7 +106,138 @@ export default function BottomNavigation() {
     }
   }
 
-  if (!user || !profile) return null
+  // Handle non-authenticated users - show signup/signin bubble
+  if (!user || !profile) {
+    return (
+      <>
+        {/* Draggable Floating Menu Bubble - Mobile Only (Guest) */}
+        <motion.div
+          drag
+          dragMomentum={false}
+          dragConstraints={{ left: -window.innerWidth + 80, right: 0, top: -window.innerHeight + 150, bottom: 0 }}
+          initial={{ x: 0, y: 0 }}
+          animate={{ x: bubblePosition.x, y: bubblePosition.y }}
+          onDragEnd={(_, info) => {
+            setBubblePosition({ x: info.point.x - window.innerWidth + 70, y: info.point.y - window.innerHeight + 70 })
+          }}
+          className="fixed bottom-20 right-4 z-[100] md:hidden"
+          style={{ touchAction: 'none' }}
+        >
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsMenuOpen(true)}
+            className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[3px] shadow-[0_0_25px_rgba(124,58,237,0.7)]"
+          >
+            <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/10">
+              <Menu size={28} className="text-white" />
+            </div>
+          </motion.button>
+          
+          {/* Drag hint */}
+          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap opacity-60">
+            Drag to move
+          </div>
+        </motion.div>
+
+        {/* Guest Menu Popup */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMenuOpen(false)}
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
+              />
+              
+              {/* Menu */}
+              <motion.div
+                initial={{ x: '100%', opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: '100%', opacity: 0 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="fixed top-4 right-4 bottom-4 w-[65vw] max-w-[280px] bg-[#121212] border border-purple-500/30 rounded-2xl p-4 z-[70] md:hidden overflow-y-auto shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[2px]">
+                      <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center">
+                        <User size={20} className="text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Welcome</h3>
+                      <p className="text-xs text-gray-400">Sign in or join</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsMenuOpen(false)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <Link
+                    to="/auth"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 hover:from-purple-600/30 hover:to-blue-600/30 rounded-xl border border-purple-500/30 transition-colors group"
+                  >
+                    <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
+                      <LogIn size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-white font-medium text-base block">Sign In</span>
+                      <span className="text-gray-400 text-xs">Already have an account?</span>
+                    </div>
+                  </Link>
+                  
+                  <Link
+                    to="/auth?tab=signup"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 hover:from-green-600/30 hover:to-emerald-600/30 rounded-xl border border-green-500/30 transition-colors group"
+                  >
+                    <div className="p-2 rounded-lg bg-green-500/20 text-green-400 group-hover:bg-green-500/30 transition-colors">
+                      <UserPlus size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-white font-medium text-base block">Sign Up</span>
+                      <span className="text-gray-400 text-xs">Create a new account</span>
+                    </div>
+                  </Link>
+
+                  <div className="pt-2 border-t border-white/10">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Browse</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      <Link
+                        to="/live"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                      >
+                        <Video size={18} className="text-purple-400" />
+                        <span className="text-white text-sm">Live Streams</span>
+                      </Link>
+                      <Link
+                        to="/"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                      >
+                        <Home size={18} className="text-blue-400" />
+                        <span className="text-white text-sm">Home</span>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      </>
+    )
+  }
 
   // Determine Role
   const role = profile.role || 'viewer'
@@ -246,11 +377,11 @@ export default function BottomNavigation() {
             
             {/* Menu */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              initial={{ x: '100%', opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-sm bg-[#121212] border border-purple-500/30 rounded-2xl p-5 z-[70] md:hidden max-h-[80vh] overflow-y-auto shadow-2xl"
+              className="fixed top-4 right-4 bottom-4 w-[65vw] max-w-[280px] bg-[#121212] border border-purple-500/30 rounded-2xl p-4 z-[70] md:hidden overflow-y-auto shadow-2xl"
             >
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
