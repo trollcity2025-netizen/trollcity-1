@@ -13,6 +13,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // Session timeout - refresh before this to prevent issues
+    // Default is 1 hour, but we can be more aggressive with refreshes
+    flowType: 'pkce',
   },
   realtime: {
     params: {

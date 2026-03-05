@@ -179,12 +179,12 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/api/') ||
     url.pathname.includes('/rest/v1/')
   ) {
-    // API calls: Network First with short cache
+    // API calls: Network First with longer cache for stability
     // Skip auth requests
     if (url.pathname.includes('/auth/v1/')) {
       return;
     }
-    event.respondWith(networkFirstWithTimeout(request, API_CACHE, 5000));
+    event.respondWith(networkFirstWithTimeout(request, API_CACHE, 10000));
   }
 });
 

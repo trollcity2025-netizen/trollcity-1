@@ -1,11 +1,15 @@
 import React, { useEffect } from 'react'
 import { initAuthAndData, useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
+import { useBackgroundSessionRefresh } from '../hooks/useBackgroundSessionRefresh'
 
 // Placeholder auth provider to match desired provider stack.
 // Auth state is managed via zustand in useAuthStore; this wrapper keeps provider structure consistent.
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user, refreshProfile } = useAuthStore();
+
+  // Background session refresh to prevent staleness after ~10 minutes
+  useBackgroundSessionRefresh()
 
   useEffect(() => {
     void initAuthAndData()
