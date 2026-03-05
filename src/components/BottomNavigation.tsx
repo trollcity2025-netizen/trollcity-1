@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X, LogIn, UserPlus } from 'lucide-react'
+import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X, LogIn, UserPlus, Trash2 } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +22,15 @@ export default function BottomNavigation() {
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [tcpsUnreadCount, setTcpsUnreadCount] = useState(0)
+  const [notificationCount, setNotificationCount] = useState(0)
+  const totalUnreadCount = tcpsUnreadCount + notificationCount
+  
+  // Bubble visibility state - always visible by default
+  const [isBubbleVisible, setIsBubbleVisible] = useState(true)
+  
+  // Remove zone state
+  const [showRemoveZone, setShowRemoveZone] = useState(false)
+  const [isOverRemoveZone, setIsOverRemoveZone] = useState(false)
   
   // Mobile message bubble state - only show most recent
   const [recentMessage, setRecentMessage] = useState<RecentMessage | null>(null)
@@ -30,6 +39,23 @@ export default function BottomNavigation() {
   
   // Position state for draggable bubble
   const [bubblePosition, setBubblePosition] = useState({ x: 0, y: 0 })
+  
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Handle keyboard shortcut 'b' to reopen bubble
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only trigger if 'b' is pressed and not in an input field
+      if (e.key === 'b' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        setIsBubbleVisible(true)
+        toast.success('Navigation bubble restored', { duration: 2000 })
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   useEffect(() => {
     if (isMenuOpen) {
@@ -52,7 +78,10 @@ export default function BottomNavigation() {
         .select('conversation_id')
         .eq('user_id', user.id)
       
-      if (!data || data.length === 0) return
+      if (!data || data.length === 0) {
+        setTcpsUnreadCount(0)
+        return
+      }
       const convIds = data.map(d => d.conversation_id)
       
       // Batch count queries to avoid URL length limits
@@ -89,11 +118,50 @@ export default function BottomNavigation() {
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
 
+  // Fetch notification count
+  useEffect(() => {
+    if (!user?.id) return
+    
+    const fetchNotificationCount = async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .is('is_dismissed', null)
+      
+      setNotificationCount(count || 0)
+    }
+    
+    fetchNotificationCount()
+    
+    const channel = supabase
+      .channel('nav-notification-count')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        fetchNotificationCount()
+      })
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        fetchNotificationCount()
+      })
+      .subscribe()
+    
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
+
   // Subscribe to new messages for mobile bubble notification
   useEffect(() => {
     if (!user?.id) return
 
-    // Subscribe to all conversations the user is in
     const subscribeToMessages = async () => {
       const { data: memberships } = await supabase
         .from('conversation_members')
@@ -104,7 +172,6 @@ export default function BottomNavigation() {
 
       const conversationIds = memberships.map(m => m.conversation_id)
 
-      // Create a single channel for all conversations
       const channel = supabase
         .channel('mobile-message-bubble')
         .on(
@@ -117,23 +184,19 @@ export default function BottomNavigation() {
           async (payload) => {
             const newMsg = payload.new as any
             
-            // Only show if it's not from current user and user is a member of this conversation
             if (newMsg.sender_id === user.id) return
             if (!conversationIds.includes(newMsg.conversation_id)) return
 
-            // Fetch sender info
             const { data: sender } = await supabase
               .from('user_profiles')
               .select('username, avatar_url')
               .eq('id', newMsg.sender_id)
               .single()
 
-            // Clear any existing timeout
             if (messageTimeoutRef.current) {
               clearTimeout(messageTimeoutRef.current)
             }
 
-            // Set the recent message (only showing most recent)
             setRecentMessage({
               id: newMsg.id,
               sender_id: newMsg.sender_id,
@@ -145,7 +208,6 @@ export default function BottomNavigation() {
             })
             setShowMessageBubble(true)
 
-            // Auto-hide after 8 seconds
             messageTimeoutRef.current = setTimeout(() => {
               setShowMessageBubble(false)
             }, 8000)
@@ -165,7 +227,6 @@ export default function BottomNavigation() {
     }
   }, [user?.id])
 
-  // Handle navigating to message from bubble
   const handleMessageBubbleClick = () => {
     if (recentMessage) {
       navigate(`/tcps?user=${recentMessage.sender_id}`)
@@ -173,7 +234,6 @@ export default function BottomNavigation() {
     }
   }
 
-  // Dismiss message bubble
   const dismissMessageBubble = (e: React.MouseEvent) => {
     e.stopPropagation()
     setShowMessageBubble(false)
@@ -185,6 +245,23 @@ export default function BottomNavigation() {
   useEffect(() => {
     setIsMenuOpen(false)
   }, [location.pathname])
+
+  // Handle marking messages/notifications as read
+  const handleMessagesClick = async () => {
+    // Mark all notifications as read
+    if (user?.id && notificationCount > 0) {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+    }
+    
+    // Clear local counts immediately for better UX
+    setNotificationCount(0)
+    setTcpsUnreadCount(0)
+    setIsMenuOpen(false)
+  }
 
   const handleLogout = async () => {
     try {
@@ -214,141 +291,46 @@ export default function BottomNavigation() {
     }
   }
 
-  // Handle non-authenticated users - show signup/signin bubble
-  if (!user || !profile) {
-    return (
-      <>
-        {/* Draggable Floating Menu Bubble - Mobile Only (Guest) */}
-        <motion.div
-          drag
-          dragMomentum={false}
-          dragConstraints={{ left: -window.innerWidth + 80, right: 0, top: -window.innerHeight + 150, bottom: 0 }}
-          initial={{ x: 0, y: 0 }}
-          animate={{ x: bubblePosition.x, y: bubblePosition.y }}
-          onDragEnd={(_, info) => {
-            setBubblePosition({ x: info.point.x - window.innerWidth + 70, y: info.point.y - window.innerHeight + 70 })
-          }}
-          className="fixed bottom-20 right-4 z-[100] md:hidden"
-          style={{ touchAction: 'none' }}
-        >
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsMenuOpen(true)}
-            className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[3px] shadow-[0_0_25px_rgba(124,58,237,0.7)]"
-          >
-            <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/10">
-              <Menu size={28} className="text-white" />
-            </div>
-          </motion.button>
-          
-          {/* Drag hint */}
-          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap opacity-60">
-            Drag to move
-          </div>
-        </motion.div>
+  // Handle drag - show remove zone when dragging near bottom
+  const handleDrag = useCallback((_: any, info: any) => {
+    const windowHeight = window.innerHeight
+    const bubbleY = info.point.y
+    
+    // Show remove zone when within 150px of bottom
+    if (bubbleY > windowHeight - 150) {
+      setShowRemoveZone(true)
+      // Check if over the middle bottom area (remove zone)
+      const windowWidth = window.innerWidth
+      const bubbleX = info.point.x
+      const isInCenter = bubbleX > windowWidth * 0.3 && bubbleX < windowWidth * 0.7
+      setIsOverRemoveZone(isInCenter)
+    } else {
+      setShowRemoveZone(false)
+      setIsOverRemoveZone(false)
+    }
+  }, [])
 
-        {/* Guest Menu Popup */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <>
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsMenuOpen(false)}
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
-              />
-              
-              {/* Menu */}
-              <motion.div
-                initial={{ x: '100%', opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: '100%', opacity: 0 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed top-4 right-4 bottom-4 w-[65vw] max-w-[280px] bg-[#121212] border border-purple-500/30 rounded-2xl p-4 z-[70] md:hidden overflow-y-auto shadow-2xl"
-              >
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[2px]">
-                      <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center">
-                        <User size={20} className="text-white" />
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white">Welcome</h3>
-                      <p className="text-xs text-gray-400">Sign in or join</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setIsMenuOpen(false)}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <Link
-                    to="/auth"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="flex items-center gap-3 p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 hover:from-purple-600/30 hover:to-blue-600/30 rounded-xl border border-purple-500/30 transition-colors group"
-                  >
-                    <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
-                      <LogIn size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-white font-medium text-base block">Sign In</span>
-                      <span className="text-gray-400 text-xs">Already have an account?</span>
-                    </div>
-                  </Link>
-                  
-                  <Link
-                    to="/auth?tab=signup"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 hover:from-green-600/30 hover:to-emerald-600/30 rounded-xl border border-green-500/30 transition-colors group"
-                  >
-                    <div className="p-2 rounded-lg bg-green-500/20 text-green-400 group-hover:bg-green-500/30 transition-colors">
-                      <UserPlus size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-white font-medium text-base block">Sign Up</span>
-                      <span className="text-gray-400 text-xs">Create a new account</span>
-                    </div>
-                  </Link>
-
-                  <div className="pt-2 border-t border-white/10">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Browse</h4>
-                    <div className="grid grid-cols-1 gap-2">
-                      <Link
-                        to="/live"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
-                      >
-                        <Video size={18} className="text-purple-400" />
-                        <span className="text-white text-sm">Live Streams</span>
-                      </Link>
-                      <Link
-                        to="/"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
-                      >
-                        <Home size={18} className="text-blue-400" />
-                        <span className="text-white text-sm">Home</span>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-      </>
-    )
-  }
+  // Handle drag end
+  const handleDragEnd = useCallback((_: any, info: any) => {
+    setIsDragging(false)
+    setShowRemoveZone(false)
+    
+    // If dropped in remove zone, hide the bubble
+    if (isOverRemoveZone) {
+      setIsBubbleVisible(false)
+      toast.success('Navigation hidden. Press "B" to restore', { duration: 3000 })
+      setIsOverRemoveZone(false)
+      return
+    }
+    
+    setBubblePosition({ 
+      x: info.point.x - window.innerWidth + 70, 
+      y: info.point.y - window.innerHeight + 70 
+    })
+  }, [isOverRemoveZone])
 
   // Determine Role
-  const role = profile.role || 'viewer'
+  const role = profile?.role || 'viewer'
 
   // Get role display name and icon
   const getRoleInfo = () => {
@@ -373,7 +355,7 @@ export default function BottomNavigation() {
     const baseOptions = [
       { category: 'Navigation', label: 'Home', icon: Home, path: '/' },
       { category: 'Navigation', label: 'Live Streams', icon: Video, path: '/live' },
-      { category: 'Navigation', label: 'Messages', icon: MessageSquare, path: '/tcps', badge: tcpsUnreadCount },
+      { category: 'Navigation', label: 'Messages', icon: MessageSquare, path: '/tcps', badge: totalUnreadCount, onClick: handleMessagesClick },
       { category: 'Navigation', label: 'My Profile', icon: User, path: `/profile/${profile?.username || profile?.id}` },
     ]
 
@@ -434,128 +416,246 @@ export default function BottomNavigation() {
 
   return (
     <>
-      {/* Draggable Floating Menu Bubble - Mobile Only */}
-      <motion.div
-        drag
-        dragMomentum={false}
-        dragConstraints={{ left: -window.innerWidth + 80, right: 0, top: -window.innerHeight + 150, bottom: 0 }}
-        initial={{ x: 0, y: 0 }}
-        animate={{ x: bubblePosition.x, y: bubblePosition.y }}
-        onDragEnd={(_, info) => {
-          setBubblePosition({ x: info.point.x - window.innerWidth + 70, y: info.point.y - window.innerHeight + 70 })
-        }}
-        className="fixed bottom-20 right-4 z-[100] md:hidden"
-        style={{ touchAction: 'none' }}
-      >
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsMenuOpen(true)}
-          className={`w-16 h-16 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[3px] shadow-[0_0_25px_rgba(124,58,237,0.7)]`}
-        >
-          <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/10">
-            <roleInfo.icon size={28} className="text-white" />
-          </div>
-        </motion.button>
-        
-        {/* Unread indicator bubble */}
-        {tcpsUnreadCount > 0 && (
-          <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-[#0D0D0D] animate-pulse">
-            {tcpsUnreadCount > 9 ? '9+' : tcpsUnreadCount}
-          </div>
+      {/* Full Screen Overlay when menu is open */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black z-[55]"
+          />
         )}
-        
-        {/* Drag hint */}
-        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap opacity-60">
-          Drag to move
-        </div>
-      </motion.div>
+      </AnimatePresence>
 
-      {/* Role-Based Menu Popup */}
+      {/* Remove Zone - appears when dragging to bottom */}
+      <AnimatePresence>
+        {showRemoveZone && isDragging && (
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className={`fixed bottom-0 left-0 right-0 h-32 z-[90] flex items-center justify-center transition-colors ${
+              isOverRemoveZone ? 'bg-red-500/40' : 'bg-red-500/20'
+            }`}
+          >
+            <div className={`flex flex-col items-center gap-2 transition-transform ${isOverRemoveZone ? 'scale-110' : 'scale-100'}`}>
+              <Trash2 size={32} className={isOverRemoveZone ? 'text-red-300' : 'text-red-400'} />
+              <span className={`text-sm font-bold ${isOverRemoveZone ? 'text-red-200' : 'text-red-300'}`}>
+                {isOverRemoveZone ? 'Release to Remove' : 'Drag here to hide'}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Draggable Floating Menu Bubble - Always Visible */}
+      <AnimatePresence>
+        {isBubbleVisible && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0, x: 0, y: 0 }}
+            animate={{ scale: 1, opacity: 1, x: bubblePosition.x, y: bubblePosition.y }}
+            exit={{ scale: 0, opacity: 0 }}
+            drag
+            dragMomentum={false}
+            dragConstraints={{ left: -window.innerWidth + 80, right: 0, top: -window.innerHeight + 150, bottom: 0 }}
+            onDragStart={() => setIsDragging(true)}
+            onDrag={handleDrag}
+            onDragEnd={handleDragEnd}
+            className="fixed bottom-20 right-4 z-[100]"
+            style={{ touchAction: 'none' }}
+          >
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
+              onClick={() => setIsMenuOpen(true)}
+              className={`w-16 h-16 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[3px] shadow-[0_0_25px_rgba(124,58,237,0.7)]`}
+            >
+              <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/10">
+                <roleInfo.icon size={28} className="text-white" />
+              </div>
+            </motion.button>
+            
+            {/* Unread indicator bubble */}
+            {totalUnreadCount > 0 && (
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-[#0D0D0D] animate-pulse">
+                {totalUnreadCount > 9 ? '9+' : totalUnreadCount}
+              </div>
+            )}
+            
+            {/* Drag hint */}
+            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap opacity-60">
+              Drag to move
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Role-Based Menu Popup - Full Screen */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
-            {/* Backdrop */}
+            {/* Full Screen Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] md:hidden"
+              className="fixed inset-0 bg-black/95 backdrop-blur-md z-[60]"
             />
             
-            {/* Menu */}
+            {/* Full Screen Menu */}
             <motion.div
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed top-4 right-4 bottom-4 w-[65vw] max-w-[280px] bg-[#121212] border border-purple-500/30 rounded-2xl p-4 z-[70] md:hidden overflow-y-auto shadow-2xl"
+              className="fixed inset-0 z-[70] overflow-y-auto bg-gradient-to-br from-[#0a0a0a] via-[#121212] to-[#0a0a0a]"
             >
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[2px]`}>
-                    <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center">
-                      <roleInfo.icon size={20} className="text-white" />
+              {/* Header */}
+              <div className="sticky top-0 z-10 bg-black/50 backdrop-blur-md border-b border-white/10 p-4">
+                <div className="flex items-center justify-between max-w-4xl mx-auto">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[2px]`}>
+                      <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center">
+                        <roleInfo.icon size={24} className="text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">{roleInfo.label}</h3>
+                      <p className="text-xs text-gray-400">Tap to navigate</p>
                     </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white">{roleInfo.label}</h3>
-                    <p className="text-xs text-gray-400">Tap to navigate</p>
+                  <div className="flex items-center gap-2">
+                    {user && (
+                      <button
+                        onClick={handleLogout}
+                        className="p-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
+                        title="Logout"
+                      >
+                        <LogOut size={22} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setIsMenuOpen(false)}
+                      className="p-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                    >
+                      <X size={24} />
+                    </button>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleLogout}
-                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
-                    title="Logout"
-                  >
-                    <LogOut size={18} />
-                  </button>
-                  <button
-                    onClick={() => setIsMenuOpen(false)}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
                 </div>
               </div>
 
-              <div className="space-y-5">
-                {Object.entries(
-                  menuOptions.reduce((acc: any, opt: any) => {
-                    const cat = opt.category || 'General'
-                    if (!acc[cat]) acc[cat] = []
-                    acc[cat].push(opt)
-                    return acc
-                  }, {})
-                ).map(([category, options]: [string, any]) => (
-                  <div key={category}>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">{category}</h4>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {options.map((opt: any, i: number) => {
-                        const OptIcon = opt.icon
-                        return (
-                          <Link
-                            key={i}
-                            to={opt.path}
-                            onClick={() => setIsMenuOpen(false)}
-                            className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors group"
-                          >
-                            <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
-                              <OptIcon size={18} />
-                            </div>
-                            <span className="text-white font-medium text-sm flex-1">{opt.label}</span>
-                            {opt.badge > 0 && (
-                              <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                                {opt.badge > 9 ? '9+' : opt.badge}
-                              </span>
-                            )}
-                          </Link>
-                        )
-                      })}
+              {/* Menu Content */}
+              <div className="p-4 max-w-4xl mx-auto">
+                {!user ? (
+                  // Guest View
+                  <div className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Link
+                        to="/auth"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-4 p-6 bg-gradient-to-r from-purple-600/20 to-blue-600/20 hover:from-purple-600/30 hover:to-blue-600/30 rounded-2xl border border-purple-500/30 transition-colors group"
+                      >
+                        <div className="p-3 rounded-xl bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
+                          <LogIn size={28} />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-white font-bold text-lg block">Sign In</span>
+                          <span className="text-gray-400 text-sm">Already have an account?</span>
+                        </div>
+                      </Link>
+                      
+                      <Link
+                        to="/auth?tab=signup"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-4 p-6 bg-gradient-to-r from-green-600/20 to-emerald-600/20 hover:from-green-600/30 hover:to-emerald-600/30 rounded-2xl border border-green-500/30 transition-colors group"
+                      >
+                        <div className="p-3 rounded-xl bg-green-500/20 text-green-400 group-hover:bg-green-500/30 transition-colors">
+                          <UserPlus size={28} />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-white font-bold text-lg block">Sign Up</span>
+                          <span className="text-gray-400 text-sm">Create a new account</span>
+                        </div>
+                      </Link>
+                    </div>
+
+                    <div className="pt-4 border-t border-white/10">
+                      <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 px-1">Browse</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <Link
+                          to="/live"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                        >
+                          <Video size={24} className="text-purple-400" />
+                          <span className="text-white font-medium">Live Streams</span>
+                        </Link>
+                        <Link
+                          to="/"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                        >
+                          <Home size={24} className="text-blue-400" />
+                          <span className="text-white font-medium">Home</span>
+                        </Link>
+                      </div>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  // Authenticated User View
+                  <div className="space-y-6 mt-4">
+                    {Object.entries(
+                      menuOptions.reduce((acc: any, opt: any) => {
+                        const cat = opt.category || 'General'
+                        if (!acc[cat]) acc[cat] = []
+                        acc[cat].push(opt)
+                        return acc
+                      }, {})
+                    ).map(([category, options]: [string, any]) => (
+                      <div key={category}>
+                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">{category}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {options.map((opt: any, i: number) => {
+                            const OptIcon = opt.icon
+                            return (
+                              <Link
+                                key={i}
+                                to={opt.path}
+                                onClick={() => {
+                                  if (opt.onClick) {
+                                    opt.onClick()
+                                  } else {
+                                    setIsMenuOpen(false)
+                                  }
+                                }}
+                                className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors group"
+                              >
+                                <div className="p-3 rounded-xl bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
+                                  <OptIcon size={24} />
+                                </div>
+                                <span className="text-white font-medium text-base flex-1">{opt.label}</span>
+                                {opt.badge > 0 && (
+                                  <span className="px-3 py-1 bg-red-500 text-white text-sm font-bold rounded-full">
+                                    {opt.badge > 9 ? '9+' : opt.badge}
+                                  </span>
+                                )}
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer hint */}
+              <div className="sticky bottom-0 p-4 text-center">
+                <p className="text-xs text-gray-600">
+                  Press <kbd className="px-2 py-1 bg-white/10 rounded text-gray-400">B</kbd> to restore navigation bubble
+                </p>
               </div>
             </motion.div>
           </>
@@ -570,11 +670,10 @@ export default function BottomNavigation() {
             animate={{ x: 0, opacity: 1, scale: 1 }}
             exit={{ x: 300, opacity: 0, scale: 0.8 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed top-20 right-4 left-4 md:left-auto md:w-80 bg-[#1A1A2E] border border-purple-500/30 rounded-2xl p-4 z-[80] shadow-2xl md:hidden cursor-pointer"
+            className="fixed top-20 right-4 left-4 md:left-auto md:w-80 bg-[#1A1A2E] border border-purple-500/30 rounded-2xl p-4 z-[80] shadow-2xl cursor-pointer"
             onClick={handleMessageBubbleClick}
           >
             <div className="flex items-start gap-3">
-              {/* Avatar */}
               <div className="relative flex-shrink-0">
                 <img
                   src={recentMessage.sender_avatar_url || `https://ui-avatars.com/api/?name=${recentMessage.sender_username}&background=random`}
@@ -584,7 +683,6 @@ export default function BottomNavigation() {
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1A1A2E]" />
               </div>
               
-              {/* Message Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="font-bold text-white text-sm truncate">
@@ -606,7 +704,6 @@ export default function BottomNavigation() {
               </div>
             </div>
             
-            {/* Progress bar for auto-dismiss */}
             <motion.div
               initial={{ scaleX: 1 }}
               animate={{ scaleX: 0 }}

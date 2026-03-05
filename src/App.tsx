@@ -1003,7 +1003,7 @@ function AppContent() {
         onRetry={retryLastAction}
       />
 
-      <AppLayout showSidebar={!isMobileUI} showHeader={!isMobileUI} showBottomNav={isMobileUI}>
+      <AppLayout showSidebar={!isMobileUI} showHeader={!isMobileUI} showBottomNav={true}>
         <GlobalPresenceTracker />
         {user && <AdminOfficerQuickMenu />}
         {user && (

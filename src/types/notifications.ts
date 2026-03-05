@@ -36,6 +36,7 @@ export type NotificationType =
   | 'coin_gifted'
   | 'property_purchased'
   | 'jail_sentence'
+  | 'court_summon'
 
 export interface Notification {
   id: string

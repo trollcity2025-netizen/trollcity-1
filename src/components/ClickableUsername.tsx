@@ -3,11 +3,12 @@ import VerifiedBadge from './VerifiedBadge'
 import OfficerTierBadge from './OfficerTierBadge'
 import { EmpireBadge } from './EmpireBadge'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Crown, Skull, Star, UserX, Ban, MicOff, User, LogOut, ClipboardList } from 'lucide-react'
+import { Shield, Crown, Skull, Star, UserX, Ban, MicOff, User, LogOut, ClipboardList, Gavel } from 'lucide-react'
 import { applyGlowingUsername, getGlowingTextStyle } from '../lib/perkEffects'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
+import { notifyAdmins } from '../lib/notifications'
 import SummonModal from './SummonModal'
 
 interface ClickableUsernameProps {
@@ -210,6 +211,21 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
                 if (error) throw error
                 if (data && data.success) {
                    toast.success(`Warrant issued for ${username}. Access restricted until court appearance.`)
+                   
+                   // Notify admins
+                   await notifyAdmins(
+                       'Warrant Issued',
+                       `@${currentUserProfile?.username || 'Staff'} issued a warrant for @${username}`,
+                       'moderation_action',
+                       {
+                           target_user_id: targetUserId,
+                           target_username: username,
+                           action: 'issue_warrant',
+                           reason: reason || 'No reason provided',
+                           performed_by: currentUser?.id,
+                           performed_by_username: currentUserProfile?.username
+                       }
+                   )
                 } else {
                    toast.error(data?.error || 'Failed to issue warrant')
                 }
@@ -234,6 +250,21 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
                     
                 if (error) throw error;
                 toast.success(`${username} restricted for 24h`);
+                
+                // Notify admins
+                await notifyAdmins(
+                    'Broadcast Restriction',
+                    `@${currentUserProfile?.username || 'Staff'} restricted @${username} from broadcasting for 24h`,
+                    'moderation_action',
+                    {
+                        target_user_id: targetUserId,
+                        target_username: username,
+                        action: 'restrict_broadcast',
+                        duration: '24h',
+                        performed_by: currentUser?.id,
+                        performed_by_username: currentUserProfile?.username
+                    }
+                )
             } catch (err: any) {
                 toast.error(err.message);
             }
@@ -392,6 +423,22 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
                 }
 
                 toast.success(`User ${username} has been muted`)
+                
+                // Notify admins
+                await notifyAdmins(
+                    'User Muted',
+                    `@${currentUserProfile?.username || 'Staff'} muted @${username} for ${minutes} minutes`,
+                    'moderation_action',
+                    {
+                        target_user_id: targetUserId,
+                        target_username: username,
+                        action: 'mute',
+                        duration_minutes: minutes,
+                        reason: reason || 'No reason provided',
+                        performed_by: currentUser?.id,
+                        performed_by_username: currentUserProfile?.username
+                    }
+                )
             } catch (err: any) {
                 console.error('Error muting user:', err)
                 // Fallback if RPC doesn't exist yet or fails
@@ -415,11 +462,30 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
                     }
                     
                     toast.success(`User ${username} deleted`)
+                    
+                    // Notify admins
+                    await notifyAdmins(
+                        'User Deleted',
+                        `User @${username} has been permanently deleted by @${currentUserProfile?.username || 'staff'}`,
+                        'moderation_action',
+                        {
+                            target_user_id: targetUserId,
+                            target_username: username,
+                            action: 'delete',
+                            performed_by: currentUser?.id,
+                            performed_by_username: currentUserProfile?.username
+                        }
+                    )
                 } catch (err: any) {
                     console.error('Error deleting user:', err)
                     toast.error('Failed to delete user. You may not have permission or need to use the Admin Dashboard.')
                 }
             }
+            break
+        }
+
+        case 'summon_to_court': {
+            setShowSummonModal(true)
             break
         }
     }
@@ -625,6 +691,14 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
 
                     {isStaff && (
                         <>
+                            <button
+                                onClick={() => handleAction('summon_to_court')}
+                                className="w-full text-left px-3 py-2 text-sm text-purple-400 hover:bg-zinc-800 hover:text-purple-300 rounded flex items-center gap-2"
+                            >
+                                <Gavel size={14} />
+                                Summon to Court
+                            </button>
+                            <div className="border-t border-gray-800 my-1"></div>
                             <button
                                 onClick={() => handleAction('mute')}
                                 className="w-full text-left px-3 py-2 text-sm text-yellow-400 hover:bg-zinc-800 hover:text-yellow-300 rounded flex items-center gap-2"

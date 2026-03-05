@@ -349,34 +349,71 @@ export default function InboxSidebar({
   const handleHideChat = async (otherUserId: string) => {
     if (!user) return
     
-    const conv = conversations.find(c => c.other_user_id === otherUserId)
-    if (!conv) return
-
-    const { data: memberData } = await supabase
-      .from('conversation_members')
-      .select('conversation_id')
-      .eq('user_id', user.id)
+    // Close menu immediately for better UX
+    setOpenMenuId(null)
     
-    if (memberData) {
-      const myConvIds = memberData.map(m => m.conversation_id)
-      const { data: shared } = await supabase
+    try {
+      const conv = conversations.find(c => c.other_user_id === otherUserId)
+      if (!conv) {
+        console.warn('Hide chat: conversation not found for user', otherUserId)
+        return
+      }
+
+      // Immediately remove from local state for instant feedback
+      setConversations(prev => prev.filter(c => c.other_user_id !== otherUserId))
+      toast.success('Chat hidden')
+
+      // Find and store the conversation_id in localStorage
+      const { data: memberData, error: memberError } = await supabase
         .from('conversation_members')
         .select('conversation_id')
-        .in('conversation_id', myConvIds)
-        .eq('user_id', otherUserId)
-        .maybeSingle()
+        .eq('user_id', user.id)
       
-      if (shared) {
-        const hiddenChats = JSON.parse(localStorage.getItem('hidden_conversations') || '[]')
-        if (!hiddenChats.includes(shared.conversation_id)) {
-          hiddenChats.push(shared.conversation_id)
-          localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
-        }
-        toast.success('Chat hidden')
-        fetchConversations() // Refresh sidebar
+      if (memberError) {
+        console.error('Hide chat: member query error', memberError)
+        return
       }
+      
+      if (memberData && memberData.length > 0) {
+        const myConvIds = memberData.map(m => m.conversation_id)
+        const { data: shared, error: sharedError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', myConvIds)
+          .eq('user_id', otherUserId)
+          .maybeSingle()
+        
+        if (sharedError) {
+          console.error('Hide chat: shared query error', sharedError)
+          return
+        }
+        
+        if (shared?.conversation_id) {
+          // Safely get hidden conversations from localStorage
+          let hiddenChats: string[] = []
+          try {
+            const stored = localStorage.getItem('hidden_conversations')
+            if (stored) {
+              hiddenChats = JSON.parse(stored)
+              if (!Array.isArray(hiddenChats)) {
+                hiddenChats = []
+              }
+            }
+          } catch (e) {
+            console.warn('Hide chat: invalid localStorage data, resetting', e)
+            hiddenChats = []
+          }
+          
+          if (!hiddenChats.includes(shared.conversation_id)) {
+            hiddenChats.push(shared.conversation_id)
+            localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Hide chat: unexpected error', err)
+      // Silently fail - chat is already hidden in UI
     }
-    setOpenMenuId(null)
   }
 
   // Clear new message notification when user selects a conversation

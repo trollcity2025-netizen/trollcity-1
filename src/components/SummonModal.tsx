@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { X, Gavel, Users, AlertCircle, Calendar } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { notifyAdmins } from '../lib/notifications'
 import { toast } from 'sonner'
 import { normalizeTextArray } from '../lib/courtUtils'
+import { useAuthStore } from '../lib/store'
 
 interface SummonModalProps {
   isOpen: boolean
@@ -17,6 +19,7 @@ export default function SummonModal({ isOpen, onClose, userId, username }: Summo
   const [loading, setLoading] = useState(false)
   const [dockets, setDockets] = useState<any[]>([])
   const [selectedDocketId, setSelectedDocketId] = useState<string>('')
+  const { profile: currentUserProfile, user: currentUser } = useAuthStore()
 
   useEffect(() => {
     if (isOpen) {
@@ -65,6 +68,25 @@ export default function SummonModal({ isOpen, onClose, userId, username }: Summo
 
       if (data && data.success) {
         toast.success(`Summoned ${username} to court!`)
+        
+        // Notify admins about the court summon
+        await notifyAdmins(
+          'User Summoned to Court',
+          `@${currentUserProfile?.username || 'Staff'} summoned @${username} to court`,
+          'court_summon',
+          {
+            defendant_id: userId,
+            defendant_username: username,
+            reason: reason,
+            docket_id: selectedDocketId || data.docket_id,
+            users_involved: usersInvolved,
+            performed_by: currentUser?.id,
+            performed_by_username: currentUserProfile?.username,
+            case_id: data.case_id,
+            action_url: '/government/court'
+          }
+        )
+        
         onClose()
       } else {
         toast.error(data?.error || 'Failed to summon user')

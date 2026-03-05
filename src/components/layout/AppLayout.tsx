@@ -90,11 +90,9 @@ export default function AppLayout({
           {children}
         </main>
 
-        {/* Mobile Bottom Navigation - Fixed at bottom */}
+        {/* Bottom Navigation Bubble - Always visible on all screen sizes */}
         {effectiveShowBottomNav && !isKeyboardVisible && (
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100]">
-            <BottomNavigation />
-          </div>
+          <BottomNavigation />
         )}
 
         {/* Global Chat Bubble */}
