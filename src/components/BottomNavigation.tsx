@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X, LogIn, UserPlus } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
@@ -6,12 +6,27 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 
+interface RecentMessage {
+  id: string
+  sender_id: string
+  sender_username: string
+  sender_avatar_url: string | null
+  content: string
+  conversation_id: string
+  created_at: string
+}
+
 export default function BottomNavigation() {
   const { user, profile, logout } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [tcpsUnreadCount, setTcpsUnreadCount] = useState(0)
+  
+  // Mobile message bubble state - only show most recent
+  const [recentMessage, setRecentMessage] = useState<RecentMessage | null>(null)
+  const [showMessageBubble, setShowMessageBubble] = useState(false)
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   // Position state for draggable bubble
   const [bubblePosition, setBubblePosition] = useState({ x: 0, y: 0 })
@@ -73,6 +88,99 @@ export default function BottomNavigation() {
     
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
+
+  // Subscribe to new messages for mobile bubble notification
+  useEffect(() => {
+    if (!user?.id) return
+
+    // Subscribe to all conversations the user is in
+    const subscribeToMessages = async () => {
+      const { data: memberships } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id)
+
+      if (!memberships || memberships.length === 0) return
+
+      const conversationIds = memberships.map(m => m.conversation_id)
+
+      // Create a single channel for all conversations
+      const channel = supabase
+        .channel('mobile-message-bubble')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'conversation_messages'
+          },
+          async (payload) => {
+            const newMsg = payload.new as any
+            
+            // Only show if it's not from current user and user is a member of this conversation
+            if (newMsg.sender_id === user.id) return
+            if (!conversationIds.includes(newMsg.conversation_id)) return
+
+            // Fetch sender info
+            const { data: sender } = await supabase
+              .from('user_profiles')
+              .select('username, avatar_url')
+              .eq('id', newMsg.sender_id)
+              .single()
+
+            // Clear any existing timeout
+            if (messageTimeoutRef.current) {
+              clearTimeout(messageTimeoutRef.current)
+            }
+
+            // Set the recent message (only showing most recent)
+            setRecentMessage({
+              id: newMsg.id,
+              sender_id: newMsg.sender_id,
+              sender_username: sender?.username || 'Unknown',
+              sender_avatar_url: sender?.avatar_url || null,
+              content: newMsg.body,
+              conversation_id: newMsg.conversation_id,
+              created_at: newMsg.created_at
+            })
+            setShowMessageBubble(true)
+
+            // Auto-hide after 8 seconds
+            messageTimeoutRef.current = setTimeout(() => {
+              setShowMessageBubble(false)
+            }, 8000)
+          }
+        )
+        .subscribe()
+
+      return channel
+    }
+
+    let channel: any
+    subscribeToMessages().then(ch => { channel = ch })
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+      if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current)
+    }
+  }, [user?.id])
+
+  // Handle navigating to message from bubble
+  const handleMessageBubbleClick = () => {
+    if (recentMessage) {
+      navigate(`/tcps?user=${recentMessage.sender_id}`)
+      setShowMessageBubble(false)
+    }
+  }
+
+  // Dismiss message bubble
+  const dismissMessageBubble = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowMessageBubble(false)
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current)
+    }
+  }
 
   useEffect(() => {
     setIsMenuOpen(false)
@@ -451,6 +559,61 @@ export default function BottomNavigation() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Message Notification Bubble - Only shows most recent message */}
+      <AnimatePresence>
+        {showMessageBubble && recentMessage && (
+          <motion.div
+            initial={{ x: 300, opacity: 0, scale: 0.8 }}
+            animate={{ x: 0, opacity: 1, scale: 1 }}
+            exit={{ x: 300, opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed top-20 right-4 left-4 md:left-auto md:w-80 bg-[#1A1A2E] border border-purple-500/30 rounded-2xl p-4 z-[80] shadow-2xl md:hidden cursor-pointer"
+            onClick={handleMessageBubbleClick}
+          >
+            <div className="flex items-start gap-3">
+              {/* Avatar */}
+              <div className="relative flex-shrink-0">
+                <img
+                  src={recentMessage.sender_avatar_url || `https://ui-avatars.com/api/?name=${recentMessage.sender_username}&background=random`}
+                  alt={recentMessage.sender_username}
+                  className="w-12 h-12 rounded-full border-2 border-purple-500/30"
+                />
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1A1A2E]" />
+              </div>
+              
+              {/* Message Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="font-bold text-white text-sm truncate">
+                    {recentMessage.sender_username}
+                  </h4>
+                  <button
+                    onClick={dismissMessageBubble}
+                    className="text-gray-400 hover:text-white p-1 -mr-1 -mt-1 rounded-full hover:bg-white/10 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <p className="text-gray-300 text-sm mt-1 line-clamp-2">
+                  {recentMessage.content}
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Tap to reply
+                </p>
+              </div>
+            </div>
+            
+            {/* Progress bar for auto-dismiss */}
+            <motion.div
+              initial={{ scaleX: 1 }}
+              animate={{ scaleX: 0 }}
+              transition={{ duration: 8, ease: 'linear' }}
+              className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-b-2xl origin-left"
+            />
+          </motion.div>
         )}
       </AnimatePresence>
     </>
