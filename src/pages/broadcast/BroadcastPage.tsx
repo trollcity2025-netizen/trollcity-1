@@ -1015,6 +1015,27 @@ function BroadcastPage() {
             console.warn('[BroadcastPage] Failed to mark stream as live:', liveErr);
           }
 
+          // Create Mux live stream for viewers
+          try {
+            console.log('[BroadcastPage] Creating Mux stream for viewers...');
+            const { data: muxData, error: muxError } = await supabase.functions.invoke('create-mux-stream', {
+              body: {
+                type: 'broadcast',
+                room_id: stream.id,
+                room_name: stream.title || 'Live Broadcast'
+              }
+            });
+            
+            if (muxError) {
+              console.warn('[BroadcastPage] Failed to create Mux stream:', muxError);
+            } else if (muxData?.playback_id) {
+              console.log('[BroadcastPage] Mux stream created:', muxData.playback_id);
+              setMuxPlaybackId(muxData.playback_id);
+            }
+          } catch (muxErr) {
+            console.warn('[BroadcastPage] Mux stream creation error:', muxErr);
+          }
+
           // Mark as joined to prevent re-initialization when user returns to page
           hasJoinedRef.current = true;
 
