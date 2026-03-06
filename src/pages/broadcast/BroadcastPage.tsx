@@ -1031,6 +1031,73 @@ function BroadcastPage() {
             } else if (muxData?.playback_id) {
               console.log('[BroadcastPage] Mux stream created:', muxData.playback_id);
               setMuxPlaybackId(muxData.playback_id);
+              
+              // Set up WHIP connection to Mux using WebRTC
+              // Mux WHIP endpoint format: https://live.mux.com/{playback_id}/whip
+              const whipUrl = `https://live.mux.com/${muxData.playback_id}/whip`;
+              const rtmpUrl = muxData.rtmp_url || 'rtmp://global-live.mux.com:5222/app';
+              const streamKey = muxData.stream_key;
+              
+              // Try WHIP first (WebRTC to Mux)
+              try {
+                console.log('[BroadcastPage] Setting up Mux WHIP connection...');
+                
+                // Create RTCPeerConnection for WHIP
+                const pc = new RTCPeerConnection({
+                  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                
+                // Get local tracks from Agora client
+                if (localTracks) {
+                  // Add Agora tracks to the peer connection
+                  for (const track of localTracks) {
+                    if (track) {
+                      pc.addTrack(track as any);
+                    }
+                  }
+                  
+                  // Create offer
+                  const offer = await pc.createOffer();
+                  await pc.setLocalDescription(offer);
+                  
+                  // Send to Mux WHIP endpoint
+                  const response = await fetch(whipUrl, {
+                    method: 'POST',
+                    body: offer.sdp,
+                    headers: { 'Content-Type': 'application/sdp' }
+                  });
+                  
+                  if (response.ok) {
+                    const answerSdp = await response.text();
+                    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                    console.log('[BroadcastPage] Mux WHIP connection established!');
+                    
+                    // Store peer connection for cleanup
+                    muxWhipPcRef.current = pc;
+                    isStreamingToMuxRef.current = true;
+                  } else {
+                    console.warn('[BroadcastPage] Mux WHIP rejected:', response.status);
+                    pc.close();
+                  }
+                }
+              } catch (whipErr) {
+                console.warn('[BroadcastPage] WHIP failed, trying RTMP relay:', whipErr);
+                
+                // Fallback: Use Agora RTMP push if available
+                // This requires special Agora configuration
+                if (streamKey && client) {
+                  try {
+                    const fullRtmpUrl = rtmpUrl + '/' + streamKey;
+                    console.log('[BroadcastPage] Attempting Agora RTMP push to:', fullRtmpUrl);
+                    
+                    // Note: This may not work in browser SDK without special permissions
+                    await (client as any).pushStreamToRtmp(fullRtmpUrl);
+                    console.log('[BroadcastPage] RTMP push started');
+                  } catch (rtmpErr) {
+                    console.warn('[BroadcastPage] RTMP push not available:', rtmpErr);
+                  }
+                }
+              }
             }
           } catch (muxErr) {
             console.warn('[BroadcastPage] Mux stream creation error:', muxErr);
@@ -1374,6 +1441,14 @@ function BroadcastPage() {
     
     // Stop camera and mic before leaving
     stopLocalTracks();
+    
+    // Close Mux WHIP connection if active
+    if (muxWhipPcRef.current) {
+      console.log('[STREAM_LIFECYCLE] Closing Mux WHIP connection');
+      muxWhipPcRef.current.close();
+      muxWhipPcRef.current = null;
+      isStreamingToMuxRef.current = false;
+    }
     
     // Check if there's an active battle - if so, forfeit and credit opponent as winner
     if (stream?.battle_id && isHost) {
