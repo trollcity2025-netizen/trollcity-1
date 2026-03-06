@@ -134,6 +134,7 @@ Deno.serve(async (req) => {
     const playbackId = stream.playback_ids?.[0]?.id;
     const ingestUrl = stream.ingest_url;
     const streamKey = stream.stream_key;
+    const muxStreamId = stream.id; // Store this for webhook correlation
 
     if (!playbackId) {
       return new Response(JSON.stringify({ error: 'No playback ID returned from Mux' }), { 
@@ -149,7 +150,8 @@ Deno.serve(async (req) => {
         .update({ 
           mux_playback_id: playbackId,
           mux_stream_key: streamKey,
-          mux_rtmp_url: rtmpUrl
+          mux_rtmp_url: rtmpUrl,
+          mux_stream_id: muxStreamId
         })
         .eq('id', room_id);
     } else if (type === 'broadcast') {
@@ -158,7 +160,8 @@ Deno.serve(async (req) => {
         .update({ 
           mux_playback_id: playbackId,
           mux_stream_key: streamKey,
-          mux_rtmp_url: rtmpUrl
+          mux_rtmp_url: rtmpUrl,
+          mux_stream_id: muxStreamId
         })
         .eq('id', room_id);
     }
@@ -168,7 +171,8 @@ Deno.serve(async (req) => {
       playback_id: playbackId,
       stream_key: streamKey,
       rtmp_url: rtmpUrl,
-      ingest_url: ingestUrl
+      ingest_url: ingestUrl,
+      mux_stream_id: muxStreamId
     }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });

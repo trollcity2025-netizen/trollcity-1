@@ -19,6 +19,7 @@ import GiftBoxModal, { GiftTarget, GiftItem } from '../../components/broadcast/G
 import GiftAnimationOverlay from '../../components/broadcast/GiftAnimationOverlay'
 import PinnedProductOverlay from '../../components/broadcast/PinnedProductOverlay'
 import PinProductModal from '../../components/broadcast/PinProductModal'
+import MuxViewerPlayer from '../../components/broadcast/MuxViewerPlayer'
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime'
 import { useBroadcastPinnedProducts } from '../../hooks/useBroadcastPinnedProducts'
 import { useBoxCount } from '../../hooks/useBoxCount'
@@ -1036,9 +1037,17 @@ function BroadcastPage() {
           setIsJoining(false)
         }
       }
-      /** VIEWER → AGORA */
+      /** VIEWER → MUX or AGORA */
       else {
-        // Viewers use Agora to subscribe to the broadcast
+        // Viewers use Mux playback if available, otherwise fallback to Agora
+        if (muxPlaybackId && !muxPlaybackId.startsWith('placeholder_')) {
+          console.log('[BroadcastPage] Viewer using Mux playback:', muxPlaybackId);
+          hasJoinedRef.current = true;
+          setIsJoining(false);
+          return;
+        }
+        
+        // Fallback to Agora if Mux not available
         setIsJoining(true);
         
         const stringToUid = (str: string): number => {
@@ -1535,28 +1544,38 @@ function BroadcastPage() {
         }
         
         video={
-          <BroadcastGrid
-            stream={stream}
-            seats={seats}
-            onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
-            isHost={isHost}
-            localTracks={
-              localTracks
-                ? [localTracks[0], localTracks[1]]
-                : [undefined, undefined]
-            }
-            remoteUsers={remoteUsers}
-            localUserId={user?.id}
-            userIdToAgoraUid={userIdToAgoraUid}
-            onGift={onGift}
-            onGiftAll={onGiftAll}
-            toggleCamera={toggleCamera}
-            toggleMicrophone={toggleMicrophone}
-            onGetUserPositions={handleGetUserPositions}
-            broadcasterProfile={broadcasterProfile}
-            streamStatus={stream.status}
-            boxCount={boxCount}
-          />
+          // Use Mux player for viewers when muxPlaybackId is available
+          muxPlaybackId && !muxPlaybackId.startsWith('placeholder_') && !isHost && !userSeat ? (
+            <MuxViewerPlayer
+              playbackId={muxPlaybackId}
+              streamType="live"
+              autoPlay
+              muted={false}
+            />
+          ) : (
+            <BroadcastGrid
+              stream={stream}
+              seats={seats}
+              onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
+              isHost={isHost}
+              localTracks={
+                localTracks
+                  ? [localTracks[0], localTracks[1]]
+                  : [undefined, undefined]
+              }
+              remoteUsers={remoteUsers}
+              localUserId={user?.id}
+              userIdToAgoraUid={userIdToAgoraUid}
+              onGift={onGift}
+              onGiftAll={onGiftAll}
+              toggleCamera={toggleCamera}
+              toggleMicrophone={toggleMicrophone}
+              onGetUserPositions={handleGetUserPositions}
+              broadcasterProfile={broadcasterProfile}
+              streamStatus={stream.status}
+              boxCount={boxCount}
+            />
+          )
         }
         
         controls={
