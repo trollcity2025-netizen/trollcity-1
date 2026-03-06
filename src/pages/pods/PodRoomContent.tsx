@@ -1,11 +1,24 @@
 import React from 'react';
-import { Mic, MicOff, Users, Hand, Settings } from 'lucide-react';
+import { Mic, MicOff, Users, Hand, Settings, LogOut, XCircle } from 'lucide-react';
 import PodParticipantBox from './PodParticipantBox';
 import PodChatBox from './PodChatBox';
 import PodHostControlPanel from './PodHostControlPanel';
 import TrollsTownControl from '../../components/TrollsTownControl';
 
-const PodRoomContent = ({ room, isHost, participantsData, participantCount, onRequestSpeak, onApproveRequest, onRemoveSpeaker, isGuest, canPublish, localAudioTrack }) => {
+const PodRoomContent = ({ 
+  room, 
+  isHost, 
+  participantsData, 
+  participantCount, 
+  onRequestSpeak, 
+  onApproveRequest, 
+  onRemoveSpeaker,
+  onEndPod,
+  onLeavePod,
+  isGuest, 
+  canPublish, 
+  localAudioTrack 
+}) => {
   if (!room) {
     return (
       <div className="flex flex-col h-screen bg-gray-900 text-white items-center justify-center">
@@ -25,6 +38,23 @@ const PodRoomContent = ({ room, isHost, participantsData, participantCount, onRe
                 <Users />
                 <span>{participantCount}</span>
               </div>
+              {isHost ? (
+                <button 
+                  onClick={onEndPod}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-white text-sm transition-colors"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>End</span>
+                </button>
+              ) : (
+                <button 
+                  onClick={onLeavePod}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Leave</span>
+                </button>
+              )}
               {isHost && <Settings />}
             </div>
           </div>

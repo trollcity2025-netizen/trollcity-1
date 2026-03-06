@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mic, MicOff, Users, MessageSquare, Hand, UserMinus, UserPlus, Settings, Coins, Map } from 'lucide-react';
+import { Mic, MicOff, Users, MessageSquare, Hand, UserMinus, UserPlus, Settings, Coins, Map, LogOut, XCircle } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { useAuthStore } from '../../lib/store';
@@ -520,6 +520,49 @@ export default function TrollPodRoom() {
   const isGuest = !currentUser;
   const isStaff = profile?.is_staff || false;
 
+  // End pod - Host only
+  const handleEndPod = async () => {
+    if (!roomId || !isHost) return;
+    
+    if (!confirm('Are you sure you want to end this pod?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('pod_rooms')
+        .update({ is_live: false, ended_at: new Date().toISOString() })
+        .eq('id', roomId);
+      
+      if (error) throw error;
+      
+      toast.success('Pod ended');
+      navigate('/pods');
+    } catch (err) {
+      console.error('Error ending pod:', err);
+      toast.error('Failed to end pod');
+    }
+  };
+
+  // Leave pod - For listeners
+  const handleLeavePod = async () => {
+    if (!roomId || !currentUser) return;
+    
+    if (!confirm('Leave this pod?')) return;
+    
+    try {
+      // Remove from participants
+      await supabase
+        .from('pod_room_participants')
+        .delete()
+        .eq('room_id', roomId)
+        .eq('user_id', currentUser.id);
+      
+      navigate('/pods');
+    } catch (err) {
+      console.error('Error leaving pod:', err);
+      toast.error('Failed to leave pod');
+    }
+  };
+
   return (
     <PodRoomContent
       room={room!}
@@ -531,6 +574,8 @@ export default function TrollPodRoom() {
       onApproveRequest={handleApproveRequest}
       onRemoveSpeaker={handleRemoveSpeaker}
       onCancelRequest={handleCancelRequest}
+      onEndPod={handleEndPod}
+      onLeavePod={handleLeavePod}
       isStaff={isStaff}
       canPublish={canPublish}
       isGuest={isGuest}
