@@ -11,7 +11,8 @@ import {
   Wifi,
   Settings,
   Send,
-  Volume2
+  Volume2,
+  ShoppingCart
 } from 'lucide-react'
 import AdminVoiceNotificationsSettings from '../../../components/AdminVoiceNotificationsSettings'
 import { useAdminVoiceNotifications } from '../../../hooks/useAdminVoiceNotifications'
@@ -23,6 +24,7 @@ interface QuickActionsBarProps {
   onSystemMaintenance: () => void
   onViewAnalytics: () => void
   onExportData: () => void
+  onManualOrders?: () => void
 }
 
 interface QuickAction {
@@ -43,6 +45,7 @@ export default function QuickActionsBar({
   onSystemMaintenance,
   onViewAnalytics,
   onExportData,
+  onManualOrders,
 }: QuickActionsBarProps) {
   const { announceNotification } = useAdminVoiceNotifications()
 
@@ -119,7 +122,16 @@ export default function QuickActionsBar({
       color: 'text-blue-400',
       bgColor: 'bg-blue-500/20',
       borderColor: 'border-blue-500/30'
-    }
+    },
+    ...(onManualOrders ? [{
+      icon: <ShoppingCart className="w-4 h-4" />,
+      label: 'Manual Orders',
+      description: 'Cash App queue',
+      action: onManualOrders,
+      color: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/20',
+      borderColor: 'border-emerald-500/30'
+    }] : [])
   ]
 
   return (

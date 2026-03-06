@@ -871,6 +871,7 @@ export default function AdminDashboard() {
   const handleOpenReferralBonuses = () => navigate('/admin/referral-bonuses')
   const handleOpenAdminPool = () => navigate('/admin/pool')
   const handleOpenTrollmersTournament = () => navigate('/admin/trollmers-tournament')
+  const handleOpenManualOrders = () => navigate('/admin/manual-orders')
 
   const redirectRoutes = useMemo(
     () =>
@@ -1056,6 +1057,7 @@ export default function AdminDashboard() {
         onSystemMaintenance={handleSystemMaintenance}
         onViewAnalytics={handleViewAnalytics}
         onExportData={handleExportData}
+        onManualOrders={handleOpenManualOrders}
       />
 
       <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-5">
