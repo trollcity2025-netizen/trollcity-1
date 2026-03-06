@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
@@ -514,7 +514,8 @@ function StreamCard({
 }) {
   const [isHovering, setIsHovering] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hlsRef = useRef<any>(null);
 
   // Handle mouse enter (PC hover) - start audio
   const handleMouseEnter = () => {
@@ -537,16 +538,53 @@ function StreamCard({
     }
   };
 
-  // Start audio preview
-  const startAudioPreview = () => {
+  // Start audio preview using hls.js for HLS streams
+  const startAudioPreview = async () => {
     if (!stream.hls_url || audioRef.current) return;
     
     try {
-      const audio = new Audio(stream.hls_url);
+      // Create audio element
+      const audio = new Audio();
       audio.volume = 0.5;
-      audio.play().catch(console.error);
       audioRef.current = audio;
-      setAudioPlaying(true);
+
+      // Check if it's an HLS stream
+      if (stream.hls_url.includes('.m3u8')) {
+        // Dynamically import hls.js
+        const Hls = (await import('hls.js')).default;
+        
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+          });
+          hlsRef.current = hls;
+          hls.loadSource(stream.hls_url);
+          hls.attachMedia(audio);
+          
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            audio.play().catch(console.error);
+            setAudioPlaying(true);
+          });
+          
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            console.error('HLS error:', data);
+            if (data.fatal) {
+              stopAudioPreview();
+            }
+          });
+        } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+          // Safari native HLS support
+          audio.src = stream.hls_url;
+          audio.play().catch(console.error);
+          setAudioPlaying(true);
+        }
+      } else {
+        // Direct audio URL
+        audio.src = stream.hls_url;
+        audio.play().catch(console.error);
+        setAudioPlaying(true);
+      }
     } catch (err) {
       console.error('Error playing audio:', err);
     }
@@ -556,19 +594,20 @@ function StreamCard({
   const stopAudioPreview = () => {
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+      audioRef.current.src = '';
       audioRef.current = null;
+    }
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
     }
     setAudioPlaying(false);
   };
 
   // Cleanup on unmount
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      stopAudioPreview();
     };
   }, []);
 
