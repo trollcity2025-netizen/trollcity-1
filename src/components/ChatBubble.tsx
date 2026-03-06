@@ -482,8 +482,9 @@ export default function ChatBubble() {
     return (
       <div className="fixed bottom-4 right-4 z-50">
         <button
-          onClick={toggleMinimize}
+          onClick={closeChatBubble}
           className="bg-purple-600 hover:bg-purple-500 text-white p-3 rounded-full shadow-lg shadow-purple-900/50 flex items-center justify-center transition-all hover:scale-105"
+          title="Close chat"
         >
           <div className="relative">
             <img 
