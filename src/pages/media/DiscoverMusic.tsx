@@ -19,6 +19,7 @@ export default function DiscoverMusic() {
   const [activeFeed, setActiveFeed] = useState<DiscoveryFeedType>('trending');
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [playingSong, setPlayingSong] = useState<Song | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
 
   const { songs, loading: songsLoading } = useSongs({
@@ -32,6 +33,7 @@ export default function DiscoverMusic() {
 
   const handlePlaySong = (song: Song) => {
     setPlayingSong(song);
+    setIsPlaying(true);
     setIsPlayerMinimized(false);
   };
 
@@ -125,12 +127,14 @@ export default function DiscoverMusic() {
       {playingSong && (
         <AudioPlayer
           song={playingSong}
+          isPlaying={isPlaying}
+          onIsPlayingChange={setIsPlaying}
           isMinimized={isPlayerMinimized}
           onMinimizeToggle={() => setIsPlayerMinimized(!isPlayerMinimized)}
-          onClose={() => setPlayingSong(null)}
+          onClose={() => { setPlayingSong(null); setIsPlaying(false); }}
           queue={displayedSongs}
           currentIndex={displayedSongs.findIndex(s => s.id === playingSong.id)}
-          onChangeSong={(index) => setPlayingSong(displayedSongs[index])}
+          onChangeSong={(index) => { setPlayingSong(displayedSongs[index]); setIsPlaying(true); }}
         />
       )}
     </div>

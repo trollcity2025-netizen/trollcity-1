@@ -13,6 +13,8 @@ interface AudioPlayerProps {
   song: Song;
   queue: Song[];
   currentIndex: number;
+  isPlaying: boolean;
+  onIsPlayingChange: (playing: boolean) => void;
   isMinimized: boolean;
   onMinimizeToggle: () => void;
   onClose: () => void;
@@ -20,9 +22,18 @@ interface AudioPlayerProps {
 }
 
 export default function AudioPlayer({ 
-  song, queue, currentIndex, isMinimized, onMinimizeToggle, onClose, onChangeSong 
+  song, queue, currentIndex, isPlaying, onIsPlayingChange, isMinimized, onMinimizeToggle, onClose, onChangeSong 
 }: AudioPlayerProps) {
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [internalIsPlaying, setInternalIsPlaying] = useState(true);
+  // Use controlled isPlaying if provided, otherwise fall back to internal state
+  const currentIsPlaying = isPlaying !== undefined ? isPlaying : internalIsPlaying;
+  const setCurrentIsPlaying = (playing: boolean) => {
+    if (onIsPlayingChange) {
+      onIsPlayingChange(playing);
+    } else {
+      setInternalIsPlaying(playing);
+    }
+  };
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
@@ -41,7 +52,7 @@ export default function AudioPlayer({
     if (audioRef.current) {
       audioRef.current.src = song.audio_url;
       audioRef.current.load();
-      if (isPlaying) {
+      if (currentIsPlaying) {
         audioRef.current.play().catch(console.error);
       }
       setCurrentTime(0);
@@ -51,13 +62,13 @@ export default function AudioPlayer({
   // Handle play/pause
   useEffect(() => {
     if (audioRef.current) {
-      if (isPlaying) {
+      if (currentIsPlaying) {
         audioRef.current.play().catch(console.error);
       } else {
         audioRef.current.pause();
       }
     }
-  }, [isPlaying]);
+  }, [currentIsPlaying]);
 
   // Handle volume
   useEffect(() => {
@@ -89,7 +100,7 @@ export default function AudioPlayer({
     } else if (repeatMode === 'all') {
       onChangeSong(0);
     } else {
-      setIsPlaying(false);
+      setCurrentIsPlaying(false);
     }
   };
 
@@ -143,8 +154,8 @@ export default function AudioPlayer({
             <p className="text-sm text-gray-400 truncate">{song.artist?.artist_name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 rounded-full bg-pink-500 hover:bg-pink-400">
-              {isPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
+            <button onClick={() => setCurrentIsPlaying(!currentIsPlaying)} className="p-2 rounded-full bg-pink-500 hover:bg-pink-400">
+              {currentIsPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
             </button>
             <button onClick={onMinimizeToggle} className="p-2 text-gray-400 hover:text-white">
               <Maximize2 className="w-5 h-5" />
@@ -220,10 +231,10 @@ export default function AudioPlayer({
                 </button>
 
                 <button 
-                  onClick={() => setIsPlaying(!isPlaying)} 
+                  onClick={() => setCurrentIsPlaying(!currentIsPlaying)} 
                   className="w-12 h-12 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 flex items-center justify-center transition-all"
                 >
-                  {isPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
+                  {currentIsPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
                 </button>
 
                 <button onClick={handleNext} className="p-2 text-gray-300 hover:text-white transition-colors">
