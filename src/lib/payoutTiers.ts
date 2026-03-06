@@ -1,4 +1,5 @@
 export const TIERS = [
+  { coins: 5000, usd: 10, manualReview: false },
   { coins: 15000, usd: 50, manualReview: false },
   { coins: 30000, usd: 150, manualReview: false },
   { coins: 60000, usd: 300, manualReview: false },
@@ -14,5 +15,6 @@ export function getRateForCoins(coins: number) {
   if (coins >= 60000) return 300 / 60000;
   if (coins >= 30000) return 150 / 30000;
   if (coins >= 15000) return 50 / 15000;
+  if (coins >= 5000) return 10 / 5000;
   return 0;
 }
