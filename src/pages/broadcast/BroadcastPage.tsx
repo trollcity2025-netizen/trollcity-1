@@ -1418,15 +1418,15 @@ function BroadcastPage() {
     try {
       console.log('[STREAM_LIFECYCLE] Updating stream in DB:', { streamId: stream?.id });
       
-      const { data: updateResult, error: updateError } = await supabase
+      // Remove .select() to avoid permission issues - just update
+      const { error: updateError } = await supabase
         .from('streams')
         .update({
           is_live: false,
           status: 'ended',
           ended_at: new Date().toISOString()
         })
-        .eq('id', stream.id)
-        .select('id, is_live, status, ended_at');
+        .eq('id', stream.id);
       
       if (updateError) {
         console.error('[STREAM_LIFECYCLE] FAILED to mark stream as ended:', {
@@ -1439,13 +1439,12 @@ function BroadcastPage() {
       }
       
       console.log('[STREAM_LIFECYCLE] Stream successfully marked as ended:', {
-        streamId: stream?.id,
-        updateResult
+        streamId: stream?.id
       });
     } catch (endErr) {
       console.error('[STREAM_LIFECYCLE] EXCEPTION marking stream as ended:', {
         streamId: stream?.id,
-        error: endErr.message
+        error: endErr?.message || endErr
       });
     }
     
