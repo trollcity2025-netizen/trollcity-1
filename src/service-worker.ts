@@ -42,8 +42,10 @@ const PRECACHE_MANIFEST: any[] = (self as unknown as { __WB_MANIFEST: any[] })._
 self.addEventListener('install', (event) => {
   console.log(`[SW] Installing version ${APP_VERSION} (${CACHE_VERSION})`);
   
-  // Force immediate activation
-  self.skipWaiting();
+  // DON'T force immediate activation - let the user stay on the current version
+  // This prevents unexpected page reloads during critical moments (like broadcasts)
+  // The skipWaiting will be called only when explicitly requested via message
+  // self.skipWaiting();
   
   // Pre-cache critical assets
   event.waitUntil(
@@ -184,7 +186,7 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.includes('/auth/v1/')) {
       return;
     }
-    event.respondWith(networkFirstWithTimeout(request, API_CACHE, 10000));
+    event.respondWith(networkFirstWithTimeout(request, API_CACHE, 30000));
   }
 });
 

@@ -29,10 +29,20 @@ export function useBackgroundSessionRefresh() {
         if (!newSession.session) {
           console.warn('[BackgroundSession] No active session after refresh failure')
           // Session might be completely expired - user will need to re-login
+          // Force a page reload to re-initialize auth state
+          window.location.reload()
           return
         }
       }
       
+      // Verify we have a valid access token
+      const { data: verifySession } = await supabase.auth.getSession()
+      if (!verifySession.session?.access_token) {
+        console.warn('[BackgroundSession] No valid access token, forcing re-authentication')
+        window.location.reload()
+        return
+      }
+
       // Also refresh the user profile
       await refreshProfile()
       
@@ -42,6 +52,8 @@ export function useBackgroundSessionRefresh() {
       console.log('[BackgroundSession] Session and profile refreshed successfully')
     } catch (err) {
       console.error('[BackgroundSession] Unexpected error during refresh:', err)
+      // On unexpected errors, try a page reload to recover
+      window.location.reload()
     }
   }, [user, refreshProfile])
 
@@ -57,8 +69,8 @@ export function useBackgroundSessionRefresh() {
     }
     isActiveRef.current = true
 
-    // Refresh session every 3 minutes (more frequent to prevent issues)
-    const SESSION_REFRESH_INTERVAL = 3 * 60 * 1000 // 3 minutes
+    // Refresh session every 2 minutes (more frequent to prevent 10-minute staleness)
+    const SESSION_REFRESH_INTERVAL = 2 * 60 * 1000 // 2 minutes
     
     // Initial refresh
     doRefresh()

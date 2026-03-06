@@ -448,10 +448,35 @@ function BroadcastPage() {
         }
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
+        console.log('[Realtime] User(s) joined presence:', newPresences);
+        // Immediately update viewer count when users join
+        const state = channel.presenceState();
+        let totalUsers = 0;
+        for (const [key, users] of Object.entries(state)) {
+          totalUsers += (users as any[]).length;
+        }
+        setViewerCount(totalUsers);
+        
         for (const p of newPresences as any[]) {
           if (p.is_host) {
             console.log('[Realtime] Broadcaster joined - stream is live!');
+          } else {
+            console.log('[Realtime] Viewer joined:', p.username || p.user_id);
           }
+        }
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        console.log('[Realtime] User(s) left presence:', leftPresences);
+        // Immediately update viewer count when users leave
+        const state = channel.presenceState();
+        let totalUsers = 0;
+        for (const [key, users] of Object.entries(state)) {
+          totalUsers += (users as any[]).length;
+        }
+        setViewerCount(totalUsers);
+        
+        for (const p of leftPresences as any[]) {
+          console.log('[Realtime] Viewer left:', p.username || p.user_id);
         }
       });
 
