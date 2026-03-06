@@ -9,6 +9,7 @@ import { Mail, Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 // import InstallButton from '../components/InstallButton';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import { generateUUID } from '../lib/uuid';
+import { handleConcurrentLogin, resetConcurrentLoginCheck } from '../lib/sessionUtils';
 
 interface AuthProps {
   embedded?: boolean;
@@ -237,6 +238,27 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
         console.error('Error registering session:', sessionError)
         // Continue with login even if session registration fails
       }
+      
+      // Check for concurrent login from other devices (after session is registered)
+      // Reset check flag for fresh login attempt
+      resetConcurrentLoginCheck()
+      
+      // This check runs in the background and will log out if fraud detected
+      // We don't await it to allow the login to complete
+      handleConcurrentLogin(
+        data.user.id,
+        sessionId,
+        async () => {
+          // Custom logout function for Auth page context
+          await supabase.auth.signOut()
+          useAuthStore.getState().logout()
+        }
+      ).then(wasLoggedOut => {
+        if (wasLoggedOut) {
+          // If logged out due to fraud, don't proceed with profile loading
+          return
+        }
+      })
       
       setAuth(data.user, data.session)
       

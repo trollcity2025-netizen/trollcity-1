@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, UserProfile, UserRole, validateProfile, ensureSupabaseSession } from '../lib/supabase'
+import { handleConcurrentLogin, resetConcurrentLoginCheck } from './sessionUtils'
 
 // Module-level debounce tracking
 let lastProfileUpdateTime = 0
@@ -386,6 +387,21 @@ export async function initAuthAndData() {
 
   if (session?.user) {
     useAuthStore.getState().setAuth(session.user, session)
+    
+    // Check for concurrent login from other devices
+    const sessionId = (session as any)?.access_token
+    if (sessionId) {
+      // Reset the check flag for fresh login
+      resetConcurrentLoginCheck()
+      
+      // Handle concurrent login - this will log out if fraud detected
+      await handleConcurrentLogin(
+        session.user.id,
+        sessionId,
+        () => useAuthStore.getState().logout()
+      )
+    }
+    
     await useAuthStore.getState().refreshProfile()
   } else {
     // Clear stale state if Supabase has no session but store does
@@ -419,6 +435,18 @@ export async function initAuthAndData() {
 
     if (session?.user) {
       useAuthStore.getState().setAuth(session.user, session)
+      
+      // Check for concurrent login when session changes
+      const sessionId = (session as any)?.access_token
+      if (sessionId) {
+        resetConcurrentLoginCheck()
+        await handleConcurrentLogin(
+          session.user.id,
+          sessionId,
+          () => useAuthStore.getState().logout()
+        )
+      }
+      
       await useAuthStore.getState().refreshProfile()
     } else {
       useAuthStore.getState().setAuth(null, null)

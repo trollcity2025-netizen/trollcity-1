@@ -78,6 +78,7 @@ const TrollPodRoom = lazyWithRetry(() => import("./pages/pods/TrollPodRoom"));
 // Lazy-loaded pages
 const Following = lazyWithRetry(() => import("./pages/Following"));
 const ExploreFeed = lazyWithRetry(() => import("./pages/ExploreFeed"));
+const StreamSwipePage = lazyWithRetry(() => import("./pages/StreamSwipePage"));
 const CoinStore = lazyWithRetry(() => import("./pages/CoinStore"));
 const Marketplace = lazyWithRetry(() => import("./pages/Marketplace"));
 const PublicPool = lazyWithRetry(() => import("./pages/PublicPool"));
@@ -1049,6 +1050,7 @@ function AppContent() {
                  
                 {/* 🔓 Public Discover & Watch */}
                 <Route path="/explore" element={<ExploreFeed />} />
+                <Route path="/live-swipe" element={<StreamSwipePage />} />
                 <Route path="/watch/:id" element={<BroadcastPage />} />
 
                 <Route path="/badges" element={<BadgesPage />} />
