@@ -140,7 +140,7 @@
   ],
   "prefer_related_applications": false,
   "scope_extensions": [
-    { "origin": "*.maitrollcity.com" },
-    { "origin": "maitrollcity.com" }
+    { "origin": "*.maitrollcity.com", "type": "secure" },
+    { "origin": "maitrollcity.com", "type": "secure" }
   ]
 }

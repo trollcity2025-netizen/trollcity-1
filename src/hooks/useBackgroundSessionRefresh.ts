@@ -13,6 +13,7 @@ export function useBackgroundSessionRefresh() {
   const { user, refreshProfile } = useAuthStore()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isActiveRef = useRef(false)
+  const lastRefreshTimeRef = useRef<number>(Date.now())
   
   // Function to refresh session and profile
   const doRefresh = useCallback(async () => {
@@ -39,12 +40,19 @@ export function useBackgroundSessionRefresh() {
       const { data: verifySession } = await supabase.auth.getSession()
       if (!verifySession.session?.access_token) {
         console.warn('[BackgroundSession] No valid access token, forcing re-authentication')
+        // Force a page reload to re-initialize auth state - prevents stale data
         window.location.reload()
         return
       }
 
-      // Also refresh the user profile
-      await refreshProfile()
+      // Force a soft refresh periodically to ensure UI stays in sync
+      // This prevents the "stale until refresh" issue by proactively updating the state
+      const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
+      if (timeSinceLastRefresh > 5 * 60 * 1000) { // Every 5 minutes, trigger full profile refresh
+        console.log('[BackgroundSession] Performing periodic full refresh to prevent staleness')
+        await refreshProfile()
+        lastRefreshTimeRef.current = Date.now()
+      }
       
       // Dispatch event to notify other components (like realtime) that we're active
       window.dispatchEvent(new CustomEvent('supabase-realtime-activity'))
@@ -69,8 +77,9 @@ export function useBackgroundSessionRefresh() {
     }
     isActiveRef.current = true
 
-    // Refresh session every 2 minutes (more frequent to prevent 10-minute staleness)
-    const SESSION_REFRESH_INTERVAL = 2 * 60 * 1000 // 2 minutes
+    // Refresh session every 1 minute to prevent staleness
+    // More frequent than default to ensure session stays valid
+    const SESSION_REFRESH_INTERVAL = 60 * 1000 // 1 minute
     
     // Initial refresh
     doRefresh()

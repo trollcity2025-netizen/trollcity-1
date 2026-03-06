@@ -75,7 +75,9 @@ export default defineConfig(({ mode: _mode }) => ({
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true,
+        // Disabled skipWaiting to prevent unexpected page reloads
+        // The page will only reload when user explicitly refreshes or when needed
+        skipWaiting: false,
       },
     }),
   ],
