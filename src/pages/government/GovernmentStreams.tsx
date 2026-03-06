@@ -512,8 +512,73 @@ function StreamCard({
   onDisableChats: () => void;
   onSummon: () => void;
 }) {
+  const [isHovering, setIsHovering] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  // Handle mouse enter (PC hover) - start audio
+  const handleMouseEnter = () => {
+    setIsHovering(true);
+    startAudioPreview();
+  };
+
+  // Handle mouse leave (PC hover) - stop audio
+  const handleMouseLeave = () => {
+    setIsHovering(false);
+    stopAudioPreview();
+  };
+
+  // Handle click (mobile) - toggle audio
+  const handleClick = () => {
+    if (audioPlaying) {
+      stopAudioPreview();
+    } else {
+      startAudioPreview();
+    }
+  };
+
+  // Start audio preview
+  const startAudioPreview = () => {
+    if (!stream.hls_url || audioRef.current) return;
+    
+    try {
+      const audio = new Audio(stream.hls_url);
+      audio.volume = 0.5;
+      audio.play().catch(console.error);
+      audioRef.current = audio;
+      setAudioPlaying(true);
+    } catch (err) {
+      console.error('Error playing audio:', err);
+    }
+  };
+
+  // Stop audio preview
+  const stopAudioPreview = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setAudioPlaying(false);
+  };
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   return (
-    <div className="group bg-black/40 border border-purple-900/30 hover:border-purple-500/50 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col">
+    <div 
+      className="group bg-black/40 border border-purple-900/30 hover:border-purple-500/50 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col cursor-pointer"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
+    >
       {/* Header Info */}
       <div className="p-4 bg-gradient-to-r from-purple-900/20 to-transparent border-b border-white/5 flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -530,6 +595,12 @@ function StreamCard({
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
+          {audioPlaying && (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-500/20 border border-green-500/30 text-green-400 text-[10px] font-bold rounded-full animate-pulse">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+              AUDIO
+            </span>
+          )}
           <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded-full animate-pulse">
             <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
             LIVE
