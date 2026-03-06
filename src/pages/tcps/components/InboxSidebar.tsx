@@ -30,7 +30,7 @@ interface InboxSidebarProps {
 }
 
 const CACHE_KEY = 'tcps_conversations_cache'
-const CACHE_DURATION_MS = 5 * 60 * 1000 // 5 minutes
+const CACHE_DURATION_MS = 30 * 60 * 1000 // 30 minutes
 
 export default function InboxSidebar({
   activeConversation,
@@ -53,7 +53,7 @@ export default function InboxSidebar({
   const menuRef = useRef<HTMLDivElement>(null)
   const hasLoadedFromCache = useRef(false)
 
-  // Load from cache immediately on mount
+  // Load from cache immediately on mount - show cached data even if slightly stale
   useEffect(() => {
     if (!user?.id || hasLoadedFromCache.current) return
     
@@ -61,7 +61,8 @@ export default function InboxSidebar({
       const cached = localStorage.getItem(`${CACHE_KEY}_${user.id}`)
       if (cached) {
         const { data, timestamp } = JSON.parse(cached)
-        const isValid = Date.now() - timestamp < CACHE_DURATION_MS
+        // Allow stale cache up to 1 hour - show immediately while fetching fresh data
+        const isValid = Date.now() - timestamp < 60 * 60 * 1000
         
         if (isValid && Array.isArray(data) && data.length > 0) {
           setConversations(data)
