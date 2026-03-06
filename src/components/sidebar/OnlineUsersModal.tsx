@@ -1131,9 +1131,11 @@ const UserRow: React.FC<UserRowProps> = ({
 
         {/* Action Button */}
         <button
-          onClick={() => setShowActionMenu(showActionMenu === user.id ? null : user.id)}
-          disabled={actionLoading}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowActionMenu(showActionMenu === user.id ? null : user.id);
+          }}
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
         >
           <MoreVertical className="w-4 h-4 text-gray-400" />
         </button>

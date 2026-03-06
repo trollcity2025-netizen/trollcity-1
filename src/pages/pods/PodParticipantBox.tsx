@@ -125,8 +125,8 @@ export default function PodParticipantBox({
         <div className="absolute top-2 right-2 z-30">
           <button 
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="p-1.5 bg-black/60 hover:bg-gray-800 rounded-full text-white backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
-            data-state={showMenu ? 'open' : 'closed'}
+            className="p-1.5 bg-black/60 hover:bg-gray-800 rounded-full text-white backdrop-blur-sm transition-colors"
+            aria-label="Show options"
           >
             <MoreVertical className="w-4 h-4" />
           </button>
