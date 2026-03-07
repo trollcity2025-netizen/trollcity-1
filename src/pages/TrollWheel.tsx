@@ -30,11 +30,21 @@ const TROLLMOND_TIERS = [
 
 export default function TrollWheel() {
   const { profile } = useAuthStore();
-  const [userBalance, setUserBalance] = useState(10000);
-  const [trollmondBalance, setTrollmondBalance] = useState(250);
+  const [userBalance, setUserBalance] = useState(0);
+  const [trollmondBalance, setTrollmondBalance] = useState(0);
   const [topSpinners, setTopSpinners] = useState<TopSpinner[]>([]);
   const [bigWinners, setBigWinners] = useState<BigWinner[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Initialize balance from profile
+  useEffect(() => {
+    if (profile?.coins) {
+      setUserBalance(profile.coins);
+    }
+    if (profile?.trollmonds) {
+      setTrollmondBalance(profile.trollmonds);
+    }
+  }, [profile]);
   
   // Mobile: toggle for info bubble
   const [showMobileInfo, setShowMobileInfo] = useState(true);
@@ -256,19 +266,7 @@ export default function TrollWheel() {
             </div>
           </div>
 
-          {/* Info Box */}
-          <div className="bg-blue-900/30 border border-blue-500/30 rounded-2xl p-4">
-            <h3 className="font-bold text-white mb-2">How it works:</h3>
-            <ul className="text-slate-300 text-sm space-y-1">
-              <li>• Each spin costs <span className="text-yellow-400 font-bold">125 coins ($1.25)</span></li>
-              <li>• Win <span className="text-green-400">$0.25 to $75</span> per spin</li>
-              <li>• <span className="text-red-400">0.1% chance</span> for the $75 jackpot!</li>
-              <li>• Payout: <span className="text-yellow-400">100 coins = $1</span></li>
-              <li className="border-t border-blue-700/50 pt-2 mt-2">Earn Trollmonds: <span className="text-purple-400">1 per 100 coins</span> spent on gifts</li>
-              <li>• Discount: <span className="text-purple-400">100 Trollmonds = 5% off</span></li>
-              <li>• Max discount: <span className="text-purple-400">500 Trollmonds = 25%</span></li>
-            </ul>
-          </div>
+
         </div>
       </div>
     </div>
