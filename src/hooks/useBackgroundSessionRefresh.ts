@@ -19,6 +19,14 @@ export function useBackgroundSessionRefresh() {
   const doRefresh = useCallback(async () => {
     if (!user) return
     
+    // Prevent multiple concurrent refreshes
+    const refreshKey = 'tc_session_refresh_active'
+    if (sessionStorage.getItem(refreshKey)) {
+      console.log('[BackgroundSession] Refresh already in progress, skipping')
+      return
+    }
+    sessionStorage.setItem(refreshKey, '1')
+    
     try {
       // First, try to refresh the session
       const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession()
@@ -29,9 +37,9 @@ export function useBackgroundSessionRefresh() {
         const { data: newSession } = await supabase.auth.getSession()
         if (!newSession.session) {
           console.warn('[BackgroundSession] No active session after refresh failure')
-          // Session might be completely expired - user will need to re-login
-          // Force a page reload to re-initialize auth state
-          window.location.reload()
+          // Session might be completely expired - don't reload, just log out
+          // This prevents infinite reload loops
+          useAuthStore.getState().logout()
           return
         }
       }
@@ -39,9 +47,9 @@ export function useBackgroundSessionRefresh() {
       // Verify we have a valid access token
       const { data: verifySession } = await supabase.auth.getSession()
       if (!verifySession.session?.access_token) {
-        console.warn('[BackgroundSession] No valid access token, forcing re-authentication')
-        // Force a page reload to re-initialize auth state - prevents stale data
-        window.location.reload()
+        console.warn('[BackgroundSession] No valid access token, logging out')
+        // Don't reload - just log out to prevent infinite loop
+        useAuthStore.getState().logout()
         return
       }
 
@@ -60,8 +68,10 @@ export function useBackgroundSessionRefresh() {
       console.log('[BackgroundSession] Session and profile refreshed successfully')
     } catch (err) {
       console.error('[BackgroundSession] Unexpected error during refresh:', err)
-      // On unexpected errors, try a page reload to recover
-      window.location.reload()
+      // On unexpected errors, don't reload - just log the error
+      // This prevents infinite reload loops
+    } finally {
+      sessionStorage.removeItem(refreshKey)
     }
   }, [user, refreshProfile])
 
@@ -77,9 +87,9 @@ export function useBackgroundSessionRefresh() {
     }
     isActiveRef.current = true
 
-    // Refresh session every 1 minute to prevent staleness
-    // More frequent than default to ensure session stays valid
-    const SESSION_REFRESH_INTERVAL = 60 * 1000 // 1 minute
+    // Refresh session every 5 minutes to prevent staleness
+    // Less frequent to avoid excessive refreshes
+    const SESSION_REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
     
     // Initial refresh
     doRefresh()
@@ -90,18 +100,26 @@ export function useBackgroundSessionRefresh() {
       doRefresh()
     }, SESSION_REFRESH_INTERVAL)
 
-    // Also refresh on window focus (when user comes back to the tab)
+    // Also refresh on window visibility change, but only if it's been at least 30 seconds
+    // This prevents excessive refreshes when user switches tabs frequently
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[BackgroundSession] Window visible, refreshing session...')
-        doRefresh()
+        const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
+        if (timeSinceLastRefresh > 30 * 1000) { // 30 seconds minimum
+          console.log('[BackgroundSession] Window visible, refreshing session...')
+          doRefresh()
+        }
       }
     }
     
-    // Handle window focus events as well
+    // Also refresh on window focus, but only if it's been at least 30 seconds
+    // This prevents excessive refreshes when user is actively using the page
     const handleFocus = () => {
-      console.log('[BackgroundSession] Window focused, refreshing session...')
-      doRefresh()
+      const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
+      if (timeSinceLastRefresh > 30 * 1000) { // 30 seconds minimum between focus refreshes
+        console.log('[BackgroundSession] Window focused, refreshing session...')
+        doRefresh()
+      }
     }
     
     document.addEventListener('visibilitychange', handleVisibilityChange)

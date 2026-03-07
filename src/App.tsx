@@ -529,11 +529,23 @@ function AppContent() {
   useEffect(() => {
     if (!updateAvailable || !waitingServiceWorker) return;
 
+    // Don't auto-reload - let user click the toast action to update
+    // This prevents infinite reload loops in PWA mode
     if (isStandalone) {
-      waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+      toast.info("New update available!", {
+        duration: Infinity,
+        description: "A new version of Troll City is available.",
+        action: {
+          label: "Update Now",
+          onClick: () => {
+            waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
+          }
+        },
+        onDismiss: () => {}
+      });
       return;
     }
 
