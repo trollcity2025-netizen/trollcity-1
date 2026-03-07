@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import TrollWheelGame from '@/components/games/TrollWheelGame';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
+import { useCoins } from '@/lib/hooks/useCoins';
 import { Coins, Trophy, Crown, Gift, Zap, Gem, X, Minus } from 'lucide-react';
 
 interface TopSpinner {
@@ -30,21 +31,22 @@ const TROLLMOND_TIERS = [
 
 export default function TrollWheel() {
   const { profile } = useAuthStore();
+  const { troll_coins: coins, refreshCoins } = useCoins();
   const [userBalance, setUserBalance] = useState(0);
   const [trollmondBalance, setTrollmondBalance] = useState(0);
   const [topSpinners, setTopSpinners] = useState<TopSpinner[]>([]);
   const [bigWinners, setBigWinners] = useState<BigWinner[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Initialize balance from profile
+  // Initialize balance from useCoins hook (same as Sidebar)
   useEffect(() => {
-    if (profile?.coins) {
-      setUserBalance(profile.coins);
+    if (coins !== undefined && coins !== null) {
+      setUserBalance(coins);
     }
     if (profile?.trollmonds) {
       setTrollmondBalance(profile.trollmonds);
     }
-  }, [profile]);
+  }, [coins, profile?.trollmonds]);
   
   // Mobile: toggle for info bubble
   const [showMobileInfo, setShowMobileInfo] = useState(true);
