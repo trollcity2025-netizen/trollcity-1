@@ -869,6 +869,7 @@ export default function AdminDashboard() {
   const handleOpenResetPanel = () => navigate('/admin/reset-maintenance')
   const handleOpenEmpireApplications = () => navigate('/admin/empire-applications')
   const handleOpenReferralBonuses = () => navigate('/admin/referral-bonuses')
+  const handleOpenApplications = () => navigate('/admin/applications')
   const handleOpenAdminPool = () => navigate('/admin/pool')
   const handleOpenTrollmersTournament = () => navigate('/admin/trollmers-tournament')
   const handleOpenManualOrders = () => navigate('/admin/manual-orders')
@@ -904,6 +905,7 @@ export default function AdminDashboard() {
         // landing on the shifts view instead.
         shift_requests_approval: '/admin/officer-shifts',
         empire_applications: '/admin/empire-applications',
+        applications: '/admin/applications',
         referral_bonuses: '/admin/referral-bonuses',
         control_panel: '/admin/control-panel',
         test_diagnostics: '/admin/test-diagnostics',
@@ -1212,6 +1214,7 @@ export default function AdminDashboard() {
             onOpenResetPanel={handleOpenResetPanel}
             onOpenEmpireApplications={handleOpenEmpireApplications}
             onOpenReferralBonuses={handleOpenReferralBonuses}
+            onOpenApplications={handleOpenApplications}
             onSelectTab={_handleSelectTab} 
             counts={{
               empire_apps: stats.pendingApps,

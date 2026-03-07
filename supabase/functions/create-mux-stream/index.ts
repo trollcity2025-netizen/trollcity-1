@@ -144,6 +144,9 @@ Deno.serve(async (req) => {
     }
 
     // Update the room with all Mux details
+    const hlsPath = `https://stream.mux.com/${playbackId}.m3u8`;
+    const now = new Date().toISOString();
+    
     if (type === 'pod') {
       await supabase
         .from('pod_rooms')
@@ -151,7 +154,9 @@ Deno.serve(async (req) => {
           mux_playback_id: playbackId,
           mux_stream_key: streamKey,
           mux_rtmp_url: rtmpUrl,
-          mux_stream_id: muxStreamId
+          mux_stream_id: muxStreamId,
+          hls_path: hlsPath,
+          hls_started_at: now
         })
         .eq('id', room_id);
     } else if (type === 'broadcast') {
@@ -161,7 +166,9 @@ Deno.serve(async (req) => {
           mux_playback_id: playbackId,
           mux_stream_key: streamKey,
           mux_rtmp_url: rtmpUrl,
-          mux_stream_id: muxStreamId
+          mux_stream_id: muxStreamId,
+          hls_path: hlsPath,
+          hls_started_at: now
         })
         .eq('id', room_id);
     }
@@ -172,7 +179,8 @@ Deno.serve(async (req) => {
       stream_key: streamKey,
       rtmp_url: rtmpUrl,
       ingest_url: ingestUrl,
-      mux_stream_id: muxStreamId
+      mux_stream_id: muxStreamId,
+      hls_path: hlsPath
     }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });

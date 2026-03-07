@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-// import { useAuthStore } from '@/lib/store';
-import { Users, Video, Radio } from 'lucide-react';
+import { useAuthStore } from '@/lib/store';
+import { Users, Video, Radio, Star } from 'lucide-react';
 
 interface Stream {
   id: string;
@@ -15,6 +15,8 @@ interface Stream {
   user_profiles?: {
     username: string;
     avatar_url: string;
+    ghost_mode_until?: string;
+    featured_broadcaster_until?: string;
   };
 }
 
@@ -22,9 +24,13 @@ export default function HomeLiveGrid() {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { profile } = useAuthStore();
 
   const fetchStreams = async () => {
     try {
+      const now = new Date().toISOString();
+      
+      // First get all live streams
       const { data, error } = await supabase
         .from('streams')
         .select(`
@@ -37,15 +43,44 @@ export default function HomeLiveGrid() {
           user_id,
           user_profiles:user_profiles!streams_user_id_fkey (
             username,
-            avatar_url
+            avatar_url,
+            ghost_mode_until,
+            featured_broadcaster_until
           )
         `)
         .eq('is_live', true)
         .order('current_viewers', { ascending: false })
-        .range(0, 49); // Limit to top 50 streams for performance
+        .range(0, 49);
 
       if (error) throw error;
-      setStreams((data as any[]) || []);
+      
+      // Filter out ghost mode users (unless current user is admin)
+      let filteredStreams = (data as any[]) || [];
+      const isAdmin = profile?.role === 'admin' || profile?.is_admin;
+      
+      if (!isAdmin) {
+        filteredStreams = filteredStreams.filter((stream: any) => {
+          const ghostUntil = stream.user_profiles?.ghost_mode_until;
+          if (ghostUntil && new Date(ghostUntil) > new Date()) {
+            return false; // Filter out ghost mode users
+          }
+          return true;
+        });
+      }
+      
+      // Sort to prioritize featured broadcasters
+      filteredStreams.sort((a: any, b: any) => {
+        const aFeatured = a.user_profiles?.featured_broadcaster_until;
+        const bFeatured = b.user_profiles?.featured_broadcaster_until;
+        const aIsFeatured = aFeatured && new Date(aFeatured) > new Date();
+        const bIsFeatured = bFeatured && new Date(bFeatured) > new Date();
+        
+        if (aIsFeatured && !bIsFeatured) return -1;
+        if (!aIsFeatured && bIsFeatured) return 1;
+        return (b.current_viewers || 0) - (a.current_viewers || 0);
+      });
+      
+      setStreams(filteredStreams);
     } catch (err) {
       console.error('Error fetching streams:', err);
     } finally {
@@ -123,6 +158,14 @@ export default function HomeLiveGrid() {
               </div>
             )}
             
+            {/* Featured Badge */}
+            {stream.user_profiles?.featured_broadcaster_until && new Date(stream.user_profiles.featured_broadcaster_until) > new Date() && (
+              <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold rounded shadow-lg">
+                <Star className="w-3 h-3" />
+                FEATURED
+              </div>
+            )}
+
             {/* Live Badge */}
             <div className="absolute top-3 left-3 flex items-center gap-2">
               <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded flex items-center gap-1 shadow-lg shadow-red-900/20 animate-pulse">

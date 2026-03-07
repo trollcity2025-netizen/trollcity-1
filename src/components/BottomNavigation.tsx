@@ -363,22 +363,44 @@ export default function BottomNavigation() {
       case 'broadcaster':
         return [
           ...baseOptions,
+          // Streaming
           { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
           { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
+          { category: 'Streaming', label: 'My Guests', icon: Users, path: '/guests' },
+          // Finance
           { category: 'Finance', label: 'My Earnings', icon: DollarSign, path: '/earnings' },
-          { category: 'Community', label: 'My Guests', icon: Users, path: '/guests' }
+          { category: 'Finance', label: 'Wallet', icon: Banknote, path: '/wallet' },
+          // Community
+          { category: 'Community', label: 'My Guests', icon: Users, path: '/guests' },
+          { category: 'Community', label: 'Creator Dashboard', icon: Star, path: '/creator/dashboard' },
+          // Store
+          { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },
         ]
       case 'admin':
         return [
           ...baseOptions,
+          // Streaming
+          { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
+          { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
+          // Management
           { category: 'Management', label: 'Court', icon: Gavel, path: '/troll-court' },
-          { category: 'Streaming', label: 'Go Live', icon: Video, path: '/broadcast/setup' },
           { category: 'Management', label: 'Ban Management', icon: Ban, path: '/admin/ban-management' },
+          { category: 'Management', label: 'City Control', icon: Shield, path: '/admin/city-control' },
+          { category: 'Management', label: 'Safety Center', icon: AlertTriangle, path: '/admin/safety' },
+          // Content
           { category: 'Content', label: 'Applications', icon: FileText, path: '/admin/applications' },
           { category: 'Content', label: 'Marketplace', icon: ShoppingBag, path: '/admin/marketplace' },
           { category: 'Content', label: 'Reports', icon: Shield, path: '/admin/officer-reports' },
+          { category: 'Content', label: 'Live Dashboard', icon: Video, path: '/admin/live' },
+          { category: 'Content', label: 'Stats', icon: Star, path: '/admin/stats' },
+          // Finance
           { category: 'Finance', label: 'Earnings', icon: DollarSign, path: '/admin/earnings' },
-          { category: 'System', label: 'System Tools', icon: Settings, path: '/admin/system/health' }
+          { category: 'Finance', label: 'Payments', icon: Banknote, path: '/admin/payments' },
+          { category: 'Finance', label: 'Payouts', icon: DollarSign, path: '/admin/payouts' },
+          // System
+          { category: 'System', label: 'System Tools', icon: Settings, path: '/admin/system/health' },
+          { category: 'System', label: 'Policies', icon: FileText, path: '/admin/policies' },
+          { category: 'System', label: 'Policies Docs', icon: FileText, path: '/admin/policies-docs' },
         ]
       case 'officer':
         return [
@@ -393,10 +415,23 @@ export default function BottomNavigation() {
       default:
         return [
           ...baseOptions,
-          { category: 'General', label: 'Go Live', icon: Video, path: '/broadcast/setup' },
-          { category: 'General', label: 'Store', icon: ShoppingBag, path: '/store' },
-          { category: 'Creative', label: 'Troll Pods', icon: Mic, path: '/pods' },
-          { category: 'General', label: 'Support', icon: Heart, path: '/support' }
+          // Streaming
+          { category: 'Streaming', label: 'Go Live', icon: Video, path: '/broadcast/setup' },
+          { category: 'Streaming', label: 'Live Streams', icon: Video, path: '/live' },
+          // Store & Economy
+          { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },
+          { category: 'Store', label: 'Troll Wheel', icon: Star, path: '/troll-wheel' },
+          { category: 'Store', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace' },
+          // Community
+          { category: 'Community', label: 'Troll Pods', icon: Mic, path: '/pods' },
+          { category: 'Community', label: 'Leaderboard', icon: Star, path: '/leaderboard' },
+          { category: 'Community', label: 'Family Wars', icon: Users, path: '/family-wars' },
+          // City
+          { category: 'City', label: 'Trolls Town', icon: Home, path: '/trolls-town' },
+          { category: 'City', label: 'Explore', icon: Users, path: '/explore' },
+          // Support
+          { category: 'Support', label: 'Support', icon: Heart, path: '/support' },
+          { category: 'Support', label: 'Wallet', icon: Banknote, path: '/wallet' },
         ]
     }
   }

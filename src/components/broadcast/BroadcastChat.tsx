@@ -334,13 +334,18 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
     broadcastChannelRef.current = broadcastChannel;
 
     // Subscribe to room presence to show join/leave messages in chat
+    // Use the same channel name as BroadcastPage for shared presence
     const presenceChannel = supabase
         .channel(`stream:${streamId}`)
         .on('presence', { event: 'join' }, ({ newPresences }) => {
             const now = Date.now();
             newPresences.forEach((p: any) => {
                 // Skip showing join message for ourselves (we track our own presence)
-                if (p.user_id === user?.id) return;
+                // But still show it for testing/verification
+                if (p.user_id === user?.id) {
+                    console.log('[BroadcastChat] Our own join detected, user_id:', p.user_id?.substring(0, 8));
+                    return;
+                }
                 
                 // Debounce: Don't show join if we recently showed leave for same user
                 const lastEvent = recentPresenceRef.current.get(p.user_id);
@@ -349,6 +354,7 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                 }
                 recentPresenceRef.current.set(p.user_id, now);
                 
+                console.log('[BroadcastChat] User joined, showing message:', p.username || p.user_id);
                 const systemMsg: Message = {
                     id: `sys-join-${p.user_id}-${now}`,
                     user_id: p.user_id,

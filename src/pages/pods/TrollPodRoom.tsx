@@ -517,7 +517,7 @@ export default function TrollPodRoom() {
       }
   };
 
-  const isGuest = !currentUser;
+  const isGuest = !currentUser && !profile;
   const isStaff = profile?.is_staff || false;
 
   // End pod - Host only

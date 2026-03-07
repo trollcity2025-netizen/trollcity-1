@@ -29,7 +29,8 @@ import {
   PieChart,
   Shuffle,
   Vote,
-  Mic
+  Mic,
+  FileText
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { systemManagementRoutes } from '../adminRoutes'
@@ -46,6 +47,7 @@ interface AdditionalTasksGridProps {
   onOpenResetPanel?: () => void
   onOpenEmpireApplications?: () => void
   onOpenReferralBonuses?: () => void
+  onOpenApplications?: () => void
   onOpenAdminPool?: () => void
   onOpenTrollmersTournament?: () => void
   onSelectTab?: (tabId: string) => void
@@ -74,6 +76,7 @@ export default function AdditionalTasksGrid({
   onOpenResetPanel,
   onOpenEmpireApplications,
   onOpenReferralBonuses,
+  onOpenApplications,
   onOpenAdminPool,
   onOpenTrollmersTournament,
   onSelectTab,
@@ -402,6 +405,15 @@ export default function AdditionalTasksGrid({
           color: 'text-purple-400',
           bgColor: 'bg-purple-500/20',
           count: counts.empire_apps
+        },
+        {
+          icon: <FileText className="w-5 h-5" />,
+          label: 'Applications',
+          description: 'Review user applications',
+          action: onOpenApplications,
+          color: 'text-cyan-400',
+          bgColor: 'bg-cyan-500/20',
+          count: counts.applications
         },
         {
           icon: <Award className="w-5 h-5" />,

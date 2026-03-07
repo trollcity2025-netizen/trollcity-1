@@ -778,6 +778,33 @@ function BroadcastPage() {
       preflightClient.on('user-published', async (remoteUser, mediaType) => {
         console.log('[BroadcastPage] Preflight user-published:', remoteUser.uid, 'mediaType:', mediaType);
         
+        // Map user IDs to Agora UIDs for preflight client
+        const stringToUidPreflight = (str: string): number => {
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+          }
+          return Math.abs(hash);
+        };
+        
+        if (stream?.user_id) {
+          const hostUid = stringToUidPreflight(stream.user_id);
+          if (remoteUser.uid === hostUid) {
+            setUserIdToAgoraUid(prev => ({ ...prev, [stream.user_id]: remoteUser.uid as number }));
+          }
+        }
+        if (seats) {
+          Object.values(seats).forEach((seat: any) => {
+            if (seat?.user_id) {
+              const seatUid = stringToUidPreflight(seat.user_id);
+              if (remoteUser.uid === seatUid) {
+                setUserIdToAgoraUid(prev => ({ ...prev, [seat.user_id]: remoteUser.uid as number }));
+              }
+            }
+          });
+        }
+        
         // Subscribe to both video and audio (not just the reported mediaType)
         if (remoteUser.hasVideo && !remoteUser.videoTrack) {
           await preflightClient.subscribe(remoteUser, 'video');
@@ -825,6 +852,43 @@ function BroadcastPage() {
 
       client.on('user-published', async (remoteUser, mediaType) => {
         console.log('[BroadcastPage] User published:', remoteUser.uid, 'mediaType:', mediaType, 'hasVideo:', remoteUser.hasVideo, 'hasAudio:', remoteUser.hasAudio);
+        
+        // Try to find the userId for this Agora UID by checking stream seats
+        // The host uses numericUid = stringToUid(user.id), guests use their own UIDs
+        const stringToUidLocal = (str: string): number => {
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+          }
+          return Math.abs(hash);
+        };
+        
+        // Get stream from ref to ensure we have the latest value (might not be set in state yet)
+        const currentStream = streamRef.current;
+        
+        // Check if this UID matches the host's UID
+        if (currentStream?.user_id) {
+          const hostUid = stringToUidLocal(currentStream.user_id);
+          if (remoteUser.uid === hostUid) {
+            setUserIdToAgoraUid(prev => ({ ...prev, [currentStream.user_id]: remoteUser.uid as number }));
+            console.log('[BroadcastPage] Mapped host userId to Agora UID:', currentStream.user_id.substring(0, 8), '->', remoteUser.uid);
+          }
+        }
+        
+        // Check seat users using the seats from useStreamSeats hook
+        // Note: seats might not be available immediately when viewer joins, but we try anyway
+        if (seats) {
+          Object.values(seats).forEach((seat: any) => {
+            if (seat?.user_id) {
+              const seatUid = stringToUidLocal(seat.user_id);
+              if (remoteUser.uid === seatUid) {
+                setUserIdToAgoraUid(prev => ({ ...prev, [seat.user_id]: remoteUser.uid as number }));
+                console.log('[BroadcastPage] Mapped seat userId to Agora UID:', seat.user_id.substring(0, 8), '->', remoteUser.uid);
+              }
+            }
+          });
+        }
         
         // Subscribe to both video and audio - not just the reported mediaType
         // This ensures we get both tracks even if events fire separately
@@ -1016,6 +1080,7 @@ function BroadcastPage() {
           }
 
           // Create Mux live stream for viewers
+          // Note: Agora->Mux RTMP relay requires server-side configuration (Agora Cloud Recording or media server)
           try {
             console.log('[BroadcastPage] Creating Mux stream for viewers...');
             const { data: muxData, error: muxError } = await supabase.functions.invoke('create-mux-stream', {
@@ -1032,71 +1097,23 @@ function BroadcastPage() {
               console.log('[BroadcastPage] Mux stream created:', muxData.playback_id);
               setMuxPlaybackId(muxData.playback_id);
               
-              // Set up WHIP connection to Mux using WebRTC
-              // Mux WHIP endpoint format: https://live.mux.com/{playback_id}/whip
-              const whipUrl = `https://live.mux.com/${muxData.playback_id}/whip`;
-              const rtmpUrl = muxData.rtmp_url || 'rtmp://global-live.mux.com:5222/app';
-              const streamKey = muxData.stream_key;
-              
-              // Try WHIP first (WebRTC to Mux)
+              // Update the stream in database so viewers can find it via Mux HLS
               try {
-                console.log('[BroadcastPage] Setting up Mux WHIP connection...');
+                await supabase
+                  .from('streams')
+                  .update({ mux_playback_id: muxData.playback_id })
+                  .eq('id', stream.id);
+                console.log('[BroadcastPage] Updated stream with Mux playback_id');
                 
-                // Create RTCPeerConnection for WHIP
-                const pc = new RTCPeerConnection({
-                  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-                });
+                // Log RTMP details for server-side relay setup
+                const rtmpUrl = muxData.rtmp_url || 'rtmp://global-live.mux.com:5222/app';
+                const streamKey = muxData.stream_key;
+                console.log('[BroadcastPage] Mux RTMP URL:', rtmpUrl);
+                console.log('[BroadcastPage] Mux Stream Key:', streamKey);
+                console.log('[BroadcastPage] HLS Playback URL:', `https://stream.mux.com/${muxData.playback_id}.m3u8`);
                 
-                // Get local tracks from Agora client
-                if (localTracks) {
-                  // Add Agora tracks to the peer connection
-                  for (const track of localTracks) {
-                    if (track) {
-                      pc.addTrack(track as any);
-                    }
-                  }
-                  
-                  // Create offer
-                  const offer = await pc.createOffer();
-                  await pc.setLocalDescription(offer);
-                  
-                  // Send to Mux WHIP endpoint
-                  const response = await fetch(whipUrl, {
-                    method: 'POST',
-                    body: offer.sdp,
-                    headers: { 'Content-Type': 'application/sdp' }
-                  });
-                  
-                  if (response.ok) {
-                    const answerSdp = await response.text();
-                    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-                    console.log('[BroadcastPage] Mux WHIP connection established!');
-                    
-                    // Store peer connection for cleanup
-                    muxWhipPcRef.current = pc;
-                    isStreamingToMuxRef.current = true;
-                  } else {
-                    console.warn('[BroadcastPage] Mux WHIP rejected:', response.status);
-                    pc.close();
-                  }
-                }
-              } catch (whipErr) {
-                console.warn('[BroadcastPage] WHIP failed, trying RTMP relay:', whipErr);
-                
-                // Fallback: Use Agora RTMP push if available
-                // This requires special Agora configuration
-                if (streamKey && client) {
-                  try {
-                    const fullRtmpUrl = rtmpUrl + '/' + streamKey;
-                    console.log('[BroadcastPage] Attempting Agora RTMP push to:', fullRtmpUrl);
-                    
-                    // Note: This may not work in browser SDK without special permissions
-                    await (client as any).pushStreamToRtmp(fullRtmpUrl);
-                    console.log('[BroadcastPage] RTMP push started');
-                  } catch (rtmpErr) {
-                    console.warn('[BroadcastPage] RTMP push not available:', rtmpErr);
-                  }
-                }
+              } catch (updateErr) {
+                console.warn('[BroadcastPage] Failed to update stream with mux_playback_id:', updateErr);
               }
             }
           } catch (muxErr) {
@@ -1187,9 +1204,37 @@ function BroadcastPage() {
           if (existingUsers.length > 0) {
             console.log('[BroadcastPage] Found', existingUsers.length, 'existing users');
             
+            // Helper to map UIDs
+            const stringToUidLate = (str: string): number => {
+              let hash = 0;
+              for (let i = 0; i < str.length; i++) {
+                hash = (hash << 5) - hash + str.charCodeAt(i);
+                hash |= 0;
+              }
+              return Math.abs(hash);
+            };
+            
             // First subscribe to all tracks for all existing users
             for (const remoteUser of existingUsers) {
               console.log('[BroadcastPage] Late joiner user:', remoteUser.uid, 'hasVideo:', remoteUser.hasVideo, 'hasAudio:', remoteUser.hasAudio);
+              
+              // Map user IDs to Agora UIDs for late joiners
+              if (stream?.user_id) {
+                const hostUid = stringToUidLate(stream.user_id);
+                if (remoteUser.uid === hostUid) {
+                  setUserIdToAgoraUid(prev => ({ ...prev, [stream.user_id]: remoteUser.uid as number }));
+                }
+              }
+              if (seats) {
+                Object.values(seats).forEach((seat: any) => {
+                  if (seat?.user_id) {
+                    const seatUid = stringToUidLate(seat.user_id);
+                    if (remoteUser.uid === seatUid) {
+                      setUserIdToAgoraUid(prev => ({ ...prev, [seat.user_id]: remoteUser.uid as number }));
+                    }
+                  }
+                });
+              }
               
               if (remoteUser.hasVideo) {
                 await client.subscribe(remoteUser, 'video');

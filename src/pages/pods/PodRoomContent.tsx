@@ -4,21 +4,45 @@ import PodParticipantBox from './PodParticipantBox';
 import PodChatBox from './PodChatBox';
 import PodHostControlPanel from './PodHostControlPanel';
 import TrollsTownControl from '../../components/TrollsTownControl';
+import { IAgoraRTCRemoteUser, ILocalAudioTrack } from 'agora-rtc-sdk-ng';
+
+interface PodRoomContentProps {
+  room: any;
+  currentUser: any;
+  isHost: boolean;
+  participantsData: any[];
+  participantCount: number;
+  onRequestSpeak: () => void;
+  onApproveRequest: (userId: string) => void;
+  onRemoveSpeaker: (userId: string) => void;
+  onCancelRequest?: () => void;
+  onEndPod: () => void;
+  onLeavePod: () => void;
+  isGuest: boolean;
+  canPublish: boolean;
+  remoteUsers?: any[];
+  localAudioTrack?: any;
+  isStaff?: boolean;
+}
 
 const PodRoomContent = ({ 
   room, 
+  currentUser,
   isHost, 
   participantsData, 
   participantCount, 
   onRequestSpeak, 
   onApproveRequest, 
   onRemoveSpeaker,
+  onCancelRequest,
   onEndPod,
   onLeavePod,
   isGuest, 
   canPublish, 
-  localAudioTrack 
-}) => {
+  remoteUsers,
+  localAudioTrack,
+  isStaff
+}: PodRoomContentProps) => {
   if (!room) {
     return (
       <div className="flex flex-col h-screen bg-gray-900 text-white items-center justify-center">
@@ -59,9 +83,39 @@ const PodRoomContent = ({
             </div>
           </div>
           <div className="flex-1 p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {participantsData.map(p => (
-              <PodParticipantBox key={p.id} participant={p} isHost={isHost} onApprove={onApproveRequest} onRemove={onRemoveSpeaker} />
-            ))}
+            {participantsData.map(p => {
+              // Find matching remote user or use local audio track for self
+              const isSelf = p.user_id === currentUser?.id;
+              const remoteUser = remoteUsers?.find((ru: IAgoraRTCRemoteUser) => {
+                // Convert user_id to numeric UID to match
+                const stringToUid = (str: string): number => {
+                  let hash = 0;
+                  for (let i = 0; i < str.length; i++) {
+                    hash = (hash << 5) - hash + str.charCodeAt(i);
+                    hash |= 0;
+                  }
+                  return Math.abs(hash);
+                };
+                return ru.uid === stringToUid(p.user_id);
+              });
+              const audioTrack = isSelf ? localAudioTrack : remoteUser?.audioTrack;
+              
+              return (
+                <PodParticipantBox 
+                  key={p.id} 
+                  participant={p} 
+                  isHost={isHost}
+                  isOfficer={isStaff}
+                  isSelf={isSelf}
+                  currentUserId={currentUser?.id || ''}
+                  isParticipantHost={p.role === 'host' || p.is_host}
+                  isParticipantOfficer={p.role === 'officer'}
+                  audioTrack={audioTrack}
+                  onApprove={onApproveRequest} 
+                  onRemove={onRemoveSpeaker} 
+                />
+              );
+            })}
           </div>
           <div className="p-4 border-t border-gray-700">
             {isGuest ? (
@@ -87,7 +141,7 @@ const PodRoomContent = ({
           </div>
         </div>
         <div className="w-80 border-l border-gray-700 flex flex-col">
-          <PodChatBox roomId={room.id} />
+          <PodChatBox roomId={room.id} isHost={isHost} currentUserId={currentUser?.id || ''} />
         </div>
       </div>
     </div>
