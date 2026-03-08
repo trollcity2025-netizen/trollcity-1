@@ -4,6 +4,7 @@ import TrollWheelGame from '@/components/games/TrollWheelGame';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { useCoins } from '@/lib/hooks/useCoins';
+import { toast } from 'sonner';
 import { Coins, Trophy, Crown, Gift, Zap, Gem, X, Minus } from 'lucide-react';
 
 interface TopSpinner {
@@ -57,39 +58,56 @@ export default function TrollWheel() {
       try {
         const { data: spinners } = await supabase
           .from('troll_wheel_wins')
-          .select('user_id, user_profiles(username), reward_value, coins_awarded, created_at')
+          .select('*')
           .order('created_at', { ascending: false })
           .limit(100);
 
-        if (spinners) {
-          const aggregated: Record<string, TopSpinner> = {};
-          spinners.forEach((spin: any) => {
-            if (!aggregated[spin.user_id]) {
-              aggregated[spin.user_id] = {
-                username: spin.user_profiles?.username || 'Unknown',
-                total_winnings: 0,
-                spins: 0,
-              };
-            }
-            aggregated[spin.user_id].total_winnings += spin.coins_awarded;
-            aggregated[spin.user_id].spins += 1;
-          });
+        if (spinners && spinners.length > 0) {
+          // Get unique user IDs
+          const userIds = [...new Set(spinners.map((s: any) => s.user_id).filter(Boolean))];
+          
+          if (userIds.length > 0) {
+            // Fetch usernames for these users
+            const { data: profiles } = await supabase
+              .from('user_profiles')
+              .select('id, username')
+              .in('id', userIds);
+            
+            const profileMap: Record<string, string> = {};
+            profiles?.forEach((p: any) => {
+              profileMap[p.id] = p.username;
+            });
 
-          const top = Object.values(aggregated)
-            .sort((a, b) => b.total_winnings - a.total_winnings)
-            .slice(0, 10);
-          setTopSpinners(top);
+            const aggregated: Record<string, TopSpinner> = {};
+            spinners.forEach((spin: any) => {
+              if (!spin.user_id) return;
+              if (!aggregated[spin.user_id]) {
+                aggregated[spin.user_id] = {
+                  username: profileMap[spin.user_id] || 'Unknown',
+                  total_winnings: 0,
+                  spins: 0,
+                };
+              }
+              aggregated[spin.user_id].total_winnings += spin.coins_awarded || 0;
+              aggregated[spin.user_id].spins += 1;
+            });
 
-          const winners = spinners
-            .filter((s: any) => s.reward_value >= 10)
-            .slice(0, 10)
-            .map((w: any) => ({
-              username: w.user_profiles?.username || 'Unknown',
-              reward_value: w.reward_value,
-              coins_awarded: w.coins_awarded,
-              created_at: w.created_at,
-            }));
-          setBigWinners(winners);
+            const top = Object.values(aggregated)
+              .sort((a, b) => b.total_winnings - a.total_winnings)
+              .slice(0, 10);
+            setTopSpinners(top);
+
+            const winners = spinners
+              .filter((s: any) => s.reward_value >= 10)
+              .slice(0, 10)
+              .map((w: any) => ({
+                username: profileMap[w.user_id] || 'Unknown',
+                reward_value: w.reward_value,
+                coins_awarded: w.coins_awarded,
+                created_at: w.created_at,
+              }));
+            setBigWinners(winners);
+          }
         }
       } catch (err) {
         console.warn('[TrollWheel] No data yet:', err);
@@ -104,10 +122,27 @@ export default function TrollWheel() {
 
   const handleBalanceChange = (newBalance: number) => {
     setUserBalance(newBalance);
+    // Refresh coins from database after spin
+    refreshCoins();
   };
 
-  const handleTrollmondChange = (newBalance: number) => {
+  const handleTrollmondChange = async (newBalance: number) => {
     setTrollmondBalance(newBalance);
+    // Refresh profile from database to get updated trollmonds
+    if (profile?.id) {
+      try {
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('trollmonds')
+          .eq('id', profile.id)
+          .single();
+        if (data?.trollmonds !== undefined) {
+          setTrollmondBalance(data.trollmonds);
+        }
+      } catch (err) {
+        console.warn('Failed to refresh trollmonds:', err);
+      }
+    }
   };
 
   const getDiscountTier = () => {

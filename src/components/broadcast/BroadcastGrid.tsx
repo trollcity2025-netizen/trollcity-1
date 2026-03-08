@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties, useRef, useEffect, memo } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import { ILocalVideoTrack, ILocalAudioTrack, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, MicOff, VideoOff, Gift } from 'lucide-react';
+import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 import { supabase } from '../../lib/supabase';
@@ -773,6 +773,11 @@ export default function BroadcastGrid({
               {userId && (
                 <div className="absolute top-3 right-3 z-10 pointer-events-none">
                   <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+                    <Gem size={12} className="text-purple-400" />
+                    <span className="text-sm font-bold text-white">
+                      {(displayProfile?.trollmonds || 0).toLocaleString()}
+                    </span>
+                    <div className="w-px h-4 bg-white/20" />
                     <Coins size={12} className="text-yellow-400" />
                     <span className="text-sm font-bold text-white">
                       {(displayProfile?.troll_coins || 0).toLocaleString()}

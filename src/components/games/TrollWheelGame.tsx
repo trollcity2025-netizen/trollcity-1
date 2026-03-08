@@ -108,7 +108,7 @@ interface TrollWheelProps {
 
 interface WheelReward {
   id: number;
-  type: 'coins' | 'bankrupt' | 'trolled' | 'free_perk' | 'free_insurance' | 'free_entrance' | 'ghost_mode' | 'featured_broadcaster';
+  type: 'coins' | 'trollmonds' | 'bankrupt' | 'trolled' | 'free_perk' | 'free_insurance' | 'free_entrance' | 'ghost_mode' | 'featured_broadcaster';
   coins: number;
   label: string;
   description: string;
@@ -119,22 +119,23 @@ interface WheelReward {
 }
 
 // Enhanced wheel rewards: 14 coin amounts + 1 bankrupt + 1 troll (24hr lock)
+// Changed to Trollmonds - 85% more valuable than Troll Coins
 const WHEEL_REWARDS: WheelReward[] = [
-  // Coin rewards (14 segments)
-  { id: 0, type: 'coins', coins: 1, label: '+1', description: '+1 coin', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '🪙' },
-  { id: 1, type: 'coins', coins: 5, label: '+5', description: '+5 coins', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '🪙' },
-  { id: 2, type: 'coins', coins: 10, label: '+10', description: '+10 coins', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '🪙' },
-  { id: 3, type: 'coins', coins: 50, label: '+50', description: '+50 coins', rarity: 'uncommon', color: '#3b82f6', glowColor: '#60a5fa', icon: '🪙' },
-  { id: 4, type: 'coins', coins: 100, label: '+100', description: '+100 coins', rarity: 'uncommon', color: '#3b82f6', glowColor: '#60a5fa', icon: '🪙' },
-  { id: 5, type: 'coins', coins: 150, label: '+150', description: '+150 coins', rarity: 'rare', color: '#8b5cf6', glowColor: '#a78bfa', icon: '🪙' },
-  { id: 6, type: 'coins', coins: 200, label: '+200', description: '+200 coins', rarity: 'rare', color: '#8b5cf6', glowColor: '#a78bfa', icon: '🪙' },
-  { id: 7, type: 'coins', coins: 250, label: '+250', description: '+250 coins', rarity: 'epic', color: '#f59e0b', glowColor: '#fbbf24', icon: '🪙' },
-  { id: 8, type: 'coins', coins: 300, label: '+300', description: '+300 coins', rarity: 'epic', color: '#f59e0b', glowColor: '#fbbf24', icon: '🪙' },
-  { id: 9, type: 'coins', coins: 350, label: '+350', description: '+350 coins', rarity: 'epic', color: '#f59e0b', glowColor: '#fbbf24', icon: '🪙' },
-  { id: 10, type: 'coins', coins: 400, label: '+400', description: '+400 coins', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '🪙' },
-  { id: 11, type: 'coins', coins: 450, label: '+450', description: '+450 coins', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '🪙' },
-  { id: 12, type: 'coins', coins: 500, label: '+500', description: '+500 coins', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '🪙' },
-  { id: 13, type: 'coins', coins: 550, label: '+550', description: '+550 coins', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '🪙' },
+  // Coin rewards (14 segments) - now Trollmonds
+  { id: 0, type: 'trollmonds', coins: 1, label: '+1', description: '+1 Trollmond', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '💎' },
+  { id: 1, type: 'trollmonds', coins: 5, label: '+5', description: '+5 Trollmonds', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '💎' },
+  { id: 2, type: 'trollmonds', coins: 10, label: '+10', description: '+10 Trollmonds', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '💎' },
+  { id: 3, type: 'trollmonds', coins: 50, label: '+50', description: '+50 Trollmonds', rarity: 'uncommon', color: '#3b82f6', glowColor: '#60a5fa', icon: '💎' },
+  { id: 4, type: 'trollmonds', coins: 100, label: '+100', description: '+100 Trollmonds', rarity: 'uncommon', color: '#3b82f6', glowColor: '#60a5fa', icon: '💎' },
+  { id: 5, type: 'trollmonds', coins: 150, label: '+150', description: '+150 Trollmonds', rarity: 'rare', color: '#8b5cf6', glowColor: '#a78bfa', icon: '💎' },
+  { id: 6, type: 'trollmonds', coins: 200, label: '+200', description: '+200 Trollmonds', rarity: 'rare', color: '#8b5cf6', glowColor: '#a78bfa', icon: '💎' },
+  { id: 7, type: 'trollmonds', coins: 250, label: '+250', description: '+250 Trollmonds', rarity: 'epic', color: '#f59e0b', glowColor: '#fbbf24', icon: '💎' },
+  { id: 8, type: 'trollmonds', coins: 300, label: '+300', description: '+300 Trollmonds', rarity: 'epic', color: '#f59e0b', glowColor: '#fbbf24', icon: '💎' },
+  { id: 9, type: 'trollmonds', coins: 350, label: '+350', description: '+350 Trollmonds', rarity: 'epic', color: '#f59e0b', glowColor: '#fbbf24', icon: '💎' },
+  { id: 10, type: 'trollmonds', coins: 400, label: '+400', description: '+400 Trollmonds', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '💎' },
+  { id: 11, type: 'trollmonds', coins: 450, label: '+450', description: '+450 Trollmonds', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '💎' },
+  { id: 12, type: 'trollmonds', coins: 500, label: '+500', description: '+500 Trollmonds', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '💎' },
+  { id: 13, type: 'trollmonds', coins: 550, label: '+550', description: '+550 Trollmonds', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '💎' },
   // Special rewards
   { id: 14, type: 'bankrupt', coins: 0, label: 'BANKRUPT', description: 'Lose all coins!', rarity: 'special', color: '#1a1a1a', glowColor: '#000000', icon: '💀' },
   { id: 15, type: 'trolled', coins: 0, label: 'TROLLED!', description: 'No spins for 24 hours!', rarity: 'special', color: '#dc2626', glowColor: '#ef4444', icon: '🤡' },
@@ -210,7 +211,104 @@ const TireRing = ({ size }: { size: number }) => {
   );
 };
 
-// Tire Tread Pattern
+// Wheel Segments Component - Renders the colored segments with labels
+const WheelSegments = ({ size, rewards }: { size: number; rewards: WheelReward[] }) => {
+  const centerX = size / 2;
+  const centerY = size / 2;
+  const outerRadius = size / 2 - 35; // Inside the tire ring
+  const innerRadius = outerRadius * 0.35; // Leave space for center hub
+  const segmentAngle = 360 / rewards.length;
+  
+  return (
+    <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${size} ${size}`}>
+      {rewards.map((reward, index) => {
+        const startAngle = index * segmentAngle - 90; // Start from top
+        const endAngle = startAngle + segmentAngle;
+        
+        // Calculate segment path
+        const startRad = (startAngle * Math.PI) / 180;
+        const endRad = (endAngle * Math.PI) / 180;
+        
+        const x1 = centerX + Math.cos(startRad) * outerRadius;
+        const y1 = centerY + Math.sin(startRad) * outerRadius;
+        const x2 = centerX + Math.cos(endRad) * outerRadius;
+        const y2 = centerY + Math.sin(endRad) * outerRadius;
+        const x3 = centerX + Math.cos(endRad) * innerRadius;
+        const y3 = centerY + Math.sin(endRad) * innerRadius;
+        const x4 = centerX + Math.cos(startRad) * innerRadius;
+        const y4 = centerY + Math.sin(startRad) * innerRadius;
+        
+        const largeArc = segmentAngle > 180 ? 1 : 0;
+        
+        const pathD = `
+          M ${x1} ${y1}
+          A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x2} ${y2}
+          L ${x3} ${y3}
+          A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4}
+          Z
+        `;
+        
+        // Calculate text position (middle of segment)
+        const textAngle = startAngle + segmentAngle / 2;
+        const textRad = (textAngle * Math.PI) / 180;
+        const textRadius = (outerRadius + innerRadius) / 2;
+        const textX = centerX + Math.cos(textRad) * textRadius;
+        const textY = centerY + Math.sin(textRad) * textRadius;
+        
+        // Determine text color based on background brightness
+        const isDark = reward.color === '#1a1a1a' || reward.color === '#dc2626';
+        const textColor = isDark ? '#ffffff' : '#000000';
+        
+        return (
+          <g key={reward.id}>
+            {/* Segment fill */}
+            <path 
+              d={pathD} 
+              fill={reward.color}
+              stroke="rgba(0,0,0,0.3)"
+              strokeWidth="1"
+            />
+            {/* Label text */}
+            <text
+              x={textX}
+              y={textY}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill={textColor}
+              fontSize={reward.label.length > 8 ? "10" : "12"}
+              fontWeight="bold"
+              transform={`rotate(${textAngle + 90}, ${textX}, ${textY})`}
+              style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.5)' }}
+            >
+              {reward.label}
+            </text>
+          </g>
+        );
+      })}
+      
+      {/* Segment divider lines */}
+      {rewards.map((_, index) => {
+        const angle = (index * segmentAngle - 90) * (Math.PI / 180);
+        const x = centerX + Math.cos(angle) * outerRadius;
+        const y = centerY + Math.sin(angle) * outerRadius;
+        const x2 = centerX + Math.cos(angle) * innerRadius;
+        const y2 = centerY + Math.sin(angle) * innerRadius;
+        
+        return (
+          <line
+            key={`divider-${index}`}
+            x1={x}
+            y1={y}
+            x2={x2}
+            y2={y2}
+            stroke="rgba(0,0,0,0.4)"
+            strokeWidth="2"
+          />
+        );
+      })}
+    </svg>
+  );
+};
 const TireTreadPattern = ({ size }: { size: number }) => (
   <svg className="absolute inset-0 pointer-events-none" style={{ width: size, height: size }}>
     <defs>
@@ -385,11 +483,13 @@ export default function TrollWheelGame({
 }: TrollWheelProps) {
   const { profile } = useAuthStore();
   const [isSpinning, setIsSpinning] = useState(false);
+  const [spinKey, setSpinKey] = useState(0); // Force re-render after spin
   const [rotation, setRotation] = useState(0);
   const [selectedMultiplier, setSelectedMultiplier] = useState(1);
   const [winningIndex, setWinningIndex] = useState<number | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [lastWin, setLastWin] = useState<{ type: string; label: string; description: string; coins: number; multiplier: number } | null>(null);
+  const [showWinModal, setShowWinModal] = useState(false);
   
   // Wheel balance state (separate from user's troll_coins)
   const [wheelBalance, setWheelBalance] = useState(0);
@@ -505,6 +605,7 @@ export default function TrollWheelGame({
     setLastWin(null);
     setWinningIndex(null);
     setShowConfetti(false);
+    setShowWinModal(false);
     
     // === RANDOM SPIN WITH 1 IN 15 CHANCE FOR SPECIAL WINS ===
     let resultIndex: number;
@@ -542,102 +643,80 @@ export default function TrollWheelGame({
     setWinningIndex(resultIndex);
     setRotation(finalRotation);
     
-    // Wait for spin to finish
-    setTimeout(async () => {
-      // Process the result
+    // Wait for spin animation to finish, then show result
+    // Use setTimeout with a callback to ensure it runs
+    setTimeout(() => {
+      finishSpin(result, newBalance);
+    }, 4000);
+  };
+  
+  // Separate function to handle spin completion - ensures it always runs
+  const finishSpin = async (result: WheelReward, newBalance: number) => {
+    if (!profile?.id) {
+      setIsSpinning(false);
+      setSpinKey(k => k + 1);
+      return;
+    }
+    
+    try {
       let finalCoins = 0;
       let message = '';
       
       if (result.type === 'coins') {
         finalCoins = result.coins * selectedMultiplier;
-        // Add directly to user's actual balance
         const finalUserBalance = newBalance + finalCoins;
         onBalanceChange(finalUserBalance);
-        
-        // Update in database
-        await supabase.rpc('add_troll_coins', { 
-          p_user_id: profile.id, 
-          p_amount: finalCoins 
-        }).catch(() => {});
-        
-        // Play win sound
+        try {
+          await supabase.rpc('add_troll_coins', { p_user_id: profile.id, p_amount: finalCoins });
+        } catch (e) { /* ignore */ }
         playWinSound();
         message = `🎉 WIN! x${selectedMultiplier}: +${finalCoins} coins`;
-        
+      } else if (result.type === 'trollmonds') {
+        finalCoins = result.coins * selectedMultiplier;
+        const finalTrollmondBalance = trollmondBalance + finalCoins;
+        // Update trollmond balance via onTrollmondChange callback
+        if (onTrollmondChange) {
+          onTrollmondChange(finalTrollmondBalance);
+        }
+        // Also save to database using increment_trollmonds
+        try {
+          await supabase.rpc('increment_trollmonds', { p_user_id: profile.id, p_amount: finalCoins });
+        } catch (e) { /* ignore */ }
+        playWinSound();
+        message = `💎 WIN! x${selectedMultiplier}: +${finalCoins} Trollmonds`;
       } else if (result.type === 'bankrupt') {
-        // Lose all coins - reset to 0!
         onBalanceChange(0);
-        
-        // Play bankrupt sound
         playBankruptSound();
-        
-        // Update in database
-        await supabase.rpc('set_troll_coins', { 
-          p_user_id: profile.id, 
-          p_amount: 0 
-        }).catch(() => {});
-        
+        try {
+          await supabase.rpc('set_troll_coins', { p_user_id: profile.id, p_amount: 0 });
+        } catch (e) { /* ignore */ }
         message = '💀 BANKRUPT! You lost all your coins!';
-        
       } else if (result.type === 'trolled') {
-        // Trolled! No spins for 24 hours
         playTrolledSound();
-        
-        // Set troll lock until 24 hours from now
         const trollLockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        
-        await supabase
-          .from('user_profiles')
-          .update({ wheel_troll_locked_until: trollLockUntil })
-          .eq('id', profile.id);
-        
-        message = '🤡 TROLLED! No spins for 24 hours! Mwahaha!';
-        
+        await supabase.from('user_profiles').update({ wheel_troll_locked_until: trollLockUntil }).eq('id', profile.id);
+        message = '🤡 TROLLED! No spins for 24 hours!';
       } else if (result.type === 'featured_broadcaster') {
         playWinSound();
-        message = '⭐ FEATURED! You will be featured on Live Now for 30 minutes!';
-        
-        // Add to inventory
+        message = '⭐ FEATURED! 30 minutes on Live Now!';
         await addToInventory('featured_broadcaster', 'Featured Broadcaster', 'Get featured on Live Now page for 30 minutes');
-        
-        // Update profile immediately
-        await supabase
-          .from('user_profiles')
-          .update({ featured_broadcaster_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() })
-          .eq('id', profile.id);
-        
+        await supabase.from('user_profiles').update({ featured_broadcaster_until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }).eq('id', profile.id);
       } else if (result.type === 'ghost_mode') {
         playWinSound();
-        message = '👻 GHOST MODE! You are hidden from broadcast for 24 hours!';
-        
-        // Add to inventory
-        await addToInventory('ghost_mode', 'Ghost Mode', 'Hide from broadcast and live chat for 24 hours');
-        
-        // Update profile immediately
-        await supabase
-          .from('user_profiles')
-          .update({ ghost_mode_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() })
-          .eq('id', profile.id);
-        
+        message = '👻 GHOST MODE! Hidden for 24 hours!';
+        await addToInventory('ghost_mode', 'Ghost Mode', 'Hide from broadcast for 24 hours');
+        await supabase.from('user_profiles').update({ ghost_mode_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }).eq('id', profile.id);
       } else if (result.type === 'free_perk') {
         playWinSound();
-        message = '✨ FREE PERK! Visit Coin Store to claim your free perk!';
-        
-        // Add to inventory
-        await addToInventory('free_perk', 'Free Perk', 'Get any perk from Coin Store for free');
-        
+        message = '✨ FREE PERK! Visit Coin Store!';
+        await addToInventory('free_perk', 'Free Perk', 'Get any perk for free');
       } else if (result.type === 'free_insurance') {
         playWinSound();
-        message = '🛡️ FREE INSURANCE! You got 7 days of free insurance!';
-        
-        // Add to inventory
+        message = '🛡️ FREE INSURANCE! 7 days!';
         await addToInventory('free_insurance', 'Free Insurance', 'Free insurance for 7 days');
-        
       } else if (result.type === 'free_entrance') {
         playWinSound();
-        message = '🎆 FREE ENTRANCE! You got a free entrance effect!';
-        
-        // Add to inventory
+        message = '🎆 FREE ENTRANCE! Free entrance effect!';
         await addToInventory('free_entrance', 'Free Entrance Effect', 'Get any entrance effect for free');
       }
       
@@ -650,13 +729,13 @@ export default function TrollWheelGame({
         multiplier: selectedMultiplier 
       });
       
+      // Show win modal
+      setShowWinModal(true);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
-      
-      // Show toast
       toast.success(message);
       
-      // Record spin in database
+      // Record spin
       try {
         supabase.from('troll_wheel_wins').insert({
           user_id: profile.id,
@@ -665,15 +744,15 @@ export default function TrollWheelGame({
           coins_awarded: finalCoins,
           multiplier_used: selectedMultiplier,
         });
-      } catch (err) {
-        console.warn('[TrollWheel] Failed to record spin:', err);
-      }
-      
+      } catch (e) { console.warn('Failed to record spin'); }
+    } catch (err) {
+      console.error('[TrollWheel] Error in finishSpin:', err);
+    } finally {
+      // ALWAYS reset spinning state - this is critical!
       setIsSpinning(false);
-      
-      // Reload inventory
+      setSpinKey(k => k + 1);
       loadInventory();
-    }, 4000);
+    }
   };
   
   const addToInventory = async (itemType: string, itemName: string, itemDesc: string) => {
@@ -924,7 +1003,7 @@ export default function TrollWheelGame({
         <div className="relative mt-8" style={{ width: size, height: size }}>
           <div className="absolute inset-0 rounded-full bg-purple-600/30 blur-[40px]" />
           
-          {/* Rotating container - includes tire and tiles */}
+          {/* Rotating container - includes tire, segments and tiles */}
           <motion.div
             ref={wheelRef}
             className="absolute"
@@ -932,18 +1011,22 @@ export default function TrollWheelGame({
             animate={{ rotate: rotation }}
             transition={{ duration: 4, ease: [0.17, 0.67, 0.12, 0.99] }}
           >
+            {/* Wheel Segments - shows the reward slices */}
+            <WheelSegments size={size} rewards={WHEEL_REWARDS} />
             {/* Tire Ring - rotates with wheel */}
             <TireTreadPattern size={size} />
             <TireRing size={size} />
           </motion.div>
           
           {/* Center Hub - stays fixed */}
-          <CenterHub 
-            size={size} 
-            onSpin={handleSpin} 
-            disabled={userBalance < currentBidCost}
-            isSpinning={isSpinning}
-          />
+          <motion.div key={spinKey}>
+            <CenterHub 
+              size={size} 
+              onSpin={handleSpin} 
+              disabled={userBalance < currentBidCost}
+              isSpinning={isSpinning}
+            />
+          </motion.div>
           
           {/* Pointer - stays fixed */}
           <WheelPointer />
@@ -955,30 +1038,64 @@ export default function TrollWheelGame({
           <CoinParticles show={showConfetti} />
         </div>
         
-        {/* Win Display */}
-        <AnimatePresence>
-          {lastWin && (
+        {/* Win Display - Always visible after spin */}
+        {lastWin && (
+          <div className="bg-black/80 backdrop-blur-md border-2 border-yellow-500/50 px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(234,179,8,0.5)]">
+            <div className="text-center">
+              <p className="text-cyan-300 text-sm font-bold uppercase tracking-wider">🎉 YOU WON! 🎉</p>
+              <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-1">
+                {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier} COINS` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier} TROLLMONDS` : lastWin.label}
+              </p>
+              <p className="text-gray-300 text-sm mt-1">{lastWin.description}</p>
+              {lastWin.coins > 0 && (
+                <div className="flex items-center justify-center gap-4 mt-2">
+                  <span className="text-green-400 font-bold text-xl">+{lastWin.coins * lastWin.multiplier} coins</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Win Modal - Shows prominently after spin */}
+        {showWinModal && lastWin && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
             <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              className="bg-black/80 backdrop-blur-md border-2 border-yellow-500/50 px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(234,179,8,0.5)]"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-gradient-to-br from-purple-900 to-black border-4 border-yellow-500 p-8 rounded-3xl shadow-[0_0_60px_rgba(234,179,8,0.6)] max-w-md mx-4 text-center"
             >
-              <div className="text-center">
-                <p className="text-cyan-300 text-sm font-bold uppercase tracking-wider">🎉 YOU WON! 🎉</p>
-                <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-1">
-                  {lastWin.label}
-                </p>
-                <p className="text-gray-300 text-sm mt-1">{lastWin.description}</p>
-                {lastWin.coins > 0 && (
-                  <div className="flex items-center justify-center gap-4 mt-2">
-                    <span className="text-green-400 font-bold">+{lastWin.coins} coins</span>
-                  </div>
-                )}
+              <div className="text-6xl mb-4">
+                {lastWin.type === 'coins' ? '🪙' : lastWin.type === 'trollmonds' ? '💎' : lastWin.type === 'bankrupt' ? '💀' : lastWin.type === 'trolled' ? '🤡' : '🎁'}
               </div>
+              <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 mb-2">
+                YOU WON!
+              </h2>
+              <p className="text-4xl md:text-5xl font-black text-green-400 mb-2">
+                {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.label}
+              </p>
+              <p className="text-gray-300 mb-4">{lastWin.description}</p>
+              {lastWin.type === 'coins' && (
+                {lastWin.type === 'trollmonds' ? (
+                  <>
+                    <p className="text-xl font-bold text-cyan-400">
+                      +{lastWin.coins * lastWin.multiplier} TROLLMONDS ADDED!
+                    </p>
+                  </>
+                ) : lastWin.type === 'coins' ? (
+                  <p className="text-xl font-bold text-yellow-400">
+                    +{lastWin.coins * lastWin.multiplier} COINS ADDED!
+                  </p>
+                ) : null}
+              )}
+              <button
+                onClick={() => setShowWinModal(false)}
+                className="mt-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold px-8 py-3 rounded-xl hover:scale-105 transition-transform"
+              >
+                AWESOME!
+              </button>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </div>
+        )}
         
         <p className="text-gray-400 text-sm text-center max-w-md">
           Spin the wheel and win coins, special items, or even GHOST MODE! Higher bids multiply your coin winnings.

@@ -3,7 +3,7 @@ import { useAuthStore } from '@/lib/store';
 import { useXPStore } from '@/stores/useXPStore';
 import { useCoins } from '@/lib/hooks/useCoins';
 import { getRoleDisplayName } from '@/lib/supabase';
-import { Crown, Coins } from 'lucide-react';
+import { Crown, Coins, Gem } from 'lucide-react';
 
 const UserProfileWidget = () => {
   const { profile } = useAuthStore();
@@ -67,6 +67,13 @@ const UserProfileWidget = () => {
             <span className="font-bold">Coins</span>
           </div>
                     <span className="font-mono text-yellow-400">{coinsLoading ? '...' : (troll_coins ?? 0).toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-purple-400">
+            <Gem size={14} />
+            <span className="font-bold">Trollmonds</span>
+          </div>
+                    <span className="font-mono text-purple-400">{coinsLoading ? '...' : ((profile as any)?.trollmonds ?? 0).toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-slate-300">

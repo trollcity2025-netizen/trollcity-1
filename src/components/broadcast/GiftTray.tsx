@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Coins, Loader2, ChevronDown } from 'lucide-react';
+import { Coins, Loader2, ChevronDown, Gem } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useGiftSystem, GiftItem } from '../../lib/hooks/useGiftSystem';
@@ -188,6 +188,12 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
         </div>
         
         <div className="flex items-center gap-3">
+          {/* Trollmonds Balance */}
+          <div className="text-purple-400 font-mono text-sm bg-purple-400/10 px-3 py-1 rounded-full border border-purple-400/20 flex items-center gap-1">
+            <Gem size={14} />
+            {profile?.trollmonds?.toLocaleString() || 0}
+          </div>
+          
           {/* Coin Balance */}
           <div className="text-yellow-400 font-mono text-sm bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/20 flex items-center gap-1">
             <Coins size={14} />
