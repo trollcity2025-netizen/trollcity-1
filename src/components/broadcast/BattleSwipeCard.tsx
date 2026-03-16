@@ -1,6 +1,7 @@
 /**
  * BattleSwipeCard - Full-screen battle stream card for TikTok-style swipe interface
  * Displays battle streams with duel visuals, scores, and competitor info
+ * Migrated from Agora to LiveKit
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -11,7 +12,7 @@ import { Stream } from '../../types/broadcast';
 import { toast } from 'sonner';
 import { Eye, Heart, MessageCircle, Gift, Share2, Users, Sword, Shield, Trophy } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import AgoraRTC from 'agora-rtc-sdk-ng';
+import { Room, RoomEvent, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 
 interface BattleSwipeCardProps {
   stream: Stream & {
@@ -49,24 +50,14 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
   
-  const [remoteUsers, setRemoteUsers] = useState<any[]>([]);
+  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
   const [viewerCount, setViewerCount] = useState(stream.current_viewers || stream.viewer_count || 0);
   const [battleData, setBattleData] = useState<BattleData | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   
-  const clientRef = useRef<any>(null);
+  const roomRef = useRef<Room | null>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hasJoinedRef = useRef(false);
-  
-  // Convert stream ID to numeric UID for Agora
-  const stringToUid = (str: string): number => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash);
-  };
   
   // Fetch battle data
   useEffect(() => {
@@ -103,7 +94,7 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
     }
   }, [stream.battle_id]);
   
-  // Join Agora channel when card becomes active
+  // Join LiveKit channel when card becomes active
   const joinStream = useCallback(async () => {
     if (!isActive || hasJoinedRef.current || !user) return;
     
@@ -111,20 +102,19 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
     setIsJoining(true);
     
     try {
-      const appId = import.meta.env.VITE_AGORA_APP_ID;
-      if (!appId) {
-        console.warn('VITE_AGORA_APP_ID not configured');
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL;
+      if (!livekitUrl) {
+        console.warn('VITE_LIVEKIT_URL not configured');
         setIsJoining(false);
         return;
       }
       
-      // Get viewer token
-      const numericUid = stringToUid(user.id);
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
+      // Get viewer token from livekit-token function
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
         body: {
-          channel: stream.id,
-          uid: numericUid,
-          role: 'subscriber'
+          room: stream.id,
+          userId: user.id,
+          role: 'viewer'
         }
       });
       
@@ -134,42 +124,51 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
         return;
       }
       
-      // Create Agora client
-      const client = AgoraRTC.createClient({
-        mode: 'rtc',
-        codec: 'vp8'
+      // Create LiveKit room
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true
       });
       
-      clientRef.current = client;
+      roomRef.current = room;
       
-      // Handle user published
-      client.on('user-published', async (remoteUser: any, mediaType: string) => {
-        if (remoteUser.hasVideo) {
-          await client.subscribe(remoteUser, 'video');
-        }
-        if (remoteUser.hasAudio) {
-          await client.subscribe(remoteUser, 'audio');
-          remoteUser.audioTrack?.play();
-        }
-        
+      // Handle participant connected
+      room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+        console.log('[BattleSwipeCard] Participant connected:', participant.identity);
         setRemoteUsers(prev => {
-          const filtered = prev.filter(u => u.uid !== remoteUser.uid);
-          return [...filtered, remoteUser];
+          if (prev.find(p => p.identity === participant.identity)) return prev;
+          return [...prev, participant];
         });
       });
       
-      // Handle user unpublished
-      client.on('user-unpublished', (remoteUser: any) => {
-        setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUser.uid));
+      // Handle participant disconnected
+      room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+        console.log('[BattleSwipeCard] Participant disconnected:', participant.identity);
+        setRemoteUsers(prev => prev.filter(p => p.identity !== participant.identity));
       });
       
-      // Join channel
-      await client.join(appId, stream.id, tokenData.token, numericUid);
+      // Handle track subscribed
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteVideoTrack | RemoteAudioTrack, participant: RemoteParticipant) => {
+        console.log('[BattleSwipeCard] Track subscribed:', track.kind, 'from', participant.identity);
+        // Force re-render
+        setRemoteUsers(prev => [...prev]);
+      });
       
-      // Handle mute state
-      if (isMuted) {
-        client.setAudioVolume(0);
-      }
+      // Handle track unsubscribed
+      room.on(RoomEvent.TrackUnsubscribed, (track: RemoteVideoTrack | RemoteAudioTrack, participant: RemoteParticipant) => {
+        console.log('[BattleSwipeCard] Track unsubscribed:', track.kind, 'from', participant.identity);
+        setRemoteUsers(prev => [...prev]);
+      });
+      
+      // Connect to room
+      await room.connect(livekitUrl, tokenData.token, {
+        name: stream.id,
+        identity: user.id
+      });
+      
+      // Get existing participants
+      const existingParticipants = Array.from(room.participants.values());
+      setRemoteUsers(existingParticipants);
       
       console.log('[BattleSwipeCard] Joined stream:', stream.id);
       
@@ -179,18 +178,7 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
     } finally {
       setIsJoining(false);
     }
-  }, [isActive, stream.id, user, isMuted]);
-  
-  // Handle mute state changes
-  useEffect(() => {
-    if (clientRef.current) {
-      if (isMuted) {
-        clientRef.current.setAudioVolume(0);
-      } else {
-        clientRef.current.setAudioVolume(100);
-      }
-    }
-  }, [isMuted]);
+  }, [isActive, stream.id, user]);
   
   // Join/leave based on active state
   useEffect(() => {
@@ -199,9 +187,9 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
     }
     
     return () => {
-      if (clientRef.current) {
-        clientRef.current.leave().catch(() => {});
-        clientRef.current = null;
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
         hasJoinedRef.current = false;
       }
     };
@@ -257,6 +245,13 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
   const totalScore = challengerScore + opponentScore;
   const challengerPercent = totalScore > 0 ? (challengerScore / totalScore) * 100 : 50;
   
+  // Get video track from participant
+  const getVideoTrack = (participant: RemoteParticipant): RemoteVideoTrack | undefined => {
+    const trackPublications = Array.from(participant.videoTrackPublications.values());
+    const videoPub = trackPublications.find(p => p.track?.kind === 'video');
+    return videoPub?.track as RemoteVideoTrack | undefined;
+  };
+  
   return (
     <div className="w-full h-full relative bg-black overflow-hidden">
       {/* Video/Stream Container */}
@@ -272,24 +267,28 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
             remoteUsers.length === 2 ? "grid-cols-2" :
             "grid-cols-2 gap-0.5"
           )}>
-            {remoteUsers.map((remoteUser) => (
-              <div key={remoteUser.uid} className="relative bg-black">
-                {remoteUser.videoTrack ? (
-                  <div 
-                    ref={(el) => {
-                      if (el && remoteUser.videoTrack) {
-                        remoteUser.videoTrack.play(el);
-                      }
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                    <Users className="w-12 h-12 text-zinc-600" />
-                  </div>
-                )}
-              </div>
-            ))}
+            {remoteUsers.map((remoteUser) => {
+              const videoTrack = getVideoTrack(remoteUser);
+              return (
+                <div key={remoteUser.identity} className="relative bg-black">
+                  {videoTrack ? (
+                    <div 
+                      ref={(el) => {
+                        if (el && videoTrack) {
+                          const attached = videoTrack.attach();
+                          el.appendChild(attached);
+                        }
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                      <Users className="w-12 h-12 text-zinc-600" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           /* Placeholder when no video */

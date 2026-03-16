@@ -4,8 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
 import { useStreamStore } from '@/lib/streamStore';
-import AgoraRTC, { ILocalAudioTrack, ILocalVideoTrack } from 'agora-rtc-sdk-ng';
-import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Camera, Monitor } from 'lucide-react';
+import { LocalAudioTrack, LocalVideoTrack, AudioPresets, VideoPresets, Room } from 'livekit-client';
+import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Monitor } from 'lucide-react';
 import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
 import { GamingSetup } from '../../components/broadcast/GamingSetup';
 import { toast } from 'sonner';
@@ -64,6 +64,10 @@ export default function SetupPage() {
   const isPageVisible = useRef(true);
   const isTabSwitching = useRef(false);
 
+  // LiveKit room state - created in SetupPage and passed to BroadcastPage
+  const [livekitRoom, setLivekitRoom] = useState<Room | null>(null);
+  const livekitRoomRef = useRef<Room | null>(null);
+
 
   // Get category config
   const categoryConfig = getCategoryConfig(category);
@@ -74,16 +78,15 @@ export default function SetupPage() {
   const categoryMatchingTerm = getMatchingTerminology(category);
 
 
-  // Media state
-  // Changed from HTMLVideoElement to HTMLDivElement - Agora will create the video element
+  // Media state - LiveKit tracks for preview
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [agoraTracks, setAgoraTracks] = useState<[ILocalAudioTrack | null, ILocalVideoTrack | null]>([null, null]);
+  const [livekitTracks, setLivekitTracks] = useState<[LocalAudioTrack | null, LocalVideoTrack | null]>([null, null]);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
-  const [hasRearCamera, setHasRearCamera] = useState(false); // New state for rear camera detection
+  const [hasRearCamera, setHasRearCamera] = useState(false);
   const [followerCount, setFollowerCount] = useState<number>(0);
 
   // Stream mode for gaming category (camera vs screen share)
@@ -279,6 +282,48 @@ export default function SetupPage() {
     }
   };
 
+  // Helper to clear the video container - detaches any existing LiveKit elements
+  const clearVideoContainer = () => {
+    if (videoContainerRef.current) {
+      // Find and detach any attached video elements from LiveKit
+      const attachedElements = videoContainerRef.current.querySelectorAll('video');
+      attachedElements.forEach(el => {
+        el.remove();
+      });
+      videoContainerRef.current.innerHTML = '';
+    }
+  };
+
+  // Attach video track to container using LiveKit's attach() method
+  const attachVideoTrack = (videoTrack: LocalVideoTrack, facing: 'user' | 'environment') => {
+    if (!videoContainerRef.current) return;
+    
+    // Clear previous preview first
+    clearVideoContainer();
+    
+    // Use LiveKit's attach() to create and attach the video element
+    const mediaElement = videoTrack.attach();
+    mediaElement.style.width = '100%';
+    mediaElement.style.height = '100%';
+    mediaElement.style.objectFit = 'cover';
+    // Mirror front camera only
+    mediaElement.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
+    
+    videoContainerRef.current.appendChild(mediaElement);
+  };
+
+  // Detach video track from container using LiveKit's detach() method
+  const detachVideoTrack = (videoTrack: LocalVideoTrack) => {
+    if (!videoContainerRef.current) return;
+    
+    // Use LiveKit's detach to properly clean up the element
+    const mediaElement = videoTrack.detach();
+    if (mediaElement && videoContainerRef.current.contains(mediaElement)) {
+      videoContainerRef.current.removeChild(mediaElement);
+    }
+  };
+
+  // Acquire media stream using native browser API, then wrap in LiveKit tracks
   const acquireMediaStream = async (videoFacingMode: 'user' | 'environment', enableVideo: boolean): Promise<MediaStream | null> => {
     console.log('[acquireMediaStream] Attempting to acquire media stream...');
 
@@ -313,70 +358,70 @@ export default function SetupPage() {
     }
 
     try {
-      // Create Agora tracks instead of raw MediaStream
-      console.log('[acquireMediaStream] Creating Agora tracks...');
+      // First get native media stream using browser API
+      console.log('[acquireMediaStream] Getting native media stream...');
       
-      let audioTrack: ILocalAudioTrack | null = null;
-      let videoTrack: ILocalVideoTrack | null = null;
+      const constraints: MediaStreamConstraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: enableVideo ? {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: videoFacingMode
+        } : false
+      };
 
-      // Create audio track
-      try {
-        audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        console.log('[acquireMediaStream] Audio track created:', audioTrack.getTrackId?.());
-      } catch (audioErr) {
-        console.warn('[acquireMediaStream] Failed to create audio track:', audioErr);
-      }
+      const nativeStream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('[acquireMediaStream] Native stream acquired');
 
-      // Create video track if enabled
-      if (enableVideo) {
+      // Wrap audio track in LiveKit LocalAudioTrack
+      let audioTrack: LocalAudioTrack | null = null;
+      let videoTrack: LocalVideoTrack | null = null;
+
+      const audioTracks = nativeStream.getAudioTracks();
+      if (audioTracks.length > 0) {
         try {
-          videoTrack = await AgoraRTC.createCameraVideoTrack({
-            facingMode: videoFacingMode,
-          });
-          console.log('[acquireMediaStream] Video track created:', videoTrack.getTrackId?.());
-        } catch (videoErr) {
-          console.warn('[acquireMediaStream] Failed to create video track:', videoErr);
-          toast.warning('Camera not found. Audio only mode.');
-          setIsVideoEnabled(false);
+          audioTrack = new LocalAudioTrack(audioTracks[0]);
+          console.log('[acquireMediaStream] Audio track wrapped in LiveKit');
+        } catch (audioErr) {
+          console.warn('[acquireMediaStream] Failed to wrap audio track:', audioErr);
         }
       }
 
-      // Store Agora tracks for reuse in BroadcastPage
-      setAgoraTracks([audioTrack, videoTrack]);
+      const videoTracks = nativeStream.getVideoTracks();
+      if (videoTracks.length > 0) {
+        try {
+          videoTrack = new LocalVideoTrack(videoTracks[0]);
+          console.log('[acquireMediaStream] Video track wrapped in LiveKit');
+        } catch (videoErr) {
+          console.warn('[acquireMediaStream] Failed to wrap video track:', videoErr);
+        }
+      }
+
+      // Store LiveKit tracks for reuse in BroadcastPage
+      setLivekitTracks([audioTrack, videoTrack]);
       
       // Also store in PreflightStore for handoff
-      PreflightStore.setAgoraClient(null, [audioTrack, videoTrack, null, null]);
-      console.log('[acquireMediaStream] Agora tracks stored in PreflightStore');
+      PreflightStore.setLivekitTracks(audioTrack, videoTrack);
+      console.log('[acquireMediaStream] LiveKit tracks stored in PreflightStore');
 
-      // IMPORTANT: Use Agora's play() method instead of manually creating MediaStream
-      // This ensures proper playback management by Agora SDK
-      if (videoTrack && videoContainerRef.current) {
-        console.log('[acquireMediaStream] Playing video track in container using Agora play()');
-        videoTrack.play(videoContainerRef.current, {
-          fit: 'cover',
-          // Mirror local video for better user experience (self-view)
-          mirror: videoFacingMode === 'user'
-        });
-      }
-
-      // Create a MediaStream from Agora tracks for compatibility with existing code
-      // This is used for state management but the actual playback is handled by Agora
-      const mediaStream = new MediaStream();
-      if (audioTrack) {
-        mediaStream.addTrack(audioTrack.getMediaStreamTrack());
-      }
+      // Attach video track to container using LiveKit's attach() method
       if (videoTrack) {
-        mediaStream.addTrack(videoTrack.getMediaStreamTrack());
+        console.log('[acquireMediaStream] Attaching video track to container');
+        attachVideoTrack(videoTrack, videoFacingMode);
       }
       
-      console.log('[acquireMediaStream] MediaStream created from Agora tracks:', {
-        audioTracks: mediaStream.getAudioTracks().length,
-        videoTracks: mediaStream.getVideoTracks().length
+      console.log('[acquireMediaStream] MediaStream created:', {
+        audioTracks: nativeStream.getAudioTracks().length,
+        videoTracks: nativeStream.getVideoTracks().length
       });
       
-      return mediaStream;
+      return nativeStream;
     } catch (err: any) {
-      console.error('[acquireMediaStream] Error creating Agora tracks:', err);
+      console.error('[acquireMediaStream] Error creating media stream:', err);
       toast.error('Failed to access camera/microphone: ' + err.message);
       return null;
     }
@@ -523,57 +568,93 @@ export default function SetupPage() {
       currentLocalStream = mediaStream;
       setStream(mediaStream);
 
-      // Note: Video is now played via Agora's play() method in acquireMediaStream
-      // No need to manually attach srcObject - Agora manages the video element
-      console.log('[SetupPage] Video playback handled by Agora SDK via play() method');
+      // Note: Video is now played via LiveKit's attach() method in acquireMediaStream
+      // No need to manually attach srcObject - LiveKit manages the video element
+      console.log('[SetupPage] Video playback handled by LiveKit SDK via attach() method');
     }
     getInitialMedia();
 
     return () => {
       isMounted.current = false;
-      // Stop Agora video track playback when component unmounts or re-renders
+      // Clean up LiveKit video track when component unmounts or re-renders
       // This prevents duplicate video elements and memory leaks
-      if (agoraTracks[1]) {
-        console.log('[SetupPage] Cleanup: Stopping Agora video track playback');
-        agoraTracks[1].stop();
+      if (livekitTracks[1]) {
+        console.log('[SetupPage] Cleanup: Detaching LiveKit video track');
+        detachVideoTrack(livekitTracks[1]);
       }
       
       // Don't cleanup on tab switches - only on actual unmount or stream start
       // Use the current ref value, not a captured one, to get latest state
-      if (currentLocalStream && !isStartingStream.current) {
+      // CRITICAL: Read isStartingStream.current AT THE START of cleanup to avoid race conditions
+      const amStartingStream = isStartingStream.current;
+      console.log('[SetupPage] Cleanup: isStartingStream =', amStartingStream);
+      
+      if (currentLocalStream) {
         // Check if this is a tab switch (isTabSwitching will be true for 500ms after visibility change)
         if (isTabSwitching.current || !isPageVisible.current) {
           console.log('[SetupPage] Cleanup: Tab switch detected - preserving media stream.');
           PreflightStore.setStream(currentLocalStream);
-        } else {
-          console.log('[SetupPage] Cleanup: Cleaning up media stream on unmount.');
+        } else if (!amStartingStream) {
+          // Only stop tracks if we're NOT starting the stream
+          // When starting stream, we want to preserve the tracks for BroadcastPage
+          console.log('[SetupPage] Cleanup: Cleaning up media stream on unmount (not starting stream).');
           currentLocalStream.getTracks().forEach(track => track.stop());
+        } else {
+          console.log('[SetupPage] Cleanup: Preserving media stream for broadcast (starting stream).');
+          PreflightStore.setStream(currentLocalStream);
         }
-      } else if (isStartingStream.current && currentLocalStream) {
-        console.log('[SetupPage] Cleanup: Preserving media stream for broadcast (natural unmount).');
-        PreflightStore.setStream(currentLocalStream);
+      } else if (amStartingStream && livekitTracks[0] && livekitTracks[1]) {
+        // Even if currentLocalStream is null, if we're starting stream, preserve LiveKit tracks
+        console.log('[SetupPage] Cleanup: Preserving LiveKit tracks for BroadcastPage.');
+        PreflightStore.setLivekitTracks(livekitTracks[0], livekitTracks[1]);
+      } else if (!amStartingStream) {
+        // Not starting stream and no local stream - just cleanup
+        console.log('[SetupPage] Cleanup: Not starting stream, no local stream to clean up.');
       }
     };
   }, [facingMode, isVideoEnabled, showPermissionPrompt, streamMode, screenTrack]);
 
+  // Toggle video - stop/start the track
   const toggleVideo = async () => {
     const newState = !isVideoEnabled;
-    if (agoraTracks[1]) {
-      await agoraTracks[1].setEnabled(newState);
-      console.log('[SetupPage] Video track enabled set to:', newState);
+    
+    if (newState) {
+      // Re-acquire video track
+      const mediaStream = await acquireMediaStream(facingMode, true);
+      if (mediaStream) {
+        setStream(mediaStream);
+      }
+    } else {
+      // Stop video track
+      if (stream) {
+        stream.getVideoTracks().forEach(track => track.stop());
+      }
+      // Clear video preview
+      if (videoContainerRef.current) {
+        videoContainerRef.current.innerHTML = '';
+      }
     }
     setIsVideoEnabled(newState);
   };
 
+  // Toggle audio - stop/start the track
   const toggleAudio = async () => {
     const newState = !isAudioEnabled;
-    if (agoraTracks[0]) {
-      await agoraTracks[0].setEnabled(newState);
-      console.log('[SetupPage] Audio track enabled set to:', newState);
+    
+    if (!newState && stream) {
+      // Stop audio track
+      stream.getAudioTracks().forEach(track => track.stop());
+    } else if (newState && !isAudioEnabled) {
+      // Re-acquire audio
+      const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
+      if (mediaStream) {
+        setStream(mediaStream);
+      }
     }
     setIsAudioEnabled(newState);
   };
 
+  // Flip camera - properly recreate video track with new facing mode
   const flipCamera = async () => {
     if (!canUseFrontCamera && facingMode === 'environment') {
       toast.error('Front camera is not available for this category');
@@ -584,43 +665,48 @@ export default function SetupPage() {
     setFacingMode(newFacingMode);
     
     // Recreate video track with new facing mode
-    if (agoraTracks[1]) {
+    if (livekitTracks[1]) {
       try {
         console.log('[SetupPage] Recreating video track with facing mode:', newFacingMode);
-        // Stop and close current video track
-        agoraTracks[1].stop();
-        agoraTracks[1].close();
         
-        // Create new video track with new facing mode
-        const newVideoTrack = await AgoraRTC.createCameraVideoTrack({
-          facingMode: newFacingMode,
+        // Detach and close current video track
+        detachVideoTrack(livekitTracks[1]);
+        livekitTracks[1].stop();
+        livekitTracks[1].close();
+        
+        // Get new video track using native browser API
+        const newNativeStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: newFacingMode
+          }
         });
         
-        // Update state
-        setAgoraTracks([agoraTracks[0], newVideoTrack]);
-        PreflightStore.setAgoraClient(null, [agoraTracks[0], newVideoTrack, null, null]);
+        const newVideoTracks = newNativeStream.getVideoTracks();
+        if (newVideoTracks.length === 0) {
+          throw new Error('No video track found');
+        }
         
-        // Update preview stream
+        // Wrap in LiveKit track
+        const newVideoTrack = new LocalVideoTrack(newVideoTracks[0]);
+        
+        // Update state with new track
+        setLivekitTracks([livekitTracks[0], newVideoTrack]);
+        
+        // Store in PreflightStore for BroadcastPage
+        PreflightStore.setLivekitTracks(livekitTracks[0], newVideoTrack);
+        
+        // Update preview stream for state management
         const newStream = new MediaStream();
-        if (agoraTracks[0]) {
-          newStream.addTrack(agoraTracks[0].getMediaStreamTrack());
+        if (livekitTracks[0]) {
+          newStream.addTrack(livekitTracks[0].getMediaStreamTrack());
         }
         newStream.addTrack(newVideoTrack.getMediaStreamTrack());
         setStream(newStream);
         
-        // Use Agora's play() method instead of srcObject
-        if (videoContainerRef.current) {
-          // Stop any previous video track playback
-          if (agoraTracks[1]) {
-            agoraTracks[1].stop();
-          }
-          // Play new track in container
-          newVideoTrack.play(videoContainerRef.current, {
-            fit: 'cover',
-            mirror: newFacingMode === 'user'
-          });
-          console.log('[SetupPage] New video track playing via Agora play()');
-        }
+        // Attach new track to preview using LiveKit's attach()
+        attachVideoTrack(newVideoTrack, newFacingMode);
         
         console.log('[SetupPage] Video track recreated successfully');
       } catch (err) {
@@ -642,7 +728,7 @@ export default function SetupPage() {
       const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
       if (mediaStream) {
         setStream(mediaStream);
-        // Video is now played via Agora's play() method in acquireMediaStream
+        // Video is now played via LiveKit's attach() method in acquireMediaStream
       }
       toast.info('Switched to camera mode');
     } else {
@@ -654,18 +740,26 @@ export default function SetupPage() {
         setStream(null);
       }
 
+      // Detach camera preview
+      if (livekitTracks[1]) {
+        detachVideoTrack(livekitTracks[1]);
+      }
+
       const track = await screenShare.startScreenShare();
       if (track) {
         setScreenTrack(track);
         setStreamMode('screen');
 
-        // Use Agora's play() method for screen share preview
+        // Attach screen share track to preview using LiveKit's attach()
         if (videoContainerRef.current) {
-          track.play(videoContainerRef.current, {
-            fit: 'contain', // Use contain for screen share to show full screen
-            mirror: false   // Don't mirror screen share
-          });
-          console.log('[SetupPage] Screen track playing via Agora play()');
+          clearVideoContainer();
+          const mediaElement = track.attach();
+          mediaElement.style.width = '100%';
+          mediaElement.style.height = '100%';
+          mediaElement.style.objectFit = 'contain'; // Use contain for screen share
+          mediaElement.style.transform = 'none'; // Don't mirror screen share
+          videoContainerRef.current.appendChild(mediaElement);
+          console.log('[SetupPage] Screen track attached for preview');
         }
 
         // Create preview stream for state management
@@ -682,13 +776,15 @@ export default function SetupPage() {
           setScreenTrack(null);
           setScreenPreviewStream(null);
           setStreamMode('camera');
-          // Stop screen track playback
+          // Stop screen track
           track.stop();
+          // Clear container
+          clearVideoContainer();
           // Re-acquire camera stream when screen share ends
           acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
             if (mediaStream) {
               setStream(mediaStream);
-              // Video will be played via Agora's play() in acquireMediaStream
+              // Video will be attached via LiveKit's attach() in acquireMediaStream
             }
           });
           toast.info('Screen sharing ended');
@@ -699,23 +795,14 @@ export default function SetupPage() {
         const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
         if (mediaStream) {
           setStream(mediaStream);
-          // Video will be played via Agora's play() in acquireMediaStream
+          // Video will be attached via LiveKit's attach() in acquireMediaStream
         }
       }
     }
   };
 
   const handleStartStream = async () => {
-    // Mark that we're starting the stream to prevent cleanup from stopping tracks
-    isStartingStream.current = true;
-    console.log('[SetupPage] Starting stream - isStartingStream set to true');
-
-    // Clear session storage flags when starting stream
-    sessionStorage.removeItem('tc_setup_initialized');
-    sessionStorage.removeItem('tc_tab_switching');
-    sessionStorage.removeItem('tc_screen_share_active');
-    sessionStorage.removeItem('tc_stream_mode');
-
+    // Perform all validations first BEFORE setting isStartingStream
     if (!title.trim()) {
       toast.error('Please enter a stream title');
       return;
@@ -791,13 +878,33 @@ export default function SetupPage() {
       return;
     }
 
+    // All validations passed - now set isStartingStream and proceed
+    isStartingStream.current = true;
+    console.log('[SetupPage] Starting stream - isStartingStream set to true');
+
+    // Clear session storage flags when starting stream
+    sessionStorage.removeItem('tc_setup_initialized');
+    sessionStorage.removeItem('tc_tab_switching');
+    sessionStorage.removeItem('tc_screen_share_active');
+    sessionStorage.removeItem('tc_stream_mode');
+
     setLoading(true);
     try {
+      // LiveKit room name is the stream ID
+      const roomName = streamId;
+      
+      console.log('[SetupPage] Stream config:', {
+        roomName
+      });
+      
       const { data, error } = await supabase
         .from('streams')
         .insert({
           id: streamId,
           user_id: user.id,
+          broadcaster_id: user.id,
+          streamer_id: user.id,
+          owner_id: user.id,
           title,
           category,
           stream_kind: category === 'trollmers' ? 'trollmers' : 'regular',
@@ -808,6 +915,8 @@ export default function SetupPage() {
           layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' :
                        categoryConfig.layoutMode === 'classroom' ? 'grid' :
                        categoryConfig.layoutMode === 'spotlight' ? 'spotlight' : 'grid',
+          // Store room name for LiveKit
+          agora_channel: roomName,
           // Store category-specific data
           ...(category === 'spiritual' && { selected_religion: selectedReligion }),
         })
@@ -816,54 +925,15 @@ export default function SetupPage() {
 
       if (error) throw error;
 
-      // =====================================================
-      // MANUAL AGORA SETUP - Production pattern
-      // =====================================================
-      
-      // 1. Generate numeric UID for Agora (consistent hash)
-      const stringToUid = (str: string): number => {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-          hash = (hash << 5) - hash + str.charCodeAt(i);
-          hash |= 0;
-        }
-        return Math.abs(hash);
-      };
-      const numericUid = stringToUid(user.id);
-      
-      // 2. Fetch token from supabase edge function
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
-        body: {
-          channel: streamId,
-          uid: numericUid,
-          role: 'publisher'
-        }
-      });
-      
-      if (tokenError) {
-        console.error('[SetupPage] Token fetch error:', tokenError);
-        throw new Error('Failed to get streaming token');
-      }
-      
-      if (!tokenData?.token) {
-        throw new Error('No token available for streaming');
-      }
-      
-      console.log("TOKEN APP ID:", tokenData?.appId);
-      console.log("TOKEN LENGTH:", tokenData?.token?.length);
-
-      // NOTE: Do NOT join Agora channel in SetupPage - BroadcastPage will handle joining
-      // This prevents UID_CONFLICT errors when BroadcastPage creates its own fresh client
-      console.log('[SetupPage] Skipping Agora join - BroadcastPage will handle connection');
+      // NOTE: Do NOT join LiveKit room in SetupPage - BroadcastPage will handle joining
+      // This prevents connection conflicts when BroadcastPage creates its own fresh room
+      // Token is also not fetched here - BroadcastPage handles all token fetching
+      console.log('[SetupPage] Skipping LiveKit join - BroadcastPage will handle connection and token');
 
       // Store stream info in sessionStorage for BroadcastPage to use
-      sessionStorage.setItem('tc_stream_token', tokenData.token);
-      sessionStorage.setItem('tc_stream_uid', numericUid.toString());
-
-      // Store App ID if provided by token endpoint
-      if (tokenData?.appId) {
-        sessionStorage.setItem('tc_stream_app_id', tokenData.appId);
-      }
+      // NOTE: Token will be fetched by BroadcastPage, not stored here
+      sessionStorage.removeItem('tc_stream_token');
+      sessionStorage.setItem('tc_stream_uid', user.id);
 
       // Store screen share state in sessionStorage for BroadcastPage to read
       // Note: The actual screenTrack is stored in the global streamStore and will persist across navigation
@@ -885,7 +955,8 @@ export default function SetupPage() {
       }
 
       // Update stream status to 'live' immediately so other broadcasters can see it
-      await supabase
+      console.log('[SetupPage] Updating stream to live, streamId:', streamId);
+      const { error: liveUpdateError } = await supabase
         .from('streams')
         .update({
           status: 'live',
@@ -894,9 +965,19 @@ export default function SetupPage() {
         })
         .eq('id', streamId);
 
+      if (liveUpdateError) {
+        console.error('[SetupPage] FAILED to update stream to live:', liveUpdateError);
+        toast.error('Failed to go live: ' + liveUpdateError.message);
+      } else {
+        console.log('[SetupPage] Stream updated to live successfully');
+      }
+
+      // Small delay to ensure database update propagates
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Ensure video state reflects actual track state before storing
-      const hasVideoTrack = agoraTracks[1] !== null;
-      const videoTrackEnabled = agoraTracks[1]?.enabled ?? false;
+      const hasVideoTrack = livekitTracks[1] !== null;
+      const videoTrackEnabled = livekitTracks[1]?.enabled ?? false;
       const actualVideoEnabled = isVideoEnabled && hasVideoTrack && videoTrackEnabled;
       
       console.log('[SetupPage] Storing track enabled states:', {
@@ -910,28 +991,28 @@ export default function SetupPage() {
       // Store the actual state, not just the toggle state
       PreflightStore.setTrackEnabledStates(actualVideoEnabled, isAudioEnabled);
 
-      // Update Agora track enabled states to match UI
-      if (agoraTracks[0]) {
-        await agoraTracks[0].setEnabled(isAudioEnabled);
-        console.log('[SetupPage] Audio track enabled set to:', isAudioEnabled);
-      }
-      if (agoraTracks[1]) {
-        await agoraTracks[1].setEnabled(isVideoEnabled);
-        console.log('[SetupPage] Video track enabled set to:', isVideoEnabled);
+      // CRITICAL: Ensure tracks exist before navigating to BroadcastPage
+      // If tracks are null, we need to wait for them or create them
+      if (!livekitTracks[0] || !livekitTracks[1]) {
+        console.warn('[SetupPage] Tracks not ready yet, waiting...', { 
+          audioTrack: !!livekitTracks[0], 
+          videoTrack: !!livekitTracks[1] 
+        });
+        toast.error('Camera not ready. Please wait a moment and try again.');
+        setLoading(false);
+        isStartingStream.current = false;
+        return;
       }
 
-      // Store Agora tracks in PreflightStore for BroadcastPage to use
-      // IMPORTANT: We don't stop the tracks - they will be reused
-      PreflightStore.setAgoraClient(null, [agoraTracks[0], agoraTracks[1], null, null]);
-      console.log('[SetupPage] Agora tracks stored for BroadcastPage reuse:', {
-        hasAudio: !!agoraTracks[0],
-        hasVideo: !!agoraTracks[1],
-        audioEnabled: agoraTracks[0]?.enabled,
-        videoEnabled: agoraTracks[1]?.enabled
+      console.log('[SetupPage] Tracks verified, storing for BroadcastPage:', {
+        hasAudio: !!livekitTracks[0],
+        hasVideo: !!livekitTracks[1]
       });
 
-      // DO NOT stop the tracks - they will be reused by BroadcastPage
-      // The tracks are stored in PreflightStore and will persist across navigation
+      // NOTE: Do NOT connect to LiveKit room in SetupPage - BroadcastPage will handle joining
+      // This prevents connection conflicts when BroadcastPage creates its own fresh room
+      // The tracks are stored in PreflightStore and will be used by BroadcastPage
+      console.log('[SetupPage] Skipping LiveKit connection - BroadcastPage will handle it');
 
       // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
@@ -944,12 +1025,14 @@ export default function SetupPage() {
       toast.error(err.message || 'Failed to start stream');
     } finally {
       setLoading(false);
+      isStartingStream.current = false;
     }
   };
 
 
 
 
+  
 
   // Render Religion Selector for Spiritual category
   const renderReligionSelector = () => {
@@ -971,7 +1054,7 @@ export default function SetupPage() {
           ))}
         </select>
         <p className="text-xs text-gray-500">
-          You&apos;ll only be matched with broadcasters of the same faith
+          You'll only be matched with broadcasters of the same faith
         </p>
       </div>
     );
@@ -1044,15 +1127,15 @@ export default function SetupPage() {
         );
       case 'education':
         return (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-sm">
-            <p className="text-green-300">📚 Classroom layout - You're the Teacher, guests are Students</p>
-          </div>
+           <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-sm">
+             <p className="text-green-300">📚 Classroom layout - You're the Teacher, guests are Students</p>
+           </div>
         );
       case 'fitness':
         return (
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 text-sm">
-            <p className="text-orange-300">💪 One-way broadcast - You're the Trainer</p>
-          </div>
+           <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 text-sm">
+             <p className="text-orange-300">💪 One-way broadcast - You're the Trainer</p>
+           </div>
         );
       case 'irl':
         return (
@@ -1118,14 +1201,14 @@ export default function SetupPage() {
                 )}
               </div>
             ) : (
-              // Container div for Agora video playback
-              // Agora SDK will create and manage the video element inside this container
+              // Container div for LiveKit video preview
+              // LiveKit SDK manages the video element inside this container via attach()
               <div
                 ref={videoContainerRef}
                 className="absolute inset-0 w-full h-full bg-black overflow-hidden"
                 style={{
                   zIndex: 1,
-                  // Mirror effect for front camera is handled by Agora's play() method
+                  // Mirror effect for front camera is handled in attachVideoTrack()
                 }}
               />
             )}
@@ -1185,7 +1268,7 @@ export default function SetupPage() {
             Check your camera and microphone before going live
             {category === 'gaming' && (
               <span className="block text-xs text-amber-400 mt-1">
-                💡 Chromebook/Chrome users: When screen sharing, select &quot;Window&quot; instead of &quot;Chrome Tab&quot; for best results
+                💡 Chromebook/Chrome users: When screen sharing, select "Window" instead of "Chrome Tab" for best results
               </span>
             )}
           </p>

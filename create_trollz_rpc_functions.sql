@@ -457,7 +457,7 @@ BEGIN
     END IF;
 
     -- Log the spin
-    INSERT INTO troll_wheel_spins (user_id, cost_trollz, reward_type, reward_amount)
+    INSERT INTO troll_wheel_wins (user_id, cost_trollz, reward_type, reward_amount)
     VALUES (p_user_id, spin_cost, reward_type, reward_amount);
 
     -- Log transaction

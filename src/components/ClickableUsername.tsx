@@ -41,6 +41,8 @@ interface ClickableUsernameProps {
   isBroadcaster?: boolean
   isModerator?: boolean // Stream moderator
   streamId?: string
+  isLive?: boolean // Whether user is currently live
+  liveStreamId?: string // The stream ID if user is live
 }
 
 const ClickableUsername: React.FC<ClickableUsernameProps> = ({
@@ -53,7 +55,9 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
   userId,
   isBroadcaster,
   isModerator,
-  streamId
+  streamId,
+  isLive,
+  liveStreamId
 }) => {
   const navigate = useNavigate()
   const usernameRef = useRef<HTMLSpanElement>(null)
@@ -504,6 +508,12 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
     if (canModerate) {
         setShowMenu(!showMenu)
         return
+    }
+    
+    // If user is live and we have a stream ID, navigate to stream
+    if (isLive && liveStreamId) {
+      navigate(`/stream/${liveStreamId}`);
+      return;
     }
     
     try {

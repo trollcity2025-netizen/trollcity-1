@@ -496,6 +496,28 @@ export default function TrollWheelGame({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<{ bankrupt_landed: boolean; total_spins: number } | null>(null);
   
+  // Check if user is currently locked from the wheel
+  const isWheelLocked = profile?.wheel_troll_locked_until 
+    ? new Date(profile.wheel_troll_locked_until) > new Date()
+    : false;
+  
+  // Calculate remaining lock time if locked
+  const getLockTimeRemaining = (): string => {
+    if (!profile?.wheel_troll_locked_until) return '';
+    const lockUntil = new Date(profile.wheel_troll_locked_until);
+    const now = new Date();
+    if (lockUntil <= now) return '';
+    
+    const diff = lockUntil.getTime() - now.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+  
   // Inventory state
   const [inventory, setInventory] = useState<WheelInventoryItem[]>([]);
   const [showInventory, setShowInventory] = useState(false);
@@ -610,10 +632,15 @@ export default function TrollWheelGame({
     // === RANDOM SPIN WITH 1 IN 15 CHANCE FOR SPECIAL WINS ===
     let resultIndex: number;
     
-    // 1 in 15 chance for special result (bankrupt or trolled)
-    const roll = Math.random() * 15;
+    // Check if user is admin/ceo (bypass session bankrupt limit)
+    const isAdmin = profile?.is_admin || profile?.is_ceo;
     
-    if (roll < 1) {
+    // 1 in 15 chance for special result (bankrupt or trolled)
+    // If user already hit bankrupt in this session, skip bankrupt chance (unless admin)
+    const roll = Math.random() * 15;
+    const canGetBankrupt = isAdmin || !sessionData?.bankrupt_landed;
+    
+    if (roll < 1 && canGetBankrupt) {
       // Special result - either bankrupt (50%) or trolled (50%)
       resultIndex = Math.random() < 0.5 ? 14 : 15; // 14 = bankrupt, 15 = trolled
     } else {
@@ -678,10 +705,29 @@ export default function TrollWheelGame({
         if (onTrollmondChange) {
           onTrollmondChange(finalTrollmondBalance);
         }
-        // Also save to database using increment_trollmonds
+        // Also save to database by updating user_profiles directly
         try {
+          // First try the RPC function
           await supabase.rpc('increment_trollmonds', { p_user_id: profile.id, p_amount: finalCoins });
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          // RPC might fail if column doesn't exist, try direct update
+          try {
+            const { data: current } = await supabase
+              .from('user_profiles')
+              .select('trollmonds')
+              .eq('id', profile.id)
+              .single();
+            const newBalance = (current?.trollmonds || 0) + finalCoins;
+            await supabase
+              .from('user_profiles')
+              .update({ trollmonds: newBalance })
+              .eq('id', profile.id);
+          } catch (e2) {
+            console.warn('Failed to update trollmonds:', e2);
+          }
+        }
+        // Refresh the global auth profile so sidebar and broadcast update
+        useAuthStore.getState().refreshProfile();
         playWinSound();
         message = `💎 WIN! x${selectedMultiplier}: +${finalCoins} Trollmonds`;
       } else if (result.type === 'bankrupt') {
@@ -695,6 +741,8 @@ export default function TrollWheelGame({
         playTrolledSound();
         const trollLockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         await supabase.from('user_profiles').update({ wheel_troll_locked_until: trollLockUntil }).eq('id', profile.id);
+        // Refresh profile so the lock takes effect immediately
+        useAuthStore.getState().refreshProfile();
         message = '🤡 TROLLED! No spins for 24 hours!';
       } else if (result.type === 'featured_broadcaster') {
         playWinSound();
@@ -783,17 +831,8 @@ export default function TrollWheelGame({
         toast.success('Item activated!');
         loadInventory();
         
-        // Update profile to reflect the change
-        const { data: profileData } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', profile?.id)
-          .single();
-        
-        if (profileData) {
-          // Force refresh of profile in store
-          window.location.reload();
-        }
+        // Refresh the global auth profile instead of reloading the page
+        useAuthStore.getState().refreshProfile();
       } else {
         toast.error('Failed to activate item');
       }
@@ -854,7 +893,24 @@ export default function TrollWheelGame({
         
         {/* Balance Display - Single on mobile, all on desktop */}
         <div className="flex flex-wrap items-center justify-center gap-4">
+          {/* Locked Status - Show when user is trolled */}
+          {isWheelLocked && (
+            <motion.div 
+              className="flex items-center gap-3 bg-red-900/80 backdrop-blur-md px-6 py-3 rounded-full border-2 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.6)]"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+            >
+              <div className="p-2 bg-red-500/20 rounded-full">
+                <span className="text-2xl">🤡</span>
+              </div>
+              <div>
+                <p className="text-xs text-red-400/70 font-bold uppercase tracking-wider">TROLLED!</p>
+                <p className="text-lg font-black text-white">No spins for {getLockTimeRemaining()}</p>
+              </div>
+            </motion.div>
+          )}
           {/* Always show Troll Coins */}
+          {!isWheelLocked && (
           <motion.div 
             className="flex items-center gap-3 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border-2 border-yellow-500/50 shadow-[0_0_25px_rgba(234,179,8,0.4)]"
             whileHover={{ scale: 1.02 }}
@@ -867,32 +923,8 @@ export default function TrollWheelGame({
               <p className="text-xl font-black text-white">{userBalance.toLocaleString()}</p>
             </div>
           </motion.div>
-          
-          {/* Wheel Balance - Hidden on mobile */}
-          <motion.div 
-            className="hidden md:flex items-center gap-3 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border-2 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.4)]"
-            whileHover={{ scale: 1.02 }}
-          >
-            <div className="p-2 bg-cyan-500/20 rounded-full">
-              <Gem className="w-5 h-5 text-cyan-400" />
-            </div>
-            <div>
-              <p className="text-xs text-cyan-400/70 font-bold uppercase tracking-wider">Wheel Balance</p>
-              <div className="flex items-center gap-2">
-                <p className="text-xl font-black text-white">{wheelBalance.toLocaleString()}</p>
-                {wheelBalance > 0 && (
-                  <button 
-                    onClick={collectWheelBalance}
-                    className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full font-bold hover:bg-green-600"
-                  >
-                    COLLECT
-                  </button>
-                )}
-              </div>
-            </div>
-          </motion.div>
-          
-          {/* Inventory Button - Hidden on mobile */}
+          )}
+          {!isWheelLocked && (
           <motion.button 
             onClick={() => setShowInventory(!showInventory)}
             className="hidden md:flex items-center gap-3 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border-2 border-purple-500/50 shadow-[0_0_25px_rgba(168,85,247,0.4)]"
@@ -907,6 +939,7 @@ export default function TrollWheelGame({
               <p className="text-xl font-black text-white">{inventory.length}</p>
             </div>
           </motion.button>
+          )}
         </div>
         
         {/* Inventory Panel */}
@@ -1023,7 +1056,7 @@ export default function TrollWheelGame({
             <CenterHub 
               size={size} 
               onSpin={handleSpin} 
-              disabled={userBalance < currentBidCost}
+              disabled={userBalance < currentBidCost || isWheelLocked}
               isSpinning={isSpinning}
             />
           </motion.div>
@@ -1074,19 +1107,15 @@ export default function TrollWheelGame({
                 {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.label}
               </p>
               <p className="text-gray-300 mb-4">{lastWin.description}</p>
-              {lastWin.type === 'coins' && (
-                {lastWin.type === 'trollmonds' ? (
-                  <>
-                    <p className="text-xl font-bold text-cyan-400">
-                      +{lastWin.coins * lastWin.multiplier} TROLLMONDS ADDED!
-                    </p>
-                  </>
-                ) : lastWin.type === 'coins' ? (
-                  <p className="text-xl font-bold text-yellow-400">
-                    +{lastWin.coins * lastWin.multiplier} COINS ADDED!
-                  </p>
-                ) : null}
-              )}
+              {lastWin.type === 'coins' ? (
+                <p className="text-xl font-bold text-yellow-400">
+                  +{lastWin.coins * lastWin.multiplier} COINS ADDED!
+                </p>
+              ) : lastWin.type === 'trollmonds' ? (
+                <p className="text-xl font-bold text-cyan-400">
+                  +{lastWin.coins * lastWin.multiplier} TROLLMONDS ADDED!
+                </p>
+              ) : null}
               <button
                 onClick={() => setShowWinModal(false)}
                 className="mt-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold px-8 py-3 rounded-xl hover:scale-105 transition-transform"

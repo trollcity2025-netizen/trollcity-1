@@ -9,11 +9,11 @@ import { emitEvent as triggerEvent } from '../../lib/events';
 import PodParticipantBox from './PodParticipantBox';
 import PodChatBox from './PodChatBox';
 import PodHostControlPanel from './PodHostControlPanel';
-import AgoraRTC, {
+import { Room, 
   ILocalAudioTrack,
-} from 'agora-rtc-sdk-ng';
+} from "livekit-client";
 import PodRoomContent from './PodRoomContent';
-import { IAgoraRTCRemoteUser, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
+import { RemoteParticipant, IRemoteAudioTrack } from "livekit-client";
 
 
 interface Room {
@@ -46,9 +46,9 @@ export default function TrollPodRoom() {
   const { user: currentUser, profile } = useAuthStore();
   const [participantsData, setParticipantsData] = useState<PodParticipant[]>([]);
   const [participantCount, setParticipantCount] = useState(0);
-    const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
+    const [agoraClient, setAgoraClient] = useState<Room | null>(null);
   const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
-  const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([]);
+  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
 
   const isHost = room?.host_id === currentUser?.id;
   const myRecord = participantsData.find((p) => p.user_id === currentUser?.id);
@@ -58,7 +58,7 @@ export default function TrollPodRoom() {
     if (!roomId || !currentUser) return;
 
     const roomName = `pod-${roomId}`;
-    const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+    const client = new Room({ mode: 'rtc', codec: 'vp8' });
     setAgoraClient(client);
 
     const joinChannel = async () => {
@@ -87,14 +87,14 @@ export default function TrollPodRoom() {
           return;
         }
         
-        await client.join(
+        await room.connect(
           import.meta.env.VITE_AGORA_APP_ID!,
           roomName,
           data.token,
           currentUser.id
         );
 
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        const audioTrack = await  LocalAudioTrack.create();
         await client.publish([audioTrack]);
         setLocalAudioTrack(audioTrack);
       } else {
@@ -131,7 +131,7 @@ export default function TrollPodRoom() {
             return;
           }
 
-          await client.join(
+          await room.connect(
             appId,
             roomName,
             tokenData.token,
@@ -149,7 +149,7 @@ export default function TrollPodRoom() {
     joinChannel();
 
     const handleUserPublished = async (
-      user: IAgoraRTCRemoteUser,
+      user: RemoteParticipant,
       mediaType: 'audio' | 'video'
     ) => {
       await client.subscribe(user, mediaType);
@@ -161,7 +161,7 @@ export default function TrollPodRoom() {
       }
     };
 
-    const handleUserUnpublished = (user: IAgoraRTCRemoteUser) => {
+    const handleUserUnpublished = (user: RemoteParticipant) => {
       setRemoteUsers((prevUsers) =>
         prevUsers.filter((remoteUser) => remoteUser.uid !== user.uid)
       );
@@ -174,7 +174,7 @@ export default function TrollPodRoom() {
       client.off('user-published', handleUserPublished);
       client.off('user-unpublished', handleUserUnpublished);
       localAudioTrack?.close();
-      client.leave();
+      room.disconnect();
     };
   }, [roomId, canPublish, currentUser]);
   

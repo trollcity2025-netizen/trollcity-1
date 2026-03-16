@@ -53,7 +53,7 @@ const LiveAvatar: React.FC<LiveAvatarProps> = memo(({
           .single();
 
         if (stream?.id) {
-          navigate(`/live/${stream.id}`);
+          navigate(`/stream/${stream.id}`);
           return;
         } else {
           // If no active stream found despite isLive=true (could be stale state), fallback to profile

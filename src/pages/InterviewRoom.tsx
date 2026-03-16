@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { useAgoraRoom } from '../hooks/useRoom'
-import AgoraRTC, { IRemoteUser } from 'agora-rtc-sdk-ng'
+import { Room } from 'livekit-client'
 import { Button } from '../components/ui/button'
 import { toast } from 'sonner'
 import { User, DollarSign, CheckCircle, XCircle, Trash2, Mic, MicOff, Video, VideoOff } from 'lucide-react'
@@ -110,7 +110,7 @@ const ParticipantBox = ({
 interface InterviewGridProps {
   interview: Interview;
   isAdmin: boolean;
-  localTracks: [AgoraRTC.ILocalVideoTrack | undefined, AgoraRTC.ILocalAudioTrack | undefined];
+  localTracks: [ ILocalVideoTrack | undefined,  ILocalAudioTrack | undefined];
   remoteUsers: IRemoteUser[];
   toggleCamera: () => void;
   toggleMicrophone: () => void;

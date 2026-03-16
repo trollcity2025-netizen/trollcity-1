@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import AgoraRTC, { ILocalVideoTrack } from 'agora-rtc-sdk-ng';
+import { LocalVideoTrack } from 'livekit-client';
 
 export type StreamMode = 'camera' | 'screen';
 
@@ -19,9 +19,11 @@ export function canScreenShare(): boolean {
 }
 
 /**
- * Create a screen share video track using Agora
+ * Create a screen share video track using LiveKit
+ * LiveKit uses browser's getDisplayMedia and wraps it in a LocalVideoTrack
  */
-export async function createScreenTrack(): Promise<ILocalVideoTrack> {
+export async function createScreenTrack(): Promise<LocalVideoTrack> {
+  // Use browser's getDisplayMedia
   const stream = await navigator.mediaDevices.getDisplayMedia({
     video: {
       frameRate: { ideal: 60, max: 60 },
@@ -31,8 +33,9 @@ export async function createScreenTrack(): Promise<ILocalVideoTrack> {
     audio: true
   });
 
-  const videoTrack = await AgoraRTC.createCustomVideoTrack({
-    mediaStreamTrack: stream.getVideoTracks()[0]
+  // Create LiveKit LocalVideoTrack from the stream
+  const videoTrack = new LocalVideoTrack(stream.getVideoTracks()[0], {
+    name: 'screen-share'
   });
 
   return videoTrack;
@@ -48,39 +51,60 @@ export function useScreenShare() {
     error: null
   });
   
-  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenTrackRef = useRef<LocalVideoTrack | null>(null);
   const onEndedCallbackRef = useRef<(() => void) | null>(null);
   const isPageVisible = useRef(true);
   const isUnmounting = useRef(false);
 
   /**
-   * Start screen sharing using official Agora API
+   * Start screen sharing
    */
-  const startScreenShare = useCallback(async (): Promise<ILocalVideoTrack | null> => {
+  const startScreenShare = useCallback(async (): Promise<LocalVideoTrack | null> => {
     try {
       setState(prev => ({ ...prev, error: null }));
 
-      const screenTrack = await AgoraRTC.createScreenVideoTrack(
-        {
-          encoderConfig: "1080p_1",
-          optimizationMode: "detail"
+      // Get screen share stream from browser
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 30, max: 60 },
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 }
         },
-        "auto"
-      ) as ILocalVideoTrack;
+        audio: false // Audio handled separately if needed
+      });
 
-      screenTrack.on("track-ended", () => {
+      // Create LiveKit LocalVideoTrack from the stream
+      const videoTrack = new LocalVideoTrack(stream.getVideoTracks()[0], {
+        name: 'screen-share'
+      });
+
+      screenTrackRef.current = videoTrack;
+
+      // Listen for track ended event (user clicks "Stop sharing" in browser UI)
+      stream.getVideoTracks()[0].onended = () => {
         console.log("[useScreenShare] Screen share ended by user");
         setState(prev => ({ ...prev, isSharing: false }));
+        screenTrackRef.current = null;
         if (onEndedCallbackRef.current) {
           onEndedCallbackRef.current();
         }
-      });
+      };
 
       setState(prev => ({ ...prev, isSharing: true }));
 
-      return screenTrack;
+      return videoTrack;
     } catch (err: any) {
       console.error("[useScreenShare] Error starting screen share:", err);
+
+      // User cancelled is not an error
+      if (err.name === 'NotAllowedError') {
+        setState(prev => ({
+          ...prev,
+          error: null,
+          isSharing: false
+        }));
+        return null;
+      }
 
       setState(prev => ({
         ...prev,
@@ -96,9 +120,9 @@ export function useScreenShare() {
    * Stop screen sharing
    */
   const stopScreenShare = useCallback(() => {
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(track => track.stop());
-      screenStreamRef.current = null;
+    if (screenTrackRef.current) {
+      screenTrackRef.current.stop();
+      screenTrackRef.current = null;
     }
     setState(prev => ({ ...prev, isSharing: false }));
   }, []);
@@ -121,17 +145,9 @@ export function useScreenShare() {
       console.log(`[useScreenShare] Visibility changed: ${wasVisible ? 'visible' : 'hidden'} -> ${isPageVisible.current ? 'visible' : 'hidden'}`);
       
       // If becoming visible again and we were sharing, check if stream still exists
-      if (isPageVisible.current && state.isSharing && screenStreamRef.current) {
-        const tracks = screenStreamRef.current.getTracks();
-        const hasActiveTracks = tracks.some(track => track.readyState === 'live');
-        
-        if (!hasActiveTracks) {
-          console.log('[useScreenShare] Screen share tracks ended while hidden');
-          setState(prev => ({ ...prev, isSharing: false }));
-          if (onEndedCallbackRef.current) {
-            onEndedCallbackRef.current();
-          }
-        }
+      if (isPageVisible.current && state.isSharing && screenTrackRef.current) {
+        // Track may have been stopped while hidden
+        console.log('[useScreenShare] Checking screen share state after visibility change');
       }
     };
 

@@ -226,6 +226,10 @@ export interface UserProfile {
   bypass_broadcast_restriction?: boolean;
   phone?: string;
   id_verification_status?: string;
+
+  // Wheel fields
+  wheel_balance?: number;
+  wheel_troll_locked_until?: string | null;
 }
 
 

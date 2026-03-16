@@ -12,7 +12,7 @@ import ThemeSelector from './ThemeSelector';
 import { useAuthStore } from '../../lib/store';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
+import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 interface BroadcastControlsProps {
   stream: Stream;
@@ -30,7 +30,7 @@ interface BroadcastControlsProps {
   handleLike: () => void;
   toggleBattleMode: () => void;
   liveViewerCount?: number;
-  localTracks: [IMicrophoneAudioTrack, ICameraVideoTrack] | null;
+  localTracks: [LocalAudioTrack | null, LocalVideoTrack | null] | null;
   toggleCamera: () => void;
   toggleMicrophone: () => void;
   onPinProduct?: () => void;
@@ -76,8 +76,9 @@ export default function BroadcastControls({
   const [audioTrack, videoTrack] = localTracks || [];
 
   // Use props if provided (from parent state), otherwise derive from localTracks
-  const isMicOn = propMicOn !== undefined ? propMicOn : (audioTrack ? audioTrack.enabled : false);
-  const isCamOn = propCamOn !== undefined ? propCamOn : (videoTrack ? videoTrack.enabled : false);
+  // IMPORTANT: Check .isEnabled on the track, not just track existence
+  const isMicOn = propMicOn !== undefined ? propMicOn : (audioTrack ? (audioTrack.isEnabled ?? true) : false);
+  const isCamOn = propCamOn !== undefined ? propCamOn : (videoTrack ? (videoTrack.isEnabled ?? true) : false);
   
   // Check if tracks are available
   const hasAudioTrack = !!audioTrack;

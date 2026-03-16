@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties, useRef, useEffect, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ILocalVideoTrack, ILocalAudioTrack, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack } from 'agora-rtc-sdk-ng';
+import { motion } from 'framer-motion';
+import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
 import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -29,8 +29,8 @@ interface BroadcastGridProps {
   broadcasterProfile?: any;
   hideEmptySeats?: boolean;
   seatPriceOverride?: number;
-  localTracks: [ILocalAudioTrack | undefined, ILocalVideoTrack | undefined];
-  remoteUsers: IRemoteUser[];
+  localTracks: [LocalAudioTrack | undefined, LocalVideoTrack | undefined];
+  remoteUsers: RemoteParticipant[];
   localUserId: string;
   toggleCamera: () => void;
   toggleMicrophone: () => void;
@@ -46,13 +46,12 @@ function AgoraVideoPlayer({
   videoTrack,
   isLocal = false,
 }: {
-  videoTrack: ILocalVideoTrack | IRemoteVideoTrack | undefined;
+  videoTrack: LocalVideoTrack | RemoteVideoTrack | undefined;
   isLocal?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasPlayedRef = useRef(false);
-  const retryCountRef = useRef(0);
-  const maxRetries = 3;
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!videoTrack || !containerRef.current) {
@@ -69,43 +68,37 @@ function AgoraVideoPlayer({
       if (!containerRef.current) return;
 
       try {
-        console.log('[AgoraVideoPlayer] Calling play() - attempt', retryCountRef.current + 1);
-        videoTrack.play(containerRef.current);
+        console.log('[AgoraVideoPlayer] Calling attach() - LiveKit track');
+        // LiveKit uses attach() instead of play()
+        const videoElement = videoTrack.attach();
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        // Mirror local video
+        if (isLocal) {
+          videoElement.style.transform = 'scaleX(-1)';
+        }
+        
+        containerRef.current.appendChild(videoElement);
+        videoElementRef.current = videoElement;
         hasPlayedRef.current = true;
-        console.log('[AgoraVideoPlayer] play() called successfully');
+        console.log('[AgoraVideoPlayer] attach() called successfully');
 
-        // Inspect injected video after Agora has time to inject it
+        // Inspect video element after LiveKit has time to attach it
         setTimeout(() => {
           const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
           console.log('[AgoraVideoPlayer] Inner <video> inspection:', {
             exists: !!inner,
             width: inner?.videoWidth ?? 0,
             height: inner?.videoHeight ?? 0,
-            readyState: inner?.readyState ?? -1, // 0=NOTHING, 1=metadata, 2=current, 3=future, 4=enough
+            readyState: inner?.readyState ?? -1,
             paused: inner?.paused ?? false,
             muted: inner?.muted ?? false,
-            srcObjectPresent: !!inner?.srcObject,
           });
-
-          // If no frames or not ready → retry
-          if (inner && (inner.videoWidth === 0 || inner.readyState < 2)) {
-            if (retryCountRef.current < maxRetries) {
-              retryCountRef.current++;
-              console.warn(`[AgoraVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
-              hasPlayedRef.current = false; // allow re-play
-              setTimeout(playWithRetry, 400);
-            } else {
-              console.error('[AgoraVideoPlayer] Max retries reached - no frames flowing');
-            }
-          }
-        }, 600); // give Agora time to create <video> + start frames
+        }, 600);
 
       } catch (err) {
-        console.error('[AgoraVideoPlayer] play() threw error:', err);
-        if (retryCountRef.current < maxRetries) {
-          retryCountRef.current++;
-          setTimeout(playWithRetry, 500);
-        }
+        console.error('[AgoraVideoPlayer] attach() threw error:', err);
       }
     };
 
@@ -114,14 +107,15 @@ function AgoraVideoPlayer({
 
     return () => {
       clearTimeout(initialTimer);
-      if (videoTrack) {
-        console.log('[AgoraVideoPlayer] Cleanup - stopping track');
+      if (videoTrack && videoElementRef.current) {
+        console.log('[AgoraVideoPlayer] Cleanup - detaching track');
         try {
-          videoTrack.stop();
+          videoTrack.detach();
+          videoElementRef.current = null;
         } catch (e) {}
       }
     };
-  }, [videoTrack]);
+  }, [videoTrack, isLocal]);
 
   return (
     <div
@@ -132,17 +126,15 @@ function AgoraVideoPlayer({
         minHeight: '100%',
         position: 'absolute',
         inset: 0,
-        // TEMPORARILY DISABLE mirroring to rule it out (re-enable after test)
-        // transform: isLocal ? 'scaleX(-1)' : undefined,
         zIndex: 1,
       }}
     />
   );
 }
 
-const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: ILocalAudioTrack | IRemoteAudioTrack }) => {
+const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: LocalAudioTrack | RemoteAudioTrack }) => {
   const audioRef = useRef<HTMLDivElement>(null);
-  const isPlayingRef = useRef(false);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     // Defensive: ensure we have a valid track
@@ -151,23 +143,22 @@ const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: ILocalAudioTrack | 
       return;
     }
 
-    // Already playing
-    if (isPlayingRef.current) {
-      return;
-    }
-
     try {
-      audioTrack.play();
-      isPlayingRef.current = true;
-      console.log('[AgoraAudioPlayer] Audio playing');
+      // LiveKit uses attach() instead of play() for audio
+      const audioElement = audioTrack.attach();
+      audioElementRef.current = audioElement;
+      document.body.appendChild(audioElement);
+      console.log('[AgoraAudioPlayer] Audio attached');
     } catch (err) {
-      console.error('[AgoraAudioPlayer] Failed to play audio:', err);
+      console.error('[AgoraAudioPlayer] Failed to attach audio:', err);
     }
 
     return () => {
       try {
-        audioTrack.stop();
-        isPlayingRef.current = false;
+        if (audioElementRef.current) {
+          audioTrack.detach();
+          audioElementRef.current = null;
+        }
       } catch (err) {
         console.warn('[AgoraAudioPlayer] Error stopping audio:', err);
       }
@@ -325,76 +316,103 @@ export default function BroadcastGrid({
   const getParticipantAndTracks = (userId: string | undefined) => {
     if (!userId) return { participant: undefined, videoTrack: undefined, audioTrack: undefined, isLocal: false };
 
-    let participant: IRemoteUser | undefined;
-    let videoTrack: ILocalVideoTrack | IRemoteVideoTrack | undefined;
-    let audioTrack: ILocalAudioTrack | IRemoteAudioTrack | undefined;
+    let participant: RemoteParticipant | undefined;
+    let videoTrack: LocalVideoTrack | RemoteVideoTrack | undefined;
+    let audioTrack: LocalAudioTrack | RemoteAudioTrack | undefined;
     let isLocal = false;
 
     if (userId === localUserId) {
-      // Local user - use array index since we know the structure is [audio, video]
-      // Note: localTracks doesn't have trackMediaType property (only remote tracks do)
+      // Local user - use the localTracks from props
       isLocal = true;
-      audioTrack = localTracks[0] as ILocalAudioTrack | undefined;
-      videoTrack = localTracks[1] as ILocalVideoTrack | undefined;
+      // Handle null localTracks
+      audioTrack = localTracks?.[0];
+      videoTrack = localTracks?.[1];
       console.log('[BroadcastGrid] Local user tracks for', userId?.substring(0, 8), ':', {
         hasVideoTrack: !!videoTrack,
         hasAudioTrack: !!audioTrack,
-        localTracksLength: localTracks.length,
-        localTracks0: localTracks[0]?.constructor?.name,
-        localTracks1: localTracks[1]?.constructor?.name,
+        localTracksLength: localTracks?.length ?? 0,
+        localTracks0: localTracks?.[0]?.constructor?.name,
+        localTracks1: localTracks?.[1]?.constructor?.name,
         videoTrackId: videoTrack?.getTrackId?.(),
         videoEnabled: (videoTrack as any)?.enabled,
       });
-      // For local participant, we don't have an IRemoteUser object, so we'll use a dummy one for consistent typing
-      // and to carry the identity for attribute lookup
-      participant = { uid: localUserId, hasAudio: !!audioTrack, hasVideo: !!videoTrack, audioTrack, videoTrack } as IRemoteUser;
+      // For local participant, we create a dummy participant object
+      participant = {
+        identity: localUserId,
+        videoTrack,
+        audioTrack,
+      } as unknown as RemoteParticipant;
     } else {
-      // Remote user - try to find by any available method
-      // First: use the userIdToAgoraUid mapping if available
-      const agoraUid = userIdToAgoraUid[userId];
-      if (agoraUid !== undefined) {
-        participant = remoteUsers.find(u => u.uid === agoraUid);
-        console.log('[BroadcastGrid] Looking up remote by agoraUid:', agoraUid, 'found:', !!participant);
+      // Remote user - find in remoteUsers (which are RemoteParticipants)
+      // Handle null/undefined remoteUsers
+      if (!remoteUsers || !Array.isArray(remoteUsers)) {
+        console.log('[BroadcastGrid] No remoteUsers available or not an array');
+        return { participant: undefined, videoTrack: undefined, audioTrack: undefined, isLocal: false };
       }
       
-      // Second: try to find by matching numeric Agora UID with user ID patterns
+      // Try to find by matching identity
+      participant = remoteUsers.find(u => u.identity === userId);
+      
       if (!participant) {
+        // Try to find by partial match (first 8 chars of UUID)
         participant = remoteUsers.find(u => {
-          const uidStr = String(u.uid);
-          return uidStr === userId || uidStr === userId.replace(/-/g, '').substring(0, 8);
+          const identityStr = String(u.identity);
+          return identityStr === userId || identityStr.substring(0, 8) === userId.replace(/-/g, '').substring(0, 8);
         });
-        if (participant) {
-          console.log('[BroadcastGrid] Found remote by userId pattern match');
-        }
       }
-      
-      // Third: if this is the host user and we still don't have a participant,
-      // the host might be publishing as a remote user (different connection)
-      if (!participant && userId === stream.user_id) {
-        // Host should be found - try to find any user that might be the host
-        participant = remoteUsers.find(u => u.hasVideo || u.hasAudio);
-        if (participant) {
-          console.log('[BroadcastGrid] Using fallback for host - found remote with media:', participant.uid);
-        }
-      }
-      
+
       if (participant) {
-        videoTrack = participant.videoTrack;
-        audioTrack = participant.audioTrack;
+        // Get tracks from the LiveKit participant
+        // LiveKit participants have trackPublications - use type assertion
+        const videoPubs = (participant.videoTrackPublications as unknown as Map<string, { track?: RemoteVideoTrack; isSubscribed?: boolean }>) || new Map();
+        const audioPubs = (participant.audioTrackPublications as unknown as Map<string, { track?: RemoteAudioTrack; isSubscribed?: boolean }>) || new Map();
+        
+        // Also check trackPublications directly on the participant
+        // In LiveKit, tracks may be available even if isSubscribed isn't set yet
+        const allVideoPubs = participant.trackPublications ? 
+          Array.from((participant.trackPublications as any).values()) : [];
+        const allAudioPubs = participant.trackPublications ? 
+          Array.from((participant.trackPublications as any).values()) : [];
+        
+        // First try the standard way
+        let videoPub = Array.from(videoPubs?.values() || []).find(p => p.track && p.isSubscribed);
+        let audioPub = Array.from(audioPubs?.values() || []).find(p => p.track && p.isSubscribed);
+        
+        // If not found, try getting any track regardless of subscription status
+        if (!videoPub) {
+          videoPub = Array.from(videoPubs?.values() || []).find(p => p.track);
+        }
+        if (!audioPub) {
+          audioPub = Array.from(audioPubs?.values() || []).find(p => p.track);
+        }
+        
+        // Try from all trackPublications as fallback
+        if (!videoPub) {
+          videoPub = allVideoPubs.find((p: any) => p.track && p.kind === 'video');
+        }
+        if (!audioPub) {
+          audioPub = allAudioPubs.find((p: any) => p.track && p.kind === 'audio');
+        }
+        
+        videoTrack = videoPub?.track;
+        audioTrack = audioPub?.track;
+        
         console.log('[BroadcastGrid] Remote user tracks:', {
-          uid: participant.uid,
+          identity: participant.identity,
           hasVideoTrack: !!videoTrack,
           hasAudioTrack: !!audioTrack,
-          hasVideo: participant.hasVideo,
-          hasAudio: participant.hasAudio
+          videoTrackId: videoTrack?.getTrackId?.(),
+          audioTrackId: audioTrack?.getTrackId?.(),
+          videoPubsCount: videoPubs?.size || 0,
+          allVideoPubsCount: allVideoPubs.length,
         });
       } else {
         console.log('[BroadcastGrid] No participant found for userId:', userId?.substring(0, 8), 'remoteUsers count:', remoteUsers.length);
       }
     }
     
-    // For remote users, we assume camera is on if we have a video track
-    // For local users, check if track exists and is enabled (default to true if enabled is undefined)
+    // Check if camera is on - for LiveKit, track exists means camera is on
+    // For local users, check if track exists and is enabled
     const isMicOn = isLocal 
       ? (audioTrack ? (audioTrack as any).enabled !== false : false) 
       : !!audioTrack;
@@ -483,7 +501,6 @@ export default function BroadcastGrid({
         effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
       )}
     >
-      <AnimatePresence mode="popLayout">
         {boxes.map((seatIndex) => {
           const seat = seats[seatIndex];
           let userId = seat?.user_id;
@@ -508,7 +525,7 @@ export default function BroadcastGrid({
               isMicOn,
               videoEnabled: (videoTrack as any)?.enabled,
               audioEnabled: (audioTrack as any)?.enabled,
-              remoteUsersCount: remoteUsers.length 
+              remoteUsersCount: remoteUsers?.length ?? 0 
             });
           }
 
@@ -847,7 +864,6 @@ export default function BroadcastGrid({
             </div>
           );
         })}
-      </AnimatePresence>
       
       {/* Broadcaster Stats Modal */}
       {showHostStats && isHost && (

@@ -69,13 +69,26 @@ export function useGiftSystem(
     // Validate balance based on gift type (paid or free)
     const _currency = gift.currency || 'troll_coins'
     
+    // Calculate discount based on trollmonds (max 10% off)
+    let discountPercent = 0;
+    const trollmonds = profile?.trollmonds || 0;
+    if (trollmonds >= 100) {
+      discountPercent = 10; // Max 10% off
+    } else if (trollmonds >= 50) {
+      discountPercent = 5; // 5% off
+    }
+    
+    // Calculate discounted cost (e.g., 100 coins with 10% off = 90 coins)
+    const discountAmount = Math.floor(gift.coinCost * (discountPercent / 100));
+    const finalCost = gift.coinCost - discountAmount;
+    
     let balance = 0
     if (gift.type === 'paid') {
       balance = (profile.troll_coins || 0)
     }
 
-    if (balance < gift.coinCost) {
-      toast.error(`Not enough Coins for this gift.`)
+    if (balance < finalCost) {
+      toast.error(`Not enough Coins for this gift.${discountPercent > 0 ? ` (${discountPercent}% off: ${finalCost} coins needed)` : ''}`)
       return false
     }
 

@@ -20,34 +20,30 @@ interface BigWinner {
   created_at: string;
 }
 
-// Trollmond discount tiers
+// Trollmond discount tiers - 10% max discount
 const TROLLMOND_TIERS = [
   { trollmonds: 0, discount: 0, label: 'No discount' },
-  { trollmonds: 100, discount: 5, label: '5% discount' },
-  { trollmonds: 200, discount: 10, label: '10% discount' },
-  { trollmonds: 300, discount: 15, label: '15% discount' },
-  { trollmonds: 400, discount: 20, label: '20% discount' },
-  { trollmonds: 500, discount: 25, label: 'MAX 25% discount' },
+  { trollmonds: 50, discount: 5, label: '5% off gifts' },
+  { trollmonds: 100, discount: 10, label: 'MAX 10% off gifts' },
 ];
 
 export default function TrollWheel() {
   const { profile } = useAuthStore();
-  const { troll_coins: coins, refreshCoins } = useCoins();
-  const [userBalance, setUserBalance] = useState(0);
+  const { troll_coins: coins, trollmonds, refreshCoins } = useCoins();
   const [trollmondBalance, setTrollmondBalance] = useState(0);
   const [topSpinners, setTopSpinners] = useState<TopSpinner[]>([]);
   const [bigWinners, setBigWinners] = useState<BigWinner[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Initialize balance from useCoins hook (same as Sidebar)
+  // Use coins directly from useCoins hook - this stays in sync with sidebar
+  const userBalance = coins ?? 0;
+  
+  // Initialize trollmonds from profile
   useEffect(() => {
-    if (coins !== undefined && coins !== null) {
-      setUserBalance(coins);
-    }
     if (profile?.trollmonds) {
       setTrollmondBalance(profile.trollmonds);
     }
-  }, [coins, profile?.trollmonds]);
+  }, [profile?.trollmonds]);
   
   // Mobile: toggle for info bubble
   const [showMobileInfo, setShowMobileInfo] = useState(true);
@@ -120,10 +116,9 @@ export default function TrollWheel() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleBalanceChange = (newBalance: number) => {
-    setUserBalance(newBalance);
-    // Refresh coins from database after spin
-    refreshCoins();
+  const handleBalanceChange = async (newBalance: number) => {
+    // Refresh coins from database after spin to sync with sidebar
+    await refreshCoins();
   };
 
   const handleTrollmondChange = async (newBalance: number) => {

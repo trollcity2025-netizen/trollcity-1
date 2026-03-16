@@ -272,7 +272,7 @@ export default function TCNNMainPage() {
         {/* Welcome Message */}
         <div className="text-center py-8">
           <h2 className="text-2xl font-bold text-white mb-2">Welcome to TCNN</h2>
-          <p className="text-white/60">Troll City's Official News Network</p>
+          <p className="text-white/60">Troll City&apos;s Official News Network</p>
         </div>
 
         {/* Breaking Banner */}

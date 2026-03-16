@@ -9,6 +9,8 @@ const UserProfileWidget = () => {
   const { profile } = useAuthStore();
   const { level, progress, xpTotal, xpToNext, fetchXP, subscribeToXP, unsubscribe } = useXPStore();
   const { troll_coins, crowns, loading: coinsLoading } = useCoins();
+  // Get trollmonds from profile (not returned by useCoins hook)
+  const displayTrollmonds = profile?.trollmonds ?? 0;
 
   // Subscribe to XP updates when profile is available
   useEffect(() => {
@@ -73,7 +75,7 @@ const UserProfileWidget = () => {
             <Gem size={14} />
             <span className="font-bold">Trollmonds</span>
           </div>
-                    <span className="font-mono text-purple-400">{coinsLoading ? '...' : ((profile as any)?.trollmonds ?? 0).toLocaleString()}</span>
+                    <span className="font-mono text-purple-400">{coinsLoading ? '...' : (displayTrollmonds ?? 0).toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-slate-300">

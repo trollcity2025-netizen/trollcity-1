@@ -57,6 +57,7 @@ export const useStreamStore = create<StreamState>()((set, get) => ({
   // Clear all tracks
   clearTracks: () => {
     console.log('[StreamStore] Clearing all tracks');
+    console.trace('clearTracks called from:');
     // Stop any existing tracks before clearing
     const { screenTrack, cameraTrack, screenPreviewStream } = get();
     

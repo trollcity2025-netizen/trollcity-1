@@ -483,16 +483,25 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
       
       if (acceptError) throw acceptError;
       
-      // Step 4: Update streams to battle mode
-      await supabase
-        .from('streams')
-        .update({ is_battle: true, battle_id: battleData })
-        .eq('id', currentStream.id);
+      // Step 4: Update streams to battle mode - only if in trollmers category
+      // Only set is_battle: true if the broadcaster is in trollmers category and actually in a battle
+      const isTrollmersCategory = currentStream.category === 'trollmers' || currentStream.category === 'trollmers head to head';
       
-      await supabase
-        .from('streams')
-        .update({ is_battle: true, battle_id: battleData })
-        .eq('id', challengerStreamId);
+      if (isTrollmersCategory) {
+        await supabase
+          .from('streams')
+          .update({ is_battle: true, battle_id: battleData })
+          .eq('id', currentStream.id);
+        
+        await supabase
+          .from('streams')
+          .update({ is_battle: true, battle_id: battleData })
+          .eq('id', challengerStreamId);
+      } else {
+        console.warn('[TrollmersBattleControls] Cannot start battle - stream is not in trollmers category');
+        toast.error('Battles can only be started in Trollmers Head-to-Head category');
+        return;
+      }
       
       setBattleId(battleData);
       setBattleStatus('battling');

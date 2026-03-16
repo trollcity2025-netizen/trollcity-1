@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef } from 'react';
-import { ICameraVideoTrack } from 'agora-rtc-sdk-ng';
+import { ICameraVideoTrack } from "livekit-client"-rtc-sdk-ng';
 import VotingPanel from './VotingPanel';
 
 interface PerformerBoxProps {

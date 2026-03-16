@@ -29,6 +29,9 @@ import { initTelemetry } from "./lib/telemetry";
 import GlobalPresenceTracker from "./components/GlobalPresenceTracker";
 import { useIsMobile } from "./hooks/useIsMobile";
 
+// Animation components
+import { AnimationsContainer } from "./components/animations";
+
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
@@ -58,6 +61,7 @@ import CityHall from "./pages/CityHall";
 import CityRegistry from "./pages/CityRegistry";
 const SetupPage = lazyWithRetry(() => import("./pages/broadcast/SetupPage"));
 const BroadcastPage = lazyWithRetry(() => import("./pages/broadcast/BroadcastPage"));
+const BroadcastRouter = lazyWithRetry(() => import("./pages/broadcast/BroadcastRouter"));
 const StreamSummary = lazyWithRetry(() => import("./pages/broadcast/StreamSummary"));
 const BattlePreview = lazyWithRetry(() => import("./pages/dev/BattlePreview"));
 const FrontendLimitsTest = lazyWithRetry(() => import("./pages/dev/FrontendLimitsTest"));
@@ -990,6 +994,9 @@ function AppContent() {
       {/* Global Gift Banner */}
       <GlobalGiftBanner />
 
+      {/* Animation System Container */}
+      <AnimationsContainer />
+
       {/* Broadcast Announcement */}
       <BroadcastAnnouncement />
       <GlobalPodBanner />
@@ -1064,7 +1071,7 @@ function AppContent() {
                 {/* 🔓 Public Discover & Watch */}
                 <Route path="/explore" element={<ExploreFeed />} />
                 <Route path="/live-swipe" element={<StreamSwipePage />} />
-                <Route path="/watch/:id" element={<BroadcastPage />} />
+                <Route path="/watch/:id" element={<BroadcastRouter />} />
 
                 <Route path="/badges" element={<BadgesPage />} />
                 <Route path="/badges/:userId" element={<BadgesPage />} />
@@ -1076,7 +1083,7 @@ function AppContent() {
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<LandingHome />} />
                   <Route path="/broadcast/setup" element={<SetupPage />} />
-                  <Route path="/broadcast/:id" element={<BroadcastPage />} />
+                  <Route path="/broadcast/:id" element={<BroadcastRouter />} />
                   <Route path="/kick-fee/:streamId" element={<KickFeePage />} />
                   <Route path="/broadcast/summary/:streamId" element={<StreamSummary />} />
                   
@@ -1167,8 +1174,8 @@ function AppContent() {
                   <Route path="/troll-court/session" element={<TrollCourtSession />} />
                   <Route path="/live/:streamId" element={<Navigate to="/live" replace />} />
                   <Route path="/interview/:roomId" element={<InterviewRoom />} />
-                  <Route path="/stream/:id" element={<Navigate to="/live" replace />} />
-                  <Route path="/stream/:streamId" element={<Navigate to="/live" replace />} />
+                  <Route path="/stream/:id" element={<BroadcastRouter />} />
+                  <Route path="/stream/:streamId" element={<BroadcastRouter />} />
                   <Route path="/stream/:id/summary" element={<Navigate to="/live" replace />} />
                   <Route path="/stream-ended" element={<Navigate to="/live" replace />} />
 
@@ -1863,6 +1870,9 @@ function AppContent() {
 }
 
 function App() {
+  // Debug: Log Agora App ID on startup
+  console.log("Agora App ID:", import.meta.env.VITE_AGORA_APP_ID);
+  
   useEffect(() => {
     initTelemetry();
     // Initialize global time updater for account age calculations

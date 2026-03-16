@@ -18,7 +18,7 @@ import GiftBoxModal from "../components/broadcast/GiftBoxModal";
 import { generateSummaryFeedback, CourtAgentRole } from "../lib/courtAi";
 import { getGlowingTextStyle } from "../lib/perkEffects";
 
-import AgoraRTC, { IAgoraRTCClient, IAgoraRTCRemoteUser, ILocalVideoTrack, ILocalAudioTrack, IRemoteAudioTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
+import { Room } from 'livekit-client';
 
 
 const CourtParticipantLabel = ({ uid, username: initialUsername }: { uid: string, username: string | null }) => {
@@ -162,7 +162,7 @@ const ParticipantBox = ({ title, colorClass, videoTrack, audioTrack, isLocal, ui
 const CourtVideoGrid = ({ maxTiles, localTracks, remoteUsers, toggleCamera, toggleMicrophone, localUserId, courtSession, onGiftUser }: {
   maxTiles: number;
   localTracks: [ILocalVideoTrack | undefined, ILocalAudioTrack | undefined];
-  remoteUsers: IAgoraRTCRemoteUser[];
+  remoteUsers: RemoteParticipant[];
   toggleCamera: () => void;
   toggleMicrophone: () => void;
   localUserId: string;
@@ -314,9 +314,9 @@ export default function CourtRoom() {
    const [boxCount, setBoxCount] = useState(2);
    const [joinBoxRequested, setJoinBoxRequested] = useState(false);
    const [joinBoxLoading, setJoinBoxLoading] = useState(false);
-   const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
+   const [agoraClient, setAgoraClient] = useState<Room | null>(null);
    const [localTracks, setLocalTracks] = useState<[ILocalVideoTrack | undefined, ILocalAudioTrack | undefined]>([undefined, undefined]);
-   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([]);
+   const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
    const [activeCase, setActiveCase] = useState<any>(null);
    const [courtState, setCourtState] = useState<any>(null);
    const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
@@ -508,13 +508,13 @@ export default function CourtRoom() {
 
       // If already joined as viewer, leave first
       if (agoraClient.connectionState === 'CONNECTED') {
-        await agoraClient.leave();
+        await agoraroom.disconnect();
       }
 
       const token = await getAgoraToken(courtId, user.id);
-      await agoraClient.join(import.meta.env.VITE_AGORA_APP_ID!, courtId, token, user.id);
-      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-      const videoTrack = await AgoraRTC.createCameraVideoTrack();
+      await agoraroom.connect(import.meta.env.VITE_AGORA_APP_ID!, courtId, token, user.id);
+      const audioTrack = await  LocalAudioTrack.create();
+      const videoTrack = await  LocalVideoTrack.create();
       setLocalTracks([videoTrack, audioTrack]);
       await agoraClient.publish([videoTrack, audioTrack]);
       setJoinBoxRequested(true);
@@ -542,12 +542,12 @@ export default function CourtRoom() {
       }
       setLocalTracks([undefined, undefined]);
       await agoraClient.unpublish();
-      await agoraClient.leave();
+      await agoraroom.disconnect();
       setJoinBoxRequested(false);
       toast.info('You have left the box and stopped publishing.');
       // Rejoin as viewer if needed, or simply leave the channel
       if (courtId && user) {
-        await agoraClient.join(import.meta.env.VITE_AGORA_APP_ID!, courtId, null, user.id);
+        await agoraroom.connect(import.meta.env.VITE_AGORA_APP_ID!, courtId, null, user.id);
       }
     } catch (error: any) {
       console.error('Failed to leave box and unpublish:', error);

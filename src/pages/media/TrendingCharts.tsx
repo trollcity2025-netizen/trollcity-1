@@ -23,7 +23,7 @@ export default function TrendingCharts() {
         <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-yellow-400 to-cyan-400 mb-2">
           Media City Charts
         </h2>
-        <p className="text-gray-400">Discover what's hot in the city</p>
+        <p className="text-gray-400">Discover what&apos;s hot in the city</p>
       </div>
 
       <div className="flex justify-center gap-4">

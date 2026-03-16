@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import AgoraRTC, { IAgoraRTCClient, IRemoteUser, IRemoteVideoTrack, IRemoteAudioTrack, ILocalVideoTrack, ILocalAudioTrack, ICameraVideoTrack, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
+import { Room } from "livekit-client";
 
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
@@ -592,10 +592,12 @@ interface BattleViewProps {
   currentStreamId: string;
   viewerId?: string;
   localTracks?: [IMicrophoneAudioTrack, ICameraVideoTrack] | null;
+  remoteUsers?: IRemoteUser[];
+  userIdToAgoraUid?: Record<string, number>;
   onReturnToStream?: () => void;
 }
 
-export default function BattleView({ battleId, currentStreamId, viewerId, localTracks: passedLocalTracks, onReturnToStream }: BattleViewProps) {
+export default function BattleView({ battleId, currentStreamId, viewerId, localTracks: passedLocalTracks, remoteUsers: passedRemoteUsers, userIdToAgoraUid, onReturnToStream }: BattleViewProps) {
   const [battle, setBattle] = useState<any>(null);
   const [challengerStream, setChallengerStream] = useState<Stream | null>(null);
   const [opponentStream, setOpponentStream] = useState<Stream | null>(null);
@@ -603,7 +605,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
-  const [agoraClient, setAgoraClient] = useState<IAgoraRTCClient | null>(null);
+  const [agoraClient, setAgoraClient] = useState<Room | null>(null);
   const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
   const [localVideoTrack, setLocalVideoTrack] = useState<ILocalVideoTrack | null>(null);
   const [remoteUsers, setRemoteUsers] = useState<IRemoteUser[]>([]);
@@ -661,7 +663,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
   // Agora setup
   useEffect(() => {
-    const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+    const client = new Room({ mode: 'rtc', codec: 'vp8' });
     setAgoraClient(client);
     let mounted = true;
     let createdAudioTrack: ILocalAudioTrack | null = null;
@@ -679,20 +681,20 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           });
           if (error) throw error;
 
-          await client.join(import.meta.env.VITE_AGORA_APP_ID!, roomName, data.token, effectiveUserId);
+          await room.connect(import.meta.env.VITE_AGORA_APP_ID!, roomName, data.token, effectiveUserId);
 
           if (passedLocalTracks && passedLocalTracks[0] && passedLocalTracks[1]) {
             if (!mounted) return;
             setLocalAudioTrack(passedLocalTracks[0]);
             setLocalVideoTrack(passedLocalTracks[1]);
-            await client.publish([passedLocalTracks[0], passedLocalTracks[1]]);
+            await room.localParticipant.publishTrack([passedLocalTracks[0], passedLocalTracks[1]]);
           } else {
-            const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            const audioTrack = await  LocalAudioTrack.create({
               AEC: true,
               AGC: true,
               ANS: true
             });
-            const videoTrack = await AgoraRTC.createCameraVideoTrack();
+            const videoTrack = await  LocalVideoTrack.create();
 
             createdAudioTrack = audioTrack;
             createdVideoTrack = videoTrack;
@@ -700,19 +702,19 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             setLocalAudioTrack(audioTrack);
             setLocalVideoTrack(videoTrack);
 
-            await client.publish([audioTrack, videoTrack]);
+            await room.localParticipant.publishTrack([audioTrack, videoTrack]);
           }
         } catch (error) {
           console.error("Failed to join battle as publisher:", error);
           toast.error("Couldn't connect to the battle.");
         }
       } else {
-        await client.join(import.meta.env.VITE_AGORA_APP_ID!, roomName, null, effectiveUserId);
+        await room.connect(import.meta.env.VITE_AGORA_APP_ID!, roomName, null, effectiveUserId);
       }
     };
 
     const handleUserPublished = async (user: IRemoteUser, mediaType: 'audio' | 'video') => {
-      await client.subscribe(user, mediaType);
+      await room.subscribe(user, mediaType);
       setRemoteUsers((prev) => {
         const filtered = prev.filter((u) => u.uid !== user.uid);
         return [...filtered, user];
@@ -741,7 +743,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       client.off('user-unpublished', handleUserUnpublished);
       if (createdAudioTrack) createdAudioTrack.close();
       if (createdVideoTrack) createdVideoTrack.close();
-      client.leave();
+      room.disconnect();
       PreflightStore.clear();
       clearTracks();
     };
@@ -1141,7 +1143,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         localVideoTrack.close();
       }
       if (agoraClient) {
-        agoraClient.leave();
+        agoraroom.disconnect();
       }
       PreflightStore.clear();
       clearTracks();
@@ -1233,7 +1235,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       localVideoTrack.close();
     }
     if (agoraClient) {
-      agoraClient.leave();
+      agoraroom.disconnect();
     }
     PreflightStore.clear();
     clearTracks();
@@ -1286,6 +1288,28 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const challengerPercent = totalScore === 0 ? 50 : Math.round((battle?.score_challenger / totalScore) * 100);
   const opponentPercent = 100 - challengerPercent;
 
+  // Use the userIdToAgoraUid mapping from BroadcastPage to find video tracks
+  // The mapping converts database user IDs to Agora UIDs
+  const challengerAgoraUid = userIdToAgoraUid?.[challengerStream.user_id];
+  const opponentAgoraUid = userIdToAgoraUid?.[opponentStream.user_id];
+  
+  console.log('[BattleView] User lookup - challenger stream:', challengerStream.user_id?.substring(0, 8), '-> agora uid:', challengerAgoraUid);
+  console.log('[BattleView] User lookup - opponent stream:', opponentStream.user_id?.substring(0, 8), '-> agora uid:', opponentAgoraUid);
+  console.log('[BattleView] Passed remoteUsers count:', passedRemoteUsers?.length || 0);
+  console.log('[BattleView] Local videoTrack:', !!localVideoTrack);
+
+  // Handle challenger video - use mapping to find remote user
+  const challengerUser = passedRemoteUsers?.find(u => u.uid === challengerAgoraUid) ||
+    (effectiveUserId === challengerStream.user_id
+      ? { videoTrack: localVideoTrack }
+      : null);
+
+  // Handle opponent video - use mapping to find remote user
+  const opponentUser = passedRemoteUsers?.find(u => u.uid === opponentAgoraUid) ||
+    (effectiveUserId === opponentStream.user_id
+      ? { videoTrack: localVideoTrack }
+      : null);
+
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 overflow-hidden z-50">
       {/* Troll Battle Royale Background Effects */}
@@ -1331,18 +1355,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             </div>
             
             {/* Host Box */}
-            <div className="w-full bg-gradient-to-b from-cyan-900/40 to-cyan-950/60 border-2 border-cyan-500/50 rounded-2xl p-4 mb-4 backdrop-blur-sm">
-              <div className="flex flex-col items-center">
-                <div className="relative mb-2">
-                  <div className="w-16 h-16 rounded-xl bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center">
-                    <span className="text-cyan-300 font-black text-xl">HO</span>
-                  </div>
-                  <Crown className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400 fill-yellow-400" size={20} />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-cyan-900" />
+            <div className="w-full h-48 bg-black rounded-xl overflow-hidden border border-cyan-500/40 mb-4">
+              {challengerUser?.videoTrack ? (
+                <AgoraVideoPlayer videoTrack={challengerUser.videoTrack} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-cyan-400 gap-2">
+                  <Crown className="text-yellow-400 fill-yellow-400" size={24} />
+                  <span className="text-sm">Waiting for video...</span>
                 </div>
-                <span className="text-[10px] text-cyan-400/70 uppercase tracking-wider">Broadcaster</span>
-                <span className="text-cyan-200 font-bold">{challengerStream.title || 'Host Alpha'}</span>
-              </div>
+              )}
             </div>
 
             {/* Trolls/Guests Label */}
@@ -1410,18 +1431,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             </div>
             
             {/* Host Box */}
-            <div className="w-full bg-gradient-to-b from-pink-900/40 to-pink-950/60 border-2 border-pink-500/50 rounded-2xl p-4 mb-4 backdrop-blur-sm">
-              <div className="flex flex-col items-center">
-                <div className="relative mb-2">
-                  <div className="w-16 h-16 rounded-xl bg-pink-500/20 border-2 border-pink-400 flex items-center justify-center">
-                    <span className="text-pink-300 font-black text-xl">HO</span>
-                  </div>
-                  <Crown className="absolute -top-3 left-1/2 -translate-x-1/2 text-yellow-400 fill-yellow-400" size={20} />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-pink-900" />
+            <div className="w-full h-48 bg-black rounded-xl overflow-hidden border border-pink-500/40 mb-4">
+              {opponentUser?.videoTrack ? (
+                <AgoraVideoPlayer videoTrack={opponentUser.videoTrack} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-pink-400 gap-2">
+                  <Crown className="text-yellow-400 fill-yellow-400" size={24} />
+                  <span className="text-sm">Waiting for video...</span>
                 </div>
-                <span className="text-[10px] text-pink-400/70 uppercase tracking-wider">Broadcaster</span>
-                <span className="text-pink-200 font-bold">{opponentStream.title || 'Host Beta'}</span>
-              </div>
+              )}
             </div>
 
             {/* Trolls/Guests Label */}

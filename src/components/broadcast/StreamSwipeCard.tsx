@@ -11,7 +11,7 @@ import { Stream } from '../../types/broadcast';
 import { toast } from 'sonner';
 import { Eye, Heart, MessageCircle, Gift, Share2, Users, UserPlus } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import AgoraRTC from 'agora-rtc-sdk-ng';
+import { Room, RoomEvent, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 
 interface StreamSwipeCardProps {
   stream: Stream & {
@@ -45,7 +45,7 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
   const [isJoining, setIsJoining] = useState(false);
   const [showJoinPrompt, setShowJoinPrompt] = useState(false);
   
-  const clientRef = useRef<any>(null);
+  const roomRef = useRef<Room | null>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hasJoinedRef = useRef(false);
   
@@ -91,40 +91,32 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
       }
       
       // Create Agora client
-      const client = AgoraRTC.createClient({
+      const room = new Room({
         mode: 'rtc',
         codec: 'vp8'
       });
       
-      clientRef.current = client;
+      roomRef.current = room;
       
       // Handle user published
-      client.on('user-published', async (remoteUser: any, mediaType: string) => {
-        if (remoteUser.hasVideo) {
-          await client.subscribe(remoteUser, 'video');
-        }
-        if (remoteUser.hasAudio) {
-          await client.subscribe(remoteUser, 'audio');
-          remoteUser.audioTrack?.play();
-        }
-        
-        setRemoteUsers(prev => {
-          const filtered = prev.filter(u => u.uid !== remoteUser.uid);
-          return [...filtered, remoteUser];
-        });
+      room.on(RoomEvent.ParticipantConnected, (participant) => {
+        setRemoteUsers(prev => [...prev, participant]);
       });
       
       // Handle user unpublished
-      client.on('user-unpublished', (remoteUser: any) => {
-        setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUser.uid));
+      room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        setRemoteUsers(prev => prev.filter(u => u.identity !== participant.identity));
       });
       
       // Join channel
-      await client.join(appId, stream.id, tokenData.token, numericUid);
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'wss://trollcity.livekit.cloud';
+      await room.connect(livekitUrl, tokenData.token, {
+        autoSubscribe: true,
+      });
       
       // Handle mute state
       if (isMuted) {
-        client.setAudioVolume(0);
+        // Audio handled by LiveKit;
       }
       
       console.log('[StreamSwipeCard] Joined stream:', stream.id);
@@ -135,14 +127,14 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
     } finally {
       setIsJoining(false);
     }
-  }, [isActive, stream.id, user, isMuted]);
+  }, [stream.id]);
   
   // Leave stream when card becomes inactive
   const leaveStream = useCallback(async () => {
-    if (!isActive && hasJoinedRef.current && clientRef.current) {
+    if (!isActive && hasJoinedRef.current && roomRef.current) {
       try {
-        await clientRef.current.leave();
-        clientRef.current = null;
+        await roomRef.current?.disconnect();
+        roomRef.current = null;
         hasJoinedRef.current = false;
         setRemoteUsers([]);
         console.log('[StreamSwipeCard] Left stream:', stream.id);
@@ -154,11 +146,11 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
   
   // Handle mute state changes
   useEffect(() => {
-    if (clientRef.current) {
+    if (roomRef.current) {
       if (isMuted) {
-        clientRef.current.setAudioVolume(0);
+        roomRef.current.setAudioVolume(0);
       } else {
-        clientRef.current.setAudioVolume(100);
+        roomRef.current.setAudioVolume(100);
       }
     }
   }, [isMuted]);
@@ -172,9 +164,9 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
     }
     
     return () => {
-      if (clientRef.current) {
-        clientRef.current.leave().catch(() => {});
-        clientRef.current = null;
+      if (roomRef.current) {
+        roomRef.current?.disconnect();
+        roomRef.current = null;
         hasJoinedRef.current = false;
       }
     };
@@ -282,12 +274,12 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
             "grid grid-cols-2 gap-0.5"
           )}>
             {remoteUsers.map((remoteUser) => (
-              <div key={remoteUser.uid} className="relative bg-black">
-                {remoteUser.videoTrack ? (
+              <div key={remoteUser.identity} className="relative bg-black">
+                {false ? (
                   <div 
                     ref={(el) => {
-                      if (el && remoteUser.videoTrack) {
-                        remoteUser.videoTrack.play(el);
+                      if (el) {
+                        // TODO: Get from participant.videoTrackPublications.play(el);
                       }
                     }}
                     className="w-full h-full object-cover"

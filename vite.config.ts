@@ -4,10 +4,16 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import fs from 'fs'
-// import mkcert from 'vite-plugin-mkcert'
-// import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // 🚫 Removed dotenv — not needed on Vercel
+
+// HTTPS is REQUIRED for WebRTC (camera/microphone access)
+// Browsers block getUserMedia() on HTTP except localhost
+// This configuration enables HTTPS via mkcert for local development
+// WebRTC security: Modern browsers require secure context (HTTPS) for camera/mic access
+//
+// mkcert auto-generates certificates for localhost and 127.0.0.1
+// No manual certificate setup needed - just run `npm run dev`
 
 const disableHmr = process.env.DISABLE_HMR === '1'
 
@@ -35,8 +41,8 @@ export default defineConfig(({ mode: _mode }) => ({
   },
   plugins: [
     react(),
+    // mkcert removed - using HTTP for LAN access
     tsconfigPaths(),
-    // mkcert(), // DISABLED for HTTP-only mode
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png"],
@@ -83,11 +89,11 @@ export default defineConfig(({ mode: _mode }) => ({
   ],
   base: '/',
   server: {
-    host: '0.0.0.0',
-    port: 5176,
+    host: true, // Enable LAN access
+    https: false, // Using HTTP for LAN access
+    port: 5178,
     strictPort: false,
     hmr: disableHmr ? false : { overlay: false },
-    // https: false, // Force HTTP (Default is false, explicit false causes TS error)
     proxy: {
       '/api': {
         target: `http://localhost:${process.env.PORT || 3001}`,

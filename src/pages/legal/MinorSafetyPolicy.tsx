@@ -86,7 +86,7 @@ export default function MinorSafetyPolicy() {
                   <h3 className="text-lg font-bold text-white mb-2">Enable Minor Indicator</h3>
                   <p className="text-zinc-400">
                     Users who may have minors appear on their streams should enable the 
-                    "Minor Supervision Indicator" in their profile settings. This displays 
+                     &quot;Minor Supervision Indicator&quot; in their profile settings. This displays 
                     a visible badge to inform viewers that minors may be present.
                   </p>
                 </div>
@@ -148,11 +148,9 @@ export default function MinorSafetyPolicy() {
               <Gavel className="text-purple-400" />
               Reporting Violations
             </h2>
-            <p className="text-zinc-300 leading-relaxed mb-4">
-              All users are encouraged to report violations. If you observe a minor left unsupervised 
-              on a broadcast, please use the "Minor Left Unsupervised" report option and 
-              include screenshot evidence if possible.
-            </p>
+             <p className="text-zinc-300 leading-relaxed mb-4">
+               All users are encouraged to report violations. If you&apos;re observing a minor left unsupervised, you&apos;re required to use the &quot;Minor Left Unsupervised&quot; report option and include screenshot evidence if possible.
+             </p>
             <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
               <p className="text-purple-400 text-sm">
                 Reports are reviewed by moderators. False reports may result in penalties against 

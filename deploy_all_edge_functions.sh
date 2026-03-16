@@ -96,6 +96,8 @@ UTILITY_FUNCTIONS=(
     "battles"
     "troll-events"
     "ping"
+    "agora-token"
+    "start-agora-cdn"
 )
 
 # Function to deploy a single function

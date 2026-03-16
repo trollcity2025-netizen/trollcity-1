@@ -1,4 +1,4 @@
-import type { IAgoraRTCClient } from 'agora-rtc-sdk-ng';
+import type { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 interface PreflightState {
   stream: MediaStream | null;
@@ -6,9 +6,9 @@ interface PreflightState {
   token: string | null;
   roomName: string | null;
   url: string | null;
-  // Agora client and tracks for seamless handoff to BroadcastPage
-  agoraClient: IAgoraRTCClient | null;
-  localTracks: [any, any, any, any] | null; // [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?]
+  // LiveKit room for seamless handoff to BroadcastPage
+  livekitRoom: any | null;
+  localTracks: [LocalAudioTrack | null, LocalVideoTrack | null] | null; // [audioTrack, videoTrack]
   // Track enabled states from setup page
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
@@ -20,7 +20,7 @@ const state: PreflightState = {
   token: null,
   roomName: null,
   url: null,
-  agoraClient: null,
+  livekitRoom: null,
   localTracks: null,
   isVideoEnabled: true,
   isAudioEnabled: true,
@@ -54,15 +54,30 @@ export const PreflightStore = {
     return { token: state.token, roomName: state.roomName, url: state.url };
   },
 
-  // Set Agora client and tracks for handoff to BroadcastPage
-  // tracks: [audioTrack, videoTrack, cameraAudioTrack?, cameraVideoTrack?]
-  setAgoraClient(client: IAgoraRTCClient | null, tracks: [any, any, any, any] | null) {
-    state.agoraClient = client;
-    state.localTracks = tracks;
+  // Set LiveKit tracks for handoff to BroadcastPage
+  setLivekitTracks(audioTrack: LocalAudioTrack | null, videoTrack: LocalVideoTrack | null) {
+    state.localTracks = [audioTrack, videoTrack];
   },
 
-  getAgoraClient() {
-    return state.agoraClient;
+  // Get LiveKit tracks for BroadcastPage
+  getLivekitTracks(): [LocalAudioTrack | null, LocalVideoTrack | null] | null {
+    return state.localTracks;
+  },
+
+  // Legacy method - kept for compatibility
+  setAgoraClient(client: any | null, tracks: [any, any, any, any] | null) {
+    // Convert legacy format to LiveKit format
+    if (tracks && tracks[0]) {
+      state.localTracks = [tracks[0], tracks[1]];
+    }
+  },
+
+  getLivekitRoom() {
+    return state.livekitRoom;
+  },
+
+  setLivekitRoom(room: any | null) {
+    state.livekitRoom = room;
   },
 
   getLocalTracks() {
@@ -87,27 +102,24 @@ export const PreflightStore = {
     if (state.cameraStream) {
       state.cameraStream.getTracks().forEach(track => track.stop());
     }
-    // Stop Agora tracks if any
+    // Stop LiveKit tracks if any
     if (state.localTracks) {
       state.localTracks.forEach(track => {
         if (track && typeof track.stop === 'function') {
           try {
             track.stop();
-            if (typeof track.close === 'function') {
-              track.close();
-            }
           } catch (e) {
             console.warn('Error stopping track in PreflightStore.clear():', e);
           }
         }
       });
     }
-    // Leave Agora client if connected
-    if (state.agoraClient) {
+    // Disconnect from LiveKit room if connected
+    if (state.livekitRoom) {
       try {
-        state.agoraClient.leave();
+        state.livekitRoom.disconnect();
       } catch (e) {
-        console.warn('Error leaving Agora client in PreflightStore.clear():', e);
+        console.warn('Error disconnecting from LiveKit room in PreflightStore.clear():', e);
       }
     }
     state.stream = null;
@@ -115,7 +127,7 @@ export const PreflightStore = {
     state.token = null;
     state.roomName = null;
     state.url = null;
-    state.agoraClient = null;
+    state.livekitRoom = null;
     state.localTracks = null;
     state.isVideoEnabled = true;
     state.isAudioEnabled = true;

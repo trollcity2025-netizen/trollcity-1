@@ -42,6 +42,7 @@ interface StreamRow {
   title: string;
   hls_url?: string;
   agora_channel?: string; // Add agora_channel
+  mux_playback_id?: string; // Add Mux playback ID
   broadcaster: {
     username: string;
     avatar_url: string;
@@ -100,6 +101,7 @@ export default function GovernmentStreams() {
           status,
           is_live,
           hls_url,
+          mux_playback_id,
           viewer_count,
           current_viewers,
           title,

@@ -4,7 +4,7 @@ import PodParticipantBox from './PodParticipantBox';
 import PodChatBox from './PodChatBox';
 import PodHostControlPanel from './PodHostControlPanel';
 import TrollsTownControl from '../../components/TrollsTownControl';
-import { IAgoraRTCRemoteUser, ILocalAudioTrack } from 'agora-rtc-sdk-ng';
+import { RemoteParticipant, ILocalAudioTrack } from "livekit-client";
 
 interface PodRoomContentProps {
   room: any;
@@ -86,7 +86,7 @@ const PodRoomContent = ({
             {participantsData.map(p => {
               // Find matching remote user or use local audio track for self
               const isSelf = p.user_id === currentUser?.id;
-              const remoteUser = remoteUsers?.find((ru: IAgoraRTCRemoteUser) => {
+              const remoteUser = remoteUsers?.find((ru: RemoteParticipant) => {
                 // Convert user_id to numeric UID to match
                 const stringToUid = (str: string): number => {
                   let hash = 0;

@@ -3,10 +3,10 @@ import { Mic, MicOff, Crown, Shield, User, MoreVertical, ArrowDown, MessageSquar
 import { supabase } from '@/lib/supabase';
 import GiftModal from '@/components/GiftModal';
 import { PodParticipant } from './TrollPodRoom';
-import { IRemoteAudioTrack, ILocalAudioTrack } from 'agora-rtc-sdk-ng';
+import { IRemoteAudioTrack, ILocalAudioTrack } from 'livekit-client';
 
 interface PodParticipantBoxProps {
-  participant: PodParticipant | IAgoraRTCRemoteUser;
+  participant: PodParticipant | RemoteParticipant;
   isHost: boolean; // Is the viewer the host of the room?
   isOfficer?: boolean; // Is the viewer an officer?
   isSelf: boolean; // Is this box for the viewer themselves?

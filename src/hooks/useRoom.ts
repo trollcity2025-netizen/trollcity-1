@@ -1,72 +1,177 @@
-import AgoraRTC, { IAgoraRTCClient, ICameraVideoTrack, IMicrophoneAudioTrack, IRemoteAudioTrack, IRemoteVideoTrack, ILocalVideoTrack, ILocalAudioTrack, ILocalTrack, IAgoraRTCRemoteUser } from "agora-rtc-sdk-ng";
-import { useState, useRef, useEffect } from "react";
-
-type IRemoteUser = IAgoraRTCRemoteUser;
+import { useState, useRef, useEffect, useCallback } from "react";
+import { 
+  Room, 
+  RoomEvent, 
+  LocalVideoTrack, 
+  LocalAudioTrack, 
+  RemoteParticipant,
+  RemoteVideoTrack,
+  RemoteAudioTrack,
+  VideoPresets,
+  AudioPresets
+} from "livekit-client";
+import { supabase } from "../lib/supabase";
 
 interface UseRoomOptions {
   url?: string;
   token?: string;
-  onConnected?: (room: IAgoraRTCClient) => void;
+  onConnected?: (room: Room) => void;
   onDisconnected?: () => void;
 }
 
+// Convert URL to room name (strip any protocol/path)
+const extractRoomName = (url?: string): string => {
+  if (!url) return '';
+  // URL format: wss://[host]/live/[roomName]
+  const parts = url.split('/');
+  return parts[parts.length - 1] || '';
+};
+
 export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOptions = {}) {
-  const [room, _setRoom] = useState<IAgoraRTCClient | null>(null);
+  const [room, _setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [remoteUsers, setRemoteUsers] = useState<IRemoteUser[]>([]);
-  const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
-  const [localVideoTrack, setLocalVideoTrack] = useState<ILocalVideoTrack | null>(null);
+  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
+  const [localAudioTrack, setLocalAudioTrack] = useState<LocalAudioTrack | null>(null);
+  const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
   const [viewerCount, setViewerCount] = useState(0);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(true);
-  const roomRef = useRef<IAgoraRTCClient | null>(null);
+  const roomRef = useRef<Room | null>(null);
+
+  // Fetch LiveKit token
+  const fetchToken = useCallback(async (roomName: string, userId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('livekit-token', {
+        body: {
+          room: roomName,
+          userId: userId,
+          role: 'publisher' // useRoom always publishes
+        }
+      });
+
+      if (error) throw error;
+      return data?.token;
+    } catch (err) {
+      console.error('[useRoom] Token fetch error:', err);
+      return null;
+    }
+  }, []);
+
+  // Handle participant connected
+  const handleParticipantConnected = useCallback((participant: RemoteParticipant) => {
+    console.log('[useRoom] Participant connected:', participant.identity);
+    setRemoteUsers(prev => {
+      if (prev.find(p => p.identity === participant.identity)) return prev;
+      return [...prev, participant];
+    });
+    setViewerCount(prev => prev + 1);
+  }, []);
+
+  // Handle participant disconnected
+  const handleParticipantDisconnected = useCallback((participant: RemoteParticipant) => {
+    console.log('[useRoom] Participant disconnected:', participant.identity);
+    setRemoteUsers(prev => prev.filter(p => p.identity !== participant.identity));
+    setViewerCount(prev => Math.max(0, prev - 1));
+  }, []);
+
+  // Handle track subscribed
+  const handleTrackSubscribed = useCallback((track: RemoteVideoTrack | RemoteAudioTrack, participant: RemoteParticipant) => {
+    console.log('[useRoom] Track subscribed:', track.kind, 'from', participant.identity);
+    // Force re-render
+    setRemoteUsers(prev => [...prev]);
+  }, []);
+
+  // Handle track unsubscribed
+  const handleTrackUnsubscribed = useCallback((track: RemoteVideoTrack | RemoteAudioTrack, participant: RemoteParticipant) => {
+    console.log('[useRoom] Track unsubscribed:', track.kind, 'from', participant.identity);
+    setRemoteUsers(prev => [...prev]);
+  }, []);
 
   useEffect(() => {
     if (!url || !token) return;
 
+    const roomName = extractRoomName(url);
+    if (!roomName) {
+      console.error('[useRoom] Invalid room URL');
+      return;
+    }
+
     const connect = async () => {
       try {
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        // Generate a random user ID for this session
+        const userId = `user-${Math.random().toString(36).substring(2, 15)}`;
 
-        client.on("user-published", async (user, mediaType) => {
-          await client.subscribe(user, mediaType);
-          if (mediaType === "audio") {
-            const remoteAudioTrack = user.audioTrack;
-            // Audio can play immediately (no DOM element needed)
-            remoteAudioTrack?.play();
+        // If we have a token, use it directly; otherwise fetch one
+        let actualToken = token;
+        if (!token || token.length < 10) {
+          actualToken = await fetchToken(roomName, userId);
+          if (!actualToken) {
+            console.error('[useRoom] Failed to get token');
+            return;
           }
-          // Video is NOT played here - the component using this hook (e.g., BroadcastGrid)
-          // will handle playing video in the correct DOM container
-          setRemoteUsers((prev) => {
-            if (prev.find((p) => p.uid === user.uid)) return prev;
-            return [...prev, user];
-          });
-          setViewerCount((prev) => prev + 1);
+        }
+
+        const livekitRoom = new Room({
+          adaptiveStream: true,
+          dynacast: true,
+          videoCaptureDefaults: {
+            ...VideoPresets.hd,
+            facingMode: 'user'
+          },
+          audioCaptureDefaults: {
+            ...AudioPresets.audio,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         });
 
-        client.on("user-unpublished", (user) => {
-          setRemoteUsers((prev) => prev.filter((p) => p.uid !== user.uid));
-          setViewerCount((prev) => Math.max(0, prev - 1));
+        roomRef.current = livekitRoom;
+
+        // Set up event listeners
+        livekitRoom.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+        livekitRoom.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+        livekitRoom.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+        livekitRoom.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+
+        // Get LiveKit URL from env
+        const livekitUrl = import.meta.env.VITE_LIVEKIT_URL;
+        
+        if (!livekitUrl) {
+          console.error('[useRoom] Missing VITE_LIVEKIT_URL');
+          return;
+        }
+
+        // Connect to room
+        await livekitRoom.connect(livekitUrl, actualToken, {
+          name: roomName,
+          identity: userId
         });
 
-        await client.join(token, url, null);
-        roomRef.current = client;
-        _setRoom(client);
+        _setRoom(livekitRoom);
         setIsConnected(true);
-        onConnected?.(client);
+        onConnected?.(livekitRoom);
 
         // Create and publish local tracks
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        const videoTrack = await AgoraRTC.createCameraVideoTrack();
-        await client.publish([audioTrack, videoTrack]);
+        const audioTrack = await LocalAudioTrack.create(AudioPresets.audio);
+        const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
+        
+        await livekitRoom.localParticipant.publishTrack(audioTrack);
+        await livekitRoom.localParticipant.publishTrack(videoTrack);
+        
         setLocalAudioTrack(audioTrack);
         setLocalVideoTrack(videoTrack);
 
-        setIsCameraEnabled(videoTrack.enabled);
-        setIsMicrophoneEnabled(audioTrack.enabled);
+        setIsCameraEnabled(true);
+        setIsMicrophoneEnabled(true);
+
+        // Get existing participants
+        const existingParticipants = Array.from(livekitRoom.participants.values());
+        setRemoteUsers(existingParticipants);
+        setViewerCount(existingParticipants.length);
 
       } catch (error) {
-        console.error("Failed to connect to room:", error);
+        console.error("[useRoom] Failed to connect to room:", error);
       }
     };
 
@@ -74,29 +179,52 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
 
     return () => {
       if (roomRef.current) {
-        roomRef.current.leave();
+        roomRef.current.disconnect();
         roomRef.current = null;
       }
       if (localAudioTrack) {
-        localAudioTrack.close();
+        localAudioTrack.stop();
       }
       if (localVideoTrack) {
-        localVideoTrack.close();
+        localVideoTrack.stop();
       }
+      onDisconnected?.();
     };
-  }, [url, token, onConnected, onDisconnected, localAudioTrack, localVideoTrack]);
+  }, [url, token, onConnected, onDisconnected, fetchToken, handleParticipantConnected, handleParticipantDisconnected, handleTrackSubscribed, handleTrackUnsubscribed, localAudioTrack, localVideoTrack]);
 
   const toggleCamera = async () => {
-    if (localVideoTrack) {
-      await localVideoTrack.setEnabled(!isCameraEnabled);
-      setIsCameraEnabled(!isCameraEnabled);
+    if (localVideoTrack && roomRef.current) {
+      try {
+        if (isCameraEnabled) {
+          await roomRef.current.localParticipant.unpublishTrack(localVideoTrack);
+          localVideoTrack.stop();
+        } else {
+          const newTrack = await LocalVideoTrack.create(VideoPresets.hd);
+          setLocalVideoTrack(newTrack);
+          await roomRef.current.localParticipant.publishTrack(newTrack);
+        }
+        setIsCameraEnabled(!isCameraEnabled);
+      } catch (err) {
+        console.error('[useRoom] Error toggling camera:', err);
+      }
     }
   };
 
   const toggleMicrophone = async () => {
-    if (localAudioTrack) {
-      await localAudioTrack.setEnabled(!isMicrophoneEnabled);
-      setIsMicrophoneEnabled(!isMicrophoneEnabled);
+    if (localAudioTrack && roomRef.current) {
+      try {
+        if (isMicrophoneEnabled) {
+          await roomRef.current.localParticipant.unpublishTrack(localAudioTrack);
+          localAudioTrack.stop();
+        } else {
+          const newTrack = await LocalAudioTrack.create(AudioPresets.audio);
+          setLocalAudioTrack(newTrack);
+          await roomRef.current.localParticipant.publishTrack(newTrack);
+        }
+        setIsMicrophoneEnabled(!isMicrophoneEnabled);
+      } catch (err) {
+        console.error('[useRoom] Error toggling microphone:', err);
+      }
     }
   };
 
@@ -116,15 +244,14 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
     remoteUsers,
     leave: () => {
       if (roomRef.current) {
-        roomRef.current.leave();
+        roomRef.current.disconnect();
         roomRef.current = null;
       }
     },
   };
 }
 
-// Legacy alias for backwards compatibility
+// Legacy alias for backwards compatibility  
 export function useAgoraRoom() {
   return useRoom({});
 }
-

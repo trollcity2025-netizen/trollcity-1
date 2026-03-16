@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
-import AgoraRTC, { ILocalAudioTrack, ILocalVideoTrack, IRemoteUser } from 'agora-rtc-sdk-ng';
+import { Room } from livekit-client';
 import { toast } from 'sonner';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 
@@ -43,7 +43,7 @@ const JailVisitRoom: React.FC = () => {
             return;
         }
 
-        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+        const client = new Room(({ mode: 'rtc', codec: 'vp8' });
 
         const joinCall = async () => {
             setIsJoining(true);
@@ -54,10 +54,10 @@ const JailVisitRoom: React.FC = () => {
 
                 if (error) throw new Error('Failed to get token');
 
-                await client.join(process.env.NEXT_PUBLIC_AGORA_APP_ID!, visitId, data.token, user.id);
+                await room.connect(process.env.NEXT_PUBLIC_AGORA_APP_ID!, visitId, data.token, user.id);
 
-                const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                const videoTrack = await AgoraRTC.createCameraVideoTrack();
+                const audioTrack = await  LocalAudioTrack.create();
+                const videoTrack = await  LocalVideoTrack.create();
 
                 setLocalAudioTrack(audioTrack);
                 setLocalVideoTrack(videoTrack);
@@ -93,7 +93,7 @@ const JailVisitRoom: React.FC = () => {
             client.off('user-unpublished', handleUserUnpublished);
             localAudioTrack?.close();
             localVideoTrack?.close();
-            client.leave();
+            room.disconnect();
         };
     }, [visitId, user, navigate, localAudioTrack, localVideoTrack]);
 

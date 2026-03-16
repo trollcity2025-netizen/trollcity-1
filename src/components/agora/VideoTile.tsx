@@ -1,17 +1,16 @@
-
 import React, { useEffect, useRef, useState } from 'react';
-import { IAgoraRTCRemoteUser, ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
+import { RemoteParticipant, LocalVideoTrack, LocalAudioTrack, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface VideoTileProps {
-  user?: IAgoraRTCRemoteUser;
-  localVideoTrack?: ICameraVideoTrack;
-  localAudioTrack?: IMicrophoneAudioTrack;
+  user?: RemoteParticipant;
+  localVideoTrack?: LocalVideoTrack;
+  localAudioTrack?: LocalAudioTrack;
   displayName: string;
   role: 'performer' | 'judge' | 'viewer';
   canPublish?: boolean;
-  agoraClient?: any; // The main Agora client instance
+  livekitRoom?: any; // The LiveKit room instance
 }
 
 const VideoTile: React.FC<VideoTileProps> = ({ 
@@ -21,41 +20,78 @@ const VideoTile: React.FC<VideoTileProps> = ({
   displayName,
   role,
   canPublish = false,
-  agoraClient
+  livekitRoom
 }) => {
   const videoRef = useRef<HTMLDivElement>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
 
-  const videoTrack = localVideoTrack || user?.videoTrack;
-  const audioTrack = localAudioTrack || user?.audioTrack;
+  // Get video track from user or local
+  const getVideoTrack = () => {
+    if (localVideoTrack) return localVideoTrack;
+    if (user) {
+      // Get video track from LiveKit participant
+      const trackPublications = Array.from(user.videoTrackPublications.values());
+      const videoPub = trackPublications.find(p => p.track?.kind === 'video');
+      return videoPub?.track as RemoteVideoTrack | undefined;
+    }
+    return undefined;
+  };
 
-  // Play video track
+  // Get audio track from user or local
+  const getAudioTrack = () => {
+    if (localAudioTrack) return localAudioTrack;
+    if (user) {
+      const trackPublications = Array.from(user.audioTrackPublications.values());
+      const audioPub = trackPublications.find(p => p.track?.kind === 'audio');
+      return audioPub?.track as RemoteAudioTrack | undefined;
+    }
+    return undefined;
+  };
+
+  const videoTrack = getVideoTrack();
+  const audioTrack = getAudioTrack();
+
+  // Attach video track to DOM element
   useEffect(() => {
     if (videoRef.current && videoTrack) {
-      videoTrack.play(videoRef.current);
+      // LiveKit tracks attach themselves to the element
+      if ('attach' in videoTrack) {
+        const element = videoTrack.attach();
+        videoRef.current.appendChild(element);
+      }
     }
     return () => {
-      videoTrack?.stop();
+      // Cleanup attached element on unmount
+      if (videoRef.current) {
+        videoRef.current.innerHTML = '';
+      }
     };
   }, [videoTrack]);
 
   // Play audio track for remote users
   useEffect(() => {
     if (user && audioTrack) {
-      audioTrack.play();
+      // LiveKit audio tracks auto-play when attached
+      if ('attach' in audioTrack) {
+        audioTrack.attach();
+      }
     }
   }, [user, audioTrack]);
 
   const togglePublish = async () => {
-    if (!agoraClient || !localVideoTrack || !localAudioTrack) return;
+    if (!livekitRoom || !localVideoTrack || !localAudioTrack) return;
 
     if (!isPublished) {
-      await agoraClient.publish([localAudioTrack, localVideoTrack]);
+      // Publish tracks
+      await livekitRoom.localParticipant.publishTrack(localAudioTrack);
+      await livekitRoom.localParticipant.publishTrack(localVideoTrack);
       setIsPublished(true);
     } else {
-      await agoraClient.unpublish([localAudioTrack, localVideoTrack]);
+      // Unpublish tracks
+      await livekitRoom.localParticipant.unpublishTrack(localAudioTrack);
+      await livekitRoom.localParticipant.unpublishTrack(localVideoTrack);
       setIsPublished(false);
     }
   };
