@@ -74,7 +74,7 @@
 - ✅ `/api/auth/*` - Authentication
 - ✅ `/api/payments/*` - Payment processing
 - ✅ `/api/square/*` - Square integration
-- ✅ `/api/agora/*` - Agora tokens
+- ✅ `/api/livekit/*` - LiveKit tokens
 - ✅ `/api/admin/*` - Admin operations
 - ✅ `/api/admin/economy/*` - Economy dashboard
 - ✅ `/api/admin/risk/*` - Risk management

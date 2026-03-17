@@ -84,6 +84,7 @@ export default function BattleChat({
           filter: `stream_id=in.(${challengerStream.id},${opponentStream.id})`,
         },
         (payload) => {
+          console.log('[BattleChat] Received postgres chat message:', payload);
           const newMsg = payload.new as ChatMessage;
           setMessages((prev) => {
             // Prevent duplicates
@@ -92,6 +93,17 @@ export default function BattleChat({
           });
         }
       )
+      // Also listen for broadcast chat events (for real-time delivery)
+      .on('broadcast', { event: 'chat_message' }, (payload) => {
+        console.log('[BattleChat] Received broadcast chat message:', payload);
+        const newMsg = payload.payload as ChatMessage;
+        if (newMsg && newMsg.id) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev.slice(-49), newMsg];
+          });
+        }
+      })
       .subscribe();
 
     return () => {
@@ -115,6 +127,25 @@ export default function BattleChat({
       ? opponentStream.id 
       : challengerStream.id;
 
+    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const chatMessage = {
+      id: messageId,
+      stream_id: targetStreamId,
+      user_id: currentUserId,
+      message: newMessage.trim(),
+      created_at: new Date().toISOString(),
+    };
+
+    // First broadcast the message immediately for real-time delivery
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'chat_message',
+        payload: chatMessage,
+      });
+    }
+
+    // Then insert to database for persistence
     const { error } = await supabase.from('stream_chat').insert({
       stream_id: targetStreamId,
       user_id: currentUserId,

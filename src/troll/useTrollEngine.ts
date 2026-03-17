@@ -33,8 +33,8 @@ const RARITY_PROBABILITIES = {
 // Event type probabilities by rarity
 const EVENT_TYPE_PROBABILITIES: Record<Rarity, Array<{ type: TrollEventType; probability: number }>> = {
   COMMON: [
-    { type: 'TROLL_JUMPSCARE', probability: 0.5 },
-    { type: 'FAKE_BAN_SCREEN', probability: 0.3 },
+    { type: 'TROLL_JUMPSCARE', probability: 0.2 },
+    { type: 'FAKE_BAN_SCREEN', probability: 0.2 },
     { type: 'TROLL_COURT_SUMMONS', probability: 0.2 },
   ],
   RARE: [
@@ -42,18 +42,18 @@ const EVENT_TYPE_PROBABILITIES: Record<Rarity, Array<{ type: TrollEventType; pro
     { type: 'FAKE_COIN_LOSS', probability: 0.4 },
   ],
   EPIC: [
-    { type: 'TROLL_COURT_SUMMONS', probability: 0.5 },
-    { type: 'FAKE_BAN_SCREEN', probability: 0.3 },
+    { type: 'TROLL_COURT_SUMMONS', probability: 0.2 },
+    { type: 'FAKE_BAN_SCREEN', probability: 0.2 },
     { type: 'TROLL_JUMPSCARE', probability: 0.2 },
   ],
   LEGENDARY: [
-    { type: 'TROLL_COURT_SUMMONS', probability: 0.6 },
-    { type: 'FAKE_COIN_LOSS', probability: 0.4 },
+    { type: 'TROLL_COURT_SUMMONS', probability: 0.2 },
+    { type: 'FAKE_COIN_LOSS', probability: 0.2 },
   ],
 };
 
-// Cooldown duration (30 seconds for testing, change to 2 * 60 * 1000 for production)
-const COOLDOWN_DURATION = 30 * 1000;
+// Cooldown duration (30 seconds for testing, change to 2 * 600 * 1000 for production)
+const COOLDOWN_DURATION = 300 * 1000;
 
 // Safe contexts where trolls should not trigger
 const SAFE_CONTEXTS = [

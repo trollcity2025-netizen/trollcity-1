@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties, useRef, useEffect, memo } from '
 import { motion } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem } from 'lucide-react';
+import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem, Crown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 import { supabase } from '../../lib/supabase';
@@ -59,6 +59,18 @@ function AgoraVideoPlayer({
       return;
     }
 
+    // Always try to attach - even if hasPlayedRef is true, we may need to reattach
+    // after cleanup. The key is to check if we already have a video element attached.
+    if (hasPlayedRef.current && videoElementRef.current && containerRef.current.contains(videoElementRef.current)) {
+      console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
+      return;
+    }
+
+    // Reset the played state if we don't have a valid element
+    if (!videoElementRef.current || !containerRef.current.contains(videoElementRef.current)) {
+      hasPlayedRef.current = false;
+    }
+
     if (hasPlayedRef.current) {
       console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
       return;
@@ -74,9 +86,12 @@ function AgoraVideoPlayer({
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
         videoElement.style.objectFit = 'cover';
-        // Mirror local video
+        // Critical: Add autoPlay and playsInline for proper video display
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        // Ensure muted for local video to avoid feedback
         if (isLocal) {
-          videoElement.style.transform = 'scaleX(-1)';
+          videoElement.muted = true;
         }
         
         containerRef.current.appendChild(videoElement);
@@ -94,8 +109,47 @@ function AgoraVideoPlayer({
             readyState: inner?.readyState ?? -1,
             paused: inner?.paused ?? false,
             muted: inner?.muted ?? false,
+            srcObject: !!inner?.srcObject,
           });
+          
+          // If video element exists but has no srcObject, try to play it
+          if (inner) {
+            if (!inner.srcObject) {
+              console.log('[AgoraVideoPlayer] Video element has no srcObject, attempting play()');
+              inner.play().catch(e => console.log('[AgoraVideoPlayer] play() failed:', e));
+            }
+            // Always try to ensure video is playing - call play() regardless
+            if (inner.paused) {
+              console.log('[AgoraVideoPlayer] Video is paused, attempting play()');
+              inner.play().catch(e => console.log('[AgoraVideoPlayer] play() failed:', e));
+            }
+          }
         }, 600);
+
+        // Additional check after longer delay to ensure video is flowing
+        setTimeout(() => {
+          const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
+          if (inner && (inner.videoWidth === 0 || inner.videoHeight === 0)) {
+            console.log('[AgoraVideoPlayer] Video has no dimensions, re-attaching track');
+            // Force re-attach by getting new element
+            try {
+              videoTrack.detach();
+            } catch (e) {}
+            const newElement = videoTrack.attach();
+            newElement.style.width = '100%';
+            newElement.style.height = '100%';
+            newElement.style.objectFit = 'cover';
+            newElement.autoplay = true;
+            newElement.playsInline = true;
+            if (isLocal) {
+              newElement.muted = true;
+            }
+            containerRef.current!.innerHTML = '';
+            containerRef.current!.appendChild(newElement);
+            videoElementRef.current = newElement;
+            console.log('[AgoraVideoPlayer] Re-attached track');
+          }
+        }, 2000);
 
       } catch (err) {
         console.error('[AgoraVideoPlayer] attach() threw error:', err);
@@ -107,12 +161,20 @@ function AgoraVideoPlayer({
 
     return () => {
       clearTimeout(initialTimer);
-      if (videoTrack && videoElementRef.current) {
-        console.log('[AgoraVideoPlayer] Cleanup - detaching track');
-        try {
-          videoTrack.detach();
-          videoElementRef.current = null;
-        } catch (e) {}
+      // Only detach if the component is truly being unmounted, not just re-rendering
+      // We use a more robust check here
+      if (videoTrack && videoElementRef.current && containerRef.current) {
+        // Check if this specific element is still in the container
+        if (containerRef.current.contains(videoElementRef.current)) {
+          console.log('[AgoraVideoPlayer] Cleanup - detaching track');
+          try {
+            videoTrack.detach();
+            videoElementRef.current = null;
+            hasPlayedRef.current = false;
+          } catch (e) {
+            console.warn('[AgoraVideoPlayer] detach error:', e);
+          }
+        }
       }
     };
   }, [videoTrack, isLocal]);
@@ -792,10 +854,15 @@ export default function BroadcastGrid({
                 </div>
               )}
 
-              {/* Coin Balance in Top Right */}
+              {/* Coin Balance in Top Right - with Crowns */}
               {userId && (
                 <div className="absolute top-3 right-3 z-10 pointer-events-none">
                   <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+                    <Crown size={12} className="text-amber-400" />
+                    <span className="text-sm font-bold text-white">
+                      {(displayProfile?.battle_crowns || 0).toLocaleString()}
+                    </span>
+                    <div className="w-px h-4 bg-white/20" />
                     <Gem size={12} className="text-purple-400" />
                     <span className="text-sm font-bold text-white">
                       {(displayProfile?.trollmonds || 0).toLocaleString()}

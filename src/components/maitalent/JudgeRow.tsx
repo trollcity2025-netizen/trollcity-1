@@ -13,7 +13,7 @@ interface JudgeRowProps {
   localVideoTrack?: any;
   localAudioTrack?: any;
   canPublish?: boolean;
-  agoraClient?: any;
+  livekitClient?: any;
   onJoinSeat?: (seatNumber: number) => void;
   onLeaveSeat?: (seatNumber: number) => void;
 }
@@ -30,7 +30,7 @@ export const JudgeRow: React.FC<JudgeRowProps> = ({
   localVideoTrack,
   localAudioTrack,
   canPublish = false,
-  agoraClient,
+  livekitClient,
   onJoinSeat,
   onLeaveSeat,
 }) => {
@@ -54,7 +54,7 @@ export const JudgeRow: React.FC<JudgeRowProps> = ({
             localVideoTrack={seat.user?.id === currentUserId ? localVideoTrack : undefined}
             localAudioTrack={seat.user?.id === currentUserId ? localAudioTrack : undefined}
             canPublish={seat.user?.id === currentUserId && canPublish}
-            agoraClient={agoraClient}
+            livekitClient={livekitClient}
             onJoin={() => onJoinSeat?.(seat.seatNumber)}
             onLeave={() => onLeaveSeat?.(seat.seatNumber)}
           />

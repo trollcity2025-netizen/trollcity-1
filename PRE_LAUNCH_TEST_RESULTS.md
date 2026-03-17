@@ -77,8 +77,8 @@ All required environment variables present:
 - ✅ `/api/square/wallet-bind` - Bind wallet
 - ✅ Route registered and functional
 
-### Agora (`/api/agora/*`)
-- ✅ `/api/agora/agora-token` - Generate RTC tokens
+### LiveKit (`/api/livekit/*`)
+- ✅ `/api/livekit/livekit-token` - Generate RTC tokens
 - ✅ Route registered and functional
 
 ### Admin (`/api/admin/*`)

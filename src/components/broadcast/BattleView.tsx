@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Room, LocalAudioTrack, LocalVideoTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, RoomEvent } from 'livekit-client';
+import { Room, LocalAudioTrack, LocalVideoTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, RoomEvent, Track } from 'livekit-client';
 
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
 import { useAuthStore } from '../../lib/store';
 import { PreflightStore } from '../../lib/preflightStore';
-import { useStreamStore } from '../../lib/streamStore';
-import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus, Crown, Flame, ArrowLeft, Skull } from 'lucide-react';
+import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus, Crown, Flame, ArrowLeft, Skull, Gem } from 'lucide-react';
+import { useBattleRoom } from '../../hooks/useBattleRoom';
+import { useCoins } from '../../lib/hooks/useCoins';
 import BattleChat from './BattleChat';
 import MuteHandler from './MuteHandler';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
@@ -23,11 +24,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 const LiveKitVideoPlayer = ({
   videoTrack,
   isLocal = false,
+  onDimensionsReady,
 }: {
   videoTrack?: LocalVideoTrack | RemoteVideoTrack;
   isLocal?: boolean;
+  onDimensionsReady?: (width: number, height: number) => void;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const hasPlayedRef = useRef(false);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
@@ -43,16 +47,56 @@ const LiveKitVideoPlayer = ({
       return;
     }
 
+    const handleLoaded = () => {
+      if (!videoRef.current) return;
+      
+      // This is the ONLY moment the browser actually knows the real dimensions
+      const width = videoRef.current.videoWidth;
+      const height = videoRef.current.videoHeight;
+      
+      console.log('[LiveKitVideoPlayer] REAL dimensions from loadedmetadata:', width, height);
+      
+      // Report dimensions back to parent if callback provided
+      if (onDimensionsReady && width > 0 && height > 0) {
+        onDimensionsReady(width, height);
+      }
+    };
+
     const playWithRetry = () => {
       if (!containerRef.current) return;
 
       try {
-        console.log('[LiveKitVideoPlayer] Calling play() - attempt', retryCountRef.current + 1);
-        videoTrack.play(containerRef.current);
+        console.log('[LiveKitVideoPlayer] Calling attach() - attempt', retryCountRef.current + 1);
+        // LiveKit tracks use attach() instead of play()
+        const videoElement = videoTrack.attach();
+        
+        // Store ref to the attached video element for dimension tracking
+        videoRef.current = videoElement;
+        
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        // Mirror local video
+        if (isLocal) {
+          videoElement.style.transform = 'scaleX(-1)';
+        }
+        // Critical: Add autoplay and playsInline for proper video display
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        // Ensure muted for local video to avoid feedback
+        if (isLocal) {
+          videoElement.muted = true;
+        }
+        
+        // Add loadedmetadata listener for reliable dimensions
+        videoElement.addEventListener('loadedmetadata', handleLoaded);
+        
+        containerRef.current.appendChild(videoElement);
         hasPlayedRef.current = true;
-        console.log('[LiveKitVideoPlayer] play() called successfully');
+        console.log('[LiveKitVideoPlayer] attach() called successfully');
 
         // Inspect injected video after LiveKit has time to inject it
+        // Also handle case where metadata is already loaded
         setTimeout(() => {
           const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
           console.log('[LiveKitVideoPlayer] Inner <video> inspection:', {
@@ -65,7 +109,15 @@ const LiveKitVideoPlayer = ({
             srcObjectPresent: !!inner?.srcObject,
           });
 
-          if (inner && (inner.videoWidth === 0 || inner.readyState < 2)) {
+          // If already loaded, trigger the handler
+          if (inner && inner.videoWidth > 0 && inner.readyState >= 1) {
+            handleLoaded();
+          } else if (inner && (inner.videoWidth === 0 || inner.readyState < 2)) {
+            // If video element has no srcObject, try to play it
+            if (inner && !inner.srcObject) {
+              console.log('[LiveKitVideoPlayer] Video element has no srcObject, attempting play()');
+              inner.play().catch(e => console.log('[LiveKitVideoPlayer] play() failed:', e));
+            }
             if (retryCountRef.current < maxRetries) {
               retryCountRef.current++;
               console.warn(`[LiveKitVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
@@ -78,7 +130,7 @@ const LiveKitVideoPlayer = ({
         }, 600);
 
       } catch (err) {
-        console.error('[LiveKitVideoPlayer] play() threw error:', err);
+        console.error('[LiveKitVideoPlayer] attach() threw error:', err);
         if (retryCountRef.current < maxRetries) {
           retryCountRef.current++;
           setTimeout(playWithRetry, 500);
@@ -89,8 +141,24 @@ const LiveKitVideoPlayer = ({
     const initialTimer = setTimeout(playWithRetry, 150);
 
     // FIX #5: Hidden Bug - Only stop LOCAL tracks, not remote tracks
+    // Also need to detach the video element from DOM
     return () => {
       clearTimeout(initialTimer);
+      
+      // Remove the loadedmetadata listener
+      if (videoRef.current) {
+        videoRef.current.removeEventListener('loadedmetadata', handleLoaded);
+      }
+      
+      // Detach the video element from container
+      if (containerRef.current) {
+        const videoEl = containerRef.current.querySelector('video');
+        if (videoEl) {
+          try {
+            videoTrack.detach();
+          } catch (e) {}
+        }
+      }
       
       // Only stop LOCAL tracks - stopping remote tracks kills the stream
       if (isLocal && videoTrack) {
@@ -128,12 +196,24 @@ interface BattleParticipant {
   sourceStreamId?: string;
   seatIndex?: number;
   profile?: any;
+  trollCoins?: number;
+  trollmonds?: number;
 }
 
 interface CrownInfo {
   crowns: number;
   streak: number;
   hasStreak: boolean;
+}
+
+// Extended props for BattleParticipantTile to support single-host mode
+interface BattleParticipantTileProps extends BattleParticipant {
+  side: 'challenger' | 'opponent';
+  crownInfo?: CrownInfo;
+  isSuddenDeath?: boolean;
+  onTroll?: () => void;
+  canTroll?: boolean;
+  isSingleHost?: boolean; // New: true when this is the only participant (no guests)
 }
 
 const BattleParticipantTile = ({
@@ -150,26 +230,36 @@ const BattleParticipantTile = ({
   isSuddenDeath,
   onTroll,
   canTroll,
-}: BattleParticipant & { 
-  side: 'challenger' | 'opponent';
-  crownInfo?: CrownInfo;
-  isSuddenDeath?: boolean;
-  onTroll?: () => void;
-  canTroll?: boolean;
-}) => {
+  isSingleHost = false, // Default: show boxed style
+}: BattleParticipantTileProps) => {
   const isHost = metadata.role === 'host';
   const isMicMuted = !isMicrophoneEnabled;
   const isVideoOn = isCameraEnabled && !!videoTrack;
 
+  // DEBUG: Log single host detection
+  useEffect(() => {
+    console.log('[BattleParticipantTile] Rendering:', {
+      name,
+      isHost,
+      isSingleHost,
+      hasVideo: !!videoTrack,
+      side
+    });
+  }, [isSingleHost, isHost, name, side, videoTrack]);
+
+  // When isSingleHost is true, remove box styling to match BroadcastGrid single-broadcaster layout
+  // The video should fill the available space without borders/rounded corners
+  const containerClass = isSingleHost
+    ? "relative w-full h-full transition-all duration-300"
+    : "relative rounded-2xl overflow-hidden border-2 transition-all duration-300" +
+      (isHost ? " h-48 md:h-56 lg:h-64" : " h-32 md:h-36 lg:h-40") +
+      (side === 'challenger' 
+        ? " border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.3)]" 
+        : " border-emerald-500/50 shadow-[0_0_20px_rgba(34,197,94,0.3)]") +
+      " bg-black/60 backdrop-blur-sm";
+
   return (
-    <div className={cn(
-      "relative rounded-2xl overflow-hidden border-2 transition-all duration-300",
-      isHost ? "h-48 md:h-56 lg:h-64" : "h-32 md:h-36 lg:h-40",
-      side === 'challenger' 
-        ? "border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.3)]" 
-        : "border-emerald-500/50 shadow-[0_0_20px_rgba(34,197,94,0.3)]",
-      "bg-black/60 backdrop-blur-sm"
-    )}>
+    <div className={cn(containerClass)}>
       {/* Video or Avatar */}
       {isVideoOn ? (
         <LiveKitVideoPlayer videoTrack={videoTrack} isLocal={isLocal} />
@@ -277,6 +367,8 @@ interface BattleArenaProps {
   battleId: string;
   localAudioTrack: LocalAudioTrack | null;
   localVideoTrack: LocalVideoTrack | null;
+  localIsCameraEnabled?: boolean;
+  localIsMicEnabled?: boolean;
   remoteUsers: RemoteParticipant[];
   challengerStreamId: string;
   opponentStreamId: string;
@@ -290,6 +382,7 @@ interface BattleArenaProps {
   onTrollOpponent?: (targetStreamId: string) => void;
   canTroll?: boolean;
   currentUserTeam?: 'challenger' | 'opponent' | null;
+  userIdToLiveKitIdentity?: Record<string, string>;
 }
 
 const BattleArena = ({
@@ -297,6 +390,8 @@ const BattleArena = ({
   battleId,
   localAudioTrack,
   localVideoTrack,
+  localIsCameraEnabled,
+  localIsMicEnabled,
   remoteUsers,
   challengerStreamId,
   opponentStreamId,
@@ -310,29 +405,104 @@ const BattleArena = ({
   onTrollOpponent,
   canTroll = false,
   currentUserTeam,
+  userIdToLiveKitIdentity,
 }: BattleArenaProps) => {
   const { user } = useAuthStore();
   const [battleParticipants, setBattleParticipants] = useState<BattleParticipant[]>([]);
+  
+  // Helper to get username from participant (checks profile join first)
+  const getUsername = (participant: any, fallback = 'Anonymous'): string => {
+    return participant?.profile?.username || participant?.username || fallback;
+  };
   
   useEffect(() => {
     const fetchParticipantData = async () => {
       const getSupabaseParticipant = async (userId: string) => {
         const { data, error } = await supabase
           .from('battle_participants')
-          .select('*, profile:user_profiles(*)')
+          .select('*, profile:user_profiles(id, username, avatar_url, troll_coins, trollmonds)')
           .eq('battle_id', battleId)
           .eq('user_id', userId)
           .maybeSingle();
         if (error) console.error(`Failed to fetch battle_participant for user ${userId}:`, error);
+        console.log('[BattleArena] getSupabaseParticipant for', userId, ':', data);
         return data;
       };
 
       const participantsData: BattleParticipant[] = [];
 
+      // First, fetch ALL battle participants from database to ensure slots are shown
+      // even before LiveKit connections are established
+      const { data: allParticipants } = await supabase
+        .from('battle_participants')
+        .select('*, profile:user_profiles(id, username, avatar_url, troll_coins, trollmonds)')
+        .eq('battle_id', battleId);
+
+      // Add database participants even if they're not in LiveKit yet
+      if (allParticipants) {
+        for (const dbParticipant of allParticipants) {
+          // Skip if we already have this participant
+          if (participantsData.some(p => p.identity === dbParticipant.user_id)) continue;
+          
+          let metadata: any = {};
+          if (dbParticipant.metadata) {
+            try {
+              metadata = JSON.parse(dbParticipant.metadata);
+            } catch (e) {}
+          }
+          
+          // Determine team from host IDs if not set
+          let team: 'challenger' | 'opponent' | null = dbParticipant.team;
+          if (!team) {
+            if (dbParticipant.user_id === challengerHostId) {
+              team = 'challenger';
+            } else if (dbParticipant.user_id === opponentHostId) {
+              team = 'opponent';
+            }
+          }
+          
+          // Get username from profile if available (joined via profile:user_profiles)
+          const getUsername = (participant: any): string => {
+            return participant.profile?.username || participant.username || 'Anonymous';
+          };
+          
+          participantsData.push({
+            identity: dbParticipant.user_id,
+            name: getUsername(dbParticipant),
+            isLocal: false, // Database participants aren't local until they connect
+            videoTrack: undefined,
+            audioTrack: undefined,
+            isMicrophoneEnabled: false,
+            isCameraEnabled: false,
+            metadata: metadata,
+            role: dbParticipant.role,
+            team: team,
+            sourceStreamId: metadata.sourceStreamId,
+            seatIndex: metadata.seatIndex,
+            profile: dbParticipant.profile,
+            trollCoins: dbParticipant.profile?.troll_coins || 0,
+            trollmonds: dbParticipant.profile?.trollmonds || 0,
+          });
+        }
+      }
+
+      // Helper to find LiveKit identity for a user ID
+      const findLiveKitIdentity = (userId: string): string | undefined => {
+        if (userIdToLiveKitIdentity) {
+          return userIdToLiveKitIdentity[userId];
+        }
+        return undefined;
+      };
+
+      // Helper to find RemoteParticipant by LiveKit identity
+      const findRemoteParticipant = (livekitIdentity: string): RemoteParticipant | undefined => {
+        return remoteUsers.find(u => u.identity === livekitIdentity);
+      };
+
       // Local participant
       if (user) {
         const localSupabaseParticipant = await getSupabaseParticipant(user.id);
-        let localMetadata = {};
+        let localMetadata: any = {};
         if (localSupabaseParticipant?.metadata) {
           try {
             localMetadata = JSON.parse(localSupabaseParticipant.metadata);
@@ -340,61 +510,192 @@ const BattleArena = ({
             console.error("Failed to parse metadata for local user:", user.id, e);
           }
         }
+        // Get username from profile if available (joined via profile:user_profiles)
+        const getUsername = (participant: any): string => {
+          return participant.profile?.username || participant.username || 'You';
+        };
+        
         participantsData.push({
           identity: user.id,
-          name: localSupabaseParticipant?.username || user.user_metadata?.username || 'You',
+          name: getUsername(localSupabaseParticipant) || user.user_metadata?.username || 'You',
           isLocal: true,
           videoTrack: localVideoTrack,
           audioTrack: localAudioTrack,
-          isMicrophoneEnabled: localAudioTrack?.enabled ?? false,
-          // FIX #4: Local Track Sync Issue - add safety check for mediaStreamTrack readyState
-          isCameraEnabled: !!localVideoTrack && localVideoTrack.mediaStreamTrack.readyState === 'live',
+          // Use explicitly passed enabled state, fallback to track-based detection
+          isMicrophoneEnabled: localIsMicEnabled ?? (localAudioTrack?.enabled ?? false),
+          // Be more lenient with camera check - use explicit state if available, otherwise check track
+          isCameraEnabled: localIsCameraEnabled ?? !!localVideoTrack,
           metadata: localMetadata,
           role: localSupabaseParticipant?.role,
           team: localSupabaseParticipant?.team,
           sourceStreamId: localMetadata.sourceStreamId,
           seatIndex: localMetadata.seatIndex,
           profile: localSupabaseParticipant?.profile,
+          trollCoins: localSupabaseParticipant?.profile?.troll_coins || 0,
+          trollmonds: localSupabaseParticipant?.profile?.trollmonds || 0,
         });
       }
 
-      // Remote participants
+      // Remote participants - use mapping to identify which team each belongs to
       for (const remoteUser of remoteUsers) {
-        const remoteSupabaseParticipant = await getSupabaseParticipant(remoteUser.identity);
-        let remoteMetadata = {};
-        if (remoteSupabaseParticipant?.metadata) {
-          try {
-            remoteMetadata = JSON.parse(remoteSupabaseParticipant.metadata);
-          } catch (e) {
-            console.error("Failed to parse metadata for remote user:", remoteUser.identity, e);
+        // Try to match remote user to a team using the LiveKit identity mapping
+        let matchedUserId: string | null = null;
+        let matchedTeam: 'challenger' | 'opponent' | null = null;
+        
+        if (userIdToLiveKitIdentity) {
+          // Find which user ID has this LiveKit identity
+          for (const [userId, identity] of Object.entries(userIdToLiveKitIdentity)) {
+            if (identity === remoteUser.identity) {
+              matchedUserId = userId;
+              // Determine team based on which stream this user owns
+              if (userId === challengerHostId) {
+                matchedTeam = 'challenger';
+              } else if (userId === opponentHostId) {
+                matchedTeam = 'opponent';
+              }
+              break;
+            }
           }
         }
+
+        // If we didn't find a match via mapping, try to find participant by LiveKit identity directly
+        // This handles the case where the identity IS the user ID
+        if (!matchedUserId) {
+          const { data: participantByIdentity } = await supabase
+            .from('battle_participants')
+            .select('*, profile:user_profiles(id, username, avatar_url, troll_coins, trollmonds)')
+            .eq('battle_id', battleId)
+            .eq('user_id', remoteUser.identity)
+            .maybeSingle();
+          
+          if (participantByIdentity) {
+            matchedUserId = remoteUser.identity;
+            matchedTeam = participantByIdentity.team;
+          }
+        }
+
+        // If we still don't have a match, skip this participant
+        if (!matchedUserId) {
+          console.log('[BattleArena] Skipping unmatched remote participant:', remoteUser.identity);
+          continue;
+        }
+
+        // If we found a match, get participant data from database
+        let remoteSupabaseParticipant = null;
+        let remoteMetadata: any = {};
+        
+        if (matchedUserId) {
+          remoteSupabaseParticipant = await getSupabaseParticipant(matchedUserId);
+          if (remoteSupabaseParticipant?.metadata) {
+            try {
+              remoteMetadata = JSON.parse(remoteSupabaseParticipant.metadata);
+            } catch (e) {
+              console.error("Failed to parse metadata for remote user:", remoteUser.identity, e);
+            }
+          }
+          // Use team from database if not set from mapping
+          if (!matchedTeam && remoteSupabaseParticipant?.team) {
+            matchedTeam = remoteSupabaseParticipant.team;
+          }
+        }
+
         // FIX #1: Correct Track Extraction - use publications with isSubscribed check
-        const videoPublications = Array.from(remoteUser.videoTracks.values());
-        const audioPublications = Array.from(remoteUser.audioTracks.values());
-        const videoPub = videoPublications.find(p => p.isSubscribed && p.track);
-        const audioPub = audioPublications.find(p => p.isSubscribed && p.track);
-        participantsData.push({
+        // Use proper source mapping - check publication.source against Track.Source enum
+        const videoPublications = Array.from(remoteUser.videoTracks.values()) as RemoteTrackPublication[];
+        const audioPublications = Array.from(remoteUser.audioTracks.values()) as RemoteTrackPublication[];
+        
+        // Log ALL publication details for debugging
+        videoPublications.forEach(p => {
+          console.log('[BattleArena] Video publication:', {
+            sid: p.sid,
+            trackSid: p.trackSid,
+            source: p.source,
+            isSubscribed: p.isSubscribed,
+            trackKind: p.kind,
+            hasTrack: !!p.track,
+            trackId: p.track?.id,
+            trackSidFromTrack: p.track?.sid,
+            // Use Track.Source enum for proper comparison
+            isCamera: p.source === Track.Source.Camera,
+            isScreen: p.source === Track.Source.ScreenShare,
+          });
+        });
+        
+        audioPublications.forEach(p => {
+          console.log('[BattleArena] Audio publication:', {
+            sid: p.sid,
+            trackSid: p.trackSid,
+            source: p.source,
+            isSubscribed: p.isSubscribed,
+            trackKind: p.kind,
+            hasTrack: !!p.track,
+            trackId: p.track?.id,
+            trackSidFromTrack: p.track?.sid,
+            isMic: p.source === Track.Source.Microphone,
+          });
+        });
+        
+        // Find subscribed tracks - prefer Camera source for video, Microphone for audio
+        // Note: p.track might be undefined even when isSubscribed is true, so we check both
+        const videoPub = videoPublications.find(p => p.isSubscribed && p.track && p.source === Track.Source.Camera) 
+          || videoPublications.find(p => p.isSubscribed && p.track);
+        const audioPub = audioPublications.find(p => p.isSubscribed && p.track && p.source === Track.Source.Microphone)
+          || audioPublications.find(p => p.isSubscribed && p.track);
+        
+        // Log what we found
+        console.log('[BattleArena] Selected video publication:', {
+          found: !!videoPub,
+          sid: videoPub?.sid,
+          trackSid: videoPub?.trackSid,
+          hasTrack: !!videoPub?.track,
+          trackSidFromTrack: videoPub?.track?.sid,
+        });
+        console.log('[BattleArena] Selected audio publication:', {
+          found: !!audioPub,
+          sid: audioPub?.sid,
+          trackSid: audioPub?.trackSid,
+          hasTrack: !!audioPub?.track,
+          trackSidFromTrack: audioPub?.track?.sid,
+        });
+        
+        // Check if there's a subscribed video track - be more permissive to show video when available
+        // Don't require isEnabled as it may not be set correctly for remote tracks
+        const hasVideoTrack = !!(videoPub?.track);
+        const hasAudioTrack = !!(audioPub?.track);
+        
+        // Update existing participant or add new one
+        const existingIdx = participantsData.findIndex(p => p.identity === matchedUserId);
+        // Get username from profile join
+        const remoteName = remoteSupabaseParticipant?.profile?.username || remoteSupabaseParticipant?.username || `User ${remoteUser.identity.substring(0, 8)}`;
+        const participantData = {
           identity: remoteUser.identity,
-          name: remoteSupabaseParticipant?.username || `User ${remoteUser.identity}`,
+          name: remoteName,
           isLocal: false,
           videoTrack: videoPub?.track as RemoteVideoTrack | undefined,
           audioTrack: audioPub?.track as RemoteAudioTrack | undefined,
-          isMicrophoneEnabled: audioPublications.some(t => t.isSubscribed && t.kind === 'audio'),
-          isCameraEnabled: videoPublications.some(t => t.isSubscribed && t.kind === 'video'),
+          isMicrophoneEnabled: hasAudioTrack,
+          isCameraEnabled: hasVideoTrack,
           metadata: remoteMetadata,
-          role: remoteSupabaseParticipant?.role,
-          team: remoteSupabaseParticipant?.team,
+          role: remoteSupabaseParticipant?.role || (matchedTeam ? 'host' : 'stage'),
+          team: matchedTeam || remoteSupabaseParticipant?.team || null,
           sourceStreamId: remoteMetadata.sourceStreamId,
           seatIndex: remoteMetadata.seatIndex,
           profile: remoteSupabaseParticipant?.profile,
-        });
+          trollCoins: remoteSupabaseParticipant?.profile?.troll_coins || 0,
+          trollmonds: remoteSupabaseParticipant?.profile?.trollmonds || 0,
+        };
+        
+        if (existingIdx >= 0) {
+          participantsData[existingIdx] = participantData;
+        } else {
+          participantsData.push(participantData);
+        }
       }
       setBattleParticipants(participantsData);
     };
 
     fetchParticipantData();
-  }, [remoteUsers, user, localAudioTrack, localVideoTrack, battleId]);
+  }, [remoteUsers, user, localAudioTrack, localVideoTrack, battleId, userIdToLiveKitIdentity, challengerHostId, opponentHostId]);
 
   const categorized = useMemo(() => {
     const teams = {
@@ -466,9 +767,28 @@ const BattleArena = ({
   const challengerSlots = generateSlots('challenger');
   const opponentSlots = generateSlots('opponent');
 
-  const getGridClass = (slotCount: number) => {
-    if (slotCount <= 2) return 'grid-cols-1';
-    if (slotCount <= 4) return 'grid-cols-2';
+  // DEBUG: Log slot counts to diagnose single-host scenarios
+  useEffect(() => {
+    console.log('[BattleArena] Slot counts:', {
+      challengerSlots: challengerSlots.length,
+      opponentSlots: opponentSlots.length,
+      challengerGuests: categorized.challenger.guests.length,
+      opponentGuests: categorized.opponent.guests.length
+    });
+  }, [challengerSlots.length, opponentSlots.length, categorized.challenger.guests.length, categorized.opponent.guests.length]);
+
+  // Determine if a side has only the host (no guests) - for single-host styling
+  const challengerIsSingleHost = challengerSlots.length === 1 && challengerSlots[0]?.type === 'host';
+  const opponentIsSingleHost = opponentSlots.length === 1 && opponentSlots[0]?.type === 'host';
+
+  const getGridClass = (totalSlots: number) => {
+    // Match BroadcastGrid layout logic
+    if (totalSlots === 1) return 'grid-cols-1 grid-rows-1';
+    if (totalSlots === 2) return 'grid-cols-1 md:grid-cols-2 grid-rows-1';
+    if (totalSlots === 3) return 'grid-cols-2 grid-rows-2';
+    if (totalSlots === 4) return 'grid-cols-2 grid-rows-2';
+    if (totalSlots === 5) return 'grid-cols-2 grid-rows-3';
+    if (totalSlots === 6) return 'grid-cols-3 grid-rows-2';
     return 'grid-cols-2 grid-rows-3';
   };
 
@@ -483,54 +803,61 @@ const BattleArena = ({
           Gift Side A
         </button>
         
-        {/* Host Slot - show even if no participant */}
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            if (challengerSlots[0]?.participant) {
-              handleGiftClick(challengerSlots[0].participant);
-            }
-          }}
-          className={cn(
-            "cursor-pointer transform transition-transform hover:scale-[1.02]",
-            !challengerSlots[0]?.participant && "opacity-50"
-          )}
-        >
-          {challengerSlots[0]?.participant ? (
-            <BattleParticipantTile 
-              {...challengerSlots[0].participant} 
-              side="challenger" 
-              crownInfo={challengerCrownInfo}
-              isSuddenDeath={isSuddenDeath}
-              canTroll={canTroll && currentUserTeam === 'opponent'}
-              onTroll={() => handleTrollClick('challenger')}
-            />
-          ) : (
-            <div className="h-48 md:h-56 lg:h-64 rounded-2xl border-2 border-purple-500/30 bg-black/40 flex flex-col items-center justify-center">
-              <User className="text-purple-500/50" size={48} />
-              <span className="text-purple-500/50 text-sm mt-2">Waiting for challenger...</span>
-            </div>
-          )}
-        </div>
-        
-        {/* Guest Slots - show all based on box_count */}
-        <div className={`grid gap-2 ${getGridClass(challengerSlots.length - 1)}`}>
-          {challengerSlots.slice(1).map((slot, idx) => (
-            <div key={`challenger-guest-${idx}`}>
-              {slot.participant ? (
+        {/* Unified Grid for Host + Guests - match BroadcastGrid layout */}
+        <div className={`grid gap-2 ${getGridClass(challengerSlots.length)} flex-1`}>
+          {challengerSlots.map((slot, idx) => (
+            <div key={`challenger-slot-${idx}`} className="min-h-0">
+              {slot.type === 'host' ? (
                 <div
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleGiftClick(slot.participant!);
+                    if (slot.participant) {
+                      handleGiftClick(slot.participant);
+                    }
                   }}
-                  className="cursor-pointer transform transition-transform hover:scale-[1.02]"
+                  className={cn(
+                    "cursor-pointer transform transition-transform hover:scale-[1.02] h-full",
+                    !slot.participant && "opacity-50"
+                  )}
                 >
-                  <BattleParticipantTile {...slot.participant} side="challenger" />
+                  {slot.participant ? (
+                    <BattleParticipantTile 
+                      {...slot.participant} 
+                      side="challenger" 
+                      crownInfo={challengerCrownInfo}
+                      isSuddenDeath={isSuddenDeath}
+                      canTroll={canTroll && currentUserTeam === 'opponent'}
+                      onTroll={() => handleTrollClick('challenger')}
+                      isSingleHost={challengerIsSingleHost}
+                    />
+                  ) : (
+                    <div className="h-full min-h-[120px] rounded-2xl border-2 border-purple-500/30 bg-black/40 flex flex-col items-center justify-center">
+                      <User className="text-purple-500/50" size={48} />
+                      <span className="text-purple-500/50 text-sm mt-2">Waiting for challenger...</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="h-32 md:h-36 lg:h-40 rounded-2xl border border-purple-500/20 bg-black/20 flex flex-col items-center justify-center">
-                  <User className="text-purple-500/30" size={24} />
-                  <span className="text-purple-500/30 text-xs mt-1">Empty</span>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (slot.participant) {
+                      handleGiftClick(slot.participant!);
+                    }
+                  }}
+                  className={cn(
+                    "cursor-pointer transform transition-transform hover:scale-[1.02] h-full",
+                    !slot.participant && "opacity-50"
+                  )}
+                >
+                  {slot.participant ? (
+                    <BattleParticipantTile {...slot.participant} side="challenger" />
+                  ) : (
+                    <div className="h-full min-h-[100px] rounded-2xl border border-purple-500/20 bg-black/20 flex flex-col items-center justify-center">
+                      <User className="text-purple-500/30" size={24} />
+                      <span className="text-purple-500/30 text-xs mt-1">Empty</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -550,54 +877,61 @@ const BattleArena = ({
           Gift Side B
         </button>
         
-        {/* Host Slot - show even if no participant */}
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            if (opponentSlots[0]?.participant) {
-              handleGiftClick(opponentSlots[0].participant);
-            }
-          }}
-          className={cn(
-            "cursor-pointer transform transition-transform hover:scale-[1.02]",
-            !opponentSlots[0]?.participant && "opacity-50"
-          )}
-        >
-          {opponentSlots[0]?.participant ? (
-            <BattleParticipantTile 
-              {...opponentSlots[0].participant} 
-              side="opponent" 
-              crownInfo={opponentCrownInfo}
-              isSuddenDeath={isSuddenDeath}
-              canTroll={canTroll && currentUserTeam === 'challenger'}
-              onTroll={() => handleTrollClick('opponent')}
-            />
-          ) : (
-            <div className="h-48 md:h-56 lg:h-64 rounded-2xl border-2 border-emerald-500/30 bg-black/40 flex flex-col items-center justify-center">
-              <User className="text-emerald-500/50" size={48} />
-              <span className="text-emerald-500/50 text-sm mt-2">Waiting for opponent...</span>
-            </div>
-          )}
-        </div>
-        
-        {/* Guest Slots - show all based on box_count */}
-        <div className={`grid gap-2 ${getGridClass(opponentSlots.length - 1)}`}>
-          {opponentSlots.slice(1).map((slot, idx) => (
-            <div key={`opponent-guest-${idx}`}>
-              {slot.participant ? (
+        {/* Unified Grid for Host + Guests - match BroadcastGrid layout */}
+        <div className={`grid gap-2 ${getGridClass(opponentSlots.length)} flex-1`}>
+          {opponentSlots.map((slot, idx) => (
+            <div key={`opponent-slot-${idx}`} className="min-h-0">
+              {slot.type === 'host' ? (
                 <div
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleGiftClick(slot.participant!);
+                    if (slot.participant) {
+                      handleGiftClick(slot.participant);
+                    }
                   }}
-                  className="cursor-pointer transform transition-transform hover:scale-[1.02]"
+                  className={cn(
+                    "cursor-pointer transform transition-transform hover:scale-[1.02] h-full",
+                    !slot.participant && "opacity-50"
+                  )}
                 >
-                  <BattleParticipantTile {...slot.participant} side="opponent" />
+                  {slot.participant ? (
+                    <BattleParticipantTile 
+                      {...slot.participant} 
+                      side="opponent" 
+                      crownInfo={opponentCrownInfo}
+                      isSuddenDeath={isSuddenDeath}
+                      canTroll={canTroll && currentUserTeam === 'challenger'}
+                      onTroll={() => handleTrollClick('opponent')}
+                      isSingleHost={opponentIsSingleHost}
+                    />
+                  ) : (
+                    <div className="h-full min-h-[120px] rounded-2xl border-2 border-emerald-500/30 bg-black/40 flex flex-col items-center justify-center">
+                      <User className="text-emerald-500/50" size={48} />
+                      <span className="text-emerald-500/50 text-sm mt-2">Waiting for opponent...</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="h-32 md:h-36 lg:h-40 rounded-2xl border border-emerald-500/20 bg-black/20 flex flex-col items-center justify-center">
-                  <User className="text-emerald-500/30" size={24} />
-                  <span className="text-emerald-500/30 text-xs mt-1">Empty</span>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (slot.participant) {
+                      handleGiftClick(slot.participant!);
+                    }
+                  }}
+                  className={cn(
+                    "cursor-pointer transform transition-transform hover:scale-[1.02] h-full",
+                    !slot.participant && "opacity-50"
+                  )}
+                >
+                  {slot.participant ? (
+                    <BattleParticipantTile {...slot.participant} side="opponent" />
+                  ) : (
+                    <div className="h-full min-h-[100px] rounded-2xl border border-emerald-500/20 bg-black/20 flex flex-col items-center justify-center">
+                      <User className="text-emerald-500/30" size={24} />
+                      <span className="text-emerald-500/30 text-xs mt-1">Empty</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -630,10 +964,13 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
-  const [livekitRoom, setLivekitRoom] = useState<Room | null>(null);
-  const [localAudioTrack, setLocalAudioTrack] = useState<LocalAudioTrack | null>(null);
-  const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
-  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
+  
+  // Get coin/crown balances for display
+  const { troll_coins: userCoins, crowns: userCrowns, trollmonds: userTrollmonds } = useCoins();
+  
+  // Explicitly track enabled state to ensure camera stays on during battle
+  const [isCameraEnabled, setIsCameraEnabled] = useState(true);
+  const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [participantSnapshots, setParticipantSnapshots] = useState<Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>>([]);
   const [arenaReadyAtMs, setArenaReadyAtMs] = useState<number | null>(null);
   const [arenaReady, setArenaReady] = useState(false);
@@ -641,15 +978,70 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [opponentCrownInfo, setOpponentCrownInfo] = useState<CrownInfo>({ crowns: 0, streak: 0, hasStreak: false });
   
   const publishedArenaReadyRef = useRef(false);
-  // Track if we're reusing existing room vs creating new one
-  const isReusingRoomRef = useRef(false);
   
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const { clearTracks } = useStreamStore();
   const effectiveUserId = viewerId || user?.id;
 
   const isBroadcaster = participantInfo?.role === 'host' || participantInfo?.role === 'stage';
+
+  // Get local tracks from PreflightStore
+  const prefightTracks = PreflightStore.getLivekitTracks();
+  const localTracksFromPreflight = prefightTracks || passedLocalTracks || null;
+
+  // Use the new useBattleRoom hook for deterministic, stable connections
+  const {
+    room: livekitRoom,
+    isConnected,
+    isConnecting,
+    remoteParticipants,
+    localAudioTrack,
+    localVideoTrack,
+    error: battleRoomError,
+    connect: connectToBattleRoom,
+    disconnect: disconnectFromBattleRoom,
+  } = useBattleRoom({
+    battleId,
+    challengerUserId: challengerStream?.user_id || '',
+    opponentUserId: opponentStream?.user_id || '',
+    currentUserId: effectiveUserId || '',
+    isPublisher: isBroadcaster,
+    localTracks: localTracksFromPreflight,
+    onRoomConnected: (room) => {
+      console.log('[BattleView] Battle room connected, room:', room.name);
+      setIsCameraEnabled(true);
+      setIsMicEnabled(true);
+    },
+    onRoomDisconnected: () => {
+      console.log('[BattleView] Battle room disconnected');
+    },
+  });
+
+  // Auto-connect when battle is ready and we have user IDs
+  useEffect(() => {
+    if (
+      battle && 
+      challengerStream && 
+      opponentStream && 
+      effectiveUserId &&
+      !isConnected &&
+      !isConnecting &&
+      battle.status === 'active'
+    ) {
+      console.log('[BattleView] Auto-connecting to battle room...');
+      connectToBattleRoom();
+    }
+  }, [battle, challengerStream, opponentStream, effectiveUserId, isConnected, isConnecting, connectToBattleRoom]);
+
+  // Update mic/camera enabled state based on track availability
+  useEffect(() => {
+    if (localAudioTrack) {
+      setIsMicEnabled(true);
+    }
+    if (localVideoTrack) {
+      setIsCameraEnabled(true);
+    }
+  }, [localAudioTrack, localVideoTrack]);
 
   // Fetch crown info for both broadcasters
   useEffect(() => {
@@ -688,27 +1080,95 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     fetchCrownInfo();
   }, [challengerStream?.user_id, opponentStream?.user_id]);
 
-  // LiveKit setup - REUSE existing room from PreflightStore if available
+  // LiveKit setup - check if we should reuse existing room or create new one
   useEffect(() => {
-    // First, try to reuse existing room from PreflightStore (set by BroadcastPage/SetupPage)
+    // First, check for existing room from PreflightStore
     const existingRoom = PreflightStore.getLivekitRoom();
     const existingTracks = PreflightStore.getLivekitTracks();
     
-    // If we have an existing room, use it instead of creating a new one
-    // If we have an existing room, use it instead of creating a new one
-    if (existingRoom) {
-      console.log('[BattleView] Reusing existing LiveKit room from PreflightStore');
+    // Check if there's a valid existing room and tracks to reuse
+    if (existingRoom && existingTracks && existingTracks[1]) {
+      console.log('[BattleView] Reusing existing LiveKit room and tracks from PreflightStore');
       isReusingRoomRef.current = true;
       setLivekitRoom(existingRoom);
       
       // FIX #3: Load already connected participants when reusing room
       setRemoteUsers(Array.from(existingRoom.remoteParticipants.values()));
       
-      if (existingTracks) {
-        console.log('[BattleView] Reusing existing tracks from PreflightStore');
-        setLocalAudioTrack(existingTracks[0]);
-        setLocalVideoTrack(existingTracks[1]);
-      }
+      console.log('[BattleView] Reusing existing tracks from PreflightStore - will publish to battle room');
+      console.log('[BattleView] existingTracks:', { audio: !!existingTracks[0], video: !!existingTracks[1] });
+      setLocalAudioTrack(existingTracks[0]);
+      setLocalVideoTrack(existingTracks[1]);
+      
+      // CRITICAL FIX: Publish existing tracks to the battle room!
+      // Without this, the camera shows locally but others in battle can't see it
+      const hasPublishedRef = { current: false };
+      
+      const publishTracksToBattle = async () => {
+        // Prevent multiple simultaneous publish attempts
+        if (hasPublishedRef.current) {
+          console.log('[BattleView] Publish already in progress, skipping duplicate call');
+          return;
+        }
+        
+        console.log('[BattleView] publishTracksToBattle called - room state:', existingRoom?.state);
+        
+        if (!existingRoom || existingRoom.state !== 'connected') {
+          console.log('[BattleView] Room not connected yet, waiting... Current state:', existingRoom?.state);
+          setTimeout(publishTracksToBattle, 500);
+          return;
+        }
+        
+        // Mark as published to prevent duplicate attempts
+        hasPublishedRef.current = true;
+        
+        // DEBUG: Log current published tracks before attempting to publish
+        const currentPublications = Array.from(existingRoom.localParticipant.tracks.values());
+        console.log('[BattleView] Current local publications:', currentPublications.map((p: any) => ({ trackSid: p.trackSid, source: p.source, isSubscribed: p.isSubscribed })));
+        
+        console.log('[BattleView] Publishing tracks to battle room...');
+        try {
+          // Publish audio track
+          if (existingTracks[0]) {
+            // Check if track is already published
+            const alreadyPublished = currentPublications.some((p: any) => p.trackSid === existingTracks[0].sid);
+            console.log('[BattleView] Audio track already published?', alreadyPublished);
+            
+            if (!alreadyPublished) {
+              await existingRoom.localParticipant.publishTrack(existingTracks[0], { name: 'audio' });
+              console.log('[BattleView] Published audio track to battle room');
+            }
+            setIsMicEnabled(true);
+          }
+          
+          // Publish video track
+          if (existingTracks[1]) {
+            // Check if track is already published
+            const alreadyPublished = currentPublications.some((p: any) => p.trackSid === existingTracks[1].sid);
+            console.log('[BattleView] Video track already published?', alreadyPublished);
+            
+            if (!alreadyPublished) {
+              await existingRoom.localParticipant.publishTrack(existingTracks[1], { name: 'video' });
+              console.log('[BattleView] Published video track to battle room');
+            }
+            setIsCameraEnabled(true);
+          }
+          
+          // Verify tracks are now published
+          const afterPublications = Array.from(existingRoom.localParticipant.tracks.values());
+          console.log('[BattleView] After publish - local publications:', afterPublications.map((p: any) => ({ trackSid: p.trackSid, source: p.source })));
+          
+        } catch (e) {
+          console.error('[BattleView] Failed to publish tracks to battle room:', e);
+          // Reset the flag to allow retry
+          hasPublishedRef.current = false;
+          // Retry once after delay
+          setTimeout(publishTracksToBattle, 1000);
+        }
+      };
+      
+      // Publish tracks after a short delay to ensure room is connected
+      setTimeout(publishTracksToBattle, 300);
       
       // Subscribe to existing participants
       const handleParticipantConnected = (participant: RemoteParticipant) => {
@@ -730,7 +1190,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       return () => {
         // Don't disconnect the room if we reused it - it belongs to the main broadcast
         // Only unsubscribe from events
-        if (!isReusingRoomRef.current && existingRoom) {
+        if (isReusingRoomRef.current && existingRoom) {
           existingRoom.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
           existingRoom.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
         }
@@ -738,7 +1198,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     }
     
     // Fallback: Create new room only if no existing room
-    console.log('[BattleView] No existing room found, creating new connection (fallback)');
+    console.log('[BattleView] No existing room found, creating new connection');
     isReusingRoomRef.current = false;
     const client = new Room({ mode: 'rtc', codec: 'vp8' });
     setLivekitRoom(client);
@@ -764,16 +1224,27 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             { name: roomName }
           );
 
-          if (passedLocalTracks && passedLocalTracks[0] && passedLocalTracks[1]) {
-            if (!mounted) return;
-            setLocalAudioTrack(passedLocalTracks[0]);
-            setLocalVideoTrack(passedLocalTracks[1]);
-            // Publish tracks individually to avoid issues with the library
-            try {
-              await client.localParticipant.publishTrack(passedLocalTracks[0]);
-              await client.localParticipant.publishTrack(passedLocalTracks[1]);
-            } catch (publishError) {
-              console.warn('[BattleView] Track publish warning:', publishError);
+          if (passedLocalTracks) {
+            // Handle tracks independently - publish whatever is available
+            if (passedLocalTracks[0]) {
+              setLocalAudioTrack(passedLocalTracks[0]);
+              setIsMicEnabled(true);
+              try {
+                // Pass trackName to ensure proper identification in battle room
+                await client.localParticipant.publishTrack(passedLocalTracks[0], { name: 'audio' });
+              } catch (e) {
+                console.warn('[BattleView] Failed to publish audio track:', e);
+              }
+            }
+            if (passedLocalTracks[1]) {
+              setLocalVideoTrack(passedLocalTracks[1]);
+              setIsCameraEnabled(true);
+              try {
+                // Pass trackName to ensure proper identification in battle room
+                await client.localParticipant.publishTrack(passedLocalTracks[1], { name: 'video' });
+              } catch (e) {
+                console.warn('[BattleView] Failed to publish video track:', e);
+              }
             }
           } else {
             // Use the recommended approach: enableCameraAndMicrophone
@@ -854,31 +1325,54 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     };
 
     // FIX #2: React to Track Updates Properly - handle all track events
+    
     const forceUpdate = () => {
       setRemoteUsers(prev => [...prev]);
     };
 
-    // Handle track subscribed
-    const handleTrackSubscribed = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-      console.log('[BattleView] Track subscribed:', publication.kind, 'from', participant.identity);
+    // Handle track subscribed - use RoomEvent.TrackSubscribed to get actual track with SID
+    // Note: The callback receives (track, publication, participant) - track is the actual LiveKit track
+    const handleTrackSubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[BattleView] Track subscribed:', {
+        trackKind: track.kind,
+        trackSid: track.sid,
+        trackConstructor: track.constructor.name,
+        publicationSid: publication.sid,
+        participantIdentity: participant.identity,
+      });
       forceUpdate();
     };
 
     // Handle track unsubscribed
-    const handleTrackUnsubscribed = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-      console.log('[BattleView] Track unsubscribed:', publication.kind, 'from', participant.identity);
+    const handleTrackUnsubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[BattleView] Track unsubscribed:', {
+        trackKind: track.kind,
+        trackSid: track.sid,
+        publicationSid: publication.sid,
+        participantIdentity: participant.identity,
+      });
       forceUpdate();
     };
 
-    // Handle track published
+    // Handle track published (local participant published a track)
     const handleTrackPublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-      console.log('[BattleView] Track published:', publication.kind, 'from', participant.identity);
+      console.log('[BattleView] Track published:', {
+        trackKind: publication.kind,
+        trackSid: publication.sid,
+        trackSource: publication.source,
+        participantIdentity: participant.identity,
+      });
       forceUpdate();
     };
 
     // Handle track unpublished
     const handleTrackUnpublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-      console.log('[BattleView] Track unpublished:', publication.kind, 'from', participant.identity);
+      console.log('[BattleView] Track unpublished:', {
+        trackKind: publication.kind,
+        trackSid: publication.sid,
+        trackSource: publication.source,
+        participantIdentity: participant.identity,
+      });
       forceUpdate();
     };
 
@@ -905,7 +1399,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       // Do NOT call PreflightStore.clear() - tracks belong to the main broadcast
       // clearTracks();
     };
-  }, [battle, effectiveUserId, isBroadcaster, passedLocalTracks, clearTracks]);
+  }, [battle, effectiveUserId, isBroadcaster, passedLocalTracks]);
 
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
   const [giftStreamId, setGiftStreamId] = useState<string | null>(null);
@@ -986,6 +1480,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   useEffect(() => {
     const initBattle = async () => {
       try {
+        // Set battle mode flag to hide TrollEngine during battles
+        PreflightStore.setInBattle(true);
+        console.log('[BattleView] Set isInBattle = true');
+        
         const { data: battleData, error: battleError } = await supabase.from('battles').select('*').eq('id', battleId).maybeSingle();
         if (battleError || !battleData) {
           setError('Battle not found');
@@ -1066,6 +1564,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
     return () => {
       supabase.removeChannel(channel);
+      // Clear battle mode flag when leaving battle
+      PreflightStore.setInBattle(false);
+      console.log('[BattleView] Set isInBattle = false (cleanup)');
     };
   }, [battleId, effectiveUserId]);
 
@@ -1336,6 +1837,27 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       if (leaveError || leaveResult?.success === false) {
         toast.error(leaveResult?.message || leaveError?.message || 'Failed to leave battle');
       } else {
+        // CRITICAL: Update streams to clear battle state - this prevents redirect loop
+        try {
+          // Clear challenger stream's battle state
+          if (challengerStream?.id) {
+            await supabase.from('streams').update({
+              is_battle: false,
+              battle_id: null
+            }).eq('id', challengerStream.id);
+          }
+          // Clear opponent stream's battle state
+          if (opponentStream?.id) {
+            await supabase.from('streams').update({
+              is_battle: false,
+              battle_id: null
+            }).eq('id', opponentStream.id);
+          }
+          console.log('[BattleView] Cleared battle state from streams');
+        } catch (streamUpdateErr) {
+          console.warn('[BattleView] Failed to update stream battle state:', streamUpdateErr);
+        }
+        
         // Award crowns to the winner (the other broadcaster)
         const winnerStreamId = leaveResult?.winner_stream_id;
         if (winnerStreamId) {
@@ -1376,35 +1898,31 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         toast.success(isChallenger ? 'You forfeited. Opponent wins!' : 'You forfeited. Challenger wins!');
       }
       
-      // Only navigate the forfeiting user back to their stream
-      // The other user stays in battle view to see results
+      // FIX: Forfeiting broadcaster should return to their own stream, not the winner's stream
+      // Navigate back to the forfeiting broadcaster's own stream so they can continue their broadcast
+      // Use /stream/{streamId} route (not /live which redirects to /live)
       if (participantInfo?.team === 'challenger' && challengerStream?.id) {
-        navigate(`/live/${challengerStream.id}`);
+        navigate(`/stream/${challengerStream.id}`);
       } else if (participantInfo?.team === 'opponent' && opponentStream?.id) {
-        navigate(`/live/${opponentStream.id}`);
+        navigate(`/stream/${opponentStream.id}`);
+      } else if (currentStreamId) {
+        // Fallback to original stream
+        navigate(`/stream/${currentStreamId}`);
+      } else if (onReturnToStream) {
+        // Fallback to callback if provided
+        onReturnToStream();
       } else {
-        // Fallback for viewers or unknown - use the callback
-        if (onReturnToStream) {
-          onReturnToStream();
-        } else {
-          navigate('/');
-        }
+        // Last resort - navigate to home
+        navigate('/');
       }
       
-      // Stop local tracks only for the user who is leaving
-      if (localAudioTrack) {
-        localAudioTrack.stop();
-        localAudioTrack.close();
-      }
-      if (localVideoTrack) {
-        localVideoTrack.stop();
-        localVideoTrack.close();
-      }
-      if (livekitRoom) {
-        livekitRoom.disconnect();
-      }
-      // Do NOT call PreflightStore.clear() or clearTracks() - tracks belong to the main broadcast
-      // Navigate back to stream
+      // Do NOT stop local tracks - they belong to the broadcaster's main stream
+      // The tracks should continue working when they return to their stream
+      // The LiveKit room will handle cleanup when the user leaves the battle room
+      // Note: We intentionally don't stop/close tracks or disconnect the room here
+      // because the user is returning to their broadcast stream where these tracks are needed
+      
+      // Just navigate back to the stream without stopping tracks
     } catch (e) {
       console.error(e);
       toast.error('Failed to leave battle');
@@ -1416,7 +1934,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     } finally {
       setLeaveLoading(false);
     }
-  }, [battle, user, localAudioTrack, localVideoTrack, livekitRoom, clearTracks, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id]);
+  }, [battle, user, localAudioTrack, localVideoTrack, livekitRoom, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id]);
 
   // Timer effect - 3 minutes + 10 seconds sudden death
   useEffect(() => {
@@ -1513,13 +2031,14 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     // Navigate back to stream - prioritize the original broadcast stream
 
     // If user is a broadcaster (host or stage), return to their own stream
+    // Use /stream/{streamId} route (not /live which redirects to /live)
     if (participantInfo?.team === 'challenger' && challengerStream?.id) {
-      navigate(`/live/${challengerStream.id}`);
+      navigate(`/stream/${challengerStream.id}`);
     } else if (participantInfo?.team === 'opponent' && opponentStream?.id) {
-      navigate(`/live/${opponentStream.id}`);
+      navigate(`/stream/${opponentStream.id}`);
     } else if (currentStreamId) {
       // Fallback to the original stream they were watching
-      navigate(`/live/${currentStreamId}`);
+      navigate(`/stream/${currentStreamId}`);
     } else if (onReturnToStream) {
       // Fallback to callback if provided
       onReturnToStream();
@@ -1527,7 +2046,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       // Last resort - navigate to home but keep them in app
       navigate('/');
     }
-  }, [localAudioTrack, localVideoTrack, livekitRoom, clearTracks, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id, currentStreamId]);
+  }, [localAudioTrack, localVideoTrack, livekitRoom, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id, currentStreamId]);
 
   // Auto-return after battle ends - only for viewers, not for broadcasters who should stay
   // Don't auto-return when someone forfeited - show winner first and let them click return
@@ -1542,10 +2061,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       }
       
       // For viewers, auto-return after delay but only to the original stream
+      // Use /stream/{streamId} route (not /live which redirects to /live)
       const timer = setTimeout(() => {
         // Return to original stream if available
         if (currentStreamId) {
-          navigate(`/live/${currentStreamId}`);
+          navigate(`/stream/${currentStreamId}`);
         } else if (onReturnToStream) {
           onReturnToStream();
         } else {
@@ -1615,7 +2135,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl" />
       </div>
 
-      {/* Header - Troll Battle Royale */}
+      {/* Header - Troll Battle Royale with Balance */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
@@ -1623,6 +2143,33 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           </div>
           <h1 className="text-xl font-black text-white tracking-wide">Troll Battle Royale</h1>
         </div>
+        
+        {/* Crown & Coin Balance Display */}
+        {effectiveUserId && (
+          <div className="flex items-center gap-3 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+            <div className="flex items-center gap-1.5">
+              <Crown size={14} className="text-amber-400" />
+              <span className="text-sm font-bold text-white">
+                {(userCrowns ?? 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="w-px h-4 bg-white/20" />
+            <div className="flex items-center gap-1.5">
+              <Gem size={14} className="text-purple-400" />
+              <span className="text-sm font-bold text-white">
+                {(userTrollmonds ?? 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="w-px h-4 bg-white/20" />
+            <div className="flex items-center gap-1.5">
+              <Coins size={14} className="text-yellow-400" />
+              <span className="text-sm font-bold text-white">
+                {(userCoins ?? 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        )}
+        
         <div className="flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/50 rounded-full">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-green-400 text-sm font-bold">LIVE</span>
@@ -1649,6 +2196,8 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           battleId={battleId}
           localAudioTrack={localAudioTrack}
           localVideoTrack={localVideoTrack}
+          localIsCameraEnabled={isCameraEnabled}
+          localIsMicEnabled={isMicEnabled}
           remoteUsers={remoteUsers}
           challengerStreamId={challengerStream.id}
           opponentStreamId={opponentStream.id}
@@ -1662,6 +2211,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           onTrollOpponent={handleTrollOpponent}
           canTroll={isSuddenDeath && participantInfo?.role === 'host'}
           currentUserTeam={participantInfo?.team}
+          userIdToLiveKitIdentity={userIdToLiveKitIdentity}
         />
         </div>
 

@@ -106,8 +106,8 @@ VITE_SQUARE_ACCESS_TOKEN=<production_token>
 # Agora
 AGORA_APP_ID=7b95b64b0e154f7ab931e2abf000e694
 VITE_AGORA_APP_ID=7b95b64b0e154f7ab931e2abf000e694
-AGORA_APP_CERTIFICATE=<certificate>
-VITE_BACKEND_TOKEN_SERVER_URL=https://trollcity.app/api/agora-token
+LIVEKIT_APP_CERTIFICATE=<certificate>
+VITE_BACKEND_TOKEN_SERVER_URL=https://trollcity.app/api/livekit-token
 
 # Admin
 VITE_ADMIN_EMAIL=trollcity2025@gmail.com

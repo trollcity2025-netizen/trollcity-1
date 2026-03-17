@@ -255,3 +255,8 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
 export function useAgoraRoom() {
   return useRoom({});
 }
+
+// LiveKit room hook - used by InterviewRoom and other components
+export function useLiveKitRoom(options?: UseRoomOptions) {
+  return useRoom(options || {});
+}

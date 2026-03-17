@@ -35,19 +35,19 @@ export function GamingSetup({
   // Use screen share hook
   const screenShare = useScreenShare();
 
-  // Agora RTMP settings
-  const agoraRTMPUrl = 'rtmp://rtmp.agora.io/live';
-  const agoraStreamKey = streamId;
+  // LiveKit RTMP settings
+  const livekitRTMPUrl = 'rtmp://rtmp.livekit.io/live';
+  const livekitStreamKey = streamId;
 
   const handleCopyKey = () => {
-    navigator.clipboard.writeText(agoraStreamKey);
+    navigator.clipboard.writeText(livekitStreamKey);
     setCopiedKey(true);
     toast.success('Stream key copied!');
     setTimeout(() => setCopiedKey(false), 2000);
   };
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(agoraRTMPUrl);
+    navigator.clipboard.writeText(livekitRTMPUrl);
     setCopiedUrl(true);
     toast.success('RTMP URL copied!');
     setTimeout(() => setCopiedUrl(false), 2000);
@@ -229,7 +229,7 @@ export function GamingSetup({
             <span className="text-gray-400 text-xs">RTMP Ingest URL:</span>
             <div className="flex gap-2 mt-1">
               <code className="flex-1 bg-black/50 p-2 rounded text-blue-300 text-xs break-all">
-                {agoraRTMPUrl}
+                {livekitRTMPUrl}
               </code>
               <button
                 type="button"
@@ -247,7 +247,7 @@ export function GamingSetup({
             <span className="text-gray-400 text-xs">Stream Key (Channel):</span>
             <div className="flex gap-2 mt-1">
               <code className="flex-1 bg-black/50 p-2 rounded text-green-400 text-xs break-all">
-                {agoraStreamKey}
+                {livekitStreamKey}
               </code>
               <button
                 type="button"

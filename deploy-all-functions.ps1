@@ -43,8 +43,8 @@ $functions = @(
     "officer-leave-stream",
     "officer-report-abuse",
     "officer-touch-activity",
-    "agora-token",
-    "start-agora-cdn"
+    "livekit-token",
+    "start-livekit-cdn"
 )
 
 Write-Host "🚀 Deploying all Supabase Edge Functions..." -ForegroundColor Cyan

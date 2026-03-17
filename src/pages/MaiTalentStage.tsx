@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAgoraRoom } from '@/hooks/useAgoraRoom';
+import { useLiveKitRoom } from '@/hooks/useLiveKitRoom';
 import { useJudgeRole } from '@/hooks/useJudgeRole';
 import GoldenBuzzerEffect from '@/components/maitalent/GoldenBuzzerEffect';
 import { StageCurtains } from '@/components/maitalent/StageCurtains';
@@ -79,7 +79,7 @@ const VoteControls = ({ isJudge, performer, showId }) => {
   );
 };
 
-const PerformerStage = ({ performer, slot, isJudge, showId, localVideoTrack, localAudioTrack, remoteUser, canPublish, agoraClient }) => {
+const PerformerStage = ({ performer, slot, isJudge, showId, localVideoTrack, localAudioTrack, remoteUser, canPublish, livekitClient }) => {
   return (
     <div className="flex flex-col gap-3">
       <PerformerFrame 
@@ -89,7 +89,7 @@ const PerformerStage = ({ performer, slot, isJudge, showId, localVideoTrack, loc
         localAudioTrack={localAudioTrack}
         remoteUser={remoteUser}
         canPublish={canPublish}
-        agoraClient={agoraClient}
+        livekitClient={livekitClient}
       />
       <div className="flex items-center justify-between mt-3">
         <PerformerInfo performer={performer} />
@@ -112,7 +112,7 @@ const MaiTalentStage = () => {
   const [isInQueue, setIsInQueue] = useState(false);
   const { profile } = useAuthStore();
 
-  const { localVideoTrack, localAudioTrack, remoteUsers, client } = useAgoraRoom({
+  const { localVideoTrack, localAudioTrack, remoteUsers, client } = useLiveKitRoom({
     roomId: session?.id || 'maitalent-stage', // Use session ID for room
     role: 'publisher',
     publish: false, // Control publishing manually
@@ -287,7 +287,7 @@ const MaiTalentStage = () => {
                 localAudioTrack={canPublishPerformer ? localAudioTrack : undefined}
                 remoteUser={remotePerformerA}
                 canPublish={canPublishPerformer}
-                agoraClient={client}
+                livekitClient={client}
               />
               
               {/* Performer B */}
@@ -300,7 +300,7 @@ const MaiTalentStage = () => {
                 localAudioTrack={canPublishPerformer ? localAudioTrack : undefined}
                 remoteUser={remotePerformerB}
                 canPublish={canPublishPerformer}
-                agoraClient={client}
+                livekitClient={client}
               />
             </div>
 
@@ -312,7 +312,7 @@ const MaiTalentStage = () => {
                 localVideoTrack={canPublishJudge ? localVideoTrack : undefined}
                 localAudioTrack={canPublishJudge ? localAudioTrack : undefined}
                 canPublish={canPublishJudge}
-                agoraClient={client}
+                livekitClient={client}
                 onJoinSeat={handleJoinJudgeSeat}
                 onLeaveSeat={handleLeaveJudgeSeat}
               />

@@ -92,7 +92,7 @@ VITE_API_URL=https://your-vercel-app.vercel.app
 - ✅ `/api/auth` - Authentication
 - ✅ `/api/payments` - Square payments
 - ✅ `/api/square` - Square cards
-- ✅ `/api/agora` - Agora tokens
+- ✅ `/api/livekit` - LiveKit tokens
 - ✅ `/api/platform-fees` - Platform fees
 - ✅ `/api/admin` - Admin controls
 - ✅ `/api/payouts` - Payouts

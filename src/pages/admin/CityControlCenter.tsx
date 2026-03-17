@@ -135,7 +135,7 @@ export default function CityControlCenter() {
               case 'api': {
                 // Test general Edge Function health
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                const apiUrl = `${supabaseUrl}/functions/v1/agora-token`; 
+                const apiUrl = `${supabaseUrl}/functions/v1/livekit-token`; 
                 const apiResponse = await fetch(apiUrl, { 
                   method: 'OPTIONS',
                   headers: { 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY }

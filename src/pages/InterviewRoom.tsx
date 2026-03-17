@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { useAgoraRoom } from '../hooks/useRoom'
-import { Room } from 'livekit-client'
+import { useLiveKitRoom } from '../hooks/useRoom'
+import { Room, LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack, Track } from 'livekit-client'
 import { Button } from '../components/ui/button'
 import { toast } from 'sonner'
 import { User, DollarSign, CheckCircle, XCircle, Trash2, Mic, MicOff, Video, VideoOff } from 'lucide-react'
@@ -110,13 +110,25 @@ const ParticipantBox = ({
 interface InterviewGridProps {
   interview: Interview;
   isAdmin: boolean;
-  localTracks: [ ILocalVideoTrack | undefined,  ILocalAudioTrack | undefined];
-  remoteUsers: IRemoteUser[];
+  localTracks: [LocalVideoTrack | undefined, LocalAudioTrack | undefined];
+  remoteUsers: RemoteParticipant[];
   toggleCamera: () => void;
   toggleMicrophone: () => void;
   localUserId: string;
   applicantId: string;
 }
+
+// Helper function to get video track from RemoteParticipant
+const getRemoteVideoTrack = (participant: RemoteParticipant): RemoteVideoTrack | undefined => {
+  const publication = participant.getTrackPublication(Track.Source.Camera);
+  return publication?.track as RemoteVideoTrack | undefined;
+};
+
+// Helper function to get audio track from RemoteParticipant
+const getRemoteAudioTrack = (participant: RemoteParticipant): RemoteAudioTrack | undefined => {
+  const publication = participant.getTrackPublication(Track.Source.Microphone);
+  return publication?.track as RemoteAudioTrack | undefined;
+};
 
 // Inner component to render the interview grid
 function InterviewGrid({ 
@@ -134,16 +146,16 @@ function InterviewGrid({
 
   // Find participants
   const isLocalUserApplicant = localUserId === applicantId;
-  const applicantRemoteUser = remoteUsers.find(user => user.uid === applicantId);
-  const interviewerRemoteUser = remoteUsers.find(user => user.uid !== applicantId && user.uid !== localUserId);
+  const applicantRemoteUser = remoteUsers.find(user => user.identity === applicantId);
+  const interviewerRemoteUser = remoteUsers.find(user => user.identity !== applicantId && user.identity !== localUserId);
 
   const applicantDisplay = isLocalUserApplicant
     ? { user: { username: interview.applicant?.username || 'Applicant' }, videoTrack: localVideoTrack, audioTrack: localAudioTrack, isLocal: true }
-    : (applicantRemoteUser ? { user: { username: interview.applicant?.username || 'Applicant' }, videoTrack: applicantRemoteUser.videoTrack, audioTrack: applicantRemoteUser.audioTrack, isLocal: false } : undefined);
+    : (applicantRemoteUser ? { user: { username: interview.applicant?.username || 'Applicant' }, videoTrack: getRemoteVideoTrack(applicantRemoteUser), audioTrack: getRemoteAudioTrack(applicantRemoteUser), isLocal: false } : undefined);
 
   const interviewerDisplay = !isLocalUserApplicant
     ? { user: { username: interview.interviewer_id || 'Interviewer' }, videoTrack: localVideoTrack, audioTrack: localAudioTrack, isLocal: true }
-    : (interviewerRemoteUser ? { user: { username: 'Interviewer' }, videoTrack: interviewerRemoteUser.videoTrack, audioTrack: interviewerRemoteUser.audioTrack, isLocal: false } : undefined);
+    : (interviewerRemoteUser ? { user: { username: 'Interviewer' }, videoTrack: getRemoteVideoTrack(interviewerRemoteUser), audioTrack: getRemoteAudioTrack(interviewerRemoteUser), isLocal: false } : undefined);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl flex-1">
@@ -177,7 +189,9 @@ export default function InterviewRoom() {
   const { profile } = useAuthStore()
   const [interview, setInterview] = useState<Interview | null>(null)
   const [loading, setLoading] = useState(true)
-  const { join, localTracks, remoteUsers, toggleCamera, toggleMicrophone } = useAgoraRoom()
+  const [roomUrl, setRoomUrl] = useState<string>('')
+  const [roomToken, setRoomToken] = useState<string>('')
+  const { localTracks, remoteUsers, toggleCamera, toggleMicrophone, isConnected } = useLiveKitRoom({ url: roomUrl, token: roomToken })
   const [connection, setConnection] = useState<string>("")
   const [isAdmin, setIsAdmin] = useState(false)
   
@@ -216,7 +230,7 @@ export default function InterviewRoom() {
         setIsAdmin(isInterviewer)
 
         // Get Connection Details
-        const { data: connectionData, error: connectionError } = await supabase.functions.invoke('agora-token', {
+        const { data: connectionData, error: connectionError } = await supabase.functions.invoke('livekit-token', {
           body: {
             channel: roomId,
             uid: profile.id,
@@ -231,7 +245,10 @@ export default function InterviewRoom() {
         }
 
         setConnection(connectionData.token)
-        join(roomId, connectionData.token)
+        // Set URL and token for the hook - it will auto-connect
+        const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || `wss://${window.location.host}/live`;
+        setRoomUrl(`${livekitUrl}/${roomId}`);
+        setRoomToken(connectionData.token);
 
         // If pending and admin joins, update status to active
         if (isInterviewer && data.status === 'pending') {
@@ -249,7 +266,7 @@ export default function InterviewRoom() {
     }
 
     checkAccess()
-  }, [roomId, profile, navigate, join])
+  }, [roomId, profile, navigate, roomUrl, roomToken])
 
   // Real-time status updates
   useEffect(() => {

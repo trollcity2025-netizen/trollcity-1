@@ -62,6 +62,8 @@ function BroadcastPage() {
   const [isBattleMode, setIsBattleMode] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
   const [hostMicMutedByOfficer, setHostMicMutedByOfficer] = useState(false)
+  const [battleData, setBattleData] = useState<any>(null)
+  const [isBattleLoading, setIsBattleLoading] = useState(false)
   
   const hasJoinedRef = useRef(false)
   const roomRef = useRef<Room | null>(null)
@@ -221,6 +223,56 @@ function BroadcastPage() {
 
     fetchStream()
   }, [streamId, navigate, user?.id])
+
+  // Fetch battle data when stream enters battle mode
+  useEffect(() => {
+    // Only fetch if we don't have battle data yet and we have the necessary info
+    if (!stream?.is_battle || !stream.battle_id) {
+      return;
+    }
+    
+    // Skip if we already have data for this battle
+    if (battleData && battleData.id === stream.battle_id) {
+      return;
+    }
+
+    setIsBattleLoading(true);
+    const fetchBattleData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('battles')
+          .select('*')
+          .eq('id', stream.battle_id)
+          .maybeSingle();
+        
+        if (error) {
+          console.error('Error fetching battle data:', error);
+          return;
+        }
+        
+        if (data) {
+          // Also fetch the stream user IDs for both challengers
+          const [challengerStream, opponentStream] = await Promise.all([
+            supabase.from('streams').select('user_id').eq('id', data.challenger_stream_id).maybeSingle(),
+            supabase.from('streams').select('user_id').eq('id', data.opponent_stream_id).maybeSingle(),
+          ]);
+          
+          // Add user IDs to battle data
+          setBattleData({
+            ...data,
+            challenger_user_id: challengerStream?.data?.user_id,
+            opponent_user_id: opponentStream?.data?.user_id,
+          });
+        }
+      } catch (err) {
+        console.error('Error in battle data fetch:', err);
+      } finally {
+        setIsBattleLoading(false);
+      }
+    };
+
+    fetchBattleData();
+  }, [stream?.is_battle, stream?.battle_id]);
 
   // Emit stream_watch_time events for troll system
   useEffect(() => {
@@ -712,6 +764,10 @@ function BroadcastPage() {
           roomRef.current = existingRoom
           console.log('[BroadcastPage] Reusing LiveKit room from SetupPage')
           
+          // Get track enabled states from PreflightStore to ensure tracks stay enabled
+          const preflightEnabledStates = PreflightStore.getTrackEnabledStates()
+          console.log('[BroadcastPage] Preflight enabled states:', preflightEnabledStates)
+          
           // Get tracks from the existing room's local participant
           let videoTrack: LocalVideoTrack | undefined
           let audioTrack: LocalAudioTrack | undefined
@@ -726,6 +782,8 @@ function BroadcastPage() {
             // Validate tracks are proper LiveKit track objects
             const validateTrack = (track: any, type: 'audio' | 'video'): { valid: boolean; track: any } => {
               if (!track) return { valid: false, track: null }
+              
+              // Check for required LiveKit track properties
               const hasGetTrackId = typeof track.getTrackId === 'function'
               const hasGetMediaStreamTrack = typeof track.getMediaStreamTrack === 'function'
               
@@ -773,6 +831,38 @@ function BroadcastPage() {
             audioIsValid: audioTrack && typeof audioTrack.getTrackId === 'function',
             videoIsValid: videoTrack && typeof videoTrack.getTrackId === 'function'
           })
+          
+          // Ensure tracks are enabled based on PreflightStore state
+          // This is critical - we must enable tracks that were enabled in SetupPage
+          if (videoTrack && preflightEnabledStates.isVideoEnabled) {
+            console.log('[BroadcastPage] Ensuring video track is enabled from existing room')
+            try {
+              const videoMediaTrack = videoTrack.getMediaStreamTrack()
+              if (videoMediaTrack) {
+                videoMediaTrack.enabled = true
+              }
+              if (typeof videoTrack.enable === 'function') {
+                videoTrack.enable()
+              }
+            } catch (e) {
+              console.warn('[BroadcastPage] Error enabling video track:', e)
+            }
+          }
+          
+          if (audioTrack && preflightEnabledStates.isAudioEnabled) {
+            console.log('[BroadcastPage] Ensuring audio track is enabled from existing room')
+            try {
+              const audioMediaTrack = audioTrack.getMediaStreamTrack()
+              if (audioMediaTrack) {
+                audioMediaTrack.enabled = true
+              }
+              if (typeof audioTrack.enable === 'function') {
+                audioTrack.enable()
+              }
+            } catch (e) {
+              console.warn('[BroadcastPage] Error enabling audio track:', e)
+            }
+          }
           
           // Set local tracks state
           if (audioTrack || videoTrack) {
@@ -872,10 +962,17 @@ function BroadcastPage() {
             if (videoShouldBeEnabled) {
               console.log('[BroadcastPage] Ensuring video track is enabled from PreflightStore state')
               // Check if it's a proper LiveKit track with getMediaStreamTrack method
-              if (videoTrack && typeof videoTrack.getMediaStreamTrack === 'function') {
-                const videoMediaTrack = videoTrack.getMediaStreamTrack()
-                if (videoMediaTrack) {
-                  videoMediaTrack.enabled = true
+              // OR has stop method (which indicates valid LiveKit track)
+              if (videoTrack && (typeof videoTrack.getMediaStreamTrack === 'function' || typeof videoTrack.stop === 'function')) {
+                // Try getMediaStreamTrack first, fall back to direct enable
+                if (typeof videoTrack.getMediaStreamTrack === 'function') {
+                  const videoMediaTrack = videoTrack.getMediaStreamTrack()
+                  if (videoMediaTrack) {
+                    videoMediaTrack.enabled = true
+                  }
+                } else if (typeof videoTrack.enable === 'function') {
+                  // Fallback: use LiveKit's enable method
+                  videoTrack.enable()
                 }
               } else {
                 console.warn('[BroadcastPage] videoTrack does not have getMediaStreamTrack method or is not a valid LiveKit track')
@@ -884,10 +981,17 @@ function BroadcastPage() {
             if (audioShouldBeEnabled) {
               console.log('[BroadcastPage] Ensuring audio track is enabled from PreflightStore state')
               // Check if it's a proper LiveKit track with getMediaStreamTrack method
-              if (audioTrack && typeof audioTrack.getMediaStreamTrack === 'function') {
-                const audioMediaTrack = audioTrack.getMediaStreamTrack()
-                if (audioMediaTrack) {
-                  audioMediaTrack.enabled = true
+              // OR has stop method (which indicates valid LiveKit track)
+              if (audioTrack && (typeof audioTrack.getMediaStreamTrack === 'function' || typeof audioTrack.stop === 'function')) {
+                // Try getMediaStreamTrack first, fall back to direct enable
+                if (typeof audioTrack.getMediaStreamTrack === 'function') {
+                  const audioMediaTrack = audioTrack.getMediaStreamTrack()
+                  if (audioMediaTrack) {
+                    audioMediaTrack.enabled = true
+                  }
+                } else if (typeof audioTrack.enable === 'function') {
+                  // Fallback: use LiveKit's enable method
+                  audioTrack.enable()
                 }
               } else {
                 console.warn('[BroadcastPage] audioTrack does not have getMediaStreamTrack method or is not a valid LiveKit track')
@@ -1385,17 +1489,50 @@ function BroadcastPage() {
   const categorySupportsBattles = supportsBattles(stream.category || 'general')
   const categoryMatchingTerm = getMatchingTerminology(stream.category || 'general');
 
-  if (stream.is_battle) {
+  // Show loading while fetching battle data
+  if (stream.is_battle && isBattleLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black text-white">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <p className="ml-4">Loading battle...</p>
+      </div>
+    );
+  }
+
+  if (stream.is_battle && battleData) {
+    // Build proper mapping: database user ID -> LiveKit identity
+    const battleMapping: Record<string, string> = {};
+    
+    // Add both broadcasters to the mapping from battle data
+    if (battleData) {
+      // Map challenger and opponent user IDs
+      if (battleData.challenger_user_id) {
+        battleMapping[battleData.challenger_user_id] = battleData.challenger_user_id;
+      }
+      if (battleData.opponent_user_id) {
+        battleMapping[battleData.opponent_user_id] = battleData.opponent_user_id;
+      }
+    }
+    
+    // Also include remote participants (they may be viewers joining the battle room)
+    remoteParticipants.forEach((participant, identity) => {
+      battleMapping[identity] = identity;
+    });
+    
+    // Include current user's ID
+    if (user?.id) {
+      battleMapping[user.id] = user.id;
+    }
+
     return (
       <BattleView
         battleId={stream.battle_id}
         currentStreamId={stream.id}
         localTracks={localTracks}
         remoteUsers={Array.from(remoteParticipants.values())}
-        userIdToLiveKitIdentity={Object.fromEntries(
-          Array.from(remoteParticipants.keys()).map(identity => [identity, identity])
-        )}
+        userIdToLiveKitIdentity={battleMapping}
         onReturnToStream={() => {
+          setBattleData(null); // Reset battle data when returning
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, is_battle: false, battle_id: null };
@@ -1404,6 +1541,36 @@ function BroadcastPage() {
         }}
       />
     )
+  }
+
+  // Fallback: show battle view anyway if is_battle is true but no battleData yet
+  // This handles the case where battle data failed to load but we still want to show battle
+  if (stream.is_battle && !battleData) {
+    // Still try to build mapping with what we have
+    const battleMapping: Record<string, string> = {};
+    remoteParticipants.forEach((participant, identity) => {
+      battleMapping[identity] = identity;
+    });
+    if (user?.id) {
+      battleMapping[user.id] = user.id;
+    }
+
+    return (
+      <BattleView
+        battleId={stream.battle_id}
+        currentStreamId={stream.id}
+        localTracks={localTracks}
+        remoteUsers={Array.from(remoteParticipants.values())}
+        userIdToLiveKitIdentity={battleMapping}
+        onReturnToStream={() => {
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, is_battle: false, battle_id: null };
+          });
+          refreshStream();
+        }}
+      />
+    );
   }
 
   if (isJoining) {

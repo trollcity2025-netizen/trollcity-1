@@ -1,5 +1,5 @@
 import React from 'react';
-import VideoTile from '@/components/agora/VideoTile';
+import VideoTile from '@/components/livekit/VideoTile';
 
 interface JudgeSeatProps {
   seatNumber: number;
@@ -8,7 +8,7 @@ interface JudgeSeatProps {
   localVideoTrack?: any;
   localAudioTrack?: any;
   canPublish?: boolean;
-  agoraClient?: any;
+  livekitClient?: any;
   onJoin?: () => void;
   onLeave?: () => void;
 }
@@ -28,7 +28,7 @@ export const JudgeSeat: React.FC<JudgeSeatProps> = ({
   localVideoTrack,
   localAudioTrack,
   canPublish = false,
-  agoraClient,
+  livekitClient,
   onJoin,
   onLeave,
 }) => {
@@ -73,7 +73,7 @@ export const JudgeSeat: React.FC<JudgeSeatProps> = ({
                 displayName={username}
                 role="judge"
                 canPublish={canPublish}
-                agoraClient={agoraClient}
+                livekitClient={livekitClient}
               />
             ) : (
               <VideoTile

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import { useTrollEngine, TrollEvent } from './useTrollEngine';
 import { subscribeEvents, TrollEventType } from '../lib/events';
 import TrollOverlay from './TrollOverlay';
+import { PreflightStore } from '../lib/preflightStore';
 
 interface TrollContextType {
   triggerTroll: (context?: string, options?: { safe?: boolean }) => void;
@@ -107,7 +108,7 @@ export const TrollProvider = ({ children }: TrollProviderProps) => {
   return (
     <TrollContext.Provider value={{ triggerTroll }}>
       {children}
-      {activeTroll && <TrollOverlay event={activeTroll} onComplete={() => setActiveTroll(null)} />}
+      {activeTroll && !PreflightStore.getInBattle() && <TrollOverlay event={activeTroll} onComplete={() => setActiveTroll(null)} />}
     </TrollContext.Provider>
   );
 };

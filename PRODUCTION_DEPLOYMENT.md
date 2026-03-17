@@ -57,8 +57,8 @@ Login to Supabase Dashboard (trollcity2025@gmail.com):
    VITE_SUPABASE_ANON_KEY=[from .env]
    VITE_API_URL=https://your-app.vercel.app
    VITE_EDGE_FUNCTIONS_URL=https://yjxpwfalenorzrqxwmtr.supabase.co/functions/v1
-   VITE_AGORA_APP_ID=7b95b64b0e154f7ab931e2abf000e694
-   VITE_BACKEND_TOKEN_SERVER_URL=https://your-app.vercel.app/api/agora-token
+   VITE_LIVEKIT_APP_ID=your_livekit_app_id
+   VITE_BACKEND_TOKEN_SERVER_URL=https://your-app.vercel.app/api/livekit-token
    VITE_SQUARE_APPLICATION_ID=sq0idp-CrLUQ0nBsGw514BdmRCKcw
    VITE_SQUARE_LOCATION_ID=LC50JZXVG8F0M
    VITE_SQUARE_ENVIRONMENT=production
@@ -108,7 +108,7 @@ vercel --prod
    After deployment, update these environment variables in Vercel:
    ```
    VITE_API_URL=https://your-deployment-url.vercel.app
-   VITE_BACKEND_TOKEN_SERVER_URL=https://your-deployment-url.vercel.app/api/agora-token
+   VITE_BACKEND_TOKEN_SERVER_URL=https://your-deployment-url.vercel.app/api/livekit-token
    ```
    
    Then redeploy.

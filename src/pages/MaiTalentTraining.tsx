@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { useAgoraRoom } from '@/hooks/useAgoraRoom';
+import { useLiveKitRoom } from '@/hooks/useLiveKitRoom';
 import { Button } from '@/components/ui/button';
 import { PhoneOff } from 'lucide-react';
 
@@ -10,9 +10,9 @@ import MaiTalentNav from '@/components/maitalent/MaiTalentNav';
 
 import MaiTalentLayout from '@/components/maitalent/MaiTalentLayout';
 
-import VideoTile from '@/components/agora/VideoTile';
+import VideoTile from '@/components/livekit/VideoTile';
 
-const TrainingSlot = ({ title, user, localVideoTrack, localAudioTrack, agoraClient, canPublish }) => (
+const TrainingSlot = ({ title, user, localVideoTrack, localAudioTrack, livekitClient, canPublish }) => (
   <div className="flex flex-col items-center gap-4">
     <h2 className="text-2xl font-bold">{title}</h2>
     <VideoTile 
@@ -22,7 +22,7 @@ const TrainingSlot = ({ title, user, localVideoTrack, localAudioTrack, agoraClie
       displayName={title}
       role="viewer" // Role is viewer in training, publish is controlled manually
       canPublish={canPublish}
-      agoraClient={agoraClient}
+      livekitClient={livekitClient}
     />
   </div>
 );
@@ -40,7 +40,7 @@ const MaiTalentTraining = () => {
     joinRoom, 
     leaveRoom, 
     client
-  } = useAgoraRoom({
+  } = useLiveKitRoom({
     roomId: isCallActive ? roomId : null,
     role: 'publisher',
     publish: false, // Manual publishing
@@ -86,7 +86,7 @@ const MaiTalentTraining = () => {
             title="Judge (You)" 
             localVideoTrack={localVideoTrack} 
             localAudioTrack={localAudioTrack} 
-            agoraClient={client}
+            livekitClient={client}
             canPublish={true}
           />
           <TrainingSlot 

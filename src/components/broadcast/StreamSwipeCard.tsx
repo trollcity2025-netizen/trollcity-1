@@ -76,7 +76,7 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
       
       // Get viewer token
       const numericUid = stringToUid(user.id);
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('livekit-token', {
         body: {
           channel: stream.id,
           uid: numericUid,

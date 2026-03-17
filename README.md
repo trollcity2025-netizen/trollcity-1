@@ -55,9 +55,9 @@ cp .env.example .env
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# Agora Configuration
-VITE_AGORA_APP_ID=your_agora_app_id
-VITE_BACKEND_TOKEN_SERVER_URL=http://localhost:3001/api/agora-token
+# LiveKit Configuration
+VITE_LIVEKIT_APP_ID=your_livekit_app_id
+VITE_BACKEND_TOKEN_SERVER_URL=http://localhost:3001/api/livekit-token
 
 # Square Configuration
 VITE_SQUARE_APPLICATION_ID=your_square_application_id
@@ -145,8 +145,8 @@ The app uses a distinctive troll-themed color scheme:
 - `POST /api/payments/create-payment` - Create payment
 - `POST /api/payments/webhook` - Square webhook handler
 
-### Streaming (Agora)
-- `POST /api/agora/token` - Generate Agora token
+### Streaming (LiveKit)
+- `POST /api/livekit/token` - Generate LiveKit token
 
 ## 🧪 Testing
 

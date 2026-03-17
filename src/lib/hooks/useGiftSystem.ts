@@ -109,7 +109,7 @@ export function useGiftSystem(
         p_stream_id: streamId,         // uuid
         p_recipient_id: targetReceiverId,     // uuid
         p_gift_id: gift.id,     // uuid
-        p_quantity: 1           // integer
+        p_quantity: 1 as unknown as number  // Explicitly cast to handle bigint vs integer ambiguity
       });
 
       if (rpcError) {

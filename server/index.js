@@ -23,7 +23,7 @@ app.use((req, res, next) => {
 
 // Import handlers
 
-const agoraTokenHandler = require('./api/agora-token');
+const livekitTokenHandler = require('./api/livekit-token');
 const telemetryHandler = require('./api/telemetryHandler');
 
 // API Routes
@@ -47,9 +47,9 @@ app.get('/api/paypal/test', (req, res) => {
   }
 });
 
-// Telemetry
-app.post('/api/agora-token', async (req, res) => {
-  await agoraTokenHandler(req, res);
+// LiveKit Token
+app.post('/api/livekit-token', async (req, res) => {
+  await livekitTokenHandler(req, res);
 });
 
 app.post('/api/telemetry', async (req, res) => {

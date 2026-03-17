@@ -1,21 +1,12 @@
 -- ============================================================================
--- INSTANT BATTLE MATCHMAKING SYSTEM
+-- INSTANT BATTLE MATCHMAKING SYSTEM - FIXED VERSION
 -- ============================================================================
--- Simplified flow:
--- 1. Broadcaster clicks "Battle" → added to queue
--- 2. If another broadcaster is waiting → battle starts immediately
--- 3. No acceptance required - battle begins instantly
--- 4. Winner gets crowns added to their balance
+-- This version ensures broadcasters wait in queue until an opponent joins
 -- ============================================================================
 
--- ============================================================================
--- STEP 1: Create Simple Matchmaking Queue
--- ============================================================================
-
--- Drop existing table if it exists with wrong structure
+-- Drop and recreate the battle_queue table
 DROP TABLE IF EXISTS public.battle_queue;
 
--- Create the battle_queue table with correct structure
 CREATE TABLE public.battle_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     stream_id UUID NOT NULL REFERENCES public.streams(id) ON DELETE CASCADE,
@@ -34,7 +25,12 @@ WHERE status = 'waiting';
 -- Enable RLS
 ALTER TABLE public.battle_queue ENABLE ROW LEVEL SECURITY;
 
--- Simple RLS policies
+-- RLS policies
+DROP POLICY IF EXISTS "View battle queue" ON public.battle_queue;
+DROP POLICY IF EXISTS "Insert own queue entry" ON public.battle_queue;
+DROP POLICY IF EXISTS "Update own queue entry" ON public.battle_queue;
+DROP POLICY IF EXISTS "Delete own queue entry" ON public.battle_queue;
+
 CREATE POLICY "View battle queue" ON public.battle_queue FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Insert own queue entry" ON public.battle_queue FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Update own queue entry" ON public.battle_queue FOR UPDATE TO authenticated USING (user_id = auth.uid());
@@ -43,7 +39,7 @@ CREATE POLICY "Delete own queue entry" ON public.battle_queue FOR DELETE TO auth
 GRANT ALL ON public.battle_queue TO authenticated;
 
 -- ============================================================================
--- STEP 2: Function to Start Instant Battle
+-- STEP 2: Function to Start Instant Battle - FIXED TO ALWAYS WAIT FOR OPPONENT
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.start_instant_battle(
@@ -56,8 +52,13 @@ DECLARE
     v_my_stream RECORD;
     v_opponent_queue RECORD;
     v_battle_id UUID;
+    v_queue_count INTEGER;
+    v_opponent_count INTEGER;
 BEGIN
+    -- Get the authenticated user
     v_user_id := auth.uid();
+    
+    RAISE NOTICE 'start_instant_battle called for stream % by user %', p_stream_id, v_user_id;
     
     IF v_user_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
@@ -75,23 +76,40 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Stream not live or already in battle');
     END IF;
     
-    -- Check if already in queue
+    -- Check if already in queue with waiting status
     IF EXISTS (SELECT 1 FROM public.battle_queue WHERE stream_id = p_stream_id AND status = 'waiting') THEN
         RETURN jsonb_build_object('success', false, 'error', 'Already waiting for battle');
     END IF;
     
-    -- Look for an opponent already waiting
-    SELECT * INTO v_opponent_queue
+    -- Check if already in battle
+    IF EXISTS (SELECT 1 FROM public.battle_queue WHERE stream_id = p_stream_id AND status = 'battling') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Already in a battle');
+    END IF;
+    
+    -- Count total waiting players in this category
+    SELECT COUNT(*) INTO v_queue_count
+    FROM public.battle_queue
+    WHERE status = 'waiting'
+    AND category = p_category;
+    
+    RAISE NOTICE 'Current queue count for category %: %', p_category, v_queue_count;
+    
+    -- CRITICAL FIX: Only look for opponent if there are OTHER players in queue
+    -- We explicitly check that the opponent is NOT our own stream
+    v_opponent_count := 0;
+    
+    SELECT COUNT(*) INTO v_opponent_count
     FROM public.battle_queue
     WHERE status = 'waiting'
     AND category = p_category
-    AND stream_id != p_stream_id
-    ORDER BY created_at ASC
-    FOR UPDATE SKIP LOCKED
-    LIMIT 1;
+    AND stream_id != p_stream_id;
     
-    -- If no opponent, add to queue and wait
-    IF v_opponent_queue IS NULL THEN
+    RAISE NOTICE 'Found % potential opponents', v_opponent_count;
+    
+    -- If no opponent found (v_opponent_count = 0), ALWAYS add to queue and wait
+    IF v_opponent_count = 0 THEN
+        RAISE NOTICE 'No opponent found, adding to queue and waiting';
+        
         INSERT INTO public.battle_queue (stream_id, user_id, category, status)
         VALUES (p_stream_id, v_user_id, p_category, 'waiting');
         
@@ -102,8 +120,33 @@ BEGIN
         );
     END IF;
     
-    -- Found an opponent - create battle immediately
+    -- Found an opponent - create battle
+    RAISE NOTICE 'Opponent found, creating battle';
+    
     BEGIN
+        -- Get the actual opponent record
+        SELECT * INTO v_opponent_queue
+        FROM public.battle_queue
+        WHERE status = 'waiting'
+        AND category = p_category
+        AND stream_id != p_stream_id
+        ORDER BY created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1;
+        
+        IF v_opponent_queue IS NULL THEN
+            -- Double-check: if still no opponent, add to queue
+            RAISE NOTICE 'Race condition detected, adding to queue';
+            INSERT INTO public.battle_queue (stream_id, user_id, category, status)
+            VALUES (p_stream_id, v_user_id, p_category, 'waiting');
+            
+            RETURN jsonb_build_object(
+                'success', true,
+                'status', 'waiting',
+                'message', 'Waiting for another broadcaster...'
+            );
+        END IF;
+        
         -- Clear any stale battle_ids first (defensive)
         UPDATE public.streams
         SET battle_id = NULL, is_battle = false
@@ -161,12 +204,15 @@ BEGIN
         );
         
     EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Error creating battle: %', SQLERRM;
         RETURN jsonb_build_object('success', false, 'error', SQLERRM);
     END;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.start_instant_battle(UUID, VARCHAR) TO authenticated;
+
+COMMENT ON FUNCTION public.start_instant_battle IS 'Start or join an instant battle - ALWAYS waits for opponent in queue';
 
 -- ============================================================================
 -- STEP 3: Function to Leave Battle Queue
@@ -198,16 +244,15 @@ GRANT EXECUTE ON FUNCTION public.leave_battle_queue(UUID) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.end_battle_with_rewards(
     p_battle_id UUID,
-    p_winner_stream_id UUID DEFAULT NULL  -- NULL = draw/no winner
+    p_winner_stream_id UUID DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
     v_battle RECORD;
     v_winner_user_id UUID;
     v_loser_user_id UUID;
-    v_crown_reward INTEGER := 10;  -- Crowns for winning
+    v_crown_reward INTEGER := 10;
 BEGIN
-    -- Get battle details
     SELECT * INTO v_battle
     FROM public.battles
     WHERE id = p_battle_id
@@ -218,7 +263,6 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Battle not found or not active');
     END IF;
     
-    -- Determine winner and loser
     IF p_winner_stream_id IS NOT NULL THEN
         SELECT user_id INTO v_winner_user_id
         FROM public.streams WHERE id = p_winner_stream_id;
@@ -230,13 +274,11 @@ BEGIN
         LIMIT 1;
     END IF;
     
-    -- Award crowns to winner
     IF v_winner_user_id IS NOT NULL THEN
         UPDATE public.user_profiles
         SET crowns = COALESCE(crowns, 0) + v_crown_reward
         WHERE id = v_winner_user_id;
         
-        -- Record the crown transaction
         INSERT INTO public.coin_ledger (
             user_id,
             amount,
@@ -252,7 +294,6 @@ BEGIN
         );
     END IF;
     
-    -- Update battle status
     UPDATE public.battles
     SET 
         status = 'ended',
@@ -260,12 +301,10 @@ BEGIN
         winner_stream_id = p_winner_stream_id
     WHERE id = p_battle_id;
     
-    -- Clear battle_id from streams
     UPDATE public.streams
     SET battle_id = NULL, is_battle = false
     WHERE id IN (v_battle.challenger_stream_id, v_battle.opponent_stream_id);
     
-    -- Clear queue entries
     DELETE FROM public.battle_queue WHERE battle_id = p_battle_id;
     
     RETURN jsonb_build_object(
@@ -295,7 +334,6 @@ DECLARE
     v_battle RECORD;
     v_opponent_stream_id UUID;
 BEGIN
-    -- Check if in queue
     SELECT * INTO v_queue_entry
     FROM public.battle_queue
     WHERE stream_id = p_stream_id
@@ -314,7 +352,6 @@ BEGIN
         );
     END IF;
     
-    -- In battle - get details
     SELECT * INTO v_battle
     FROM public.battles
     WHERE id = v_queue_entry.battle_id;
@@ -323,7 +360,6 @@ BEGIN
         RETURN jsonb_build_object('in_battle', false, 'in_queue', false);
     END IF;
     
-    -- Get opponent stream ID
     IF v_battle.challenger_stream_id = p_stream_id THEN
         v_opponent_stream_id := v_battle.opponent_stream_id;
     ELSE
@@ -366,7 +402,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================================
 
 COMMENT ON TABLE public.battle_queue IS 'Simple queue for instant battle matchmaking';
-COMMENT ON FUNCTION public.start_instant_battle IS 'Start or join an instant battle - pairs with next available broadcaster';
+COMMENT ON FUNCTION public.start_instant_battle IS 'Start or join an instant battle - ALWAYS waits for opponent in queue';
 COMMENT ON FUNCTION public.end_battle_with_rewards IS 'End battle and award crowns to winner';
 
 -- ============================================================================

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
-import { Room } from livekit-client';
+import { Room } from 'livekit-client';
 import { toast } from 'sonner';
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 
@@ -48,13 +48,13 @@ const JailVisitRoom: React.FC = () => {
         const joinCall = async () => {
             setIsJoining(true);
             try {
-                const { data, error } = await supabase.functions.invoke('get-agora-token', {
+                const { data, error } = await supabase.functions.invoke('get-livekit-token', {
                     body: { channelName: visitId, userId: user.id },
                 });
 
                 if (error) throw new Error('Failed to get token');
 
-                await room.connect(process.env.NEXT_PUBLIC_AGORA_APP_ID!, visitId, data.token, user.id);
+                await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_APP_ID!, visitId, data.token, user.id);
 
                 const audioTrack = await  LocalAudioTrack.create();
                 const videoTrack = await  LocalVideoTrack.create();

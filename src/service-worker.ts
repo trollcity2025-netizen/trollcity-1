@@ -150,7 +150,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.includes('.m3u8') ||
     url.pathname.includes('.ts') ||
     url.pathname.endsWith('.mp4') ||
-    url.hostname.includes('agora.io') ||
+    url.hostname.includes('livekit.cloud') ||
     url.hostname.includes('livestream')
   ) {
     return;

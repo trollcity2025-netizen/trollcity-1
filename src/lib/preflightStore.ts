@@ -12,6 +12,8 @@ interface PreflightState {
   // Track enabled states from setup page
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
+  // Battle mode flag - when true, TrollEngine should be hidden
+  isInBattle: boolean;
 }
 
 const state: PreflightState = {
@@ -24,6 +26,7 @@ const state: PreflightState = {
   localTracks: null,
   isVideoEnabled: true,
   isAudioEnabled: true,
+  isInBattle: false,
 };
 
 export const PreflightStore = {
@@ -94,6 +97,17 @@ export const PreflightStore = {
     return { isVideoEnabled: state.isVideoEnabled, isAudioEnabled: state.isAudioEnabled };
   },
 
+  // Set battle mode - used to hide TrollEngine during battles
+  setInBattle(inBattle: boolean) {
+    state.isInBattle = inBattle;
+    console.log('[PreflightStore] setInBattle:', inBattle);
+  },
+
+  // Get battle mode status
+  getInBattle(): boolean {
+    return state.isInBattle;
+  },
+
   clear() {
     // Stop all tracks in the stored stream before clearing
     if (state.stream) {
@@ -131,5 +145,6 @@ export const PreflightStore = {
     state.localTracks = null;
     state.isVideoEnabled = true;
     state.isAudioEnabled = true;
+    state.isInBattle = false;
   }
 };

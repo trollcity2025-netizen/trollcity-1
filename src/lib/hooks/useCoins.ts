@@ -8,6 +8,7 @@ interface Trollcoins {
   paid_coins: number
   total_earned_coins: number
   total_spent_coins: number
+  battle_crowns: number
 }
 
 interface SpendCoinsParams {
@@ -37,6 +38,7 @@ export function useCoins() {
     paid_coins: profile?.paid_coins ?? 0,
     total_earned_coins: profile?.total_earned_coins || 0,
     total_spent_coins: profile?.total_spent_coins || 0,
+    battle_crowns: profile?.battle_crowns ?? 0,
   })
   const [optimisticUntil, setOptimisticUntil] = useState<number | null>(null)
   const [optimisticTroll, setOptimisticTroll] = useState<number | null>(null)
@@ -49,9 +51,10 @@ export function useCoins() {
         paid_coins: profile.paid_coins ?? 0,
         total_earned_coins: profile.total_earned_coins || 0,
         total_spent_coins: profile.total_spent_coins || 0,
+        battle_crowns: profile.battle_crowns ?? 0,
       })
     }
-  }, [profile, profile?.troll_coins, profile?.paid_coins, profile?.total_earned_coins, profile?.total_spent_coins])
+  }, [profile, profile?.troll_coins, profile?.paid_coins, profile?.total_earned_coins, profile?.total_spent_coins, profile?.battle_crowns])
 
   /**
    * Refresh coin balances from database
@@ -68,7 +71,7 @@ export function useCoins() {
 
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('troll_coins, paid_coins, total_earned_coins, total_spent_coins')
+        .select('troll_coins, paid_coins, total_earned_coins, total_spent_coins, battle_crowns')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -109,6 +112,7 @@ export function useCoins() {
         paid_coins: profileData?.paid_coins ?? currentProfile?.paid_coins ?? 0,
         total_earned_coins: nextTotals.total_earned_coins,
         total_spent_coins: nextTotals.total_spent_coins,
+        battle_crowns: profileData?.battle_crowns ?? currentProfile?.battle_crowns ?? 0,
       }
 
       setBalances((prev) => {
@@ -133,6 +137,7 @@ export function useCoins() {
               troll_coins: mergedPaid as number,
               total_earned_coins: nextTotals.total_earned_coins,
               total_spent_coins: nextTotals.total_spent_coins,
+              battle_crowns: profileData?.battle_crowns ?? currentProfile?.battle_crowns ?? 0,
             }
             useAuthStore.getState().setProfile(updatedProfile)
           }
@@ -281,6 +286,10 @@ export function useCoins() {
               typeof newProfileData.total_spent_coins === 'number'
                 ? newProfileData.total_spent_coins
                 : currentProfile.total_spent_coins
+            const nextCrowns =
+              typeof newProfileData.battle_crowns === 'number'
+                ? newProfileData.battle_crowns
+                : currentProfile.battle_crowns
             const updatedProfile: UserProfile = {
               ...currentProfile,
               troll_coins: shouldKeepOptimistic
@@ -288,6 +297,7 @@ export function useCoins() {
                 : Number(candidate ?? currentProfile.troll_coins),
               total_earned_coins: nextEarned,
               total_spent_coins: nextSpent,
+              battle_crowns: nextCrowns,
             }
             useAuthStore.getState().setProfile(updatedProfile)
             setBalances((prev) => ({
@@ -305,6 +315,10 @@ export function useCoins() {
                 typeof updatedProfile.total_spent_coins === 'number'
                   ? updatedProfile.total_spent_coins
                   : prev.total_spent_coins,
+              battle_crowns:
+                typeof updatedProfile.battle_crowns === 'number'
+                  ? updatedProfile.battle_crowns
+                  : prev.battle_crowns,
             }))
             if (!shouldKeepOptimistic && optimisticUntil) {
               setOptimisticUntil(null)
@@ -370,5 +384,6 @@ export function useCoins() {
     paidBalance: balances.paid_coins,
     totalEarned: balances.total_earned_coins,
     totalSpent: balances.total_spent_coins,
+    crowns: balances.battle_crowns,
   }
 }

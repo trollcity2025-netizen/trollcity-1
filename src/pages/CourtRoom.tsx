@@ -269,12 +269,12 @@ function uidFromString(str: string) {
   return Math.abs(hash);
 }
 
-const getAgoraToken = async (room: string, identity: string) => {
+const getLiveKitToken = async (room: string, identity: string) => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   if (!supabaseUrl) {
-    throw new Error('Missing VITE_SUPABASE_URL for Agora token endpoint');
+    throw new Error('Missing VITE_SUPABASE_URL for LiveKit token endpoint');
   }
-  const tokenUrl = `${supabaseUrl}/functions/v1/agora-token`;
+  const tokenUrl = `${supabaseUrl}/functions/v1/livekit-token`;
 
   const session = await supabase.auth.getSession();
   const accessToken = session.data.session?.access_token;
@@ -301,7 +301,7 @@ const getAgoraToken = async (room: string, identity: string) => {
 
   const data = await response.json();
   if (!data?.token) {
-    throw new Error('Invalid Agora token response');
+    throw new Error('Invalid LiveKit token response');
   }
   return data.token;
 };
@@ -314,7 +314,7 @@ export default function CourtRoom() {
    const [boxCount, setBoxCount] = useState(2);
    const [joinBoxRequested, setJoinBoxRequested] = useState(false);
    const [joinBoxLoading, setJoinBoxLoading] = useState(false);
-   const [agoraClient, setAgoraClient] = useState<Room | null>(null);
+   const [livekitClient, setLivekitClient] = useState<Room | null>(null);
    const [localTracks, setLocalTracks] = useState<[ILocalVideoTrack | undefined, ILocalAudioTrack | undefined]>([undefined, undefined]);
    const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
    const [activeCase, setActiveCase] = useState<any>(null);
@@ -495,8 +495,8 @@ export default function CourtRoom() {
   const handleJoinBox = async () => {
     setJoinBoxLoading(true);
     try {
-      if (!agoraClient || !user || !courtId) {
-        throw new Error('Agora client, user, or courtId not available.');
+      if (!livekitClient || !user || !courtId) {
+        throw new Error('LiveKit client, user, or courtId not available.');
       }
 
       // Check if already publishing
@@ -507,16 +507,16 @@ export default function CourtRoom() {
       }
 
       // If already joined as viewer, leave first
-      if (agoraClient.connectionState === 'CONNECTED') {
-        await agoraroom.disconnect();
+      if (livekitClient.connectionState === 'CONNECTED') {
+        await livekitRoom.disconnect();
       }
 
-      const token = await getAgoraToken(courtId, user.id);
-      await agoraroom.connect(import.meta.env.VITE_AGORA_APP_ID!, courtId, token, user.id);
+      const token = await getLiveKitToken(courtId, user.id);
+      await livekitRoom.connect(import.meta.env.VITE_LIVEKIT_APP_ID!, courtId, token, user.id);
       const audioTrack = await  LocalAudioTrack.create();
       const videoTrack = await  LocalVideoTrack.create();
       setLocalTracks([videoTrack, audioTrack]);
-      await agoraClient.publish([videoTrack, audioTrack]);
+      await livekitClient.publish([videoTrack, audioTrack]);
       setJoinBoxRequested(true);
       toast.success('Successfully joined the box and started publishing!');
     } catch (error: any) {
@@ -529,8 +529,8 @@ export default function CourtRoom() {
 
   const handleLeaveBox = async () => {
     try {
-      if (!agoraClient) {
-        throw new Error('Agora client not available.');
+      if (!livekitClient) {
+        throw new Error('LiveKit client not available.');
       }
       if (localTracks[0]) {
         await localTracks[0].close();
@@ -541,13 +541,13 @@ export default function CourtRoom() {
         await localTracks[1].stop();
       }
       setLocalTracks([undefined, undefined]);
-      await agoraClient.unpublish();
-      await agoraroom.disconnect();
+      await livekitClient.unpublish();
+      await livekitRoom.disconnect();
       setJoinBoxRequested(false);
       toast.info('You have left the box and stopped publishing.');
       // Rejoin as viewer if needed, or simply leave the channel
       if (courtId && user) {
-        await agoraroom.connect(import.meta.env.VITE_AGORA_APP_ID!, courtId, null, user.id);
+        await livekitRoom.connect(import.meta.env.VITE_LIVEKIT_APP_ID!, courtId, null, user.id);
       }
     } catch (error: any) {
       console.error('Failed to leave box and unpublish:', error);

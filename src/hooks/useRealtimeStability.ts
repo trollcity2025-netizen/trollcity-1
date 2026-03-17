@@ -272,8 +272,8 @@ export function useLivestreamStability(streamId?: string) {
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
     
     setTimeout(() => {
-      // This would trigger a reconnect in the actual Agora implementation
-      window.dispatchEvent(new CustomEvent('agora-reconnect', { 
+      // This would trigger a reconnect in the actual LiveKit implementation
+      window.dispatchEvent(new CustomEvent('livekit-reconnect', { 
         detail: { streamId, attempt: reconnectAttempts.current } 
       }));
     }, delay);

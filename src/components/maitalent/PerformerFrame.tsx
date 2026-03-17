@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import VideoTile from '@/components/agora/VideoTile';
+import VideoTile from '@/components/livekit/VideoTile';
 
 export type PerformerState = 'empty' | 'connecting' | 'live' | 'camera_off' | 'mic_muted';
 
@@ -10,7 +10,7 @@ interface PerformerFrameProps {
   localAudioTrack?: any;
   remoteUser?: any;
   canPublish?: boolean;
-  agoraClient?: any;
+  livekitClient?: any;
   isSpeaking?: boolean;
   connectionState?: PerformerState;
 }
@@ -33,7 +33,7 @@ export const PerformerFrame: React.FC<PerformerFrameProps> = ({
   localAudioTrack,
   remoteUser,
   canPublish = false,
-  agoraClient,
+  livekitClient,
   isSpeaking = false,
   connectionState = 'empty',
 }) => {
@@ -103,7 +103,7 @@ export const PerformerFrame: React.FC<PerformerFrameProps> = ({
               displayName={username}
               role="performer"
               canPublish={canPublish}
-              agoraClient={agoraClient}
+              livekitClient={livekitClient}
             />
           ) : remoteUser || performer ? (
             <VideoTile

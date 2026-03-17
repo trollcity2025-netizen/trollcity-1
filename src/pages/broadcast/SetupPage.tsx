@@ -308,6 +308,9 @@ export default function SetupPage() {
     mediaElement.style.objectFit = 'cover';
     // Mirror front camera only
     mediaElement.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
+    // Critical: Add autoplay and playsInline for proper video display
+    mediaElement.autoplay = true;
+    mediaElement.playsInline = true;
     
     videoContainerRef.current.appendChild(mediaElement);
   };
@@ -758,6 +761,9 @@ export default function SetupPage() {
           mediaElement.style.height = '100%';
           mediaElement.style.objectFit = 'contain'; // Use contain for screen share
           mediaElement.style.transform = 'none'; // Don't mirror screen share
+          // Critical: Add autoplay and playsInline for proper video display
+          mediaElement.autoplay = true;
+          mediaElement.playsInline = true;
           videoContainerRef.current.appendChild(mediaElement);
           console.log('[SetupPage] Screen track attached for preview');
         }
