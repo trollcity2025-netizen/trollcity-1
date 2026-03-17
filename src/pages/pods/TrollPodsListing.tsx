@@ -31,6 +31,17 @@ export default function TrollPodsListing() {
   const [isCreating, setIsCreating] = useState(false);
   const [newRoomTitle, setNewRoomTitle] = useState('');
 
+  // Under construction flag - set to true to block access
+  const IS_UNDER_CONSTRUCTION = true;
+
+  const handleRoomClick = (roomId: string) => {
+    if (IS_UNDER_CONSTRUCTION) {
+      toast.info('Troll Pods are currently under construction. Please check back soon!');
+      return;
+    }
+    navigate(`/pods/${roomId}`);
+  };
+
   const fetchRooms = async () => {
     try {
       // Fetch rooms first
@@ -189,6 +200,10 @@ export default function TrollPodsListing() {
           
           <button
             onClick={() => {
+              if (IS_UNDER_CONSTRUCTION) {
+                toast.info('Troll Pods are currently under construction. Please check back soon!');
+                return;
+              }
               if (!profile) {
                 navigate('/auth?mode=signup');
               } else {
@@ -257,7 +272,7 @@ export default function TrollPodsListing() {
             {rooms.map((room) => (
               <div
                 key={room.id}
-                onClick={() => navigate(`/pods/${room.id}`)}
+                onClick={() => handleRoomClick(room.id)}
                 className={`group cursor-pointer ${trollCityTheme.backgrounds.card} border border-white/10 hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300 hover:transform hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10`}
               >
                 <div className="flex justify-between items-start mb-4">

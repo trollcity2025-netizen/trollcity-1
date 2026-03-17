@@ -48,9 +48,10 @@ export function useStreamStats(streamerId: string | null) {
     
     // Polling for streamer stats (coins/level) instead of Realtime
     // This reduces DB load when many viewers are watching one streamer
+    // Reduced from 30s to 60s to reduce disk I/O
     const interval = setInterval(() => {
         fetchStreamerStats();
-    }, 30000); // Poll every 30s
+    }, 60000); // Poll every 60s
 
     return () => {
       clearInterval(interval);

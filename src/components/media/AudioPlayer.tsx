@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, 
   Heart, Coins, MessageCircle, Share2, Minimize2, Maximize2, 
   X, Repeat, Shuffle, ListMusic 
 } from 'lucide-react';
+import { Howl } from 'howler';
 import { trollCityTheme } from '@/styles/trollCityTheme';
 import type { Song } from '@/types/media';
 import { TIP_AMOUNTS } from '@/types/media';
@@ -24,16 +25,16 @@ interface AudioPlayerProps {
 export default function AudioPlayer({ 
   song, queue, currentIndex, isPlaying, onIsPlayingChange, isMinimized, onMinimizeToggle, onClose, onChangeSong 
 }: AudioPlayerProps) {
-  const [internalIsPlaying, setInternalIsPlaying] = useState(true);
-  // Use controlled isPlaying if provided, otherwise fall back to internal state
+  const [internalIsPlaying, setInternalIsPlaying] = useState(false);
   const currentIsPlaying = isPlaying !== undefined ? isPlaying : internalIsPlaying;
-  const setCurrentIsPlaying = (playing: boolean) => {
+  const setCurrentIsPlaying = useCallback((playing: boolean) => {
     if (onIsPlayingChange) {
       onIsPlayingChange(playing);
     } else {
       setInternalIsPlaying(playing);
     }
-  };
+  }, [onIsPlayingChange]);
+
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
@@ -42,58 +43,115 @@ export default function AudioPlayer({
   const [shuffleMode, setShuffleMode] = useState(false);
   const [showTipModal, setShowTipModal] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const howlRef = useRef<Howl | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const { toggleLike, sendTip, song: currentSongData } = useSong(song.id);
 
-  // Update audio source when song changes
+  // Initialize Howl when song changes
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.src = song.audio_url;
-      audioRef.current.load();
-      if (currentIsPlaying) {
-        audioRef.current.play().catch(console.error);
-      }
-      setCurrentTime(0);
+    if (!song.audio_url) {
+      setLoadError('No audio URL available');
+      return;
     }
+
+    setIsLoading(true);
+    setLoadError(null);
+
+    // Clean up previous Howl instance
+    if (howlRef.current) {
+      howlRef.current.unload();
+      howlRef.current = null;
+    }
+
+    // Create new Howl instance
+    const howl = new Howl({
+      src: [song.audio_url],
+      html5: true, // Force HTML5 Audio to support streaming
+      volume: isMuted ? 0 : volume,
+      preload: true,
+      onload: () => {
+        setIsLoading(false);
+        setDuration(howl.duration());
+        // Auto-play when loaded if should be playing
+        if (currentIsPlaying) {
+          howl.play();
+        }
+      },
+      onloaderror: (_id, error) => {
+        console.error('Audio load error:', error);
+        setIsLoading(false);
+        setLoadError('Failed to load audio');
+      },
+      onplay: () => {
+        setIsLoading(false);
+        setCurrentIsPlaying(true);
+      },
+      onpause: () => {
+        setCurrentIsPlaying(false);
+      },
+      onstop: () => {
+        setCurrentIsPlaying(false);
+      },
+      onend: () => {
+        handleEnded();
+      },
+      onseek: () => {
+        setCurrentTime(howl.seek() as number);
+      }
+    });
+
+    howlRef.current = howl;
+
+    // Play if should be playing
+    if (currentIsPlaying) {
+      howl.play();
+    }
+
+    return () => {
+      // Don't unload on component unmount, just stop
+      // howl.unload() is called when song changes
+    };
   }, [song.id, song.audio_url]);
 
-  // Handle play/pause
+  // Update play/pause state
   useEffect(() => {
-    if (audioRef.current) {
-      if (currentIsPlaying) {
-        audioRef.current.play().catch(console.error);
-      } else {
-        audioRef.current.pause();
-      }
+    if (!howlRef.current) return;
+
+    if (currentIsPlaying && !howlRef.current.playing()) {
+      howlRef.current.play();
+    } else if (!currentIsPlaying && howlRef.current.playing()) {
+      howlRef.current.pause();
     }
   }, [currentIsPlaying]);
 
-  // Handle volume
+  // Update volume
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
+    if (howlRef.current) {
+      howlRef.current.volume(isMuted ? 0 : volume);
     }
   }, [volume, isMuted]);
 
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
+  // Update current time periodically
+  useEffect(() => {
+    if (!howlRef.current || !currentIsPlaying) return;
 
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
-    }
-  };
+    const interval = setInterval(() => {
+      if (howlRef.current && howlRef.current.playing()) {
+        setCurrentTime(howlRef.current.seek() as number);
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [currentIsPlaying]);
 
   const handleEnded = () => {
     if (repeatMode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(console.error);
+      if (howlRef.current) {
+        howlRef.current.seek(0);
+        howlRef.current.play();
       }
     } else if (currentIndex < queue.length - 1) {
       onChangeSong(currentIndex + 1);
@@ -105,18 +163,20 @@ export default function AudioPlayer({
   };
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!progressRef.current || !audioRef.current) return;
+    if (!progressRef.current || !howlRef.current || duration === 0) return;
     const rect = progressRef.current.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
     const newTime = percent * duration;
-    audioRef.current.currentTime = newTime;
+    howlRef.current.seek(newTime);
     setCurrentTime(newTime);
   };
 
   const handlePrevious = () => {
     if (currentTime > 3) {
-      if (audioRef.current) audioRef.current.currentTime = 0;
-      setCurrentTime(0);
+      if (howlRef.current) {
+        howlRef.current.seek(0);
+        setCurrentTime(0);
+      }
     } else if (currentIndex > 0) {
       onChangeSong(currentIndex - 1);
     }
@@ -134,11 +194,21 @@ export default function AudioPlayer({
   };
 
   const formatTime = (time: number) => {
-    if (!isFinite(time)) return '0:00';
+    if (!isFinite(time) || isNaN(time)) return '0:00';
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (howlRef.current) {
+        howlRef.current.unload();
+        howlRef.current = null;
+      }
+    };
+  }, []);
 
   if (isMinimized) {
     return (
@@ -154,20 +224,24 @@ export default function AudioPlayer({
             <p className="text-sm text-gray-400 truncate">{song.artist?.artist_name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setCurrentIsPlaying(!currentIsPlaying)} className="p-2 rounded-full bg-pink-500 hover:bg-pink-400">
-              {currentIsPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
+            <button 
+              onClick={() => setCurrentIsPlaying(!currentIsPlaying)} 
+              className="p-2 rounded-full bg-pink-500 hover:bg-pink-400 disabled:opacity-50"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : currentIsPlaying ? (
+                <Pause className="w-5 h-5 text-white" />
+              ) : (
+                <Play className="w-5 h-5 text-white ml-0.5" />
+              )}
             </button>
             <button onClick={onMinimizeToggle} className="p-2 text-gray-400 hover:text-white">
               <Maximize2 className="w-5 h-5" />
             </button>
           </div>
         </div>
-        <audio 
-          ref={audioRef} 
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleEnded}
-        />
       </div>
     );
   }
@@ -176,6 +250,19 @@ export default function AudioPlayer({
     <>
       <div className="fixed bottom-4 left-4 right-4 md:left-80 md:right-4 z-50">
         <div className={`${trollCityTheme.backgrounds.card} border ${trollCityTheme.borders.glass} rounded-2xl shadow-2xl overflow-hidden`}>
+          {/* Error/Loading Banner */}
+          {loadError && (
+            <div className="bg-red-500/20 border-b border-red-500/30 px-4 py-2 text-red-400 text-sm">
+              {loadError}
+            </div>
+          )}
+          {isLoading && !loadError && (
+            <div className="bg-blue-500/20 border-b border-blue-500/30 px-4 py-2 text-blue-400 text-sm flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              Loading audio...
+            </div>
+          )}
+
           {/* Progress Bar */}
           <div 
             ref={progressRef}
@@ -184,7 +271,7 @@ export default function AudioPlayer({
           >
             <div 
               className="h-full bg-gradient-to-r from-pink-500 to-purple-500 relative"
-              style={{ width: `${(currentTime / duration) * 100}%` }}
+              style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
             >
               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
@@ -232,9 +319,16 @@ export default function AudioPlayer({
 
                 <button 
                   onClick={() => setCurrentIsPlaying(!currentIsPlaying)} 
-                  className="w-12 h-12 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 flex items-center justify-center transition-all"
+                  className="w-12 h-12 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 flex items-center justify-center transition-all disabled:opacity-50"
+                  disabled={isLoading || !!loadError}
                 >
-                  {currentIsPlaying ? <Pause className="w-6 h-6 text-white" /> : <Play className="w-6 h-6 text-white ml-1" />}
+                  {isLoading ? (
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : currentIsPlaying ? (
+                    <Pause className="w-6 h-6 text-white" />
+                  ) : (
+                    <Play className="w-6 h-6 text-white ml-1" />
+                  )}
                 </button>
 
                 <button onClick={handleNext} className="p-2 text-gray-300 hover:text-white transition-colors">
@@ -297,13 +391,6 @@ export default function AudioPlayer({
               </div>
             </div>
           </div>
-
-          <audio 
-            ref={audioRef} 
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onEnded={handleEnded}
-          />
         </div>
       </div>
 

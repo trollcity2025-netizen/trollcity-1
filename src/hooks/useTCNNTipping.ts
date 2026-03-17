@@ -11,6 +11,8 @@ export interface UseTCNNTippingReturn {
   tips: TCNNTip[];
   loading: boolean;
   error: string | null;
+  canTip: boolean;
+  checkCanTip: (tipperId: string, recipientId: string) => Promise<boolean>;
   sendTip: (input: TipInput) => Promise<{ success: boolean; error: string | null; tipId?: string }>;
   fetchTipsForRecipient: (recipientId: string) => Promise<void>;
   fetchTipsForArticle: (articleId: string) => Promise<void>;
@@ -20,6 +22,40 @@ export function useTCNNTipping(): UseTCNNTippingReturn {
   const [tips, setTips] = useState<TCNNTip[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canTip, setCanTip] = useState(true);
+
+  // Check if user can tip (has enough coins and is not tipping themselves)
+  const checkCanTip = useCallback(async (tipperId: string, recipientId: string): Promise<boolean> => {
+    try {
+      // Can't tip yourself
+      if (tipperId === recipientId) {
+        setCanTip(false);
+        return false;
+      }
+
+      // Get tipper's coin balance
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('troll_coins')
+        .eq('id', tipperId)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        setCanTip(false);
+        return false;
+      }
+
+      // Minimum 1 coin needed to tip
+      const hasEnoughCoins = (profile?.troll_coins || 0) >= 1;
+      setCanTip(hasEnoughCoins);
+      return hasEnoughCoins;
+    } catch (err) {
+      console.error('Error checking tip eligibility:', err);
+      setCanTip(false);
+      return false;
+    }
+  }, []);
 
   const sendTip = useCallback(async (input: TipInput): Promise<{ success: boolean; error: string | null; tipId?: string }> => {
     try {
@@ -147,6 +183,8 @@ export function useTCNNTipping(): UseTCNNTippingReturn {
     tips,
     loading,
     error,
+    canTip,
+    checkCanTip,
     sendTip,
     fetchTipsForRecipient,
     fetchTipsForArticle,

@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { setResetPin } from '@/services/passwordManager'
 import UserInventory from './UserInventory'
 import { trollCityTheme } from '../styles/trollCityTheme'
+import FamilyMinorSettings from '../components/profile/FamilyMinorSettings'
 
 export default function ProfileSettings() {
   const { user, profile, refreshProfile } = useAuthStore()
@@ -190,6 +191,16 @@ export default function ProfileSettings() {
             </button>
           </div>
         </div>
+
+        {/* Family & Minor Settings */}
+        {profile && (
+          <div className={`${trollCityTheme.components.card}`}>
+            <FamilyMinorSettings 
+              profile={profile as any} 
+              onUpdate={() => refreshProfile()}
+            />
+          </div>
+        )}
 
         <div className={`${trollCityTheme.components.card}`}>
           <div className="flex items-center gap-2 mb-4">

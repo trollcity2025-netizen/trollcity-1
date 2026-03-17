@@ -51,14 +51,14 @@ interface RelatedArticle {
   author: {
     stage_name: string;
     avatar_url: string | null;
-  };
+  } | null;
 }
 
 export default function ArticleReader() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const { canTip } = useTCNNTipping();
+  const { user, profile } = useAuthStore();
+  const { canTip, checkCanTip } = useTCNNTipping();
   const { hasAnyRole } = useTCNNRoles(user?.id);
   
   const [article, setArticle] = useState<TCNNArticle | null>(null);
@@ -70,12 +70,22 @@ export default function ArticleReader() {
   const [tipMessage, setTipMessage] = useState('');
   const [isTipping, setIsTipping] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [canUserTip, setCanUserTip] = useState(false);
 
   useEffect(() => {
     if (id) {
       loadArticle();
     }
   }, [id]);
+
+  // Check if user can tip when profile or article changes
+  useEffect(() => {
+    if (user && article) {
+      checkCanTip(user.id, article.author_id).then(setCanUserTip);
+    } else {
+      setCanUserTip(false);
+    }
+  }, [user, article, checkCanTip]);
 
   const loadArticle = async () => {
     setIsLoading(true);
@@ -85,9 +95,9 @@ export default function ArticleReader() {
         .from('tcnn_articles')
         .select(`
           *,
-          author:user_id(
+          author:author_id(
             id,
-            stage_name,
+            username,
             avatar_url,
             is_verified
           )
@@ -126,8 +136,8 @@ export default function ArticleReader() {
           headline,
           featured_image_url,
           published_at,
-          author:user_id(
-            stage_name,
+          author:author_id(
+            username,
             avatar_url
           )
         `)
@@ -173,7 +183,7 @@ export default function ArticleReader() {
     try {
       const { data, error } = await supabase.rpc('tip_journalist', {
         p_article_id: article.id,
-        p_journalist_id: article.user_id,
+        p_journalist_id: article.author_id,
         p_tipper_id: user.id,
         p_amount: amount,
         p_message: tipMessage || null
@@ -182,7 +192,7 @@ export default function ArticleReader() {
       if (error) throw error;
 
       if (data?.success) {
-        toast.success(`Tipped ${amount} coins to ${article.author.stage_name}!`);
+        toast.success(`Tipped ${amount} coins to ${article.author?.username || article.author?.stage_name || 'Unknown Author'}!`);
         setShowTipModal(false);
         setTipAmount('10');
         setTipMessage('');
@@ -340,7 +350,7 @@ export default function ArticleReader() {
             <Card className="bg-slate-900/50 border-white/10 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  {article.author.avatar_url ? (
+                  {article.author?.avatar_url ? (
                     <img
                       src={article.author.avatar_url}
                       alt={article.author.stage_name}
@@ -353,8 +363,8 @@ export default function ArticleReader() {
                   )}
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white">{article.author.stage_name}</span>
-                      {article.author.is_verified && (
+                      <span className="font-semibold text-white">{article.author?.username || article.author?.stage_name || 'Unknown Author'}</span>
+                      {article.author?.is_verified && (
                         <span className="text-blue-400">✓</span>
                       )}
                     </div>
@@ -366,7 +376,7 @@ export default function ArticleReader() {
                 
                 <Button
                   onClick={() => setShowTipModal(true)}
-                  disabled={!canTip || user?.id === article.user_id}
+                  disabled={!user || user?.id === article.author_id}
                   className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400"
                 >
                   <Coins className="w-4 h-4 mr-2" />
@@ -404,7 +414,10 @@ export default function ArticleReader() {
                   <MessageCircle className="w-5 h-5" />
                   <span>Comments</span>
                 </button>
-                <button className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                <button 
+                  onClick={shareArticle}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                >
                   <Share2 className="w-5 h-5" />
                   <span>Share</span>
                 </button>
@@ -412,7 +425,7 @@ export default function ArticleReader() {
               
               <Button
                 onClick={() => setShowTipModal(true)}
-                disabled={!canTip || user?.id === article.user_id}
+                disabled={!user || user?.id === article.author_id}
                 variant="outline"
                 className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
               >
@@ -470,7 +483,7 @@ export default function ArticleReader() {
                           {related.headline}
                         </h4>
                         <p className="text-xs text-gray-500 mt-1">
-                          {related.author.stage_name} • {formatDistanceToNow(related.published_at)}
+                          by {related.author?.username || related.author?.stage_name || 'Unknown'}
                         </p>
                       </div>
                     </div>
@@ -488,7 +501,7 @@ export default function ArticleReader() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coins className="w-5 h-5 text-yellow-400" />
-              Tip {article.author.stage_name}
+              Tip {article.author?.username || article.author?.stage_name || 'Unknown Author'}
             </DialogTitle>
           </DialogHeader>
           

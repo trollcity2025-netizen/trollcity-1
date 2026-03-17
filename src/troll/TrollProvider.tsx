@@ -37,7 +37,14 @@ const userActionThresholds: Record<string, number> = {};
 const getRandomThreshold = () => Math.floor(Math.random() * 11) + 15; // 15-25
 
 export const TrollProvider = ({ children }: TrollProviderProps) => {
-  const { triggerTroll: engineTriggerTroll, completeTroll } = useTrollEngine();
+  const { triggerTroll: engineTriggerTroll, completeTroll } = useTrollEngine((event) => {
+    // Handle background troll triggers from useTrollEngine
+    setActiveTroll(event);
+    setTimeout(() => {
+      setActiveTroll(null);
+      completeTroll();
+    }, event.duration);
+  });
   const [activeTroll, setActiveTroll] = useState<TrollEvent | null>(null);
 
   // Handle triggering a troll

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
 interface FamilyMinorSettingsProps {
-  profile: {
+  profile?: {
     has_children?: boolean;
     minor_allowed_on_stream?: boolean;
     minor_violation_count?: number;
@@ -31,10 +31,12 @@ export const FamilyMinorSettings: React.FC<FamilyMinorSettingsProps> = ({
 
   // Update local state when profile changes
   useEffect(() => {
-    setLocalState({
-      has_children: profile?.has_children || false,
-      minor_allowed_on_stream: profile?.minor_allowed_on_stream || false,
-    });
+    if (profile) {
+      setLocalState({
+        has_children: profile.has_children || false,
+        minor_allowed_on_stream: profile.minor_allowed_on_stream || false,
+      });
+    }
   }, [profile]);
 
   const handleToggle = async (field: 'has_children' | 'minor_allowed_on_stream') => {

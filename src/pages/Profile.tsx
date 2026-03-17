@@ -201,7 +201,7 @@ function ProfileInner() {
     // setInventoryLoading(true);
     try {
       const results = await Promise.all([
-        supabase.from('user_perks').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+        supabase.from('user_perks').select('*').eq('user_id', uid).order('purchased_at', { ascending: false }),
         supabase.from('user_entrance_effects').select('*').eq('user_id', uid),
         supabase.from('user_insurances').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
         supabase.from('call_minutes').select('*').eq('user_id', uid).maybeSingle(),

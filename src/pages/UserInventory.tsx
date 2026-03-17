@@ -50,7 +50,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
       const results = await Promise.all([
         supabase.from('user_inventory').select('*').eq('user_id', user!.id).order('acquired_at', { ascending: false }),
         supabase.from('user_entrance_effects').select('*').eq('user_id', user!.id).order('purchased_at', { ascending: false }),
-        supabase.from('user_perks').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
+        supabase.from('user_perks').select('*').eq('user_id', user!.id).order('purchased_at', { ascending: false }),
         supabase.from('user_insurances').select('*').eq('user_id', user!.id).order('created_at', { ascending: false }),
         supabase
           .from('user_active_items')

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/lib/store'
 import { trollCityTheme } from '@/styles/trollCityTheme'
 import { WallPost } from '@/types/trollWall'
 import UserNameWithAge from '@/components/UserNameWithAge'
+import NeonGlowUsername from '@/components/NeonGlowUsername'
 import CreatePostComposer from './CreatePostComposer'
 import { Virtuoso } from 'react-virtuoso'
 
@@ -73,7 +74,17 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
           user_created_at: author.created_at,
           user_liked: likedPostIds.has(post.id),
           reactions: post.reactions || {},
-          gifts: post.gifts || {}
+          gifts: post.gifts || {},
+          // Extended profile fields for NeonGlowUsername
+          user_role: author.role,
+          is_verified: author.is_verified,
+          is_gold: author.is_gold,
+          username_style: author.username_style,
+          badge: author.badge,
+          empire_role: author.empire_role,
+          officer_level: author.officer_level,
+          troller_level: author.troller_level,
+          is_troller: author.is_troller,
         } as WallPost
       })
 
@@ -199,32 +210,27 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
 
   const renderPost = (index: number, post: WallPost) => (
     <div className="pb-4">
-      <div
-        className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-5`}
-      >
-        <div className="flex items-start gap-3">
-          <div className="h-11 w-11 rounded-full overflow-hidden bg-white/5 flex-shrink-0">
-            {post.avatar_url ? (
-              <img src={post.avatar_url} alt={post.username || 'User'} className="h-full w-full object-cover" />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center text-sm text-white/60">
-                {post.username?.[0]?.toUpperCase() || 'T'}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               {post.username ? (
-                <UserNameWithAge
-                  user={{
-                    username: post.username,
-                    id: post.user_id,
+                <NeonGlowUsername
+                  username={post.username}
+                  avatarUrl={post.avatar_url}
+                  profile={{
                     is_admin: post.is_admin,
                     is_troll_officer: post.is_troll_officer,
                     is_og_user: post.is_og_user,
-                    created_at: post.user_created_at
+                    is_verified: post.user_verified,
+                    is_gold: post.user_is_gold,
+                    role: post.user_role,
+                    officer_level: post.officer_level,
+                    troller_level: post.troller_level,
+                    is_troller: post.is_troller,
+                    username_style: post.username_style,
+                    badge: post.badge,
+                    empire_role: post.empire_role,
                   }}
-                  className="font-semibold text-white"
+                  size="sm"
                 />
               ) : (
                 <span className="font-semibold text-white/60">Deleted User</span>
@@ -362,8 +368,6 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                 ))}
               </div>
             )}
-          </div>
-        </div>
       </div>
     </div>
   )

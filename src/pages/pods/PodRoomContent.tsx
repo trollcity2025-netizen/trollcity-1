@@ -23,6 +23,7 @@ interface PodRoomContentProps {
   remoteUsers?: any[];
   localAudioTrack?: any;
   isStaff?: boolean;
+  onToggleMic?: () => void;
 }
 
 const PodRoomContent = ({ 
@@ -41,7 +42,8 @@ const PodRoomContent = ({
   canPublish, 
   remoteUsers,
   localAudioTrack,
-  isStaff
+  isStaff,
+  onToggleMic
 }: PodRoomContentProps) => {
   if (!room) {
     return (
@@ -83,7 +85,9 @@ const PodRoomContent = ({
             </div>
           </div>
           <div className="flex-1 p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {participantsData.map(p => {
+            {participantsData
+              .filter(p => p.role === 'host' || p.role === 'speaker' || p.role === 'officer')
+              .map(p => {
               // Find matching remote user or use local audio track for self
               const isSelf = p.user_id === currentUser?.id;
               const remoteUser = remoteUsers?.find((ru: RemoteParticipant) => {
@@ -124,8 +128,8 @@ const PodRoomContent = ({
               <div className="flex items-center justify-between">
                 <div className="flex space-x-2">
                   {canPublish && localAudioTrack && (
-                    <button onClick={() => localAudioTrack.setMuted(!localAudioTrack.muted)}>
-                      {localAudioTrack.muted ? <MicOff /> : <Mic />}
+                    <button onClick={onToggleMic}>
+                      {localAudioTrack.isEnabled ? <Mic /> : <MicOff />}
                     </button>
                   )}
                   {!canPublish && (

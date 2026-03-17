@@ -3,22 +3,27 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { useBackgroundProfileRefresh } from '../hooks/useBackgroundProfileRefresh'
+import { useCoins } from '../lib/hooks/useCoins'
 import { toast } from 'sonner'
 
 export default function FamilyApplication() {
   const { profile } = useAuthStore()
+  const { troll_coins: coinsBalance, refreshCoins } = useCoins()
   const navigate = useNavigate()
   const { refreshProfileInBackground } = useBackgroundProfileRefresh()
   const [reason, setReason] = useState('')
   const [commitment, setCommitment] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Get troll coins from useCoins hook
+  const userCoins = typeof coinsBalance === 'number' ? coinsBalance : (profile?.troll_coins || 0)
+
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!profile) return toast.error('Please sign in')
     if (!reason.trim() || !commitment.trim()) return toast.error('Complete all fields')
     const requiredCoins = 1000
-    if ((profile.troll_coins || 0) < requiredCoins) {
+    if (userCoins < requiredCoins) {
       toast.error('Requires 1,000 troll_coins to apply. Redirecting to Store...')
       navigate('/store?tab=packages')
       return
@@ -26,13 +31,14 @@ export default function FamilyApplication() {
     try {
       setLoading(true)
       
-      // 1. Deduct coins securely
-      const { data: spendResult, error: spendError } = await supabase.rpc('troll_bank_spend_coins', {
-        p_user_id: profile.id,
-        p_amount: requiredCoins,
-        p_bucket: 'application',
-        p_source: 'family_application',
-        p_metadata: { type: 'troll_family' }
+      // 1. Deduct coins securely using standard spend_coins RPC
+      const { data: spendResult, error: spendError } = await supabase.rpc('spend_coins', {
+        p_sender_id: profile.id,
+        p_receiver_id: null,
+        p_coin_amount: requiredCoins,
+        p_source: 'application',
+        p_item: 'family_application',
+        p_idempotency_key: null
       });
 
       if (spendError) throw spendError;
@@ -58,14 +64,17 @@ export default function FamilyApplication() {
         throw error
       }
       toast.success('Application submitted! An admin will review it soon.')
-      useAuthStore.getState().setProfile({ ...profile, troll_coins: profile.troll_coins - requiredCoins } as any)
+      useAuthStore.getState().setProfile({ ...profile, troll_coins: userCoins - requiredCoins } as any)
       refreshProfileInBackground()
-      setReason('')
-      setCommitment('')
+      refreshCoins()
+      // Redirect to family home after successful submission
+      navigate('/family/home')
     } catch {
       toast.error('Failed to submit')
     } finally {
       setLoading(false)
+      setReason('')
+      setCommitment('')
     }
   }
 

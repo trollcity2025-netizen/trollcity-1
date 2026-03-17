@@ -126,16 +126,7 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
     // OR challenges specifically targeted at this stream
     const { data: challenges, error } = await supabase
       .from('battle_challenges')
-      .select(`
-        id,
-        challenger_stream_id,
-        created_at,
-        streams!battle_challenges_challenger_stream_id_fkey(
-          user_id,
-          title,
-          user_profiles(username, avatar_url)
-        )
-      `)
+      .select('*')
       .eq('status', 'pending')
       .or(`opponent_stream_id.is.null,opponent_stream_id.eq.${currentStream.id}`)
       .neq('challenger_stream_id', currentStream.id) // Don't show my own challenges
@@ -148,12 +139,34 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
     }
 
     if (challenges && challenges.length > 0) {
-      const enrichedChallenges: PendingChallenge[] = challenges.map((challenge: any) => ({
-        id: challenge.id,
-        challenger_stream_id: challenge.challenger_stream_id,
-        challenger_name: challenge.streams?.user_profiles?.username || 'Unknown',
-        created_at: challenge.created_at,
-      }));
+      // Get stream IDs to fetch user info
+      const streamIds = challenges.map(c => c.challenger_stream_id);
+      const { data: streamsData } = await supabase
+        .from('streams')
+        .select('id, user_id, title')
+        .in('id', streamIds);
+      
+      const streamMap = new Map(streamsData?.map(s => [s.id, s]) || []);
+      
+      // Get user IDs for profiles
+      const userIds = [...new Set(streamsData?.map(s => s.user_id).filter(Boolean) || [])];
+      const { data: profilesData } = await supabase
+        .from('user_profiles')
+        .select('id, username, avatar_url')
+        .in('id', userIds);
+      
+      const profileMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+      
+      const enrichedChallenges: PendingChallenge[] = challenges.map((challenge: any) => {
+        const stream = streamMap.get(challenge.challenger_stream_id);
+        const profile = stream ? profileMap.get(stream.user_id) : null;
+        return {
+          id: challenge.id,
+          challenger_stream_id: challenge.challenger_stream_id,
+          challenger_name: profile?.username || stream?.title || 'Unknown',
+          created_at: challenge.created_at,
+        };
+      });
       
       setPendingChallenges(enrichedChallenges);
     } else {
@@ -162,8 +175,8 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
 
     // Check if this stream has an active challenge they created
     const { data: myChallenge } = await supabase
-      .from('battle_challenges')
-      .select('id, status')
+      .from('battles')
+      .select('id, status, challenger_stream_id, opponent_stream_id')
       .eq('challenger_stream_id', currentStream.id)
       .eq('status', 'pending')
       .maybeSingle();
@@ -348,21 +361,22 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
   useEffect(() => {
     if (!currentStream.id) return;
     
+    // Subscribe to battles table (not battle_challenges)
     const channel = supabase
-      .channel('battle-challenges')
+      .channel('battles-changes')
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'battle_challenges',
+          table: 'battles',
         },
         (payload) => {
-          const updatedChallenge = payload.new as any;
-          // If a challenge was accepted, remove it from pending list
-          if (updatedChallenge.status === 'accepted') {
+          const updatedBattle = payload.new as any;
+          // If a battle was accepted/started, remove it from pending list
+          if (updatedBattle.status === 'active' || updatedBattle.status === 'accepted') {
             setPendingChallenges(prev =>
-              prev.filter(c => c.id !== updatedChallenge.id)
+              prev.filter(c => c.id !== updatedBattle.id)
             );
           }
         }
@@ -372,10 +386,10 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'battle_challenges',
+          table: 'battles',
         },
         () => {
-          // New challenge created, refresh the list
+          // New battle created, refresh the list
           checkPendingChallenges();
         }
       )
@@ -386,50 +400,62 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
     };
   }, [currentStream.id]);
 
-  // Create an OPEN battle challenge (any broadcaster can accept)
+  // Join the instant battle queue - automatically matches with another broadcaster
   const handleFindMatch = async () => {
-    if (loading || onlineBroadcasters.length === 0) return;
+    if (loading) return;
     
     setLoading(true);
     
     try {
-      // Check if a pending challenge already exists for this stream
-      const { data: existingChallenge, error: checkError } = await supabase
-        .from('battle_challenges')
-        .select('id')
-        .eq('challenger_stream_id', currentStream.id)
-        .eq('status', 'pending')
-        .maybeSingle();
-      
-      if (checkError) throw checkError;
-      
-      if (existingChallenge) {
-        toast.info('You already have a pending challenge');
-        setMyChallengeId(existingChallenge.id);
-        setBattleStatus('waiting');
-        setLoading(false);
-        return;
-      }
-      
-      // Create an OPEN challenge - any broadcaster can accept
-      const { data: challenge, error } = await supabase
-        .from('battle_challenges')
-        .insert({
-          challenger_stream_id: currentStream.id,
-          challenger_user_id: currentStream.user_id,
-          opponent_stream_id: null, // Open to anyone
-          opponent_user_id: null,
-          status: 'pending',
-        })
-        .select('id')
-        .single();
+      // Call the instant battle RPC - this automatically matches broadcasters
+      const { data, error } = await supabase.rpc('start_instant_battle', {
+        p_stream_id: currentStream.id,
+        p_category: 'trollmers'
+      });
       
       if (error) throw error;
       
-      if (challenge) {
-        setMyChallengeId(challenge.id);
-        setBattleStatus('waiting');
-        toast.info('Open challenge created! Waiting for any broadcaster to accept...');
+      if (data?.success) {
+        if (data.status === 'waiting') {
+          // No opponent available yet - waiting in queue
+          setBattleStatus('waiting');
+          toast.info(data.message || 'Waiting for opponent...');
+        } else if (data.status === 'active') {
+          // Battle started immediately!
+          setBattleId(data.battle_id);
+          setBattleStatus('battling');
+          
+          // Get opponent info
+          if (data.opponent_stream_id) {
+            const { data: opponentData } = await supabase
+              .from('streams')
+              .select('id, user_id, title')
+              .eq('id', data.opponent_stream_id)
+              .single();
+              
+            if (opponentData) {
+              const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('username, avatar_url')
+                .eq('id', opponentData.user_id)
+                .single();
+                
+              setOpponentInfo({
+                ...opponentData,
+                ...profile
+              });
+            }
+          }
+          
+          // Start countdown
+          setCountdown(3);
+          
+          if (onBattleAccepted) {
+            onBattleAccepted();
+          }
+        }
+      } else {
+        throw new Error(data?.error || 'Failed to find match');
       }
     } catch (e: any) {
       console.error('Find match error:', e);
@@ -439,118 +465,20 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
     }
   };
 
-  // Accept a battle challenge - First come first served
-  const handleAcceptChallenge = async (challengeId: string, challengerStreamId: string) => {
-    if (loading) return;
-    
-    setLoading(true);
-    
-    try {
-      // Step 1: Try to claim the challenge by updating it with our stream ID
-      // This is an atomic operation - only one broadcaster will succeed
-      const { data: updatedChallenge, error: updateError } = await supabase
-        .from('battle_challenges')
-        .update({
-          opponent_stream_id: currentStream.id,
-          opponent_user_id: currentStream.user_id,
-          status: 'accepted',
-          accepted_at: new Date().toISOString()
-        })
-        .eq('id', challengeId)
-        .eq('status', 'pending') // Only update if still pending
-        .select()
-        .single();
-      
-      if (updateError || !updatedChallenge) {
-        toast.error('This challenge was already accepted by someone else!');
-        setLoading(false);
-        return;
-      }
-      
-      // Step 2: Create the battle
-      const { data: battleData, error: battleError } = await supabase.rpc('create_battle_challenge', {
-        p_challenger_id: challengerStreamId,
-        p_opponent_id: currentStream.id
-      });
-      
-      if (battleError) throw battleError;
-      if (!battleData) throw new Error('Failed to create battle');
-      
-      // Step 3: Accept the battle
-      const { error: acceptError } = await supabase.rpc('accept_battle', {
-        p_battle_id: battleData
-      });
-      
-      if (acceptError) throw acceptError;
-      
-      // Step 4: Update streams to battle mode - only if in trollmers category
-      // Only set is_battle: true if the broadcaster is in trollmers category and actually in a battle
-      const isTrollmersCategory = currentStream.category === 'trollmers' || currentStream.category === 'trollmers head to head';
-      
-      if (isTrollmersCategory) {
-        await supabase
-          .from('streams')
-          .update({ is_battle: true, battle_id: battleData })
-          .eq('id', currentStream.id);
-        
-        await supabase
-          .from('streams')
-          .update({ is_battle: true, battle_id: battleData })
-          .eq('id', challengerStreamId);
-      } else {
-        console.warn('[TrollmersBattleControls] Cannot start battle - stream is not in trollmers category');
-        toast.error('Battles can only be started in Trollmers Head-to-Head category');
-        return;
-      }
-      
-      setBattleId(battleData);
-      setBattleStatus('battling');
-      
-      // Step 5: Get challenger info
-      const { data: challengerData } = await supabase
-        .from('streams')
-        .select('id, user_id, title')
-        .eq('id', challengerStreamId)
-        .single();
-        
-      if (challengerData) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('username, avatar_url')
-          .eq('id', challengerData.user_id)
-          .single();
-          
-        setOpponentInfo({
-          ...challengerData,
-          ...profile
-        });
-      }
-      
-      toast.success('Battle accepted! You got it first! Merging broadcasts...');
-      if (onBattleAccepted) onBattleAccepted();
-    } catch (e: any) {
-      console.error('Accept challenge error:', e);
-      toast.error(e.message || 'Failed to accept challenge');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Cancel my challenge
+  // Leave the battle queue
   const handleCancelChallenge = async () => {
-    if (!myChallengeId) return;
+    if (!currentStream.id) return;
     
     try {
-      await supabase
-        .from('battle_challenges')
-        .delete()
-        .eq('id', myChallengeId);
+      await supabase.rpc('leave_battle_queue', {
+        p_stream_id: currentStream.id
+      });
       
-      setMyChallengeId(null);
       setBattleStatus('idle');
-      toast.success('Challenge cancelled');
+      setMyChallengeId(null);
+      toast.success('Left the queue');
     } catch (e) {
-      console.error('Cancel challenge error:', e);
+      console.error('Leave queue error:', e);
     }
   };
 
@@ -614,35 +542,9 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
             Battle other Trollmers broadcasters! Winner earns 10 crowns.
           </p>
           
-          {pendingChallenges.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-amber-400 font-bold">Incoming Challenges:</p>
-              {pendingChallenges.map((challenge) => (
-                <div key={challenge.id} className="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg">
-                  <p className="text-sm text-white font-medium">{challenge.challenger_name}</p>
-                  <p className="text-xs text-zinc-400 mb-2">wants to battle!</p>
-                  <button
-                    onClick={() => handleAcceptChallenge(challenge.id, challenge.challenger_stream_id)}
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
-                  >
-                    {loading ? (
-                      <Loader2 className="animate-spin" size={14} />
-                    ) : (
-                      <>
-                        <UserPlus size={14} />
-                        ACCEPT MATCH
-                      </>
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          
           <button
             onClick={handleFindMatch}
-            disabled={loading || onlineBroadcasters.length === 0}
+            disabled={loading}
             className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 transition-all active:scale-95"
           >
             {loading ? (
@@ -674,10 +576,10 @@ export default function TrollmersBattleControls({ currentStream, onBattleAccepte
         <div className="space-y-3">
           <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-lg">
             <p className="text-amber-200 text-sm text-center font-bold">
-              Challenge Sent!
+              Searching for Opponent...
             </p>
             <p className="text-amber-300 text-xs text-center mt-1">
-              Waiting for opponent to accept...
+              You'll be matched automatically when another broadcaster clicks Find Match!
             </p>
             <div className="flex justify-center mt-2">
               <Loader2 className="animate-spin text-amber-500" size={20} />

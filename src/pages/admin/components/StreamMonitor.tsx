@@ -131,7 +131,8 @@ const StreamMonitor = () => {
                             room_name: selectedStream.roomName,
                             title: selectedStream.dbData?.title,
                             agora_channel: selectedStream.dbData?.id, // Agora channel uses stream ID
-                            mux_playback_id: selectedStream.dbData?.mux_playback_id
+                            mux_playback_id: selectedStream.dbData?.mux_playback_id,
+                            broadcaster_id: selectedStream.dbData?.broadcaster_id
                         })}
                         className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded transition-colors"
                     >

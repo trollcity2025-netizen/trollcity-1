@@ -105,7 +105,12 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
 
   const handleJoin = (podId: string) => {
     if (!onRequireAuth('listen to a pod')) return
-    navigate(`/pods/${podId}`)
+    toast.info('Troll Pods are currently under construction. Please check back soon!');
+  }
+
+  const handleViewAll = () => {
+    if (!onRequireAuth('browse pods')) return
+    toast.info('Troll Pods are currently under construction. Please check back soon!');
   }
 
   return (
@@ -179,8 +184,7 @@ export default function TrollPodsWidget({ onRequireAuth }: TrollPodsWidgetProps)
           type="button"
           onClick={(event) => {
             event.stopPropagation()
-            if (!onRequireAuth('browse pods')) return
-            navigate('/pods')
+            handleViewAll()
           }}
           className="mt-3 w-full text-xs font-semibold text-purple-200 hover:text-white"
         >

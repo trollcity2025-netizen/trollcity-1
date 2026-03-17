@@ -26,14 +26,18 @@ export default function StreamWatchModal({ stream, onClose }: StreamWatchModalPr
   const username = useAuthStore(s => s.profile?.username);
   const isGuest = !userId;
 
-  // Determine if we should use Mux or Agora
-  // Viewers should ALWAYS use Mux when available
-  const useMux = !!stream.mux_playback_id;
+  // Determine if we should use LiveKit or Mux
+  // Always prefer LiveKit for real-time low-latency viewing
+  // Use LiveKit room name if available, otherwise fall back to stream id
+  const livekitRoomName = stream.room_name || stream.id;
+  const useLiveKit = true; // Always prefer LiveKit for real-time viewing
 
-  if (useMux) {
+  if (useLiveKit) {
+    console.log('[StreamWatchModal] Using LiveKit for real-time viewer playback, room:', livekitRoomName);
+  } else if (stream.mux_playback_id) {
     console.log('[StreamWatchModal] Using Mux for viewer playback, mux_playback_id:', stream.mux_playback_id);
   } else {
-    console.log('[StreamWatchModal] No Mux available, stream may not be live yet');
+    console.log('[StreamWatchModal] No playback method available');
   }
 
   return (
@@ -46,8 +50,15 @@ export default function StreamWatchModal({ stream, onClose }: StreamWatchModalPr
           <X className="w-6 h-6" />
         </button>
         
-        {/* Viewers use Mux when available, otherwise use LiveKit */}
-        {useMux ? (
+        {/* Always prefer LiveKit for real-time viewing, fallback to Mux if needed */}
+        {useLiveKit ? (
+          /* Use LiveKit for real-time viewing */
+          <LiveKitViewerPlayer
+            streamId={stream.id}
+            broadcasterId={stream.broadcaster_id || stream.agora_channel}
+            roomName={livekitRoomName}
+          />
+        ) : stream.mux_playback_id ? (
           <MuxViewerPlayer
             playbackId={stream.mux_playback_id!}
             streamType="live"
@@ -55,12 +66,13 @@ export default function StreamWatchModal({ stream, onClose }: StreamWatchModalPr
             muted={false}
           />
         ) : (
-          /* Use LiveKit for real-time viewing */
-          <LiveKitViewerPlayer
-            streamId={stream.id}
-            broadcasterId={stream.broadcaster_id || stream.agora_channel}
-            roomName={stream.id}
-          />
+          <div className="flex items-center justify-center h-full text-white">
+            <div className="text-center">
+              <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
+              <p>No playback method available</p>
+              <p className="text-sm text-gray-400 mt-2">Stream may not be live yet</p>
+            </div>
+          </div>
         )}
 
         <ListenerEntranceEffect

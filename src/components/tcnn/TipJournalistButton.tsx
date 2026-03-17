@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Coins, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,11 +27,21 @@ export default function TipJournalistButton({
   className = ''
 }: TipJournalistButtonProps) {
   const { user } = useAuth();
-  const { canTip } = useTCNNTipping();
+  const { canTip, checkCanTip } = useTCNNTipping();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState<string>('10');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [canUserTip, setCanUserTip] = useState(true);
+
+  // Check if user can tip when component mounts or user changes
+  useEffect(() => {
+    if (user && user.id !== journalistId) {
+      checkCanTip(user.id, journalistId).then(setCanUserTip);
+    } else {
+      setCanUserTip(false);
+    }
+  }, [user, journalistId, checkCanTip]);
 
   const handleTip = async () => {
     if (!user) {
@@ -83,7 +93,7 @@ export default function TipJournalistButton({
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        disabled={!canTip}
+        disabled={!canUserTip}
         variant={variant === 'compact' ? 'ghost' : variant}
         size={isCompact ? 'sm' : 'default'}
         className={`${
@@ -91,7 +101,7 @@ export default function TipJournalistButton({
             ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10' 
             : 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black'
         } ${className}`}
-        title={!canTip ? 'Insufficient coins or not logged in' : `Tip ${journalistName}`}
+        title={!canUserTip ? 'Insufficient coins or not logged in' : `Tip ${journalistName}`}
       >
         <Coins className={`${isCompact ? 'w-4 h-4' : 'w-4 h-4 mr-2'}`} />
         {!isCompact && 'Tip'}

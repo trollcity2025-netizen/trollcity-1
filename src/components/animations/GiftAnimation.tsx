@@ -322,14 +322,12 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
 export function GiftAnimationsContainer() {
   const { giftAnimations } = useAnimationStore();
 
-  // Only show the most recent gift animation
-  const activeGift = giftAnimations[giftAnimations.length - 1];
-
+  // Show ALL gift animations using AnimatePresence for proper stacking
   return (
-    <AnimatePresence mode="wait">
-      {activeGift && (
-        <GiftAnimation key={activeGift.id} gift={activeGift} />
-      )}
+    <AnimatePresence>
+      {giftAnimations.map((gift) => (
+        <GiftAnimation key={gift.id} gift={gift} />
+      ))}
     </AnimatePresence>
   );
 }

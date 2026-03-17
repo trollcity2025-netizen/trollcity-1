@@ -224,10 +224,12 @@ export default function BroadcastGrid({
     if (!stream?.id) return;
 
     const fetchUserGifts = async () => {
-      // Get all user IDs currently in seats
-      const userIdsInStream = Object.values(seats)
-        .filter((seat): seat is SeatSession & { user_id: string } => !!seat?.user_id)
-        .map(seat => seat.user_id);
+      // Get all user IDs currently in seats (both user_id and guest_id)
+      const userIdsInStream: string[] = [];
+      Object.values(seats).forEach((seat) => {
+        if (seat?.user_id) userIdsInStream.push(seat.user_id);
+        if (seat?.guest_id) userIdsInStream.push(seat.guest_id);
+      });
       
       // Also include host
       if (stream.user_id && !userIdsInStream.includes(stream.user_id)) {
@@ -302,11 +304,13 @@ export default function BroadcastGrid({
   }, [seats, stream.user_id, stream.box_count]);
 
   // Deduplicate user IDs (prevents redundant attribute lookups)
+  // Also include guest_ids for guests
   const userIds = useMemo(() => {
     const set = new Set<string>();
     if (stream.user_id) set.add(stream.user_id); // Always include host
     Object.values(seats).forEach((seat) => {
       if (seat?.user_id) set.add(seat.user_id);
+      if (seat?.guest_id) set.add(seat.guest_id); // Add guest IDs
     });
     return Array.from(set);
   }, [stream.user_id, seats]);
@@ -428,10 +432,11 @@ export default function BroadcastGrid({
   };
 
   // Calculate how many boxes we must render (never hide occupied seats)
+  // Also count seats with guest_id as occupied (for guest users)
   const seatKeys = Object.keys(seats);
   const occupiedSeatIndices = seatKeys
     .map(Number)
-    .filter(idx => seats[idx]?.user_id);
+    .filter(idx => seats[idx]?.user_id || seats[idx]?.guest_id);
   const maxOccupiedSeatIndex = occupiedSeatIndices.length > 0 ? Math.max(...occupiedSeatIndices) : -1;
   const requiredBoxes = Math.max(1, maxOccupiedSeatIndex + 1); // 0-indexed
 
@@ -503,7 +508,8 @@ export default function BroadcastGrid({
     >
         {boxes.map((seatIndex) => {
           const seat = seats[seatIndex];
-          let userId = seat?.user_id;
+          // Use guest_id if user_id is null (for guest users)
+          let userId = seat?.user_id || seat?.guest_id;
 
           // FORCE HOST INTO BOX 0
           if (seatIndex === 0) {

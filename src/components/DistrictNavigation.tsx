@@ -87,7 +87,7 @@ export default function DistrictNavigation() {
         { feature_name: 'Officer Dashboard', route_path: '/officer/dashboard', required_role: 'troll_officer' }
       ],
       family_neighborhood: [
-        { feature_name: 'Family Lounge', route_path: '/family/lounge', required_role: 'family_member' },
+        { feature_name: 'Troll Families', route_path: '/family/home', required_role: 'family_member' },
         { feature_name: 'Family War Hub', route_path: '/family/wars-hub', required_role: 'family_member' },
         { feature_name: 'Family Leaderboard', route_path: '/family/leaderboard', required_role: 'family_member' },
         { feature_name: 'Family Shop', route_path: '/family/shop', required_role: 'family_member' }

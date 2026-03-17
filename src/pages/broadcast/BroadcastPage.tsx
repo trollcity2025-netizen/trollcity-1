@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { useStreamStore } from '../../lib/streamStore'
 import { PreflightStore } from '../../lib/preflightStore'
+import { emitEvent } from '../../lib/events'
 
 import { Stream } from '../../types/broadcast'
 import StreamLayout from '../../components/broadcast/StreamLayout'
@@ -16,6 +17,7 @@ import BroadcastHeader from '../../components/broadcast/BroadcastHeader'
 import BattleView from '../../components/broadcast/BattleView'
 import BattleControls from '../../components/broadcast/BattleControls'
 import ErrorBoundary from '../../components/ErrorBoundary'
+import GiftersBubbleStrip from '../../components/broadcast/GiftersBubbleStrip'
 import GiftBoxModal, { GiftTarget, GiftItem } from '../../components/broadcast/GiftBoxModal'
 import GiftAnimationOverlay from '../../components/broadcast/GiftAnimationOverlay'
 import PinnedProductOverlay from '../../components/broadcast/PinnedProductOverlay'
@@ -220,6 +222,23 @@ function BroadcastPage() {
     fetchStream()
   }, [streamId, navigate, user?.id])
 
+  // Emit stream_watch_time events for troll system
+  useEffect(() => {
+    if (!streamId || !user?.id) return;
+
+    // Emit initial watch event
+    emitEvent('stream_watch_time', user.id, { streamId, watchTime: 0 });
+
+    // Track watch time and emit events periodically
+    let watchTime = 0;
+    const watchInterval = setInterval(() => {
+      watchTime += 30; // Increment by 30 seconds
+      emitEvent('stream_watch_time', user.id, { streamId, watchTime });
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(watchInterval);
+  }, [streamId, user?.id]);
+
   useEffect(() => {
     if (!isHost || !stream?.user_id) return;
 
@@ -316,13 +335,9 @@ function BroadcastPage() {
           });
         }
         
-        if (data?.status === 'ended' || data?.is_live === false) {
-          // Only treat as ended if status is explicitly 'ended'
-          // Ignore is_live=false without status='ended' as it could be initialization
-          if (data?.status !== 'ended') {
-            console.log('[BroadcastPage] Poll: Ignoring is_live=false without status=ended');
-            return;
-          }
+        // Handle stream ended - redirect ALL users (host, guests, viewers) to summary
+        if (data?.status === 'ended') {
+          console.log('[BroadcastPage] Poll detected stream ended, redirecting to summary');
           clearInterval(pollInterval);
           stopLocalTracks();
           navigate(`/broadcast/summary/${streamId}`);
@@ -400,13 +415,10 @@ function BroadcastPage() {
                 is_live: payload.new.is_live
               };
             });
-            if (payload.new.status === 'ended' || payload.new.is_live === false) {
-              // Only treat as ended if status is explicitly 'ended'
-              // Ignore is_live=false without status='ended' as it could be initialization
-              if (payload.new.status !== 'ended') {
-                console.log('[BroadcastPage] Subscription: Ignoring is_live=false without status=ended');
-                return;
-              }
+            
+            // Handle stream ended - redirect ALL users (host, guests, viewers) to summary
+            if (payload.new.status === 'ended') {
+              console.log('[BroadcastPage] Realtime subscription detected stream ended, redirecting to summary');
               stopLocalTracks();
               setTimeout(() => {
                 navigate(`/broadcast/summary/${streamId}`);
@@ -507,7 +519,11 @@ function BroadcastPage() {
   }, [streamId, navigate, stopLocalTracks, user?.id]);
 
   useEffect(() => {
-    if (!stream || !stream.id || !user || !user.id) {
+    // Allow guests with seats to initialize LiveKit
+    // Guests may not have user.id but can have userSeat from joinSeat
+    const hasUserIdentity = !!user?.id || !!userSeat;
+    
+    if (!stream || !stream.id || !hasUserIdentity) {
       return;
     }
 
@@ -517,18 +533,22 @@ function BroadcastPage() {
 
     const shouldPublish = isHost || !!userSeat;
     
+    // Determine the user identity for LiveKit
+    // Use user.id for logged-in users, or guest_id from userSeat for guests
+    const userIdentity = user?.id || userSeat?.guest_id || `guest-${Date.now()}`;
+    
     let mounted = true
 
     const initLiveKit = async () => {
       if (!shouldPublish) {
         setIsJoining(true)
         try {
-          const viewerIdentity = `viewer-${user.id.substring(0, 8)}-${Date.now()}`
+          const viewerIdentity = `viewer-${userIdentity.substring(0, 8)}-${Date.now()}`
           const { data, error } = await supabase.functions.invoke('livekit-token', {
             body: {
               room: stream.id,
               identity: viewerIdentity,
-              name: profile?.username || user.email || 'Viewer',
+              name: profile?.username || user?.email || userSeat?.user_profile?.username || 'Viewer',
               role: 'audience',
               isHost: false
             }
@@ -564,6 +584,9 @@ function BroadcastPage() {
               if (!next.has(participant.identity)) {
                 console.log('[BroadcastPage] Viewer: Adding new participant to remoteParticipants:', participant.identity)
                 next.set(participant.identity, participant)
+              } else {
+                // Update existing participant to include the new track
+                next.set(participant.identity, participant)
               }
               return next
             })
@@ -574,6 +597,7 @@ function BroadcastPage() {
             })
           })
 
+          // Also listen for trackUnsubscribed to clean up
           room.on('trackUnsubscribed', (track, publication, participant) => {
             console.log('[BroadcastPage] Viewer: Track unsubscribed:', track.kind, 'from', participant.identity)
             setRemoteParticipants(prev => new Map(prev))
@@ -612,12 +636,12 @@ function BroadcastPage() {
       setIsJoining(true)
 
       try {
-        const hostIdentity = user.id
+        const hostIdentity = userIdentity
         const { data, error } = await supabase.functions.invoke('livekit-token', {
           body: {
             room: stream.id,
             identity: hostIdentity,
-            name: profile?.username || user.email || 'Host',
+            name: profile?.username || user?.email || userSeat?.user_profile?.username || 'Host',
             role: 'publisher',
             isHost: true
           }
@@ -1044,7 +1068,7 @@ function BroadcastPage() {
         } else {
           console.log('[BroadcastPage] hostMicMutedByOfficer is false or not host - enabling mic if not already')
           // Ensure mic is enabled if not muted
-          if (!room.localParticipant.isMicrophoneEnabled()) {
+          if (!room.localParticipant.isMicrophoneEnabled) {
             await room.localParticipant.setMicrophoneEnabled(true)
           }
         }
@@ -1073,7 +1097,7 @@ function BroadcastPage() {
   const toggleCamera = async () => {
     if (!roomRef.current || !roomRef.current.localParticipant) return
     
-    const isEnabled = roomRef.current.localParticipant.isCameraEnabled()
+    const isEnabled = roomRef.current.localParticipant.isCameraEnabled
     if (isEnabled) {
       await roomRef.current.localParticipant.setCameraEnabled(false)
     } else {
@@ -1092,7 +1116,7 @@ function BroadcastPage() {
   const toggleMicrophone = async () => {
     if (!roomRef.current || !roomRef.current.localParticipant) return
     
-    const isEnabled = roomRef.current.localParticipant.isMicrophoneEnabled()
+    const isEnabled = roomRef.current.localParticipant.isMicrophoneEnabled
     if (isEnabled) {
       await roomRef.current.localParticipant.setMicrophoneEnabled(false)
     } else {
@@ -1293,9 +1317,13 @@ function BroadcastPage() {
   const activeUserIds = useMemo(() => {
     if (!stream) return [];
     const ids: string[] = [];
+    // Include both user_id and guest_id for active participants
     Object.values(seats).forEach((seat: any) => {
       if (seat?.user_id && seat.user_id !== stream.user_id) {
         ids.push(seat.user_id);
+      }
+      if (seat?.guest_id && seat.guest_id !== stream.user_id) {
+        ids.push(seat.guest_id);
       }
     });
     return ids;
@@ -1312,10 +1340,19 @@ function BroadcastPage() {
       };
     }
     
+    // Handle both user_id and guest_id profiles
     Object.values(seats).forEach((seat: any) => {
+      // For registered users with profiles
       if (seat?.user_id && seat.user_profile) {
         profiles[seat.user_id] = {
           username: seat.user_profile.username || 'User',
+          avatar_url: seat.user_profile.avatar_url,
+        };
+      }
+      // For guest users - use guest_id directly (guests have username in the seat data)
+      if (seat?.guest_id && seat.user_profile) {
+        profiles[seat.guest_id] = {
+          username: seat.user_profile.username || 'Guest',
           avatar_url: seat.user_profile.avatar_url,
         };
       }
@@ -1354,7 +1391,10 @@ function BroadcastPage() {
         battleId={stream.battle_id}
         currentStreamId={stream.id}
         localTracks={localTracks}
-        remoteParticipants={remoteParticipants}
+        remoteUsers={Array.from(remoteParticipants.values())}
+        userIdToLiveKitIdentity={Object.fromEntries(
+          Array.from(remoteParticipants.keys()).map(identity => [identity, identity])
+        )}
         onReturnToStream={() => {
           setStream((prev: any) => {
             if (!prev) return prev;
@@ -1392,26 +1432,32 @@ function BroadcastPage() {
         }
         
         video={
-          <BroadcastGrid
-            stream={stream}
-            seats={seats}
-            onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
-            isHost={isHost}
-            localTracks={localTracks}
-            room={roomRef.current}
-            remoteUsers={Array.from(remoteParticipants.values())}
-            localUserId={user?.id}
-            onGift={onGift}
-            onGiftAll={onGiftAll}
-            toggleCamera={toggleCamera}
-            toggleMicrophone={toggleMicrophone}
-            onGetUserPositions={handleGetUserPositions}
-            broadcasterProfile={broadcasterProfile}
-            streamStatus={stream.status}
-            boxCount={boxCount}
-          />
+          <div className="flex flex-col h-full">
+            <GiftersBubbleStrip 
+              streamId={streamId || ''} 
+              hostId={stream.user_id}
+            />
+            <BroadcastGrid
+              stream={stream}
+              seats={seats}
+              onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
+              isHost={isHost}
+              localTracks={localTracks}
+              room={roomRef.current}
+              remoteUsers={Array.from(remoteParticipants.values())}
+              localUserId={user?.id}
+              onGift={onGift}
+              onGiftAll={onGiftAll}
+              toggleCamera={toggleCamera}
+              toggleMicrophone={toggleMicrophone}
+              onGetUserPositions={handleGetUserPositions}
+              broadcasterProfile={broadcasterProfile}
+              streamStatus={stream.status}
+              boxCount={boxCount}
+            />
+          </div>
         }
-        
+
         controls={
           <BroadcastControls
             stream={stream}

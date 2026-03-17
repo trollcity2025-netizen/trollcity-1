@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS artist_profiles (
   total_plays INTEGER DEFAULT 0,
   total_tips INTEGER DEFAULT 0,
   coins_earned INTEGER DEFAULT 0,
-  label_id UUID,
+  label_id UUID REFERENCES record_labels(id) ON DELETE SET NULL,
   genre VARCHAR(100),
   location VARCHAR(255),
   website_url TEXT,

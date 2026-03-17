@@ -4,6 +4,7 @@ import { X, Search, Gift, Sparkles, Crown, Gem, Zap, Heart, Users, UserCircle, R
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useGiftSystem, GiftItem } from '../../hooks/useGiftSystem';
+import { useAnimationStore, type GiftType } from '../../lib/animationManager';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -81,6 +82,7 @@ export default function GiftBoxModal({
 }: GiftBoxModalProps) {
   const { user, profile } = useAuthStore();
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId, null, undefined, sharedChannel);
+  const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation);
   
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<GiftCategory>('all');
@@ -203,6 +205,13 @@ export default function GiftBoxModal({
         // Send to broadcaster only
         success = await sendGift(selectedGift, broadcasterId, quantity);
         if (success) {
+          // ✅ FORCE animation locally immediately
+          playGiftAnimation({
+            type: (selectedGift.slug?.toLowerCase().replace(/[^a-z]/g, '') as GiftType) || 'heart',
+            senderName: profile?.username || 'You',
+            receiverName: 'Broadcaster',
+            amount: quantity
+          });
           toast.success(`Sent ${quantity}x ${selectedGift.name} to broadcaster!`);
           onGiftSent?.(selectedGift, { type: 'broadcaster', userId: broadcasterId, quantity });
         }
@@ -211,6 +220,13 @@ export default function GiftBoxModal({
         const targetId = giftTarget.userId || recipientId;
         success = await sendGift(selectedGift, targetId, quantity);
         if (success) {
+          // ✅ FORCE animation locally immediately
+          playGiftAnimation({
+            type: (selectedGift.slug?.toLowerCase().replace(/[^a-z]/g, '') as GiftType) || 'heart',
+            senderName: profile?.username || 'You',
+            receiverName: giftTarget.username || 'User',
+            amount: quantity
+          });
           const targetName = userProfiles[targetId]?.username || 'user';
           toast.success(`Sent ${quantity}x ${selectedGift.name} to ${targetName}!`);
           onGiftSent?.(selectedGift, { type: 'specific', userId: targetId, username: targetName, quantity });

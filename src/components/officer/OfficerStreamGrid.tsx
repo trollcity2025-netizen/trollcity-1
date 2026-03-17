@@ -161,7 +161,14 @@ export default function OfficerStreamGrid() {
               {/* Actions */}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
-                  onClick={() => setSelectedStream({ id: stream.id, agora_channel: stream.id, title: stream.title, mux_playback_id: stream.mux_playback_id })}
+                  onClick={() => setSelectedStream({ 
+                    id: stream.id, 
+                    agora_channel: stream.id, 
+                    room_name: stream.room_name || stream.id,
+                    title: stream.title, 
+                    mux_playback_id: stream.mux_playback_id,
+                    broadcaster_id: stream.broadcaster_id
+                  })}
                   className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors"
                 >
                   <Eye className="w-3.5 h-3.5" />

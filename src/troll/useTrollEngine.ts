@@ -67,12 +67,10 @@ const SAFE_CONTEXTS = [
   'church',
   'news',
   'tcnn',
-  'broadcast',
-  'stream',
 ];
 
 // Hook for triggering troll events
-export const useTrollEngine = () => {
+export const useTrollEngine = (onBackgroundTrigger?: (event: TrollEvent) => void) => {
   const [lastTrollTime, setLastTrollTime] = useState<number>(0);
   const [isTrollActive, setIsTrollActive] = useState<boolean>(false);
 
@@ -196,6 +194,11 @@ export const useTrollEngine = () => {
           setIsTrollActive(true);
           console.log('[TrollEngine] Background troll triggered:', event.type);
 
+          // Call the callback if provided (for TrollProvider to display the overlay)
+          if (onBackgroundTrigger) {
+            onBackgroundTrigger(event);
+          }
+
           // Auto-complete the troll after duration
           setTimeout(() => {
             setIsTrollActive(false);
@@ -207,7 +210,7 @@ export const useTrollEngine = () => {
     return () => {
       clearInterval(checkInterval);
     };
-  }, [isTrollActive, createTrollEvent]);
+  }, [isTrollActive, createTrollEvent, onBackgroundTrigger]);
 
   return {
     triggerTroll,

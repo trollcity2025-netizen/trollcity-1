@@ -7,6 +7,7 @@ export interface SeatSession {
   id: string; // session_id
   seat_index: number;
   user_id: string;
+  guest_id?: string; // For guest users (TC-xxxx)
   user_profile?: {
     username: string;
     avatar_url: string;
@@ -80,6 +81,7 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
           id: s.id,
           seat_index: idx,
           user_id: s.user_id,
+          guest_id: s.guest_id, // Include guest_id for guest users
           user_profile: userProfile,
           status: s.status,
           joined_at: s.joined_at,
@@ -106,8 +108,8 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
     fetchSeats();
 
     // Polling fallback to ensure consistency even if Realtime fails
-    // Reduced to 2 seconds for faster updates
-    const interval = setInterval(fetchSeats, 2000);
+    // Reduced to 10 seconds for faster updates while reducing DB load
+    const interval = setInterval(fetchSeats, 10000);
 
     const channel = supabase
       .channel(`seats:${streamId}`)
@@ -217,6 +219,13 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
         }
     }
 
+    // Prevent concurrent join requests
+    if (joinSeat.isRunning) {
+      console.log('[useStreamSeats] Join already in progress, skipping');
+      return false;
+    }
+    joinSeat.isRunning = true;
+
     try {
       const isGuest = effectiveUserId.startsWith('TC-');
       const payload = {
@@ -229,7 +238,39 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
 
       const { data: result, error } = await supabase.rpc('join_seat_atomic', payload);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('[useStreamSeats] join_seat_atomic RPC error:', error);
+        // Try direct insert as fallback
+        const { error: insertError } = await supabase.from('stream_seat_sessions').insert({
+          stream_id: streamId,
+          seat_index: seatIndex,
+          user_id: isGuest ? null : effectiveUserId,
+          guest_id: isGuest ? effectiveUserId : null,
+          status: 'active',
+          joined_at: new Date().toISOString()
+        });
+        
+        if (insertError) {
+          throw insertError;
+        }
+        toast.success('Joined seat!');
+        
+        // IMMEDIATELY update local state to reflect seat ownership
+        // This triggers LiveKit initialization without waiting for polling
+        const newSession: SeatSession = {
+          id: `temp-${Date.now()}`,
+          seat_index: seatIndex,
+          user_id: isGuest ? null : effectiveUserId,
+          guest_id: isGuest ? effectiveUserId : null,
+          user_profile: profile ? { username: profile.username || 'Guest', avatar_url: profile.avatar_url || '' } : undefined,
+          status: 'active',
+          joined_at: new Date().toISOString()
+        };
+        setMySession(newSession);
+        setSeats(prev => ({ ...prev, [seatIndex]: newSession }));
+        
+        return true;
+      }
 
       // Handle RPC returning table (array) or object
       const data = Array.isArray(result) ? result[0] : result;
@@ -238,38 +279,93 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
 
       toast.success('Joined seat!');
       
-      // Just update local state - don't trigger a full refetch that could cause re-renders
-      // The realtime subscription will handle keeping seats in sync
+      // IMMEDIATELY update local state to reflect seat ownership
+      // This triggers LiveKit initialization without waiting for polling
+      const newSession: SeatSession = {
+        id: data.session_id || `temp-${Date.now()}`,
+        seat_index: seatIndex,
+        user_id: isGuest ? null : effectiveUserId,
+        guest_id: isGuest ? effectiveUserId : null,
+        user_profile: profile ? { username: profile.username || 'Guest', avatar_url: profile.avatar_url || '' } : undefined,
+        status: 'active',
+        joined_at: new Date().toISOString()
+      };
+      setMySession(newSession);
+      setSeats(prev => ({ ...prev, [seatIndex]: newSession }));
+      
       return true;
     } catch (err: any) {
       toast.error(err.message || 'Failed to join seat');
       return false;
+    } finally {
+      joinSeat.isRunning = false;
     }
   };
+  
+  // Add static properties for concurrency control
+  joinSeat.isRunning = false;
 
   const leaveSeat = async () => {
     if (!mySession) return;
 
+    // Prevent concurrent leave requests
+    if (leaveSeat.isRunning) {
+      console.log('[useStreamSeats] Leave already in progress, skipping');
+      return;
+    }
+    leaveSeat.isRunning = true;
+
+    // Capture session data before clearing
+    const sessionId = mySession.id;
+    const seatIndex = mySession.seat_index;
+    
+    // IMMEDIATELY clear local state so UI updates instantly
+    // This prevents the "shows on viewer side" issue
+    setMySession(null);
+    setSeats(prev => {
+      const next = { ...prev };
+      delete next[seatIndex];
+      return next;
+    });
+
     try {
-      const { data: result, error } = await supabase.rpc('leave_seat_atomic', {
-        p_session_id: mySession.id,
-      });
+      // First, try to update the session status directly (more reliable than atomic)
+      const { error: updateError } = await supabase
+        .from('stream_seat_sessions')
+        .update({ status: 'left', left_at: new Date().toISOString() })
+        .eq('id', sessionId)
+        .eq('status', 'active');
 
-      if (error) throw error;
+      if (updateError) {
+        console.warn('[useStreamSeats] Direct update failed, trying RPC:', updateError);
+        // Fall back to RPC if direct update fails
+        const { data: result, error } = await supabase.rpc('leave_seat_atomic', {
+          p_session_id: sessionId,
+        });
 
-      // Handle RPC returning table (array) or object
-      const data = Array.isArray(result) ? result[0] : result;
+        if (error) {
+          console.warn('[useStreamSeats] RPC leave_seat_atomic failed:', error);
+        }
 
-      if (!data || !data.success) throw new Error(data?.message || 'Failed to leave seat');
+        // Handle RPC returning table (array) or object
+        const data = Array.isArray(result) ? result[0] : result;
+
+        if (!data || !data.success) {
+          console.warn('[useStreamSeats] Leave seat returned failure:', data?.message);
+        }
+      }
 
       toast.success('Left seat');
-      setMySession(null);
-      // Don't call fetchSeats here - the realtime subscription will update state
     } catch (err: any) {
       console.error('Leave seat failed:', err);
-      toast.error(err.message || 'Failed to leave seat');
+      // Already cleared local state above, so no need to do anything else
+    } finally {
+      leaveSeat.isRunning = false;
     }
   };
+  
+  // Add static property for concurrency control
+  leaveSeat.isRunning = false;
 
   const kickParticipant = async (targetUserId: string) => {
     if (!streamId) return;

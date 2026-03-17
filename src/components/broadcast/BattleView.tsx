@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Room } from "livekit-client";
+import { Room, LocalAudioTrack, LocalVideoTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, RoomEvent } from 'livekit-client';
 
 import { supabase } from '../../lib/supabase';
 import { Stream } from '../../types/broadcast';
@@ -20,11 +20,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Sub-components for the new architecture ---
 
-const AgoraVideoPlayer = ({
+const LiveKitVideoPlayer = ({
   videoTrack,
   isLocal = false,
 }: {
-  videoTrack?: ILocalVideoTrack | IRemoteVideoTrack;
+  videoTrack?: LocalVideoTrack | RemoteVideoTrack;
   isLocal?: boolean;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,12 +34,12 @@ const AgoraVideoPlayer = ({
 
   useEffect(() => {
     if (!videoTrack || !containerRef.current) {
-      console.log('[AgoraVideoPlayer] Skipping - missing track or container');
+      console.log('[LiveKitVideoPlayer] Skipping - missing track or container');
       return;
     }
 
     if (hasPlayedRef.current) {
-      console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
+      console.log('[LiveKitVideoPlayer] Already played this track - skipping duplicate');
       return;
     }
 
@@ -47,15 +47,15 @@ const AgoraVideoPlayer = ({
       if (!containerRef.current) return;
 
       try {
-        console.log('[AgoraVideoPlayer] Calling play() - attempt', retryCountRef.current + 1);
+        console.log('[LiveKitVideoPlayer] Calling play() - attempt', retryCountRef.current + 1);
         videoTrack.play(containerRef.current);
         hasPlayedRef.current = true;
-        console.log('[AgoraVideoPlayer] play() called successfully');
+        console.log('[LiveKitVideoPlayer] play() called successfully');
 
-        // Inspect injected video after Agora has time to inject it
+        // Inspect injected video after LiveKit has time to inject it
         setTimeout(() => {
           const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
-          console.log('[AgoraVideoPlayer] Inner <video> inspection:', {
+          console.log('[LiveKitVideoPlayer] Inner <video> inspection:', {
             exists: !!inner,
             width: inner?.videoWidth ?? 0,
             height: inner?.videoHeight ?? 0,
@@ -68,17 +68,17 @@ const AgoraVideoPlayer = ({
           if (inner && (inner.videoWidth === 0 || inner.readyState < 2)) {
             if (retryCountRef.current < maxRetries) {
               retryCountRef.current++;
-              console.warn(`[AgoraVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
+              console.warn(`[LiveKitVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
               hasPlayedRef.current = false;
               setTimeout(playWithRetry, 400);
             } else {
-              console.error('[AgoraVideoPlayer] Max retries reached - no frames flowing');
+              console.error('[LiveKitVideoPlayer] Max retries reached - no frames flowing');
             }
           }
         }, 600);
 
       } catch (err) {
-        console.error('[AgoraVideoPlayer] play() threw error:', err);
+        console.error('[LiveKitVideoPlayer] play() threw error:', err);
         if (retryCountRef.current < maxRetries) {
           retryCountRef.current++;
           setTimeout(playWithRetry, 500);
@@ -88,10 +88,13 @@ const AgoraVideoPlayer = ({
 
     const initialTimer = setTimeout(playWithRetry, 150);
 
+    // FIX #5: Hidden Bug - Only stop LOCAL tracks, not remote tracks
     return () => {
       clearTimeout(initialTimer);
-      if (videoTrack) {
-        console.log('[AgoraVideoPlayer] Cleanup - stopping track');
+      
+      // Only stop LOCAL tracks - stopping remote tracks kills the stream
+      if (isLocal && videoTrack) {
+        console.log('[LiveKitVideoPlayer] Cleanup - stopping LOCAL track only');
         try {
           videoTrack.stop();
         } catch (e) {}
@@ -111,12 +114,12 @@ const AgoraVideoPlayer = ({
   );
 };
 
-interface AgoraBattleParticipant {
+interface BattleParticipant {
   identity: string;
   name: string;
   isLocal: boolean;
-  videoTrack?: ILocalVideoTrack | IRemoteVideoTrack;
-  audioTrack?: ILocalAudioTrack | IRemoteAudioTrack;
+  videoTrack?: LocalVideoTrack | RemoteVideoTrack;
+  audioTrack?: LocalAudioTrack | RemoteAudioTrack;
   isMicrophoneEnabled: boolean;
   isCameraEnabled: boolean;
   metadata: any;
@@ -147,7 +150,7 @@ const BattleParticipantTile = ({
   isSuddenDeath,
   onTroll,
   canTroll,
-}: AgoraBattleParticipant & { 
+}: BattleParticipant & { 
   side: 'challenger' | 'opponent';
   crownInfo?: CrownInfo;
   isSuddenDeath?: boolean;
@@ -160,7 +163,7 @@ const BattleParticipantTile = ({
 
   return (
     <div className={cn(
-      "relative rounded-xl overflow-hidden border-2 transition-all duration-300",
+      "relative rounded-2xl overflow-hidden border-2 transition-all duration-300",
       isHost ? "h-48 md:h-56 lg:h-64" : "h-32 md:h-36 lg:h-40",
       side === 'challenger' 
         ? "border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.3)]" 
@@ -169,7 +172,7 @@ const BattleParticipantTile = ({
     )}>
       {/* Video or Avatar */}
       {isVideoOn ? (
-        <AgoraVideoPlayer videoTrack={videoTrack} isLocal={isLocal} />
+        <LiveKitVideoPlayer videoTrack={videoTrack} isLocal={isLocal} />
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/80">
           <div className={cn(
@@ -272,9 +275,9 @@ const BattleParticipantTile = ({
 interface BattleArenaProps {
   onGift: (uid: string, sourceStreamId: string) => void;
   battleId: string;
-  localAudioTrack: ILocalAudioTrack | null;
-  localVideoTrack: ILocalVideoTrack | null;
-  remoteUsers: IRemoteUser[];
+  localAudioTrack: LocalAudioTrack | null;
+  localVideoTrack: LocalVideoTrack | null;
+  remoteUsers: RemoteParticipant[];
   challengerStreamId: string;
   opponentStreamId: string;
   challengerHostId: string;
@@ -309,7 +312,7 @@ const BattleArena = ({
   currentUserTeam,
 }: BattleArenaProps) => {
   const { user } = useAuthStore();
-  const [allBattleParticipants, setAllBattleParticipants] = useState<AgoraBattleParticipant[]>([]);
+  const [battleParticipants, setBattleParticipants] = useState<BattleParticipant[]>([]);
   
   useEffect(() => {
     const fetchParticipantData = async () => {
@@ -324,7 +327,7 @@ const BattleArena = ({
         return data;
       };
 
-      const participantsData: AgoraBattleParticipant[] = [];
+      const participantsData: BattleParticipant[] = [];
 
       // Local participant
       if (user) {
@@ -344,7 +347,8 @@ const BattleArena = ({
           videoTrack: localVideoTrack,
           audioTrack: localAudioTrack,
           isMicrophoneEnabled: localAudioTrack?.enabled ?? false,
-          isCameraEnabled: localVideoTrack?.enabled ?? false,
+          // FIX #4: Local Track Sync Issue - add safety check for mediaStreamTrack readyState
+          isCameraEnabled: !!localVideoTrack && localVideoTrack.mediaStreamTrack.readyState === 'live',
           metadata: localMetadata,
           role: localSupabaseParticipant?.role,
           team: localSupabaseParticipant?.team,
@@ -356,23 +360,28 @@ const BattleArena = ({
 
       // Remote participants
       for (const remoteUser of remoteUsers) {
-        const remoteSupabaseParticipant = await getSupabaseParticipant(remoteUser.uid.toString());
+        const remoteSupabaseParticipant = await getSupabaseParticipant(remoteUser.identity);
         let remoteMetadata = {};
         if (remoteSupabaseParticipant?.metadata) {
           try {
             remoteMetadata = JSON.parse(remoteSupabaseParticipant.metadata);
           } catch (e) {
-            console.error("Failed to parse metadata for remote user:", remoteUser.uid, e);
+            console.error("Failed to parse metadata for remote user:", remoteUser.identity, e);
           }
         }
+        // FIX #1: Correct Track Extraction - use publications with isSubscribed check
+        const videoPublications = Array.from(remoteUser.videoTracks.values());
+        const audioPublications = Array.from(remoteUser.audioTracks.values());
+        const videoPub = videoPublications.find(p => p.isSubscribed && p.track);
+        const audioPub = audioPublications.find(p => p.isSubscribed && p.track);
         participantsData.push({
-          identity: remoteUser.uid.toString(),
-          name: remoteSupabaseParticipant?.username || `User ${remoteUser.uid}`,
+          identity: remoteUser.identity,
+          name: remoteSupabaseParticipant?.username || `User ${remoteUser.identity}`,
           isLocal: false,
-          videoTrack: remoteUser.videoTrack,
-          audioTrack: remoteUser.audioTrack,
-          isMicrophoneEnabled: remoteUser.audioTrack?.enabled ?? false,
-          isCameraEnabled: remoteUser.videoTrack?.enabled ?? false,
+          videoTrack: videoPub?.track as RemoteVideoTrack | undefined,
+          audioTrack: audioPub?.track as RemoteAudioTrack | undefined,
+          isMicrophoneEnabled: audioPublications.some(t => t.isSubscribed && t.kind === 'audio'),
+          isCameraEnabled: videoPublications.some(t => t.isSubscribed && t.kind === 'video'),
           metadata: remoteMetadata,
           role: remoteSupabaseParticipant?.role,
           team: remoteSupabaseParticipant?.team,
@@ -381,7 +390,7 @@ const BattleArena = ({
           profile: remoteSupabaseParticipant?.profile,
         });
       }
-      setAllBattleParticipants(participantsData);
+      setBattleParticipants(participantsData);
     };
 
     fetchParticipantData();
@@ -389,11 +398,11 @@ const BattleArena = ({
 
   const categorized = useMemo(() => {
     const teams = {
-      challenger: { host: null as AgoraBattleParticipant | null, guests: [] as AgoraBattleParticipant[], boxCount: Math.max(1, Math.min(challengerBoxCount, 6)) },
-      opponent: { host: null as AgoraBattleParticipant | null, guests: [] as AgoraBattleParticipant[], boxCount: Math.max(1, Math.min(opponentBoxCount, 6)) }
+      challenger: { host: null as BattleParticipant | null, guests: [] as BattleParticipant[], boxCount: Math.max(1, Math.min(challengerBoxCount, 6)) },
+      opponent: { host: null as BattleParticipant | null, guests: [] as BattleParticipant[], boxCount: Math.max(1, Math.min(opponentBoxCount, 6)) }
     };
 
-    allBattleParticipants.forEach(p => {
+    battleParticipants.forEach(p => {
       if (p.team === 'challenger' || p.team === 'opponent') {
         if (p.role === 'host') {
           teams[p.team].host = p;
@@ -403,7 +412,7 @@ const BattleArena = ({
       }
     });
 
-    const sortBySeat = (a: AgoraBattleParticipant, b: AgoraBattleParticipant) => {
+    const sortBySeat = (a: BattleParticipant, b: BattleParticipant) => {
       return (a.seatIndex || 0) - (b.seatIndex || 0);
     };
     
@@ -411,9 +420,9 @@ const BattleArena = ({
     teams.opponent.guests.sort(sortBySeat);
 
     return teams;
-  }, [allBattleParticipants, challengerBoxCount, opponentBoxCount]);
+  }, [battleParticipants, challengerBoxCount, opponentBoxCount]);
 
-  const handleGiftClick = (p: AgoraBattleParticipant) => {
+  const handleGiftClick = (p: BattleParticipant) => {
     const resolvedStreamId =
       p.sourceStreamId ||
       (p.team === 'challenger' ? challengerStreamId : p.team === 'opponent' ? opponentStreamId : '');
@@ -435,18 +444,20 @@ const BattleArena = ({
     onTrollOpponent(targetStreamId);
   };
 
-  // Generate placeholder slots based on box_count for each team
+  // Generate placeholder slots based on box_count for each team - show ALL slots including empty ones
   const generateSlots = (team: 'challenger' | 'opponent') => {
     const teamData = categorized[team];
     const boxCount = Math.min(teamData.boxCount, 6);
-    const slots: Array<{ type: 'host' | 'guest'; participant?: AgoraBattleParticipant; index?: number }> = [];
+    const slots: Array<{ type: 'host' | 'guest'; participant?: BattleParticipant | null; index?: number }> = [];
     
-    slots.push({ type: 'host', participant: teamData.host || undefined });
+    // Always include host slot (can be empty)
+    slots.push({ type: 'host', participant: teamData.host || null });
     
+    // Generate guest slots based on box_count
     const guestSlots = Math.max(0, boxCount - 1);
     for (let i = 0; i < guestSlots; i++) {
       const guest = teamData.guests[i];
-      slots.push({ type: 'guest', participant: guest, index: i + 1 });
+      slots.push({ type: 'guest', participant: guest || null, index: i + 1 });
     }
     
     return slots;
@@ -472,15 +483,20 @@ const BattleArena = ({
           Gift Side A
         </button>
         
-        {/* Host */}
-        {challengerSlots[0]?.participant ? (
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              handleGiftClick(challengerSlots[0].participant!);
-            }}
-            className="cursor-pointer transform transition-transform hover:scale-[1.02]"
-          >
+        {/* Host Slot - show even if no participant */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (challengerSlots[0]?.participant) {
+              handleGiftClick(challengerSlots[0].participant);
+            }
+          }}
+          className={cn(
+            "cursor-pointer transform transition-transform hover:scale-[1.02]",
+            !challengerSlots[0]?.participant && "opacity-50"
+          )}
+        >
+          {challengerSlots[0]?.participant ? (
             <BattleParticipantTile 
               {...challengerSlots[0].participant} 
               side="challenger" 
@@ -489,14 +505,15 @@ const BattleArena = ({
               canTroll={canTroll && currentUserTeam === 'opponent'}
               onTroll={() => handleTrollClick('challenger')}
             />
-          </div>
-        ) : (
-          <div className="relative bg-zinc-900/50 rounded-xl overflow-hidden border border-purple-500/20 h-48 md:h-56 lg:h-64 flex items-center justify-center">
-            <span className="text-zinc-500 text-sm">Waiting for host...</span>
-          </div>
-        )}
+          ) : (
+            <div className="h-48 md:h-56 lg:h-64 rounded-2xl border-2 border-purple-500/30 bg-black/40 flex flex-col items-center justify-center">
+              <User className="text-purple-500/50" size={48} />
+              <span className="text-purple-500/50 text-sm mt-2">Waiting for challenger...</span>
+            </div>
+          )}
+        </div>
         
-        {/* Guests */}
+        {/* Guest Slots - show all based on box_count */}
         <div className={`grid gap-2 ${getGridClass(challengerSlots.length - 1)}`}>
           {challengerSlots.slice(1).map((slot, idx) => (
             <div key={`challenger-guest-${idx}`}>
@@ -511,8 +528,9 @@ const BattleArena = ({
                   <BattleParticipantTile {...slot.participant} side="challenger" />
                 </div>
               ) : (
-                <div className="relative bg-zinc-900/30 rounded-xl overflow-hidden border border-dashed border-purple-500/20 h-32 md:h-36 lg:h-40 flex items-center justify-center">
-                  <span className="text-zinc-600 text-xs">Empty Seat</span>
+                <div className="h-32 md:h-36 lg:h-40 rounded-2xl border border-purple-500/20 bg-black/20 flex flex-col items-center justify-center">
+                  <User className="text-purple-500/30" size={24} />
+                  <span className="text-purple-500/30 text-xs mt-1">Empty</span>
                 </div>
               )}
             </div>
@@ -532,15 +550,20 @@ const BattleArena = ({
           Gift Side B
         </button>
         
-        {/* Host */}
-        {opponentSlots[0]?.participant ? (
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              handleGiftClick(opponentSlots[0].participant!);
-            }}
-            className="cursor-pointer transform transition-transform hover:scale-[1.02]"
-          >
+        {/* Host Slot - show even if no participant */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (opponentSlots[0]?.participant) {
+              handleGiftClick(opponentSlots[0].participant);
+            }
+          }}
+          className={cn(
+            "cursor-pointer transform transition-transform hover:scale-[1.02]",
+            !opponentSlots[0]?.participant && "opacity-50"
+          )}
+        >
+          {opponentSlots[0]?.participant ? (
             <BattleParticipantTile 
               {...opponentSlots[0].participant} 
               side="opponent" 
@@ -549,14 +572,15 @@ const BattleArena = ({
               canTroll={canTroll && currentUserTeam === 'challenger'}
               onTroll={() => handleTrollClick('opponent')}
             />
-          </div>
-        ) : (
-          <div className="relative bg-zinc-900/50 rounded-xl overflow-hidden border border-emerald-500/20 h-48 md:h-56 lg:h-64 flex items-center justify-center">
-            <span className="text-zinc-500 text-sm">Waiting for host...</span>
-          </div>
-        )}
+          ) : (
+            <div className="h-48 md:h-56 lg:h-64 rounded-2xl border-2 border-emerald-500/30 bg-black/40 flex flex-col items-center justify-center">
+              <User className="text-emerald-500/50" size={48} />
+              <span className="text-emerald-500/50 text-sm mt-2">Waiting for opponent...</span>
+            </div>
+          )}
+        </div>
         
-        {/* Guests */}
+        {/* Guest Slots - show all based on box_count */}
         <div className={`grid gap-2 ${getGridClass(opponentSlots.length - 1)}`}>
           {opponentSlots.slice(1).map((slot, idx) => (
             <div key={`opponent-guest-${idx}`}>
@@ -571,8 +595,9 @@ const BattleArena = ({
                   <BattleParticipantTile {...slot.participant} side="opponent" />
                 </div>
               ) : (
-                <div className="relative bg-zinc-900/30 rounded-xl overflow-hidden border border-dashed border-emerald-500/20 h-32 md:h-36 lg:h-40 flex items-center justify-center">
-                  <span className="text-zinc-600 text-xs">Empty Seat</span>
+                <div className="h-32 md:h-36 lg:h-40 rounded-2xl border border-emerald-500/20 bg-black/20 flex flex-col items-center justify-center">
+                  <User className="text-emerald-500/30" size={24} />
+                  <span className="text-emerald-500/30 text-xs mt-1">Empty</span>
                 </div>
               )}
             </div>
@@ -591,13 +616,13 @@ interface BattleViewProps {
   battleId: string;
   currentStreamId: string;
   viewerId?: string;
-  localTracks?: [IMicrophoneAudioTrack, ICameraVideoTrack] | null;
-  remoteUsers?: IRemoteUser[];
-  userIdToAgoraUid?: Record<string, number>;
+  localTracks?: [LocalAudioTrack, LocalVideoTrack] | null;
+  remoteUsers?: RemoteParticipant[];
+  userIdToLiveKitIdentity?: Record<string, string>;
   onReturnToStream?: () => void;
 }
 
-export default function BattleView({ battleId, currentStreamId, viewerId, localTracks: passedLocalTracks, remoteUsers: passedRemoteUsers, userIdToAgoraUid, onReturnToStream }: BattleViewProps) {
+export default function BattleView({ battleId, currentStreamId, viewerId, localTracks: passedLocalTracks, remoteUsers: passedRemoteUsers, userIdToLiveKitIdentity, onReturnToStream }: BattleViewProps) {
   const [battle, setBattle] = useState<any>(null);
   const [challengerStream, setChallengerStream] = useState<Stream | null>(null);
   const [opponentStream, setOpponentStream] = useState<Stream | null>(null);
@@ -605,10 +630,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
-  const [agoraClient, setAgoraClient] = useState<Room | null>(null);
-  const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
-  const [localVideoTrack, setLocalVideoTrack] = useState<ILocalVideoTrack | null>(null);
-  const [remoteUsers, setRemoteUsers] = useState<IRemoteUser[]>([]);
+  const [livekitRoom, setLivekitRoom] = useState<Room | null>(null);
+  const [localAudioTrack, setLocalAudioTrack] = useState<LocalAudioTrack | null>(null);
+  const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
+  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
   const [participantSnapshots, setParticipantSnapshots] = useState<Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>>([]);
   const [arenaReadyAtMs, setArenaReadyAtMs] = useState<number | null>(null);
   const [arenaReady, setArenaReady] = useState(false);
@@ -616,6 +641,8 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [opponentCrownInfo, setOpponentCrownInfo] = useState<CrownInfo>({ crowns: 0, streak: 0, hasStreak: false });
   
   const publishedArenaReadyRef = useRef(false);
+  // Track if we're reusing existing room vs creating new one
+  const isReusingRoomRef = useRef(false);
   
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -661,13 +688,63 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     fetchCrownInfo();
   }, [challengerStream?.user_id, opponentStream?.user_id]);
 
-  // Agora setup
+  // LiveKit setup - REUSE existing room from PreflightStore if available
   useEffect(() => {
+    // First, try to reuse existing room from PreflightStore (set by BroadcastPage/SetupPage)
+    const existingRoom = PreflightStore.getLivekitRoom();
+    const existingTracks = PreflightStore.getLivekitTracks();
+    
+    // If we have an existing room, use it instead of creating a new one
+    // If we have an existing room, use it instead of creating a new one
+    if (existingRoom) {
+      console.log('[BattleView] Reusing existing LiveKit room from PreflightStore');
+      isReusingRoomRef.current = true;
+      setLivekitRoom(existingRoom);
+      
+      // FIX #3: Load already connected participants when reusing room
+      setRemoteUsers(Array.from(existingRoom.remoteParticipants.values()));
+      
+      if (existingTracks) {
+        console.log('[BattleView] Reusing existing tracks from PreflightStore');
+        setLocalAudioTrack(existingTracks[0]);
+        setLocalVideoTrack(existingTracks[1]);
+      }
+      
+      // Subscribe to existing participants
+      const handleParticipantConnected = (participant: RemoteParticipant) => {
+        console.log('[BattleView] Participant connected:', participant.identity);
+        setRemoteUsers(prev => {
+          if (prev.some(p => p.identity === participant.identity)) return prev;
+          return [...prev, participant];
+        });
+      };
+
+      const handleParticipantDisconnected = (participant: RemoteParticipant) => {
+        console.log('[BattleView] Participant disconnected:', participant.identity);
+        setRemoteUsers(prev => prev.filter(p => p.identity !== participant.identity));
+      };
+
+      existingRoom.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+      existingRoom.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+      
+      return () => {
+        // Don't disconnect the room if we reused it - it belongs to the main broadcast
+        // Only unsubscribe from events
+        if (!isReusingRoomRef.current && existingRoom) {
+          existingRoom.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+          existingRoom.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+        }
+      };
+    }
+    
+    // Fallback: Create new room only if no existing room
+    console.log('[BattleView] No existing room found, creating new connection (fallback)');
+    isReusingRoomRef.current = false;
     const client = new Room({ mode: 'rtc', codec: 'vp8' });
-    setAgoraClient(client);
+    setLivekitRoom(client);
     let mounted = true;
-    let createdAudioTrack: ILocalAudioTrack | null = null;
-    let createdVideoTrack: ILocalVideoTrack | null = null;
+    let createdAudioTrack: LocalAudioTrack | null = null;
+    let createdVideoTrack: LocalVideoTrack | null = null;
 
     const joinBattle = async () => {
       if (!battle || !effectiveUserId) return;
@@ -676,76 +753,157 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
       if (isBroadcaster) {
         try {
-          const { data, error } = await supabase.functions.invoke('get-agora-token', {
-            body: { channelName: roomName, userId: effectiveUserId },
+          const { data, error } = await supabase.functions.invoke('livekit-token', {
+            body: { room: roomName, userId: effectiveUserId, role: 'publisher' },
           });
           if (error) throw error;
 
-          await room.connect(import.meta.env.VITE_AGORA_APP_ID!, roomName, data.token, effectiveUserId);
+          await client.connect(
+            import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
+            data.token,
+            { name: roomName }
+          );
 
           if (passedLocalTracks && passedLocalTracks[0] && passedLocalTracks[1]) {
             if (!mounted) return;
             setLocalAudioTrack(passedLocalTracks[0]);
             setLocalVideoTrack(passedLocalTracks[1]);
-            await room.localParticipant.publishTrack([passedLocalTracks[0], passedLocalTracks[1]]);
+            // Publish tracks individually to avoid issues with the library
+            try {
+              await client.localParticipant.publishTrack(passedLocalTracks[0]);
+              await client.localParticipant.publishTrack(passedLocalTracks[1]);
+            } catch (publishError) {
+              console.warn('[BattleView] Track publish warning:', publishError);
+            }
           } else {
-            const audioTrack = await  LocalAudioTrack.create({
-              AEC: true,
-              AGC: true,
-              ANS: true
-            });
-            const videoTrack = await  LocalVideoTrack.create();
+            // Use the recommended approach: enableCameraAndMicrophone
+            try {
+              const tracks = await client.localParticipant.enableCameraAndMicrophone();
+              if (!mounted) return;
+              
+              const audioTrack = tracks.find(t => t.kind === 'audio') as LocalAudioTrack | undefined;
+              const videoTrack = tracks.find(t => t.kind === 'video') as LocalVideoTrack | undefined;
+              
+              if (audioTrack) {
+                createdAudioTrack = audioTrack;
+                setLocalAudioTrack(audioTrack);
+              }
+              if (videoTrack) {
+                createdVideoTrack = videoTrack;
+                setLocalVideoTrack(videoTrack);
+              }
+            } catch (trackError) {
+              console.warn('[BattleView] Failed to enable camera/mic:', trackError);
+              // Try manual track creation as fallback
+              try {
+                const audioTrack = await LocalAudioTrack.create({
+                  AEC: true,
+                  AGC: true,
+                  ANS: true
+                });
+                const videoTrack = await LocalVideoTrack.create();
 
-            createdAudioTrack = audioTrack;
-            createdVideoTrack = videoTrack;
-            if (!mounted) return;
-            setLocalAudioTrack(audioTrack);
-            setLocalVideoTrack(videoTrack);
+                createdAudioTrack = audioTrack;
+                createdVideoTrack = videoTrack;
+                if (!mounted) return;
+                setLocalAudioTrack(audioTrack);
+                setLocalVideoTrack(videoTrack);
 
-            await room.localParticipant.publishTrack([audioTrack, videoTrack]);
+                await client.localParticipant.publishTrack(audioTrack);
+                await client.localParticipant.publishTrack(videoTrack);
+              } catch (manualError) {
+                console.error('[BattleView] Manual track creation also failed:', manualError);
+              }
+            }
           }
         } catch (error) {
           console.error("Failed to join battle as publisher:", error);
           toast.error("Couldn't connect to the battle.");
         }
       } else {
-        await room.connect(import.meta.env.VITE_AGORA_APP_ID!, roomName, null, effectiveUserId);
+        try {
+          const { data, error } = await supabase.functions.invoke('livekit-token', {
+            body: { room: roomName, userId: effectiveUserId, role: 'viewer' },
+          });
+          if (error) throw error;
+          
+          await client.connect(
+            import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
+            data.token,
+            { name: roomName }
+          );
+        } catch (error) {
+          console.error("Failed to join battle as viewer:", error);
+        }
       }
     };
 
-    const handleUserPublished = async (user: IRemoteUser, mediaType: 'audio' | 'video') => {
-      await room.subscribe(user, mediaType);
-      setRemoteUsers((prev) => {
-        const filtered = prev.filter((u) => u.uid !== user.uid);
-        return [...filtered, user];
+    // Handle participant connected
+    const handleParticipantConnected = (participant: RemoteParticipant) => {
+      console.log('[BattleView] Participant connected:', participant.identity);
+      setRemoteUsers(prev => {
+        if (prev.some(p => p.identity === participant.identity)) return prev;
+        return [...prev, participant];
       });
     };
 
-    const handleUserUnpublished = (user: IRemoteUser) => {
-      setRemoteUsers((prev) => {
-        const target = prev.find((u) => u.uid === user.uid);
-        if (!target) return prev;
-        if (!target.audioTrack && !target.videoTrack) {
-          return prev.filter((u) => u.uid !== user.uid);
-        }
-        return [...prev];
-      });
+    // Handle participant disconnected
+    const handleParticipantDisconnected = (participant: RemoteParticipant) => {
+      console.log('[BattleView] Participant disconnected:', participant.identity);
+      setRemoteUsers(prev => prev.filter(p => p.identity !== participant.identity));
     };
 
-    client.on('user-published', handleUserPublished);
-    client.on('user-unpublished', handleUserUnpublished);
+    // FIX #2: React to Track Updates Properly - handle all track events
+    const forceUpdate = () => {
+      setRemoteUsers(prev => [...prev]);
+    };
+
+    // Handle track subscribed
+    const handleTrackSubscribed = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[BattleView] Track subscribed:', publication.kind, 'from', participant.identity);
+      forceUpdate();
+    };
+
+    // Handle track unsubscribed
+    const handleTrackUnsubscribed = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[BattleView] Track unsubscribed:', publication.kind, 'from', participant.identity);
+      forceUpdate();
+    };
+
+    // Handle track published
+    const handleTrackPublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[BattleView] Track published:', publication.kind, 'from', participant.identity);
+      forceUpdate();
+    };
+
+    // Handle track unpublished
+    const handleTrackUnpublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[BattleView] Track unpublished:', publication.kind, 'from', participant.identity);
+      forceUpdate();
+    };
+
+    client.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    client.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+    client.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+    client.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    client.on(RoomEvent.TrackPublished, handleTrackPublished);
+    client.on(RoomEvent.TrackUnpublished, handleTrackUnpublished);
 
     joinBattle();
 
     return () => {
       mounted = false;
-      client.off('user-published', handleUserPublished);
-      client.off('user-unpublished', handleUserUnpublished);
-      if (createdAudioTrack) createdAudioTrack.close();
-      if (createdVideoTrack) createdVideoTrack.close();
-      room.disconnect();
-      PreflightStore.clear();
-      clearTracks();
+      client.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+      client.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+      client.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      client.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      client.off(RoomEvent.TrackPublished, handleTrackPublished);
+      client.off(RoomEvent.TrackUnpublished, handleTrackUnpublished);
+      if (createdAudioTrack) createdAudioTrack.stop();
+      if (createdVideoTrack) createdVideoTrack.stop();
+      client.disconnect();
+      // Do NOT call PreflightStore.clear() - tracks belong to the main broadcast
+      // clearTracks();
     };
   }, [battle, effectiveUserId, isBroadcaster, passedLocalTracks, clearTracks]);
 
@@ -966,9 +1124,12 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     }
 
     for (const remoteUser of remoteUsers) {
-      const hasMedia = Boolean(remoteUser.videoTrack || remoteUser.audioTrack);
+      // LiveKit RemoteParticipant.videoTracks is a Map, not an array
+      const videoTracks = Array.from(remoteUser.videoTracks.values());
+      const audioTracks = Array.from(remoteUser.audioTracks.values());
+      const hasMedia = Boolean(videoTracks.length || audioTracks.length);
       if (!hasMedia) continue;
-      loaded.add(String(remoteUser.uid));
+      loaded.add(remoteUser.identity);
     }
 
     const hostsReady = expectedHosts.length >= 2 && expectedHosts.every((id) => loaded.has(String(id)));
@@ -1060,6 +1221,57 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [timeLeft, setTimeLeft] = useState<number>(180);
   const [isSuddenDeath, setIsSuddenDeath] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
+  const [showRematchOption, setShowRematchOption] = useState(false);
+
+  const awardCrownToWinner = useCallback(async (winnerStreamId: string) => {
+    try {
+      // Award crown to winner using the existing function
+      const { data, error } = await supabase.rpc('end_battle_with_rewards', {
+        p_battle_id: battle.id,
+        p_winner_stream_id: winnerStreamId
+      });
+      
+      if (error) {
+        console.error('Failed to award crown:', error);
+        return;
+      }
+      
+      if (data?.success && data?.crowns_awarded > 0) {
+        toast.success(`Winner awarded ${data.crowns_awarded} crown(s)!`);
+      }
+    } catch (e) {
+      console.error('Crown award error:', e);
+    }
+  }, [battle?.id]);
+
+  const handleRematch = useCallback(async () => {
+    if (!battle || !user) return;
+    
+    try {
+      // Reset the battle timer by updating started_at
+      const { error: updateError } = await supabase
+        .from('battles')
+        .update({ 
+          started_at: new Date().toISOString(),
+          status: 'active'
+        })
+        .eq('id', battle.id);
+      
+      if (updateError) throw updateError;
+      
+      setTimeLeft(180);
+      setIsSuddenDeath(false);
+      setHasEnded(false);
+      setShowRematchOption(false);
+      setArenaReady(true);
+      setArenaReadyAtMs(Date.now());
+      
+      toast.success('Rematch started! Fight!');
+    } catch (e) {
+      console.error('Rematch error:', e);
+      toast.error('Failed to start rematch');
+    }
+  }, [battle, user]);
 
   const endBattle = useCallback(async (skipConfirmation = false) => {
     if (!battle || !user) return;
@@ -1124,16 +1336,62 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       if (leaveError || leaveResult?.success === false) {
         toast.error(leaveResult?.message || leaveError?.message || 'Failed to leave battle');
       } else {
+        // Award crowns to the winner (the other broadcaster)
+        const winnerStreamId = leaveResult?.winner_stream_id;
+        if (winnerStreamId) {
+          try {
+            const { data: rewardResult } = await supabase.rpc('end_battle_with_rewards', {
+              p_battle_id: battle.id,
+              p_winner_stream_id: winnerStreamId
+            });
+            
+            if (rewardResult?.success && rewardResult?.crowns_awarded > 0) {
+              toast.success(`Winner awarded ${rewardResult.crowns_awarded} crown(s)!`);
+            }
+          } catch (rewardErr) {
+            console.warn('Crown award failed:', rewardErr);
+          }
+        }
+        
+        // Distribute winnings
         try {
           await supabase.rpc('distribute_battle_winnings', { p_battle_id: battle.id });
         } catch (payoutErr) {
           console.warn('Payout failed:', payoutErr);
         }
-        toast.success('You left the battle. Opponent wins.');
+        
+        // Update battle state with winner
+        setBattle((prev: any) => {
+          if (!prev) return prev;
+          return { 
+            ...prev, 
+            status: 'ended', 
+            winner_id: winnerStreamId,
+            winner_stream_id: winnerStreamId
+          };
+        });
+        
+        // Show appropriate message based on who forfeited
+        const isChallenger = participantInfo?.team === 'challenger';
+        toast.success(isChallenger ? 'You forfeited. Opponent wins!' : 'You forfeited. Challenger wins!');
       }
       
-      handleReturnToStream();
+      // Only navigate the forfeiting user back to their stream
+      // The other user stays in battle view to see results
+      if (participantInfo?.team === 'challenger' && challengerStream?.id) {
+        navigate(`/live/${challengerStream.id}`);
+      } else if (participantInfo?.team === 'opponent' && opponentStream?.id) {
+        navigate(`/live/${opponentStream.id}`);
+      } else {
+        // Fallback for viewers or unknown - use the callback
+        if (onReturnToStream) {
+          onReturnToStream();
+        } else {
+          navigate('/');
+        }
+      }
       
+      // Stop local tracks only for the user who is leaving
       if (localAudioTrack) {
         localAudioTrack.stop();
         localAudioTrack.close();
@@ -1142,19 +1400,23 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         localVideoTrack.stop();
         localVideoTrack.close();
       }
-      if (agoraClient) {
-        agoraroom.disconnect();
+      if (livekitRoom) {
+        livekitRoom.disconnect();
       }
-      PreflightStore.clear();
-      clearTracks();
+      // Do NOT call PreflightStore.clear() or clearTracks() - tracks belong to the main broadcast
+      // Navigate back to stream
     } catch (e) {
       console.error(e);
       toast.error('Failed to leave battle');
-      handleReturnToStream();
+      if (onReturnToStream) {
+        onReturnToStream();
+      } else {
+        navigate('/');
+      }
     } finally {
       setLeaveLoading(false);
     }
-  }, [battle, user, localAudioTrack, localVideoTrack, agoraClient, clearTracks]);
+  }, [battle, user, localAudioTrack, localVideoTrack, livekitRoom, clearTracks, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id]);
 
   // Timer effect - 3 minutes + 10 seconds sudden death
   useEffect(() => {
@@ -1180,15 +1442,25 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       } else {
         setTimeLeft(0);
         setIsSuddenDeath(true);
-        if (!hasEnded && participantInfo?.role === 'host') {
+        if (!hasEnded) {
           setHasEnded(true);
+          // Award crown to winner
+          if (battle.score_challenger > battle.score_opponent && challengerStream?.user_id) {
+            awardCrownToWinner(challengerStream.user_id);
+          } else if (battle.score_opponent > battle.score_challenger && opponentStream?.user_id) {
+            awardCrownToWinner(opponentStream.user_id);
+          }
+          // Show rematch option for hosts
+          if (participantInfo?.role === 'host') {
+            setShowRematchOption(true);
+          }
           endBattle(true);
         }
       }
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [battle?.started_at, battle?.status, participantInfo?.role, hasEnded, endBattle, arenaReady, arenaReadyAtMs]);
+  }, [battle?.started_at, battle?.status, battle?.score_challenger, battle?.score_opponent, participantInfo?.role, hasEnded, endBattle, awardCrownToWinner, arenaReady, arenaReadyAtMs, challengerStream?.user_id, opponentStream?.user_id]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -1223,7 +1495,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     }
   };
 
-  // Return to stream handler
+  // Return to stream handler - returns each broadcaster to their own stream
   const handleReturnToStream = useCallback(() => {
     // Cleanup media
     if (localAudioTrack) {
@@ -1234,30 +1506,55 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       localVideoTrack.stop();
       localVideoTrack.close();
     }
-    if (agoraClient) {
-      agoraroom.disconnect();
+    if (livekitRoom) {
+      livekitRoom.disconnect();
     }
-    PreflightStore.clear();
-    clearTracks();
+    // Do NOT call PreflightStore.clear() or clearTracks() - tracks belong to the main broadcast
+    // Navigate back to stream - prioritize the original broadcast stream
 
-    // Call the callback if provided (instant return)
-    if (onReturnToStream) {
+    // If user is a broadcaster (host or stage), return to their own stream
+    if (participantInfo?.team === 'challenger' && challengerStream?.id) {
+      navigate(`/live/${challengerStream.id}`);
+    } else if (participantInfo?.team === 'opponent' && opponentStream?.id) {
+      navigate(`/live/${opponentStream.id}`);
+    } else if (currentStreamId) {
+      // Fallback to the original stream they were watching
+      navigate(`/live/${currentStreamId}`);
+    } else if (onReturnToStream) {
+      // Fallback to callback if provided
       onReturnToStream();
     } else {
-      // Otherwise navigate to home
+      // Last resort - navigate to home but keep them in app
       navigate('/');
     }
-  }, [localAudioTrack, localVideoTrack, agoraClient, clearTracks, onReturnToStream, navigate]);
+  }, [localAudioTrack, localVideoTrack, livekitRoom, clearTracks, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id, currentStreamId]);
 
-  // Auto-return after battle ends
+  // Auto-return after battle ends - only for viewers, not for broadcasters who should stay
+  // Don't auto-return when someone forfeited - show winner first and let them click return
   useEffect(() => {
     if (showResults && battle?.status === 'ended') {
+      // Check if user is a broadcaster (host or stage) - they should NOT auto-return
+      const isBroadcasterUser = participantInfo?.role === 'host' || participantInfo?.role === 'stage';
+      
+      // Don't auto-return for broadcasters - they need to manually return to stay in their broadcast
+      if (isBroadcasterUser) {
+        return;
+      }
+      
+      // For viewers, auto-return after delay but only to the original stream
       const timer = setTimeout(() => {
-        handleReturnToStream();
+        // Return to original stream if available
+        if (currentStreamId) {
+          navigate(`/live/${currentStreamId}`);
+        } else if (onReturnToStream) {
+          onReturnToStream();
+        } else {
+          navigate('/');
+        }
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [showResults, battle?.status, handleReturnToStream]);
+  }, [showResults, battle?.status, navigate, currentStreamId, onReturnToStream, participantInfo?.role]);
 
   if (error) {
     return (
@@ -1288,24 +1585,24 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const challengerPercent = totalScore === 0 ? 50 : Math.round((battle?.score_challenger / totalScore) * 100);
   const opponentPercent = 100 - challengerPercent;
 
-  // Use the userIdToAgoraUid mapping from BroadcastPage to find video tracks
-  // The mapping converts database user IDs to Agora UIDs
-  const challengerAgoraUid = userIdToAgoraUid?.[challengerStream.user_id];
-  const opponentAgoraUid = userIdToAgoraUid?.[opponentStream.user_id];
+  // Use the userIdToLiveKitIdentity mapping from BroadcastPage to find video tracks
+  // The mapping converts database user IDs to LiveKit identities
+  const challengerLiveKitIdentity = userIdToLiveKitIdentity?.[challengerStream.user_id];
+  const opponentLiveKitIdentity = userIdToLiveKitIdentity?.[opponentStream.user_id];
   
-  console.log('[BattleView] User lookup - challenger stream:', challengerStream.user_id?.substring(0, 8), '-> agora uid:', challengerAgoraUid);
-  console.log('[BattleView] User lookup - opponent stream:', opponentStream.user_id?.substring(0, 8), '-> agora uid:', opponentAgoraUid);
+  console.log('[BattleView] User lookup - challenger stream:', challengerStream.user_id?.substring(0, 8), '-> livekit identity:', challengerLiveKitIdentity);
+  console.log('[BattleView] User lookup - opponent stream:', opponentStream.user_id?.substring(0, 8), '-> livekit identity:', opponentLiveKitIdentity);
   console.log('[BattleView] Passed remoteUsers count:', passedRemoteUsers?.length || 0);
   console.log('[BattleView] Local videoTrack:', !!localVideoTrack);
 
   // Handle challenger video - use mapping to find remote user
-  const challengerUser = passedRemoteUsers?.find(u => u.uid === challengerAgoraUid) ||
+  const challengerUser = passedRemoteUsers?.find(u => u.identity === challengerLiveKitIdentity) ||
     (effectiveUserId === challengerStream.user_id
       ? { videoTrack: localVideoTrack }
       : null);
 
   // Handle opponent video - use mapping to find remote user
-  const opponentUser = passedRemoteUsers?.find(u => u.uid === opponentAgoraUid) ||
+  const opponentUser = passedRemoteUsers?.find(u => u.identity === opponentLiveKitIdentity) ||
     (effectiveUserId === opponentStream.user_id
       ? { videoTrack: localVideoTrack }
       : null);
@@ -1343,140 +1640,8 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
       {/* Main Content Container */}
       <div className="relative z-10 flex flex-col h-full pt-20">
-        {/* Battle Arena - Two Teams */}
-        <div className="flex-1 flex items-center justify-center gap-4 px-4 pb-4">
-          {/* TEAM CHAOS - Left Side */}
-          <div className="flex-1 flex flex-col items-center max-w-md">
-            <h2 className="text-2xl font-black text-cyan-400 tracking-wider mb-2 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
-              TEAM CHAOS
-            </h2>
-            <div className="text-5xl font-black text-cyan-300 mb-4 drop-shadow-[0_0_20px_rgba(34,211,238,0.8)]">
-              {(battle?.score_challenger || 0).toLocaleString()}
-            </div>
-            
-            {/* Host Box */}
-            <div className="w-full h-48 bg-black rounded-xl overflow-hidden border border-cyan-500/40 mb-4">
-              {challengerUser?.videoTrack ? (
-                <AgoraVideoPlayer videoTrack={challengerUser.videoTrack} />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-cyan-400 gap-2">
-                  <Crown className="text-yellow-400 fill-yellow-400" size={24} />
-                  <span className="text-sm">Waiting for video...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Trolls/Guests Label */}
-            <div className="w-full text-center mb-2">
-              <span className="text-[10px] text-cyan-400/50 uppercase tracking-widest">Trolls / Guests</span>
-            </div>
-
-            {/* Troll Boxes Grid */}
-            <div className="grid grid-cols-5 gap-2 w-full">
-              {Array.from({ length: Math.min(challengerStream.box_count || 1, 5) }).map((_, i) => (
-                <div key={i} className="aspect-square bg-cyan-900/30 border border-cyan-500/30 rounded-lg flex flex-col items-center justify-center relative">
-                  <span className="text-cyan-400 font-bold text-sm">TR</span>
-                  <span className="text-[8px] text-cyan-400/60">Troll #{i + 1}</span>
-                  <div className="absolute bottom-1 right-1 w-2 h-2 bg-green-500 rounded-full" />
-                </div>
-              ))}
-            </div>
-
-            {/* Box Controls */}
-            {participantInfo?.team === 'challenger' && participantInfo?.role === 'host' && (
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  onClick={() => updateMyStreamBoxCount((challengerStream.box_count || 1) - 1)}
-                  className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition"
-                >
-                  <Minus size={16} />
-                </button>
-                <button
-                  onClick={() => updateMyStreamBoxCount((challengerStream.box_count || 1) + 1)}
-                  className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Center - Timer & VS */}
-          <div className="flex flex-col items-center justify-center gap-6">
-            {/* Circular Timer */}
-            <div className="relative">
-              <div className="w-40 h-40 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 border-4 border-slate-700 flex flex-col items-center justify-center shadow-2xl">
-                <span className="text-4xl font-black text-red-500 tabular-nums">
-                  {formatTime(timeLeft)}
-                </span>
-                <span className="text-[10px] text-red-400/70 uppercase tracking-widest mt-1">Time!</span>
-              </div>
-              {/* Timer Glow Effect */}
-              <div className="absolute inset-0 rounded-full bg-red-500/10 blur-xl -z-10" />
-            </div>
-
-            {/* VS Badge */}
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
-              <span className="text-white font-black text-xl">VS</span>
-            </div>
-          </div>
-
-          {/* TEAM MAYHEM - Right Side */}
-          <div className="flex-1 flex flex-col items-center max-w-md">
-            <h2 className="text-2xl font-black text-pink-400 tracking-wider mb-2 drop-shadow-[0_0_10px_rgba(236,72,153,0.5)]">
-              TEAM MAYHEM
-            </h2>
-            <div className="text-5xl font-black text-pink-300 mb-4 drop-shadow-[0_0_20px_rgba(236,72,153,0.8)]">
-              {(battle?.score_opponent || 0).toLocaleString()}
-            </div>
-            
-            {/* Host Box */}
-            <div className="w-full h-48 bg-black rounded-xl overflow-hidden border border-pink-500/40 mb-4">
-              {opponentUser?.videoTrack ? (
-                <AgoraVideoPlayer videoTrack={opponentUser.videoTrack} />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-pink-400 gap-2">
-                  <Crown className="text-yellow-400 fill-yellow-400" size={24} />
-                  <span className="text-sm">Waiting for video...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Trolls/Guests Label */}
-            <div className="w-full text-center mb-2">
-              <span className="text-[10px] text-pink-400/50 uppercase tracking-widest">Trolls / Guests</span>
-            </div>
-
-            {/* Troll Boxes Grid */}
-            <div className="grid grid-cols-5 gap-2 w-full">
-              {Array.from({ length: Math.min(opponentStream.box_count || 1, 5) }).map((_, i) => (
-                <div key={i} className="aspect-square bg-pink-900/30 border border-pink-500/30 rounded-lg flex flex-col items-center justify-center relative">
-                  <span className="text-pink-400 font-bold text-sm">TR</span>
-                  <span className="text-[8px] text-pink-400/60">Troll #{i + 6}</span>
-                  <div className="absolute bottom-1 right-1 w-2 h-2 bg-green-500 rounded-full" />
-                </div>
-              ))}
-            </div>
-
-            {/* Box Controls */}
-            {participantInfo?.team === 'opponent' && participantInfo?.role === 'host' && (
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  onClick={() => updateMyStreamBoxCount((opponentStream.box_count || 1) - 1)}
-                  className="w-8 h-8 rounded-lg bg-pink-500/20 border border-pink-500/50 text-pink-400 flex items-center justify-center hover:bg-pink-500/30 transition"
-                >
-                  <Minus size={16} />
-                </button>
-                <button
-                  onClick={() => updateMyStreamBoxCount((opponentStream.box_count || 1) + 1)}
-                  className="w-8 h-8 rounded-lg bg-pink-500/20 border border-pink-500/50 text-pink-400 flex items-center justify-center hover:bg-pink-500/30 transition"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Battle Arena - Shows all participants with scores */}
+        <div className="flex-1 flex items-center justify-center px-2 md:px-4 pb-36">
 
         {/* Battle Arena */}
         <MemoBattleArena
@@ -1498,6 +1663,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           canTroll={isSuddenDeath && participantInfo?.role === 'host'}
           currentUserTeam={participantInfo?.team}
         />
+        </div>
 
         {/* Central Floating Timer */}
         <div className="absolute top-24 md:top-28 left-1/2 -translate-x-1/2 pointer-events-none z-40">
@@ -1527,6 +1693,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
             </div>
             {isSuddenDeath && (
               <span className="text-[10px] text-red-400/80 mt-0.5">Troll buttons active!</span>
+            )}
+            {/* Rematch Button - shows when battle ended and user is host */}
+            {showRematchOption && participantInfo?.role === 'host' && (
+              <button
+                onClick={handleRematch}
+                className="mt-2 px-4 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-bold text-sm rounded-full shadow-lg transition-all hover:scale-105"
+              >
+                🔄 REMATCH
+              </button>
             )}
           </motion.div>
         </div>
@@ -1639,12 +1814,52 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
                 {battle.status === 'ended' ? (
                   <div className="mb-6">
                     <div className="text-xs text-zinc-500 uppercase tracking-widest mb-2">Winner</div>
-                    <div className="flex items-center justify-center gap-2 text-2xl font-bold text-white">
-                      <Crown size={24} className="text-yellow-400 fill-yellow-400" />
-                      {battle.winner_id === challengerStream.user_id ? challengerStream.title : 
-                       battle.winner_id === opponentStream.user_id ? opponentStream.title : 
-                       "It's a Draw!"}
-                    </div>
+                    {/* Check both winner_id and winner_stream_id for winner determination */}
+                    {battle.winner_id === challengerStream.user_id || battle.winner_stream_id === challengerStream.id ? (
+                      <div className="flex flex-col items-center gap-2">
+                        {participantInfo?.team === 'challenger' ? (
+                          <>
+                            <div className="flex items-center justify-center gap-2 text-3xl font-black text-green-400">
+                              <Crown size={32} className="text-yellow-400 fill-yellow-400" />
+                              YOU WON!
+                            </div>
+                            <div className="flex items-center justify-center gap-1 text-amber-400 font-bold">
+                              <Coins size={20} className="text-yellow-400" />
+                              +{Math.round((battle.score_challenger || 0) * 0.1)} coins
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2 text-2xl font-bold text-white">
+                            <Crown size={24} className="text-yellow-400 fill-yellow-400" />
+                            {challengerStream.title}
+                          </div>
+                        )}
+                      </div>
+                    ) : battle.winner_id === opponentStream.user_id || battle.winner_stream_id === opponentStream.id ? (
+                      <div className="flex flex-col items-center gap-2">
+                        {participantInfo?.team === 'opponent' ? (
+                          <>
+                            <div className="flex items-center justify-center gap-2 text-3xl font-black text-green-400">
+                              <Crown size={32} className="text-yellow-400 fill-yellow-400" />
+                              YOU WON!
+                            </div>
+                            <div className="flex items-center justify-center gap-1 text-amber-400 font-bold">
+                              <Coins size={20} className="text-yellow-400" />
+                              +{Math.round((battle.score_opponent || 0) * 0.1)} coins
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2 text-2xl font-bold text-white">
+                            <Crown size={24} className="text-yellow-400 fill-yellow-400" />
+                            {opponentStream.title}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-2xl font-bold text-zinc-400">
+                        It's a Draw!
+                      </div>
+                    )}
                     {(battle.winner_id === challengerStream.user_id && challengerCrownInfo.hasStreak) ||
                      (battle.winner_id === opponentStream.user_id && opponentCrownInfo.hasStreak) ? (
                       <div className="mt-2 text-amber-400 font-bold flex items-center justify-center gap-1">

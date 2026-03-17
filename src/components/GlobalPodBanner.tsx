@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { Mic, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PodNotification {
   id: string;
@@ -71,7 +72,7 @@ export default function GlobalPodBanner() {
         <div 
           className="relative z-10 flex items-center gap-3 cursor-pointer"
           onClick={() => {
-            navigate(`/pods/${notification.room_id}`);
+            toast.info('Troll Pods are currently under construction. Please check back soon!');
             setNotification(null);
           }}
         >

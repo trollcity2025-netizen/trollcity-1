@@ -152,15 +152,18 @@ const SPECIAL_REWARDS: WheelReward[] = [
 const SPIN_COST = 125;
 const SEGMENT_ANGLE = 360 / WHEEL_REWARDS.length;
 
+// Dynamic bid multipliers - cost scales with bid amount
+// Formula: cost = bid * SPIN_COST (e.g., 10x bid costs 1250)
+// MAX option will use user's entire balance
 const BID_MULTIPLIERS = [
-  { value: 1, label: '1x', cost: 125 },
-  { value: 2, label: '2x', cost: 250 },
-  { value: 3, label: '3x', cost: 375 },
-  { value: 5, label: '5x', cost: 625 },
-  { value: 10, label: '10x', cost: 1250 },
-  { value: 25, label: '25x', cost: 3125 },
-  { value: 50, label: '50x', cost: 6250 },
-  { value: 100, label: 'MAX', cost: 12500 },
+  { value: 1, label: '1x' },
+  { value: 2, label: '2x' },
+  { value: 3, label: '3x' },
+  { value: 5, label: '5x' },
+  { value: 10, label: '10x' },
+  { value: 25, label: '25x' },
+  { value: 50, label: '50x' },
+  { value: 0, label: 'MAX' }, // 0 indicates use full balance
 ];
 
 // Tire Ring Component
@@ -524,7 +527,18 @@ export default function TrollWheelGame({
   
   const wheelRef = useRef<HTMLDivElement>(null);
   const size = 400;
-  const currentBidCost = BID_MULTIPLIERS.find(m => m.value === selectedMultiplier)?.cost || SPIN_COST;
+  
+  // Dynamic cost calculation: bid * base_cost
+  // MAX (value 0) uses user's entire balance
+  const getBidCost = (multiplier: number, balance: number): number => {
+    if (multiplier === 0) {
+      // MAX - use entire balance, minimum 125
+      return Math.max(balance, SPIN_COST);
+    }
+    return multiplier * SPIN_COST;
+  };
+  
+  const currentBidCost = getBidCost(selectedMultiplier, userBalance);
   
   // Load wheel balance and session on mount
   useEffect(() => {
@@ -613,7 +627,8 @@ export default function TrollWheelGame({
     }
     
     if (userBalance < currentBidCost) {
-      toast.error(`Not enough coins! Need ${currentBidCost} coins for ${selectedMultiplier}x bid.`);
+      const bidLabel = selectedMultiplier === 0 ? 'MAX' : `${selectedMultiplier}x`;
+      toast.error(`Not enough coins! Need ${currentBidCost.toLocaleString()} coins for ${bidLabel} bid.`);
       return;
     }
     
@@ -731,12 +746,31 @@ export default function TrollWheelGame({
         playWinSound();
         message = `💎 WIN! x${selectedMultiplier}: +${finalCoins} Trollmonds`;
       } else if (result.type === 'bankrupt') {
+        // Remove ALL coins and trollmonds
         onBalanceChange(0);
+        if (onTrollmondChange) {
+          onTrollmondChange(0);
+        }
         playBankruptSound();
         try {
+          // Set coins to 0
           await supabase.rpc('set_troll_coins', { p_user_id: profile.id, p_amount: 0 });
         } catch (e) { /* ignore */ }
-        message = '💀 BANKRUPT! You lost all your coins!';
+        // Also set trollmonds to 0 - use explicit column reference
+        try {
+          await supabase.rpc('set_trollmonds', { p_user_id: profile.id, p_amount: 0 });
+        } catch (e) {
+          // Fallback to direct update
+          try {
+            await supabase
+              .from('user_profiles')
+              .update({ trollmonds: 0 })
+              .eq('id', profile.id);
+          } catch (e2) { /* ignore */ }
+        }
+        // Refresh profile to update global state
+        useAuthStore.getState().refreshProfile();
+        message = '💀 BANKRUPT! You lost all your coins AND trollmonds!';
       } else if (result.type === 'trolled') {
         playTrolledSound();
         const trollLockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -1011,24 +1045,33 @@ export default function TrollWheelGame({
             <span className="text-lg font-black text-yellow-400">{currentBidCost.toLocaleString()} coins</span>
           </div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {BID_MULTIPLIERS.map((bid) => (
-              <motion.button
-                key={bid.value}
-                onClick={() => setSelectedMultiplier(bid.value)}
-                disabled={isSpinning || userBalance < bid.cost}
-                className={`px-4 py-2.5 font-bold rounded-xl transition-all
-                  ${selectedMultiplier === bid.value 
-                    ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-black shadow-[0_0_20px_rgba(249,115,22,0.6)]' 
-                    : userBalance < bid.cost
-                      ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
-                      : 'bg-black/60 text-white hover:bg-black/80 border border-yellow-500/30 hover:border-yellow-400'
-                  }`}
-                whileHover={userBalance >= bid.cost ? { scale: 1.05 } : {}}
-                whileTap={userBalance >= bid.cost ? { scale: 0.95 } : {}}
-              >
-                {bid.label}
-              </motion.button>
-            ))}
+            {BID_MULTIPLIERS.map((bid) => {
+              const bidCost = getBidCost(bid.value, userBalance);
+              const isMax = bid.value === 0;
+              const isDisabled = isSpinning || (isMax ? userBalance < SPIN_COST : userBalance < bidCost);
+              
+              return (
+                <motion.button
+                  key={bid.value}
+                  onClick={() => setSelectedMultiplier(bid.value)}
+                  disabled={isDisabled}
+                  className={`px-4 py-2.5 font-bold rounded-xl transition-all min-w-[70px]
+                    ${selectedMultiplier === bid.value 
+                      ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-black shadow-[0_0_20px_rgba(249,115,22,0.6)]' 
+                      : isDisabled
+                        ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
+                        : 'bg-black/60 text-white hover:bg-black/80 border border-yellow-500/30 hover:border-yellow-400'
+                    }`}
+                  whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                  whileTap={!isDisabled ? { scale: 0.95 } : {}}
+                >
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span>{bid.label}</span>
+                    <span className="text-[10px] opacity-70">{isMax ? `${userBalance.toLocaleString()}` : bidCost.toLocaleString()}</span>
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
         </div>
         

@@ -1,605 +1,594 @@
-import { supabase } from './supabase';
-import { UserProfile } from './supabase';
-import { deductCoins, addCoins } from './coinTransactions';
-import giftCatalog, { giftCategories, tierPriority } from './giftCatalog';
-import { addXp } from './progressionEngine';
+// 🎁 Gift Engine - Next-generation gifting system with AR face-tracking and high-performance animations
+// This module provides the core infrastructure for the enhanced gift broadcasting system
 
-const BROADCASTER_SHARE = 0.95;
-const PLATFORM_SHARE = 1 - BROADCASTER_SHARE;
-const INVENTORY_TABLE = 'gifts_owned';
-const TRANSACTION_TABLE = 'gift_transactions';
+import { create } from 'zustand';
+import { generateUUID } from './uuid';
 
-// Award Trollz bonus to sender (50% of gift value)
-async function awardTrollzBonus(senderId: string, giftValue: number): Promise<boolean> {
-  try {
-    const trollzBonus = Math.floor(giftValue * 0.5);
-    if (trollzBonus <= 0) return true;
+// ============================================================================
+// 1. GIFT TYPE DEFINITIONS
+// ============================================================================
 
-    const { data, error } = await supabase.rpc('award_trollz_for_gift', {
-      p_user_id: senderId,
-      p_gift_coins: giftValue
+export type GiftCategory = 'face' | 'grand' | 'standard';
+
+export interface GiftEffect {
+  id: string;
+  name: string;
+  // AR effect file path (for face-tracking gifts)
+  effectFile?: string;
+  // Animation file path (Lottie JSON or SVGA)
+  animationFile?: string;
+  // Preview icon
+  icon: string;
+  // Duration in ms
+  duration: number;
+}
+
+export interface GiftEvent {
+  id: string;
+  gift_id: string;
+  type: GiftCategory;
+  sender_id: string;
+  sender_name: string;
+  receiver_id: string;
+  combo_count: number;
+  timestamp: number;
+  // For face effects
+  effect?: GiftEffect;
+}
+
+export interface GiftQueueItem {
+  id: string;
+  event: GiftEvent;
+  priority: number; // Higher = more important
+  startTime?: number;
+  status: 'queued' | 'playing' | 'completed';
+}
+
+// ============================================================================
+// 2. GIFT EVENT STREAM - WebSocket listener setup
+// ============================================================================
+
+type GiftEventCallback = (event: GiftEvent) => void;
+
+class GiftEventStream {
+  private listeners: Set<GiftEventCallback> = new Set();
+  private channel: any = null;
+  private supabase: any = null;
+  private streamId: string | null = null;
+
+  // Initialize with Supabase channel
+  initialize(supabaseClient: any, streamId: string) {
+    this.supabase = supabaseClient;
+    this.streamId = streamId;
+    
+    // Create channel for gift events
+    this.channel = this.supabase.channel(`gifts:${streamId}`);
+    
+    this.channel.on(
+      'broadcast',
+      { event: 'gift_event' },
+      (payload: any) => {
+        const event = payload.payload as GiftEvent;
+        this.notifyListeners(event);
+      }
+    );
+    
+    this.channel.subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[GiftEventStream] Subscribed to gift events');
+      }
     });
+  }
 
-    if (error) {
-      console.warn('Failed to award Trollz bonus:', error);
+  // Subscribe to gift events
+  subscribe(callback: GiftEventCallback): () => void {
+    this.listeners.add(callback);
+    return () => this.listeners.delete(callback);
+  }
+
+  // Notify all listeners
+  private notifyListeners(event: GiftEvent) {
+    this.listeners.forEach(callback => {
+      try {
+        callback(event);
+      } catch (err) {
+        console.error('[GiftEventStream] Error in listener:', err);
+      }
+    });
+  }
+
+  // Cleanup
+  disconnect() {
+    if (this.channel) {
+      this.supabase.removeChannel(this.channel);
+      this.channel = null;
+    }
+    this.listeners.clear();
+  }
+}
+
+// Singleton instance
+export const giftEventStream = new GiftEventStream();
+
+// ============================================================================
+// 3. GIFT PROCESSING ENGINE
+// ============================================================================
+
+// Map gift IDs to AR effects
+export const giftEffectsMap: Record<string, GiftEffect> = {
+  // Face-tracking effects (hats, glasses, makeup)
+  'gift_hat': {
+    id: 'gift_hat',
+    name: 'Fancy Hat',
+    effectFile: 'effects/hat.glb',
+    animationFile: 'animations/hat.json',
+    icon: '🎩',
+    duration: 10000,
+  },
+  'gift_glasses': {
+    id: 'gift_glasses',
+    name: 'Cool Glasses',
+    effectFile: 'effects/glasses.glb',
+    animationFile: 'animations/glasses.json',
+    icon: '🕶️',
+    duration: 10000,
+  },
+  'gift_crown': {
+    id: 'gift_crown',
+    name: 'Royal Crown',
+    effectFile: 'effects/crown.glb',
+    animationFile: 'animations/crown.json',
+    icon: '👑',
+    duration: 15000,
+  },
+  'gift_makeup': {
+    id: 'gift_makeup',
+    name: 'Glam Makeup',
+    effectFile: 'effects/makeup',
+    animationFile: 'animations/makeup.json',
+    icon: '💄',
+    duration: 8000,
+  },
+  'gift_rainbow': {
+    id: 'gift_rainbow',
+    name: 'Rainbow Pride',
+    effectFile: 'effects/rainbow',
+    animationFile: 'animations/rainbow.json',
+    icon: '🌈',
+    duration: 12000,
+  },
+  'gift_fire': {
+    id: 'gift_fire',
+    name: 'Fire Aura',
+    effectFile: 'effects/fire',
+    animationFile: 'animations/fire.json',
+    icon: '🔥',
+    duration: 10000,
+  },
+  'gift_angel': {
+    id: 'gift_angel',
+    name: 'Angel Wings',
+    effectFile: 'effects/angel',
+    animationFile: 'animations/angel.json',
+    icon: '😇',
+    duration: 15000,
+  },
+  'gift_devil': {
+    id: 'gift_devil',
+    name: 'Devil Horns',
+    effectFile: 'effects/devil',
+    animationFile: 'animations/devil.json',
+    icon: '😈',
+    duration: 10000,
+  },
+  // Grand animations (full-screen premium)
+  'gift_rocket': {
+    id: 'gift_rocket',
+    name: 'Rocket Launch',
+    animationFile: 'animations/rocket.json',
+    icon: '🚀',
+    duration: 5000,
+  },
+  'gift_dragon': {
+    id: 'gift_dragon',
+    name: 'Dragon Flight',
+    animationFile: 'animations/dragon.json',
+    icon: '🐉',
+    duration: 6000,
+  },
+  'gift_rain': {
+    id: 'gift_rain',
+    name: 'Diamond Rain',
+    animationFile: 'animations/diamond_rain.json',
+    icon: '💎',
+    duration: 8000,
+  },
+  'gift_car': {
+    id: 'gift_car',
+    name: 'Luxury Car',
+    animationFile: 'animations/car.json',
+    icon: '🏎️',
+    duration: 5000,
+  },
+  'gift_house': {
+    id: 'gift_house',
+    name: 'Mansion',
+    animationFile: 'animations/house.json',
+    icon: '🏠',
+    duration: 7000,
+  },
+  'gift_yacht': {
+    id: 'gift_yacht',
+    name: 'Yacht',
+    animationFile: 'animations/yacht.json',
+    icon: '🛥️',
+    duration: 6000,
+  },
+};
+
+// Determine gift category based on gift ID
+export function getGiftCategory(giftId: string): GiftCategory {
+  const faceGifts = ['gift_hat', 'gift_glasses', 'gift_crown', 'gift_makeup', 'gift_rainbow', 'gift_fire', 'gift_angel', 'gift_devil'];
+  const grandGifts = ['gift_rocket', 'gift_dragon', 'gift_rain', 'gift_car', 'gift_house', 'gift_yacht'];
+  
+  if (faceGifts.includes(giftId)) return 'face';
+  if (grandGifts.includes(giftId)) return 'grand';
+  return 'standard';
+}
+
+// Get effect for a gift
+export function getGiftEffect(giftId: string): GiftEffect | undefined {
+  return giftEffectsMap[giftId];
+}
+
+// ============================================================================
+// 4. GIFT QUEUE SYSTEM - Prevents crashes and overlap
+// ============================================================================
+
+interface GiftEngineState {
+  // Queue management
+  giftQueue: GiftQueueItem[];
+  isProcessing: boolean;
+  currentGift: GiftQueueItem | null;
+  
+  // Combo tracking
+  comboCount: number;
+  comboGiftId: string | null;
+  comboTimer: ReturnType<typeof setTimeout> | null;
+  
+  // Leaderboard data
+  topGifters: Array<{ userId: string; username: string; totalGifts: number }>;
+  
+  // Gift history (last 50)
+  giftHistory: GiftEvent[];
+  
+  // Actions
+  enqueueGift: (event: GiftEvent) => void;
+  processQueue: () => Promise<void>;
+  completeGift: (id: string) => void;
+  updateCombo: (giftId: string) => void;
+  resetCombo: () => void;
+  addGifter: (userId: string, username: string, amount: number) => void;
+  getNextGift: () => GiftQueueItem | null;
+}
+
+export const useGiftEngine = create<GiftEngineState>((set, get) => ({
+  giftQueue: [],
+  isProcessing: false,
+  currentGift: null,
+  comboCount: 0,
+  comboGiftId: null,
+  comboTimer: null,
+  topGifters: [],
+  giftHistory: [],
+
+  // Enqueue a gift for processing
+  enqueueGift: (event: GiftEvent) => {
+    const state = get();
+    
+    // Determine priority based on gift type
+    let priority = 1;
+    if (event.type === 'grand') priority = 3;
+    else if (event.type === 'face') priority = 2;
+    
+    const item: GiftQueueItem = {
+      id: generateUUID(),
+      event,
+      priority,
+      status: 'queued',
+    };
+    
+    // Add to queue (sorted by priority)
+    const newQueue = [...state.giftQueue, item].sort((a, b) => b.priority - a.priority);
+    
+    // Keep history (last 50)
+    const newHistory = [event, ...state.giftHistory].slice(0, 50);
+    
+    set({ 
+      giftQueue: newQueue,
+      giftHistory: newHistory,
+    });
+    
+    // Update combo if same gift
+    if (event.gift_id === state.comboGiftId) {
+      get().updateCombo(event.gift_id);
+    } else {
+      get().resetCombo();
+      get().updateCombo(event.gift_id);
+    }
+    
+    // Add to leaderboard
+    get().addGifter(event.sender_id, event.sender_name, event.combo_count);
+    
+    // Start processing if not already
+    if (!state.isProcessing) {
+      get().processQueue();
+    }
+  },
+
+  // Get next gift from queue
+  getNextGift: () => {
+    const state = get();
+    if (state.giftQueue.length === 0) return null;
+    return state.giftQueue[0];
+  },
+
+  // Process the queue
+  processQueue: async () => {
+    const state = get();
+    
+    if (state.isProcessing || state.giftQueue.length === 0) {
+      set({ isProcessing: false });
+      return;
+    }
+    
+    set({ isProcessing: true });
+    
+    const currentItem = state.giftQueue[0];
+    const effect = getGiftEffect(currentItem.event.gift_id);
+    
+    // Update status to playing
+    set({
+      currentGift: {
+        ...currentItem,
+        status: 'playing',
+        startTime: Date.now(),
+        event: { ...currentItem.event, effect },
+      },
+    });
+    
+    // Wait for animation to complete
+    const duration = effect?.duration || 4000;
+    await new Promise(resolve => setTimeout(resolve, duration));
+    
+    // Complete the gift
+    get().completeGift(currentItem.id);
+  },
+
+  // Mark gift as completed and remove from queue
+  completeGift: (id: string) => {
+    set(state => ({
+      giftQueue: state.giftQueue.filter(item => item.id !== id),
+      currentGift: null,
+      isProcessing: false,
+    }));
+    
+    // Process next in queue
+    get().processQueue();
+  },
+
+  // Update combo count
+  updateCombo: (giftId: string) => {
+    const state = get();
+    
+    // Clear existing timer
+    if (state.comboTimer) {
+      clearTimeout(state.comboTimer);
+    }
+    
+    // Set new combo (max 99)
+    const newCombo = giftId === state.comboGiftId 
+      ? Math.min(99, state.comboCount + 1) 
+      : 1;
+    
+    // Auto-reset combo after 3 seconds of no gifts
+    const timer = setTimeout(() => {
+      get().resetCombo();
+    }, 3000);
+    
+    set({
+      comboCount: newCombo,
+      comboGiftId: giftId,
+      comboTimer: timer,
+    });
+  },
+
+  // Reset combo
+  resetCombo: () => {
+    const state = get();
+    if (state.comboTimer) {
+      clearTimeout(state.comboTimer);
+    }
+    set({
+      comboCount: 0,
+      comboGiftId: null,
+      comboTimer: null,
+    });
+  },
+
+  // Add/update gifter in leaderboard
+  addGifter: (userId: string, username: string, amount: number) => {
+    set(state => {
+      const existing = state.topGifters.find(g => g.userId === userId);
+      if (existing) {
+        return {
+          topGifters: state.topGifters
+            .map(g => g.userId === userId ? { ...g, totalGifts: g.totalGifts + amount } : g)
+            .sort((a, b) => b.totalGifts - a.totalGifts)
+            .slice(0, 10), // Keep top 10
+        };
+      }
+      return {
+        topGifters: [...state.topGifters, { userId, username, totalGifts: amount }]
+          .sort((a, b) => b.totalGifts - a.totalGifts)
+          .slice(0, 10),
+      };
+    });
+  },
+}));
+
+// ============================================================================
+// 5. AR FACE-TRACKING SYSTEM (Placeholder for SDK integration)
+// ============================================================================
+
+// AR Engine class - integrates with Banuba, DeepAR, or similar
+export class AREngine {
+  private licenseKey: string;
+  private isInitialized: boolean = false;
+  private currentEffect: string | null = null;
+
+  constructor(options: { licenseKey: string; tracking?: '2D' | '6DoF' }) {
+    this.licenseKey = options.licenseKey;
+  }
+
+  // Initialize the AR engine
+  async initialize(): Promise<boolean> {
+    try {
+      // Placeholder for actual AR SDK initialization
+      // In production, this would initialize Banuba or DeepAR
+      console.log('[AREngine] Initializing AR engine...');
+      
+      // Simulate async initialization
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      this.isInitialized = true;
+      console.log('[AREngine] AR engine initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('[AREngine] Failed to initialize:', error);
+      return false;
+    }
+  }
+
+  // Apply an AR effect to the video stream
+  async applyEffect(effectId: string): Promise<boolean> {
+    if (!this.isInitialized) {
+      console.warn('[AREngine] Engine not initialized');
       return false;
     }
 
-    return data?.success === true;
-  } catch (err) {
-    console.warn('Trollz bonus award error:', err);
-    return false;
-  }
-}
-
-export interface GiftProcessingResult {
-  creatorId: string;
-  baseAmount: number;
-  bonusAmount: number;
-  totalAmount: number;
-  isTrollTractCreator: boolean;
-  giftId?: string;
-  streamId?: string;
-  senderId?: string;
-}
-
-export function getGiftCatalog() {
-  return giftCatalog;
-}
-
-export function getGiftCategories() {
-  return giftCategories;
-}
-
-export function getTierPriority() {
-  return tierPriority;
-}
-
-export function findGiftBySlug(giftSlug: string) {
-  return giftCatalog.find((gift) => gift.gift_slug === giftSlug) || null;
-}
-
-async function upsertInventory(userId: string, giftSlug: string, quantityDelta: number) {
-  try {
-    const { data, error } = await supabase
-      .from(INVENTORY_TABLE)
-      .select('quantity')
-      .eq('user_id', userId)
-      .eq('gift_slug', giftSlug)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('Gift inventory select failed', error);
-      return null;
-    }
-
-    if (data) {
-      const updatedQuantity = Math.max(0, data.quantity + quantityDelta);
-      if (updatedQuantity <= 0) {
-        await supabase
-          .from(INVENTORY_TABLE)
-          .delete()
-          .eq('user_id', userId)
-          .eq('gift_slug', giftSlug);
-      } else {
-        await supabase
-          .from(INVENTORY_TABLE)
-          .update({
-            quantity: updatedQuantity,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', userId)
-          .eq('gift_slug', giftSlug);
-      }
-
-      return updatedQuantity;
-    }
-
-    if (quantityDelta > 0) {
-      const timestamp = new Date().toISOString();
-      const { error: insertError } = await supabase
-        .from(INVENTORY_TABLE)
-        .insert({
-          user_id: userId,
-          gift_slug: giftSlug,
-          quantity: quantityDelta,
-          created_at: timestamp,
-          updated_at: timestamp
-        });
-
-      if (insertError) {
-        console.warn('Failed to seed gift inventory', insertError);
-        return null;
-      }
-
-      return quantityDelta;
-    }
-
-    return 0;
-  } catch (err) {
-    console.warn('Inventory table unavailable', err);
-    return null;
-  }
-}
-
-async function logGiftLedger(rows: any[]) {
-  if (!rows.length) return;
-
-  try {
-    await supabase.from(TRANSACTION_TABLE).insert(rows);
-  } catch (err) {
-    console.warn('Gift ledger unavailable', err);
-  }
-}
-
-export async function purchaseGift({ userId, giftSlug, quantity = 1 }: { userId: string; giftSlug: string; quantity?: number }) {
-  const gift = findGiftBySlug(giftSlug);
-  if (!gift) {
-    return { success: false, error: 'Gift not found' };
-  }
-
-  const totalCost = gift.coinCost * quantity;
-  const deduction = await deductCoins({
-    userId,
-    amount: totalCost,
-    type: 'purchase',
-    description: `Troll Gift: ${gift.name}`,
-    metadata: { giftSlug, quantity }
-  });
-
-  if (!deduction.success) {
-    return { success: false, error: deduction.error || 'Unable to deduct coins' };
-  }
-
-  // Revenue Sync: Log purchase to ledger
-  try {
-    const { data: dbItem } = await supabase
-      .from('purchasable_items')
-      .select('id')
-      .eq('item_key', giftSlug)
-      .maybeSingle();
-
-    if (dbItem) {
-      await supabase.from('purchase_ledger').insert({
-        user_id: userId,
-        item_id: dbItem.id,
-        coin_amount: totalCost,
-        payment_method: 'coins',
-        source_context: 'purchaseGift',
-        metadata: { giftSlug, quantity }
-      });
-    }
-  } catch (err) {
-    console.warn('Failed to log purchase ledger', err);
-  }
-
-  const newQuantity = await upsertInventory(userId, giftSlug, quantity);
-
-  return {
-    success: true,
-    gift,
-    purchasedQuantity: quantity,
-    inventoryQuantity: newQuantity ?? null,
-    remainingBalance: deduction.newBalance
-  };
-}
-
-export async function getUserInventory(userId: string) {
-  try {
-    const { data, error } = await supabase
-      .from(INVENTORY_TABLE)
-      .select('gift_slug,quantity')
-      .eq('user_id', userId);
-
-    if (error) {
-      console.warn('Gift inventory load error', error);
-      return [];
-    }
-
-    if (!Array.isArray(data)) return [];
-
-    return data.map((row) => ({
-      giftSlug: row.gift_slug,
-      quantity: row.quantity,
-      gift: findGiftBySlug(row.gift_slug)
-    }));
-  } catch (err) {
-    console.warn('Gift inventory missing table', err);
-    return [];
-  }
-}
-
-export async function sendGiftFromInventory({
-  senderId,
-  giftSlug,
-  quantity = 1,
-  receiverId,
-  streamId = null,
-  context = 'gift_tray'
-}: {
-  senderId: string;
-  giftSlug: string;
-  quantity?: number;
-  receiverId: string;
-  streamId?: string | null;
-  context?: string;
-}) {
-  if (quantity <= 0) {
-    return { success: false, error: 'Quantity must be positive' };
-  }
-
-  const gift = findGiftBySlug(giftSlug);
-  if (!gift) {
-    return { success: false, error: 'Gift not found' };
-  }
-
-  if (!senderId || !receiverId) {
-    return { success: false, error: 'Sender or receiver missing' };
-  }
-
-  const { data: inventory } = await supabase
-    .from(INVENTORY_TABLE)
-    .select('quantity')
-    .eq('user_id', senderId)
-    .eq('gift_slug', giftSlug)
-    .maybeSingle();
-
-  const available = inventory?.quantity || 0;
-  if (available < quantity) {
-    return { success: false, error: 'Not enough gifts' };
-  }
-
-  await upsertInventory(senderId, giftSlug, -quantity);
-
-  const sentValue = gift.coinCost * quantity;
-  let trollPassBonus = 0;
-  
-  // Calculate broadcaster share
-  let broadcasterEarnings = Math.floor(sentValue * BROADCASTER_SHARE);
-  const platformPortion = sentValue - broadcasterEarnings;
-
-  // Apply TrollTract bonus if applicable
-  const trollTractResult = await processGiftWithTrollTractBonus(
-    receiverId,
-    broadcasterEarnings,
-    undefined, // giftId will be assigned after ledger log
-    streamId || undefined,
-    senderId
-  );
-
-  if (trollTractResult.isTrollTractCreator) {
-    broadcasterEarnings = trollTractResult.totalAmount;
-  }
-
-  const ledgerRows = [
-    {
-      from_user_id: senderId,
-      to_user_id: receiverId,
-      gift_slug: giftSlug,
-      type: 'sent',
-      quantity,
-      coins: sentValue,
-      stream_id: streamId,
-      description: gift.name,
-      metadata: {
-        giftSlug,
-        context,
-        animation: gift.animationType,
-        tier: gift.tier,
-        platform_share_percentage: PLATFORM_SHARE,
-        broadcaster_share_percentage: BROADCASTER_SHARE,
-        platform_coins: platformPortion,
-        broadcaster_coins: broadcasterEarnings,
-        trolltract_bonus: trollTractResult.bonusAmount,
-        sender_id: senderId
-      }
-    }
-  ];
-
-  if (receiverId) {
-    ledgerRows.push({
-      from_user_id: senderId,
-      to_user_id: receiverId,
-      gift_slug: giftSlug,
-      type: 'received',
-      quantity,
-      coins: broadcasterEarnings,
-      stream_id: streamId,
-      description: `Received ${gift.name}`,
-      metadata: {
-        giftSlug,
-        context,
-        animation: gift.animationType,
-        tier: gift.tier,
-        platform_share_percentage: PLATFORM_SHARE,
-        broadcaster_share_percentage: BROADCASTER_SHARE,
-        platform_coins: platformPortion,
-        broadcaster_coins: broadcasterEarnings,
-        trolltract_bonus: trollTractResult.bonusAmount,
-        sender_id: senderId
-      }
-    });
-  }
-
-  await logGiftLedger(ledgerRows);
-
-  if (broadcasterEarnings > 0) {
     try {
-      await addCoins({
-        userId: receiverId,
-        amount: broadcasterEarnings,
-        type: 'gift_received',
-        coinType: 'troll_coins',
-        description: `Gift earnings: ${gift.name}${trollTractResult.isTrollTractCreator ? ' (+10% TrollTract Bonus)' : ''}`,
-        metadata: {
-          giftSlug,
-          senderId,
-          quantity,
-          streamId,
-          context,
-          trolltract_bonus: trollTractResult.bonusAmount
-        }
-      });
-
-      // Award XP to broadcaster based on earnings
-      await addXp(receiverId, broadcasterEarnings, `Received gift: ${gift.name}`);
-
-    } catch (err) {
-      console.warn('Failed to credit broadcaster', err);
+      console.log('[AREngine] Applying effect:', effectId);
+      this.currentEffect = effectId;
+      // In production: this would call the AR SDK to apply the effect
+      return true;
+    } catch (error) {
+      console.error('[AREngine] Failed to apply effect:', error);
+      return false;
     }
   }
 
-  // Award Trollz bonus to sender (50% of gift value)
-  try {
-    await awardTrollzBonus(senderId, sentValue);
-  } catch (err) {
-    console.warn('Failed to award Trollz bonus', err);
-  }
- 
-  try {
-    const { data: senderProfile } = await supabase
-      .from('user_profiles')
-      .select('troll_pass_expires_at')
-      .eq('id', senderId)
-      .single();
-    const tpExpire = senderProfile?.troll_pass_expires_at;
-    const isTrollPassActive = tpExpire && new Date(tpExpire) > new Date();
-    if (isTrollPassActive) {
-      const bonusAmount = Math.floor(sentValue * 0.05);
-      if (bonusAmount > 0) {
-        const { success } = await addCoins({
-          userId: senderId,
-          amount: bonusAmount,
-          type: 'reward',
-          coinType: 'troll_coins',
-          description: 'Troll Pass 5% gift bonus',
-          metadata: {
-            giftSlug,
-            quantity,
-            streamId,
-            bonus_pct: 5,
-            source: 'troll_pass'
-          }
-        });
-        if (success) {
-          trollPassBonus = bonusAmount;
-        }
-      }
-    }
-  } catch {}
-
-  return {
-    success: true,
-    gift,
-    quantity,
-    broadcasterEarnings,
-    totalValue: sentValue,
-    trollTractBonus: trollTractResult.bonusAmount,
-    trollPassBonus
-  };
-}
-
-/**
- * Process a gift with TrollTract bonus calculation
- * This function should be called whenever a gift is processed in your system
- * 
- * @param creatorId - The broadcaster/creator's user ID
- * @param giftAmount - The base gift amount in coins
- * @param giftId - Optional gift transaction ID
- * @param streamId - Optional stream ID
- * @param senderId - Optional sender's user ID
- * @returns GiftProcessingResult with bonus details
- */
-export async function processGiftWithTrollTractBonus(
-  creatorId: string,
-  giftAmount: number,
-  giftId?: string,
-  streamId?: string,
-  senderId?: string
-): Promise<GiftProcessingResult> {
-  
-  const result: GiftProcessingResult = {
-    creatorId,
-    baseAmount: giftAmount,
-    bonusAmount: 0,
-    totalAmount: giftAmount,
-    isTrollTractCreator: false,
-    giftId,
-    streamId,
-    senderId
-  };
-
-  try {
-    // Get creator profile to check TrollTract status
-    const { data: creatorProfile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('id, is_trolltract')
-      .eq('id', creatorId)
-      .single();
-
-    if (profileError) {
-      console.error('Error fetching creator profile:', profileError);
-      return result;
-    }
-
-    // Check if creator has TrollTract activated
-    if (!creatorProfile?.is_trolltract) {
-      return result;
-    }
-
-    result.isTrollTractCreator = true;
-
-    // Calculate 10% bonus
-    const bonusAmount = Math.floor(giftAmount * 0.10);
-    result.bonusAmount = bonusAmount;
-    result.totalAmount = giftAmount + bonusAmount;
-
-    // Log the bonus to trolltract_bonus_log table
-    const { error: logError } = await supabase
-      .from('trolltract_bonus_log')
-      .insert({
-        user_id: creatorId,
-        gift_id: giftId || null,
-        stream_id: streamId || null,
-        base_amount: giftAmount,
-        bonus_amount: bonusAmount,
-        total_amount: result.totalAmount,
-        sender_id: senderId || null
-      });
-
-    if (logError) {
-      console.error('Error logging TrollTract bonus:', logError);
-      // Don't fail the whole process for logging errors
-    }
-
-    return result;
-
-  } catch (error) {
-    console.error('Error processing gift with TrollTract bonus:', error);
-    return result;
-  }
-}
-
-/**
- * Apply TrollTract ranking boost to a creator's score
- * Use this in your ranking/discovery algorithms
- * 
- * @param baseScore - The base ranking score
- * @param creatorId - The creator's user ID
- * @returns Boosted score with TrollTract multiplier
- */
-export async function applyTrollTractRankingBoost(
-  baseScore: number,
-  creatorId: string
-): Promise<number> {
-  
-  try {
-    // Get creator profile to check TrollTract status
-    const { data: creatorProfile } = await supabase
-      .from('user_profiles')
-      .select('is_trolltract')
-      .eq('id', creatorId)
-      .single();
-
-    // If creator has TrollTract, apply 25% boost
-    if (creatorProfile?.is_trolltract) {
-      const boostedScore = Math.round(baseScore * 1.25);
-      return boostedScore;
-    }
-
-    return baseScore;
-
-  } catch (error) {
-    console.error('Error applying TrollTract ranking boost:', error);
-    return baseScore;
-  }
-}
-
-/**
- * Get TrollTract statistics for a creator
- * Useful for dashboards and analytics
- * 
- * @param creatorId - The creator's user ID
- * @returns Object with TrollTract statistics
- */
-export async function getTrollTractCreatorStats(creatorId: string) {
-  try {
-    // Get basic profile info
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('is_trolltract, trolltract_activated_at')
-      .eq('id', creatorId)
-      .single();
-
-    if (!profile) {
-      throw new Error('Profile not found');
-    }
-
-    // Get bonus statistics
-    const { data: bonusData } = await supabase
-      .from('trolltract_bonus_log')
-      .select('bonus_amount, total_amount, created_at')
-      .eq('user_id', creatorId)
-      .gt('bonus_amount', 0)
-      .order('created_at', { ascending: false });
-
-    const totalBonus = bonusData?.reduce((sum, log) => sum + log.bonus_amount, 0) || 0;
-    const totalEarnings = bonusData?.reduce((sum, log) => sum + log.total_amount, 0) || 0;
-    const bonusCount = bonusData?.length || 0;
-
-    // Calculate days active
-    const activatedAt = profile.trolltract_activated_at 
-      ? new Date(profile.trolltract_activated_at) 
-      : null;
+  // Clear the current effect
+  async clearEffect(): Promise<void> {
+    if (!this.isInitialized) return;
     
-    const daysActive = activatedAt 
-      ? Math.floor((Date.now() - activatedAt.getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
+    console.log('[AREngine] Clearing effect');
+    this.currentEffect = null;
+    // In production: this would call the AR SDK to remove effects
+  }
 
-    return {
-      isTrollTractCreator: profile.is_trolltract,
-      activatedAt: profile.trolltract_activated_at,
-      daysActive,
-      totalBonus,
-      totalEarnings,
-      bonusCount,
-      averageBonusPerDay: daysActive > 0 ? Math.round(totalBonus / daysActive) : 0,
-      averageBonusPerGift: bonusCount > 0 ? Math.round(totalBonus / bonusCount) : 0
-    };
+  // Check if an effect is currently active
+  hasActiveEffect(): boolean {
+    return this.currentEffect !== null;
+  }
 
-  } catch (error) {
-    console.error('Error getting TrollTract stats:', error);
-    return {
-      isTrollTractCreator: false,
-      activatedAt: null,
-      daysActive: 0,
-      totalBonus: 0,
-      totalEarnings: 0,
-      bonusCount: 0,
-      averageBonusPerDay: 0,
-      averageBonusPerGift: 0
-    };
+  // Get current effect ID
+  getCurrentEffect(): string | null {
+    return this.currentEffect;
   }
 }
 
-/**
- * Check if a user has access to TrollTract features
- * Utility function for feature gating
- * 
- * @param profile - User profile object
- * @returns Object with feature access status
- */
-export function getTrollTractFeatureAccess(profile: UserProfile) {
-  const hasTrollTract = profile.is_trolltract;
+// Create singleton AR engine instance
+export const arEngine = new AREngine({
+  licenseKey: import.meta.env.VITE_AR_LICENSE_KEY || '',
+  tracking: '6DoF',
+});
+
+// ============================================================================
+// 6. PERFORMANCE OPTIMIZATION UTILITIES
+// ============================================================================
+
+// GPU layer helper for hardware acceleration
+export function enableGPUTlayer(element: HTMLElement): void {
+  element.style.transform = 'translateZ(0)';
+  element.style.willChange = 'transform, opacity';
+}
+
+// Memoized gift event handler
+export function createGiftEventHandler(
+  onFaceEffect: (giftId: string) => void,
+  onGrandAnimation: (gift: GiftEvent) => void,
+  onStandardUpdate: (gift: GiftEvent) => void
+): (event: GiftEvent) => void {
+  // Use a WeakMap to track processed events
+  const processedEvents = new WeakSet();
   
-  return {
-    hasTrollTract,
-    canAccessCreatorDashboard: hasTrollTract,
-    getsBonusEarnings: hasTrollTract,
-    getsRankingBoost: hasTrollTract,
-    canApplyForFeatured: hasTrollTract,
-    hasCreatorBadge: hasTrollTract,
-    bonusPercentage: hasTrollTract ? 10 : 0,
-    rankingBoostPercentage: hasTrollTract ? 25 : 0
+  return (event: GiftEvent) => {
+    // Skip if already processed
+    if (processedEvents.has(event)) return;
+    processedEvents.add(event);
+    
+    const category = getGiftCategory(event.gift_id);
+    
+    if (category === 'face') {
+      const effect = getGiftEffect(event.gift_id);
+      if (effect) {
+        onFaceEffect(event.gift_id);
+      }
+    } else if (category === 'grand') {
+      onGrandAnimation(event);
+    } else {
+      onStandardUpdate(event);
+    }
   };
 }
+
+// ============================================================================
+// 7. FAILSAFE HANDLING
+// ============================================================================
+
+// Fallback animation for when AR fails
+export function playFallbackAnimation(giftId: string): void {
+  console.log('[GiftEngine] Playing fallback animation for:', giftId);
+  // Use standard gift animation as fallback
+}
+
+// Throttle queue when overloaded
+export function shouldThrottle(queueLength: number): boolean {
+  // Throttle if queue has more than 10 items
+  return queueLength > 10;
+}
+
+// Get lightweight fallback for failed animations
+export function getLightweightFallback(giftId: string): GiftEffect {
+  return {
+    id: giftId,
+    name: 'Gift',
+    icon: '🎁',
+    duration: 2000, // Shorter duration
+  };
+}
+
+export default {
+  giftEventStream,
+  useGiftEngine,
+  arEngine,
+  getGiftCategory,
+  getGiftEffect,
+  giftEffectsMap,
+  createGiftEventHandler,
+  playFallbackAnimation,
+  shouldThrottle,
+  getLightweightFallback,
+  enableGPUTlayer,
+};

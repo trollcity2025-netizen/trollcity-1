@@ -93,16 +93,31 @@ export default function GiftAnimationOverlay({
    
   // Process new gifts when they arrive
   useEffect(() => {
-    if (!gifts || gifts.length === 0) return;
+    if (!gifts || gifts.length === 0) {
+      // Clear visible gifts when there are no gifts
+      if (visibleGifts.length > 0) {
+        setVisibleGifts([]);
+      }
+      return;
+    }
     
     console.log('[GiftOverlay] Processing gifts:', gifts.length, gifts);
     
     setVisibleGifts(prev => {
-      // Filter out gifts we already have
+      // Create a map of existing gift IDs for quick lookup
       const existingIds = new Set(prev.map(g => g.id));
+      
+      // Find truly new gifts by comparing with the full gifts array
+      // Always include the most recent gifts from the prop
       const newGifts = gifts.filter(g => !existingIds.has(g.id));
       
-      if (newGifts.length === 0) return prev;
+      if (newGifts.length === 0) {
+        // No new gifts, but make sure we have the latest gifts from props
+        // Take the most recent MAX_VISIBLE_GIFTS
+        return gifts.slice(-MAX_VISIBLE_GIFTS);
+      }
+      
+      console.log('[GiftOverlay] New gifts found:', newGifts.length);
       
       // Process each new gift - but only trigger effects once per batch
       const processedBatches = new Set<string>();
@@ -123,7 +138,7 @@ export default function GiftAnimationOverlay({
         console.log('[GiftOverlay] Gift processed:', gift.gift_name, 'tier:', tier, 'cost:', details.cost, 'sender:', gift.sender_name, 'batch:', batchId);
       });
       
-      // Keep all new gifts, limit to MAX_VISIBLE_GIFTS
+      // Combine previous and new gifts, keeping most recent
       const combined = [...prev, ...newGifts];
       return combined.slice(-MAX_VISIBLE_GIFTS);
     });

@@ -30,7 +30,7 @@ export default function GlobalPodNotification() {
               className="bg-gray-900 border border-purple-500/50 rounded-xl p-4 shadow-2xl shadow-purple-500/20 cursor-pointer flex items-center gap-4 w-full max-w-md hover:bg-gray-800 transition-colors"
               onClick={() => {
                 toast.dismiss(t);
-                navigate(`/pods/${room_id}`);
+                toast.info('Troll Pods are currently under construction. Please check back soon!');
               }}
             >
               <div className="bg-purple-600/20 p-3 rounded-full animate-pulse">

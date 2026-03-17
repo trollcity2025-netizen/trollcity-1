@@ -69,6 +69,7 @@ const TrollopolyCityDevTest = lazyWithRetry(() => import("./pages/dev/Trollopoly
 const LivingPage = lazyWithRetry(() => import("./pages/LivingPage"));
 const ChurchPage = lazyWithRetry(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazyWithRetry(() => import("./pages/church/PastorDashboard"));
+const BadgeDesignShowcase = lazyWithRetry(() => import("./pages/dev/BadgeDesignShowcase"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
@@ -78,6 +79,7 @@ const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 const TCPS = lazyWithRetry(() => import("./pages/TCPS"));
 const TrollPodsListing = lazyWithRetry(() => import("./pages/pods/TrollPodsListing"));
 const TrollPodRoom = lazyWithRetry(() => import("./pages/pods/TrollPodRoom"));
+const PodSummary = lazyWithRetry(() => import("./pages/pods/PodSummary"));
 
 // Lazy-loaded pages
 const Following = lazyWithRetry(() => import("./pages/Following"));
@@ -112,7 +114,7 @@ const TrollOfficerLounge = lazyWithRetry(() => import("./pages/TrollOfficerLoung
 const FoundingOfficerTrial = lazyWithRetry(() => import("./pages/FoundingOfficerTrial"));
 const OfficerModeration = lazyWithRetry(() => import("./pages/OfficerModeration"));
 const TrollFamily = lazyWithRetry(() => import("./pages/TrollFamily"));
-const FamilyLounge = lazyWithRetry(() => import("./pages/FamilyLounge.jsx"));
+const TrollFamilyHome = lazyWithRetry(() => import("./pages/TrollFamilyHome"));
 const FamilyWarsHub = lazyWithRetry(() => import("./pages/FamilyWarsHub.jsx"));
 const FamilyLeaderboard = lazyWithRetry(() => import("./pages/FamilyLeaderboard.jsx"));
 const FamilyShop = lazyWithRetry(() => import("./pages/FamilyShop.jsx"));
@@ -163,12 +165,13 @@ const OfficerPayrollDashboard = lazyWithRetry(() => import("./pages/officer/Offi
 const OfficerDashboard = lazyWithRetry(() => import("./pages/officer/OfficerDashboard"));
 const OfficerOWCDashboard = lazyWithRetry(() => import("./pages/OfficerOWCDashboard"));
 const OfficerVote = lazyWithRetry(() => import("./pages/OfficerVote"));
+const GovernmentPage = lazyWithRetry(() => import("./pages/Government"));
 const GovernmentStreams = lazyWithRetry(() => import("./pages/government/GovernmentStreams"));
 const ReportDetailsPage = lazyWithRetry(() => import("./pages/ReportDetailsPage"));
 const TrollFamilyCity = lazyWithRetry(() => import("./pages/TrollFamilyCity"));
 const FamilyProfilePage = lazyWithRetry(() => import("./pages/FamilyProfilePage"));
 const FamilyWarsPage = lazyWithRetry(() => import("./pages/FamilyWarsPage"));
-const FamilyChatPage = lazyWithRetry(() => import("./pages/FamilyChatPage"));
+const FamilyChatPage = lazyWithRetry(() => import("./pages/TrollFamilyChat"));
 const TransactionHistory = lazyWithRetry(() => import("./pages/TransactionHistory"));
 const CashoutPage = lazyWithRetry(() => import("./pages/CashoutPage"));
 const FamilyApplication = lazyWithRetry(() => import("./pages/FamilyApplication"));
@@ -226,7 +229,6 @@ const LeadOfficerDashboard = lazyWithRetry(() => import("./pages/lead-officer/Le
 const ShopPartnerPage = lazyWithRetry(() => import("./pages/ShopPartnerPage"));
 const UniverseEventPage = lazyWithRetry(() => import("./pages/UniverseEventPage"));
 const NeighborsPage = lazyWithRetry(() => import("./pages/Neighbors"));
-const MediaCityPage = lazyWithRetry(() => import("./pages/media/MediaCityPage"));
 
 // TCNN - Troll City News Network
 const TCNNMainPage = lazyWithRetry(() => import("./pages/tcnn/TCNNMainPage"));
@@ -692,7 +694,7 @@ function AppContent() {
         return;
       }
       if (event.key === 'g' || event.key === 'G') {
-        navigate('/government/streams');
+        navigate('/government');
         expandGroup('Government Sector');
         return;
       }
@@ -1106,7 +1108,7 @@ function AppContent() {
                   <Route path="/dev/trollopoly-city" element={<TrollopolyCityDevTest />} />
 
                   <Route path="/mobile" element={<Navigate to="/" replace />} />
-                  <Route path="/live" element={<LandingHome />} />
+                  <Route path="/live" element={<ExploreFeed />} />
                   <Route path="/messages" element={<Navigate to="/tcps" replace />} />
                   <Route path="/tcps" element={<TCPS />} />
           <Route path="/city-hall" element={<CityHall />} />
@@ -1127,7 +1129,6 @@ function AppContent() {
                   <Route path="/trollifieds" element={<Trollifieds />} />
                   <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/pool" element={<PublicPool />} />
-                  <Route path="/media-city" element={<MediaCityPage />} />
                   <Route path="/troll-games" element={<TrollGamesPage />} />
                   <Route path="/troll-games/queue" element={<TrollGamesPage />} />
                   <Route path="/troll-games/live" element={<TrollGamesPage />} />
@@ -1161,10 +1162,12 @@ function AppContent() {
                    
                    <Route path="/pods" element={<TrollPodsListing />} />
                   <Route path="/pods/:roomId" element={<TrollPodRoom />} />
+                  <Route path="/pods/:roomId/summary" element={<PodSummary />} />
                   
                   <Route path="/church" element={<ChurchPage />} />
                   <Route path="/church/pastor" element={<PastorDashboard />} />
                   <Route path="/dev/xp" element={<XPSimulatorPage />} />
+                  <Route path="/dev/badge-showcase" element={<BadgeDesignShowcase />} />
                   
                   {/* 🎥 Streaming */}
 
@@ -1222,11 +1225,12 @@ function AppContent() {
                   <Route path="/family/browse" element={<FamilyBrowse />} />
                   <Route path="/family/city" element={<TrollFamilyCity />} />
                   <Route path="/family/profile/:id" element={<FamilyProfilePage />} />
-                  <Route path="/family/chat" element={<FamilyChatPage />} />
+                  <Route path="/family/chat" element={<Navigate to="/family" replace />} />
+                  <Route path="/family/chat/:familyId" element={<FamilyChatPage />} />
                   <Route path="/family/wars" element={<FamilyWarsPage />} />
 
                   {/* 🏰 Troll Family Ecosystem */}
-                  <Route path="/family/lounge" element={<FamilyLounge user={profile || undefined} />} />
+                  <Route path="/family/home" element={<TrollFamilyHome user={profile || undefined} />} />
                   <Route path="/family/wars-hub" element={<FamilyWarsHub />} />
                   <Route path="/family/leaderboard" element={<FamilyLeaderboard />} />
                   <Route path="/family/shop" element={<FamilyShop />} />
@@ -1317,6 +1321,10 @@ function AppContent() {
                         <GovernmentStreams />
                       </RequireRole>
                     }
+                  />
+                  <Route
+                    path="/government"
+                    element={<GovernmentPage />}
                   />
 
                   {/* 👑 Admin */}
@@ -1870,9 +1878,6 @@ function AppContent() {
 }
 
 function App() {
-  // Debug: Log Agora App ID on startup
-  console.log("Agora App ID:", import.meta.env.VITE_AGORA_APP_ID);
-  
   useEffect(() => {
     initTelemetry();
     // Initialize global time updater for account age calculations

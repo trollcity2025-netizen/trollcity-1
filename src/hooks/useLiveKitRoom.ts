@@ -10,7 +10,8 @@ import {
   VideoCaptureOptions,
   AudioCaptureOptions,
   VideoPresets,
-  AudioPresets
+  AudioPresets,
+  createLocalAudioTrack
 } from 'livekit-client';
 import { supabase } from '../lib/supabase';
 
@@ -52,6 +53,7 @@ export function useLiveKitRoom({
   const roomRef = useRef<Room | null>(null);
   const joinedRef = useRef(false);
   const localUserIdRef = useRef<string | null>(null);
+  const joiningRef = useRef(false); // Track joining state to prevent race conditions
 
   // Get LiveKit credentials from environment
   const getLiveKitUrl = () => import.meta.env.VITE_LIVEKIT_URL;
@@ -90,7 +92,7 @@ export function useLiveKitRoom({
   const createLocalTracks = useCallback(async () => {
     try {
       // Audio track - always create for publishers
-      const audioTrack = await LocalAudioTrack.create(AudioPresets.audio);
+      const audioTrack = await createLocalAudioTrack();
       setLocalAudioTrack(audioTrack);
 
       // Video track - only create if not audio-only room
@@ -139,8 +141,29 @@ export function useLiveKitRoom({
 
   // Join LiveKit as publisher
   const joinAsPublisher = useCallback(async (userId: string) => {
-    if (joinedRef.current || !roomId || !userId) return;
+    // Guard: prevent multiple simultaneous connection attempts
+    if (joinedRef.current) {
+      console.warn('[useLiveKitRoom] Join prevented: already joined');
+      return roomRef.current;
+    }
+    
+    if (joiningRef.current) {
+      console.warn('[useLiveKitRoom] Join prevented: already joining');
+      // Wait for existing join to complete
+      let attempts = 0;
+      while (joiningRef.current && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      return roomRef.current;
+    }
+    
+    if (!roomId || !userId) {
+      console.warn('[useLiveKitRoom] Join prevented: missing params');
+      return;
+    }
 
+    joiningRef.current = true;
     setIsJoining(true);
     setError(null);
     localUserIdRef.current = userId;
@@ -168,6 +191,35 @@ export function useLiveKitRoom({
       room.on(RoomEvent.ParticipantDisconnected, handleParticipantLeft);
       room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      
+      // Handle disconnection events to reset state
+      room.on(RoomEvent.Disconnected, () => {
+        console.log('[useLiveKitRoom] Room disconnected');
+        joinedRef.current = false;
+        joiningRef.current = false;
+        setIsConnected(false);
+        setIsPublishing(false);
+      });
+
+      // Handle reconnection events
+      room.on(RoomEvent.Reconnecting, () => {
+        console.log('[useLiveKitRoom] Room reconnecting...');
+      });
+
+      room.on(RoomEvent.Reconnected, () => {
+        console.log('[useLiveKitRoom] Room reconnected');
+        joinedRef.current = true;
+        setIsConnected(true);
+      });
+
+      // Handle connection state changes
+      room.on(RoomEvent.ConnectionStateChanged, (state) => {
+        console.log('[useLiveKitRoom] Connection state changed:', state);
+        if (state === 'disconnected') {
+          joinedRef.current = false;
+          setIsConnected(false);
+        }
+      });
 
       // Get token
       const token = await fetchToken(roomId, userId);
@@ -186,43 +238,97 @@ export function useLiveKitRoom({
 
       // Create and publish local tracks if publishing
       if (publish) {
-        // Create audio track
-        const audioTrack = await LocalAudioTrack.create(AudioPresets.audio);
-        setLocalAudioTrack(audioTrack);
-        await room.localParticipant.publishTrack(audioTrack);
+        // Check if room is still connected before publishing
+        if (!roomRef.current || room.state !== 'connected') {
+          console.warn('[useLiveKitRoom] Room not connected, skipping track publishing');
+        } else {
+          // Create audio track
+          const audioTrack = await createLocalAudioTrack();
+          audioTrack.enable(); // Ensure audio is enabled
+          setLocalAudioTrack(audioTrack);
+          await room.localParticipant.publishTrack(audioTrack);
 
-        // Create video track if not audio-only
-        if (!audioOnly && roomType !== 'pod') {
-          const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
-          setLocalVideoTrack(videoTrack);
-          await room.localParticipant.publishTrack(videoTrack);
+          // Create video track if not audio-only
+          if (!audioOnly && roomType !== 'pod') {
+            const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
+            setLocalVideoTrack(videoTrack);
+            await room.localParticipant.publishTrack(videoTrack);
+          }
+
+          setIsPublishing(true);
         }
-
-        setIsPublishing(true);
       }
 
-      // Get existing participants
-      const existingParticipants = Array.from(room.participants.values());
+      // Get existing participants - guard against undefined
+      const existingParticipants = room.participants ? Array.from(room.participants.values()) : [];
       setRemoteUsers(existingParticipants);
 
       joinedRef.current = true;
       setIsConnected(true);
       setIsJoining(false);
+      joiningRef.current = false;
 
       return room;
     } catch (err: any) {
       console.error('[useLiveKitRoom] Error joining as publisher:', err);
-      setError(err.message || 'Failed to join room');
-      setIsJoining(false);
-      onError?.(err);
-      throw err;
+      
+      // Check if this is a getUserMedia error - these often happen in LiveKit's internal
+      // reconnection logic and don't necessarily mean the connection failed
+      const errorMessage = err?.message || String(err) || '';
+      const isGetUserMediaError = errorMessage.includes('getUserMedia');
+      
+      // Only reset state and call onError if it's NOT a getUserMedia error
+      // or if we haven't successfully connected yet
+      if (!isGetUserMediaError || !roomRef.current) {
+        // Reset state on error
+        joinedRef.current = false;
+        setIsConnected(false);
+        setIsPublishing(false);
+        setError(err.message || 'Failed to join room');
+        setIsJoining(false);
+        joiningRef.current = false;
+        onError?.(err);
+        throw err;
+      } else {
+        // For getUserMedia errors, just log but don't fail
+        console.warn('[useLiveKitRoom] Ignoring getUserMedia error - connection may still work');
+        // If we got here, the connection might have succeeded despite the error
+        if (roomRef.current && !joinedRef.current) {
+          joinedRef.current = true;
+          setIsConnected(true);
+          setIsJoining(false);
+          joiningRef.current = false;
+          return roomRef.current;
+        }
+      }
     }
   }, [roomId, publish, audioOnly, roomType, fetchToken, handleParticipantJoined, handleParticipantLeft, handleTrackSubscribed, handleTrackUnsubscribed, onError]);
 
   // Join as viewer (LiveKit)
   const joinAsAudience = useCallback(async (userId: string) => {
-    if (joinedRef.current || !roomId || !userId) return;
+    // Guard: prevent multiple simultaneous connection attempts
+    if (joinedRef.current) {
+      console.warn('[useLiveKitRoom] Join prevented: already joined');
+      return roomRef.current;
+    }
+    
+    if (joiningRef.current) {
+      console.warn('[useLiveKitRoom] Join prevented: already joining');
+      // Wait for existing join to complete
+      let attempts = 0;
+      while (joiningRef.current && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      return roomRef.current;
+    }
+    
+    if (!roomId || !userId) {
+      console.warn('[useLiveKitRoom] Join prevented: missing params');
+      return;
+    }
 
+    joiningRef.current = true;
     setIsJoining(true);
     setError(null);
     localUserIdRef.current = userId;
@@ -240,6 +346,35 @@ export function useLiveKitRoom({
       room.on(RoomEvent.ParticipantDisconnected, handleParticipantLeft);
       room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      
+      // Handle disconnection events to reset state
+      room.on(RoomEvent.Disconnected, () => {
+        console.log('[useLiveKitRoom] Room disconnected');
+        joinedRef.current = false;
+        joiningRef.current = false;
+        setIsConnected(false);
+        setIsPublishing(false);
+      });
+
+      // Handle reconnection events
+      room.on(RoomEvent.Reconnecting, () => {
+        console.log('[useLiveKitRoom] Room reconnecting...');
+      });
+
+      room.on(RoomEvent.Reconnected, () => {
+        console.log('[useLiveKitRoom] Room reconnected');
+        joinedRef.current = true;
+        setIsConnected(true);
+      });
+
+      // Handle connection state changes
+      room.on(RoomEvent.ConnectionStateChanged, (state) => {
+        console.log('[useLiveKitRoom] Connection state changed:', state);
+        if (state === 'disconnected') {
+          joinedRef.current = false;
+          setIsConnected(false);
+        }
+      });
 
       // Get token
       const token = await fetchToken(roomId, userId);
@@ -256,21 +391,48 @@ export function useLiveKitRoom({
         identity: userId
       });
 
-      // Get existing participants
-      const existingParticipants = Array.from(room.participants.values());
+      // Get existing participants - guard against undefined
+      const existingParticipants = room.participants ? Array.from(room.participants.values()) : [];
       setRemoteUsers(existingParticipants);
 
       joinedRef.current = true;
       setIsConnected(true);
       setIsJoining(false);
+      joiningRef.current = false;
 
       return room;
     } catch (err: any) {
       console.error('[useLiveKitRoom] Error joining as audience:', err);
-      setError(err.message || 'Failed to join room');
-      setIsJoining(false);
-      onError?.(err);
-      throw err;
+      
+      // Check if this is a getUserMedia error - these often happen in LiveKit's internal
+      // reconnection logic and don't necessarily mean the connection failed
+      const errorMessage = err?.message || String(err) || '';
+      const isGetUserMediaError = errorMessage.includes('getUserMedia');
+      
+      // Only reset state and call onError if it's NOT a getUserMedia error
+      // or if we haven't successfully connected yet
+      if (!isGetUserMediaError || !roomRef.current) {
+        // Reset state on error
+        joinedRef.current = false;
+        setIsConnected(false);
+        setIsPublishing(false);
+        setError(err.message || 'Failed to join room');
+        setIsJoining(false);
+        joiningRef.current = false;
+        onError?.(err);
+        throw err;
+      } else {
+        // For getUserMedia errors, just log but don't fail
+        console.warn('[useLiveKitRoom] Ignoring getUserMedia error - connection may still work');
+        // If we got here, the connection might have succeeded despite the error
+        if (roomRef.current && !joinedRef.current) {
+          joinedRef.current = true;
+          setIsConnected(true);
+          setIsJoining(false);
+          joiningRef.current = false;
+          return roomRef.current;
+        }
+      }
     }
   }, [roomId, fetchToken, handleParticipantJoined, handleParticipantLeft, handleTrackSubscribed, handleTrackUnsubscribed, onError]);
 
@@ -293,12 +455,21 @@ export function useLiveKitRoom({
         roomRef.current = null;
       }
 
+      // Reset all state and refs
       joinedRef.current = false;
+      joiningRef.current = false;
+      localUserIdRef.current = null;
       setIsConnected(false);
       setIsPublishing(false);
       setRemoteUsers([]);
     } catch (err) {
       console.error('[useLiveKitRoom] Error leaving room:', err);
+      // Ensure state is reset even on error
+      joinedRef.current = false;
+      joiningRef.current = false;
+      roomRef.current = null;
+      setIsConnected(false);
+      setIsPublishing(false);
     }
   }, [localAudioTrack, localVideoTrack]);
 
@@ -329,7 +500,7 @@ export function useLiveKitRoom({
         await roomRef.current.localParticipant.unpublishTrack(localAudioTrack);
         localAudioTrack.stop();
       } else {
-        const newTrack = await LocalAudioTrack.create(AudioPresets.audio);
+        const newTrack = await createLocalAudioTrack();
         setLocalAudioTrack(newTrack);
         await roomRef.current.localParticipant.publishTrack(newTrack);
       }

@@ -71,7 +71,10 @@ export default function Sidebar() {
   const isActive = (path: string) => location.pathname === path
 
   const [canSeeOfficer, setCanSeeOfficer] = useState(false)
-  const [canSeeFamilyLounge, setCanSeeFamilyLounge] = useState(false)
+  const [canSeeTrollFamily, setCanSeeTrollFamily] = useState(false)
+  const [hasFamily, setHasFamily] = useState(false)
+  const [isFamilyLeader, setIsFamilyLeader] = useState(false)
+  const [isFamilyMember, setIsFamilyMember] = useState(false)
   const [canSeeSecretary, setCanSeeSecretary] = useState(false)
 
   const [showCourtModal, setShowCourtModal] = useState(false)
@@ -88,7 +91,7 @@ export default function Sidebar() {
       expandGroup('Social');
     } else if (path.startsWith('/marketplace')) {
       expandGroup('City Center');
-    } else if (path.startsWith('/government/streams')) {
+    } else if (path.startsWith('/government')) {
       expandGroup('Government Sector');
     } else if (path.startsWith('/city-registry')) {
       expandGroup('City Registry');
@@ -122,7 +125,7 @@ export default function Sidebar() {
     const checkAccess = async () => {
       if (!profile) { 
         setCanSeeOfficer(false)
-        setCanSeeFamilyLounge(false)
+        setCanSeeTrollFamily(false)
         setCanSeeSecretary(false)
         return 
       }
@@ -140,22 +143,57 @@ export default function Sidebar() {
 
       setCanSeeOfficer(isOfficer || activeAdmin)
 
-      if (isOfficer) { 
-        setCanSeeFamilyLounge(true)
-      } else {
-        try {
-          const { data: familyApp } = await supabase
-            .from('applications')
-            .select('status')
-            .eq('user_id', profile.id)
-            .eq('type', 'troll_family')
-            .eq('status', 'approved')
-            .maybeSingle()
+      // Check if user is in a family (more accurate than checking applications)
+      // Officers also need to check if they have a family
+      // Also check if user has submitted a troll family application
+      try {
+        // Check profile role first (most reliable after approval)
+        const profileRole = profile?.role
+        const hasTrollFamilyRole = profileRole === 'troll_family' || profileRole === 'family_leader'
+        
+        // Check for pending/approved troll family application
+        const { data: familyApp } = await supabase
+          .from('applications')
+          .select('id, status')
+          .eq('user_id', profile.id)
+          .eq('type', 'troll_family')
+          .in('status', ['pending', 'approved'])
+          .maybeSingle()
+        
+        const hasPendingApplication = !!familyApp && familyApp.status === 'pending'
+        const hasApprovedApplication = !!familyApp && familyApp.status === 'approved'
+        
+        // Check family_members table
+        const { data: familyMember } = await supabase
+          .from('family_members')
+          .select('id, role')
+          .eq('user_id', profile.id)
+          .maybeSingle()
 
-          setCanSeeFamilyLounge(!!familyApp)
-        } catch {
-          setCanSeeFamilyLounge(false)
-        }
+        // Also check if user is a leader in troll_families
+        const { data: leaderFamily } = await supabase
+          .from('troll_families')
+          .select('id')
+          .eq('leader_id', profile.id)
+          .maybeSingle()
+
+        const hasFamilyMembership = !!familyMember
+        const isLeader = !!leaderFamily
+        const inFamily = hasFamilyMembership || isLeader || hasTrollFamilyRole || hasApprovedApplication
+        
+        // Officers can see troll families, but also show "My Family" if they're in one
+        // Also show if they have a pending application
+        setCanSeeTrollFamily(isOfficer || inFamily || hasPendingApplication)
+        setHasFamily(inFamily)
+        
+        // Set leader/member status for role-based access
+        setIsFamilyLeader(isLeader || hasTrollFamilyRole)
+        setIsFamilyMember(hasFamilyMembership)
+      } catch {
+        setCanSeeTrollFamily(isOfficer)
+        setHasFamily(false)
+        setIsFamilyLeader(false)
+        setIsFamilyMember(false)
       }
 
       if (isAdmin || isSecretary) {
@@ -179,14 +217,15 @@ export default function Sidebar() {
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
-  const socialPaths = ['/tcps', '/pool', '/universe-event', '/media-city']
-  if (canSeeFamilyLounge) socialPaths.push('/family/lounge')
+  const socialPaths = ['/tcps', '/pool', '/universe-event']
+  if (canSeeTrollFamily) socialPaths.push('/family/home')
   const specialAccessPaths: string[] = []
   if (canSeeCourt) specialAccessPaths.push('/admin/court-dockets')
-  if (canSeeOfficer) specialAccessPaths.push('/officer/dashboard', '/officer/lounge', '/officer/moderation')
+  if (canSeeOfficer) specialAccessPaths.push('/officer/dashboard')
   if (isLead) specialAccessPaths.push('/lead-officer')
   if (canSeeSecretary) specialAccessPaths.push('/secretary')
   if (isAdmin) specialAccessPaths.push('/admin/applications')
+  if (profile?.role === 'president' || profile?.troll_role === 'president') specialAccessPaths.push('/government')
   const systemPaths = ['/application', '/interview-room', '/wallet']
   const isAnyUpdated = (paths: string[]) => paths.some(path => isUpdated(path))
 
@@ -326,15 +365,7 @@ export default function Sidebar() {
                 highlight={isUpdated('/pods')} onClick={() => markAsViewed('/pods')}
                 className="text-purple-400 hover:text-purple-300"
               />
-              <SidebarItem
-                icon={Music}
-                label="Media City"
-                to="/media-city"
-                active={isActive('/media-city')}
-                collapsed={isSidebarCollapsed}
-                highlight={isUpdated('/media-city')} onClick={() => markAsViewed('/media-city')}
-                className="text-pink-400 hover:text-pink-300"
-              />
+              {/* MAI TALENT - UNDER CONSTRUCTION - Disabled for all users
               <SidebarItem 
                 icon={Mic} 
                 label="Mai Talent" 
@@ -344,6 +375,8 @@ export default function Sidebar() {
                 highlight={isUpdated('/mai-talent/stage')} onClick={() => markAsViewed('/mai-talent/stage')}
                 className="text-pink-400 hover:text-pink-300"
               />
+              */}
+              {/* END MAI TALENT DISABLED */}
               <SidebarItem 
                 icon={Waves} 
                 label="Public Pool" 
@@ -371,20 +404,20 @@ export default function Sidebar() {
                 highlight={isUpdated('/troll-wheel')} onClick={() => markAsViewed('/troll-wheel')}
                 className="text-yellow-500 hover:text-yellow-400"
               />
-              {canSeeFamilyLounge && (
+              {canSeeTrollFamily && (
                 <SidebarItem 
                   icon={Crown} 
-                  label="Family Lounge" 
-                  to="/family/lounge" 
+                  label={hasFamily ? 'My Family' : 'Troll Families'} 
+                  to="/family/home" 
                   active={location.pathname.startsWith('/family')} 
                   collapsed={isSidebarCollapsed}
-                  highlight={isUpdated('/family/lounge')} onClick={() => markAsViewed('/family/lounge')}
+                  highlight={isUpdated('/family/home')} onClick={() => markAsViewed('/family/home')}
                   className="text-amber-400 hover:text-amber-300"
                 />
               )}
             </SidebarGroup>
 
-            {(canSeeOfficer || canSeeFamilyLounge || canSeeSecretary || canSeeCourt) && (
+            {(canSeeOfficer || canSeeTrollFamily || canSeeSecretary || canSeeCourt) && (
               <SidebarGroup 
                 title={isSidebarCollapsed ? '' : "Government Sector"} 
                 isCollapsed={isSidebarCollapsed} 
@@ -401,6 +434,17 @@ export default function Sidebar() {
                     collapsed={isSidebarCollapsed}
                     highlight={isUpdated('/government/streams')} onClick={() => markAsViewed('/government/streams')}
                     className="text-red-400 hover:text-red-300"
+                  />
+                )}
+                {(canSeeOfficer || canSeeSecretary || profile?.role === 'president' || profile?.troll_role === 'president' || isAdmin) && (
+                  <SidebarItem 
+                    icon={Landmark} 
+                    label="Troll City Government" 
+                    to="/government" 
+                    active={location.pathname === '/government'} 
+                    collapsed={isSidebarCollapsed}
+                    highlight={isUpdated('/government')} onClick={() => markAsViewed('/government')}
+                    className="text-yellow-400 hover:text-yellow-300"
                   />
                 )}
                 {canSeeCourt && (
@@ -424,24 +468,6 @@ export default function Sidebar() {
                       collapsed={isSidebarCollapsed}
                       highlight={isUpdated('/officer/dashboard')} onClick={() => markAsViewed('/officer/dashboard')}
                       className="text-emerald-400 hover:text-emerald-300"
-                    />
-                    <SidebarItem 
-                      icon={Shield} 
-                      label="Officer Lounge" 
-                      to="/officer/lounge" 
-                      active={location.pathname.startsWith('/officer/lounge')} 
-                      collapsed={isSidebarCollapsed}
-                      highlight={isUpdated('/officer/lounge')} onClick={() => markAsViewed('/officer/lounge')}
-                      className="text-purple-400 hover:text-purple-300"
-                    />
-                    <SidebarItem 
-                      icon={Shield} 
-                      label="Officer Moderation" 
-                      to="/officer/moderation" 
-                      active={location.pathname.startsWith('/officer/moderation')} 
-                      collapsed={isSidebarCollapsed}
-                      highlight={isUpdated('/officer/moderation')} onClick={() => markAsViewed('/officer/moderation')}
-                      className="text-blue-400 hover:text-blue-300"
                     />
                   </>
                 )}

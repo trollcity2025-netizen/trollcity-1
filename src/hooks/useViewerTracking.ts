@@ -66,9 +66,10 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
         }
 
         // Only Host OR Officer/Admin updates the DB count
+        // Reduced from 10s to 30s to reduce disk I/O
         if (isUpdateAuthorized) {
           const now = Date.now()
-          if (now - lastDbUpdate.current > 10000) { // Throttled to 10s
+          if (now - lastDbUpdate.current > 30000) { // Throttled to 30s
             lastDbUpdate.current = now
             supabase.rpc('update_stream_viewer_count', { p_stream_id: streamId, p_count: count });
           }
@@ -98,7 +99,7 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
         }
       })
 
-    // Heartbeat for stream_viewers table every 30s
+    // Heartbeat for stream_viewers table every 60s (reduced from 30s to reduce DB load)
     const heartbeatInterval = setInterval(async () => {
       if (streamId && user?.id) {
         await supabase.from('stream_viewers').upsert({
@@ -107,7 +108,7 @@ export function useViewerTracking(streamId: string | null, isHost: boolean = fal
           last_seen: new Date().toISOString()
         }, { onConflict: 'stream_id,user_id' });
       }
-    }, 30000);
+    }, 60000);
 
     return () => {
       clearInterval(heartbeatInterval);
@@ -169,6 +170,7 @@ export function useLiveViewerCount(streamId: string | null) {
 
     // Subscribe to DB updates (debounced by the host's 5s update interval)
     // REFACTOR: Changed from Realtime subscription to Polling to reduce DB connection costs
+    // Reduced from 5s to 30s to reduce disk I/O on Supabase
     const interval = setInterval(async () => {
         if (!mounted) return;
         const { data } = await supabase
@@ -180,7 +182,7 @@ export function useLiveViewerCount(streamId: string | null) {
         if (mounted && data) {
             setViewerCount(data.current_viewers || 0);
         }
-    }, 5000); // Poll every 5s
+    }, 30000); // Poll every 30s (reduced from 5s)
 
     return () => {
       mounted = false

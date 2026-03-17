@@ -1,20 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mic, MicOff, Users, MessageSquare, Hand, UserMinus, UserPlus, Settings, Coins, Map, LogOut, XCircle } from 'lucide-react';
+import { Mic, MicOff, Users, Hand, Settings, LogOut, XCircle } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { useAuthStore } from '../../lib/store';
-import { emitEvent as triggerEvent } from '../../lib/events';
 import PodParticipantBox from './PodParticipantBox';
 import PodChatBox from './PodChatBox';
 import PodHostControlPanel from './PodHostControlPanel';
-import { Room, 
-  ILocalAudioTrack,
-} from "livekit-client";
 import PodRoomContent from './PodRoomContent';
-import { RemoteParticipant, IRemoteAudioTrack } from "livekit-client";
-
+import { RemoteParticipant } from "livekit-client";
+import useLiveKitRoom from '../../hooks/useLiveKitRoom';
 
 interface Room {
   id: string;
@@ -46,137 +42,107 @@ export default function TrollPodRoom() {
   const { user: currentUser, profile } = useAuthStore();
   const [participantsData, setParticipantsData] = useState<PodParticipant[]>([]);
   const [participantCount, setParticipantCount] = useState(0);
-    const [agoraClient, setAgoraClient] = useState<Room | null>(null);
-  const [localAudioTrack, setLocalAudioTrack] = useState<ILocalAudioTrack | null>(null);
-  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
+
+  // Under construction - redirect to pods listing with message
+  useEffect(() => {
+    toast.info('Troll Pods are currently under construction. Please check back soon!');
+    navigate('/pods');
+  }, [navigate]);
+
+  // Early return after redirect
+  if (!roomId) {
+    return null;
+  }
 
   const isHost = room?.host_id === currentUser?.id;
   const myRecord = participantsData.find((p) => p.user_id === currentUser?.id);
   const canPublish = isHost || myRecord?.role === 'speaker' || myRecord?.role === 'officer';
 
+  // Ref to prevent reconnect churn
+  const hasJoinedLiveKitRef = useRef(false);
+
+  // Use LiveKit hook for both host and listeners
+  const {
+    isConnected: isLiveKitConnected,
+    isPublishing,
+    remoteUsers,
+    localAudioTrack,
+    error: liveKitError,
+    joinAsPublisher,
+    joinAsAudience,
+    leaveRoom,
+    toggleMicrophone
+  } = useLiveKitRoom({
+    roomId: roomId || '',
+    roomType: 'pod',
+    audioOnly: true, // Pods are audio-only
+    publish: canPublish,
+    onUserJoined: (participant) => {
+      console.log('[TrollPodRoom] LiveKit user joined:', participant.identity);
+    },
+    onUserLeft: (participant) => {
+      console.log('[TrollPodRoom] LiveKit user left:', participant.identity);
+    },
+    onError: (err) => {
+      console.error('[TrollPodRoom] LiveKit error:', err);
+      // Ignore getUserMedia errors - these are usually from LiveKit's internal reconnection
+      // and don't affect the actual connection
+      if (err && err.message && err.message.includes('getUserMedia')) {
+        console.warn('[TrollPodRoom] Ignoring getUserMedia error - connection may still work');
+        return;
+      }
+      toast.error('Failed to connect to audio');
+    }
+  });
+
+  // Refs for stable callback references (initialized after hook)
+  const joinAsPublisherRef = useRef(joinAsPublisher);
+  const joinAsAudienceRef = useRef(joinAsAudience);
+  
+  // Update refs when functions change
   useEffect(() => {
-    if (!roomId || !currentUser) return;
+    joinAsPublisherRef.current = joinAsPublisher;
+    joinAsAudienceRef.current = joinAsAudience;
+  }, [joinAsPublisher, joinAsAudience]);
 
-    const roomName = `pod-${roomId}`;
-    const client = new Room({ mode: 'rtc', codec: 'vp8' });
-    setAgoraClient(client);
+  // Join LiveKit room when ready (only once per session)
+  useEffect(() => {
+    if (!roomId || !currentUser || !room) return;
+    // Already joined in this session
+    if (hasJoinedLiveKitRef.current) return;
 
-    const joinChannel = async () => {
-      if (canPublish) {
-        // Convert user ID to numeric UID for Agora
-        const stringToUid = (str: string): number => {
-          let hash = 0;
-          for (let i = 0; i < str.length; i++) {
-            hash = (hash << 5) - hash + str.charCodeAt(i);
-            hash |= 0;
-          }
-          return Math.abs(hash);
-        };
-        const numericUid = stringToUid(currentUser.id);
-        
-        // Fetch Agora token using edge function
-        const { data, error } = await supabase.functions.invoke('agora-token', {
-          body: {
-            channel: roomName,
-            uid: numericUid
-          }
-        });
-        
-        if (error || !data?.token) {
-          console.error('Error fetching token', error || 'No token returned');
-          return;
+    const joinLiveKit = async () => {
+      try {
+        if (isHost || myRecord?.role === 'speaker' || myRecord?.role === 'officer') {
+          await joinAsPublisherRef.current(currentUser.id);
+          console.log('[TrollPodRoom] Joined as publisher (host/speaker)');
+        } else {
+          await joinAsAudienceRef.current(currentUser.id);
+          console.log('[TrollPodRoom] Joined as audience (listener)');
         }
-        
-        await room.connect(
-          import.meta.env.VITE_AGORA_APP_ID!,
-          roomName,
-          data.token,
-          currentUser.id
-        );
 
-        const audioTrack = await  LocalAudioTrack.create();
-        await client.publish([audioTrack]);
-        setLocalAudioTrack(audioTrack);
-      } else {
-        // Listeners: use Agora to subscribe to the pod audio
-        const stringToUid = (str: string): number => {
-          let hash = 0;
-          for (let i = 0; i < str.length; i++) {
-            hash = (hash << 5) - hash + str.charCodeAt(i);
-            hash |= 0;
-          }
-          return Math.abs(hash);
-        };
-        const listenerUid = stringToUid(currentUser.id);
-        
-        try {
-          // Get listener token
-          const { data: tokenData, error: tokenError } = await supabase.functions.invoke('agora-token', {
-            body: {
-              channel: roomName,
-              uid: listenerUid,
-              role: 'subscriber'
-            }
-          });
-
-          if (tokenError || !tokenData?.token) {
-            console.error('Listener token error', tokenError);
-            return;
-          }
-
-          const appId = import.meta.env.VITE_AGORA_APP_ID;
-          
-          if (!appId) {
-            console.warn('VITE_AGORA_APP_ID not configured');
-            return;
-          }
-
-          await room.connect(
-            appId,
-            roomName,
-            tokenData.token,
-            listenerUid
-          );
-          
-          console.log('[TrollPodRoom] Listener joined Agora successfully');
-          
-        } catch (listenerErr) {
-          console.error('[TrollPodRoom] Listener join error:', listenerErr);
-        }
+        hasJoinedLiveKitRef.current = true;
+      } catch (err) {
+        console.error('[TrollPodRoom] Failed to join LiveKit:', err);
       }
     };
 
-    joinChannel();
+    joinLiveKit();
+  }, [roomId, currentUser?.id, room, isHost, myRecord?.role]);
 
-    const handleUserPublished = async (
-      user: RemoteParticipant,
-      mediaType: 'audio' | 'video'
-    ) => {
-      await client.subscribe(user, mediaType);
-      if (mediaType === 'audio') {
-        setRemoteUsers((prevUsers) => [...prevUsers.filter(u => u.uid !== user.uid), user]);
-        if (user.audioTrack) {
-            user.audioTrack.play();
-        }
-      }
-    };
-
-    const handleUserUnpublished = (user: RemoteParticipant) => {
-      setRemoteUsers((prevUsers) =>
-        prevUsers.filter((remoteUser) => remoteUser.uid !== user.uid)
-      );
-    };
-
-    client.on('user-published', handleUserPublished);
-    client.on('user-unpublished', handleUserUnpublished);
-
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      client.off('user-published', handleUserPublished);
-      client.off('user-unpublished', handleUserUnpublished);
-      localAudioTrack?.close();
-      room.disconnect();
+      hasJoinedLiveKitRef.current = false;
+      leaveRoom();
     };
-  }, [roomId, canPublish, currentUser]);
+  }, [leaveRoom]);
+
+  // Handle mic toggle
+  const handleToggleMic = useCallback(async () => {
+    if (!localAudioTrack) return;
+    await toggleMicrophone();
+  }, [localAudioTrack, toggleMicrophone]);
   
   // Fetch Room Info
   useEffect(() => {
@@ -187,11 +153,11 @@ export default function TrollPodRoom() {
     }
 
     const fetchRoom = async () => {
-        const { data, error } = await supabase
-          .from('pod_rooms')
-          .select('*, current_viewers')
-          .eq('id', roomId)
-          .maybeSingle();
+      const { data, error } = await supabase
+        .from('pod_rooms')
+        .select('*, current_viewers')
+        .eq('id', roomId)
+        .maybeSingle();
 
       if (error || !data) {
         toast.error('Room not found or ended');
@@ -223,7 +189,7 @@ export default function TrollPodRoom() {
       }, (payload) => {
         if (payload.new.is_live === false) {
           toast.info('The pod has ended');
-          navigate('/pods');
+          navigate(`/pods/${roomId}/summary`);
         }
         setRoom(payload.new as Room);
         const newCount = payload.new.current_viewers || payload.new.viewer_count;
@@ -231,14 +197,14 @@ export default function TrollPodRoom() {
       })
       .subscribe();
 
-    // Heartbeat to keep connection alive
+    // Heartbeat
     const roomHeartbeat = setInterval(() => {
       roomChannel.send({
         type: 'broadcast',
         event: 'ping',
         payload: { timestamp: Date.now(), room_id: roomId }
       }).catch(() => {});
-    }, 30000); // Every 30 seconds
+    }, 30000);
 
     return () => {
       clearInterval(roomHeartbeat);
@@ -251,37 +217,35 @@ export default function TrollPodRoom() {
     if (!roomId) return;
 
     const fetchParticipants = async () => {
-        // OPTIMIZATION: Fetch hosts, speakers, OFFICERS, AND any listeners who have raised their hand
-        // We also need to make sure we get the current user's status if they are in the room
-        const { data: activeParticipants } = await supabase
-            .from('pod_room_participants')
-            .select('*')
-            .eq('room_id', roomId)
-            .or(`role.in.(host,speaker,officer),is_hand_raised.eq.true${currentUser ? `,user_id.eq.${currentUser.id}` : ''}`);
-        
-        // Fetch count of all participants (cheap)
-        const { count } = await supabase
-            .from('pod_room_participants')
-            .select('id', { count: 'exact', head: true })
-            .eq('room_id', roomId);
-        
-        if (count !== null) setParticipantCount(count);
+      // Get hosts, speakers, officers, and raised hands
+      const { data: activeParticipants } = await supabase
+        .from('pod_room_participants')
+        .select('*')
+        .eq('room_id', roomId)
+        .or(`role.in.(host,speaker,officer),is_hand_raised.eq.true${currentUser ? `,user_id.eq.${currentUser.id}` : ''}`);
+      
+      // Get count
+      const { count } = await supabase
+        .from('pod_room_participants')
+        .select('id', { count: 'exact', head: true })
+        .eq('room_id', roomId);
+      
+      if (count !== null) setParticipantCount(count);
 
-        if (activeParticipants) {
-            // Fetch user profiles for active participants
-            const userIds = [...new Set(activeParticipants.map(p => p.user_id))];
-            const { data: profiles } = await supabase
-                .from('user_profiles')
-                .select('id, username, avatar_url')
-                .in('id', userIds);
+      if (activeParticipants) {
+        const userIds = [...new Set(activeParticipants.map(p => p.user_id))];
+        const { data: profiles } = await supabase
+            .from('user_profiles')
+            .select('id, username, avatar_url')
+            .in('id', userIds);
 
-            const participantsWithUsers = activeParticipants.map(p => ({
-                ...p,
-                user: profiles?.find(profile => profile.id === p.user_id)
-            }));
-            
-            setParticipantsData(participantsWithUsers as PodParticipant[]);
-        }
+        const participantsWithUsers = activeParticipants.map(p => ({
+            ...p,
+            user: profiles?.find(profile => profile.id === p.user_id)
+        }));
+        
+        setParticipantsData(participantsWithUsers as PodParticipant[]);
+      }
     };
 
     fetchParticipants();
@@ -294,21 +258,21 @@ export default function TrollPodRoom() {
             table: 'pod_room_participants',
             filter: `room_id=eq.${roomId}`
         }, async (payload: any) => {
-            // OPTIMIZATION: Refetch if:
-            // 1. Role is host/speaker (join/leave/change)
-            // 2. Hand raised status changes (request/cancel/approve)
-            // 3. It's the current user (so they see their own state updates)
+            // Check if someone raised their hand
+            if (payload.new && payload.new.is_hand_raised === true && payload.new.role === 'listener') {
+                // Get the requester's username
+                const { data: requester } = await supabase
+                    .from('user_profiles')
+                    .select('username')
+                    .eq('id', payload.new.user_id)
+                    .single();
+                
+                if (requester) {
+                    toast.info(`${requester.username} wants to speak!`);
+                }
+            }
             
-            // const isRelevantUpdate = 
-            //    (payload.new && (['host', 'speaker', 'officer'].includes(payload.new.role) || payload.new.is_hand_raised || payload.new.user_id === currentUser?.id)) ||
-            //    (payload.old && (['host', 'speaker', 'officer'].includes(payload.old.role) || payload.old.is_hand_raised || payload.old.user_id === currentUser?.id));
-
-            // ALWAYS refetch if there's any update to participants table for now to debug sync issues
-            // In high scale, we'd revert to the optimization above
             fetchParticipants();
-
-            if (payload.eventType === 'INSERT') setParticipantCount(prev => prev + 1);
-            if (payload.eventType === 'DELETE') setParticipantCount(prev => Math.max(0, prev - 1));
         })
         .subscribe();
     
@@ -327,14 +291,13 @@ export default function TrollPodRoom() {
         })
         .subscribe();
 
-    // Heartbeat to keep connections alive
     const participantsHeartbeat = setInterval(() => {
       participantsChannel.send({
         type: 'broadcast',
         event: 'ping',
         payload: { timestamp: Date.now(), room_id: roomId, channel: 'participants' }
       }).catch(() => {});
-    }, 30000); // Every 30 seconds
+    }, 30000);
 
     const bansHeartbeat = setInterval(() => {
       bansChannel.send({
@@ -342,7 +305,7 @@ export default function TrollPodRoom() {
         event: 'ping',
         payload: { timestamp: Date.now(), room_id: roomId, channel: 'bans' }
       }).catch(() => {});
-    }, 30000); // Every 30 seconds
+    }, 30000);
 
     return () => {
         clearInterval(participantsHeartbeat);
@@ -352,68 +315,72 @@ export default function TrollPodRoom() {
     };
   }, [roomId, currentUser, navigate]);
 
-  // Auto-join as listener to enable chat (RLS requirement)
+  // Auto-join as listener (for chat/RLS)
   useEffect(() => {
-    if (!roomId || !currentUser) return;
+    if (!roomId || !currentUser || !room) return;
 
     const joinAsListener = async () => {
-        // Check ban first
-        const { data: ban } = await supabase
-            .from('pod_bans')
-            .select('id')
-            .eq('room_id', roomId)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
-        
-        if (ban) {
-             toast.error('You are banned from this pod');
-             navigate('/pods');
-             return;
-        }
+      const { data: ban } = await supabase
+        .from('pod_bans')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
 
-        // Check whitelist
-        const { data: whitelist } = await supabase
-            .from('pod_whitelists')
-            .select('id')
-            .eq('room_id', roomId)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
+      if (ban) {
+        toast.error('You are banned from this pod');
+        navigate('/pods');
+        return;
+      }
 
-        const initialRole = whitelist ? 'speaker' : 'listener';
+      const { data: whitelist } = await supabase
+        .from('pod_whitelists')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
 
-        // Check if already in participants table
-        const { data } = await supabase
-            .from('pod_room_participants')
-            .select('id, role')
-            .eq('room_id', roomId)
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
-        
-        if (!data) {
-            // Not in table, insert
-            await supabase.from('pod_room_participants').insert({
-                room_id: roomId,
-                user_id: currentUser.id,
-                role: initialRole,
-                is_hand_raised: false
-            });
-        } else if (whitelist && data.role === 'listener') {
-            // Upgrade if whitelisted but currently listener
-             await supabase.from('pod_room_participants')
-                .update({ role: 'speaker' })
-                .eq('id', data.id);
-        }
+      const initialRole: PodParticipant['role'] =
+        room.host_id === currentUser.id
+          ? 'host'
+          : whitelist
+            ? 'speaker'
+            : 'listener';
+
+      const { data } = await supabase
+        .from('pod_room_participants')
+        .select('id, role')
+        .eq('room_id', roomId)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+
+      if (!data) {
+        await supabase.from('pod_room_participants').insert({
+          room_id: roomId,
+          user_id: currentUser.id,
+          role: initialRole,
+          is_hand_raised: false
+        });
+      } else if (room.host_id === currentUser.id && data.role !== 'host') {
+        await supabase
+          .from('pod_room_participants')
+          .update({ role: 'host', is_hand_raised: false })
+          .eq('id', data.id);
+      } else if (whitelist && data.role === 'listener') {
+        await supabase
+          .from('pod_room_participants')
+          .update({ role: 'speaker' })
+          .eq('id', data.id);
+      }
     };
 
     joinAsListener();
-  }, [roomId, currentUser, navigate]);
-
+  }, [roomId, currentUser, navigate, room]);
 
   // Actions
   const handleRequestSpeak = async () => {
     if (!currentUser || !roomId || !room) return;
     
-    // 1. Paid Entry
     if (room.guest_price > 0) {
         if (confirm(`Join stage for ${room.guest_price} coins?`)) {
             const { data, error } = await supabase.rpc('join_pod_speaker_paid', { 
@@ -436,8 +403,6 @@ export default function TrollPodRoom() {
         return;
     }
 
-    // 2. Free Request
-    // Try update first (most common case since user should be joined)
     const { error, count } = await supabase.from('pod_room_participants')
         .update({ is_hand_raised: true })
         .eq('room_id', roomId)
@@ -451,7 +416,6 @@ export default function TrollPodRoom() {
     }
 
     if (count === 0) {
-        // User not in DB (rare race condition), insert them
         const { error: insertError } = await supabase.from('pod_room_participants').insert({
             room_id: roomId,
             user_id: currentUser.id,
@@ -479,7 +443,6 @@ export default function TrollPodRoom() {
   };
 
   const handleApproveRequest = async (userId: string) => {
-      // Check speaker limit (3 guests max)
       const currentSpeakers = participantsData.filter(p => p.role === 'speaker');
       if (currentSpeakers.length >= 3) {
         toast.error('Guest limit reached (3 guests max)');
@@ -494,10 +457,6 @@ export default function TrollPodRoom() {
   };
 
   const handleRemoveSpeaker = async (userId: string) => {
-      // If it's a request denial (still listener), just clear hand raise
-      // If it's a speaker removal, downgrade to listener
-      // OR we can just delete the row if we want "Deduct Box" to mean "Go back to audience"
-      
       const participant = participantsData.find(p => p.user_id === userId);
       if (!participant) return;
 
@@ -508,7 +467,6 @@ export default function TrollPodRoom() {
             .eq('user_id', userId);
            toast.success('Speaker removed from stage');
       } else {
-          // Just deny request
            await supabase.from('pod_room_participants')
             .update({ is_hand_raised: false })
             .eq('room_id', roomId)
@@ -520,13 +478,16 @@ export default function TrollPodRoom() {
   const isGuest = !currentUser && !profile;
   const isStaff = profile?.is_staff || false;
 
-  // End pod - Host only
+  // End pod - Navigate to summary
   const handleEndPod = async () => {
     if (!roomId || !isHost) return;
     
     if (!confirm('Are you sure you want to end this pod?')) return;
     
     try {
+      // Leave LiveKit first
+      await leaveRoom();
+      
       const { error } = await supabase
         .from('pod_rooms')
         .update({ is_live: false, ended_at: new Date().toISOString() })
@@ -535,21 +496,23 @@ export default function TrollPodRoom() {
       if (error) throw error;
       
       toast.success('Pod ended');
-      navigate('/pods');
+      navigate(`/pods/${roomId}/summary`);
     } catch (err) {
       console.error('Error ending pod:', err);
       toast.error('Failed to end pod');
     }
   };
 
-  // Leave pod - For listeners
+  // Leave pod
   const handleLeavePod = async () => {
     if (!roomId || !currentUser) return;
     
     if (!confirm('Leave this pod?')) return;
     
     try {
-      // Remove from participants
+      // Leave LiveKit first
+      await leaveRoom();
+      
       await supabase
         .from('pod_room_participants')
         .delete()
@@ -581,6 +544,7 @@ export default function TrollPodRoom() {
       isGuest={isGuest}
       remoteUsers={remoteUsers}
       localAudioTrack={localAudioTrack}
+      onToggleMic={handleToggleMic}
     />
   );
 }

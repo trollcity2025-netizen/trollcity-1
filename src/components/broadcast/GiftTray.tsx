@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useGiftSystem, GiftItem } from '../../lib/hooks/useGiftSystem';
 import { useAuthStore } from '../../lib/store';
+import { useAnimationStore, type GiftType } from '../../lib/animationManager';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -22,6 +23,7 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId, battleId, recipientId);
   const { user, profile } = useAuthStore();
+  const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation);
   const [_sendingToAll, setSendingToAll] = useState(false);
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
 
@@ -151,6 +153,15 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
         );
         
         await Promise.all(promises);
+        // ✅ FORCE animation locally for sender (show for each recipient)
+        allRecipients.forEach(() => {
+          playGiftAnimation({
+            type: (gift.slug?.toLowerCase().replace(/[^a-z]/g, '') as GiftType) || 'heart',
+            senderName: profile?.username || 'You',
+            receiverName: 'Broadcaster',
+            amount: 1
+          });
+        });
         toast.success(`Gift sent to ${allRecipients.length} users!`);
         
       } catch (e) {
@@ -165,6 +176,15 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
     const success = await sendGift(gift);
     if (success) {
       setSelectedGift(gift);
+      
+      // ✅ FORCE animation locally immediately (this fixes the missing animation)
+      playGiftAnimation({
+        type: (gift.slug?.toLowerCase().replace(/[^a-z]/g, '') as GiftType) || 'heart',
+        senderName: profile?.username || 'You',
+        receiverName: 'Broadcaster', // or dynamic
+        amount: 1
+      });
+      
       // Close after a short delay to show animation
       setTimeout(() => {
         onClose();

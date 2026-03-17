@@ -87,9 +87,9 @@ export function useBackgroundSessionRefresh() {
     }
     isActiveRef.current = true
 
-    // Refresh session every 5 minutes to prevent staleness
-    // Less frequent to avoid excessive refreshes
-    const SESSION_REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
+    // Refresh session every 10 minutes to prevent staleness
+    // Reduced frequency to avoid rate limiting with Supabase's built-in autoRefreshToken
+    const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000 // 10 minutes
     
     // Initial refresh
     doRefresh()
@@ -100,23 +100,23 @@ export function useBackgroundSessionRefresh() {
       doRefresh()
     }, SESSION_REFRESH_INTERVAL)
 
-    // Also refresh on window visibility change, but only if it's been at least 30 seconds
+    // Also refresh on window visibility change, but only if it's been at least 2 minutes
     // This prevents excessive refreshes when user switches tabs frequently
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
-        if (timeSinceLastRefresh > 30 * 1000) { // 30 seconds minimum
+        if (timeSinceLastRefresh > 2 * 60 * 1000) { // 2 minutes minimum
           console.log('[BackgroundSession] Window visible, refreshing session...')
           doRefresh()
         }
       }
     }
     
-    // Also refresh on window focus, but only if it's been at least 30 seconds
+    // Also refresh on window focus, but only if it's been at least 2 minutes
     // This prevents excessive refreshes when user is actively using the page
     const handleFocus = () => {
       const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
-      if (timeSinceLastRefresh > 30 * 1000) { // 30 seconds minimum between focus refreshes
+      if (timeSinceLastRefresh > 2 * 60 * 1000) { // 2 minutes minimum between focus refreshes
         console.log('[BackgroundSession] Window focused, refreshing session...')
         doRefresh()
       }
