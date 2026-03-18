@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { Coins, Loader2, ChevronDown, Gem } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Coins, Loader2, ChevronDown, Gem, Percent } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { useGiftSystem, GiftItem } from '../../lib/hooks/useGiftSystem';
+import { useGiftSystem, GiftItem, getTrollmondDiscount, getDiscountedPrice } from '../../lib/hooks/useGiftSystem';
 import { useAuthStore } from '../../lib/store';
 import { useAnimationStore, type GiftType } from '../../lib/animationManager';
 import { toast } from 'sonner';
@@ -26,6 +26,18 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation);
   const [_sendingToAll, setSendingToAll] = useState(false);
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
+
+  // Calculate trollmonds discount
+  const trollmondDiscount = useMemo(() => {
+    return getTrollmondDiscount(profile?.trollmonds || 0);
+  }, [profile?.trollmonds]);
+
+  // Discount label for display
+  const discountLabel = useMemo(() => {
+    if (trollmondDiscount >= 10) return 'MAX 10% OFF';
+    if (trollmondDiscount >= 5) return '5% OFF';
+    return null;
+  }, [trollmondDiscount]);
 
   useEffect(() => {
     const fetchGifts = async () => {
@@ -193,7 +205,8 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
   };
 
   const canAfford = (cost: number) => {
-    return (profile?.troll_coins || 0) >= cost;
+    const discountedCost = getDiscountedPrice(cost, trollmondDiscount);
+    return (profile?.troll_coins || 0) >= discountedCost;
   };
 
   return (
@@ -212,6 +225,9 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
           <div className="text-purple-400 font-mono text-sm bg-purple-400/10 px-3 py-1 rounded-full border border-purple-400/20 flex items-center gap-1">
             <Gem size={14} />
             {profile?.trollmonds?.toLocaleString() || 0}
+            {trollmondDiscount > 0 && (
+              <span className="text-green-400 text-xs">(-{trollmondDiscount}%)</span>
+            )}
           </div>
           
           {/* Coin Balance */}
@@ -306,7 +322,10 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
                     : 'bg-red-500/20 text-red-400'
                 )}>
                   <Coins size={10} />
-                  {gift.coinCost.toLocaleString()}
+                  {getDiscountedPrice(gift.coinCost, trollmondDiscount).toLocaleString()}
+                  {trollmondDiscount > 0 && gift.coinCost > 0 && (
+                    <span className="text-[9px] text-green-400 ml-0.5">(-{trollmondDiscount}%)</span>
+                  )}
                 </div>
                 
                 {/* Hover Glow Effect */}

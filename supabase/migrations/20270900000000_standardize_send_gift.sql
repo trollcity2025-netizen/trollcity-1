@@ -18,6 +18,7 @@ DECLARE
     v_total_cost NUMERIC;
     v_sender_balance NUMERIC;
     v_recipient_share NUMERIC;
+    v_gift_tx_id UUID;
 BEGIN
     v_sender_id := auth.uid();
     
@@ -72,7 +73,21 @@ BEGIN
         total_earned_coins = COALESCE(total_earned_coins, 0) + v_recipient_share
     WHERE id = p_recipient_id;
 
-    -- 5. Log Transaction
+    -- 5. Log Transaction in stream_gifts table (for XP processing)
+    INSERT INTO public.stream_gifts (
+        stream_id,
+        sender_id,
+        recipient_id,
+        gift_id
+    ) VALUES (
+        p_stream_id,
+        v_sender_id,
+        p_recipient_id,
+        p_gift_id
+    )
+    RETURNING id INTO v_gift_tx_id;
+
+    -- Also log in coin_transactions for audit trail
     INSERT INTO public.coin_transactions (
         user_id, 
         amount, 
@@ -84,14 +99,16 @@ BEGIN
         'gift_name', v_name,
         'recipient_id', p_recipient_id, 
         'stream_id', p_stream_id,
-        'quantity', p_quantity
+        'quantity', p_quantity,
+        'gift_tx_id', v_gift_tx_id
     )),
     (p_recipient_id, v_recipient_share, 'gift_received', jsonb_build_object(
         'gift_id', p_gift_id, 
         'gift_name', v_name,
         'sender_id', v_sender_id, 
         'stream_id', p_stream_id,
-        'quantity', p_quantity
+        'quantity', p_quantity,
+        'gift_tx_id', v_gift_tx_id
     ));
 
     -- 6. Insert Stream Message (for chat notification)
@@ -112,6 +129,7 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true, 
         'new_balance', v_sender_balance - v_total_cost,
+        'transaction_id', v_gift_tx_id,
         'message', 'Sent ' || v_name
     );
 END;

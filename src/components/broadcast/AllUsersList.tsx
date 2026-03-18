@@ -25,6 +25,9 @@ interface ActiveViewer {
     avatar_url: string | null;
     role?: string;
     troll_role?: string;
+    is_admin?: boolean;
+    is_troll_officer?: boolean;
+    is_lead_officer?: boolean;
     created_at: string;
     joined_at: string;
 }
@@ -59,7 +62,7 @@ export default function AllUsersList({ streamId, onClose }: AllUsersListProps) {
             const userIds = data.map(v => v.user_id);
             const { data: profiles, error: profileError } = await supabase
                 .from('user_profiles')
-                .select('id, username, avatar_url, role, troll_role, created_at')
+                .select('id, username, avatar_url, role, troll_role, is_admin, is_troll_officer, is_lead_officer, created_at')
                 .in('id', userIds);
 
             if (profileError) throw profileError;
@@ -74,6 +77,9 @@ export default function AllUsersList({ streamId, onClose }: AllUsersListProps) {
                     avatar_url: profile?.avatar_url || null,
                     role: profile?.role,
                     troll_role: profile?.troll_role,
+                    is_admin: profile?.is_admin,
+                    is_troll_officer: profile?.is_troll_officer,
+                    is_lead_officer: profile?.is_lead_officer,
                     created_at: profile?.created_at || '',
                     joined_at: v.joined_at
                 };
@@ -240,10 +246,10 @@ export default function AllUsersList({ streamId, onClose }: AllUsersListProps) {
                             }}
                             showBadges={false}
                         />
-                        {(viewer.role === 'admin' || viewer.troll_role === 'admin') && (
+                        {(viewer.role === 'admin' || viewer.troll_role === 'admin' || viewer.is_admin) && (
                             <Crown size={12} className="text-red-500" />
                         )}
-                        {(viewer.role === 'moderator' || viewer.troll_role === 'troll_officer') && (
+                        {(viewer.role === 'moderator' || viewer.troll_role === 'troll_officer' || viewer.is_troll_officer || viewer.is_lead_officer) && (
                             <Shield size={12} className="text-blue-400" />
                         )}
                     </div>

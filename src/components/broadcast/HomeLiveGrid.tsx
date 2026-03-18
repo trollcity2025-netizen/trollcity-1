@@ -56,7 +56,12 @@ export default function HomeLiveGrid() {
       
       // Filter out ghost mode users (unless current user is admin)
       let filteredStreams = (data as any[]) || [];
-      const isAdmin = profile?.role === 'admin' || profile?.is_admin;
+      // Enhanced admin check with multiple validation methods
+      const isAdmin = 
+        profile?.role === 'admin' || 
+        profile?.is_admin === true ||
+        profile?.troll_role === 'admin' ||
+        profile?.officer_role === 'owner';
       
       if (!isAdmin) {
         filteredStreams = filteredStreams.filter((stream: any) => {

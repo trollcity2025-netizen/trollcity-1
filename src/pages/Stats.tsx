@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { useCoins } from '../lib/hooks/useCoins'
 import { supabase } from '../lib/supabase'
@@ -29,89 +30,119 @@ interface UserStats {
 }
 
 export default function Stats() {
+  const navigate = useNavigate()
   const { user, profile } = useAuthStore()
   const { balances, loading: coinsLoading } = useCoins()
   const { xpTotal, level, xpToNext, progress, fetchXP, subscribeToXP, unsubscribe } = useXPStore()
   const { data: creditData, loading: creditLoading } = useCreditScore()
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const isInitialized = useRef(false)
+  const prevXPData = useRef({ level: 0, xpTotal: 0, xpToNext: 0 })
 
+  // Initialize XP data and subscription only once
   useEffect(() => {
-    const loadStats = async () => {
-      if (!user?.id) return
+    if (!user?.id || isInitialized.current) return
 
+    const initXP = async () => {
       try {
-        setLoading(true)
-
-        // Fetch XP from store and subscribe to real-time updates
+        // Fetch initial XP data
         await fetchXP(user.id)
+        // Subscribe to real-time updates
         subscribeToXP(user.id)
-
-        // Load family data
-        let familyData = null
-        const { data: familyMember } = await supabase
-          .from('family_members')
-          .select('family_id, role')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        if (familyMember?.family_id) {
-          const familyStats = await getFamilySeasonStats(familyMember.family_id)
-          const { data: family, error: _familyError2 } = await supabase
-            .from('troll_families')
-            .select('name')
-            .eq('id', familyMember.family_id)
-            .maybeSingle()
-
-          if (family) {
-            familyData = {
-              familyName: family.name,
-              familyLevel: familyStats.seasonRank || 1,
-              familyXp: familyStats.weeklyCoins || 0,
-              seasonScore: familyStats.seasonCoins || 0
-            }
-          }
-        }
-
-        // Load war stats (placeholder for now)
-        const warStats = {
-          warWins: 0,
-          warLosses: 0,
-          warStreak: 0,
-          warTier: 'Bronze'
-        }
-
-        // Calculate badges
-        const badges = []
-        if (profile?.role === 'admin' || profile?.troll_role === 'admin') badges.push('🛡️ Admin')
-        if (familyMember) badges.push('⚔️ Family War')
-        if (level >= 10) badges.push('👑 Top Rank')
-        if (balances.paid_coins > 1000) badges.push('💰 Big Spender')
-
-        setStats({
-          level: level,
-          xp: xpTotal,
-          totalXp: xpTotal,
-          nextLevelXp: xpToNext + xpTotal,
-          troll_coins: balances.troll_coins || 0,
-          paid_coins: balances.paid_coins || 0,
-          ...familyData,
-          ...warStats,
-          badges
-        })
+        isInitialized.current = true
+        // Trigger stats load after initialization
+        loadStatsInternal()
       } catch (err) {
-        console.error('Error loading stats:', err)
-      } finally {
-        setLoading(false)
+        console.error('Error initializing XP:', err)
+        // Still mark as initialized to allow stats to load
+        isInitialized.current = true
+        loadStatsInternal()
       }
     }
 
-    loadStats()
+    initXP()
 
     return () => {
       unsubscribe()
+      isInitialized.current = false
     }
-  }, [user?.id, level, xpTotal, xpToNext, profile?.role, profile?.troll_role, balances.troll_coins, balances.paid_coins, fetchXP, subscribeToXP, unsubscribe])
+  }, [user?.id])
+
+  // Internal function to load stats
+  const loadStatsInternal = useCallback(async () => {
+    if (!user?.id) return
+
+    try {
+      setLoading(true)
+
+      // Load family data
+      let familyData = null
+      const { data: familyMember } = await supabase
+        .from('family_members')
+        .select('family_id, role')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (familyMember?.family_id) {
+        const familyStats = await getFamilySeasonStats(familyMember.family_id)
+        const { data: family } = await supabase
+          .from('troll_families')
+          .select('name')
+          .eq('id', familyMember.family_id)
+          .maybeSingle()
+
+        if (family) {
+          familyData = {
+            familyName: family.name,
+            familyLevel: familyStats.seasonRank || 1,
+            familyXp: familyStats.weeklyCoins || 0,
+            seasonScore: familyStats.seasonCoins || 0
+          }
+        }
+      }
+
+      // Load war stats (placeholder for now)
+      const warStats = {
+        warWins: 0,
+        warLosses: 0,
+        warStreak: 0,
+        warTier: 'Bronze'
+      }
+
+      // Calculate badges
+      const badges = []
+      if (profile?.role === 'admin' || profile?.troll_role === 'admin') badges.push('🛡️ Admin')
+      if (familyMember) badges.push('⚔️ Family War')
+      if (level >= 10) badges.push('👑 Top Rank')
+      if (balances.paid_coins > 1000) badges.push('💰 Big Spender')
+
+      setStats({
+        level: level,
+        xp: xpTotal,
+        totalXp: xpTotal,
+        nextLevelXp: xpToNext + xpTotal,
+        troll_coins: balances.troll_coins || 0,
+        paid_coins: balances.paid_coins || 0,
+        ...familyData,
+        ...warStats,
+        badges
+      })
+    } catch (err) {
+      console.error('Error loading stats:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.id, level, xpTotal, xpToNext, profile?.role, profile?.troll_role, balances.troll_coins, balances.paid_coins])
+
+  // Load stats when XP data changes
+  useEffect(() => {
+    if (user?.id && isInitialized.current) {
+      // Update previous values before loading
+      prevXPData.current = { level, xpTotal, xpToNext }
+      loadStatsInternal()
+    }
+  }, [level, xpTotal, xpToNext])
 
   const computedProgress =
     progress === 0 || progress

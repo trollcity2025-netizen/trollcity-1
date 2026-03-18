@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import TrollmersBattleControls from './TrollmersBattleControls';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
-import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords } from 'lucide-react';
+import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { getCategoryConfig } from '../../config/broadcastCategories';
@@ -111,6 +111,7 @@ export default function BroadcastControls({
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [likes, setLikes] = useState(0); // Local like count for immediate feedback
   const [isLiking, setIsLiking] = useState(false);
+  const [isFeatureLoading, setIsFeatureLoading] = useState(false);
 
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
@@ -121,8 +122,21 @@ export default function BroadcastControls({
   
   // For election category, only officers/admins can modify boxes
   const isElectionCategory = stream.category === 'election';
-  const allowedRoles = ['admin', 'secretary', 'lead_troll_officer', 'troll_officer'];
-  const isOfficerOrAdmin = profile?.role && allowedRoles.includes(profile.role);
+  
+  // Check if user is officer or admin using multiple validation methods
+  const isOfficerOrAdmin = 
+    profile?.role === 'admin' ||
+    profile?.role === 'secretary' ||
+    profile?.role === 'lead_troll_officer' ||
+    profile?.role === 'troll_officer' ||
+    profile?.is_admin === true ||
+    profile?.is_troll_officer === true ||
+    profile?.is_lead_officer === true ||
+    profile?.troll_role === 'admin' ||
+    profile?.troll_role === 'lead_officer' ||
+    profile?.troll_role === 'secretary' ||
+    profile?.troll_role === 'pastor' ||
+    false;
   const canEditElectionBoxes = !isElectionCategory || isOfficerOrAdmin;
 
   // Use parent boxCount if provided, otherwise use local state
@@ -163,6 +177,32 @@ export default function BroadcastControls({
   // Only Host and Admins can control stream settings (Visuals, Price, Boxes)
   // Moderators can NOT control broadcaster streams
   const canEditStream = isHost || isTrueAdmin;
+  
+  // Feature toggle function for officers/admin
+  const toggleFeature = async () => {
+    if (!isOfficerOrAdmin || !user) return;
+    
+    setIsFeatureLoading(true);
+    try {
+      const newFeatured = !stream.is_featured;
+      const { error } = await supabase
+        .from('streams')
+        .update({ 
+          is_featured: newFeatured,
+          featured_at: newFeatured ? new Date().toISOString() : null,
+          featured_by: newFeatured ? user.id : null
+        })
+        .eq('id', stream.id);
+      
+      if (error) throw error;
+      toast.success(newFeatured ? 'Stream featured successfully!' : 'Stream unfeatured');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || 'Failed to update featured status');
+    } finally {
+      setIsFeatureLoading(false);
+    }
+  };
 
   const togglePerk = async (perkId: string) => {
     if (!user) return;
@@ -525,6 +565,23 @@ export default function BroadcastControls({
                  >
                     {chatOpen ? <MessageSquare size={20} /> : <MessageSquareOff size={20} />}
                  </button>
+
+                 {/* Feature Button - Officers/Admin Only */}
+                 {isOfficerOrAdmin && (
+                     <button
+                       onClick={(e) => { e.stopPropagation(); toggleFeature(); }}
+                       disabled={isFeatureLoading}
+                       className={cn(
+                           "p-2 rounded-lg transition-colors flex items-center gap-2",
+                           stream.is_featured 
+                               ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30" 
+                               : "hover:bg-pink-500/20 text-zinc-400 hover:text-pink-400"
+                       )}
+                       title={stream.is_featured ? "Unfeature Stream" : "Feature Stream"}
+                     >
+                        <Star size={20} className={cn(stream.is_featured && "fill-pink-400")} />
+                     </button>
+                 )}
 
                  {canManageStream && (
                     <>

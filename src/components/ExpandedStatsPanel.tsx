@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { X, Crown, Sword, Trophy, Coins, Star } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
@@ -30,9 +30,10 @@ interface UserStats {
 
 export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPanelProps) {
   const { user, profile } = useAuthStore()
-  const { level } = useXPStore()
+  const { level, xpTotal, xpToNext, progress } = useXPStore()
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const prevXPData = useRef({ level: 0, xpTotal: 0 })
 
   useEffect(() => {
     if (!isOpen || !user?.id) return
@@ -91,9 +92,9 @@ export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPan
 
         setStats({
           level: level,
-          xp: level,
-          totalXp: level,
-          nextLevelXp: 2000,
+          xp: xpTotal,
+          totalXp: xpTotal,
+          nextLevelXp: xpToNext + xpTotal,
           troll_coins: profile?.troll_coins || 0,
           paid_coins: profile?.paid_coins || 0,
           ...familyData,
@@ -108,7 +109,7 @@ export default function ExpandedStatsPanel({ isOpen, onClose }: ExpandedStatsPan
     }
 
     loadStats()
-  }, [isOpen, user?.id, profile, level])
+  }, [isOpen, user?.id, profile, level, xpTotal])
 
   if (!isOpen) return null
 

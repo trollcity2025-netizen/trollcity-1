@@ -9,6 +9,7 @@ import UserNameWithAge from '@/components/UserNameWithAge'
 import NeonGlowUsername from '@/components/NeonGlowUsername'
 import CreatePostComposer from './CreatePostComposer'
 import { Virtuoso } from 'react-virtuoso'
+import UserProfilePopup from '@/components/UserProfilePopup'
 
 interface TrollWallFeedProps {
   onRequireAuth: (intent?: string) => boolean
@@ -26,6 +27,8 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   const [likingPosts, setLikingPosts] = useState<Set<string>>(new Set())
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
 
   const loadPosts = useCallback(async (pageIndex: number, append: boolean) => {
     if (append) {
@@ -231,6 +234,10 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                     empire_role: post.empire_role,
                   }}
                   size="sm"
+                  onClick={() => {
+                    setSelectedUserId(post.user_id)
+                    setSelectedUsername(post.username || null)
+                  }}
                 />
               ) : (
                 <span className="font-semibold text-white/60">Deleted User</span>
@@ -328,17 +335,25 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           {reply.username ? (
-                            <UserNameWithAge
-                              user={{
-                                username: reply.username,
-                                id: reply.user_id,
-                                is_admin: reply.is_admin,
-                                is_troll_officer: reply.is_troll_officer,
-                                is_og_user: reply.is_og_user,
-                                created_at: reply.user_created_at
+                            <div 
+                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => {
+                                setSelectedUserId(reply.user_id)
+                                setSelectedUsername(reply.username || null)
                               }}
-                              className="font-semibold text-sm text-white"
-                            />
+                            >
+                              <UserNameWithAge
+                                user={{
+                                  username: reply.username,
+                                  id: reply.user_id,
+                                  is_admin: reply.is_admin,
+                                  is_troll_officer: reply.is_troll_officer,
+                                  is_og_user: reply.is_og_user,
+                                  created_at: reply.user_created_at
+                                }}
+                                className="font-semibold text-sm text-white"
+                              />
+                            </div>
                           ) : (
                             <span className="font-semibold text-sm text-white/60">Deleted User</span>
                           )}
@@ -409,6 +424,18 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
           </div>
         )}
       </div>
+
+      {/* User Profile Popup */}
+      {selectedUserId && selectedUsername && (
+        <UserProfilePopup
+          userId={selectedUserId}
+          username={selectedUsername}
+          onClose={() => {
+            setSelectedUserId(null)
+            setSelectedUsername(null)
+          }}
+        />
+      )}
     </div>
   )
 }

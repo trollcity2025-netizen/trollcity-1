@@ -14,6 +14,7 @@ import DailyLoginWall from '../components/trollWall/DailyLoginWall'
 import UserNameWithAge from '../components/UserNameWithAge'
 import { emitEvent } from '../lib/events'
 import { Virtuoso } from 'react-virtuoso'
+import UserProfilePopup from '../components/UserProfilePopup'
 
 // Available reactions
 const REACTIONS = [
@@ -58,6 +59,8 @@ export default function TrollCityWall() {
   const [showReplyModal, setShowReplyModal] = useState<string | null>(null)
   const [replyContent, setReplyContent] = useState('')
   const [giftModalPostId, setGiftModalPostId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
 
   const loadPosts = useCallback(async () => {
     // Thundering Herd Prevention: Add random jitter to fetch (0-800ms)
@@ -553,17 +556,25 @@ export default function TrollCityWall() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               {post.username ? (
-                <UserNameWithAge 
-                  user={{
-                    username: post.username, 
-                    id: post.user_id,
-                    is_admin: post.is_admin,
-                    is_troll_officer: post.is_troll_officer,
-                    is_og_user: post.is_og_user,
-                    created_at: post.user_created_at
+                <div 
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => {
+                    setSelectedUserId(post.user_id)
+                    setSelectedUsername(post.username || null)
                   }}
-                  className={`font-semibold hover:text-purple-400 ${post.post_type === 'announcement' ? 'text-amber-400' : 'text-white'}`} 
-                />
+                >
+                  <UserNameWithAge 
+                    user={{
+                      username: post.username, 
+                      id: post.user_id,
+                      is_admin: post.is_admin,
+                      is_troll_officer: post.is_troll_officer,
+                      is_og_user: post.is_og_user,
+                      created_at: post.user_created_at
+                    }}
+                    className={`font-semibold hover:text-purple-400 ${post.post_type === 'announcement' ? 'text-amber-400' : 'text-white'}`} 
+                  />
+                </div>
               ) : (
                 <span className="font-semibold text-gray-500">Deleted User</span>
               )}
@@ -753,17 +764,25 @@ export default function TrollCityWall() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       {reply.username ? (
-                        <UserNameWithAge 
-                          user={{
-                            username: reply.username, 
-                            id: reply.user_id,
-                            is_admin: reply.is_admin,
-                            is_troll_officer: reply.is_troll_officer,
-                            is_og_user: reply.is_og_user,
-                            created_at: reply.user_created_at
+                        <div 
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            setSelectedUserId(reply.user_id)
+                            setSelectedUsername(reply.username || null)
                           }}
-                          className="font-semibold text-sm text-white hover:text-purple-400" 
-                        />
+                        >
+                          <UserNameWithAge 
+                            user={{
+                              username: reply.username, 
+                              id: reply.user_id,
+                              is_admin: reply.is_admin,
+                              is_troll_officer: reply.is_troll_officer,
+                              is_og_user: reply.is_og_user,
+                              created_at: reply.user_created_at
+                            }}
+                            className="font-semibold text-sm text-white hover:text-purple-400" 
+                          />
+                        </div>
                       ) : (
                         <span className="font-semibold text-sm text-gray-500">Deleted User</span>
                       )}
@@ -912,6 +931,18 @@ export default function TrollCityWall() {
           onClose={() => setGiftModalPostId(null)}
           onGiftSent={(giftType, _cost) => {
             handleGift(giftModalPostId, giftType)
+          }}
+        />
+      )}
+
+      {/* User Profile Popup */}
+      {selectedUserId && selectedUsername && (
+        <UserProfilePopup
+          userId={selectedUserId}
+          username={selectedUsername}
+          onClose={() => {
+            setSelectedUserId(null)
+            setSelectedUsername(null)
           }}
         />
       )}

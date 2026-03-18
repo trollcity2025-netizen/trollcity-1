@@ -20,6 +20,7 @@ interface NeonGlowUsernameProps {
   }
   size?: 'sm' | 'md' | 'lg'
   showBadges?: boolean
+  onClick?: () => void
 }
 
 export default function NeonGlowUsername({ 
@@ -27,7 +28,8 @@ export default function NeonGlowUsername({
   avatarUrl,
   profile, 
   size = 'md',
-  showBadges = true 
+  showBadges = true,
+  onClick
 }: NeonGlowUsernameProps) {
   
   const sizeClasses = {
@@ -87,7 +89,10 @@ export default function NeonGlowUsername({
 
   if (!showBadges) {
     return (
-      <div className="flex items-center gap-2">
+      <div 
+        className={`flex items-center gap-2 ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        onClick={onClick}
+      >
         {avatarUrl && (
           <img src={avatarUrl} alt={username} className={`${sizes.avatar} rounded-full`} />
         )}
@@ -99,7 +104,10 @@ export default function NeonGlowUsername({
   }
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-black/50 border ${getGlowColor()}`}>
+    <div 
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-black/50 border ${getGlowColor()} ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+      onClick={onClick}
+    >
       {/* Avatar */}
       {avatarUrl ? (
         <img src={avatarUrl} alt={username} className={`${sizes.avatar} rounded-full ring-2 ring-white/20`} />

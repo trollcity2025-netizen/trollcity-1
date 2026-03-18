@@ -216,7 +216,7 @@ CREATE OR REPLACE FUNCTION public.process_gift_xp(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $$
+AS $
 DECLARE
     v_gift_record RECORD;
     v_stream_record RECORD;
@@ -228,20 +228,32 @@ DECLARE
     v_sender_ip TEXT;
     v_sender_fingerprint TEXT;
 BEGIN
-    -- 1. Fetch Gift Transaction (Must exist and be processed)
-    -- Checking gift_ledger which is the source of truth for processed gifts
+    -- 1. Fetch Gift Transaction from stream_gifts table (primary source)
     SELECT * INTO v_gift_record
-    FROM public.gift_ledger
+    FROM public.stream_gifts
     WHERE id = p_gift_tx_id;
 
     IF NOT FOUND THEN
-        -- Fallback to gifts table if gift_ledger doesn't have it (older schema support)
-        SELECT id, sender_id, receiver_id, coins_spent as amount, stream_id, metadata INTO v_gift_record
-        FROM public.gifts
+        -- Fallback to gift_ledger if stream_gifts doesn't have it
+        SELECT * INTO v_gift_record
+        FROM public.gift_ledger
         WHERE id = p_gift_tx_id;
         
         IF NOT FOUND THEN
-            RETURN jsonb_build_object('success', false, 'message', 'Gift transaction not found.');
+            -- Fallback to coin_transactions for older transactions
+            SELECT 
+                (metadata->>'sender_id')::uuid as sender_id,
+                (metadata->>'recipient_id')::uuid as receiver_id,
+                abs(amount) as amount,
+                (metadata->>'stream_id')::uuid as stream_id,
+                metadata
+            INTO v_gift_record
+            FROM public.coin_transactions
+            WHERE id = p_gift_tx_id AND type = 'gift_sent';
+            
+            IF NOT FOUND THEN
+                RETURN jsonb_build_object('success', false, 'message', 'Gift transaction not found.');
+            END IF;
         END IF;
     END IF;
 
@@ -251,16 +263,12 @@ BEGIN
     END IF;
 
     -- 2b. Fraud Detection: Fingerprint/IP Sharing
-    -- If sender and receiver share the same fingerprint or IP, we log it and potentially flag the account.
-    -- For now, we will allow the XP but mark it as 'suspicious' in the ledger metadata.
     IF (v_gift_record.metadata->>'fingerprint' IS NOT NULL AND 
         v_gift_record.metadata->>'fingerprint' = v_gift_record.metadata->>'receiver_fingerprint') OR
        (v_gift_record.metadata->>'ip_address' IS NOT NULL AND 
         v_gift_record.metadata->>'ip_address' = v_gift_record.metadata->>'receiver_ip') THEN
         
-        -- Add suspicious flag to metadata for both awards
-        -- This can be used later by admins to audit or automatically ban.
-        v_gift_record.metadata := v_gift_record.metadata || '{"suspicious": true, "reason": "shared_identity"}'::jsonb;
+        v_gift_record.metadata := COALESCE(v_gift_record.metadata, '{}'::jsonb) || jsonb_build_object('suspicious', true, 'reason', 'shared_identity');
     END IF;
 
     -- 3. Fetch XP Rates from Single Source of Truth
@@ -308,7 +316,7 @@ BEGIN
         'broadcaster_xp', v_broadcaster_xp
     );
 END;
-$$;
+$;
 
 -- Permissions
 GRANT EXECUTE ON FUNCTION public.grant_xp(UUID, NUMERIC, TEXT, TEXT, JSONB, TEXT) TO service_role;

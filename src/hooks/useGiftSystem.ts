@@ -5,6 +5,28 @@ import { toast } from 'sonner';
 import { generateUUID } from '../lib/uuid';
 import { OFFICIAL_GIFTS } from '../lib/giftConstants';
 
+// Trollmond discount tiers (matching TrollWheel.tsx)
+const TROLLMOND_TIERS = [
+  { trollmonds: 0, discount: 0, label: 'No discount' },
+  { trollmonds: 50, discount: 5, label: '5% off gifts' },
+  { trollmonds: 100, discount: 10, label: 'MAX 10% off gifts' },
+];
+
+// Calculate discount based on trollmonds balance
+export function getTrollmondDiscount(trollmonds: number): number {
+  for (let i = TROLLMOND_TIERS.length - 1; i >= 0; i--) {
+    if (trollmonds >= TROLLMOND_TIERS[i].trollmonds) {
+      return TROLLMOND_TIERS[i].discount;
+    }
+  }
+  return 0;
+}
+
+// Calculate discounted price
+export function getDiscountedPrice(basePrice: number, discountPercent: number): number {
+  return Math.floor(basePrice * (1 - discountPercent / 100));
+}
+
 export interface GiftItem {
   id: string;
   name: string;

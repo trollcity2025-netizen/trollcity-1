@@ -31,6 +31,10 @@ export interface Stream {
   mux_stream_key?: string;
   mux_rtmp_url?: string;
   mux_live_stream_id?: string;
+  // Featured broadcast fields
+  is_featured?: boolean;
+  featured_at?: string | null;
+  featured_by?: string | null;
 }
 
 export interface StreamGuest {

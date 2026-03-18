@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import CourtEntryModal from './CourtEntryModal'
@@ -119,7 +118,7 @@ export default function Sidebar() {
         subscribeToXP(profile.id)
         return () => unsubscribe()
     }
-  }, [profile?.id, fetchXP, subscribeToXP, unsubscribe])
+  }, [profile?.id])
 
   useEffect(() => {
     const checkAccess = async () => {

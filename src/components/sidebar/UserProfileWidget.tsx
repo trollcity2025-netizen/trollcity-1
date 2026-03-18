@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { useXPStore } from '@/stores/useXPStore';
 import { useCoins } from '@/lib/hooks/useCoins';
@@ -11,6 +11,7 @@ const UserProfileWidget = () => {
   const { troll_coins, crowns, loading: coinsLoading } = useCoins();
   // Get trollmonds from profile (not returned by useCoins hook)
   const displayTrollmonds = profile?.trollmonds ?? 0;
+  const prevXPData = useRef({ level: 0, xpTotal: 0, progress: 0 });
 
   // Subscribe to XP updates when profile is available
   useEffect(() => {
@@ -29,7 +30,17 @@ const UserProfileWidget = () => {
         unsubscribe();
       };
     }
-  }, [profile?.id, fetchXP, subscribeToXP, unsubscribe]);
+  }, [profile?.id]);
+
+  // Force re-render when XP data changes
+  useEffect(() => {
+    if (prevXPData.current.level !== level || 
+        prevXPData.current.xpTotal !== xpTotal || 
+        prevXPData.current.progress !== progress) {
+      prevXPData.current = { level, xpTotal, progress };
+      // Force update by using a state or letting the store trigger re-render
+    }
+  }, [level, xpTotal, progress]);
 
   if (!profile) {
     return null; // Or a loading skeleton

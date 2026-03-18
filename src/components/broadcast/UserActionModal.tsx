@@ -135,7 +135,11 @@ export default function UserActionModal({
             .eq('id', currentUser?.id)
             .maybeSingle();
             
-        const isKickerStaff = currentUserProfile?.role === 'admin' || currentUserProfile?.role === 'moderator';
+        const isKickerStaff = 
+            currentUserProfile?.role === 'admin' || 
+            currentUserProfile?.role === 'moderator' ||
+            currentUserProfile?.is_admin === true ||
+            currentUserProfile?.is_troll_officer === true;
         
         if (!isKickerStaff) {
             toast.error("This user has Kick Insurance! They cannot be kicked.");
@@ -180,8 +184,17 @@ export default function UserActionModal({
               .eq('id', currentUser?.id)
               .maybeSingle();
               
-          const isKickerAdmin = currentUserProfile?.role === 'admin' || currentUserProfile?.troll_role === 'admin';
-          const isKickerModerator = currentUserProfile?.role === 'moderator' || currentUserProfile?.troll_role === 'troll_officer';
+          const isKickerAdmin = 
+            currentUserProfile?.role === 'admin' || 
+            currentUserProfile?.troll_role === 'admin' ||
+            currentUserProfile?.is_admin === true;
+          const isKickerModerator = 
+            currentUserProfile?.role === 'moderator' || 
+            currentUserProfile?.role === 'troll_officer' ||
+            currentUserProfile?.troll_role === 'troll_officer' ||
+            currentUserProfile?.troll_role === 'lead_officer' ||
+            currentUserProfile?.is_troll_officer === true ||
+            currentUserProfile?.is_lead_officer === true;
           
           if (!isKickerAdmin && !isKickerModerator) {
               toast.error("This user has Insurance! Only admins can ban insured users.");

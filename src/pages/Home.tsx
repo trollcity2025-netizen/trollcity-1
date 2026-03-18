@@ -9,6 +9,7 @@ import PWAInstallPrompt from '../components/PWAInstallPrompt'
 import EventCountdown from '@/components/EventCountdown'
 import LiveStreamsModule from '@/components/home/LiveStreamsModule'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
+import FeaturedBroadcasts from '@/components/broadcast/FeaturedBroadcasts'
 
 import TrollPodsWidget from '@/components/home/TrollPodsWidget'
 import TCNNWidget from '@/components/tcnn/TCNNWidget'
@@ -111,6 +112,10 @@ export default function Home() {
                 <p className={`${trollCityTheme.text.muted} text-sm`}>Live streams happening right now.</p>
               </div>
             </div>
+            
+            {/* Featured Broadcasts - Top 2 Rows */}
+            <FeaturedBroadcasts />
+            
             <LiveStreamsModule onRequireAuth={requireAuth} />
           </section>
 
