@@ -89,6 +89,9 @@ BEGIN
   SET battle_id = NULL, is_battle = false
   WHERE battle_id = p_battle_id;
 
+  -- Clear battle_queue entries for this battle
+  DELETE FROM public.battle_queue WHERE battle_id = p_battle_id;
+
   RETURN jsonb_build_object('success', true);
 END;
 $$;
