@@ -20,6 +20,23 @@ export interface GiftItem {
   currency?: 'troll_coins'
 }
 
+// Helper function to calculate trollmonds discount percentage
+export function getTrollmondDiscount(trollmonds: number): number {
+  if (trollmonds >= 100) {
+    return 10; // Max 10% off
+  } else if (trollmonds >= 50) {
+    return 5; // 5% off
+  }
+  return 0;
+}
+
+// Helper function to calculate discounted price
+export function getDiscountedPrice(originalCost: number, discountPercent: number): number {
+  if (discountPercent <= 0) return originalCost;
+  const discountAmount = Math.floor(originalCost * (discountPercent / 100));
+  return originalCost - discountAmount;
+}
+
 export function useGiftSystem(
   streamerId: string, 
   streamId: string | null, 

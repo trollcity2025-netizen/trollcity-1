@@ -128,10 +128,6 @@ const AdminDashboard = lazyWithRetry(() => import("./pages/admin/AdminDashboard"
 const ApplicationsPage = lazyWithRetry(() => import("./pages/admin/Applications"));
 const AdminMarketplace = lazyWithRetry(() => import("./pages/admin/AdminMarketplace"));
 const AdminOfficerReports = lazyWithRetry(() => import("./pages/admin/AdminOfficerReports"));
-const MaiTalentStage = lazyWithRetry(() => import("./pages/MaiTalentStage"));
-const MaiTalentTop10 = lazyWithRetry(() => import("./pages/MaiTalentTop10"));
-const MaiTalentTraining = lazyWithRetry(() => import("./pages/MaiTalentTraining"));
-const MaiTalentAdmin = lazyWithRetry(() => import("./pages/MaiTalentAdmin"));
 const StoreDebug = lazyWithRetry(() => import("./pages/admin/StoreDebug"));
 const Changelog = lazyWithRetry(() => import("./pages/Changelog"));
 const AccessDenied = lazyWithRetry(() => import("./pages/AccessDenied"));
@@ -1136,11 +1132,7 @@ function AppContent() {
                   <Route path="/troll-games/:gameType/:matchId" element={<TrollGamesPage />} />
                   <Route path="/troll-games/giveaways" element={<GiveawaysPage />} />
                   <Route path="/troll-wheel" element={<TrollWheel />} />
-                  <Route path="/mai-talent/stage" element={<MaiTalentStage />} />
-                  <Route path="/mai-talent/top10" element={<MaiTalentTop10 />} />
-                  <Route path="/mai-talent/training" element={<MaiTalentTraining />} />
-                  <Route path="/mai-talent/admin" element={<RequireRole roles={[UserRole.ADMIN]}><MaiTalentAdmin /></RequireRole>} />
-                  <Route path="/mai-talent" element={<Navigate to="/mai-talent/stage" replace />} />
+
                   <Route path="/shop/:username" element={<ShopView />} />
                   <Route path="/inventory" element={<UserInventory />} />
           <Route path="/troting" element={<Troting />} />
