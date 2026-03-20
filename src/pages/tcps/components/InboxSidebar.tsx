@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, MessageSquare, Shield } from 'lucide-react'
+import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, Eye, MessageSquare, Shield } from 'lucide-react'
 import { supabase, isOfficer, OFFICER_GROUP_CONVERSATION_ID } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
@@ -44,6 +44,7 @@ export default function InboxSidebar({
   const { user } = useAuthStore()
   const { openChatBubble } = useChatStore()
   const [conversations, setConversations] = useState<SidebarConversation[]>([])
+  const [hiddenConversations, setHiddenConversations] = useState<SidebarConversation[]>([])
   const [loading, setLoading] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -52,6 +53,15 @@ export default function InboxSidebar({
   const [newMessagesMap, setNewMessagesMap] = useState<Record<string, boolean>>({})
   const menuRef = useRef<HTMLDivElement>(null)
   const hasLoadedFromCache = useRef(false)
+
+  // Get hidden conversations from localStorage on mount
+  const getHiddenConvIds = useCallback(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem('hidden_conversations') || '[]'))
+    } catch {
+      return new Set<string>()
+    }
+  }, [])
 
   // Load from cache immediately on mount - show cached data even if slightly stale
   useEffect(() => {
@@ -212,16 +222,18 @@ export default function InboxSidebar({
         const blockedUserIds = new Set(blockedData?.map(b => b.related_user_id) || [])
 
         // 2.6 Get hidden conversations from localStorage
-        const hiddenConvIds = new Set<string>(JSON.parse(localStorage.getItem('hidden_conversations') || '[]'))
+        const hiddenConvIds = getHiddenConvIds()
+
+        // Array to collect hidden conversations
+        const hiddenConvsArray: SidebarConversation[] = []
 
         // 4. Build conversation previews (use batched last message map)
         const convsWithDetails = convIds.map((cid) => {
           const lastMsg = lastMessageByConversationId[cid] || { body: 'No messages yet', created_at: null, sender_id: '' }
 
-          // 4.1 If conversation is hidden, only show it if there are unread messages
+          // 4.1 Check if conversation is hidden
           const isHidden = hiddenConvIds.has(cid)
           const unreadCount = unreadCounts[cid] || 0
-          if (isHidden && unreadCount === 0) return null
 
           // Find other member(s)
           const others = otherMembers?.filter(om => om.conversation_id === cid)
@@ -232,6 +244,11 @@ export default function InboxSidebar({
           if (!other.user_profiles || blockedUserIds.has(other.user_id)) return null
 
           const profile = other.user_profiles as any
+
+          // If hidden, don't add to processedConvs - it's stored separately
+          if (isHidden) {
+            return null
+          }
 
           return {
             other_user_id: other.user_id,
@@ -246,7 +263,39 @@ export default function InboxSidebar({
           }
         })
         
-        processedConvs.push(...(convsWithDetails.filter(Boolean) as SidebarConversation[]))
+        // Filter only visible conversations
+        const visibleConvs = convsWithDetails.filter(Boolean) as SidebarConversation[]
+        processedConvs.push(...visibleConvs)
+        
+        // Store hidden conversations - rebuild from convIds using the already-fetched data
+        const finalHiddenConvs: SidebarConversation[] = []
+        for (const cid of convIds) {
+          if (hiddenConvIds.has(cid)) {
+            const lastMsg = lastMessageByConversationId[cid] || { body: 'No messages yet', created_at: null, sender_id: '' }
+            const others = otherMembers?.filter(om => om.conversation_id === cid)
+            if (others && others.length > 0) {
+              const other = others[0]
+              if (other.user_profiles && !blockedUserIds.has(other.user_id)) {
+                const profile = other.user_profiles as any
+                finalHiddenConvs.push({
+                  other_user_id: other.user_id,
+                  other_username: profile.username,
+                  other_avatar_url: profile.avatar_url,
+                  rgb_username_expires_at: profile.rgb_username_expires_at,
+                  glowing_username_color: profile.glowing_username_color,
+                  other_created_at: profile.created_at,
+                  last_message: lastMsg.body,
+                  last_timestamp: lastMsg.created_at || '',
+                  unread_count: unreadCounts[cid] || 0
+                })
+              }
+            }
+          }
+        }
+        setHiddenConversations(finalHiddenConvs)
+      } else {
+        // No convIds - still need to set hidden conversations to empty
+        setHiddenConversations([])
       }
 
       // 5. Deduplicate by other_user_id
@@ -362,6 +411,12 @@ export default function InboxSidebar({
 
       // Immediately remove from local state for instant feedback
       setConversations(prev => prev.filter(c => c.other_user_id !== otherUserId))
+      
+      // Add to hidden conversations for the hidden tab
+      if (conv) {
+        setHiddenConversations(prev => [...prev, conv])
+      }
+      
       toast.success('Chat hidden')
 
       // Find and store the conversation_id in localStorage
@@ -414,6 +469,72 @@ export default function InboxSidebar({
     } catch (err) {
       console.error('Hide chat: unexpected error', err)
       // Silently fail - chat is already hidden in UI
+    }
+  }
+
+  const handleUnhideChat = async (otherUserId: string) => {
+    if (!user) return
+    
+    // Close menu immediately for better UX
+    setOpenMenuId(null)
+    
+    try {
+      // Remove from hidden conversations in local state
+      setHiddenConversations(prev => prev.filter(c => c.other_user_id !== otherUserId))
+      toast.success('Chat unhidden')
+
+      // Find and remove the conversation_id from localStorage
+      const { data: memberData, error: memberError } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id)
+      
+      if (memberError) {
+        console.error('Unhide chat: member query error', memberError)
+        return
+      }
+      
+      if (memberData && memberData.length > 0) {
+        const myConvIds = memberData.map(m => m.conversation_id)
+        const { data: shared, error: sharedError } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', myConvIds)
+          .eq('user_id', otherUserId)
+          .maybeSingle()
+        
+        if (sharedError) {
+          console.error('Unhide chat: shared query error', sharedError)
+          return
+        }
+        
+        if (shared?.conversation_id) {
+          // Safely get hidden conversations from localStorage
+          let hiddenChats: string[] = []
+          try {
+            const stored = localStorage.getItem('hidden_conversations')
+            if (stored) {
+              hiddenChats = JSON.parse(stored)
+              if (!Array.isArray(hiddenChats)) {
+                hiddenChats = []
+              }
+            }
+          } catch (e) {
+            console.warn('Unhide chat: invalid localStorage data, resetting', e)
+            hiddenChats = []
+          }
+          
+          // Remove this conversation from hidden list
+          const newHiddenChats = hiddenChats.filter((id: string) => id !== shared.conversation_id)
+          localStorage.setItem('hidden_conversations', JSON.stringify(newHiddenChats))
+        }
+      }
+      
+      // Refresh to show the conversation in inbox
+      fetchConversations()
+    } catch (err) {
+      console.error('Unhide chat: unexpected error', err)
+      // Silently fail
     }
   }
 
@@ -484,9 +605,10 @@ export default function InboxSidebar({
     }
   }, [fetchConversations, isUserOfficer, activeConversation, user?.id])
 
-  const filteredConversations = conversations.filter(c => 
-    c.other_username.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Determine which conversations to show based on active tab
+  const displayedConversations = activeTab === 'hidden' 
+    ? hiddenConversations.filter(c => c.other_username.toLowerCase().includes(searchQuery.toLowerCase()))
+    : conversations.filter(c => c.other_username.toLowerCase().includes(searchQuery.toLowerCase()))
 
   // Skeleton loader for better perceived performance
   const renderSkeleton = () => (
@@ -551,6 +673,14 @@ export default function InboxSidebar({
           >
             Requests
           </button>
+          <button 
+             onClick={() => setActiveTab('hidden')}
+             className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+              activeTab === 'hidden' ? 'bg-[#1F1F2E] text-white shadow-sm' : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            Hidden
+          </button>
         </div>
       </div>
 
@@ -562,13 +692,13 @@ export default function InboxSidebar({
           <div className="flex justify-center p-8">
             <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : filteredConversations.length === 0 ? (
+        ) : displayedConversations.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">
-            {searchQuery ? 'No conversations found' : 'No messages yet'}
+            {searchQuery ? 'No conversations found' : activeTab === 'hidden' ? 'No hidden conversations' : 'No messages yet'}
           </div>
         ) : (
           <div className="divide-y divide-purple-500/10">
-            {filteredConversations.map((conv) => {
+            {displayedConversations.map((conv) => {
               const isActive = activeConversation === conv.other_user_id
               const isOnline = onlineUsers[conv.other_user_id]
               
@@ -646,10 +776,17 @@ export default function InboxSidebar({
                           <MessageSquare className="w-4 h-4" />
                           Open in Bubble
                         </button>
-                        <button onClick={() => handleHideChat(conv.other_user_id)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
-                          <EyeOff className="w-4 h-4" />
-                          Hide Chat
-                        </button>
+                        {activeTab === 'hidden' ? (
+                          <button onClick={() => handleUnhideChat(conv.other_user_id)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
+                            <Eye className="w-4 h-4" />
+                            Unhide Chat
+                          </button>
+                        ) : (
+                          <button onClick={() => handleHideChat(conv.other_user_id)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
+                            <EyeOff className="w-4 h-4" />
+                            Hide Chat
+                          </button>
+                        )}
                         <button onClick={() => handleBlockUser(conv.other_user_id)} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10">
                           <Ban className="w-4 h-4" />
                           Block User
