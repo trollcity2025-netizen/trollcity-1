@@ -4,7 +4,6 @@ import { X, Search, Gift, Sparkles, Crown, Gem, Zap, Heart, Users, UserCircle, R
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useGiftSystem, GiftItem } from '../../hooks/useGiftSystem';
-import { useAnimationStore, type GiftType } from '../../lib/animationManager';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -82,7 +81,6 @@ export default function GiftBoxModal({
 }: GiftBoxModalProps) {
   const { user, profile } = useAuthStore();
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId, null, undefined, sharedChannel);
-  const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation);
   
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<GiftCategory>('all');
@@ -205,13 +203,7 @@ export default function GiftBoxModal({
         // Send to broadcaster only
         success = await sendGift(selectedGift, broadcasterId, quantity);
         if (success) {
-          // ✅ FORCE animation locally immediately
-          playGiftAnimation({
-            type: (selectedGift.slug?.toLowerCase().replace(/[^a-z]/g, '') as GiftType) || 'heart',
-            senderName: profile?.username || 'You',
-            receiverName: 'Broadcaster',
-            amount: quantity
-          });
+          // Gift animation disabled per user request
           toast.success(`Sent ${quantity}x ${selectedGift.name} to broadcaster!`);
           onGiftSent?.(selectedGift, { type: 'broadcaster', userId: broadcasterId, quantity });
         }
@@ -220,13 +212,7 @@ export default function GiftBoxModal({
         const targetId = giftTarget.userId || recipientId;
         success = await sendGift(selectedGift, targetId, quantity);
         if (success) {
-          // ✅ FORCE animation locally immediately
-          playGiftAnimation({
-            type: (selectedGift.slug?.toLowerCase().replace(/[^a-z]/g, '') as GiftType) || 'heart',
-            senderName: profile?.username || 'You',
-            receiverName: giftTarget.username || 'User',
-            amount: quantity
-          });
+          // Gift animation disabled per user request
           const targetName = userProfiles[targetId]?.username || 'user';
           toast.success(`Sent ${quantity}x ${selectedGift.name} to ${targetName}!`);
           onGiftSent?.(selectedGift, { type: 'specific', userId: targetId, username: targetName, quantity });
@@ -259,21 +245,21 @@ export default function GiftBoxModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-zinc-900 border border-white/10 rounded-2xl w-[90vw] max-w-4xl h-[80vh] flex flex-col overflow-hidden"
+          initial={{ scale: 0.9, opacity: 0, y: 100 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 100 }}
+          className="bg-zinc-900 border-t-2 sm:border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:w-[90vw] max-w-4xl h-[75vh] sm:h-[80vh] flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-white/10 bg-zinc-900/50">
-            <div className="flex items-center gap-3">
-              <Gift className="text-yellow-400" size={24} />
-              <h2 className="text-xl font-bold text-white">Send a Gift</h2>
+          <div className="flex items-center justify-between p-3 sm:p-4 border-b border-white/10 bg-zinc-900/50 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Gift className="text-yellow-400" size={20} />
+              <h2 className="text-base sm:text-xl font-bold text-white">Send Gift</h2>
             </div>
             <button
               onClick={onClose}
@@ -284,14 +270,14 @@ export default function GiftBoxModal({
           </div>
 
           {/* Balance Display */}
-          <div className="px-4 py-2 bg-zinc-800/50 border-b border-white/5 flex items-center justify-between">
+          <div className="px-3 sm:px-4 py-2 bg-zinc-800/50 border-b border-white/5 flex items-center justify-between text-xs sm:text-sm flex-shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-zinc-400 text-sm">Your Balance:</span>
+              <span className="text-zinc-400">Balance:</span>
               <span className="text-yellow-400 font-bold">{(profile?.troll_coins || 0).toLocaleString()} 🪙</span>
             </div>
             {selectedGift && (
               <div className="flex items-center gap-2">
-                <span className="text-zinc-400 text-sm">Total:</span>
+                <span className="text-zinc-400">Total:</span>
                 <span className={cn("font-bold", canAfford ? "text-green-400" : "text-red-400")}>
                   {getTotalCost().toLocaleString()} 🪙
                 </span>
@@ -299,44 +285,46 @@ export default function GiftBoxModal({
             )}
           </div>
 
-          <div className="flex flex-1 overflow-hidden">
-            {/* Categories Sidebar */}
-            <div className="w-48 border-r border-white/10 bg-zinc-900/30 overflow-y-auto py-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={cn(
-                    "w-full px-4 py-2 text-left flex items-center gap-2 text-sm transition-colors",
-                    selectedCategory === cat.id
-                      ? "bg-yellow-500/20 text-yellow-400 border-r-2 border-yellow-500"
-                      : "text-zinc-400 hover:bg-white/5 hover:text-white"
-                  )}
-                >
-                  <span>{cat.icon}</span>
-                  <span>{cat.label}</span>
-                </button>
-              ))}
+          <div className="flex flex-1 overflow-hidden flex-col sm:flex-row">
+            {/* Categories - horizontal scroll on mobile, sidebar on desktop */}
+            <div className="sm:w-48 border-b sm:border-r border-white/10 bg-zinc-900/30 overflow-x-auto overflow-y-hidden sm:overflow-y-auto py-2 flex-shrink-0">
+              <div className="flex sm:flex-col gap-1 sm:gap-0 px-2 sm:px-0">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={cn(
+                      "px-3 py-2 text-left flex items-center gap-2 text-sm transition-colors whitespace-nowrap",
+                      selectedCategory === cat.id
+                        ? "bg-yellow-500/20 text-yellow-400 border-r-2 sm:border-r-0 sm:border-b-2 border-yellow-500"
+                        : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    <span className="flex-shrink-0">{cat.icon}</span>
+                    <span className="hidden sm:inline">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Gift Grid */}
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Search Bar */}
-              <div className="p-4 border-b border-white/5">
+              <div className="p-2 sm:p-4 border-b border-white/5">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                  <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
                   <input
                     type="text"
                     placeholder="Search gifts..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-500"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-yellow-500"
                   />
                 </div>
               </div>
 
               {/* Gifts */}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-2 sm:p-4">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400"></div>
@@ -346,7 +334,7 @@ export default function GiftBoxModal({
                     No gifts found
                   </div>
                 ) : (
-                  <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
                     {filteredGifts.map((gift) => {
                       const isSelected = selectedGift?.id === gift.id;
                       const rarity = getGiftRarity(gift.coinCost);
@@ -358,18 +346,18 @@ export default function GiftBoxModal({
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setSelectedGift(gift)}
                           className={cn(
-                            "relative p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1",
+                            "relative p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all flex flex-col items-center gap-0.5 sm:gap-1",
                             isSelected
                               ? "border-yellow-500 bg-yellow-500/20"
                               : "border-white/10 bg-zinc-800/50 hover:border-white/30",
                             RARITY_COLORS[rarity]
                           )}
                         >
-                          <span className="text-3xl">{gift.icon}</span>
-                          <span className="text-xs text-white font-medium truncate w-full text-center">
+                          <span className="text-2xl sm:text-3xl">{gift.icon}</span>
+                          <span className="text-[9px] sm:text-xs text-white font-medium truncate w-full text-center">
                             {gift.name}
                           </span>
-                          <span className="text-xs text-yellow-400 font-bold">
+                          <span className="text-[10px] sm:text-xs text-yellow-400 font-bold">
                             {gift.coinCost} 🪙
                           </span>
                           
@@ -394,41 +382,43 @@ export default function GiftBoxModal({
             </div>
           </div>
 
-          {/* Recipient Selection - Only show when enhanced props are provided */}
-          {selectedGift && activeUserIds.length > 0 && (
-            <div className="p-4 border-t border-white/10 bg-zinc-900/50">
-              <div className="flex items-center gap-2 mb-3">
-                <UserCircle size={18} className="text-yellow-400" />
-                <span className="text-sm font-medium text-white">Send to:</span>
+          {/* Recipient Selection - Always show when a gift is selected */}
+          {selectedGift && (
+            <div className="p-2 sm:p-4 border-t border-white/10 bg-zinc-900/50 flex-shrink-0">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                <UserCircle size={16} sm:size={18} className="text-yellow-400" />
+                <span className="text-xs sm:text-sm font-medium text-white">Send to:</span>
               </div>
               
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {/* Broadcaster Option */}
                 <button
                   onClick={() => setGiftTarget({ type: 'broadcaster', userId: broadcasterId })}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                    "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all",
                     giftTarget.type === 'broadcaster'
                       ? "bg-yellow-500/20 border-2 border-yellow-500 text-yellow-400"
                       : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
                   )}
                 >
-                  <Radio size={16} />
-                  <span>B (Broadcaster)</span>
+                  <Radio size={14} sm:size={16} />
+                  <span className="hidden sm:inline">B (Broadcaster)</span>
+                  <span className="sm:hidden">Broadcaster</span>
                 </button>
                 
                 {/* All Users Option */}
                 <button
                   onClick={() => setGiftTarget({ type: 'all' })}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                    "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all",
                     giftTarget.type === 'all'
                       ? "bg-purple-500/20 border-2 border-purple-500 text-purple-400"
                       : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
                   )}
                 >
-                  <Users size={16} />
-                  <span>A (All)</span>
+                  <Users size={14} sm:size={16} />
+                  <span className="hidden sm:inline">A (All)</span>
+                  <span className="sm:hidden">All</span>
                 </button>
                 
                 {/* Specific User Options */}
@@ -437,7 +427,7 @@ export default function GiftBoxModal({
                     key={userId}
                     onClick={() => setGiftTarget({ type: 'specific', userId, username: userProfiles[userId]?.username })}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                      "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all",
                       giftTarget.type === 'specific' && giftTarget.userId === userId
                         ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
                         : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
@@ -446,9 +436,9 @@ export default function GiftBoxModal({
                     <img
                       src={userProfiles[userId]?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfiles[userId]?.username || 'U')}&background=random`}
                       alt=""
-                      className="w-5 h-5 rounded-full"
+                      className="w-4 h-4 sm:w-5 sm:h-5 rounded-full"
                     />
-                    <span className="max-w-[100px] truncate">{userProfiles[userId]?.username || 'User'}</span>
+                    <span className="max-w-[60px] sm:max-w-[100px] truncate">{userProfiles[userId]?.username || 'User'}</span>
                   </button>
                 ))}
                 
@@ -457,20 +447,20 @@ export default function GiftBoxModal({
                   <button
                     onClick={() => setGiftTarget({ type: 'specific', userId: recipientId, username: userProfiles[recipientId]?.username })}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                      "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium transition-all",
                       giftTarget.type === 'specific' && giftTarget.userId === recipientId
                         ? "bg-blue-500/20 border-2 border-blue-500 text-blue-400"
                         : "bg-zinc-800 border-2 border-transparent text-zinc-400 hover:bg-zinc-700"
                     )}
                   >
-                    <UserCircle size={16} />
-                    <span className="max-w-[100px] truncate">{userProfiles[recipientId]?.username || 'Selected User'}</span>
+                    <UserCircle size={14} sm:size={16} />
+                    <span className="max-w-[60px] sm:max-w-[100px] truncate">{userProfiles[recipientId]?.username || 'Selected User'}</span>
                   </button>
                 )}
               </div>
               
               {giftTarget.type === 'all' && (
-                <p className="text-xs text-amber-400 mt-2">
+                <p className="text-[10px] sm:text-xs text-amber-400 mt-1.5 sm:mt-2">
                   ⚠️ This will send gifts to all users (cost × {1 + activeUserIds.length} users)
                 </p>
               )}
@@ -479,20 +469,20 @@ export default function GiftBoxModal({
 
           {/* Send Button */}
           {selectedGift && (
-            <div className="p-4 border-t border-white/10 bg-zinc-900/50 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-400 text-sm">Quantity:</span>
+            <div className="p-2 sm:p-4 border-t border-white/10 bg-zinc-900/50 flex items-center justify-between gap-2 sm:gap-4 flex-shrink-0">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-zinc-400 text-xs sm:text-sm">Qty:</span>
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-8 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white flex items-center justify-center"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white flex items-center justify-center text-sm"
                   >
                     -
                   </button>
-                  <span className="w-12 text-center text-white font-bold">{quantity}</span>
+                  <span className="w-8 sm:w-12 text-center text-white font-bold text-xs sm:text-sm">{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(99, quantity + 1))}
-                    className="w-8 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white flex items-center justify-center"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white flex items-center justify-center text-sm"
                   >
                     +
                   </button>
@@ -500,7 +490,7 @@ export default function GiftBoxModal({
                 
                 <button
                   onClick={() => setQuantity(q => Math.min(99, Math.floor((profile?.troll_coins || 0) / selectedGift.coinCost)))}
-                  className="px-3 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg"
+                  className="px-2 sm:px-3 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg"
                 >
                   Max
                 </button>
@@ -510,33 +500,30 @@ export default function GiftBoxModal({
                 onClick={handleSendGift}
                 disabled={isSending || !canAfford}
                 className={cn(
-                  "px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all",
+                  "px-4 sm:px-8 py-2 sm:py-3 rounded-xl font-bold flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm transition-all",
+                  isSending && "opacity-50",
                   canAfford
                     ? "bg-yellow-500 hover:bg-yellow-400 text-black"
                     : "bg-zinc-700 text-zinc-500 cursor-not-allowed"
                 )}
               >
-                {isSending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Gift size={20} />
-                    {activeUserIds.length > 0 ? (
-                      giftTarget.type === 'all' ? (
-                        `Send to All (${1 + activeUserIds.length})`
-                      ) : giftTarget.type === 'broadcaster' ? (
-                        'Send to Broadcaster'
-                      ) : (
-                        `Send ${quantity}x ${selectedGift.name}`
-                      )
+                <Gift size={16} sm:size={20} />
+                <span className="hidden sm:inline">
+                  {activeUserIds.length > 0 ? (
+                    giftTarget.type === 'all' ? (
+                      `Send to All (${1 + activeUserIds.length})`
+                    ) : giftTarget.type === 'broadcaster' ? (
+                      'Send to Broadcaster'
                     ) : (
                       `Send ${quantity}x ${selectedGift.name}`
-                    )}
-                  </>
-                )}
+                    )
+                  ) : (
+                    `Send ${quantity}x ${selectedGift.name}`
+                  )}
+                </span>
+                <span className="sm:hidden">
+                  Send {quantity}x
+                </span>
               </button>
             </div>
           )}

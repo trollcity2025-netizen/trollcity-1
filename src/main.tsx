@@ -280,11 +280,16 @@ if (typeof window !== 'undefined') {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000, // 30 seconds
-      gcTime: 10 * 60 * 1000, // 10 minutes - increased to prevent premature garbage collection
-      refetchOnWindowFocus: true, // Refetch when window gains focus
+      staleTime: 60 * 1000, // 1 minute - increased for better cache utilization
+      gcTime: 15 * 60 * 1000, // 15 minutes - increased to prevent premature garbage collection
+      refetchOnWindowFocus: false, // Disable to prevent unnecessary refetches
       refetchOnReconnect: true, // Refetch when reconnecting
       retry: 1, // Allow one retry on failure
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    },
+    mutations: {
+      retry: 1, // Allow one retry on mutation failure
+      retryDelay: 1000,
     },
   },
 })

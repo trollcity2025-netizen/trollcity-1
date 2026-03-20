@@ -19,14 +19,39 @@ const MAX_VISIBLE_GIFTS = 5; // Maximum gifts shown at once
 
 // Helper function to get proper gift name and icon
 const getGiftDetails = (gift: BroadcastGift): { name: string; icon: string; cost: number } => {
-  const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.gift_id);
-  if (officialGift) {
-    return { name: officialGift.name, icon: officialGift.icon, cost: officialGift.coinCost };
+  // First try to find by gift_id (database UUID)
+  let officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.gift_id);
+  
+  // If not found, try to find by gift_slug
+  if (!officialGift && gift.gift_slug) {
+    officialGift = OFFICIAL_GIFTS.find(g => 
+      g.id === gift.gift_slug || 
+      g.id.toLowerCase().replace(/_/g, '-') === gift.gift_slug.toLowerCase() ||
+      g.id.toLowerCase() === gift.gift_slug.toLowerCase().replace(/-/g, '_') ||
+      // Also try matching by name for better fallback
+      g.name.toLowerCase().replace(/\s+/g, '-') === gift.gift_slug.toLowerCase() ||
+      g.name.toLowerCase() === gift.gift_slug.toLowerCase()
+    );
   }
+  
+  // Last resort: try to find by gift_name
+  if (!officialGift && gift.gift_name) {
+    officialGift = OFFICIAL_GIFTS.find(g => 
+      g.name.toLowerCase() === gift.gift_name.toLowerCase()
+    );
+  }
+  
+  if (officialGift) {
+    return { name: officialGift.name, icon: officialGift.icon, cost: officialGift.cost };
+  }
+  
+  // CRITICAL FIX: Always use payload data as fallback - this is the authoritative data
+  // The payload contains the actual gift name/icon that was sent
+  console.log('[GiftOverlay] Using fallback for gift:', { gift_id: gift.gift_id, gift_name: gift.gift_name, gift_icon: gift.gift_icon, amount: gift.amount });
   return { 
     name: gift.gift_name || 'Gift', 
     icon: gift.gift_icon || '🎁',
-    cost: gift.amount 
+    cost: gift.amount || 0
   };
 };
 
@@ -55,7 +80,8 @@ const triggerScreenShake = (cost: number) => {
   const duration = 500;
   
   body.style.animation = `none`;
-  body.offsetHeight; // Trigger reflow
+  // eslint-disable-next-line no-unused-expressions
+  void body.offsetHeight; // Trigger reflow
   body.style.animation = `shake ${duration}ms ease-in-out`;
   
   // Add keyframes if not exists
@@ -483,7 +509,7 @@ function GiftAnimation({
           transition={{ delay: delay + 0.8 }}
           className="flex items-center gap-1 text-yellow-400 text-sm font-bold"
         >
-          <span>{gift.amount.toLocaleString()}</span>
+          <span>{(details.cost || gift.amount || 0).toLocaleString()}</span>
           <span>🪙</span>
         </motion.div>
       </motion.div>

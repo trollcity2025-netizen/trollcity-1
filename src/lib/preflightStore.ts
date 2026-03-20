@@ -1,52 +1,34 @@
-import type { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
+import type { LocalVideoTrack, LocalAudioTrack, Room } from 'livekit-client';
 
 interface PreflightState {
-  stream: MediaStream | null;
-  cameraStream: MediaStream | null; // Camera stream for overlay when screen sharing
   token: string | null;
   roomName: string | null;
   url: string | null;
-  // LiveKit room for seamless handoff to BroadcastPage
-  livekitRoom: any | null;
-  localTracks: [LocalAudioTrack | null, LocalVideoTrack | null] | null; // [audioTrack, videoTrack]
   // Track enabled states from setup page
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
   // Battle mode flag - when true, TrollEngine should be hidden
   isInBattle: boolean;
+  // Global flag to disable battles - no users can start battles when true
+  battlesDisabled: boolean;
+  // LiveKit room and tracks from SetupPage
+  livekitRoom: Room | null;
+  livekitTracks: [LocalAudioTrack | null, LocalVideoTrack | null] | null;
 }
 
 const state: PreflightState = {
-  stream: null,
-  cameraStream: null,
   token: null,
   roomName: null,
   url: null,
-  livekitRoom: null,
-  localTracks: null,
   isVideoEnabled: true,
   isAudioEnabled: true,
   isInBattle: false,
+  battlesDisabled: true, // Default to disabled until further notice
+  livekitRoom: null,
+  livekitTracks: null,
 };
 
 export const PreflightStore = {
-  setStream(stream: MediaStream | null) {
-    state.stream = stream;
-  },
-
-  getStream() {
-    return state.stream;
-  },
-
-  // Store camera stream for overlay when screen sharing
-  setCameraStream(stream: MediaStream | null) {
-    state.cameraStream = stream;
-  },
-
-  getCameraStream() {
-    return state.cameraStream;
-  },
-
   setToken(token: string | null, roomName: string | null, url: string | null) {
     state.token = token;
     state.roomName = roomName;
@@ -55,36 +37,6 @@ export const PreflightStore = {
 
   getToken() {
     return { token: state.token, roomName: state.roomName, url: state.url };
-  },
-
-  // Set LiveKit tracks for handoff to BroadcastPage
-  setLivekitTracks(audioTrack: LocalAudioTrack | null, videoTrack: LocalVideoTrack | null) {
-    state.localTracks = [audioTrack, videoTrack];
-  },
-
-  // Get LiveKit tracks for BroadcastPage
-  getLivekitTracks(): [LocalAudioTrack | null, LocalVideoTrack | null] | null {
-    return state.localTracks;
-  },
-
-  // Legacy method - kept for compatibility
-  setAgoraClient(client: any | null, tracks: [any, any, any, any] | null) {
-    // Convert legacy format to LiveKit format
-    if (tracks && tracks[0]) {
-      state.localTracks = [tracks[0], tracks[1]];
-    }
-  },
-
-  getLivekitRoom() {
-    return state.livekitRoom;
-  },
-
-  setLivekitRoom(room: any | null) {
-    state.livekitRoom = room;
-  },
-
-  getLocalTracks() {
-    return state.localTracks;
   },
 
   // Track enabled states from setup page
@@ -108,43 +60,46 @@ export const PreflightStore = {
     return state.isInBattle;
   },
 
+  // Set battles disabled/enabled - globally blocks battle functionality when true
+  setBattlesDisabled(disabled: boolean) {
+    state.battlesDisabled = disabled;
+    console.log('[PreflightStore] setBattlesDisabled:', disabled);
+  },
+
+  // Get battles disabled status
+  getBattlesDisabled(): boolean {
+    return state.battlesDisabled;
+  },
+
+  // Store LiveKit room from SetupPage
+  setLivekitRoom(room: Room | null) {
+    state.livekitRoom = room;
+  },
+
+  // Get LiveKit room for reuse in BroadcastPage
+  getLivekitRoom(): Room | null {
+    return state.livekitRoom;
+  },
+
+  // Store LiveKit tracks from SetupPage
+  setLivekitTracks(tracks: [LocalAudioTrack | null, LocalVideoTrack | null] | null) {
+    state.livekitTracks = tracks;
+  },
+
+  // Get LiveKit tracks for reuse in BroadcastPage
+  getLivekitTracks(): [LocalAudioTrack | null, LocalVideoTrack | null] | null {
+    return state.livekitTracks;
+  },
+
   clear() {
-    // Stop all tracks in the stored stream before clearing
-    if (state.stream) {
-      state.stream.getTracks().forEach(track => track.stop());
-    }
-    if (state.cameraStream) {
-      state.cameraStream.getTracks().forEach(track => track.stop());
-    }
-    // Stop LiveKit tracks if any
-    if (state.localTracks) {
-      state.localTracks.forEach(track => {
-        if (track && typeof track.stop === 'function') {
-          try {
-            track.stop();
-          } catch (e) {
-            console.warn('Error stopping track in PreflightStore.clear():', e);
-          }
-        }
-      });
-    }
-    // Disconnect from LiveKit room if connected
-    if (state.livekitRoom) {
-      try {
-        state.livekitRoom.disconnect();
-      } catch (e) {
-        console.warn('Error disconnecting from LiveKit room in PreflightStore.clear():', e);
-      }
-    }
-    state.stream = null;
-    state.cameraStream = null;
     state.token = null;
     state.roomName = null;
     state.url = null;
-    state.livekitRoom = null;
-    state.localTracks = null;
     state.isVideoEnabled = true;
     state.isAudioEnabled = true;
     state.isInBattle = false;
+    state.battlesDisabled = true; // Keep battles disabled on clear
+    state.livekitRoom = null;
+    state.livekitTracks = null;
   }
 };

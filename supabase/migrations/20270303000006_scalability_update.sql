@@ -158,12 +158,20 @@ BEGIN
             last_updated_at = NOW();
     END LOOP;
 
-    -- 4. Mark remaining as Processed
-    UPDATE public.gift_ledger
-    SET status = 'processed', processed_at = NOW()
-    WHERE id IN (SELECT id FROM temp_batch);
-
-    v_processed_count := (SELECT COUNT(*) FROM temp_batch);
+     -- 4. Mark remaining as Processed
+     UPDATE public.gift_ledger
+     SET status = 'processed', processed_at = NOW()
+     WHERE id IN (SELECT id FROM temp_batch);
+ 
+     -- 5. Grant XP for each gift
+     FOR v_gift IN
+         SELECT id, stream_id
+         FROM temp_batch
+     LOOP
+         PERFORM public.process_gift_xp(v_gift.id, v_gift.stream_id);
+     END LOOP;
+ 
+     v_processed_count := (SELECT COUNT(*) FROM temp_batch);
 
     DROP TABLE temp_batch;
 

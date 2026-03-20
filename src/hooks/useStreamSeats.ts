@@ -16,6 +16,7 @@ export interface SeatSession {
     glowing_username_color?: string;
     role?: string;
     troll_coins?: number;
+    trollmonds_balance?: number;
     troll_role?: string;
     created_at?: string;
   };
@@ -73,6 +74,7 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
           glowing_username_color: s.glowing_username_color,
           role: s.role,
           troll_coins: Number(s.troll_coins || 0),
+          trollmonds_balance: Number(s.trollmonds_balance || 0),
           troll_role: s.troll_role,
           created_at: s.created_at,
         };
@@ -195,6 +197,52 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
 
   const joinSeat = async (seatIndex: number, price: number) => {
     if (!effectiveUserId || !streamId) return false;
+
+    // Check if user already has a seat (might have been added by broadcaster, e.g., challenger)
+    const { data: existingSession } = await supabase
+      .from('stream_seat_sessions')
+      .select('id, seat_index, user_id, guest_id, status')
+      .eq('stream_id', streamId)
+      .eq('status', 'active')
+      .or(`user_id.eq.${effectiveUserId},guest_id.eq.${effectiveUserId}`)
+      .maybeSingle();
+
+    if (existingSession) {
+      console.log('[useStreamSeats] User already has a seat, using existing session:', existingSession.id);
+      // User already has a seat - update local state to trigger LiveKit connection
+      const newSession: SeatSession = {
+        id: existingSession.id,
+        seat_index: existingSession.seat_index,
+        user_id: existingSession.user_id,
+        guest_id: existingSession.guest_id,
+        user_profile: profile ? { username: profile.username || 'Guest', avatar_url: profile.avatar_url || '' } : undefined,
+        status: 'active',
+        joined_at: new Date().toISOString()
+      };
+      setMySession(newSession);
+      setSeats(prev => ({ ...prev, [existingSession.seat_index]: newSession }));
+      toast.success('Joined seat!');
+      return true;
+    }
+
+    // Check if the seat is already occupied by a guest - prevent moving guests
+    const { data: targetSeat } = await supabase
+      .from('stream_seat_sessions')
+      .select('id, user_id, guest_id, status')
+      .eq('stream_id', streamId)
+      .eq('seat_index', seatIndex)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (targetSeat) {
+      // Seat is already occupied - check if it's by a guest
+      if (targetSeat.guest_id && targetSeat.guest_id !== effectiveUserId) {
+        // This seat is occupied by a guest (not the current user)
+        // Prevent broadcaster from moving the guest
+        toast.error("Cannot move a guest who has already taken a seat");
+        return false;
+      }
+    }
 
     // Check if seats are locked
     if (streamData?.are_seats_locked) {

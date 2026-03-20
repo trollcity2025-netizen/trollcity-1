@@ -178,6 +178,29 @@ export default function TrollPodsListing() {
     }
   };
 
+  // If under construction, show full page message
+  if (IS_UNDER_CONSTRUCTION) {
+    return (
+      <div className={`min-h-screen w-full ${trollCityTheme.backgrounds.primary} relative overflow-x-hidden flex items-center justify-center p-4`}>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPurple}`} />
+        </div>
+        <div className="relative z-10 text-center p-8">
+          <div className="text-6xl mb-4">🚧</div>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+            UNDER CONSTRUCTION
+          </h1>
+          <p className="text-xl text-yellow-400 mb-2">
+            Troll Pods are being rebuilt!
+          </p>
+          <p className="text-gray-400">
+            Check back soon for an exciting new experience.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen w-full ${trollCityTheme.backgrounds.primary} relative overflow-x-hidden p-4 md:p-8`}>
        {/* Background Effects */}

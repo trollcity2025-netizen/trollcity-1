@@ -735,24 +735,9 @@ function ViewerPage() {
               userProfiles={{}}
               sharedChannel={channelRef.current}
               onGiftSent={(giftData: GiftItem, target: GiftTarget) => {
-                const quantity = target.quantity || 1;
-                console.log('[ViewerPage] onGiftSent called:', { giftData, target, userId: user?.id });
-                
-                const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
-                const newGift: BroadcastGift = {
-                  id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                  gift_id: giftData.id,
-                  gift_name: giftData.name,
-                  gift_icon: giftData.icon || '🎁',
-                  amount: giftData.coinCost * quantity,
-                  quantity,
-                  sender_id: user?.id || '',
-                  sender_name: profile?.username || 'You',
-                  receiver_id: recipientId,
-                  created_at: new Date().toISOString(),
-                };
-                console.log('[ViewerPage] Adding gift to recentGifts:', newGift);
-                setRecentGifts(prev => [...prev, newGift]);
+                // Gift animations disabled per user request - do not add to recentGifts
+                // The gift is still sent successfully via the GiftBoxModal
+                console.log('[ViewerPage] Gift sent (animations disabled):', giftData.name);
               }}
             />
             

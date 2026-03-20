@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Stream } from '@/types/broadcast';
-import { User, Eye, Volume2, VolumeX, Play } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { User, Eye, Play } from 'lucide-react';
 
 interface FeaturedStream extends Stream {
   user_profiles?: {
@@ -15,9 +14,7 @@ interface FeaturedStream extends Stream {
 export default function FeaturedBroadcasts() {
   const [streams, setStreams] = useState<FeaturedStream[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mutedStreams, setMutedStreams] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
-  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
 
   const fetchFeaturedStreams = async () => {
     try {
@@ -32,7 +29,6 @@ export default function FeaturedBroadcasts() {
           featured_at,
           current_viewers,
           thumbnail_url,
-          mux_playback_id,
           user_profiles:user_profiles!streams_user_id_fkey (
             username,
             avatar_url
@@ -41,7 +37,7 @@ export default function FeaturedBroadcasts() {
         .eq('is_featured', true)
         .eq('status', 'live')
         .order('featured_at', { ascending: false })
-        .limit(4); // Top 2 rows = 4 streams (2x2 grid)
+        .limit(4);
 
       if (error) throw error;
       setStreams((data as FeaturedStream[]) || []);
@@ -76,20 +72,6 @@ export default function FeaturedBroadcasts() {
       supabase.removeChannel(channel);
     };
   }, []);
-
-  // Toggle mute for a stream
-  const toggleMute = (streamId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setMutedStreams(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(streamId)) {
-        newSet.delete(streamId);
-      } else {
-        newSet.add(streamId);
-      }
-      return newSet;
-    });
-  };
 
   // Handle stream click - navigate to full stream
   const handleStreamClick = (streamId: string) => {
@@ -130,53 +112,29 @@ export default function FeaturedBroadcasts() {
       {/* Featured Streams Grid - Top 2 rows */}
       <div className="grid grid-cols-2 gap-3 px-3 pb-3">
         {streams.slice(0, 4).map((stream) => {
-          const isMuted = mutedStreams.has(stream.id);
-          const streamUrl = stream.mux_playback_id 
-            ? `https://stream.mux.com/${stream.mux_playback_id}.m3u8`
-            : null;
-
           return (
             <div
               key={stream.id}
               onClick={() => handleStreamClick(stream.id)}
               className="relative aspect-video bg-slate-900 rounded-xl overflow-hidden border border-pink-500/30 hover:border-pink-500/60 transition-all cursor-pointer group"
             >
-              {/* Video Player - Muted by default */}
-              {streamUrl ? (
-                <video
-                  ref={(el) => { videoRefs.current[stream.id] = el; }}
-                  src={streamUrl}
-                  autoPlay
-                  muted={isMuted}
-                  playsInline
-                  loop
+              {/* Video Player placeholder - click to watch full stream */}
+              {stream.thumbnail_url ? (
+                <img 
+                  src={stream.thumbnail_url} 
+                  alt={stream.title}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Hide broken video elements
-                    (e.target as HTMLVideoElement).style.display = 'none';
-                  }}
+                />
+              ) : stream.user_profiles?.avatar_url ? (
+                <img 
+                  src={stream.user_profiles.avatar_url} 
+                  alt={stream.user_profiles.username}
+                  className="w-full h-full object-cover"
                 />
               ) : (
-                // Fallback to thumbnail or avatar
-                <>
-                  {stream.thumbnail_url ? (
-                    <img 
-                      src={stream.thumbnail_url} 
-                      alt={stream.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : stream.user_profiles?.avatar_url ? (
-                    <img 
-                      src={stream.user_profiles.avatar_url} 
-                      alt={stream.user_profiles.username}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-purple-900/20 to-cyan-900/20 flex items-center justify-center">
-                      <User className="w-12 h-12 text-white/20" />
-                    </div>
-                  )}
-                </>
+                <div className="w-full h-full bg-gradient-to-br from-purple-900/20 to-cyan-900/20 flex items-center justify-center">
+                  <User className="w-12 h-12 text-white/20" />
+                </div>
               )}
 
               {/* Overlay gradient */}
@@ -226,31 +184,18 @@ export default function FeaturedBroadcasts() {
                 {stream.current_viewers || 0}
               </div>
 
-              {/* Sound Toggle Button - Shows on hover */}
-              {streamUrl && (
-                <button
-                  onClick={(e) => toggleMute(stream.id, e)}
-                  className={cn(
-                    "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300",
-                    isMuted 
-                      ? "bg-black/60 hover:bg-black/80 text-white" 
-                      : "bg-pink-500/80 hover:bg-pink-500 text-white",
-                    "opacity-0 group-hover:opacity-100"
-                  )}
-                  title={isMuted ? "Unmute" : "Mute"}
-                >
-                  {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
-                </button>
-              )}
-
-              {/* Play Button - Shows on hover when no video */}
-              {!streamUrl && (
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                    <Play className="w-8 h-8 text-white ml-1" />
-                  </div>
+              {/* Play Button - Shows on hover */}
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStreamClick(stream.id);
+                }}
+                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <Play className="w-8 h-8 text-white ml-1" />
                 </div>
-              )}
+              </div>
 
               {/* Tap to watch indicator - Mobile */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none md:hidden">

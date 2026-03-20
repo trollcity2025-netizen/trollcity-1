@@ -8,7 +8,6 @@
 // Category types
 export type BroadcastCategoryId = 
   | 'general' 
-  | 'just_chatting' 
   | 'gaming' 
   | 'irl' 
   | 'debate' 
@@ -16,7 +15,6 @@ export type BroadcastCategoryId =
   | 'fitness' 
   | 'business' 
   | 'spiritual' 
-  | 'trollmers'
   | 'election'
   | 'tcnn';
 
@@ -110,38 +108,10 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     hasMatchingSystem: false,
     matchingTerminology: 'Battle',
     requiresReligion: false,
-    supportsBattles: false,
-    battleType: 'none',
+    supportsBattles: true,
+    battleType: 'standard',
     isOneWayBroadcast: false,
-    showCoinBalanceInChat: false, // Live chat category - no coin balance
-  },
-
-  // 2. Just Chatting - Same as General Chat but with Add/Deduct Box controls
-  just_chatting: {
-    id: 'just_chatting',
-    name: 'Just Chatting',
-    icon: '☕',
-    description: 'Casual conversations with friends',
-    layoutMode: 'grid',
-    defaultBoxCount: 1,
-    maxBoxCount: 6,
-    allowGuestBoxes: true,
-    allowAddBox: true,
-    allowDeductBox: true,
-    hostRoleLabel: 'Broadcaster',
-    allowFrontCamera: true,
-    allowRearCamera: true,
-    forceRearCamera: false,
-    hasOBSIntegration: false,
-    hasYouTubePlayer: false,
-    maxYouTubePlayerBoxes: 0,
-    hasMatchingSystem: false,
-    matchingTerminology: 'Battle',
-    requiresReligion: false,
-    supportsBattles: false,
-    battleType: 'none',
-    isOneWayBroadcast: false,
-    showCoinBalanceInChat: false, // Live chat category - no coin balance
+    showCoinBalanceInChat: true,
   },
 
   // 3. Gaming - OBS streaming with RTMP
@@ -342,37 +312,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true, // Stream category - show coin balance
   },
 
-  // 10. Trollmers - Head-to-head battles
-  trollmers: {
-    id: 'trollmers',
-    name: '🏆 Trollmers Head-to-Head',
-    icon: '🏆',
-    description: 'Competitive head-to-head streaming battles',
-    layoutMode: 'grid',
-    defaultBoxCount: 2,
-    maxBoxCount: 6,
-    allowGuestBoxes: true,
-    allowAddBox: true,
-    allowDeductBox: true,
-    hostRoleLabel: 'Challenger',
-    allowFrontCamera: true,
-    allowRearCamera: true,
-    forceRearCamera: false,
-    hasOBSIntegration: false,
-    hasYouTubePlayer: false,
-    maxYouTubePlayerBoxes: 0,
-    hasMatchingSystem: true,
-    matchingTerminology: 'Battle',
-    requiresReligion: false,
-    supportsBattles: true,
-    battleType: 'standard',
-    isOneWayBroadcast: false,
-    requiresMinFollowers: 100,
-    requiresCamera: true,
-    showCoinBalanceInChat: true, // Stream category - show coin balance
-  },
-
-  // 11. President Elections - Special category for elections (admin, secretary, lead troll officer, troll officers only)
+  // 10. President Elections - Special category for elections (admin, secretary, lead troll officer, troll officers only)
   election: {
     id: 'election',
     name: '🗳️ President Elections',

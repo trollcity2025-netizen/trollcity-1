@@ -4,7 +4,7 @@ import { useAuthStore } from '../../../lib/store'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import MessageInput from './MessageInput'
 
-const MAX_MESSAGES = 100
+const MAX_MESSAGES = 500 // Increased to fetch more messages
 
 type ChatMessage = {
   id: string
@@ -378,12 +378,30 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack }: ChatWindowProps) => {
               data={messages}
               initialTopMostItemIndex={messages.length - 1}
               followOutput="smooth"
-              itemContent={(_index, msg) => (
-                <div key={msg.id} className="p-4 border-b border-white/5">
-                  <strong>{msg.sender_username || 'Unknown'}: </strong>
-                  <span className="text-gray-300">{msg.content}</span>
-                </div>
-              )}
+              itemContent={(_index, msg) => {
+                const isMe = msg.sender_id === user?.id
+                return (
+                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3 px-4`}>
+                    <div 
+                      className={`max-w-[75%] px-4 py-2 rounded-2xl ${
+                        isMe 
+                          ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-br-md' 
+                          : 'bg-white/10 text-gray-100 rounded-bl-md'
+                      }`}
+                    >
+                      {!isMe && (
+                        <div className="text-xs text-purple-300 mb-1 font-medium">
+                          {msg.sender_username || 'Unknown'}
+                        </div>
+                      )}
+                      <div className="text-sm break-words">{msg.content}</div>
+                      <div className={`text-[10px] mt-1 ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                )
+              }}
             />
           </div>
         )}

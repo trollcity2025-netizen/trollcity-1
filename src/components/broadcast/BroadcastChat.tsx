@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, User, Shield, Crown, Sparkles, Gift } from 'lucide-react';
+import { Send, User, Shield, Crown, Sparkles, Gift, Swords } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
+import { PreflightStore } from '../../lib/preflightStore';
 import { generateUUID } from '../../lib/uuid';
 import { toast } from 'sonner';
 import GiftBoxModal from './GiftBoxModal';
@@ -13,11 +14,18 @@ interface Message {
   user_id: string;
   content: string;
   created_at: string;
-  type?: 'chat' | 'system' | 'gift';
+  type?: 'chat' | 'system' | 'gift' | 'challenge';
   // Gift-specific fields
   gift_type?: string;
   gift_amount?: number;
   sender_name?: string;
+  // Challenge-specific fields
+  challenge_id?: string;
+  challenger_id?: string;
+  challenger_username?: string;
+  challenger_avatar?: string;
+  challenger_crowns?: number;
+  challenge_status?: 'pending' | 'accepted' | 'denied' | 'on_hold' | 'expired';
   // Denormalized fields
   user_name?: string;
   user_avatar?: string;
@@ -38,6 +46,18 @@ interface Message {
   } | null;
 }
 
+// Challenge notification interface
+interface ChallengeNotification {
+  id: string;
+  challenge_id: string;
+  challenger_id: string;
+  challenger_username: string;
+  challenger_avatar?: string;
+  challenger_crowns?: number;
+  expires_at: string;
+  status: 'pending' | 'accepted' | 'denied' | 'on_hold' | 'expired';
+}
+
 interface BroadcastChatProps {
     streamId: string;
     hostId: string;
@@ -46,9 +66,30 @@ interface BroadcastChatProps {
     isViewer?: boolean;
     isGuest?: boolean;
     onStreamEnd?: () => void;
+    onChallengeBroadcaster?: () => void;
+    hasPendingChallenge?: boolean;
+    // Challenge management props
+    pendingChallenges?: ChallengeNotification[];
+    onAcceptChallenge?: (challengeId: string, challengerId: string) => void;
+    onDenyChallenge?: (challengeId: string) => void;
+    isBattleActive?: boolean;
 }
 
-export default function BroadcastChat({ streamId, hostId, isModerator, isHost, isViewer = false, isGuest = false, onStreamEnd }: BroadcastChatProps) {
+export default function BroadcastChat({ 
+  streamId, 
+  hostId, 
+  isModerator, 
+  isHost, 
+  isViewer = false, 
+  isGuest = false, 
+  onStreamEnd, 
+  onChallengeBroadcaster, 
+  hasPendingChallenge = false,
+  pendingChallenges = [],
+  onAcceptChallenge,
+  onDenyChallenge,
+  isBattleActive = false
+}: BroadcastChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -92,6 +133,117 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
 
   // Realtime broadcast channel ref
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  
+  // Challenge notifications in chat
+  const [challengeNotifications, setChallengeNotifications] = useState<ChallengeNotification[]>([]);
+  
+  // Process pending challenges from props
+  useEffect(() => {
+    if (isHost && pendingChallenges.length > 0) {
+      // Convert pending challenges to notifications
+      const notifications: ChallengeNotification[] = pendingChallenges.map(c => ({
+        id: c.challenge_id || c.id,
+        challenge_id: c.challenge_id || c.id,
+        challenger_id: c.challenger_id,
+        challenger_username: c.challenger_username,
+        challenger_avatar: c.challenger_avatar,
+        challenger_crowns: c.challenger_crowns,
+        expires_at: c.expires_at,
+        status: isBattleActive ? 'on_hold' : 'pending'
+      }));
+      setChallengeNotifications(notifications);
+    }
+  }, [pendingChallenges, isHost, isBattleActive]);
+  
+  // Listen for challenge broadcasts
+  useEffect(() => {
+    if (!streamId) return;
+    
+    const challengeChannel = supabase
+      .channel(`chat-challenges-${streamId}`)
+      .on(
+        'broadcast',
+        { event: 'new_challenge' },
+        (payload: any) => {
+          const challengeData = payload.payload;
+          console.log('[BroadcastChat] New challenge received:', challengeData);
+          
+          const notification: ChallengeNotification = {
+            id: challengeData.challenge_id,
+            challenge_id: challengeData.challenge_id,
+            challenger_id: challengeData.challenger_id,
+            challenger_username: challengeData.challenger_username,
+            challenger_avatar: challengeData.challenger_avatar,
+            challenger_crowns: challengeData.challenger_crowns,
+            expires_at: challengeData.expires_at,
+            status: isBattleActive ? 'on_hold' : 'pending'
+          };
+          
+          setChallengeNotifications(prev => {
+            // Don't add duplicate
+            if (prev.some(c => c.challenge_id === notification.challenge_id)) {
+              return prev;
+            }
+            return [...prev, notification];
+          });
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'challenge_accepted' },
+        (payload: any) => {
+          const challengeData = payload.payload;
+          setChallengeNotifications(prev => 
+            prev.filter(c => c.challenge_id !== challengeData.challenge_id)
+          );
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'challenge_denied' },
+        (payload: any) => {
+          const challengeData = payload.payload;
+          setChallengeNotifications(prev => 
+            prev.filter(c => c.challenge_id !== challengeData.challenge_id)
+          );
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(challengeChannel);
+    };
+  }, [streamId, isBattleActive]);
+  
+  // Handle accept challenge from chat
+  const handleAcceptChallengeFromChat = async (notification: ChallengeNotification) => {
+    if (!onAcceptChallenge) return;
+    
+    try {
+      await onAcceptChallenge(notification.challenge_id, notification.challenger_id);
+      // Remove from notifications
+      setChallengeNotifications(prev => 
+        prev.filter(c => c.challenge_id !== notification.challenge_id)
+      );
+    } catch (err) {
+      console.error('Error accepting challenge from chat:', err);
+    }
+  };
+  
+  // Handle deny challenge from chat
+  const handleDenyChallengeFromChat = async (notification: ChallengeNotification) => {
+    if (!onDenyChallenge) return;
+    
+    try {
+      await onDenyChallenge(notification.challenge_id);
+      // Remove from notifications
+      setChallengeNotifications(prev => 
+        prev.filter(c => c.challenge_id !== notification.challenge_id)
+      );
+    } catch (err) {
+      console.error('Error denying challenge from chat:', err);
+    }
+  };
 
   // Fetch Stream Mods
   useEffect(() => {
@@ -648,25 +800,120 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
           </div>
         )}
         
-        <div className="p-4 border-b border-white/10 font-bold bg-zinc-900/50 flex items-center gap-2">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
-            Live Chat
-            {unreadCount > 0 && (
-              <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 animate-pulse font-normal">
-                +{unreadCount}
-              </span>
+        <div className="p-4 border-b border-white/10 font-bold bg-zinc-900/50 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
+                Live Chat
+                {unreadCount > 0 && (
+                  <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 animate-pulse font-normal">
+                    +{unreadCount}
+                  </span>
+                )}
+            </div>
+            {/* Challenge Button - Only show for viewers, when category supports battles */}
+            {onChallengeBroadcaster && !PreflightStore.getBattlesDisabled() && (
+                <button
+                    type="button"
+                    onClick={onChallengeBroadcaster}
+                    disabled={hasPendingChallenge}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        hasPendingChallenge
+                            ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
+                            : 'bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black shadow-lg hover:shadow-yellow-500/25'
+                    }`}
+                    title={hasPendingChallenge ? 'Challenge pending...' : 'Challenge broadcaster to a battle!'}
+                >
+                    <Swords size={14} className={hasPendingChallenge ? 'animate-pulse' : ''} />
+                    {hasPendingChallenge ? 'Pending...' : 'Challenge'}
+                </button>
             )}
         </div>
         
         <div className="flex-1 min-h-0 relative overflow-hidden">
+            {/* Challenge Notifications Section - Show active challenges */}
+            {challengeNotifications.length > 0 && (
+                <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-purple-900/80 to-transparent p-2 max-h-[180px] overflow-y-auto">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Swords size={14} className="text-purple-400" />
+                        <span className="text-xs font-bold text-purple-300">
+                            {isBattleActive ? 'Challenges On Hold' : 'Incoming Challenges'}
+                        </span>
+                        <span className="bg-purple-500/20 text-purple-400 text-[10px] px-1.5 py-0.5 rounded-full">
+                            {challengeNotifications.length}
+                        </span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        {challengeNotifications.map((notification) => (
+                            <div 
+                                key={notification.challenge_id}
+                                className={`flex items-center gap-2 p-2 rounded-lg border animate-in slide-in-from-top-2 fade-in duration-300 ${
+                                    notification.status === 'on_hold' 
+                                        ? 'bg-yellow-900/30 border-yellow-500/30' 
+                                        : 'bg-purple-900/40 border-purple-500/30'
+                                }`}
+                            >
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-red-500 flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
+                                    {notification.challenger_avatar ? (
+                                        <img src={notification.challenger_avatar} alt={notification.challenger_username} className="w-full h-full object-cover" />
+                                    ) : (
+                                        notification.challenger_username?.charAt(0).toUpperCase() || '?'
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1">
+                                        <span className="font-bold text-purple-300 text-xs truncate">
+                                            {notification.challenger_username || 'Unknown'}
+                                        </span>
+                                        {notification.challenger_crowns !== undefined && (
+                                            <span className="text-amber-400 text-[10px] flex items-center gap-0.5">
+                                                <Crown size={10} />
+                                                {notification.challenger_crowns}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {notification.status === 'on_hold' && (
+                                        <span className="text-[10px] text-yellow-400">On hold - battle in progress</span>
+                                    )}
+                                </div>
+                                {isHost && notification.status !== 'on_hold' && (
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAcceptChallengeFromChat(notification)}
+                                            className="p-1.5 bg-green-500/20 hover:bg-green-500/40 text-green-400 rounded-lg transition-colors"
+                                            title="Accept"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDenyChallengeFromChat(notification)}
+                                            className="p-1.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-colors"
+                                            title="Deny"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            
             {/* Floating Messages - Show last 10 messages as floating bubbles */}
-            <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-1 p-2 max-h-[200px] overflow-hidden">
+            <div className={`absolute left-0 right-0 flex flex-col gap-1 p-2 overflow-hidden ${challengeNotifications.length > 0 ? 'bottom-0 max-h-[120px]' : 'bottom-0 max-h-[200px]'}`}>
                 {messages.slice(-10).map((msg, index) => {
                     // Calculate animation delay based on index (newer messages appear on top)
                     const isSystem = msg.type === 'system';
                     
                     // Check if this is a gift message
                     const isGift = msg.type === 'gift' || msg.content?.startsWith('GIFT_EVENT:');
+                    
+                    // Skip gift messages - they are shown as animations instead
+                    if (isGift) {
+                        return null;
+                    }
                     
                     if (isSystem) {
                         return (
@@ -684,6 +931,52 @@ export default function BroadcastChat({ streamId, hostId, isModerator, isHost, i
                                     {msg.user_profiles?.username || 'User'}
                                 </button>
                                 <span className="truncate">{msg.content}</span>
+                            </div>
+                        );
+                    }
+                    
+                    // Check if this is a challenge message
+                    if (msg.type === 'challenge') {
+                        return (
+                            <div 
+                                key={msg.id}
+                                className="flex items-center gap-2 bg-purple-900/40 border border-purple-500/30 p-2 rounded-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
+                            >
+                                <Swords size={14} className="text-purple-400 flex-shrink-0" />
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-1">
+                                        <span className="font-bold text-purple-400 text-xs">
+                                            {msg.user_profiles?.username || msg.challenger_username || 'Someone'}
+                                        </span>
+                                        <span className="text-zinc-400 text-xs">sent a challenge!</span>
+                                    </div>
+                                    {isHost && msg.challenge_id && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (onAcceptChallenge) {
+                                                        onAcceptChallenge(msg.challenge_id!, msg.challenger_id!);
+                                                    }
+                                                }}
+                                                className="px-2 py-0.5 bg-green-500/20 hover:bg-green-500/40 text-green-400 text-xs rounded transition-colors"
+                                            >
+                                                Accept
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (onDenyChallenge) {
+                                                        onDenyChallenge(msg.challenge_id!);
+                                                    }
+                                                }}
+                                                className="px-2 py-0.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs rounded transition-colors"
+                                            >
+                                                Deny
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         );
                     }

@@ -352,8 +352,21 @@ function AppContent() {
     }
   }
 
-  // Narrow selectors to avoid returning a fresh object from the selector
-  const user = useAuthStore((s) => s.user);
+  // Use granular selectors to prevent unnecessary re-renders
+  // Only re-render when these specific values change
+  const userId = useAuthStore((s) => s.user?.id);
+  const user = useAuthStore((s) => s.user); // Keep full user object for components that need it
+  const userRole = useAuthStore((s) => s.profile?.role);
+  const isAdmin = useAuthStore((s) => s.profile?.is_admin);
+  const isLeadOfficer = useAuthStore((s) => s.profile?.is_lead_officer);
+  const isTrollOfficer = useAuthStore((s) => s.profile?.is_troll_officer);
+  const isPastor = useAuthStore((s) => s.profile?.is_pastor);
+  const isJailed = useAuthStore((s) => s.profile?.is_jailed);
+  const isBanned = useAuthStore((s) => s.profile?.is_banned);
+  const isKicked = useAuthStore((s) => s.profile?.is_kicked);
+  const hasActiveWarrant = useAuthStore((s) => s.profile?.has_active_warrant);
+  const username = useAuthStore((s) => s.profile?.username);
+  const profileRole = useAuthStore((s) => s.profile?.role);
 
   // Some legacy logic needs the full profile object in several effects
   const profile = useAuthStore((s) => s.profile);
@@ -411,14 +424,14 @@ function AppContent() {
 
   // Initial profile load
   useEffect(() => {
-    if (user?.id && !initialProfileLoaded && userIdRef.current !== user.id) {
-      console.log(`Found user, refreshing profile ${user.id}`);
+    if (userId && !initialProfileLoaded && userIdRef.current !== userId) {
+      console.log(`Found user, refreshing profile ${userId}`);
       refreshProfile();
-      eligibilityRefresh(user.id);
+      eligibilityRefresh(userId);
       setInitialProfileLoaded(true);
-      userIdRef.current = user.id;
+      userIdRef.current = userId;
     }
-  }, [user, initialProfileLoaded, refreshProfile, eligibilityRefresh]);
+  }, [userId, initialProfileLoaded, refreshProfile, eligibilityRefresh]);
 
   // Handle Service Worker navigation requests (e.g. from push notifications)
   useEffect(() => {
@@ -467,11 +480,11 @@ function AppContent() {
     const { subscribeToRealtime, unsubscribeFromRealtime, fetchAlerts } = useBugAlertStore.getState();
     
     // Only set up subscription if user is admin
-    if (user && profile?.role === 'admin') {
+    if (userId && userRole === 'admin') {
       console.log('[BugAlert] Admin detected, setting up real-time subscription');
       
       // Subscribe to real-time bug alerts
-      subscribeToRealtime(user.id, true);
+      subscribeToRealtime(userId, true);
       
       // Fetch initial alerts
       fetchAlerts({ status: 'active' });
@@ -481,7 +494,7 @@ function AppContent() {
     return () => {
       unsubscribeFromRealtime();
     };
-  }, [user, profile?.role]);
+  }, [userId, userRole]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -570,9 +583,9 @@ function AppContent() {
 
   useEffect(() => {
     if (hasNavigatedRef.current) return;
-    if (!user || !isStandalone) return;
+    if (!userId || !isStandalone) return;
     // Mobile UI is now activated automatically for PWA standalone.
-  }, [user, isStandalone, location.pathname, navigate]);
+  }, [userId, isStandalone, location.pathname, navigate]);
 
   // Track route changes for session persistence
   useEffect(() => {
@@ -593,17 +606,17 @@ function AppContent() {
     }
 
     // Don't redirect if user is not logged in
-    if (!user || !profile) {
+    if (!userId || !profile) {
       return;
     }
 
     hasNavigatedRef.current = true;
 
     // Redirect to family if troll_family role
-    if (profile?.role === 'troll_family') {
+    if (profileRole === 'troll_family') {
       navigate('/family', { replace: true });
     }
-  }, [profile, location.pathname, navigate, user]);
+  }, [profile, location.pathname, navigate, userId]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -732,7 +745,7 @@ function AppContent() {
     const controller = new AbortController()
 
     const trackIP = async () => {
-      if (!user?.id) return
+      if (!userId) return
 
       try {
         // Get user's IP address with timeout
@@ -790,7 +803,7 @@ function AppContent() {
         const { data: currentProfile } = await supabase
           .from('user_profiles')
           .select('ip_address_history')
-          .eq('id', user.id)
+          .eq('id', userId)
           .maybeSingle()
 
         const ipHistory = currentProfile?.ip_address_history || []
@@ -808,7 +821,7 @@ function AppContent() {
             last_known_ip: userIP,
             ip_address_history: updatedHistory
           })
-          .eq('id', user.id)
+          .eq('id', userId)
       } catch (error: any) {
         // Ignore abort errors
         if (error.name === 'AbortError' || error.message?.includes('AbortError')) return
@@ -816,18 +829,18 @@ function AppContent() {
       }
     }
 
-    if (user) {
+    if (userId) {
       trackIP()
     }
 
     return () => {
         controller.abort()
     }
-  }, [user, navigate])
+  }, [userId, navigate])
 
   // 🔹 Check Daily Login for XP
   useEffect(() => {
-    if (user?.id) {
+    if (userId) {
       const checkLogin = async () => {
         try {
           // This function checks the date, updates streak, and awards XP if valid
@@ -838,7 +851,7 @@ function AppContent() {
       };
       checkLogin();
     }
-  }, [user?.id]);
+  }, [userId]);
 
   
 
@@ -847,7 +860,7 @@ function AppContent() {
       void reportError({
         message: event.message || 'window.onerror',
         stack: event.error?.stack,
-        userId: user?.id || null,
+        userId: userId || null,
         url: window.location.pathname,
         component: 'global'
       })
@@ -866,7 +879,7 @@ function AppContent() {
       void reportError({
         message: (reason?.message || String(reason) || 'unhandledrejection'),
         stack: reason?.stack,
-        userId: user?.id || null,
+        userId: userId || null,
         url: window.location.pathname,
         component: 'global'
       })
@@ -877,7 +890,7 @@ function AppContent() {
         const msg = typeof args[0] === 'string' ? args[0] : (args[0]?.message || JSON.stringify(args[0]))
         void reportError({
           message: msg || 'console.error',
-          userId: user?.id || null,
+          userId: userId || null,
           url: window.location.pathname,
           component: 'console',
           context: { args }
@@ -892,11 +905,11 @@ function AppContent() {
       window.removeEventListener('unhandledrejection', onRejection)
       console.error = originalConsoleError
     }
-  }, [user?.id])
+  }, [userId])
 
   // 🔹 Tab Visibility Change Handler
   useEffect(() => {
-    if (!user?.id) return
+    if (!userId) return
  
     const handleVisibilityChange = async () => {
       if (!document.hidden) {
@@ -914,7 +927,7 @@ function AppContent() {
           const { data: userStreams } = await supabase
             .from('streams')
             .select('id')
-            .eq('user_id', user.id);
+            .eq('user_id', userId);
             
           const streamIds = userStreams?.map(s => s.id) || [];
           
@@ -939,7 +952,7 @@ function AppContent() {
         // Tab became visible, refresh data
         console.log('Tab became visible, refreshing data...')
         refreshProfile()
-        eligibilityRefresh(user.id)
+        eligibilityRefresh(userId)
         // Dispatch global refetch event for all components
         window.dispatchEvent(new CustomEvent(APP_DATA_REFETCH_EVENT_NAME))
       }
@@ -947,7 +960,7 @@ function AppContent() {
  
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [user?.id, refreshProfile, eligibilityRefresh])
+  }, [userId, refreshProfile, eligibilityRefresh])
 
   // 🔹 Scroll to top on route change
   useEffect(() => {
@@ -1215,6 +1228,7 @@ function AppContent() {
                   {/* 👨‍👩‍👧 Family */}
                   <Route path="/family" element={<TrollFamily />} />
                   <Route path="/family/browse" element={<FamilyBrowse />} />
+                  <Route path="/family/create" element={<FamilyBrowse />} />
                   <Route path="/family/city" element={<TrollFamilyCity />} />
                   <Route path="/family/profile/:id" element={<FamilyProfilePage />} />
                   <Route path="/family/chat" element={<Navigate to="/family" replace />} />

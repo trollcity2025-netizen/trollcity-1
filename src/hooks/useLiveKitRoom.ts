@@ -24,7 +24,6 @@ import { supabase } from '../lib/supabase';
  * @param config.role - 'publisher' | 'viewer'
  * @param config.audioOnly - Whether room is audio-only (pods)
  * @param config.publish - Whether user should publish (host/speaker/guest)
- * @param config.muxPlaybackId - Mux playback ID for viewers (fallback)
  * @param config.onUserJoined - Callback when user joins
  * @param config.onUserLeft - Callback when user leaves
  * @param config.onError - Error callback
@@ -35,7 +34,6 @@ export function useLiveKitRoom({
   role = 'viewer',
   audioOnly = false,
   publish = false,
-  muxPlaybackId,
   onUserJoined,
   onUserLeft,
   onError
@@ -532,9 +530,6 @@ export function useLiveKitRoom({
     leaveRoom,
     toggleCamera,
     toggleMicrophone,
-    
-    // For Mux fallback
-    muxPlaybackId,
     
     // Room ref for external access
     room: roomRef.current

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { X, Search, Gavel, AlertTriangle, Scale } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '../lib/store';
 
 interface FileLawsuitModalProps {
   isOpen: boolean;
@@ -12,7 +13,23 @@ interface FileLawsuitModalProps {
 
 export default function FileLawsuitModal({ isOpen, onClose, onSuccess }: FileLawsuitModalProps) {
   const [loading, setLoading] = useState(false);
-  
+  const { profile } = useAuthStore();
+
+  // Check if user has permission to file lawsuits (admin, lead troll officer, or secretary only)
+  const canFileLawsuit =
+    profile?.is_admin === true ||
+    profile?.is_lead_officer === true ||
+    profile?.is_secretary === true ||
+    ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.role || '')) ||
+    ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.troll_role || ''));
+
+  // If not authorized, redirect or show error
+  if (!canFileLawsuit) {
+    toast.error('Only Admin, Lead Troll Officers, and Secretaries can file lawsuits.');
+    onClose();
+    return null;
+  }
+
   // Form Data
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);

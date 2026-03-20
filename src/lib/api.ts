@@ -42,9 +42,6 @@ export const API_ENDPOINTS = {
     reset: '/go-live-reset',
     refundHDBoost: '/go-live-refund-hd-boost',
   },
-  rtmp: {
-    start: '/rtmp-relay',
-  },
   admin: {
     trollDrop: '/admin/troll-drop',
     sendAnnouncement: '/send-announcement',
@@ -442,10 +439,6 @@ export async function del<T = any>(endpoint: string, params?: any, options?: Req
   return request<T>(endpoint, { ...options, method: 'DELETE', params });
 }
 
-export async function startRtmpRelay(roomName: string, streamKey: string) {
-  return await post(API_ENDPOINTS.rtmp.start, { roomName, streamKey })
-}
-
 const api = { 
   get, 
   post, 
@@ -453,7 +446,6 @@ const api = {
   patch, 
   delete: del, 
   request, 
-  startRtmpRelay,
   endpoints: API_ENDPOINTS 
 };
 

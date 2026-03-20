@@ -46,43 +46,6 @@ export default function SellOnTrollCity() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deletingShop, setDeletingShop] = useState(false)
 
-  const pauseShop = async () => {
-    if (!shop) return
-    try {
-      const { data, error } = await supabase
-        .from('trollcity_shops')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', shop.id)
-        .eq('owner_id', user!.id)
-        .select('*')
-        .single()
-      if (error) throw error
-      setShop(data)
-      toast.success('Shop paused')
-    } catch (err: any) {
-      console.error('Error pausing shop:', err)
-      toast.error('Failed to pause shop')
-    }
-  }
-
-  const resumeShop = async () => {
-    if (!shop) return
-    try {
-      const { data, error } = await supabase
-        .from('trollcity_shops')
-        .update({ is_active: true, updated_at: new Date().toISOString() })
-        .eq('id', shop.id)
-        .eq('owner_id', user!.id)
-        .select('*')
-        .single()
-      if (error) throw error
-      setShop(data)
-      toast.success('Shop resumed')
-    } catch (err: any) {
-      console.error('Error resuming shop:', err)
-      toast.error('Failed to resume shop')
-    }
-  }
 
   const loadShop = useCallback(async () => {
     setLoading(true)
@@ -404,53 +367,17 @@ export default function SellOnTrollCity() {
                 <p className="text-gray-400">Loading...</p>
               ) : shop ? (
                 <div className="space-y-4">
-                  {shop.is_active ? (
-                    <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-green-400 font-semibold">✓ Shop Active: {shop.name}</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={pauseShop}
-                            className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded transition-colors"
-                          >
-                            Pause Shop
-                          </button>
-                          <button
-                            onClick={() => setShowDeleteModal(true)}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
-                          >
-                            Delete Shop
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-yellow-300 mt-2">
-                        Pause your shop anytime if you cannot afford weekly fees.
-                      </p>
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-green-400 font-semibold">✓ Shop Active: {shop.name}</p>
+                      <button
+                        onClick={() => setShowDeleteModal(true)}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                      >
+                        Delete Shop
+                      </button>
                     </div>
-                  ) : (
-                    <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-yellow-400 font-semibold">Shop Paused: {shop.name}</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={resumeShop}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
-                          >
-                            Resume Shop
-                          </button>
-                          <button
-                            onClick={() => setShowDeleteModal(true)}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
-                          >
-                            Delete Shop
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-300 mt-2">
-                        While paused, your shop is hidden and fees are not charged.
-                      </p>
-                    </div>
-                  )}
+                  </div>
                   <button onClick={() => setActiveTab('dashboard')} className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
                     Seller Dashboard
                   </button>
@@ -654,12 +581,12 @@ export default function SellOnTrollCity() {
                       </div>
                     </div>
 
-                    <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                    <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
                       <div className="flex items-start gap-3">
-                        <DollarSign className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                        <Coins className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                         <div>
-                          <h3 className="font-semibold text-yellow-400 mb-1">$10/Month Platform Fee</h3>
-                          <p className="text-gray-300 text-sm">$10/month (billed monthly). No fees from items sold - you keep 100% of your earnings!</p>
+                          <h3 className="font-semibold text-green-400 mb-1">Free to Sell!</h3>
+                          <p className="text-gray-300 text-sm">No monthly fees! Create your shop and keep 100% of your earnings.</p>
                         </div>
                       </div>
                     </div>
@@ -953,7 +880,7 @@ export default function SellOnTrollCity() {
 
               {earnings && earnings.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4 text-center">
                       <p className="text-2xl font-bold text-green-400">
                         ${earnings.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0).toFixed(2)}
@@ -965,12 +892,6 @@ export default function SellOnTrollCity() {
                         {earnings.length}
                       </p>
                       <p className="text-sm text-gray-400">Total Orders</p>
-                    </div>
-                    <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 text-center">
-                      <p className="text-2xl font-bold text-yellow-400">
-                        ${(earnings.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0) * 0.1).toFixed(2)}
-                      </p>
-                      <p className="text-sm text-gray-400">Platform Fees</p>
                     </div>
                   </div>
 

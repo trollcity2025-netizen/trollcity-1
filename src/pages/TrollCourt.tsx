@@ -78,14 +78,21 @@ export default function TrollCourt() {
     'TrollCity Policy Violation'
   ]
 
-  const canStartCourt =
-    profile?.role === UserRole.ADMIN ||
-    profile?.role === UserRole.LEAD_TROLL_OFFICER ||
-    profile?.role === UserRole.SECRETARY ||
-    profile?.role === UserRole.TROLL_OFFICER ||
-    (profile as any)?.is_admin === true ||
-    (profile as any)?.is_lead_officer === true ||
-    (profile as any)?.is_troll_officer === true
+   // Permissions for court operations
+   const canSummonUser =
+     profile?.is_admin === true ||
+     profile?.is_lead_officer === true ||
+     profile?.is_secretary === true ||
+     profile?.is_troll_officer === true ||
+     ['admin', 'lead_troll_officer', 'secretary', 'troll_officer'].includes(String(profile?.role || '')) ||
+     ['admin', 'lead_troll_officer', 'secretary', 'troll_officer'].includes(String(profile?.troll_role || ''));
+
+   const canAddCase =
+     profile?.is_admin === true ||
+     profile?.is_lead_officer === true ||
+     profile?.is_secretary === true ||
+     ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.role || '')) ||
+     ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.troll_role || ''));
 
   // Fetch recent cases
   useEffect(() => {
@@ -337,7 +344,7 @@ export default function TrollCourt() {
   }, [user?.id])
 
   const openCreateModal = () => {
-    if (!canStartCourt) return
+    if (!canSummonUser) return
     setIsCreateModalOpen(true)
     setSearchQuery('')
     setSelectedUser(null)
@@ -571,7 +578,7 @@ export default function TrollCourt() {
                   <Users className="w-4 h-4" />
                   Enter Court Room
                 </button>
-                {canStartCourt && (
+                {canSummonUser && (
                   <>
                     <button
                       onClick={openCreateModal}
@@ -635,7 +642,7 @@ export default function TrollCourt() {
                   <Users className="w-4 h-4" />
                   No Active Session
                 </button>
-                {canStartCourt ? (
+                {canSummonUser ? (
                   <button
                     onClick={openCreateModal}
                     disabled={isStartingSession}
@@ -963,25 +970,25 @@ export default function TrollCourt() {
                   </div>
 
                   {/* Admin Controls */}
-                  {canStartCourt && (
+                  {canAddCase && (
                       <div className="mt-3 pt-3 border-t border-gray-700 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
+                          <button
                             onClick={() => handleEditCase(c)}
                             className="text-xs bg-blue-900/40 hover:bg-blue-800 border border-blue-500/30 px-2 py-1 rounded text-blue-200"
                           >
-                              Edit
+                            Edit
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleExtendCase(c.id)}
                             className="text-xs bg-yellow-900/40 hover:bg-yellow-800 border border-yellow-500/30 px-2 py-1 rounded text-yellow-200"
                           >
-                              Extend Date
+                            Extend Date
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleDeleteCase(c.id)}
                             className="text-xs bg-red-900/40 hover:bg-red-800 border border-red-500/30 px-2 py-1 rounded text-red-200"
                           >
-                              Delete
+                            Delete
                           </button>
                       </div>
                   )}

@@ -41,8 +41,6 @@
     "@capacitor/splash-screen": "^6.0.4",
     "@capacitor/status-bar": "^6.0.3",
     "@ffmpeg/ffmpeg": "^0.12.6",
-    "@mux/mux-audio-react": "^0.15.21",
-    "@mux/mux-video-react": "^0.30.2",
     "@paypal/react-paypal-js": "^8.9.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-popover": "^1.1.15",

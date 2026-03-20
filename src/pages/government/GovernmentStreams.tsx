@@ -40,9 +40,7 @@ interface StreamRow {
   viewer_count: number;
   current_viewers?: number;
   title: string;
-  hls_url?: string;
-  agora_channel?: string; // Add agora_channel
-  mux_playback_id?: string; // Add Mux playback ID
+  streamChannel?: string; // LiveKit room name
   broadcaster: {
     username: string;
     avatar_url: string;
@@ -60,7 +58,6 @@ interface PodRow {
   viewer_count: number;
   current_viewers?: number;
   started_at: string;
-  hls_url?: string;
   host?: {
       username: string;
       avatar_url: string;
@@ -100,8 +97,6 @@ export default function GovernmentStreams() {
           user_id,
           status,
           is_live,
-          hls_url,
-          mux_playback_id,
           viewer_count,
           current_viewers,
           title,
@@ -125,6 +120,12 @@ export default function GovernmentStreams() {
 
       if (error) throw error;
 
+      // Map agora_channel to streamChannel for compatibility with StreamWatchModal
+      const mappedStreamsData = (streamsData || []).map(s => ({
+        ...s,
+        streamChannel: s.agora_channel
+      }));
+
       // Fetch active officers for these streams
       const streamIds = streamsData.map(s => s.id);
       const { data: officerLogs } = await supabase
@@ -140,7 +141,7 @@ export default function GovernmentStreams() {
         .is('left_at', null);
 
       // Merge data
-      const streamsWithOfficers = streamsData.map(stream => ({
+      const streamsWithOfficers = mappedStreamsData.map(stream => ({
         ...stream,
         broadcaster: (Array.isArray(stream.broadcaster) ? stream.broadcaster[0] : stream.broadcaster) || { username: 'Unknown', avatar_url: '' },
         active_officers: officerLogs
@@ -515,103 +516,21 @@ function StreamCard({
   onSummon: () => void;
 }) {
   const [isHovering, setIsHovering] = useState(false);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const hlsRef = useRef<any>(null);
 
-  // Handle mouse enter (PC hover) - start audio
+  // Handle mouse enter (PC hover)
   const handleMouseEnter = () => {
     setIsHovering(true);
-    startAudioPreview();
   };
 
-  // Handle mouse leave (PC hover) - stop audio
+  // Handle mouse leave (PC hover)
   const handleMouseLeave = () => {
     setIsHovering(false);
-    stopAudioPreview();
   };
 
-  // Handle click (mobile) - toggle audio
+  // Handle click - open watch modal
   const handleClick = () => {
-    if (audioPlaying) {
-      stopAudioPreview();
-    } else {
-      startAudioPreview();
-    }
+    onWatch();
   };
-
-  // Start audio preview using hls.js for HLS streams
-  const startAudioPreview = async () => {
-    if (!stream.hls_url || audioRef.current) return;
-    
-    try {
-      // Create audio element
-      const audio = new Audio();
-      audio.volume = 0.5;
-      audioRef.current = audio;
-
-      // Check if it's an HLS stream
-      if (stream.hls_url.includes('.m3u8')) {
-        // Dynamically import hls.js
-        const Hls = (await import('hls.js')).default;
-        
-        if (Hls.isSupported()) {
-          const hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-          });
-          hlsRef.current = hls;
-          hls.loadSource(stream.hls_url);
-          hls.attachMedia(audio);
-          
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            audio.play().catch(console.error);
-            setAudioPlaying(true);
-          });
-          
-          hls.on(Hls.Events.ERROR, (event, data) => {
-            console.error('HLS error:', data);
-            if (data.fatal) {
-              stopAudioPreview();
-            }
-          });
-        } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
-          // Safari native HLS support
-          audio.src = stream.hls_url;
-          audio.play().catch(console.error);
-          setAudioPlaying(true);
-        }
-      } else {
-        // Direct audio URL
-        audio.src = stream.hls_url;
-        audio.play().catch(console.error);
-        setAudioPlaying(true);
-      }
-    } catch (err) {
-      console.error('Error playing audio:', err);
-    }
-  };
-
-  // Stop audio preview
-  const stopAudioPreview = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current = null;
-    }
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    setAudioPlaying(false);
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopAudioPreview();
-    };
-  }, []);
 
   return (
     <div 
@@ -636,12 +555,6 @@ function StreamCard({
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          {audioPlaying && (
-            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-500/20 border border-green-500/30 text-green-400 text-[10px] font-bold rounded-full animate-pulse">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-              AUDIO
-            </span>
-          )}
           <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded-full animate-pulse">
             <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
             LIVE

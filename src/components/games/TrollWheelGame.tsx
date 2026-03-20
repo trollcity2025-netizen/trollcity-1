@@ -152,6 +152,12 @@ const SPECIAL_REWARDS: WheelReward[] = [
 const SPIN_COST = 125;
 const SEGMENT_ANGLE = 360 / WHEEL_REWARDS.length;
 
+// Maximum percentage of bid that can be paid with Trollmonds (35%)
+const TROLLMOND_PAYMENT_PERCENT = 0.35;
+
+// Bankrupt deduction percentage (protected from full bankrupt - 25%)
+const BANKRUPT_DEDUCTION_PERCENT = 0.25;
+
 // Dynamic bid multipliers - cost scales with bid amount
 // Formula: cost = bid * SPIN_COST (e.g., 10x bid costs 1250)
 // MAX option will use user's entire balance
@@ -530,15 +536,26 @@ export default function TrollWheelGame({
   
   // Dynamic cost calculation: bid * base_cost
   // MAX (value 0) uses user's entire balance
-  const getBidCost = (multiplier: number, balance: number): number => {
+  // Now supports Trollmonds payment up to 35% of bid
+  const getBidCost = (multiplier: number, balance: number, trollmondBalance: number): { totalCost: number; coinsPaid: number; trollmondsPaid: number } => {
+    let totalCost: number;
     if (multiplier === 0) {
       // MAX - use entire balance, minimum 125
-      return Math.max(balance, SPIN_COST);
+      totalCost = Math.max(balance, SPIN_COST);
+    } else {
+      totalCost = multiplier * SPIN_COST;
     }
-    return multiplier * SPIN_COST;
+    
+    // Calculate how much can be paid with Trollmonds (up to 35%)
+    const maxTrollmondsPayment = Math.floor(totalCost * TROLLMOND_PAYMENT_PERCENT);
+    const trollmondsPaid = Math.min(trollmondBalance, maxTrollmondsPayment);
+    const coinsPaid = totalCost - trollmondsPaid;
+    
+    return { totalCost, coinsPaid, trollmondsPaid };
   };
   
-  const currentBidCost = getBidCost(selectedMultiplier, userBalance);
+  const currentBidCostInfo = getBidCost(selectedMultiplier, userBalance, trollmondBalance);
+  const currentBidCost = currentBidCostInfo.totalCost;
   
   // Load wheel balance and session on mount
   useEffect(() => {
@@ -599,7 +616,7 @@ export default function TrollWheelGame({
     }
   };
   
-  const MIN_BALANCE_TO_SPIN = 2000;
+  const MIN_BALANCE_TO_SPIN = 750;
   
   const handleSpin = async () => {
     if (!profile?.id) {
@@ -620,24 +637,32 @@ export default function TrollWheelGame({
       }
     }
     
-    // Check minimum balance requirement
-    if (userBalance < MIN_BALANCE_TO_SPIN) {
-      toast.error(`Need at least ${MIN_BALANCE_TO_SPIN.toLocaleString()} coins to spin!`);
+    // Check minimum balance requirement - now considers Trollmonds payment
+    const bidInfo = getBidCost(selectedMultiplier, userBalance, trollmondBalance);
+    const totalRequired = bidInfo.coinsPaid + (bidInfo.trollmondsPaid * 100); // Treat trollmonds as worth 100 coins each
+    
+    if (userBalance + (trollmondBalance * 100) < MIN_BALANCE_TO_SPIN) {
+      toast.error(`Need at least ${MIN_BALANCE_TO_SPIN.toLocaleString()} coins (including Trollmonds value) to spin!`);
       return;
     }
     
-    if (userBalance < currentBidCost) {
+    // Check if user has enough coins (after Trollmonds payment)
+    if (userBalance < bidInfo.coinsPaid) {
       const bidLabel = selectedMultiplier === 0 ? 'MAX' : `${selectedMultiplier}x`;
-      toast.error(`Not enough coins! Need ${currentBidCost.toLocaleString()} coins for ${bidLabel} bid.`);
+      toast.error(`Not enough coins! Need ${bidInfo.coinsPaid.toLocaleString()} coins for ${bidLabel} bid.`);
       return;
     }
     
     // Play spin sound
     playSpinSound();
     
-    // Deduct cost first from actual balance
-    const newBalance = userBalance - currentBidCost;
+    // Deduct cost IMMEDIATELY when spin starts - both coins and trollmonds
+    const newBalance = userBalance - bidInfo.coinsPaid;
+    const newTrollmondBalance = trollmondBalance - bidInfo.trollmondsPaid;
     onBalanceChange(newBalance);
+    if (onTrollmondChange) {
+      onTrollmondChange(newTrollmondBalance);
+    }
     setIsSpinning(true);
     setLastWin(null);
     setWinningIndex(null);
@@ -688,12 +713,12 @@ export default function TrollWheelGame({
     // Wait for spin animation to finish, then show result
     // Use setTimeout with a callback to ensure it runs
     setTimeout(() => {
-      finishSpin(result, newBalance);
+      finishSpin(result, newBalance, newTrollmondBalance);
     }, 4000);
   };
   
   // Separate function to handle spin completion - ensures it always runs
-  const finishSpin = async (result: WheelReward, newBalance: number) => {
+  const finishSpin = async (result: WheelReward, newBalance: number, newTrollmondBalance: number) => {
     if (!profile?.id) {
       setIsSpinning(false);
       setSpinKey(k => k + 1);
@@ -745,33 +770,35 @@ export default function TrollWheelGame({
         useAuthStore.getState().refreshProfile();
         playWinSound();
         message = `💎 WIN! x${selectedMultiplier}: +${finalCoins} Trollmonds`;
-      } else if (result.type === 'bankrupt') {
-        // Remove ALL coins and trollmonds
-        onBalanceChange(0);
-        if (onTrollmondChange) {
-          onTrollmondChange(0);
-        }
-        playBankruptSound();
-        try {
-          // Set coins to 0
-          await supabase.rpc('set_troll_coins', { p_user_id: profile.id, p_amount: 0 });
-        } catch (e) { /* ignore */ }
-        // Also set trollmonds to 0 - use explicit column reference
-        try {
-          await supabase.rpc('set_trollmonds', { p_user_id: profile.id, p_amount: 0 });
-        } catch (e) {
-          // Fallback to direct update
-          try {
-            await supabase
-              .from('user_profiles')
-              .update({ trollmonds: 0 })
-              .eq('id', profile.id);
-          } catch (e2) { /* ignore */ }
-        }
-        // Refresh profile to update global state
-        useAuthStore.getState().refreshProfile();
-        message = '💀 BANKRUPT! You lost all your coins AND trollmonds!';
-      } else if (result.type === 'trolled') {
+       } else if (result.type === 'bankrupt') {
+           // Deduct 10% of user's balance (protected from full bankrupt)
+           // This is deducted from BOTH Troll Coins AND Trollmonds
+           const coinsDeducted = Math.floor(newBalance * BANKRUPT_DEDUCTION_PERCENT);
+           const trollmondsDeducted = Math.floor(newTrollmondBalance * BANKRUPT_DEDUCTION_PERCENT);
+           
+           const finalBalance = newBalance - coinsDeducted;
+           const finalTrollmondBalance = newTrollmondBalance - trollmondsDeducted;
+           
+           // Update balance - already deducted at spin time, just confirm with DB
+           onBalanceChange(finalBalance);
+           if (onTrollmondChange) {
+             onTrollmondChange(finalTrollmondBalance);
+           }
+           playBankruptSound();
+           try {
+             // Update both troll_coins and trollmonds in database
+             await supabase
+               .from('user_profiles')
+               .update({ 
+                 troll_coins: finalBalance,
+                 trollmonds: finalTrollmondBalance
+               })
+               .eq('id', profile.id);
+           } catch (e) { /* ignore */ }
+           // Refresh profile to update global state
+           useAuthStore.getState().refreshProfile();
+           message = `💸 BANKRUPT! Lost 25% of your balance (-${coinsDeducted.toLocaleString()} coins, -${trollmondsDeducted} Trollmonds)!`;
+        } else if (result.type === 'trolled') {
         playTrolledSound();
         const trollLockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         await supabase.from('user_profiles').update({ wheel_troll_locked_until: trollLockUntil }).eq('id', profile.id);
@@ -898,7 +925,7 @@ export default function TrollWheelGame({
   };
   
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-[#0a0a1a] via-[#0f172a] to-[#0a0a1a]">
+    <div className="relative overflow-hidden bg-gradient-to-b from-[#0a0a1a] via-[#0f172a] to-[#0a0a1a] min-h-0">
       {/* Background effects */}
       <div className="absolute inset-0">
         {Array.from({ length: 15 }).map((_, i) => (
@@ -916,61 +943,61 @@ export default function TrollWheelGame({
       </div>
       
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center gap-6 p-4 md:p-8 max-w-2xl mx-auto">
+      <div className="relative z-10 flex flex-col items-center gap-2 md:gap-4 p-2 md:p-4 mx-auto w-full overflow-hidden">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 drop-shadow-[0_0_20px_rgba(168,85,247,0.6)]">
+        <div className="text-center w-full">
+          <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 drop-shadow-[0_0_20px_rgba(168,85,247,0.6)]">
             TROLL WHEEL
           </h1>
-          <p className="text-cyan-300 text-sm mt-2 font-medium">SPIN TO WIN! 🎰</p>
+          <p className="text-cyan-300 text-xs md:text-sm mt-1 font-medium">SPIN TO WIN! 🎰</p>
         </div>
         
         {/* Balance Display - Single on mobile, all on desktop */}
-        <div className="flex flex-wrap items-center justify-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 w-full px-2">
           {/* Locked Status - Show when user is trolled */}
           {isWheelLocked && (
             <motion.div 
-              className="flex items-center gap-3 bg-red-900/80 backdrop-blur-md px-6 py-3 rounded-full border-2 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.6)]"
+              className="flex items-center gap-2 md:gap-3 bg-red-900/80 backdrop-blur-md px-4 md:px-6 py-2 md:py-3 rounded-full border-2 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.6)]"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
             >
-              <div className="p-2 bg-red-500/20 rounded-full">
-                <span className="text-2xl">🤡</span>
+              <div className="p-1.5 md:p-2 bg-red-500/20 rounded-full">
+                <span className="text-xl md:text-2xl">🤡</span>
               </div>
               <div>
                 <p className="text-xs text-red-400/70 font-bold uppercase tracking-wider">TROLLED!</p>
-                <p className="text-lg font-black text-white">No spins for {getLockTimeRemaining()}</p>
+                <p className="text-base md:text-lg font-black text-white">No spins for {getLockTimeRemaining()}</p>
               </div>
             </motion.div>
           )}
           {/* Always show Troll Coins */}
           {!isWheelLocked && (
           <motion.div 
-            className="flex items-center gap-3 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border-2 border-yellow-500/50 shadow-[0_0_25px_rgba(234,179,8,0.4)]"
+            className="flex items-center gap-2 md:gap-3 bg-black/70 backdrop-blur-md px-4 md:px-6 py-2 md:py-3 rounded-full border-2 border-yellow-500/50 shadow-[0_0_25px_rgba(234,179,8,0.4)]"
             whileHover={{ scale: 1.02 }}
           >
-            <div className="p-2 bg-yellow-500/20 rounded-full">
-              <Coins className="w-5 h-5 text-yellow-400" />
+            <div className="p-1.5 md:p-2 bg-yellow-500/20 rounded-full">
+              <Coins className="w-4 md:w-5 h-4 md:h-5 text-yellow-400" />
             </div>
             <div>
               <p className="text-xs text-yellow-400/70 font-bold uppercase tracking-wider">Troll Coins</p>
-              <p className="text-xl font-black text-white">{userBalance.toLocaleString()}</p>
+              <p className="text-lg md:text-xl font-black text-white">{userBalance.toLocaleString()}</p>
             </div>
           </motion.div>
           )}
           {!isWheelLocked && (
           <motion.button 
             onClick={() => setShowInventory(!showInventory)}
-            className="hidden md:flex items-center gap-3 bg-black/70 backdrop-blur-md px-6 py-3 rounded-full border-2 border-purple-500/50 shadow-[0_0_25px_rgba(168,85,247,0.4)]"
+            className="hidden md:flex items-center gap-2 md:gap-3 bg-black/70 backdrop-blur-md px-4 md:px-6 py-2 md:py-3 rounded-full border-2 border-purple-500/50 shadow-[0_0_25px_rgba(168,85,247,0.4)]"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className="p-2 bg-purple-500/20 rounded-full">
-              <Package className="w-5 h-5 text-purple-400" />
+            <div className="p-1.5 md:p-2 bg-purple-500/20 rounded-full">
+              <Package className="w-4 md:w-5 h-4 md:h-5 text-purple-400" />
             </div>
             <div>
               <p className="text-xs text-purple-400/70 font-bold uppercase tracking-wider">Gift Box</p>
-              <p className="text-xl font-black text-white">{inventory.length}</p>
+              <p className="text-lg md:text-xl font-black text-white">{inventory.length}</p>
             </div>
           </motion.button>
           )}
@@ -983,7 +1010,7 @@ export default function TrollWheelGame({
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="w-full max-w-md bg-black/80 backdrop-blur-md border-2 border-purple-500/50 rounded-2xl p-4"
+              className="w-full max-w-md bg-black/80 backdrop-blur-md border-2 border-purple-500/50 rounded-2xl p-3 md:p-4"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1039,23 +1066,28 @@ export default function TrollWheelGame({
         </AnimatePresence>
         
         {/* Bid Selector */}
-        <div className="w-full max-w-md">
-          <div className="flex items-center justify-between mb-3 px-2">
-            <span className="text-sm text-cyan-300 font-bold">BID AMOUNT</span>
-            <span className="text-lg font-black text-yellow-400">{currentBidCost.toLocaleString()} coins</span>
+        <div className="w-full max-w-md px-1 md:px-2">
+          <div className="flex items-center justify-between mb-2 md:mb-3">
+            <span className="text-xs md:text-sm text-cyan-300 font-bold">BID AMOUNT</span>
+            <span className="text-base md:text-lg font-black text-yellow-400">
+              {currentBidCostInfo.trollmondsPaid > 0 ? 
+                `${currentBidCostInfo.coinsPaid.toLocaleString()} + ${currentBidCostInfo.trollmondsPaid}💎` : 
+                `${currentBidCost.toLocaleString()} coins`
+              }
+            </span>
           </div>
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex flex-wrap gap-2 md:gap-3 justify-center">
             {BID_MULTIPLIERS.map((bid) => {
-              const bidCost = getBidCost(bid.value, userBalance);
+              const bidInfo = getBidCost(bid.value, userBalance, trollmondBalance);
               const isMax = bid.value === 0;
-              const isDisabled = isSpinning || (isMax ? userBalance < SPIN_COST : userBalance < bidCost);
+              const isDisabled = isSpinning || (isMax ? userBalance < SPIN_COST : userBalance < bidInfo.coinsPaid);
               
               return (
                 <motion.button
                   key={bid.value}
                   onClick={() => setSelectedMultiplier(bid.value)}
                   disabled={isDisabled}
-                  className={`px-4 py-2.5 font-bold rounded-xl transition-all min-w-[70px]
+                  className={`px-3 md:px-4 py-2 md:py-2.5 font-bold rounded-xl transition-all min-w-[60px] md:min-w-[70px] text-xs md:text-sm
                     ${selectedMultiplier === bid.value 
                       ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-black shadow-[0_0_20px_rgba(249,115,22,0.6)]' 
                       : isDisabled
@@ -1067,7 +1099,13 @@ export default function TrollWheelGame({
                 >
                   <div className="flex flex-col items-center gap-0.5">
                     <span>{bid.label}</span>
-                    <span className="text-[10px] opacity-70">{isMax ? `${userBalance.toLocaleString()}` : bidCost.toLocaleString()}</span>
+                    <span className="text-[9px] md:text-[10px] opacity-70">
+                      {isMax ? `${userBalance.toLocaleString()}` : 
+                        bidInfo.trollmondsPaid > 0 ? 
+                          `${bidInfo.coinsPaid.toLocaleString()}+${bidInfo.trollmondsPaid}💎` : 
+                          bidInfo.totalCost.toLocaleString()
+                      }
+                    </span>
                   </div>
                 </motion.button>
               );
@@ -1076,7 +1114,7 @@ export default function TrollWheelGame({
         </div>
         
         {/* Tire Wheel - Everything rotates together */}
-        <div className="relative mt-8" style={{ width: size, height: size }}>
+        <div className="relative mt-2 md:mt-4" style={{ width: size, height: size, maxWidth: '100%', transform: 'scale(0.75)', transformOrigin: 'center center' }}>
           <div className="absolute inset-0 rounded-full bg-purple-600/30 blur-[40px]" />
           
           {/* Rotating container - includes tire, segments and tiles */}
@@ -1099,7 +1137,7 @@ export default function TrollWheelGame({
             <CenterHub 
               size={size} 
               onSpin={handleSpin} 
-              disabled={userBalance < currentBidCost || isWheelLocked}
+              disabled={userBalance < currentBidCostInfo.coinsPaid || isWheelLocked}
               isSpinning={isSpinning}
             />
           </motion.div>
@@ -1116,16 +1154,16 @@ export default function TrollWheelGame({
         
         {/* Win Display - Always visible after spin */}
         {lastWin && (
-          <div className="bg-black/80 backdrop-blur-md border-2 border-yellow-500/50 px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(234,179,8,0.5)]">
+          <div className="bg-black/80 backdrop-blur-md border-2 border-yellow-500/50 px-4 md:px-8 py-3 md:py-4 rounded-2xl shadow-[0_0_40px_rgba(234,179,8,0.5)]">
             <div className="text-center">
-              <p className="text-cyan-300 text-sm font-bold uppercase tracking-wider">🎉 YOU WON! 🎉</p>
-              <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-1">
+              <p className="text-cyan-300 text-xs md:text-sm font-bold uppercase tracking-wider">🎉 YOU WON! 🎉</p>
+              <p className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-1">
                 {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier} COINS` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier} TROLLMONDS` : lastWin.label}
               </p>
-              <p className="text-gray-300 text-sm mt-1">{lastWin.description}</p>
+              <p className="text-gray-300 text-xs md:text-sm mt-1">{lastWin.description}</p>
               {lastWin.coins > 0 && (
                 <div className="flex items-center justify-center gap-4 mt-2">
-                  <span className="text-green-400 font-bold text-xl">+{lastWin.coins * lastWin.multiplier} coins</span>
+                  <span className="text-green-400 font-bold text-lg md:text-xl">+{lastWin.coins * lastWin.multiplier} coins</span>
                 </div>
               )}
             </div>
@@ -1138,30 +1176,30 @@ export default function TrollWheelGame({
             <motion.div
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-gradient-to-br from-purple-900 to-black border-4 border-yellow-500 p-8 rounded-3xl shadow-[0_0_60px_rgba(234,179,8,0.6)] max-w-md mx-4 text-center"
+              className="bg-gradient-to-br from-purple-900 to-black border-4 border-yellow-500 p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(234,179,8,0.6)] max-w-sm md:max-w-md mx-4 text-center"
             >
-              <div className="text-6xl mb-4">
+              <div className="text-5xl md:text-6xl mb-3 md:mb-4">
                 {lastWin.type === 'coins' ? '🪙' : lastWin.type === 'trollmonds' ? '💎' : lastWin.type === 'bankrupt' ? '💀' : lastWin.type === 'trolled' ? '🤡' : '🎁'}
               </div>
-              <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 mb-2">
+              <h2 className="text-2xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 mb-2">
                 YOU WON!
               </h2>
-              <p className="text-4xl md:text-5xl font-black text-green-400 mb-2">
+              <p className="text-3xl md:text-5xl font-black text-green-400 mb-2">
                 {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.label}
               </p>
-              <p className="text-gray-300 mb-4">{lastWin.description}</p>
+              <p className="text-gray-300 mb-3 md:mb-4">{lastWin.description}</p>
               {lastWin.type === 'coins' ? (
-                <p className="text-xl font-bold text-yellow-400">
+                <p className="text-lg md:text-xl font-bold text-yellow-400">
                   +{lastWin.coins * lastWin.multiplier} COINS ADDED!
                 </p>
               ) : lastWin.type === 'trollmonds' ? (
-                <p className="text-xl font-bold text-cyan-400">
+                <p className="text-lg md:text-xl font-bold text-cyan-400">
                   +{lastWin.coins * lastWin.multiplier} TROLLMONDS ADDED!
                 </p>
               ) : null}
               <button
                 onClick={() => setShowWinModal(false)}
-                className="mt-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold px-8 py-3 rounded-xl hover:scale-105 transition-transform"
+                className="mt-4 md:mt-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold px-6 md:px-8 py-2 md:py-3 rounded-xl hover:scale-105 transition-transform"
               >
                 AWESOME!
               </button>
@@ -1169,7 +1207,7 @@ export default function TrollWheelGame({
           </div>
         )}
         
-        <p className="text-gray-400 text-sm text-center max-w-md">
+        <p className="text-gray-400 text-xs md:text-sm text-center max-w-md px-2">
           Spin the wheel and win coins, special items, or even GHOST MODE! Higher bids multiply your coin winnings.
         </p>
       </div>

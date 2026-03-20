@@ -14,8 +14,8 @@ import BroadcastGrid from '../../components/broadcast/BroadcastGrid'
 import BroadcastChat from '../../components/broadcast/BroadcastChat'
 import BroadcastControls from '../../components/broadcast/BroadcastControls'
 import BroadcastHeader from '../../components/broadcast/BroadcastHeader'
-import BattleView from '../../components/broadcast/BattleView'
-import BattleControls from '../../components/broadcast/BattleControls'
+
+
 import ErrorBoundary from '../../components/ErrorBoundary'
 import GiftersBubbleStrip from '../../components/broadcast/GiftersBubbleStrip'
 import GiftBoxModal, { GiftTarget, GiftItem } from '../../components/broadcast/GiftBoxModal'
@@ -30,6 +30,8 @@ import {
   supportsBattles,
   getMatchingTerminology,
 } from '../../config/broadcastCategories'
+import ChallengeManager from '../../components/broadcast/ChallengeManager'
+import BattleGridOverlay from '../../components/broadcast/BattleGridOverlay'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -54,6 +56,29 @@ function BroadcastPage() {
   useEffect(() => {
     localTracksRef.current = localTracks
   }, [localTracks])
+
+  // Cleanup handler for page unload - ensures camera is turned off immediately when user closes browser
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const room = roomRef.current
+      
+      // Only disconnect if we're actually ending the stream/unloading
+      // Don't stop tracks here as that could interfere with normal operation
+      if (room) {
+        try {
+          room.disconnect().catch(() => {})
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
 
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, RemoteParticipant>>(new Map())
@@ -125,6 +150,119 @@ function BroadcastPage() {
   }, [streamId, supabase])
 
   const [isPinProductModalOpen, setIsPinProductModalOpen] = useState(false)
+  const [hasPendingChallenge, setHasPendingChallenge] = useState(false)
+
+  // Direct send challenge - no popup
+  const handleDirectChallenge = async () => {
+    if (!user || !streamId || isHost) return;
+    
+    try {
+      // Get user profile for username
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('username, avatar_url, battle_crowns')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      if (!profileData?.username) {
+        toast.error('Please set a username in your profile first');
+        return;
+      }
+      
+      // Check if there's already a pending challenge
+      const { data: existingChallenge } = await supabase
+        .from('broadcast_challenges')
+        .select('id, status')
+        .eq('stream_id', streamId)
+        .eq('challenger_id', user.id)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (existingChallenge) {
+        toast.error('You already have a pending challenge');
+        return;
+      }
+
+      // Check if broadcaster is in battle
+      const { data: activeBattle } = await supabase
+        .from('battles')
+        .select('id, status')
+        .eq('opponent_id', stream?.user_id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (activeBattle) {
+        toast.error('Broadcaster is currently in a battle');
+        return;
+      }
+
+      // Create challenge
+      const { data, error } = await supabase
+        .from('broadcast_challenges')
+        .insert({
+          stream_id: streamId,
+          challenger_id: user.id,
+          challenger_username: profileData.username,
+          status: 'pending',
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Notify via realtime
+      const streamChannel = supabase.channel(`chat-challenges-${streamId}`);
+      await streamChannel.subscribe();
+      await streamChannel.send({
+        type: 'broadcast',
+        event: 'new_challenge',
+        payload: {
+          challenge_id: data.id,
+          challenger_id: user.id,
+          challenger_username: profileData.username,
+          challenger_avatar: profileData.avatar_url,
+          challenger_crowns: profileData.battle_crowns || 0,
+          stream_id: streamId,
+          expires_at: data.expires_at,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      toast.success('Challenge sent!');
+      setHasPendingChallenge(true);
+      setTimeout(() => setHasPendingChallenge(false), 5 * 60 * 1000);
+    } catch (err) {
+      console.error('Direct challenge error:', err);
+      toast.error('Failed to send challenge');
+    }
+  };
+  
+  // State for incoming challenges (broadcaster view)
+  const [incomingChallenges, setIncomingChallenges] = useState<any[]>([])
+  
+  // State for tracking outgoing challenge (for viewers who sent challenge)
+  const [outgoingChallengeId, setOutgoingChallengeId] = useState<string | null>(null);
+  const [pendingBattleId, setPendingBattleId] = useState<string | null>(null);
+
+  // Handler for accepting a challenge
+  const handleAcceptChallenge = useCallback(async (challengeId: string, challengerId: string) => {
+    console.log('[BroadcastPage] Challenge accepted:', challengeId, challengerId);
+    // Clear incoming challenges immediately
+    setIncomingChallenges(prev => prev.filter(c => c.challenge_id !== challengeId));
+    
+    // Show feedback that battle is starting
+    toast.success('Challenge accepted! Battle starting...');
+    
+    // The battle mode will be activated via the database update
+    // The existing useEffect for stream changes will detect is_battle=true and show BattleGridOverlay
+  }, []);
+
+  // Handler for denying a challenge
+  const handleDenyChallenge = useCallback(async (challengeId: string) => {
+    console.log('[BroadcastPage] Challenge denied:', challengeId);
+    setIncomingChallenges(prev => prev.filter(c => c.challenge_id !== challengeId));
+  }, []);
 
   const isHost = stream?.user_id === user?.id
 
@@ -150,6 +288,162 @@ function BroadcastPage() {
     isHost,
   });
 
+  // Fetch incoming challenges for broadcaster
+  useEffect(() => {
+    if (!isHost || !streamId) return;
+
+    const fetchChallenges = async () => {
+      const { data } = await supabase
+        .from('broadcast_challenges')
+        .select('*')
+        .eq('stream_id', streamId)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        // Transform to ChallengeManager format
+        const challenges = data.map(c => ({
+          challenge_id: c.id,
+          challenger_id: c.challenger_id,
+          challenger_username: c.challenger_username,
+          challenger_avatar: c.challenger_avatar,
+          challenger_crowns: c.challenger_crowns || 0,
+          stream_id: c.stream_id,
+          expires_at: c.expires_at
+        }));
+        setIncomingChallenges(challenges);
+      }
+    };
+
+    fetchChallenges();
+
+    // Subscribe to new challenges
+    const challengesChannel = supabase
+      .channel(`broadcast-challenges:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'broadcast_challenges',
+          filter: `stream_id=eq.${streamId}`
+        },
+        (payload) => {
+          if (payload.new && payload.new.status === 'pending') {
+            const newChallenge = {
+              challenge_id: payload.new.id,
+              challenger_id: payload.new.challenger_id,
+              challenger_username: payload.new.challenger_username,
+              challenger_avatar: payload.new.challenger_avatar,
+              challenger_crowns: payload.new.challenger_crowns || 0,
+              stream_id: payload.new.stream_id,
+              expires_at: payload.new.expires_at
+            };
+            setIncomingChallenges(prev => [newChallenge, ...prev]);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'broadcast_challenges',
+          filter: `stream_id=eq.${streamId}`
+        },
+        (payload) => {
+          // Remove challenges that are no longer pending
+          if (payload.new && payload.new.status !== 'pending') {
+            setIncomingChallenges(prev => prev.filter(c => c.challenge_id !== payload.new.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Poll for new challenges every 10 seconds
+    const pollInterval = setInterval(fetchChallenges, 10000);
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(challengesChannel);
+    };
+  }, [isHost, streamId, supabase]);
+
+  // For viewers: check if they have sent a challenge and listen for acceptance - AUTO JOIN
+  // Uses joinSeat directly from the hook - will auto-trigger when challenge is accepted
+  useEffect(() => {
+    if (isHost || !user?.id || !streamId) return;
+
+    // Check if user has an outgoing pending challenge
+    const checkOutgoingChallenge = async () => {
+      const { data } = await supabase
+        .from('broadcast_challenges')
+        .select('id, status, seat_index')
+        .eq('challenger_id', user.id)
+        .eq('stream_id', streamId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (data) {
+        setOutgoingChallengeId(data.id);
+      }
+    };
+
+    checkOutgoingChallenge();
+
+    // Listen for challenge_accepted broadcast events - AUTO JOIN
+    const challengeChannel = supabase.channel(`challenge-viewer-${streamId}`)
+      .on(
+        'broadcast',
+        { event: 'challenge_accepted' },
+        async (payload) => {
+          const data = payload.payload;
+          console.log('[BroadcastPage] Challenge accepted, auto-joining:', data);
+          
+          if (data.challenger_id === user.id && data.seat_index !== undefined) {
+            // AUTO JOIN - no prompt!
+            toast.message('Challenge accepted! Joining stage...');
+            
+            // Trigger a custom event that will be handled after components are mounted
+            // This avoids the issue of using joinSeat before it's defined
+            window.dispatchEvent(new CustomEvent('challenge-accepted', { 
+              detail: { seatIndex: data.seat_index } 
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    // Also poll for challenge status if user has outgoing challenge - AUTO JOIN
+    const pollChallengeStatus = async () => {
+      if (!outgoingChallengeId) return;
+      
+      const { data: challenge } = await supabase
+        .from('broadcast_challenges')
+        .select('status, seat_index')
+        .eq('id', outgoingChallengeId)
+        .maybeSingle();
+
+      if (challenge?.status === 'accepted' && challenge?.seat_index !== undefined) {
+        console.log('[BroadcastPage] Challenge accepted via poll, auto-joining seat:', challenge.seat_index);
+        toast.message('Challenge accepted! Joining stage...');
+        
+        // AUTO JOIN - no prompt!
+        window.dispatchEvent(new CustomEvent('challenge-accepted', { 
+          detail: { seatIndex: challenge.seat_index } 
+        }));
+      }
+    };
+
+    const pollInterval = setInterval(pollChallengeStatus, 3000);
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(challengeChannel);
+    };
+  }, [isHost, user?.id, streamId, supabase]);
+
   const { seats, mySession: userSeat, joinSeat, leaveSeat } =
     useStreamSeats(stream?.id, user?.id, broadcasterProfile, stream)
 
@@ -165,10 +459,73 @@ function BroadcastPage() {
     }
   }, [userSeat])
 
+  // Handle leaving seat with instant track cleanup
+  const handleLeaveSeat = useCallback(async () => {
+    const room = roomRef.current
+    
+    // Instantly stop publishing tracks before clearing seat
+    if (room && room.localParticipant) {
+      try {
+        // Unpublish all tracks instantly - this removes them from other participants immediately
+        for (const pub of room.localParticipant.videoTrackPublications.values()) {
+          if (pub.track) {
+            room.localParticipant.unpublishTrack(pub.track).catch(console.warn)
+          }
+        }
+        for (const pub of room.localParticipant.audioTrackPublications.values()) {
+          if (pub.track) {
+            room.localParticipant.unpublishTrack(pub.track).catch(console.warn)
+          }
+        }
+        console.log('[BroadcastPage] Unpublished all tracks for leaving seat')
+      } catch (e) {
+        console.warn('Error unpublishing tracks on leave:', e)
+      }
+    }
+    
+    // Stop local tracks immediately
+    if (localTracks) {
+      localTracks.forEach((track) => {
+        if (track) {
+          try {
+            track.stop()
+          } catch (e) {
+            console.warn('Error stopping track on leave:', e)
+          }
+        }
+      })
+      setLocalTracks(null)
+    }
+    
+    // Call the seat leave function
+    await leaveSeat()
+    console.log('[BroadcastPage] Left seat with instant track cleanup')
+  }, [leaveSeat, localTracks])
+
   const handleJoinSeat = useCallback(async (index: number, price: number) => {
     justJoinedSeatRef.current = true
     return joinSeat(index, price)
   }, [joinSeat])
+
+  // Listen for challenge-accepted event to auto-join seat
+  useEffect(() => {
+    const handleChallengeAccepted = (e: Event) => {
+      const customEvent = e as CustomEvent<{ seatIndex: number }>;
+      const seatIndex = customEvent.detail?.seatIndex;
+      if (seatIndex !== undefined) {
+        console.log('[BroadcastPage] Handling challenge-accepted event, seat:', seatIndex);
+        toast.message('Joining stage...');
+        handleJoinSeat(seatIndex, 0).then(success => {
+          if (success) {
+            toast.success('You are now live on stage!');
+          }
+        });
+      }
+    };
+
+    window.addEventListener('challenge-accepted', handleChallengeAccepted);
+    return () => window.removeEventListener('challenge-accepted', handleChallengeAccepted);
+  }, [handleJoinSeat]);
 
   const getSeatPrice = useCallback((seatIndex: number): number => {
     if (stream?.seat_prices && stream.seat_prices.length > seatIndex) {
@@ -187,7 +544,7 @@ function BroadcastPage() {
     const fetchStream = async () => {
       const { data, error } = await supabase
         .from('streams')
-        .select('*, total_likes, hls_url')
+        .select('*, total_likes, hls_url, is_battle, battle_id')
         .eq('id', streamId)
         .maybeSingle()
 
@@ -336,7 +693,7 @@ function BroadcastPage() {
       try {
         const { data, error } = await supabase
           .from('streams')
-          .select('hls_url, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked, total_likes, seat_price')
+          .select('hls_url, status, box_count, is_battle, battle_id, has_rgb_effect, are_seats_locked, total_likes, seat_price, current_viewers, total_gifts_coins')
           .eq('id', streamId)
           .single();
         
@@ -344,12 +701,29 @@ function BroadcastPage() {
           return;
         }
 
+        // Handle battle mode transitions
         if (stream.is_battle === true && data.is_battle === false) {
+          // Battle ended
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, is_battle: false, battle_id: null };
           });
+          // Clear battle data when battle ends
+          setBattleData(null);
           return;
+        }
+        
+        if (stream.is_battle !== data.is_battle || stream.battle_id !== data.battle_id) {
+          // Battle mode changed - update state
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, is_battle: data.is_battle, battle_id: data.battle_id };
+          });
+          
+          // Clear battle data if no longer in battle mode
+          if (!data.is_battle) {
+            setBattleData(null);
+          }
         }
         
         if (data?.box_count !== undefined && data.box_count !== streamRef.current?.box_count) {
@@ -384,6 +758,20 @@ function BroadcastPage() {
           setStream((prev: any) => {
             if (!prev) return prev;
             return { ...prev, seat_price: data.seat_price };
+          });
+        }
+        
+        if (data?.current_viewers !== undefined && data.current_viewers !== streamRef.current?.current_viewers) {
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, current_viewers: data.current_viewers };
+          });
+        }
+        
+        if (data?.total_gifts_coins !== undefined && data.total_gifts_coins !== streamRef.current?.total_gifts_coins) {
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, total_gifts_coins: data.total_gifts_coins };
           });
         }
         
@@ -454,6 +842,11 @@ function BroadcastPage() {
           }
           
           try {
+            // Check if battle mode is changing
+            const wasInBattleMode = streamRef.current?.is_battle;
+            const isNowInBattleMode = payload.new.is_battle;
+            const battleIdChanged = streamRef.current?.battle_id !== payload.new.battle_id;
+            
             setStream((prev: any) => {
               if (!prev) return prev;
               return {
@@ -464,9 +857,21 @@ function BroadcastPage() {
                 total_likes: payload.new.total_likes,
                 seat_price: payload.new.seat_price,
                 status: payload.new.status,
-                is_live: payload.new.is_live
+                is_live: payload.new.is_live,
+                current_viewers: payload.new.current_viewers,
+                total_gifts_coins: payload.new.total_gifts_coins,
+                is_battle: payload.new.is_battle,
+                battle_id: payload.new.battle_id
               };
             });
+            
+            // Log battle mode change for debugging
+            if ((!wasInBattleMode && isNowInBattleMode) || (battleIdChanged && isNowInBattleMode)) {
+              console.log('[BroadcastPage] Battle mode activated via realtime:', {
+                is_battle: payload.new.is_battle,
+                battle_id: payload.new.battle_id
+              });
+            }
             
             // Handle stream ended - redirect ALL users (host, guests, viewers) to summary
             if (payload.new.status === 'ended') {
@@ -517,6 +922,29 @@ function BroadcastPage() {
               created_at: giftData.timestamp || new Date().toISOString(),
             };
             setRecentGifts(prev => [...prev, newGift]);
+            
+            // If this gift is for the broadcaster (host), refresh their profile to show updated balance
+            if (giftData.receiver_id === stream?.user_id) {
+              console.log('[BroadcastPage] Gift received by broadcaster, refreshing profile for balance update');
+              // Use the auth store's refreshProfile method
+              const { refreshProfile } = useAuthStore.getState();
+              refreshProfile().catch(err => {
+                console.warn('[BroadcastPage] Failed to refresh broadcaster profile after gift:', err);
+              });
+            }
+            
+            // If the receiver is a guest user in a seat, refresh their profile too
+            // Check if receiver is in any of the current seats
+            const receiverSeat = Object.values(seats).find(
+              (seat: any) => seat.user_id === giftData.receiver_id || seat.guest_id === giftData.receiver_id
+            );
+            if (receiverSeat) {
+              console.log('[BroadcastPage] Gift received by guest user in seat, refreshing profile for balance update');
+              const { refreshProfile } = useAuthStore.getState();
+              refreshProfile().catch(err => {
+                console.warn('[BroadcastPage] Failed to refresh guest profile after gift:', err);
+              });
+            }
           } catch (err) {
             console.error('Error processing gift:', err);
           }
@@ -629,7 +1057,7 @@ function BroadcastPage() {
           // Listen for track subscription to display remote video
           room.on('trackSubscribed', (track, publication, participant) => {
             console.log('[BroadcastPage] Viewer: Track subscribed:', track.kind, 'from', participant.identity)
-            // Also add the participant to remoteParticipants if not already present
+            // Update state to show the participant with their tracks
             setRemoteParticipants(prev => {
               const next = new Map(prev)
               // Store by full identity
@@ -642,17 +1070,23 @@ function BroadcastPage() {
               }
               return next
             })
-            // Force re-render to show the track
-            setRemoteParticipants(prev => {
-              console.log('[BroadcastPage] Viewer: Current remoteParticipants count after trackSubscribed:', prev.size)
-              return new Map(prev)
-            })
           })
 
           // Also listen for trackUnsubscribed to clean up
           room.on('trackUnsubscribed', (track, publication, participant) => {
             console.log('[BroadcastPage] Viewer: Track unsubscribed:', track.kind, 'from', participant.identity)
-            setRemoteParticipants(prev => new Map(prev))
+            // Check if participant has any remaining tracks
+            const remainingVideo = Array.from((participant.videoTrackPublications as any)?.values() || []).some((p: any) => p.track)
+            const remainingAudio = Array.from((participant.audioTrackPublications as any)?.values() || []).some((p: any) => p.track)
+            
+            // Only remove participant if they have no remaining tracks
+            if (!remainingVideo && !remainingAudio) {
+              setRemoteParticipants(prev => {
+                const next = new Map(prev)
+                next.delete(participant.identity)
+                return next
+              })
+            }
           })
 
           await room.connect(
@@ -1177,6 +1611,28 @@ function BroadcastPage() {
           }
         }
 
+        // CRITICAL: Ensure camera is enabled on initial join (similar to mic logic)
+        // This is needed because track may exist but be disabled
+        console.log('[BroadcastPage] Camera state on join:', {
+          isCameraEnabled: room.localParticipant.isCameraEnabled,
+          hasVideoTrack: !!videoTrack,
+          preflightVideoEnabled: preflightEnabledStates?.isVideoEnabled
+        })
+        
+        // If camera is not enabled but we have a video track, enable it
+        // This ensures camera is on when joining broadcast
+        if (!room.localParticipant.isCameraEnabled && (videoTrack || shouldCreateNewTracks)) {
+          console.log('[BroadcastPage] Camera was off - enabling camera on join')
+          try {
+            await room.localParticipant.setCameraEnabled(true)
+            console.log('[BroadcastPage] Camera enabled successfully')
+          } catch (err) {
+            console.error('[BroadcastPage] Failed to enable camera:', err)
+          }
+        } else if (room.localParticipant.isCameraEnabled) {
+          console.log('[BroadcastPage] Camera is already enabled - good!')
+        }
+
         await supabase
           .from('streams')
           .update({ is_live: true, status: 'live' })
@@ -1365,8 +1821,31 @@ function BroadcastPage() {
   };
 
   const handleStreamEnd = async () => {
-    stopLocalTracks();
+    // Stop local tracks first
+    if (localTracks) {
+      localTracks.forEach((track) => {
+        if (track) {
+          try {
+            track.stop()
+          } catch (e) {
+            console.warn('Error stopping track:', e)
+          }
+        }
+      })
+      setLocalTracks(null)
+    }
     
+    // Clear remote participants immediately
+    setRemoteParticipants(new Map())
+    
+    // Disconnect from room
+    const room = roomRef.current
+    if (room) {
+      room.disconnect().catch(console.error)
+      roomRef.current = null
+    }
+    
+    // Handle battle if needed
     if (stream?.battle_id && isHost) {
       try {
         const { data: battleData } = await supabase
@@ -1395,6 +1874,7 @@ function BroadcastPage() {
       }
     }
     
+    // Update database
     try {
       const { error: updateError } = await supabase
         .from('streams')
@@ -1489,8 +1969,8 @@ function BroadcastPage() {
   const categorySupportsBattles = supportsBattles(stream.category || 'general')
   const categoryMatchingTerm = getMatchingTerminology(stream.category || 'general');
 
-  // Show loading while fetching battle data
-  if (stream.is_battle && isBattleLoading) {
+  // Show loading while fetching battle data (only for non-broadcasters who would see BattleView)
+  if (stream.is_battle && isBattleLoading && !isHost) {
     return (
       <div className="flex items-center justify-center h-screen bg-black text-white">
         <Loader2 className="w-8 h-8 animate-spin" />
@@ -1499,79 +1979,8 @@ function BroadcastPage() {
     );
   }
 
-  if (stream.is_battle && battleData) {
-    // Build proper mapping: database user ID -> LiveKit identity
-    const battleMapping: Record<string, string> = {};
-    
-    // Add both broadcasters to the mapping from battle data
-    if (battleData) {
-      // Map challenger and opponent user IDs
-      if (battleData.challenger_user_id) {
-        battleMapping[battleData.challenger_user_id] = battleData.challenger_user_id;
-      }
-      if (battleData.opponent_user_id) {
-        battleMapping[battleData.opponent_user_id] = battleData.opponent_user_id;
-      }
-    }
-    
-    // Also include remote participants (they may be viewers joining the battle room)
-    remoteParticipants.forEach((participant, identity) => {
-      battleMapping[identity] = identity;
-    });
-    
-    // Include current user's ID
-    if (user?.id) {
-      battleMapping[user.id] = user.id;
-    }
-
-    return (
-      <BattleView
-        battleId={stream.battle_id}
-        currentStreamId={stream.id}
-        localTracks={localTracks}
-        remoteUsers={Array.from(remoteParticipants.values())}
-        userIdToLiveKitIdentity={battleMapping}
-        onReturnToStream={() => {
-          setBattleData(null); // Reset battle data when returning
-          setStream((prev: any) => {
-            if (!prev) return prev;
-            return { ...prev, is_battle: false, battle_id: null };
-          });
-          refreshStream();
-        }}
-      />
-    )
-  }
-
-  // Fallback: show battle view anyway if is_battle is true but no battleData yet
-  // This handles the case where battle data failed to load but we still want to show battle
-  if (stream.is_battle && !battleData) {
-    // Still try to build mapping with what we have
-    const battleMapping: Record<string, string> = {};
-    remoteParticipants.forEach((participant, identity) => {
-      battleMapping[identity] = identity;
-    });
-    if (user?.id) {
-      battleMapping[user.id] = user.id;
-    }
-
-    return (
-      <BattleView
-        battleId={stream.battle_id}
-        currentStreamId={stream.id}
-        localTracks={localTracks}
-        remoteUsers={Array.from(remoteParticipants.values())}
-        userIdToLiveKitIdentity={battleMapping}
-        onReturnToStream={() => {
-          setStream((prev: any) => {
-            if (!prev) return prev;
-            return { ...prev, is_battle: false, battle_id: null };
-          });
-          refreshStream();
-        }}
-      />
-    );
-  }
+  // Handle battle mode: show overlay for anyone in a battle (broadcaster or participant)
+  const shouldShowBattleOverlay = stream.is_battle && battleData;
 
   if (isJoining) {
     return (
@@ -1595,33 +2004,71 @@ function BroadcastPage() {
             handleLike={handleLike}
             onStartBattle={isHost && categorySupportsBattles ? () => setIsBattleMode(true) : undefined}
             categoryBattleTerm={categorySupportsBattles ? categoryMatchingTerm : undefined}
+            onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
+            hasPendingChallenge={hasPendingChallenge}
           />
         }
         
         video={
           <div className="flex flex-col h-full">
-            <GiftersBubbleStrip 
-              streamId={streamId || ''} 
-              hostId={stream.user_id}
-            />
-            <BroadcastGrid
-              stream={stream}
-              seats={seats}
-              onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
-              isHost={isHost}
-              localTracks={localTracks}
-              room={roomRef.current}
-              remoteUsers={Array.from(remoteParticipants.values())}
-              localUserId={user?.id}
-              onGift={onGift}
-              onGiftAll={onGiftAll}
-              toggleCamera={toggleCamera}
-              toggleMicrophone={toggleMicrophone}
-              onGetUserPositions={handleGetUserPositions}
-              broadcasterProfile={broadcasterProfile}
-              streamStatus={stream.status}
-              boxCount={boxCount}
-            />
+            {/* When in battle mode, show battle grid instead of regular broadcast */}
+            {shouldShowBattleOverlay && battleData ? (
+              <BattleGridOverlay
+                battleId={stream.battle_id}
+                streamId={stream.id}
+                isHost={isHost}
+                localTracks={localTracks}
+                remoteParticipants={Array.from(remoteParticipants.values())}
+                userId={user?.id || ''}
+                userProfile={broadcasterProfile}
+                onEndBattle={async () => {
+                  // End the battle and return to normal broadcast
+                  try {
+                    await supabase
+                      .from('battles')
+                      .update({ status: 'ended' })
+                      .eq('id', stream.battle_id);
+                    
+                    await supabase
+                      .from('streams')
+                      .update({ is_battle: false, battle_id: null })
+                      .eq('id', stream.id);
+                    
+                    setBattleData(null);
+                    setStream((prev: any) => prev ? { ...prev, is_battle: false, battle_id: null } : prev);
+                    toast.success('Battle ended');
+                  } catch (err) {
+                    console.error('Error ending battle:', err);
+                    toast.error('Failed to end battle');
+                  }
+                }}
+              />
+            ) : (
+              <>
+                <GiftersBubbleStrip 
+                  streamId={streamId || ''} 
+                  hostId={stream.user_id}
+                />
+                <BroadcastGrid
+                  stream={stream}
+                  seats={seats}
+                  onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
+                  isHost={isHost}
+                  localTracks={localTracks}
+                  room={roomRef.current}
+                  remoteUsers={Array.from(remoteParticipants.values())}
+                  localUserId={user?.id}
+                  onGift={onGift}
+                  onGiftAll={onGiftAll}
+                  toggleCamera={toggleCamera}
+                  toggleMicrophone={toggleMicrophone}
+                  onGetUserPositions={handleGetUserPositions}
+                  broadcasterProfile={broadcasterProfile}
+                  streamStatus={stream.status}
+                  boxCount={boxCount}
+                />
+              </>
+            )}
           </div>
         }
 
@@ -1634,7 +2081,7 @@ function BroadcastPage() {
             chatOpen={isChatOpen}
             toggleChat={() => setIsChatOpen(!isChatOpen)}
             onGiftHost={() => onGift(stream.user_id)}
-            onLeave={leaveSeat}
+            onLeave={handleLeaveSeat}
             onBoxCountUpdate={updateBoxCount}
             onStreamEnd={handleStreamEnd}
             handleLike={handleLike}
@@ -1646,6 +2093,8 @@ function BroadcastPage() {
             boxCount={boxCount}
             setBoxCount={updateBoxCount}
             onRefreshStream={refreshStream}
+            onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
+            hasPendingChallenge={hasPendingChallenge}
           />
         }
         
@@ -1656,6 +2105,12 @@ function BroadcastPage() {
             isHost={isHost}
             isViewer={!userSeat && !isHost}
             isGuest={!user}
+            onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
+            hasPendingChallenge={hasPendingChallenge}
+            pendingChallenges={incomingChallenges}
+            onAcceptChallenge={handleAcceptChallenge}
+            onDenyChallenge={handleDenyChallenge}
+            isBattleActive={stream.is_battle}
           />
         }
         
@@ -1742,6 +2197,19 @@ function BroadcastPage() {
                 }
               }}
             />
+            
+
+            
+            {/* Challenge Manager - Show for broadcaster when there are incoming challenges */}
+            {isHost && incomingChallenges.length > 0 && (
+              <div className="fixed bottom-24 left-4 z-50 w-80">
+                <ChallengeManager
+                  challenges={incomingChallenges}
+                  onAccept={handleAcceptChallenge}
+                  onDeny={handleDenyChallenge}
+                />
+              </div>
+            )}
           </>
         }
       />

@@ -34,15 +34,15 @@ interface BroadcastGridProps {
   localUserId: string;
   toggleCamera: () => void;
   toggleMicrophone: () => void;
-  // Mapping of user IDs to Agora UIDs for remote users
-  userIdToAgoraUid?: Record<string, number>;
+  // Mapping of user IDs to LiveKit identities for remote users
+  userIdToLiveKitIdentity?: Record<string, string>;
   // Callback to get user box positions for gift animations
   onGetUserPositions?: (getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => void;
   // Optional box count override (from useBoxCount hook for performance)
   boxCount?: number;
 }
 
-function AgoraVideoPlayer({
+function LiveKitVideoPlayer({
   videoTrack,
   isLocal = false,
 }: {
@@ -55,14 +55,14 @@ function AgoraVideoPlayer({
 
   useEffect(() => {
     if (!videoTrack || !containerRef.current) {
-      console.log('[AgoraVideoPlayer] Skipping - missing track or container');
+      console.log('[LiveKitVideoPlayer] Skipping - missing track or container');
       return;
     }
 
     // Always try to attach - even if hasPlayedRef is true, we may need to reattach
     // after cleanup. The key is to check if we already have a video element attached.
     if (hasPlayedRef.current && videoElementRef.current && containerRef.current.contains(videoElementRef.current)) {
-      console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
+      console.log('[LiveKitVideoPlayer] Already played this track - skipping duplicate');
       return;
     }
 
@@ -72,7 +72,7 @@ function AgoraVideoPlayer({
     }
 
     if (hasPlayedRef.current) {
-      console.log('[AgoraVideoPlayer] Already played this track - skipping duplicate');
+      console.log('[LiveKitVideoPlayer] Already played this track - skipping duplicate');
       return;
     }
 
@@ -80,7 +80,7 @@ function AgoraVideoPlayer({
       if (!containerRef.current) return;
 
       try {
-        console.log('[AgoraVideoPlayer] Calling attach() - LiveKit track');
+        console.log('[LiveKitVideoPlayer] Calling attach() - LiveKit track');
         // LiveKit uses attach() instead of play()
         const videoElement = videoTrack.attach();
         videoElement.style.width = '100%';
@@ -95,14 +95,19 @@ function AgoraVideoPlayer({
         }
         
         containerRef.current.appendChild(videoElement);
+        
+        // Mirror local video container for natural self-view
+        if (isLocal && containerRef.current) {
+          containerRef.current.style.transform = 'scaleX(-1)';
+        }
         videoElementRef.current = videoElement;
         hasPlayedRef.current = true;
-        console.log('[AgoraVideoPlayer] attach() called successfully');
+        console.log('[LiveKitVideoPlayer] attach() called successfully');
 
         // Inspect video element after LiveKit has time to attach it
         setTimeout(() => {
           const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
-          console.log('[AgoraVideoPlayer] Inner <video> inspection:', {
+          console.log('[LiveKitVideoPlayer] Inner <video> inspection:', {
             exists: !!inner,
             width: inner?.videoWidth ?? 0,
             height: inner?.videoHeight ?? 0,
@@ -115,13 +120,13 @@ function AgoraVideoPlayer({
           // If video element exists but has no srcObject, try to play it
           if (inner) {
             if (!inner.srcObject) {
-              console.log('[AgoraVideoPlayer] Video element has no srcObject, attempting play()');
-              inner.play().catch(e => console.log('[AgoraVideoPlayer] play() failed:', e));
+              console.log('[LiveKitVideoPlayer] Video element has no srcObject, attempting play()');
+              inner.play().catch(e => console.log('[LiveKitVideoPlayer] play() failed:', e));
             }
             // Always try to ensure video is playing - call play() regardless
             if (inner.paused) {
-              console.log('[AgoraVideoPlayer] Video is paused, attempting play()');
-              inner.play().catch(e => console.log('[AgoraVideoPlayer] play() failed:', e));
+              console.log('[LiveKitVideoPlayer] Video is paused, attempting play()');
+              inner.play().catch(e => console.log('[LiveKitVideoPlayer] play() failed:', e));
             }
           }
         }, 600);
@@ -130,7 +135,7 @@ function AgoraVideoPlayer({
         setTimeout(() => {
           const inner = containerRef.current?.querySelector('video') as HTMLVideoElement | null;
           if (inner && (inner.videoWidth === 0 || inner.videoHeight === 0)) {
-            console.log('[AgoraVideoPlayer] Video has no dimensions, re-attaching track');
+            console.log('[LiveKitVideoPlayer] Video has no dimensions, re-attaching track');
             // Force re-attach by getting new element
             try {
               videoTrack.detach();
@@ -147,12 +152,12 @@ function AgoraVideoPlayer({
             containerRef.current!.innerHTML = '';
             containerRef.current!.appendChild(newElement);
             videoElementRef.current = newElement;
-            console.log('[AgoraVideoPlayer] Re-attached track');
+            console.log('[LiveKitVideoPlayer] Re-attached track');
           }
         }, 2000);
 
       } catch (err) {
-        console.error('[AgoraVideoPlayer] attach() threw error:', err);
+        console.error('[LiveKitVideoPlayer] attach() threw error:', err);
       }
     };
 
@@ -166,13 +171,13 @@ function AgoraVideoPlayer({
       if (videoTrack && videoElementRef.current && containerRef.current) {
         // Check if this specific element is still in the container
         if (containerRef.current.contains(videoElementRef.current)) {
-          console.log('[AgoraVideoPlayer] Cleanup - detaching track');
+          console.log('[LiveKitVideoPlayer] Cleanup - detaching track');
           try {
             videoTrack.detach();
             videoElementRef.current = null;
             hasPlayedRef.current = false;
           } catch (e) {
-            console.warn('[AgoraVideoPlayer] detach error:', e);
+            console.warn('[LiveKitVideoPlayer] detach error:', e);
           }
         }
       }
@@ -194,14 +199,14 @@ function AgoraVideoPlayer({
   );
 }
 
-const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: LocalAudioTrack | RemoteAudioTrack }) => {
+const LiveKitAudioPlayer = memo(({ audioTrack }: { audioTrack: LocalAudioTrack | RemoteAudioTrack }) => {
   const audioRef = useRef<HTMLDivElement>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     // Defensive: ensure we have a valid track
     if (!audioTrack) {
-      console.log('[AgoraAudioPlayer] No audio track');
+      console.log('[LiveKitAudioPlayer] No audio track');
       return;
     }
 
@@ -210,9 +215,9 @@ const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: LocalAudioTrack | R
       const audioElement = audioTrack.attach();
       audioElementRef.current = audioElement;
       document.body.appendChild(audioElement);
-      console.log('[AgoraAudioPlayer] Audio attached');
+      console.log('[LiveKitAudioPlayer] Audio attached');
     } catch (err) {
-      console.error('[AgoraAudioPlayer] Failed to attach audio:', err);
+      console.error('[LiveKitAudioPlayer] Failed to attach audio:', err);
     }
 
     return () => {
@@ -222,7 +227,7 @@ const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: LocalAudioTrack | R
           audioElementRef.current = null;
         }
       } catch (err) {
-        console.warn('[AgoraAudioPlayer] Error stopping audio:', err);
+        console.warn('[LiveKitAudioPlayer] Error stopping audio:', err);
       }
     };
   }, [audioTrack]);
@@ -230,7 +235,7 @@ const AgoraAudioPlayer = memo(({ audioTrack }: { audioTrack: LocalAudioTrack | R
   return <div ref={audioRef}></div>;
 });
 
-AgoraAudioPlayer.displayName = 'AgoraAudioPlayer';
+LiveKitAudioPlayer.displayName = 'LiveKitAudioPlayer';
 
 export default function BroadcastGrid({
   stream,
@@ -251,7 +256,7 @@ export default function BroadcastGrid({
   localUserId,
   toggleCamera,
   toggleMicrophone,
-  userIdToAgoraUid = {},
+  userIdToLiveKitIdentity = {},
   onGetUserPositions,
   streamStatus,
   boxCount: boxCountProp,
@@ -687,12 +692,12 @@ export default function BroadcastGrid({
               })()}
               {/* Always render video player for local user - it handles undefined track internally */}
               {userId === localUserId ? (
-                <AgoraVideoPlayer
+                <LiveKitVideoPlayer
                   videoTrack={videoTrack}
                   isLocal={true}
                 />
               ) : videoTrack && isCamOn ? (
-                <AgoraVideoPlayer
+                <LiveKitVideoPlayer
                   videoTrack={videoTrack}
                   isLocal={false}
                 />
@@ -729,7 +734,7 @@ export default function BroadcastGrid({
                 </div>
               ) : null}
 
-              {audioTrack && !isLocal && <AgoraAudioPlayer audioTrack={audioTrack} />}
+              {audioTrack && !isLocal && <LiveKitAudioPlayer audioTrack={audioTrack} />}
 
               {/* Empty Seat */}
               {!userId && (
@@ -760,7 +765,7 @@ export default function BroadcastGrid({
                         
                         if (price > 0) {
                           return (
-                            <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30">
+                            <div className="flex items-center gap-1 bg-black/60 px-2 py-1 rounded-full mt-2 border border-yellow-500/30 transition-none">
                               <Coins size={12} className="text-yellow-500" />
                               <span className="text-xs font-bold text-yellow-400">
                                 {price}
@@ -770,7 +775,7 @@ export default function BroadcastGrid({
                         }
                         // Show "FREE" badge when price is 0
                         return (
-                          <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full mt-2 border border-green-500/30">
+                          <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full mt-2 border border-green-500/30 transition-none">
                             <span className="text-[10px] font-bold text-green-400">FREE</span>
                           </div>
                         );

@@ -43,7 +43,7 @@ const JailVisitRoom: React.FC = () => {
             return;
         }
 
-        const client = new Room(({ mode: 'rtc', codec: 'vp8' });
+        const client = new Room({ mode: 'rtc', codec: 'vp8' });
 
         const joinCall = async () => {
             setIsJoining(true);

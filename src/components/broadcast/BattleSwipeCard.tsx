@@ -1,8 +1,7 @@
 /**
  * BattleSwipeCard - Full-screen battle stream card for TikTok-style swipe interface
  * Displays battle streams with duel visuals, scores, and competitor info
- * Migrated from Agora to LiveKit
- */
+  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

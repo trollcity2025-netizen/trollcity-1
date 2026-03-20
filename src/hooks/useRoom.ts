@@ -251,8 +251,8 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
   };
 }
 
-// Legacy alias for backwards compatibility  
-export function useAgoraRoom() {
+// Legacy alias for backwards compatibility - now uses LiveKit
+export function useLiveKitRoomLegacy() {
   return useRoom({});
 }
 

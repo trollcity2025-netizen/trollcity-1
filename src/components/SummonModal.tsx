@@ -69,17 +69,19 @@ export default function SummonModal(props: SummonModalProps) {
   const targetUserId = isUserMode ? props.userId : ''
   const targetUsername = isUserMode ? props.username : ''
 
-  const handleSummon = async () => {
-    const canSummon =
-      profile?.is_admin === true ||
-      profile?.is_troll_officer === true ||
-      profile?.is_lead_officer === true ||
-      ['admin', 'troll_officer', 'lead_troll_officer'].includes(String(profile?.role || ''))
+   const handleSummon = async () => {
+     const canSummon =
+       profile?.is_admin === true ||
+       profile?.is_troll_officer === true ||
+       profile?.is_lead_officer === true ||
+       profile?.is_secretary === true ||
+       ['admin', 'troll_officer', 'lead_troll_officer', 'secretary'].includes(String(profile?.role || '')) ||
+       ['admin', 'troll_officer', 'lead_troll_officer', 'secretary'].includes(String(profile?.troll_role || ''))
 
-    if (!canSummon) {
-      toast.error('Only Admin, Troll Officer, or Lead Troll Officer can issue summons.')
-      return
-    }
+     if (!canSummon) {
+       toast.error('Only Admin, Lead Troll Officers, Secretaries, and Troll Officers can issue summons.')
+       return
+     }
 
     let userIdToSummon: string
     let reasonText: string

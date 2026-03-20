@@ -61,8 +61,8 @@ export default function StreamLayout({
             {video}
           </div>
 
-          {/* CONTROLS */}
-          <div className="flex-shrink-0 bg-zinc-900/90 border-t border-white/10 backdrop-blur">
+          {/* CONTROLS - Floating Overlay */}
+          <div className="absolute bottom-4 left-4 right-4 z-40">
             {controls}
           </div>
 

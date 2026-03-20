@@ -179,3 +179,6 @@ const ParticleBurstGifts = ({ gifts }: { gifts: typeof mockPost.gifts }) => {
         <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
         <span className="text-xs text-purple-300">Gifts Received</span>
       </div>
+    </div>
+  )
+}

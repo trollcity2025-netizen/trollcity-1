@@ -151,28 +151,54 @@ export default function TrollWheel() {
 
   const discountTier = getDiscountTier();
 
+  // Under construction - show only the construction message
+  const IS_UNDER_CONSTRUCTION = true;
+
+  if (IS_UNDER_CONSTRUCTION) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden flex flex-col items-center justify-center">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-slate-950 to-slate-950" />
+        </div>
+        <div className="relative z-10 text-center p-8">
+          <div className="text-6xl mb-4">🚧</div>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+            UNDER CONSTRUCTION
+          </h1>
+          <p className="text-xl text-yellow-400 mb-2">
+            The Troll Wheel is being rebuilt!
+          </p>
+          <p className="text-gray-400">
+            Check back soon for an exciting new experience.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden flex flex-col md:p-8">
-      {/* Header - Desktop only */}
-      <div className="hidden md:block max-w-7xl mx-auto mb-4">
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden flex flex-col items-center justify-center">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto w-full px-4 md:px-6 pt-4 md:pt-6">
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl shadow-lg shadow-yellow-500/20">
-            <Zap className="w-8 h-8 text-white" />
+          <div className="p-2 md:p-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl shadow-lg shadow-yellow-500/20">
+            <Zap className="w-6 md:w-8 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-white">
+            <h1 className="text-2xl md:text-4xl font-bold text-white">
               Troll Wheel
             </h1>
-            <p className="text-slate-400 text-sm">
-              Spin to win! 125 coins per spin ($1.25)
+            <p className="text-slate-400 text-xs md:text-sm">
+              Spin to win! 125 coins per spin
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8 p-2 md:p-0">
-        {/* Main Game Area */}
-        <div className="lg:col-span-2 h-full flex flex-col">
+      {/* Main Content Grid */}
+      <div className="flex-1 overflow-hidden max-w-7xl mx-auto w-full px-4 md:px-6 pb-6 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+        {/* Main Game Area - Left Column */}
+        <div className="h-full flex flex-col min-h-0">
           {/* Mobile Info Bubble - Integrated compact view */}
           <div className="lg:hidden mb-2">
             <div 
@@ -213,8 +239,8 @@ export default function TrollWheel() {
           </div>
 
           {/* Wheel Game */}
-          <div className="flex-1 w-full h-full min-h-0 flex items-center justify-center">
-            <div className="w-full h-full md:h-auto bg-slate-800/50 backdrop-blur-sm rounded-2xl md:rounded-3xl p-2 md:p-6 border border-slate-700">
+          <div className="flex-1 w-full min-h-0 flex items-center justify-center overflow-hidden">
+            <div className="w-full bg-slate-800/50 backdrop-blur-sm rounded-2xl md:rounded-3xl p-3 md:p-6 border border-slate-700 overflow-hidden">
               <TrollWheelGame 
                 userBalance={userBalance}
                 trollmondBalance={trollmondBalance}
@@ -225,8 +251,8 @@ export default function TrollWheel() {
           </div>
         </div>
 
-        {/* Sidebar - Desktop only */}
-        <div className="hidden lg:flex flex-col space-y-4 overflow-y-auto">
+        {/* Right Sidebar - Stats Panels */}
+        <div className="flex flex-col gap-4 overflow-y-auto lg:h-full">
           {/* Trollmond Balance & Discount */}
           <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 shadow-lg">
             <div className="flex items-center gap-2 mb-3">
@@ -300,6 +326,17 @@ export default function TrollWheel() {
 
 
         </div>
+      </div>
+
+      {/* Floating Menu Button - Fixed Position */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => window.location.reload()}
+          className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-3 rounded-full shadow-lg shadow-purple-500/30 hover:scale-110 transition-transform"
+          title="Refresh Wheel"
+        >
+          <Zap className="w-5 h-5" />
+        </button>
       </div>
     </div>
   );

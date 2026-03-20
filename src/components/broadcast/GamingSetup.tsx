@@ -3,6 +3,7 @@ import { Monitor, Camera, Gamepad2, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScreenShare, StreamMode } from '@/hooks/useScreenShare';
 import { useStreamStore } from '@/lib/streamStore';
+import { LocalVideoTrack } from 'livekit-client';
 
 interface GamingSetupProps {
   streamId: string;
@@ -11,6 +12,9 @@ interface GamingSetupProps {
   facingMode?: 'user' | 'environment';
   isVideoEnabled?: boolean;
   setStream?: (stream: MediaStream | null) => void;
+  // Callback to handle screen share attachment in parent
+  onScreenShareStarted?: (track: LocalVideoTrack) => void;
+  onScreenShareStopped?: () => void;
 }
 
 export function GamingSetup({
@@ -19,6 +23,8 @@ export function GamingSetup({
   facingMode = 'user',
   isVideoEnabled = true,
   setStream,
+  onScreenShareStarted,
+  onScreenShareStopped,
 }: GamingSetupProps) {
   const [copiedKey, setCopiedKey] = React.useState(false);
   const [copiedUrl, setCopiedUrl] = React.useState(false);
@@ -61,6 +67,11 @@ export function GamingSetup({
       setScreenPreviewStream(null);
       setStreamMode('camera');
 
+      // Notify parent to stop screen share preview
+      if (onScreenShareStopped) {
+        onScreenShareStopped();
+      }
+
       // Re-acquire camera stream if function provided
       // Note: Video playback is handled by Agora's play() method in the parent component
       if (acquireMediaStream && setStream) {
@@ -85,6 +96,11 @@ export function GamingSetup({
           setScreenPreviewStream(previewStream);
         }
 
+        // Notify parent to attach screen share preview
+        if (onScreenShareStarted) {
+          onScreenShareStarted(track);
+        }
+
         toast.success('Screen sharing started!');
 
         // Handle when user stops sharing via browser UI
@@ -92,6 +108,11 @@ export function GamingSetup({
           setScreenTrack(null);
           setScreenPreviewStream(null);
           setStreamMode('camera');
+
+          // Notify parent to stop screen share preview
+          if (onScreenShareStopped) {
+            onScreenShareStopped();
+          }
 
           // Re-acquire camera stream when screen share ends
           // Note: Video playback is handled by Agora's play() method in the parent component
@@ -161,6 +182,12 @@ export function GamingSetup({
               screenShare.stopScreenShare();
               setScreenTrack(null);
               setScreenPreviewStream(null);
+              setStreamMode('camera');
+
+              // Notify parent to stop screen share preview
+              if (onScreenShareStopped) {
+                onScreenShareStopped();
+              }
 
               // Re-acquire camera stream if function provided
               // Note: Video playback is handled by Agora's play() method in the parent component

@@ -244,8 +244,8 @@ export interface Stream {
   current_viewers: number
   total_gifts_coins: number
   total_unique_gifters: number
-  agora_channel: string
-  agora_token: string | null
+  stream_channel: string // LiveKit room name (database column 'agora_channel')
+  livekit_token: string | null // Database column 'agora_token'
   multi_beam?: boolean
   thumbnail_url?: string | null
   is_testing_mode?: boolean

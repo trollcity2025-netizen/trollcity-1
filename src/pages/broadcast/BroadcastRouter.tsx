@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useParams, Navigate } from 'react-router-dom'
+import { useParams, Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { Stream } from '../../types/broadcast'
@@ -17,6 +17,7 @@ import { Loader2 } from 'lucide-react'
  */
 function BroadcastRouter() {
   const { id: streamId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { user } = useAuthStore()
   
   const [stream, setStream] = useState<Stream | null>(null)
@@ -33,7 +34,7 @@ function BroadcastRouter() {
     const fetchStream = async () => {
       const { data, error: fetchError } = await supabase
         .from('streams')
-        .select('*, total_likes, mux_playback_id')
+        .select('*, total_likes')
         .eq('id', streamId)
         .maybeSingle()
 
@@ -50,6 +51,30 @@ function BroadcastRouter() {
     fetchStream()
   }, [streamId])
 
+  // Also listen for realtime updates to stream status
+  useEffect(() => {
+    if (!streamId || !stream) return
+
+    const channel = supabase
+      .channel(`stream-status-${streamId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'streams',
+        filter: `id=eq.${streamId}`
+      }, (payload) => {
+        if (payload.new.status === 'ended') {
+          // Redirect to summary when stream ends
+          navigate(`/broadcast/summary/${streamId}`)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [streamId, stream, navigate])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-black text-white">
@@ -65,6 +90,11 @@ function BroadcastRouter() {
         <p className="text-red-500">{error || 'Stream not found'}</p>
       </div>
     )
+  }
+
+  // If stream is ended, redirect to summary
+  if (stream.status === 'ended') {
+    return <Navigate to={`/broadcast/summary/${streamId}`} replace />
   }
 
   // Check if current user is the host

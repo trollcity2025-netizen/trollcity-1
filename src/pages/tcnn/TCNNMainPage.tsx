@@ -7,6 +7,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/store';
+import { toast } from 'sonner';
 import {
   Radio,
   Users,
@@ -29,18 +31,51 @@ interface TCNNStream {
   streamerAvatar: string | null;
   viewerCount: number;
   isLive: boolean;
-  muxPlaybackId: string | null;
-  agoraChannel: string;
+  streamChannel: string;
 }
 
 export default function TCNNMainPage() {
   const navigate = useNavigate();
+  const { user, profile } = useAuthStore();
   const [activeStream, setActiveStream] = useState<TCNNStream | null>(null);
   const [trendingArticles, setTrendingArticles] = useState<TCNNArticle[]>([]);
   const [recentArticles, setRecentArticles] = useState<TCNNArticle[]>([]);
   const [journalists, setJournalists] = useState<JournalistStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+   // Check if user has permission to view TCNN content on mount
+   useEffect(() => {
+     // Only approved TCNN roles (News Casters, Chief News Casters) and Admins can view TCNN
+     if (!user || !profile) {
+       // Not logged in, redirect to auth
+       navigate('/auth?mode=signup');
+       return;
+     }
+     
+     // Check if user is an approved TCNN role (News Caster or Chief News Caster) OR an Admin
+     const isApprovedTCNNRole = profile?.is_news_caster || profile?.is_chief_news_caster;
+     const isAdmin = profile?.role === 'admin' || profile?.is_admin || 
+                     profile?.role === 'superadmin' || profile?.is_superadmin;
+     
+     // If user is neither an approved TCNN role nor an admin, deny access
+     if (!isApprovedTCNNRole && !isAdmin) {
+       toast.error('Access denied: TCNN is only available to approved News Casters, Chief News Casters, and Admins');
+       navigate('/');
+       return;
+     }
+     
+     // Additional explicit check to block Troll Officers and Lead Troll Officers
+     // Even if they somehow have TCNN flags, these roles should not access TCNN
+     const isTrollOfficer = profile?.is_troll_officer || profile?.is_lead_troll_officer || 
+                           profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer';
+                           
+     if (isTrollOfficer && !isAdmin) {
+       toast.error('Access denied: Troll Officers cannot access TCNN. Apply for News Caster role.');
+       navigate('/');
+       return;
+     }
+   }, [user, profile, navigate, toast]);
 
   useEffect(() => {
     let mounted = true;
@@ -60,7 +95,6 @@ export default function TCNNMainPage() {
             is_live,
             viewer_count,
             current_viewers,
-            mux_playback_id,
             agora_channel,
             broadcaster:user_profiles!user_id(username, avatar_url)
           `)
@@ -86,8 +120,7 @@ export default function TCNNMainPage() {
             streamerAvatar: broadcaster?.avatar_url || null,
             viewerCount: streamData.current_viewers || streamData.viewer_count || 0,
             isLive: streamData.is_live,
-            muxPlaybackId: streamData.mux_playback_id,
-            agoraChannel: streamData.agora_channel,
+            streamChannel: streamData.agora_channel,
           });
         }
 

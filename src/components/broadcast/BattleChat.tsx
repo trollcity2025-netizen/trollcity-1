@@ -99,7 +99,9 @@ export default function BattleChat({
         const newMsg = payload.payload as ChatMessage;
         if (newMsg && newMsg.id) {
           setMessages((prev) => {
+            // Prevent duplicates
             if (prev.some((m) => m.id === newMsg.id)) return prev;
+            // Add sender's own message immediately for instant display
             return [...prev.slice(-49), newMsg];
           });
         }
@@ -128,13 +130,22 @@ export default function BattleChat({
       : challengerStream.id;
 
     const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Get sender's username from the current messages or use a default
+    const existingMessage = messages.find(m => m.user_id === currentUserId);
+    const senderUsername = existingMessage?.username || 'You';
+    
     const chatMessage = {
       id: messageId,
       stream_id: targetStreamId,
       user_id: currentUserId,
+      username: senderUsername,
       message: newMessage.trim(),
       created_at: new Date().toISOString(),
     };
+
+    // IMMEDIATELY add sender's own message to local state so they can see it
+    setMessages((prev) => [...prev.slice(-49), chatMessage]);
 
     // First broadcast the message immediately for real-time delivery
     if (channelRef.current) {

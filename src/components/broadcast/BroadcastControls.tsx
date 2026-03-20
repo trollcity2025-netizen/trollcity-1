@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TrollmersBattleControls from './TrollmersBattleControls';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
-import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star } from 'lucide-react';
+import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star, GripVertical, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { getCategoryConfig } from '../../config/broadcastCategories';
 import BannedUsersList from './BannedUsersList';
 import ThemeSelector from './ThemeSelector';
 import { useAuthStore } from '../../lib/store';
+import { PreflightStore } from '../../lib/preflightStore';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { AnimatePresence, motion } from 'framer-motion';
+import ChallengeManager from './ChallengeManager';
 import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 interface BroadcastControlsProps {
@@ -43,6 +45,13 @@ interface BroadcastControlsProps {
   setBoxCount?: (count: number) => void;
   // Stream refresh for battle mode
   onRefreshStream?: () => void;
+  // Challenge management props
+  pendingChallenges?: any[];
+  onAcceptChallenge?: (challengeId: string, challengerId: string) => void;
+  onDenyChallenge?: (challengeId: string) => void;
+  // Challenge button props for viewers
+  onChallengeBroadcaster?: () => void;
+  hasPendingChallenge?: boolean;
 }
 
 export default function BroadcastControls({
@@ -70,7 +79,12 @@ export default function BroadcastControls({
   isCamOn: propCamOn,
   boxCount: parentBoxCount,
   setBoxCount: parentSetBoxCount,
-  onRefreshStream
+  onRefreshStream,
+  pendingChallenges = [],
+  onAcceptChallenge,
+  onDenyChallenge,
+  onChallengeBroadcaster,
+  hasPendingChallenge = false
 }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
@@ -115,6 +129,12 @@ export default function BroadcastControls({
 
   const [isMinimized, setIsMinimized] = useState(false);
   const [showStreamControls, setShowStreamControls] = useState(true);
+  // Default to stationary (not floating) at bottom of screen
+  const [isFloating, setIsFloating] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
+  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
 
   // Get category config to check if boxes can be added/removed
   const categoryConfig = getCategoryConfig(stream.category || 'general');
@@ -160,6 +180,24 @@ export default function BroadcastControls({
         setLikes(stream.total_likes);
     }
   }, [stream.total_likes]);
+
+  // Sync seat prices from stream - keep stable, only update when broadcaster explicitly changes
+  useEffect(() => {
+    if (stream.seat_prices && Array.isArray(stream.seat_prices)) {
+      // Only update if we don't have pending changes (debouncing)
+      const currentPrices = stream.seat_prices;
+      setSeatPrices(currentPrices);
+      setDebouncedSeatPrices(currentPrices);
+    }
+  }, [stream.seat_prices]);
+  
+  // Also sync main seat price
+  useEffect(() => {
+    if (stream.seat_price !== undefined) {
+      setSeatPrice(stream.seat_price);
+      setDebouncedPrice(stream.seat_price);
+    }
+  }, [stream.seat_price]);
 
   // Sync box count when stream updates (only if no parent control)
   useEffect(() => {
@@ -430,18 +468,119 @@ export default function BroadcastControls({
 
 
 
-  return (
-    <div className={cn(
-        "bg-zinc-900/90 border-t border-white/10 backdrop-blur-sm mx-auto rounded-xl shadow-2xl relative transition-all duration-300",
-        isMinimized ? "w-48 py-2 px-4 flex justify-center items-center" : "w-full p-4 flex flex-col gap-4 max-w-4xl"
-    )}>
-        <button 
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="absolute -top-3 left-1/2 -translate-x-1/2 bg-zinc-800 border border-white/10 rounded-full p-1 text-zinc-400 hover:text-white shadow-lg z-50"
-            title={isMinimized ? "Expand Controls" : "Minimize Controls"}
+  // If closed, show a small button to reopen
+  if (isClosed) {
+    return (
+      <div 
+        className="fixed z-50"
+        style={{ left: position.x, top: position.y }}
+      >
+        <button
+          onClick={() => setIsClosed(false)}
+          className="bg-zinc-900/95 border border-yellow-500/50 rounded-full p-3 shadow-lg hover:bg-zinc-800 transition-colors"
+          title="Show Controls"
         >
-            {isMinimized ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          <Settings2 size={20} className="text-yellow-500" />
         </button>
+      </div>
+    );
+  }
+
+  // Drag handlers for floating bubble mode
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isFloating) {
+      setIsDragging(true);
+      dragStartPos.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && isFloating) {
+      setPosition({
+        x: e.clientX - dragStartPos.current.x,
+        y: e.clientY - dragStartPos.current.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <div 
+      className={cn(
+        "bg-zinc-900/95 border border-white/10 backdrop-blur-sm rounded-2xl shadow-2xl relative transition-all duration-300",
+        isMinimized ? "w-56 py-3 px-4" : isFloating ? "w-80 p-4" : "w-full p-4",
+        isFloating ? "fixed z-50 border-2 border-yellow-500/30" : ""
+      )}
+      style={isFloating ? { left: position.x, top: position.y } : undefined}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+        {/* Drag handle for floating bubble */}
+        <div 
+          className={cn(
+            "flex items-center justify-between mb-2",
+            isFloating && "cursor-move pb-2 border-b border-white/10"
+          )}
+          onMouseDown={handleMouseDown}
+        >
+          {isFloating ? (
+            <>
+              <div className="flex items-center gap-2">
+                <GripVertical size={16} className="text-yellow-500" />
+                <span className="text-xs text-yellow-500 font-bold">Controls</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                    onClick={() => setIsFloating(false)}
+                    className="bg-zinc-800 border border-white/10 rounded-full p-1 text-zinc-400 hover:text-white"
+                    title="Dock"
+                >
+                    <Settings2 size={14} />
+                </button>
+                <button 
+                    onClick={() => setIsMinimized(!isMinimized)}
+                    className="bg-zinc-800 border border-white/10 rounded-full p-1 text-zinc-400 hover:text-white"
+                    title={isMinimized ? "Expand" : "Minimize"}
+                >
+                    {isMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                <button 
+                    onClick={() => setIsClosed(true)}
+                    className="bg-red-500/20 border border-red-500/30 rounded-full p-1 text-red-400 hover:text-red-300"
+                    title="Close"
+                >
+                    <X size={14} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 font-bold">Controls</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                    onClick={() => setIsFloating(true)}
+                    className="bg-yellow-500/20 border border-yellow-500/30 rounded-full p-1.5 text-yellow-500 hover:text-yellow-400"
+                    title="Make Floating"
+                >
+                    <GripVertical size={14} />
+                </button>
+                <button 
+                    onClick={() => setIsClosed(true)}
+                    className="bg-red-500/20 border border-red-500/30 rounded-full p-1 text-red-400 hover:text-red-300"
+                    title="Close"
+                >
+                    <X size={14} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {isMinimized ? (
              <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Controls</span>
@@ -553,6 +692,23 @@ export default function BroadcastControls({
                  >
                     <Heart size={20} className={cn("text-zinc-400 group-hover:text-pink-500 transition-colors", isLiking && "scale-125 text-pink-500 fill-pink-500")} />
                  </button>
+
+                 {/* Challenge Button - For Viewers */}
+                 {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (
+                     <button
+                         onClick={(e) => { e.stopPropagation(); onChallengeBroadcaster(); }}
+                         disabled={hasPendingChallenge}
+                         className={cn(
+                             "p-2 rounded-lg transition-colors flex items-center gap-2",
+                             hasPendingChallenge
+                                 ? "bg-yellow-500/20 text-yellow-400 cursor-wait"
+                                 : "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"
+                         )}
+                         title={hasPendingChallenge ? "Challenge pending..." : "Challenge broadcaster to a battle!"}
+                     >
+                         <Swords size={20} className={hasPendingChallenge ? "animate-pulse" : ""} />
+                     </button>
+                 )}
 
                  {/* Chat Toggle */}
                  <button 
@@ -794,6 +950,8 @@ export default function BroadcastControls({
          </button>
                     </div>
                     )}
+
+                    {/* Challenge Manager moved to live chat only */}
 
                     {/* Trollmers Battle Controls - Only for trollmers category */}
                     {(stream.category === 'trollmers' || stream.category === 'trollmers head to head') && (

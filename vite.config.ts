@@ -135,20 +135,50 @@ export default defineConfig(({ mode: _mode }) => ({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemaps in production for smaller bundles
+    minify: 'terser', // Use Terser for better minification
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log in production
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+        passes: 2, // Multiple compression passes
+      },
+      mangle: {
+        safari10: true,
+      },
+      format: {
+        comments: false, // Remove comments
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks: (id) => {
           // Vendor chunks for stable dependencies
           if (id.includes('node_modules')) {
+            // Core React ecosystem - loaded first
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom') || id.includes('zustand')) {
-              return 'vendor';
+              return 'vendor-react';
             }
+            // Supabase - separate chunk for DB operations
             if (id.includes('@supabase')) {
-              return 'supabase';
+              return 'vendor-supabase';
             }
+            // UI libraries - loaded on demand
             if (id.includes('framer-motion') || id.includes('lucide-react') || id.includes('clsx') || id.includes('tailwind-merge') || id.includes('sonner') || id.includes('recharts') || id.includes('react-swipeable')) {
-              return 'ui';
+              return 'vendor-ui';
+            }
+            // 3D and heavy libraries - lazy loaded
+            if (id.includes('@babylonjs') || id.includes('three') || id.includes('@react-three') || id.includes('gsap')) {
+              return 'vendor-3d';
+            }
+            // Media libraries
+            if (id.includes('hls.js') || id.includes('livekit') || id.includes('socket.io')) {
+              return 'vendor-media';
+            }
+            // Payment and external SDKs
+            if (id.includes('@stripe') || id.includes('@paypal') || id.includes('stripe')) {
+              return 'vendor-payment';
             }
           }
           
@@ -156,9 +186,16 @@ export default defineConfig(({ mode: _mode }) => ({
           if (id.includes('src/pages/admin') || id.includes('src\\pages\\admin')) {
             return 'admin-core';
           }
+          
+          // Group broadcast components
+          if (id.includes('src/components/broadcast') || id.includes('src\\components\\broadcast')) {
+            return 'broadcast-components';
+          }
         },
       },
     },
+    chunkSizeWarningLimit: 1500, // Increase limit for larger chunks
+    reportCompressedSize: true, // Report compressed sizes
   },
   resolve: {
     alias: {

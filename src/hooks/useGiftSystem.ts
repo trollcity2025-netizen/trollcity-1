@@ -4,22 +4,21 @@ import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
 import { generateUUID } from '../lib/uuid';
 import { OFFICIAL_GIFTS } from '../lib/giftConstants';
-
-// Trollmond discount tiers (matching TrollWheel.tsx)
-const TROLLMOND_TIERS = [
-  { trollmonds: 0, discount: 0, label: 'No discount' },
-  { trollmonds: 50, discount: 5, label: '5% off gifts' },
-  { trollmonds: 100, discount: 10, label: 'MAX 10% off gifts' },
-];
+import { notifyGiftReceived } from '../lib/notifications';
 
 // Calculate discount based on trollmonds balance
+// 10% discount per 100 trollmonds (e.g., 200 trollmonds = 20% off)
 export function getTrollmondDiscount(trollmonds: number): number {
-  for (let i = TROLLMOND_TIERS.length - 1; i >= 0; i--) {
-    if (trollmonds >= TROLLMOND_TIERS[i].trollmonds) {
-      return TROLLMOND_TIERS[i].discount;
-    }
-  }
-  return 0;
+  // Every 100 trollmonds gives 10% discount
+  const discountPercent = Math.floor(trollmonds / 100) * 10;
+  // Cap at 100%
+  return Math.min(discountPercent, 100);
+}
+
+// Calculate how many trollmonds will be deducted per gift
+export function getTrollmondDeduction(trollmonds: number): number {
+  // 100 trollmonds deducted per gift sent (regardless of gift size)
+  return trollmonds >= 100 ? 100 : 0;
 }
 
 // Calculate discounted price
@@ -126,27 +125,35 @@ export function useGiftSystem(
 
       if (error) throw error;
 
-      if (data && data.success) {
-        toast.success(`Sent ${gift.name}!`);
+       if (data && data.success) {
+         // Get sender's profile for username
+         let senderName = 'Someone';
+         try {
+           const { data: profileData } = await supabase
+             .from('user_profiles')
+             .select('username')
+             .eq('id', user.id)
+             .single();
+           if (profileData?.username) {
+             senderName = profileData.username;
+           }
+         } catch (profileErr) {
+           console.warn('[GiftSystem] Could not fetch sender profile:', profileErr);
+         }
         
-        // Get sender's profile for username
-        let senderName = 'Someone';
-        try {
-          const { data: profileData } = await supabase
-            .from('user_profiles')
-            .select('username')
-            .eq('id', user.id)
-            .single();
-          if (profileData?.username) {
-            senderName = profileData.username;
-          }
-        } catch (profileErr) {
-          console.warn('[GiftSystem] Could not fetch sender profile:', profileErr);
+        // Get gift icon - try multiple lookups to find the correct icon
+        let giftIcon = '🎁';
+        const officialGiftById = OFFICIAL_GIFTS.find(g => g.id === gift.id);
+        const officialGiftBySlug = OFFICIAL_GIFTS.find(g => 
+          g.id.toLowerCase().replace(/_/g, '-') === gift.slug?.toLowerCase() ||
+          g.id.toLowerCase() === gift.slug?.toLowerCase().replace(/-/g, '_')
+        );
+        const officialGift = officialGiftById || officialGiftBySlug;
+        if (officialGift) {
+          giftIcon = officialGift.icon;
+        } else if (gift.icon) {
+          giftIcon = gift.icon;
         }
-        
-        // Get gift icon from official gifts
-        const officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.id);
-        const giftIcon = officialGift?.icon || '🎁';
         
         // Broadcast event for animations via Supabase realtime channel
         try {
@@ -201,7 +208,7 @@ export function useGiftSystem(
           console.warn('[GiftSystem] Could not broadcast gift event:', broadcastErr);
         }
         
-        // Also send a chat message via Supabase broadcast
+         // Also send a chat message via Supabase broadcast
         try {
           if (streamId) {
             const txnId = generateUUID();
@@ -210,21 +217,20 @@ export function useGiftSystem(
               if (status === 'SUBSCRIBED') {
                 chatChannel.send({
                   type: 'broadcast',
-                  event: 'message',
+                  event: 'chat-message',
                   payload: {
-                    v: 1,
+                    id: txnId,
                     txn_id: txnId,
-                    s: user.id,
-                    ts: Date.now(),
-                    stream_id: streamId,
-                    d: {
-                      content: `${senderName} sent ${gift.name} x${quantity}`,
-                      gift_type: gift.slug,
-                      gift_amount: quantity,
-                      sender_name: senderName,
-                      is_gift_message: true,
-                      user_name: senderName,
-                      user_avatar: null
+                    user_id: user.id,
+                    content: `${senderName} sent ${gift.name} x${quantity}`,
+                    created_at: new Date().toISOString(),
+                    type: 'chat',
+                    gift_type: gift.slug,
+                    gift_amount: quantity,
+                    sender_name: senderName,
+                    user_profiles: {
+                      username: senderName,
+                      avatar_url: null
                     }
                   }
                 });
@@ -239,11 +245,39 @@ export function useGiftSystem(
           console.warn('[GiftSystem] Could not send chat message:', chatErr);
         }
         
-        // Refresh profile to update balance in real-time
+         // Refresh sender's profile to update balance in real-time
         // Use non-blocking refresh to avoid disrupting Agora connection
         refreshProfile().catch(err => {
           console.warn('[GiftSystem] Profile refresh failed:', err);
         });
+
+        // Create notification for the receiver (if not sending to self)
+        // Also refresh receiver's profile so they see updated balance in real-time
+        if (finalRecipientId !== user.id) {
+          const totalCoins = gift.coinCost * quantity;
+          
+          // Create notification for receiver
+          notifyGiftReceived(
+            finalRecipientId,
+            user.id,
+            totalCoins,
+            streamId || undefined
+          ).catch(err => {
+            console.warn('[GiftSystem] Failed to create notification:', err);
+          });
+          
+          // If receiver is different from sender, we need to trigger a profile refresh for them
+          // This is done via the notification system which will cause a refresh when they check it
+          // For real-time update, we also need to inform the receiver's client
+          // The realtime channel will broadcast this via gift_sent event
+        }
+
+        // If the receiver is the current user, refresh their profile to see updated balance (e.g., broadcaster receiving gift)
+        if (finalRecipientId === user.id) {
+          refreshProfile().catch(err => {
+            console.warn('[GiftSystem] Profile refresh failed for receiver:', err);
+          });
+        }
         
         // XP is now granted server-side within send_premium_gift to prevent farming exploits
         // Client-side XP calls removed.

@@ -17,7 +17,6 @@ interface StreamRow {
   title?: string;
   room_name?: string;
   category?: string;
-  mux_playback_id?: string; // Added for Mux playback
   broadcaster?: {
     username: string;
     avatar_url: string;
@@ -47,7 +46,6 @@ export default function OfficerStreamGrid() {
           title,
           room_name,
           category,
-          mux_playback_id,
           broadcaster:user_profiles!broadcaster_id(username, avatar_url)
         `)
         .or('is_live.eq.true,status.eq.live')
@@ -163,10 +161,9 @@ export default function OfficerStreamGrid() {
                 <button
                   onClick={() => setSelectedStream({ 
                     id: stream.id, 
-                    agora_channel: stream.id, 
+                    streamChannel: stream.id, 
                     room_name: stream.room_name || stream.id,
                     title: stream.title, 
-                    mux_playback_id: stream.mux_playback_id,
                     broadcaster_id: stream.broadcaster_id
                   })}
                   className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors"

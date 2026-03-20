@@ -8,6 +8,8 @@ import NewMessageModal from './tcps/components/NewMessageModal'
 import IncomingCallPopup from '../components/IncomingCallPopup'
 import { supabase } from '../lib/supabase'
 import { usePresenceStore } from '../lib/presenceStore'
+import { useQueryClient } from '@tanstack/react-query'
+import { useConversations, useMessages, useSendMessage, useMarkAsRead, usePrefetchMessages } from '../hooks/useOptimizedChat'
 
 const MOBILE_BREAKPOINT_PX = 768
 
@@ -28,6 +30,11 @@ export default function TCPS() {
   const safeOnlineUserIds = onlineUserIds ?? []
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  // Use React Query for instant cached loading
+  const { data: conversations } = useConversations()
+  const prefetchMessages = usePrefetchMessages()
 
   const [activeConversation, setActiveConversation] = useState<string | null>(null)
 
@@ -191,13 +198,16 @@ export default function TCPS() {
   }
 
   const handleConversationsLoaded = useCallback((conversations: SidebarConversation[]) => {
-    // Only auto-select first conversation if no user is specified in URL
-    const userParam = searchParams.get('user')
-    const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= MOBILE_BREAKPOINT_PX : true
-    if (isDesktop && !activeConversation && !userParam && conversations.length > 0) {
-      const first = conversations[0]
-      setActiveConversation(first.other_user_id)
-      navigate(`/tcps?user=${first.other_user_id}`, { replace: true })
+    // Use React Query cached conversations if available
+    if (conversations && conversations.length > 0) {
+      // Only auto-select first conversation if no user is specified in URL
+      const userParam = searchParams.get('user')
+      const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= MOBILE_BREAKPOINT_PX : true
+      if (isDesktop && !activeConversation && !userParam) {
+        const first = conversations[0]
+        setActiveConversation(first.other_user_id)
+        navigate(`/tcps?user=${first.other_user_id}`, { replace: true })
+      }
     }
   }, [activeConversation, navigate, searchParams])
 

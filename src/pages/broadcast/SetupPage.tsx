@@ -57,6 +57,38 @@ export default function SetupPage() {
   
   // Pre-generate stream ID for token optimization
   const [streamId] = useState(() => generateUUID());
+  // Pre-fetch LiveKit token in background once we have user
+  const [prefetchedToken, setPrefetchedToken] = useState<string | null>(null);
+
+  // Pre-fetch LiveKit token once user is available
+  useEffect(() => {
+    if (!user?.id || prefetchedToken) return;
+    
+    const prefetchToken = async () => {
+      try {
+        const roomName = streamId;
+        const { data, error } = await supabase.functions.invoke('livekit-token', {
+          body: { room: roomName, userId: user.id, role: 'publisher' },
+        });
+        if (error) {
+          console.warn('[SetupPage] Token prefetch failed:', error);
+          return;
+        }
+        if (data?.token) {
+          console.log('[SetupPage] Token prefetched successfully');
+          setPrefetchedToken(data.token);
+          // Store in sessionStorage for BroadcastPage
+          sessionStorage.setItem('tc_stream_token', data.token);
+        }
+      } catch (err) {
+        console.warn('[SetupPage] Token prefetch error:', err);
+      }
+    };
+    
+    // Delay slightly to not block initial page load
+    const timeout = setTimeout(prefetchToken, 1000);
+    return () => clearTimeout(timeout);
+  }, [user?.id, streamId]);
 
   // Track if we are navigating to broadcast to prevent cleanup
   const isStartingStream = useRef(false);
@@ -380,36 +412,36 @@ export default function SetupPage() {
       const nativeStream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log('[acquireMediaStream] Native stream acquired');
 
-      // Wrap audio track in LiveKit LocalAudioTrack
-      let audioTrack: LocalAudioTrack | null = null;
-      let videoTrack: LocalVideoTrack | null = null;
+       // Wrap audio track in LiveKit LocalAudioTrack
+       let audioTrack: LocalAudioTrack | null = null;
+       let videoTrack: LocalVideoTrack | null = null;
 
-      const audioTracks = nativeStream.getAudioTracks();
-      if (audioTracks.length > 0) {
-        try {
-          audioTrack = new LocalAudioTrack(audioTracks[0]);
-          console.log('[acquireMediaStream] Audio track wrapped in LiveKit');
-        } catch (audioErr) {
-          console.warn('[acquireMediaStream] Failed to wrap audio track:', audioErr);
-        }
-      }
+       const audioTracks = nativeStream.getAudioTracks();
+       if (audioTracks.length > 0) {
+         try {
+           audioTrack = new LocalAudioTrack(audioTracks[0]);
+           console.log('[acquireMediaStream] Audio track wrapped in LiveKit');
+         } catch (audioErr) {
+           console.warn('[acquireMediaStream] Failed to wrap audio track:', audioErr);
+         }
+       }
 
-      const videoTracks = nativeStream.getVideoTracks();
-      if (videoTracks.length > 0) {
-        try {
-          videoTrack = new LocalVideoTrack(videoTracks[0]);
-          console.log('[acquireMediaStream] Video track wrapped in LiveKit');
-        } catch (videoErr) {
-          console.warn('[acquireMediaStream] Failed to wrap video track:', videoErr);
-        }
-      }
+       const videoTracks = nativeStream.getVideoTracks();
+       if (videoTracks.length > 0) {
+         try {
+           videoTrack = new LocalVideoTrack(videoTracks[0]);
+           console.log('[acquireMediaStream] Video track wrapped in LiveKit');
+         } catch (videoErr) {
+           console.warn('[acquireMediaStream] Failed to wrap video track:', videoErr);
+         }
+       }
 
-      // Store LiveKit tracks for reuse in BroadcastPage
-      setLivekitTracks([audioTrack, videoTrack]);
-      
-      // Also store in PreflightStore for handoff
-      PreflightStore.setLivekitTracks(audioTrack, videoTrack);
-      console.log('[acquireMediaStream] LiveKit tracks stored in PreflightStore');
+       // Store LiveKit tracks for reuse in BroadcastPage
+       setLivekitTracks([audioTrack, videoTrack]);
+       
+       // Note: We no longer store tracks in PreflightStore to avoid reference issues
+       // BroadcastPage will create fresh tracks using room.localParticipant.enableCameraAndMicrophone()
+       console.log('[acquireMediaStream] LiveKit tracks stored locally (not in PreflightStore)');
 
       // Attach video track to container using LiveKit's attach() method
       if (videoTrack) {
@@ -592,28 +624,27 @@ export default function SetupPage() {
       const amStartingStream = isStartingStream.current;
       console.log('[SetupPage] Cleanup: isStartingStream =', amStartingStream);
       
-      if (currentLocalStream) {
-        // Check if this is a tab switch (isTabSwitching will be true for 500ms after visibility change)
-        if (isTabSwitching.current || !isPageVisible.current) {
-          console.log('[SetupPage] Cleanup: Tab switch detected - preserving media stream.');
-          PreflightStore.setStream(currentLocalStream);
+        if (currentLocalStream) {
+          // Check if this is a tab switch (isTabSwitching will be true for 500ms after visibility change)
+          if (isTabSwitching.current || !isPageVisible.current) {
+            console.log('[SetupPage] Cleanup: Tab switch detected - preserving media stream locally.');
+            // Note: We don't store stream in PreflightStore anymore - tracks will be created fresh in BroadcastPage
+          } else if (!amStartingStream) {
+            // Only stop tracks if we're NOT starting the stream
+            // When starting stream, BroadcastPage will create fresh tracks
+            console.log('[SetupPage] Cleanup: Cleaning up media stream on unmount (not starting stream).');
+            currentLocalStream.getTracks().forEach(track => track.stop());
+          } else {
+            console.log('[SetupPage] Cleanup: Starting stream - BroadcastPage will create fresh tracks.');
+          }
+        } else if (amStartingStream && livekitTracks[0] && livekitTracks[1]) {
+          // Even if currentLocalStream is null, if we're starting stream, we no longer store tracks in PreflightStore
+          // BroadcastPage will create fresh tracks using enableCameraAndMicrophone()
+          console.log('[SetupPage] Cleanup: Starting stream - BroadcastPage will create fresh tracks.');
         } else if (!amStartingStream) {
-          // Only stop tracks if we're NOT starting the stream
-          // When starting stream, we want to preserve the tracks for BroadcastPage
-          console.log('[SetupPage] Cleanup: Cleaning up media stream on unmount (not starting stream).');
-          currentLocalStream.getTracks().forEach(track => track.stop());
-        } else {
-          console.log('[SetupPage] Cleanup: Preserving media stream for broadcast (starting stream).');
-          PreflightStore.setStream(currentLocalStream);
+          // Not starting stream and no local stream - just cleanup
+          console.log('[SetupPage] Cleanup: Not starting stream, no local stream to clean up.');
         }
-      } else if (amStartingStream && livekitTracks[0] && livekitTracks[1]) {
-        // Even if currentLocalStream is null, if we're starting stream, preserve LiveKit tracks
-        console.log('[SetupPage] Cleanup: Preserving LiveKit tracks for BroadcastPage.');
-        PreflightStore.setLivekitTracks(livekitTracks[0], livekitTracks[1]);
-      } else if (!amStartingStream) {
-        // Not starting stream and no local stream - just cleanup
-        console.log('[SetupPage] Cleanup: Not starting stream, no local stream to clean up.');
-      }
     };
   }, [facingMode, isVideoEnabled, showPermissionPrompt, streamMode, screenTrack]);
 
@@ -697,9 +728,7 @@ export default function SetupPage() {
         // Update state with new track
         setLivekitTracks([livekitTracks[0], newVideoTrack]);
         
-        // Store in PreflightStore for BroadcastPage
-        PreflightStore.setLivekitTracks(livekitTracks[0], newVideoTrack);
-        
+        // Note: We no longer store tracks in PreflightStore - BroadcastPage will create fresh tracks
         // Update preview stream for state management
         const newStream = new MediaStream();
         if (livekitTracks[0]) {
@@ -807,6 +836,22 @@ export default function SetupPage() {
     }
   };
 
+  // Helper functions to check category access
+  const canAccessTCNN = () => {
+    const isNewsCaster = profile?.is_news_caster || profile?.is_chief_news_caster;
+    const isAdmin = profile?.role === 'admin' || profile?.is_admin || 
+                    profile?.role === 'superadmin' || profile?.is_superadmin;
+    // Check if they have restricted roles
+    const isRestrictedRole = profile?.is_troll_officer || profile?.is_lead_troll_officer || 
+                             profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer';
+    return (isNewsCaster || isAdmin) && !isRestrictedRole;
+  };
+
+  const canAccessElections = () => {
+    const allowedRoles = ['admin', 'secretary', 'lead_troll_officer', 'troll_officer'];
+    return profile?.role && allowedRoles.includes(profile.role);
+  };
+
   const handleStartStream = async () => {
     // Perform all validations first BEFORE setting isStartingStream
     if (!title.trim()) {
@@ -814,29 +859,36 @@ export default function SetupPage() {
       return;
     }
 
-    // Check follower requirement for ALL broadcast categories
-    if (followerCount < 1) {
-      toast.error('You need at least 1 follower to start a broadcast');
-      return;
-    }
-
-    // Check religion requirement for spiritual category
-    if (categoryRequiresReligion && !selectedReligion) {
-      toast.error('Please select your religion');
-      return;
-    }
-
-    // Check Trollmers requirements
-    if (category === 'trollmers') {
-      if (followerCount < 1) {
-        toast.error('Trollmers requires 1+ followers');
-        return;
-      }
-      if (!isVideoEnabled) {
-        toast.error('Trollmers requires camera enabled');
-        return;
-      }
-    }
+     // Check religion requirement for spiritual category
+     if (categoryRequiresReligion && !selectedReligion) {
+       toast.error('Please select your religion');
+       return;
+     }
+ 
+     // Check Gaming category requirements
+ 
+     // Check Gaming category requirements - 100 followers required (admin/roles bypass)
+     if (category === 'gaming') {
+       const isAdminOrOfficer = profile?.role === 'admin' || profile?.role === 'superadmin' || 
+         profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || 
+         profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || 
+         profile?.role === 'lead_troll_officer' || profile?.role === 'secretary';
+       
+       if (!isAdminOrOfficer && followerCount < 100) {
+         toast.error('Gaming category requires 100 followers');
+         return;
+       }
+     }
+ 
+     // Check follower requirement for ALL broadcast categories (admins/officers bypass)
+     const isAdminOrOfficer = profile?.role === 'admin' || profile?.role === 'superadmin' || 
+       profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || 
+       profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || 
+       profile?.role === 'lead_troll_officer' || profile?.role === 'secretary';
+     if (!isAdminOrOfficer && followerCount < 1) {
+       toast.error('You need at least 1 follower to start a broadcast');
+       return;
+     }
 
     // Check President Elections requirements - only admin, secretary, lead_troll_officer, troll_officer
     if (category === 'election') {
@@ -913,7 +965,6 @@ export default function SetupPage() {
           owner_id: user.id,
           title,
           category,
-          stream_kind: category === 'trollmers' ? 'trollmers' : 'regular',
           camera_ready: isVideoEnabled,
           status: 'pending',
           is_live: false,
@@ -921,7 +972,7 @@ export default function SetupPage() {
           layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' :
                        categoryConfig.layoutMode === 'classroom' ? 'grid' :
                        categoryConfig.layoutMode === 'spotlight' ? 'spotlight' : 'grid',
-          // Store room name for LiveKit
+          // Store room name for LiveKit (database column still uses legacy name 'agora_channel')
           agora_channel: roomName,
           // Store category-specific data
           ...(category === 'spiritual' && { selected_religion: selectedReligion }),
@@ -938,7 +989,7 @@ export default function SetupPage() {
 
       // Store stream info in sessionStorage for BroadcastPage to use
       // NOTE: Token will be fetched by BroadcastPage, not stored here
-      sessionStorage.removeItem('tc_stream_token');
+      // Keep the prefetched token in sessionStorage for BroadcastPage to use
       sessionStorage.setItem('tc_stream_uid', user.id);
 
       // Store screen share state in sessionStorage for BroadcastPage to read
@@ -961,25 +1012,25 @@ export default function SetupPage() {
       }
 
       // Update stream status to 'live' immediately so other broadcasters can see it
-      console.log('[SetupPage] Updating stream to live, streamId:', streamId);
-      const { error: liveUpdateError } = await supabase
+      // Don't await this - let it happen in background while we navigate
+      console.log('[SetupPage] Updating stream to live in background, streamId:', streamId);
+      supabase
         .from('streams')
         .update({
           status: 'live',
           is_live: true,
           started_at: new Date().toISOString()
         })
-        .eq('id', streamId);
+        .eq('id', streamId)
+        .then(({ error: liveUpdateError }) => {
+          if (liveUpdateError) {
+            console.error('[SetupPage] Background: FAILED to update stream to live:', liveUpdateError);
+          } else {
+            console.log('[SetupPage] Background: Stream updated to live');
+          }
+        });
 
-      if (liveUpdateError) {
-        console.error('[SetupPage] FAILED to update stream to live:', liveUpdateError);
-        toast.error('Failed to go live: ' + liveUpdateError.message);
-      } else {
-        console.log('[SetupPage] Stream updated to live successfully');
-      }
-
-      // Small delay to ensure database update propagates
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // No delay - navigate immediately while DB update happens in background
 
       // Ensure video state reflects actual track state before storing
       const hasVideoTrack = livekitTracks[1] !== null;
@@ -1085,22 +1136,6 @@ export default function SetupPage() {
           </span>
         </div>
         
-        {category === 'trollmers' && (
-          <>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300">Camera Ready:</span>
-              <span className={`font-bold ${isVideoEnabled ? 'text-green-400' : 'text-red-400'}`}>
-                {isVideoEnabled ? '✓ Yes' : '✗ No'}
-              </span>
-            </div>
-            {!isVideoEnabled && (
-              <p className="text-xs text-amber-300 mt-2">
-                ⚠️ Trollmers requires camera enabled
-              </p>
-            )}
-          </>
-        )}
-        
         {followerCount < 1 && (
           <p className="text-xs text-amber-300 mt-2">
             ⚠️ You need at least 1 follower to start any broadcast
@@ -1153,12 +1188,6 @@ export default function SetupPage() {
         return (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm">
             <p className="text-red-300">📺 Official TCNN broadcast - News Caster role required</p>
-          </div>
-        );
-      case 'trollmers':
-        return (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm">
-            <p className="text-amber-300">⚔️ Battle mode - Challenge other broadcasters head-to-head!</p>
           </div>
         );
       default:
@@ -1310,7 +1339,6 @@ export default function SetupPage() {
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-gray-300"
               >
                 <option value="general">💬 General Chat</option>
-                <option value="just_chatting">☕ Just Chatting</option>
                 <option value="gaming">🎮 Gaming</option>
                 <option value="irl">📍 IRL / Lifestyle</option>
                 <option value="debate">⚖️ Debate & Discussion</option>
@@ -1318,14 +1346,41 @@ export default function SetupPage() {
                 <option value="fitness">💪 Fitness & Sports</option>
                 <option value="business">💼 Business & Finance</option>
                 <option value="spiritual">✝️ Spiritual / Church</option>
-                <option value="trollmers">🏆 Trollmers Head-to-Head</option>
-                <option value="election">🗳️ President Elections</option>
-                <option value="tcnn">📺 TCNN News</option>
+                {canAccessElections() && (
+                  <option value="election">🗳️ President Elections</option>
+                )}
+                {canAccessTCNN() && (
+                  <option value="tcnn">📺 TCNN News</option>
+                )}
               </select>
             </div>
 
             {/* Category-specific info */}
             {renderCategoryInfo()}
+
+            {/* Gaming Follower Requirement */}
+            {category === 'gaming' && (
+              <div className={`rounded-xl p-4 border ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'bg-green-500/10 border-green-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-300">🎮 Gaming Follower Requirement</span>
+                  <span className={`text-sm font-bold ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'text-green-400' : 'text-amber-400'}`}>
+                    {followerCount} / 100
+                  </span>
+                </div>
+                <div className="w-full bg-gray-700/50 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'bg-green-500' : 'bg-amber-500'}`}
+                    style={{ width: `${Math.min((followerCount / 100) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className={`text-xs mt-2 ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'text-green-300' : 'text-amber-300'}`}>
+                  {followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary')
+                    ? '✅ You can broadcast in Gaming category!'
+                    : '⚠️ Gaming category requires 100 followers (admins & officers bypass)'
+                  }
+                </p>
+              </div>
+            )}
 
             {/* Gaming Setup Panel */}
             {category === 'gaming' && (
@@ -1335,6 +1390,31 @@ export default function SetupPage() {
                 facingMode={facingMode}
                 isVideoEnabled={isVideoEnabled}
                 setStream={setStream}
+                onScreenShareStarted={(track) => {
+                  // Attach screen share track to preview
+                  if (videoContainerRef.current) {
+                    clearVideoContainer();
+                    const mediaElement = track.attach();
+                    mediaElement.style.width = '100%';
+                    mediaElement.style.height = '100%';
+                    mediaElement.style.objectFit = 'contain'; // Use contain for screen share
+                    mediaElement.style.transform = 'none'; // Don't mirror screen share
+                    mediaElement.autoplay = true;
+                    mediaElement.playsInline = true;
+                    videoContainerRef.current.appendChild(mediaElement);
+                    console.log('[SetupPage] Screen share preview attached from GamingSetup');
+                  }
+                }}
+                onScreenShareStopped={() => {
+                  // Clear screen share preview
+                  clearVideoContainer();
+                  // Re-acquire camera stream
+                  acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
+                    if (mediaStream) {
+                      setStream(mediaStream);
+                    }
+                  });
+                }}
               />
             )}
 

@@ -371,7 +371,6 @@ export default function BottomNavigation() {
           { category: 'Finance', label: 'My Earnings', icon: DollarSign, path: '/earnings' },
           { category: 'Finance', label: 'Wallet', icon: Banknote, path: '/wallet' },
           // Community
-          { category: 'Community', label: 'My Guests', icon: Users, path: '/guests' },
           { category: 'Community', label: 'Creator Dashboard', icon: Star, path: '/creator/dashboard' },
           // Store
           { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },

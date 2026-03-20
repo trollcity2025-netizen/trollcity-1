@@ -40,8 +40,7 @@ import {
   Files,
   Gamepad2,
   Music,
-  Newspaper,
-  Users
+  Newspaper
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -58,8 +57,6 @@ import UserProfileWidget from './sidebar/UserProfileWidget';
 import { getGlowingTextStyle } from '@/lib/perkEffects'
 
 import { useSidebarStore } from '@/stores/useSidebarStore';
-import UserPresenceCounter from './sidebar/UserPresenceCounter';
-import OnlineUsersModal from './sidebar/OnlineUsersModal';
 
 export default function Sidebar() {
   const { profile } = useAuthStore()
@@ -78,7 +75,6 @@ export default function Sidebar() {
 
   const [showCourtModal, setShowCourtModal] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [showOnlineUsers, setShowOnlineUsers] = useState(false)
 
   const { expandedGroups, toggleGroup, expandGroup } = useSidebarStore();
 
@@ -101,7 +97,8 @@ export default function Sidebar() {
   const isSecretary = profile?.role === UserRole.SECRETARY || profile?.troll_role === UserRole.SECRETARY;
   const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
   const isOfficer = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.TROLL_OFFICER || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
-  const canSeeCourt = true; // Show court dockets for all users
+  // Court dockets visible to all users (logged in or not)
+  const canSeeCourt = true;
   
   const needsLicense = useMemo(() => {
     if (!profile) return false
@@ -216,7 +213,7 @@ export default function Sidebar() {
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
-  const socialPaths = ['/tcps', '/pool', '/universe-event']
+  const socialPaths = ['/tcps', '/pool', '/universe-event', '/family/browse']
   if (canSeeTrollFamily) socialPaths.push('/family/home')
   const specialAccessPaths: string[] = []
   if (canSeeCourt) specialAccessPaths.push('/admin/court-dockets')
@@ -403,17 +400,15 @@ export default function Sidebar() {
                 highlight={isUpdated('/troll-wheel')} onClick={() => markAsViewed('/troll-wheel')}
                 className="text-yellow-500 hover:text-yellow-400"
               />
-              {canSeeTrollFamily && (
-                <SidebarItem 
-                  icon={Crown} 
-                  label={hasFamily ? 'My Family' : 'Troll Families'} 
-                  to="/family/home" 
-                  active={location.pathname.startsWith('/family')} 
-                  collapsed={isSidebarCollapsed}
-                  highlight={isUpdated('/family/home')} onClick={() => markAsViewed('/family/home')}
-                  className="text-amber-400 hover:text-amber-300"
-                />
-              )}
+              <SidebarItem 
+                icon={Crown} 
+                label={hasFamily ? 'My Family' : 'Troll Families'} 
+                to={hasFamily ? '/family/home' : '/family/browse'} 
+                active={location.pathname.startsWith('/family')} 
+                collapsed={isSidebarCollapsed}
+                highlight={isUpdated('/family/home')} onClick={() => markAsViewed('/family/home')}
+                className="text-amber-400 hover:text-amber-300"
+              />
             </SidebarGroup>
 
             {(canSeeOfficer || canSeeTrollFamily || canSeeSecretary || canSeeCourt) && (
@@ -544,25 +539,10 @@ export default function Sidebar() {
           <LayoutDashboard size={20} />
           {!isSidebarCollapsed && <span className="text-sm font-medium">Stats</span>}
         </Link>
-        
-        {/* Online Users Button */}
-        <button
-          onClick={() => setShowOnlineUsers(true)}
-          className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-white/5 text-gray-400 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
-        >
-          <Users size={20} />
-          {!isSidebarCollapsed && (
-            <div className="flex items-center justify-between flex-1">
-              <span className="text-sm font-medium">Online</span>
-              <UserPresenceCounter />
-            </div>
-          )}
-        </button>
       </div>
 
       {/* Modals */}
       {showCourtModal && <CourtEntryModal isOpen={true} onClose={() => setShowCourtModal(false)} />}
-      <OnlineUsersModal isOpen={showOnlineUsers} onClose={() => setShowOnlineUsers(false)} />
     </div>
   )
 }

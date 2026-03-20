@@ -143,7 +143,7 @@ export default function TermsAgreement() {
       { icon: '⚠️', title: 'Account Responsibility', desc: 'You are responsible for all activity on your account. Secure your credentials.' },
       { icon: '💸', title: 'No Chargebacks', desc: 'All coin purchases are final. Chargebacks will result in permanent ban.' },
       { icon: '🔒', title: 'Account Reset on Ban', desc: 'Banned users lose ALL progress: coins, XP, level, badges reset to 0' },
-      { icon: '📊', title: 'Platform Fees', desc: 'All transactions include platform fees. See cashout page for current rates.' },
+      { icon: '📊', title: 'Free Marketplace', desc: 'No fees to run a shop. Sellers keep 100% of earnings from item sales.' },
       { icon: '🎥', title: 'Content Ownership', desc: 'By streaming, you grant Troll City rights to use your content for promotion' },
       { icon: '⚖️', title: 'Dispute Resolution', desc: 'All disputes must go through our support ticket system first' },
       { icon: '🔄', title: 'Terms Can Change', desc: 'We reserve the right to update these terms. Continued use means acceptance.' },

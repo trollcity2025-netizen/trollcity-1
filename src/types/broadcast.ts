@@ -25,12 +25,10 @@ export interface Stream {
   has_rgb_effect: boolean;
   rgb_purchased?: boolean;
   active_theme_url?: string;
+  // Deprecated: HLS-based streaming removed. Use LiveKit for all streaming.
+  // These fields remain for backward compatibility but are no longer used.
   hls_path?: string;
   hls_url?: string;
-  mux_playback_id?: string;
-  mux_stream_key?: string;
-  mux_rtmp_url?: string;
-  mux_live_stream_id?: string;
   // Featured broadcast fields
   is_featured?: boolean;
   featured_at?: string | null;

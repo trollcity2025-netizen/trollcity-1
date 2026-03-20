@@ -58,6 +58,13 @@ BEGIN
   SET troll_coins = troll_coins + FLOOR(v_total_cost * 0.95)
   WHERE id = p_receiver_id;
 
+  -- 4b. Update stream's total_gifts_coins if stream_id provided
+  IF p_stream_id IS NOT NULL THEN
+    UPDATE public.streams
+    SET total_gifts_coins = COALESCE(total_gifts_coins, 0) + v_total_cost
+    WHERE id = p_stream_id;
+  END IF;
+
   -- 5. Record gift in stream_gifts
   INSERT INTO public.stream_gifts (stream_id, sender_id, receiver_id, gift_id, quantity, metadata)
   VALUES (p_stream_id, p_sender_id, p_receiver_id, p_gift_id, p_quantity, p_metadata);

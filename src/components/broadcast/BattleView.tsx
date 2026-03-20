@@ -8,9 +8,9 @@ import { Stream } from '../../types/broadcast';
 import { useAuthStore } from '../../lib/store';
 import { PreflightStore } from '../../lib/preflightStore';
 import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus, Crown, Flame, ArrowLeft, Skull, Gem } from 'lucide-react';
-import { useBattleRoom } from '../../hooks/useBattleRoom';
 import { useCoins } from '../../lib/hooks/useCoins';
 import BattleChat from './BattleChat';
+import BroadcastChat from './BroadcastChat';
 import MuteHandler from './MuteHandler';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
 import GiftTray from './GiftTray';
@@ -31,10 +31,8 @@ const LiveKitVideoPlayer = ({
   onDimensionsReady?: (width: number, height: number) => void;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hasPlayedRef = useRef(false);
-  const retryCountRef = useRef(0);
-  const maxRetries = 3;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const attachedTrackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!videoTrack || !containerRef.current) {
@@ -42,9 +40,19 @@ const LiveKitVideoPlayer = ({
       return;
     }
 
-    if (hasPlayedRef.current) {
-      console.log('[LiveKitVideoPlayer] Already played this track - skipping duplicate');
+    // Check if this track is already attached (by comparing track IDs)
+    const currentTrackId = videoTrack.sid || (videoTrack as any).id;
+    if (attachedTrackIdRef.current === currentTrackId && videoRef.current) {
+      console.log('[LiveKitVideoPlayer] Track already attached, skipping:', currentTrackId);
       return;
+    }
+
+    // Clean up any existing video element before attaching new one
+    if (containerRef.current.querySelector('video')) {
+      console.log('[LiveKitVideoPlayer] Cleaning up existing video element');
+      try {
+        videoTrack.detach();
+      } catch (e) {}
     }
 
     const handleLoaded = () => {
@@ -62,16 +70,23 @@ const LiveKitVideoPlayer = ({
       }
     };
 
-    const playWithRetry = () => {
+    const playWithRetry = (attempt = 0) => {
       if (!containerRef.current) return;
+      if (attempt > 3) {
+        console.error('[LiveKitVideoPlayer] Max retries reached - no frames flowing');
+        return;
+      }
 
       try {
-        console.log('[LiveKitVideoPlayer] Calling attach() - attempt', retryCountRef.current + 1);
+        console.log('[LiveKitVideoPlayer] Calling attach() - attempt', attempt + 1);
         // LiveKit tracks use attach() instead of play()
         const videoElement = videoTrack.attach();
         
         // Store ref to the attached video element for dimension tracking
         videoRef.current = videoElement;
+        
+        // Store the track ID so we know this track is attached
+        attachedTrackIdRef.current = currentTrackId;
         
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
@@ -92,7 +107,6 @@ const LiveKitVideoPlayer = ({
         videoElement.addEventListener('loadedmetadata', handleLoaded);
         
         containerRef.current.appendChild(videoElement);
-        hasPlayedRef.current = true;
         console.log('[LiveKitVideoPlayer] attach() called successfully');
 
         // Inspect injected video after LiveKit has time to inject it
@@ -118,30 +132,24 @@ const LiveKitVideoPlayer = ({
               console.log('[LiveKitVideoPlayer] Video element has no srcObject, attempting play()');
               inner.play().catch(e => console.log('[LiveKitVideoPlayer] play() failed:', e));
             }
-            if (retryCountRef.current < maxRetries) {
-              retryCountRef.current++;
-              console.warn(`[LiveKitVideoPlayer] No frames yet (attempt ${retryCountRef.current}/${maxRetries}) - retrying in 400ms`);
-              hasPlayedRef.current = false;
-              setTimeout(playWithRetry, 400);
-            } else {
-              console.error('[LiveKitVideoPlayer] Max retries reached - no frames flowing');
-            }
+            // Retry with delay
+            console.warn(`[LiveKitVideoPlayer] No frames yet (attempt ${attempt + 1}/3) - retrying in 500ms`);
+            setTimeout(() => playWithRetry(attempt + 1), 500);
           }
         }, 600);
 
       } catch (err) {
         console.error('[LiveKitVideoPlayer] attach() threw error:', err);
-        if (retryCountRef.current < maxRetries) {
-          retryCountRef.current++;
-          setTimeout(playWithRetry, 500);
+        if (attempt < 3) {
+          setTimeout(() => playWithRetry(attempt + 1), 500);
         }
       }
     };
 
-    const initialTimer = setTimeout(playWithRetry, 150);
+    const initialTimer = setTimeout(playWithRetry, 100);
 
-    // FIX #5: Hidden Bug - Only stop LOCAL tracks, not remote tracks
-    // Also need to detach the video element from DOM
+    // FIX #5: Cleanup - only detach video element, don't stop tracks
+    // Stopping tracks will cause camera/mic to disappear
     return () => {
       clearTimeout(initialTimer);
       
@@ -150,25 +158,22 @@ const LiveKitVideoPlayer = ({
         videoRef.current.removeEventListener('loadedmetadata', handleLoaded);
       }
       
-      // Detach the video element from container
+      // Detach the video element from container (but DON'T stop the track)
       if (containerRef.current) {
         const videoEl = containerRef.current.querySelector('video');
         if (videoEl) {
           try {
             videoTrack.detach();
           } catch (e) {}
+          // Clear the ref since we detached
+          attachedTrackIdRef.current = null;
         }
       }
       
-      // Only stop LOCAL tracks - stopping remote tracks kills the stream
-      if (isLocal && videoTrack) {
-        console.log('[LiveKitVideoPlayer] Cleanup - stopping LOCAL track only');
-        try {
-          videoTrack.stop();
-        } catch (e) {}
-      }
+      // DO NOT stop the track here - it's managed by the parent component
+      // Stopping local tracks causes camera/mic to disappear in battle mode
     };
-  }, [videoTrack]);
+  }, [videoTrack]); // Only re-run when videoTrack reference changes
 
   return (
     <div
@@ -601,8 +606,13 @@ const BattleArena = ({
 
         // FIX #1: Correct Track Extraction - use publications with isSubscribed check
         // Use proper source mapping - check publication.source against Track.Source enum
-        const videoPublications = Array.from(remoteUser.videoTracks.values()) as RemoteTrackPublication[];
-        const audioPublications = Array.from(remoteUser.audioTracks.values()) as RemoteTrackPublication[];
+        // Also handle case where videoTracks/audioTracks might be undefined
+        const videoPublications = remoteUser.videoTracks 
+          ? Array.from(remoteUser.videoTracks.values()) as RemoteTrackPublication[]
+          : [];
+        const audioPublications = remoteUser.audioTracks 
+          ? Array.from(remoteUser.audioTracks.values()) as RemoteTrackPublication[]
+          : [];
         
         // Log ALL publication details for debugging
         videoPublications.forEach(p => {
@@ -971,6 +981,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   // Explicitly track enabled state to ensure camera stays on during battle
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
   const [isMicEnabled, setIsMicEnabled] = useState(true);
+  
+  // Local track state - used for publishing to battle room (managed by component, not hook)
+  const [battleLocalAudioTrack, setBattleLocalAudioTrack] = useState<LocalAudioTrack | null>(null);
+  const [battleLocalVideoTrack, setBattleLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
   const [participantSnapshots, setParticipantSnapshots] = useState<Array<{ user_id: string; role: 'host' | 'stage' | 'viewer' }>>([]);
   const [arenaReadyAtMs, setArenaReadyAtMs] = useState<number | null>(null);
   const [arenaReady, setArenaReady] = useState(false);
@@ -978,6 +992,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [opponentCrownInfo, setOpponentCrownInfo] = useState<CrownInfo>({ crowns: 0, streak: 0, hasStreak: false });
   
   const publishedArenaReadyRef = useRef(false);
+  const isReusingRoomRef = useRef(false);
+  const battleRoomRef = useRef<Room | null>(null); // FIX 1: Prevent double connection
+  const isConnectingRef = useRef(false); // FIX 1: Track connection state
+  const [livekitRoom, setLivekitRoom] = useState<Room | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'failed'>('connecting');
   
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -985,63 +1004,21 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
   const isBroadcaster = participantInfo?.role === 'host' || participantInfo?.role === 'stage';
 
-  // Get local tracks from PreflightStore
-  const prefightTracks = PreflightStore.getLivekitTracks();
-  const localTracksFromPreflight = prefightTracks || passedLocalTracks || null;
+   // Get local tracks - only use passed tracks since we don't store in PreflightStore anymore
+   const localTracksFromPreflight = passedLocalTracks || null;
 
-  // Use the new useBattleRoom hook for deterministic, stable connections
-  const {
-    room: livekitRoom,
-    isConnected,
-    isConnecting,
-    remoteParticipants,
-    localAudioTrack,
-    localVideoTrack,
-    error: battleRoomError,
-    connect: connectToBattleRoom,
-    disconnect: disconnectFromBattleRoom,
-  } = useBattleRoom({
-    battleId,
-    challengerUserId: challengerStream?.user_id || '',
-    opponentUserId: opponentStream?.user_id || '',
-    currentUserId: effectiveUserId || '',
-    isPublisher: isBroadcaster,
-    localTracks: localTracksFromPreflight,
-    onRoomConnected: (room) => {
-      console.log('[BattleView] Battle room connected, room:', room.name);
-      setIsCameraEnabled(true);
-      setIsMicEnabled(true);
-    },
-    onRoomDisconnected: () => {
-      console.log('[BattleView] Battle room disconnected');
-    },
-  });
-
-  // Auto-connect when battle is ready and we have user IDs
-  useEffect(() => {
-    if (
-      battle && 
-      challengerStream && 
-      opponentStream && 
-      effectiveUserId &&
-      !isConnected &&
-      !isConnecting &&
-      battle.status === 'active'
-    ) {
-      console.log('[BattleView] Auto-connecting to battle room...');
-      connectToBattleRoom();
-    }
-  }, [battle, challengerStream, opponentStream, effectiveUserId, isConnected, isConnecting, connectToBattleRoom]);
+  // REMOVED useBattleRoom hook - using legacy connection only to avoid conflicts
+  // The legacy code uses room name: battle-{battleId}
 
   // Update mic/camera enabled state based on track availability
   useEffect(() => {
-    if (localAudioTrack) {
+    if (battleLocalAudioTrack) {
       setIsMicEnabled(true);
     }
-    if (localVideoTrack) {
+    if (battleLocalVideoTrack) {
       setIsCameraEnabled(true);
     }
-  }, [localAudioTrack, localVideoTrack]);
+  }, [battleLocalAudioTrack, battleLocalVideoTrack]);
 
   // Fetch crown info for both broadcasters
   useEffect(() => {
@@ -1080,128 +1057,35 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     fetchCrownInfo();
   }, [challengerStream?.user_id, opponentStream?.user_id]);
 
-  // LiveKit setup - check if we should reuse existing room or create new one
+  // LiveKit setup - ALWAYS create a NEW connection to the battle room
+  // Do NOT reuse the main broadcast room - we need a separate battle room connection
   useEffect(() => {
-    // First, check for existing room from PreflightStore
-    const existingRoom = PreflightStore.getLivekitRoom();
-    const existingTracks = PreflightStore.getLivekitTracks();
+    // Skip if battle isn't ready yet
+    if (!battle || !effectiveUserId) return;
     
-    // Check if there's a valid existing room and tracks to reuse
-    if (existingRoom && existingTracks && existingTracks[1]) {
-      console.log('[BattleView] Reusing existing LiveKit room and tracks from PreflightStore');
-      isReusingRoomRef.current = true;
-      setLivekitRoom(existingRoom);
-      
-      // FIX #3: Load already connected participants when reusing room
-      setRemoteUsers(Array.from(existingRoom.remoteParticipants.values()));
-      
-      console.log('[BattleView] Reusing existing tracks from PreflightStore - will publish to battle room');
-      console.log('[BattleView] existingTracks:', { audio: !!existingTracks[0], video: !!existingTracks[1] });
-      setLocalAudioTrack(existingTracks[0]);
-      setLocalVideoTrack(existingTracks[1]);
-      
-      // CRITICAL FIX: Publish existing tracks to the battle room!
-      // Without this, the camera shows locally but others in battle can't see it
-      const hasPublishedRef = { current: false };
-      
-      const publishTracksToBattle = async () => {
-        // Prevent multiple simultaneous publish attempts
-        if (hasPublishedRef.current) {
-          console.log('[BattleView] Publish already in progress, skipping duplicate call');
-          return;
-        }
-        
-        console.log('[BattleView] publishTracksToBattle called - room state:', existingRoom?.state);
-        
-        if (!existingRoom || existingRoom.state !== 'connected') {
-          console.log('[BattleView] Room not connected yet, waiting... Current state:', existingRoom?.state);
-          setTimeout(publishTracksToBattle, 500);
-          return;
-        }
-        
-        // Mark as published to prevent duplicate attempts
-        hasPublishedRef.current = true;
-        
-        // DEBUG: Log current published tracks before attempting to publish
-        const currentPublications = Array.from(existingRoom.localParticipant.tracks.values());
-        console.log('[BattleView] Current local publications:', currentPublications.map((p: any) => ({ trackSid: p.trackSid, source: p.source, isSubscribed: p.isSubscribed })));
-        
-        console.log('[BattleView] Publishing tracks to battle room...');
-        try {
-          // Publish audio track
-          if (existingTracks[0]) {
-            // Check if track is already published
-            const alreadyPublished = currentPublications.some((p: any) => p.trackSid === existingTracks[0].sid);
-            console.log('[BattleView] Audio track already published?', alreadyPublished);
-            
-            if (!alreadyPublished) {
-              await existingRoom.localParticipant.publishTrack(existingTracks[0], { name: 'audio' });
-              console.log('[BattleView] Published audio track to battle room');
-            }
-            setIsMicEnabled(true);
-          }
-          
-          // Publish video track
-          if (existingTracks[1]) {
-            // Check if track is already published
-            const alreadyPublished = currentPublications.some((p: any) => p.trackSid === existingTracks[1].sid);
-            console.log('[BattleView] Video track already published?', alreadyPublished);
-            
-            if (!alreadyPublished) {
-              await existingRoom.localParticipant.publishTrack(existingTracks[1], { name: 'video' });
-              console.log('[BattleView] Published video track to battle room');
-            }
-            setIsCameraEnabled(true);
-          }
-          
-          // Verify tracks are now published
-          const afterPublications = Array.from(existingRoom.localParticipant.tracks.values());
-          console.log('[BattleView] After publish - local publications:', afterPublications.map((p: any) => ({ trackSid: p.trackSid, source: p.source })));
-          
-        } catch (e) {
-          console.error('[BattleView] Failed to publish tracks to battle room:', e);
-          // Reset the flag to allow retry
-          hasPublishedRef.current = false;
-          // Retry once after delay
-          setTimeout(publishTracksToBattle, 1000);
-        }
-      };
-      
-      // Publish tracks after a short delay to ensure room is connected
-      setTimeout(publishTracksToBattle, 300);
-      
-      // Subscribe to existing participants
-      const handleParticipantConnected = (participant: RemoteParticipant) => {
-        console.log('[BattleView] Participant connected:', participant.identity);
-        setRemoteUsers(prev => {
-          if (prev.some(p => p.identity === participant.identity)) return prev;
-          return [...prev, participant];
-        });
-      };
-
-      const handleParticipantDisconnected = (participant: RemoteParticipant) => {
-        console.log('[BattleView] Participant disconnected:', participant.identity);
-        setRemoteUsers(prev => prev.filter(p => p.identity !== participant.identity));
-      };
-
-      existingRoom.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      existingRoom.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      
-      return () => {
-        // Don't disconnect the room if we reused it - it belongs to the main broadcast
-        // Only unsubscribe from events
-        if (isReusingRoomRef.current && existingRoom) {
-          existingRoom.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-          existingRoom.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-        }
-      };
+    // FIX 1: Prevent double connection - check if already connected or connecting
+    if (battleRoomRef.current && battleRoomRef.current.state === 'connected') {
+      console.log('[BattleView] Already connected to battle room, skipping connection');
+      return;
     }
     
-    // Fallback: Create new room only if no existing room
-    console.log('[BattleView] No existing room found, creating new connection');
+    if (isConnectingRef.current) {
+      console.log('[BattleView] Connection in progress, skipping');
+      return;
+    }
+    
+    // Always create a new room for battle - don't reuse existing room from PreflightStore
+    console.log('[BattleView] Creating new battle room connection (battle-' + battle.id + ')');
+    isConnectingRef.current = true;
     isReusingRoomRef.current = false;
     const client = new Room({ mode: 'rtc', codec: 'vp8' });
+    battleRoomRef.current = client;
     setLivekitRoom(client);
+    
+    // Track connection state to prevent race conditions
+    const isRoomConnectedRef = { current: false };
+    const isRoomDisconnectedRef = { current: false };
+    
     let mounted = true;
     let createdAudioTrack: LocalAudioTrack | null = null;
     let createdVideoTrack: LocalVideoTrack | null = null;
@@ -1218,16 +1102,55 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           });
           if (error) throw error;
 
-          await client.connect(
-            import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
-            data.token,
-            { name: roomName }
-          );
+          // Add connection error handling with retry logic
+          let connectAttempts = 0;
+          const maxConnectAttempts = 3;
+          const connectWithRetry = async () => {
+            while (connectAttempts < maxConnectAttempts) {
+              try {
+                await client.connect(
+                  import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
+                  data.token,
+                  { name: roomName }
+                );
+                isRoomConnectedRef.current = true;
+                console.log('[BattleView] Successfully connected to battle room');
+                return true;
+              } catch (connectError: any) {
+                connectAttempts++;
+                console.warn(`[BattleView] Connection attempt ${connectAttempts} failed:`, connectError?.message || connectError);
+                
+                // Check if it's a connection error that we can retry
+                if (connectError?.message?.includes('could not establish pc connection') || 
+                    connectError?.message?.includes('connection failed') ||
+                    connectError?.message?.includes('Failed to connect')) {
+                  if (connectAttempts < maxConnectAttempts) {
+                    // Wait before retrying (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, 1000 * connectAttempts));
+                    continue;
+                  }
+                }
+                // For other errors or max attempts reached, stop trying
+                break;
+              }
+            }
+            return false;
+          };
+
+          const connected = await connectWithRetry();
+          
+          if (!connected) {
+            console.error('[BattleView] All connection attempts failed');
+            setConnectionStatus('failed');
+            isConnectingRef.current = false; // FIX 1: Reset on failure
+            toast.error('Could not connect to battle. Please check your internet connection and try again.');
+            return;
+          }
 
           if (passedLocalTracks) {
             // Handle tracks independently - publish whatever is available
             if (passedLocalTracks[0]) {
-              setLocalAudioTrack(passedLocalTracks[0]);
+              setBattleLocalAudioTrack(passedLocalTracks[0]);
               setIsMicEnabled(true);
               try {
                 // Pass trackName to ensure proper identification in battle room
@@ -1237,7 +1160,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
               }
             }
             if (passedLocalTracks[1]) {
-              setLocalVideoTrack(passedLocalTracks[1]);
+              setBattleLocalVideoTrack(passedLocalTracks[1]);
               setIsCameraEnabled(true);
               try {
                 // Pass trackName to ensure proper identification in battle room
@@ -1257,11 +1180,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
               
               if (audioTrack) {
                 createdAudioTrack = audioTrack;
-                setLocalAudioTrack(audioTrack);
+                setBattleLocalAudioTrack(audioTrack);
               }
               if (videoTrack) {
                 createdVideoTrack = videoTrack;
-                setLocalVideoTrack(videoTrack);
+                setBattleLocalVideoTrack(videoTrack);
               }
             } catch (trackError) {
               console.warn('[BattleView] Failed to enable camera/mic:', trackError);
@@ -1277,8 +1200,8 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
                 createdAudioTrack = audioTrack;
                 createdVideoTrack = videoTrack;
                 if (!mounted) return;
-                setLocalAudioTrack(audioTrack);
-                setLocalVideoTrack(videoTrack);
+                setBattleLocalAudioTrack(audioTrack);
+                setBattleLocalVideoTrack(videoTrack);
 
                 await client.localParticipant.publishTrack(audioTrack);
                 await client.localParticipant.publishTrack(videoTrack);
@@ -1298,34 +1221,67 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           });
           if (error) throw error;
           
-          await client.connect(
-            import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
-            data.token,
-            { name: roomName }
-          );
+          // Add connection error handling for viewers too
+          let connectAttempts = 0;
+          const maxConnectAttempts = 3;
+          
+          while (connectAttempts < maxConnectAttempts) {
+            try {
+              await client.connect(
+                import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
+                data.token,
+                { name: roomName }
+              );
+              isRoomConnectedRef.current = true;
+              console.log('[BattleView] Viewer connected to battle room');
+              break;
+            } catch (connectError: any) {
+              connectAttempts++;
+              console.warn(`[BattleView] Viewer connection attempt ${connectAttempts} failed:`, connectError?.message || connectError);
+              
+              if (connectAttempts < maxConnectAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * connectAttempts));
+              }
+            }
+          }
+          
+          if (!isRoomConnectedRef.current) {
+            console.error('[BattleView] Viewer could not connect to battle room after all attempts');
+            setConnectionStatus('failed');
+            isConnectingRef.current = false; // FIX 1: Reset on failure
+            toast.error('Could not connect to battle. Please check your internet connection.');
+          }
         } catch (error) {
           console.error("Failed to join battle as viewer:", error);
         }
       }
     };
 
-    // Handle participant connected
+    // Handle participant connected - FIX 4: Listen for participants correctly
     const handleParticipantConnected = (participant: RemoteParticipant) => {
-      console.log('[BattleView] Participant connected:', participant.identity);
+      console.log('[BattleView] ✅ Participant connected:', participant.identity);
       setRemoteUsers(prev => {
-        if (prev.some(p => p.identity === participant.identity)) return prev;
+        if (prev.some(p => p.identity === participant.identity)) {
+          console.log('[BattleView] Participant already in list, skipping');
+          return prev;
+        }
+        console.log('[BattleView] Adding new participant to list, total:', prev.length + 1);
         return [...prev, participant];
       });
     };
 
     // Handle participant disconnected
     const handleParticipantDisconnected = (participant: RemoteParticipant) => {
-      console.log('[BattleView] Participant disconnected:', participant.identity);
-      setRemoteUsers(prev => prev.filter(p => p.identity !== participant.identity));
+      console.log('[BattleView] ❌ Participant disconnected:', participant.identity);
+      setRemoteUsers(prev => {
+        const newList = prev.filter(p => p.identity !== participant.identity);
+        console.log('[BattleView] Remaining participants:', newList.length);
+        return newList;
+      });
     };
 
     // FIX #2: React to Track Updates Properly - handle all track events
-    
+    // Use a simple forceUpdate without refs in callbacks
     const forceUpdate = () => {
       setRemoteUsers(prev => [...prev]);
     };
@@ -1333,6 +1289,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     // Handle track subscribed - use RoomEvent.TrackSubscribed to get actual track with SID
     // Note: The callback receives (track, publication, participant) - track is the actual LiveKit track
     const handleTrackSubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      // Skip if room is disconnected
+      if (isRoomDisconnectedRef.current || !client || client.state !== 'connected') {
+        console.log('[BattleView] Skipping track subscribed - room not connected');
+        return;
+      }
       console.log('[BattleView] Track subscribed:', {
         trackKind: track.kind,
         trackSid: track.sid,
@@ -1345,6 +1306,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
     // Handle track unsubscribed
     const handleTrackUnsubscribed = (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      // Skip if room is disconnected
+      if (isRoomDisconnectedRef.current || !client || client.state !== 'connected') {
+        console.log('[BattleView] Skipping track unsubscribed - room not connected');
+        return;
+      }
       console.log('[BattleView] Track unsubscribed:', {
         trackKind: track.kind,
         trackSid: track.sid,
@@ -1356,6 +1322,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
     // Handle track published (local participant published a track)
     const handleTrackPublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      // Skip if room is disconnected
+      if (isRoomDisconnectedRef.current || !client || client.state !== 'connected') {
+        console.log('[BattleView] Skipping track published - room not connected');
+        return;
+      }
       console.log('[BattleView] Track published:', {
         trackKind: publication.kind,
         trackSid: publication.sid,
@@ -1367,6 +1338,11 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
     // Handle track unpublished
     const handleTrackUnpublished = (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      // Skip if room is disconnected
+      if (isRoomDisconnectedRef.current || !client || client.state !== 'connected') {
+        console.log('[BattleView] Skipping track unpublished - room not connected');
+        return;
+      }
       console.log('[BattleView] Track unpublished:', {
         trackKind: publication.kind,
         trackSid: publication.sid,
@@ -1382,20 +1358,83 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     client.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
     client.on(RoomEvent.TrackPublished, handleTrackPublished);
     client.on(RoomEvent.TrackUnpublished, handleTrackUnpublished);
+    
+    // Handle connection status changes
+    client.on(RoomEvent.Connected, () => {
+      console.log('[BattleView] Room connected event');
+      setConnectionStatus('connected');
+      isRoomConnectedRef.current = true;
+      isConnectingRef.current = false; // FIX 1: Reset connecting flag
+    });
+    
+    client.on(RoomEvent.Disconnected, () => {
+      console.log('[BattleView] Room disconnected event');
+      setConnectionStatus('disconnected');
+      isRoomDisconnectedRef.current = true;
+    });
+    
+    client.on(RoomEvent.Reconnecting, () => {
+      console.log('[BattleView] Room reconnecting...');
+      setConnectionStatus('connecting');
+    });
+    
+    client.on(RoomEvent.Reconnected, () => {
+      console.log('[BattleView] Room reconnected');
+      setConnectionStatus('connected');
+      isRoomConnectedRef.current = true;
+    });
+    
+    client.on(RoomEvent.ConnectionStateChanged, (state) => {
+      console.log('[BattleView] Connection state changed:', state);
+      if (state === 'connected') {
+        setConnectionStatus('connected');
+        isRoomConnectedRef.current = true;
+      } else if (state === 'disconnected') {
+        setConnectionStatus('disconnected');
+        isRoomDisconnectedRef.current = true;
+      } else if (state === 'connecting' || state === 'reconnecting') {
+        setConnectionStatus('connecting');
+      }
+    });
 
     joinBattle();
 
     return () => {
       mounted = false;
-      client.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      client.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      client.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-      client.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-      client.off(RoomEvent.TrackPublished, handleTrackPublished);
-      client.off(RoomEvent.TrackUnpublished, handleTrackUnpublished);
-      if (createdAudioTrack) createdAudioTrack.stop();
-      if (createdVideoTrack) createdVideoTrack.stop();
-      client.disconnect();
+      isRoomDisconnectedRef.current = true;
+      isConnectingRef.current = false; // FIX 1: Reset connecting flag on cleanup
+      
+      // FIX 5: Don't destroy connection mid-flow - only disconnect when explicitly leaving
+      // Only disconnect if the component is truly unmounting (not just re-rendering)
+      // The battleRoomRef check ensures we only clean up the room created by this effect
+      if (battleRoomRef.current === client) {
+        // Remove all listeners first to prevent events during cleanup
+        client.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+        client.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
+        client.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+        client.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+        client.off(RoomEvent.TrackPublished, handleTrackPublished);
+        client.off(RoomEvent.TrackUnpublished, handleTrackUnpublished);
+        
+        // Only stop tracks if they were created in this component (not passed in)
+        if (createdAudioTrack) {
+          console.log('[BattleView] Cleanup: stopping created audio track');
+          createdAudioTrack.stop();
+        }
+        if (createdVideoTrack) {
+          console.log('[BattleView] Cleanup: stopping created video track');
+          createdVideoTrack.stop();
+        }
+        
+        // Only disconnect if room is still connected - FIX 5: Don't destroy mid-flow
+        if (client.state === 'connected') {
+          console.log('[BattleView] Cleanup: disconnecting room');
+          client.disconnect();
+        }
+        
+        // Clear the ref
+        battleRoomRef.current = null;
+      }
       // Do NOT call PreflightStore.clear() - tracks belong to the main broadcast
       // clearTracks();
     };
@@ -1403,6 +1442,10 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
   const [giftStreamId, setGiftStreamId] = useState<string | null>(null);
+  
+  // Remote users state - initialize as empty array, battle room participants are managed internally
+  // Don't use passedRemoteUsers as those are from the main broadcast room, not the battle room
+  const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
 
   const handleGiftSelect = useCallback((uid: string, sourceStreamId: string) => {
     setGiftRecipientId(uid);
@@ -1620,14 +1663,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     const expectedStages = participantSnapshots.filter((p) => p.role === 'stage').map((p) => p.user_id);
 
     const loaded = new Set<string>();
-    if (effectiveUserId && (localVideoTrack || localAudioTrack)) {
+    if (effectiveUserId && (battleLocalVideoTrack || battleLocalAudioTrack)) {
       loaded.add(String(effectiveUserId));
     }
 
     for (const remoteUser of remoteUsers) {
       // LiveKit RemoteParticipant.videoTracks is a Map, not an array
-      const videoTracks = Array.from(remoteUser.videoTracks.values());
-      const audioTracks = Array.from(remoteUser.audioTracks.values());
+      // Add null checks to prevent "Cannot read properties of undefined" error
+      const videoTracks = remoteUser.videoTracks ? Array.from(remoteUser.videoTracks.values()) : [];
+      const audioTracks = remoteUser.audioTracks ? Array.from(remoteUser.audioTracks.values()) : [];
       const hasMedia = Boolean(videoTracks.length || audioTracks.length);
       if (!hasMedia) continue;
       loaded.add(remoteUser.identity);
@@ -1658,7 +1702,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       }
     }
   }, [
-    battle, arenaReady, participantSnapshots, remoteUsers, localVideoTrack, localAudioTrack,
+    battle, arenaReady, participantSnapshots, remoteUsers, battleLocalVideoTrack, battleLocalAudioTrack,
     effectiveUserId, participantInfo?.role, battleId,
   ]);
 
@@ -1723,6 +1767,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   const [isSuddenDeath, setIsSuddenDeath] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
   const [showRematchOption, setShowRematchOption] = useState(false);
+  const timerChannelRef = useRef<any>(null);
 
   const awardCrownToWinner = useCallback(async (winnerStreamId: string) => {
     try {
@@ -1934,14 +1979,29 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     } finally {
       setLeaveLoading(false);
     }
-  }, [battle, user, localAudioTrack, localVideoTrack, livekitRoom, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id]);
+  }, [battle, user, battleLocalAudioTrack, battleLocalVideoTrack, livekitRoom, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id]);
 
   // Timer effect - 3 minutes + 10 seconds sudden death
+  // Also subscribe to timer updates from other broadcasters for sync
   useEffect(() => {
     if (!battle?.started_at || battle.status !== 'active' || !arenaReady) {
       if (battle?.status === 'ended') setHasEnded(true);
       return;
     }
+
+    // Create a channel for timer sync between broadcasters
+    const timerChannel = supabase.channel(`battle_timer:${battleId}`);
+    
+    timerChannel.on('broadcast', { event: 'timer_sync' }, (payload) => {
+      const syncData = payload.payload;
+      if (syncData && syncData.timeLeft !== undefined) {
+        // Use the synced time from another broadcaster
+        setTimeLeft(syncData.timeLeft);
+        setIsSuddenDeath(syncData.isSuddenDeath);
+      }
+    }).subscribe();
+    
+    timerChannelRef.current = timerChannel;
 
     const interval = setInterval(() => {
       const now = new Date();
@@ -1952,11 +2012,31 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       const SUDDEN_DEATH = 10; // 10 seconds
       
       if (elapsed < BATTLE_DURATION) {
-        setTimeLeft(Math.ceil(BATTLE_DURATION - elapsed));
+        const newTimeLeft = Math.ceil(BATTLE_DURATION - elapsed);
+        setTimeLeft(newTimeLeft);
         setIsSuddenDeath(false);
+        
+        // Broadcast timer sync to other broadcasters every second
+        if (timerChannelRef.current && participantInfo?.role === 'host') {
+          timerChannelRef.current.send({
+            type: 'broadcast',
+            event: 'timer_sync',
+            payload: { timeLeft: newTimeLeft, isSuddenDeath: false }
+          });
+        }
       } else if (elapsed < BATTLE_DURATION + SUDDEN_DEATH) {
-        setTimeLeft(Math.ceil((BATTLE_DURATION + SUDDEN_DEATH) - elapsed));
+        const newTimeLeft = Math.ceil((BATTLE_DURATION + SUDDEN_DEATH) - elapsed);
+        setTimeLeft(newTimeLeft);
         setIsSuddenDeath(true);
+        
+        // Broadcast timer sync during sudden death
+        if (timerChannelRef.current && participantInfo?.role === 'host') {
+          timerChannelRef.current.send({
+            type: 'broadcast',
+            event: 'timer_sync',
+            payload: { timeLeft: newTimeLeft, isSuddenDeath: true }
+          });
+        }
       } else {
         setTimeLeft(0);
         setIsSuddenDeath(true);
@@ -1977,8 +2057,13 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       }
     }, 1000);
     
-    return () => clearInterval(interval);
-  }, [battle?.started_at, battle?.status, battle?.score_challenger, battle?.score_opponent, participantInfo?.role, hasEnded, endBattle, awardCrownToWinner, arenaReady, arenaReadyAtMs, challengerStream?.user_id, opponentStream?.user_id]);
+    return () => {
+      clearInterval(interval);
+      if (timerChannelRef.current) {
+        supabase.removeChannel(timerChannelRef.current);
+      }
+    };
+  }, [battle?.started_at, battle?.status, battle?.score_challenger, battle?.score_opponent, participantInfo?.role, hasEnded, endBattle, awardCrownToWinner, arenaReady, arenaReadyAtMs, challengerStream?.user_id, opponentStream?.user_id, battleId]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -2014,39 +2099,53 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   };
 
   // Return to stream handler - returns each broadcaster to their own stream
-  const handleReturnToStream = useCallback(() => {
+  // Also broadcasts to all participants to return to their respective broadcasts
+  const handleReturnToStream = useCallback(async () => {
     // Cleanup media
-    if (localAudioTrack) {
-      localAudioTrack.stop();
-      localAudioTrack.close();
+    if (battleLocalAudioTrack) {
+      battleLocalAudioTrack.stop();
+      battleLocalAudioTrack.close();
     }
-    if (localVideoTrack) {
-      localVideoTrack.stop();
-      localVideoTrack.close();
+    if (battleLocalVideoTrack) {
+      battleLocalVideoTrack.stop();
+      battleLocalVideoTrack.close();
     }
     if (livekitRoom) {
       livekitRoom.disconnect();
     }
-    // Do NOT call PreflightStore.clear() or clearTracks() - tracks belong to the main broadcast
-    // Navigate back to stream - prioritize the original broadcast stream
-
-    // If user is a broadcaster (host or stage), return to their own stream
-    // Use /stream/{streamId} route (not /live which redirects to /live)
+    
+    // Broadcast to all participants to return to their broadcasts
+    try {
+      const returnChannel = supabase.channel(`battle:${battleId}`);
+      await returnChannel.send({
+        type: 'broadcast',
+        event: 'return_to_broadcast',
+        payload: {
+          challengerStreamId: challengerStream?.id,
+          opponentStreamId: opponentStream?.id,
+          challengerHostId: challengerStream?.user_id,
+          opponentHostId: opponentStream?.user_id
+        }
+      });
+      // Clean up channel after sending
+      setTimeout(() => supabase.removeChannel(returnChannel), 2000);
+    } catch (e) {
+      console.warn('[BattleView] Failed to broadcast return event:', e);
+    }
+    
+    // Navigate based on user role
     if (participantInfo?.team === 'challenger' && challengerStream?.id) {
       navigate(`/stream/${challengerStream.id}`);
     } else if (participantInfo?.team === 'opponent' && opponentStream?.id) {
       navigate(`/stream/${opponentStream.id}`);
     } else if (currentStreamId) {
-      // Fallback to the original stream they were watching
       navigate(`/stream/${currentStreamId}`);
     } else if (onReturnToStream) {
-      // Fallback to callback if provided
       onReturnToStream();
     } else {
-      // Last resort - navigate to home but keep them in app
       navigate('/');
     }
-  }, [localAudioTrack, localVideoTrack, livekitRoom, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id, currentStreamId]);
+  }, [battleLocalAudioTrack, battleLocalVideoTrack, livekitRoom, onReturnToStream, navigate, participantInfo?.team, challengerStream?.id, opponentStream?.id, currentStreamId, battleId, challengerStream?.user_id, opponentStream?.user_id]);
 
   // Auto-return after battle ends - only for viewers, not for broadcasters who should stay
   // Don't auto-return when someone forfeited - show winner first and let them click return
@@ -2101,6 +2200,33 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
     );
   }
 
+  // Show connection status indicator
+  const renderConnectionStatus = () => {
+    if (connectionStatus === 'connecting') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/50 rounded-full">
+          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+          <span className="text-yellow-400 text-xs font-bold">Connecting...</span>
+        </div>
+      );
+    } else if (connectionStatus === 'failed') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/50 rounded-full">
+          <div className="w-2 h-2 bg-red-500 rounded-full" />
+          <span className="text-red-400 text-xs font-bold">Connection Failed</span>
+        </div>
+      );
+    } else if (connectionStatus === 'disconnected') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/50 rounded-full">
+          <div className="w-2 h-2 bg-red-500 rounded-full" />
+          <span className="text-red-400 text-xs font-bold">Disconnected</span>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const totalScore = (battle?.score_challenger || 0) + (battle?.score_opponent || 0);
   const challengerPercent = totalScore === 0 ? 50 : Math.round((battle?.score_challenger / totalScore) * 100);
   const opponentPercent = 100 - challengerPercent;
@@ -2113,18 +2239,18 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   console.log('[BattleView] User lookup - challenger stream:', challengerStream.user_id?.substring(0, 8), '-> livekit identity:', challengerLiveKitIdentity);
   console.log('[BattleView] User lookup - opponent stream:', opponentStream.user_id?.substring(0, 8), '-> livekit identity:', opponentLiveKitIdentity);
   console.log('[BattleView] Passed remoteUsers count:', passedRemoteUsers?.length || 0);
-  console.log('[BattleView] Local videoTrack:', !!localVideoTrack);
+  console.log('[BattleView] Local videoTrack:', !!battleLocalVideoTrack);
 
   // Handle challenger video - use mapping to find remote user
   const challengerUser = passedRemoteUsers?.find(u => u.identity === challengerLiveKitIdentity) ||
     (effectiveUserId === challengerStream.user_id
-      ? { videoTrack: localVideoTrack }
+      ? { videoTrack: battleLocalVideoTrack }
       : null);
 
   // Handle opponent video - use mapping to find remote user
   const opponentUser = passedRemoteUsers?.find(u => u.identity === opponentLiveKitIdentity) ||
     (effectiveUserId === opponentStream.user_id
-      ? { videoTrack: localVideoTrack }
+      ? { videoTrack: battleLocalVideoTrack }
       : null);
 
   return (
@@ -2174,6 +2300,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-green-400 text-sm font-bold">LIVE</span>
         </div>
+        
+        {/* Connection Status Indicator */}
+        {renderConnectionStatus()}
       </div>
 
       {/* Back Button */}
@@ -2188,14 +2317,14 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       {/* Main Content Container */}
       <div className="relative z-10 flex flex-col h-full pt-20">
         {/* Battle Arena - Shows all participants with scores */}
-        <div className="flex-1 flex items-center justify-center px-2 md:px-4 pb-36">
+        <div className="flex-1 flex items-center justify-center px-2 md:px-4 pb-36 pr-0 md:pr-80 lg:pr-96 pl-0 md:pl-20 lg:pl-24">
 
         {/* Battle Arena */}
         <MemoBattleArena
           onGift={handleGiftSelect}
           battleId={battleId}
-          localAudioTrack={localAudioTrack}
-          localVideoTrack={localVideoTrack}
+          localAudioTrack={battleLocalAudioTrack}
+          localVideoTrack={battleLocalVideoTrack}
           localIsCameraEnabled={isCameraEnabled}
           localIsMicEnabled={isMicEnabled}
           remoteUsers={remoteUsers}
@@ -2270,28 +2399,23 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
         <MuteHandler streamId={challengerStream.id} />
         
-        {/* Unified Battle Chat - Both sides see all messages */}
-        <div className="absolute bottom-0 left-0 w-full h-[200px] md:h-[250px] pointer-events-none flex gap-2 md:gap-4 px-2 md:px-4">
-          <div className="flex-1 pointer-events-auto">
-            <BattleChat
-              battleId={battleId}
-              challengerStream={challengerStream}
-              opponentStream={opponentStream}
-              currentUserId={effectiveUserId}
-              participantRole={participantInfo?.role}
+        {/* Live Chat - Use the challenger stream ID for chat messages (not battle-{id}) */}
+        <div className="absolute top-20 right-0 bottom-0 w-full md:w-80 lg:w-96 pointer-events-none z-40">
+          <div className="h-full pointer-events-auto">
+            <BroadcastChat
+              streamId={challengerStream?.id}
+              hostId={challengerStream.user_id}
+              isHost={participantInfo?.role === 'host'}
+              isViewer={participantInfo?.role === 'viewer'}
+              isGuest={participantInfo?.role === 'stage'}
+              isModerator={participantInfo?.role === 'host'}
             />
-          </div>
-          <div className="flex-1 pointer-events-none">
-            <div className="absolute inset-0 pointer-events-none z-30">
-              <GiftAnimationOverlay streamId={challengerStream.id} />
-              <GiftAnimationOverlay streamId={opponentStream.id} />
-            </div>
           </div>
         </div>
 
         {/* Host Controls */}
         {participantInfo?.role === 'host' && (
-          <div className="absolute top-20 right-2 md:right-4 z-40 flex flex-col gap-2">
+          <div className="absolute top-20 left-2 md:left-4 z-40 flex flex-col gap-2">
             {myStream && (
               <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/20 rounded-full px-3 py-1.5">
                 <span className="text-xs text-white/70">Boxes</span>
@@ -2407,7 +2531,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-2 text-2xl font-bold text-zinc-400">
-                        It's a Draw!
+                        It&apos;s a Draw!
                       </div>
                     )}
                     {(battle.winner_id === challengerStream.user_id && challengerCrownInfo.hasStreak) ||

@@ -337,7 +337,7 @@ function WeeklyGoalCard({ goal }: { goal: WeeklyGoal }) {
     if (category.includes('message') || category.includes('messages')) return <MessageCircle size={16} />;
     if (category.includes('battle')) return <Trophy size={16} />;
     if (category.includes('coin')) return <Coins size={16} />;
-    if (category.includes('call')) return <Phone size={16} };
+    if (category.includes('call')) return <Phone size={16} />;
     if (category.includes('invite') || category.includes('member')) return <Users size={16} />;
     if (category.includes('gift')) return <Gift size={16} />;
     if (category.includes('streak') || category.includes('active')) return <Flame size={16} />;

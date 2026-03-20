@@ -24,8 +24,7 @@ interface TCNNStream {
   streamerAvatar: string | null;
   viewerCount: number;
   isLive: boolean;
-  muxPlaybackId: string | null;
-  agoraChannel: string;
+  streamChannel: string;
 }
 
 interface TCNNHeadline {
@@ -60,7 +59,6 @@ export default function TCNNWidget({ onRequireAuth }: TCNNWidgetProps) {
             is_live,
             viewer_count,
             current_viewers,
-            mux_playback_id,
             agora_channel,
             broadcaster:user_profiles!user_id(username, avatar_url)
           `)
@@ -84,8 +82,7 @@ export default function TCNNWidget({ onRequireAuth }: TCNNWidgetProps) {
             streamerAvatar: broadcaster?.avatar_url || null,
             viewerCount: streamData.current_viewers || streamData.viewer_count || 0,
             isLive: streamData.is_live,
-            muxPlaybackId: streamData.mux_playback_id,
-            agoraChannel: streamData.agora_channel,
+            streamChannel: streamData.agora_channel,
           });
         }
 
