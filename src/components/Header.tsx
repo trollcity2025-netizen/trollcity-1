@@ -7,7 +7,8 @@ import { supabase, searchUsers } from '../lib/supabase'
 import { toast } from 'sonner'
 import UserNameWithAge from './UserNameWithAge'
 import ProfileDropdown from './ui/ProfileDropdown'
-import PresidentialToolsModal from './PresidentialToolsModal'
+import PresidentialToolsModal from './PresidentialToolsModal';
+import { TMButton } from './trollmatch/TMButton';
 
 import RGBSearchBar from './header/RGBSearchBar';
 import GlobalTicker from './header/GlobalTicker';
@@ -267,6 +268,9 @@ const Header = () => {
         )}
 
         {user && <PresidentialToolsModal />}
+
+        {/* TM Button - Troll Match */}
+        {user && <TMButton />}
 
         <button
           onClick={async () => {

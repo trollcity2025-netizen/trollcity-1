@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
+import { PreflightStore } from '../../lib/preflightStore'
 
 import { Stream } from '../../types/broadcast'
 import StreamLayout from '../../components/broadcast/StreamLayout'
@@ -64,6 +65,20 @@ function ViewerPage() {
 
   // Determine host status
   const isHost = stream?.user_id === user?.id
+
+  // Set broadcast mode to disable TrollEngine when watching a broadcast
+  useEffect(() => {
+    // When user is viewing a broadcast (not the host), enable broadcast mode
+    if (!isHost && streamId) {
+      PreflightStore.setInBroadcast(true);
+      console.log('[ViewerPage] Broadcast mode enabled - TrollEngine disabled');
+    }
+    
+    return () => {
+      PreflightStore.setInBroadcast(false);
+      console.log('[ViewerPage] Broadcast mode disabled - TrollEngine enabled');
+    };
+  }, [isHost, streamId]);
 
   // Pinned products hook
   const { pinnedProducts, pinProduct } = useBroadcastPinnedProducts({
@@ -704,15 +719,7 @@ function ViewerPage() {
         
         overlays={
           <>
-            <GiftAnimationOverlay
-              gifts={recentGifts}
-              userPositions={giftUserPositions}
-              getUserPositions={getGiftUserPositionsRef.current}
-              onAnimationComplete={(giftId) => {
-                setGiftUserPositions(getGiftUserPositionsRef.current());
-                setRecentGifts(prev => prev.filter(g => g.id !== giftId));
-              }}
-            />
+            {/* Gift animations disabled - not working */}
             
             {pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />

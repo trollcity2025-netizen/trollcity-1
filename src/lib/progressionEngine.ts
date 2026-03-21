@@ -117,17 +117,96 @@ export async function currentIdentity(userId: string) {
       console.error('Error fetching DNA profile:', dnaError)
     }
     
-    const levelData = lvl ? {
-      level: lvl.level || 1,
-      xp: lvl.xp_total || 0,
-      next_level_xp: lvl.xp_to_next_level || 100
-    } : { level: 1, xp: 0, next_level_xp: 100 }
+    // Calculate level info using the helper function
+    const { level, next_level_xp, xp_into_level, remaining_xp } = lvl ? calculateLevelFromXP(lvl.xp_total || 0) : { level: 1, next_level_xp: 100, xp_into_level: 0, remaining_xp: 100 };
+    
+    const levelData = {
+      level: level,
+      xp: xp_into_level,        // XP into current level (for progress bar)
+      next_level_xp: next_level_xp  // XP needed for current level (for progress bar)
+    }
 
     return { level: levelData, dna: dna || { primary_dna: null, traits: [] } }
   } catch (err) {
     console.error('Exception in currentIdentity:', err)
     return { level: { level: 1, xp: 0, next_level_xp: 100 }, dna: { primary_dna: null, traits: [] } }
   }
+}
+
+// Helper function to calculate level and remaining XP from absolute XP
+function calculateLevelFromXP(absoluteXp: number): { 
+  level: number; 
+  next_level_xp: number;  // XP needed for CURRENT level (for progress bar)
+  xp_into_level: number;   // XP earned into current level
+  remaining_xp: number;   // XP remaining to next level
+} {
+  let levelValue = 1;
+  let xpNeededThisLevel = 100;
+  let prevLevelAbsolute = 0;
+  let nextLevelAbsolute = 100;
+  
+  if (absoluteXp < 100) {
+    levelValue = 1;
+    xpNeededThisLevel = 100;
+    prevLevelAbsolute = 0;
+    nextLevelAbsolute = 100;
+  } else if (absoluteXp < 250) {
+    levelValue = 2;
+    xpNeededThisLevel = 150;
+    prevLevelAbsolute = 100;
+    nextLevelAbsolute = 250;
+  } else if (absoluteXp < 500) {
+    levelValue = 3;
+    xpNeededThisLevel = 250;
+    prevLevelAbsolute = 250;
+    nextLevelAbsolute = 500;
+  } else if (absoluteXp < 800) {
+    levelValue = 4;
+    xpNeededThisLevel = 300;
+    prevLevelAbsolute = 500;
+    nextLevelAbsolute = 800;
+  } else if (absoluteXp < 1200) {
+    levelValue = 5;
+    xpNeededThisLevel = 400;
+    prevLevelAbsolute = 800;
+    nextLevelAbsolute = 1200;
+  } else if (absoluteXp < 1700) {
+    levelValue = 6;
+    xpNeededThisLevel = 500;
+    prevLevelAbsolute = 1200;
+    nextLevelAbsolute = 1700;
+  } else if (absoluteXp < 2300) {
+    levelValue = 7;
+    xpNeededThisLevel = 600;
+    prevLevelAbsolute = 1700;
+    nextLevelAbsolute = 2300;
+  } else if (absoluteXp < 3000) {
+    levelValue = 8;
+    xpNeededThisLevel = 700;
+    prevLevelAbsolute = 2300;
+    nextLevelAbsolute = 3000;
+  } else if (absoluteXp < 4000) {
+    levelValue = 9;
+    xpNeededThisLevel = 1000;
+    prevLevelAbsolute = 3000;
+    nextLevelAbsolute = 4000;
+  } else {
+    // Level 10+: Each level requires 1000 more XP
+    levelValue = 10 + Math.floor((absoluteXp - 4000) / 1000);
+    xpNeededThisLevel = 1000;
+    prevLevelAbsolute = 4000 + ((levelValue - 10) * 1000);
+    nextLevelAbsolute = prevLevelAbsolute + 1000;
+  }
+  
+  const xpIntoLevel = Math.max(0, absoluteXp - prevLevelAbsolute);
+  const remainingXp = Math.max(0, xpNeededThisLevel - xpIntoLevel);
+  
+  return {
+    level: levelValue,
+    next_level_xp: xpNeededThisLevel,  // XP needed for CURRENT level (for progress bar)
+    xp_into_level: xpIntoLevel,         // XP earned into current level
+    remaining_xp: remainingXp            // XP remaining to next level
+  };
 }
 
 export async function getLevelProfile(userId: string) {
@@ -137,18 +216,21 @@ export async function getLevelProfile(userId: string) {
       console.error('Error fetching level profile:', error)
     }
     if (data) {
+      // Calculate level info using the helper function
+      const { level, next_level_xp, xp_into_level, remaining_xp } = calculateLevelFromXP(data.xp_total || 0);
       return {
-        level: data.level || 1,
-        xp: data.xp_total || 0,
+        level: level,
+        xp: xp_into_level,  // XP into current level (for progress bar)
         total_xp: data.xp_total || 0,
-        next_level_xp: data.xp_to_next_level || 100,
+        next_level_xp: next_level_xp,  // XP needed for current level (for progress bar)
+        remaining_xp: remaining_xp,    // XP remaining to next level (for display)
         updated_at: data.updated_at || new Date().toISOString()
       }
     }
-    return { level: 1, xp: 0, total_xp: 0, next_level_xp: 100, updated_at: new Date().toISOString() }
+    return { level: 1, xp: 0, total_xp: 0, next_level_xp: 100, remaining_xp: 100, updated_at: new Date().toISOString() }
   } catch (err) {
     console.error('Exception in getLevelProfile:', err)
-    return { level: 1, xp: 0, total_xp: 0, next_level_xp: 100, updated_at: new Date().toISOString() }
+    return { level: 1, xp: 0, total_xp: 0, next_level_xp: 100, remaining_xp: 100, updated_at: new Date().toISOString() }
   }
 }
 

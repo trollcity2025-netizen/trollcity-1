@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { useStreamStore } from '../../lib/streamStore'
 import { PreflightStore } from '../../lib/preflightStore'
+import { useEffect } from 'react'
 import { emitEvent } from '../../lib/events'
 
 import { Stream } from '../../types/broadcast'
@@ -265,6 +266,19 @@ function BroadcastPage() {
   }, []);
 
   const isHost = stream?.user_id === user?.id
+
+  // Set broadcast mode to disable TrollEngine when broadcasting
+  useEffect(() => {
+    if (isHost) {
+      PreflightStore.setInBroadcast(true);
+      console.log('[BroadcastPage] Broadcast mode enabled - TrollEngine disabled');
+    }
+    
+    return () => {
+      PreflightStore.setInBroadcast(false);
+      console.log('[BroadcastPage] Broadcast mode disabled - TrollEngine enabled');
+    };
+  }, [isHost]);
 
   const { pinnedProducts, pinProduct } = useBroadcastPinnedProducts({
     streamId: streamId || '',
@@ -909,6 +923,11 @@ function BroadcastPage() {
         (payload) => {
           try {
             const giftData = payload.payload;
+            console.log('[BroadcastPage] 🎁 GIFT RECEIVED via realtime:', giftData);
+            console.log('[BroadcastPage] Stream user_id:', stream?.user_id);
+            console.log('[BroadcastPage] Gift receiver_id:', giftData.receiver_id);
+            console.log('[BroadcastPage] Match?:', giftData.receiver_id === stream?.user_id);
+            
             const newGift: BroadcastGift = {
               id: giftData.id || `gift-${Date.now()}`,
               gift_id: giftData.gift_id,
@@ -925,12 +944,33 @@ function BroadcastPage() {
             
             // If this gift is for the broadcaster (host), refresh their profile to show updated balance
             if (giftData.receiver_id === stream?.user_id) {
-              console.log('[BroadcastPage] Gift received by broadcaster, refreshing profile for balance update');
-              // Use the auth store's refreshProfile method
-              const { refreshProfile } = useAuthStore.getState();
-              refreshProfile().catch(err => {
+              console.log('[BroadcastPage] ✅ Gift is for broadcaster! Refreshing profile...');
+              console.log('[BroadcastPage] Current broadcasterProfile:', broadcasterProfile);
+              
+              // Use the auth store's refreshProfile method - call directly from getState()
+              useAuthStore.getState().refreshProfile().catch(err => {
                 console.warn('[BroadcastPage] Failed to refresh broadcaster profile after gift:', err);
               });
+              
+              // Also update the local broadcasterProfile state to show updated balance immediately
+              // The broadcaster receives 95% of the gift value
+              if (broadcasterProfile) {
+                const giftAmount = Math.floor((giftData.amount || 0) * 0.95);
+                const newBalance = (broadcasterProfile.troll_coins || 0) + giftAmount;
+                console.log('[BroadcastPage] 🎯 Updating broadcasterProfile balance with 95%:', {
+                  giftAmount,
+                  oldBalance: broadcasterProfile.troll_coins,
+                  newBalance
+                });
+                setBroadcasterProfile({
+                  ...broadcasterProfile,
+                  troll_coins: newBalance
+                });
+              } else {
+                console.warn('[BroadcastPage] ❌ broadcasterProfile is null, cannot update balance!');
+              }
+            } else {
+              console.log('[BroadcastPage] Gift is NOT for broadcaster (different receiver)');
             }
             
             // If the receiver is a guest user in a seat, refresh their profile too
@@ -940,10 +980,44 @@ function BroadcastPage() {
             );
             if (receiverSeat) {
               console.log('[BroadcastPage] Gift received by guest user in seat, refreshing profile for balance update');
-              const { refreshProfile } = useAuthStore.getState();
-              refreshProfile().catch(err => {
+              useAuthStore.getState().refreshProfile().catch(err => {
                 console.warn('[BroadcastPage] Failed to refresh guest profile after gift:', err);
               });
+            }
+            
+            // 🔄 REAL-TIME BALANCE REFRESH: Broadcast to all participants
+            // Dispatch custom event to trigger balance refresh for all users in the broadcast
+            window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
+              detail: {
+                senderId: giftData.sender_id,
+                receiverId: giftData.receiver_id,
+                amount: giftData.amount,
+                timestamp: Date.now()
+              }
+            }));
+            
+            // If the current user is the sender, refresh their profile to show decreased balance
+            if (giftData.sender_id === user?.id) {
+              console.log('[BroadcastPage] 💸 Current user sent a gift - refreshing their balance');
+              useAuthStore.getState().refreshProfile().catch(err => {
+                console.warn('[BroadcastPage] Failed to refresh sender profile after gift:', err);
+              });
+            }
+            
+            // If the receiver is the broadcaster, also refresh broadcaster profile
+            if (giftData.receiver_id === stream?.user_id) {
+              // Already handled above, but ensure profile is refreshed
+              useAuthStore.getState().refreshProfile().catch(() => {});
+            }
+            
+            // Trigger seat refresh to update all participant balances in the grid
+            // This ensures all seat participants see updated balances
+            if (seats && Object.keys(seats).length > 0) {
+              console.log('[BroadcastPage] 🔄 Triggering seat refresh for balance updates');
+              // The useStreamSeats hook will pick up this event and refresh
+              window.dispatchEvent(new CustomEvent('refresh-seat-balances', {
+                detail: { streamId }
+              }));
             }
           } catch (err) {
             console.error('Error processing gift:', err);
@@ -1693,6 +1767,93 @@ function BroadcastPage() {
     });
   }, [isHost, hostMicMutedByOfficer]);
 
+  // Listen for balance update events from gift system
+  // This ensures all participants see updated balances in real-time without full page reloads
+  useEffect(() => {
+    const handleBalanceUpdate = async (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        senderId: string;
+        receiverId: string;
+        amount: number;
+        timestamp: number;
+      }>;
+      
+      const { senderId, receiverId } = customEvent.detail || {};
+      console.log('[BroadcastPage] 💰 Balance update received:', { senderId, receiverId });
+      
+      // Only refresh if the current user is involved in this gift
+      const isCurrentUserSender = senderId === user?.id;
+      const isCurrentUserReceiver = receiverId === user?.id;
+      const isBroadcasterInvolved = receiverId === stream?.user_id || senderId === stream?.user_id;
+      
+      if (isCurrentUserSender || isCurrentUserReceiver) {
+        console.log('[BroadcastPage] 🔄 Current user involved in gift - refreshing profile');
+        useAuthStore.getState().refreshProfile().catch(() => {});
+      }
+      
+      // If broadcaster is involved, update their profile
+      if (isBroadcasterInvolved && stream?.user_id) {
+        console.log('[BroadcastPage] 🔄 Broadcaster involved - updating profile');
+        const { data: updatedProfile } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', stream.user_id)
+          .single();
+        
+        if (updatedProfile) {
+          setBroadcasterProfile(updatedProfile);
+        }
+      }
+    };
+    
+    window.addEventListener('broadcast-balance-update', handleBalanceUpdate);
+    return () => window.removeEventListener('broadcast-balance-update', handleBalanceUpdate);
+  }, [user?.id, stream?.user_id, supabase]);
+
+  // Listen for seat balance refresh events
+  useEffect(() => {
+    const handleSeatRefresh = () => {
+      console.log('[BroadcastPage] 🔄 Received seat balance refresh request');
+      // This will trigger the useStreamSeats hook to refresh seat data
+      // The hook already polls every 10 seconds, but this provides instant refresh
+    };
+    
+    window.addEventListener('refresh-seat-balances', handleSeatRefresh);
+    return () => window.removeEventListener('refresh-seat-balances', handleSeatRefresh);
+  }, []);
+
+  // Subscribe to profile changes for broadcaster only (to avoid full reloads)
+  // This ensures real-time balance updates for the broadcaster without causing page reloads
+  useEffect(() => {
+    if (!streamId || !stream?.user_id) return;
+    
+    // Only subscribe to broadcaster's profile - not all participants
+    // This prevents full page reloads while still updating broadcaster balance
+    const broadcasterChannel = supabase.channel(`broadcast-broadcaster-${streamId}`);
+    
+    broadcasterChannel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'user_profiles',
+        filter: `id=eq.${stream.user_id}`
+      },
+      (payload) => {
+        console.log('[BroadcastPage] 👤 Broadcaster profile updated:', payload.new);
+        
+        // Update local broadcaster profile without causing full reload
+        if (payload.new) {
+          setBroadcasterProfile((prev: any) => prev ? { ...prev, ...payload.new } : payload.new);
+        }
+      }
+    ).subscribe();
+    
+    return () => {
+      supabase.removeChannel(broadcasterChannel);
+    };
+  }, [streamId, stream?.user_id, supabase]);
+
   const onGift = (userId: string) => {
     setGiftRecipientId(userId);
     setIsGiftModalOpen(true);
@@ -2116,15 +2277,7 @@ function BroadcastPage() {
         
         overlays={
           <>
-            <GiftAnimationOverlay
-              gifts={recentGifts}
-              userPositions={giftUserPositions}
-              getUserPositions={getGiftUserPositionsRef.current}
-              onAnimationComplete={(giftId) => {
-                setGiftUserPositions(getGiftUserPositionsRef.current());
-                setRecentGifts(prev => prev.filter(g => g.id !== giftId));
-              }}
-            />
+            {/* Gift animations disabled - not working */}
             
             {!isHost && pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
@@ -2148,6 +2301,7 @@ function BroadcastPage() {
               sharedChannel={channelRef.current}
               onGiftSent={(giftData: GiftItem, target: GiftTarget) => {
                 const quantity = target.quantity || 1;
+                const totalAmount = giftData.coinCost * quantity;
                 
                 if (target.type === 'all') {
                   const allRecipients = [stream.user_id, ...activeUserIds];
@@ -2166,6 +2320,16 @@ function BroadcastPage() {
                         created_at: new Date().toISOString(),
                       };
                       setRecentGifts(prev => [...prev, newGift]);
+                      
+                      // Dispatch balance update event for each recipient
+                      window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
+                        detail: {
+                          senderId: user?.id || '',
+                          receiverId: recipientId,
+                          amount: giftData.coinCost * quantity,
+                          timestamp: Date.now()
+                        }
+                      }));
                     }, index * 200);
                   });
                 } else {
@@ -2183,6 +2347,23 @@ function BroadcastPage() {
                     created_at: new Date().toISOString(),
                   };
                   setRecentGifts(prev => [...prev, newGift]);
+                  
+                  // Dispatch balance update event for the recipient
+                  window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
+                    detail: {
+                      senderId: user?.id || '',
+                      receiverId: recipientId,
+                      amount: giftData.coinCost * quantity,
+                      timestamp: Date.now()
+                    }
+                  }));
+                }
+                
+                // Immediately refresh sender's profile to show decreased balance
+                // The sender loses coins when sending a gift
+                if (user?.id) {
+                  console.log('[BroadcastPage] 💸 Gift sent by user - refreshing balance');
+                  useAuthStore.getState().refreshProfile().catch(() => {});
                 }
               }}
             />

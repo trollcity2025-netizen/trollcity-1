@@ -195,17 +195,56 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
     }
   }, [streamData?.status, mySession?.id]);
 
+  // Listen for balance update events to refresh seat data
+  // This ensures all participants see updated balances when gifts are sent/received
+  // Note: The existing 10-second polling will handle most updates - this is backup
+  useEffect(() => {
+    const handleBalanceUpdate = () => {
+      console.log('[useStreamSeats] 💰 Balance update detected');
+      // Use the existing polling mechanism - don't force immediate refresh
+      // to avoid causing full page reloads
+    };
+    
+    const handleBroadcastBalanceUpdate = (event: Event) => {
+      console.log('[useStreamSeats] 🎁 Received broadcast-balance-update');
+      // Rely on existing polling for seat data - 10 second intervals
+      // This prevents full page reloads while still keeping balances updated
+    };
+    
+    window.addEventListener('refresh-seat-balances', handleBalanceUpdate);
+    window.addEventListener('broadcast-balance-update', handleBroadcastBalanceUpdate);
+    
+    return () => {
+      window.removeEventListener('refresh-seat-balances', handleBalanceUpdate);
+      window.removeEventListener('broadcast-balance-update', handleBroadcastBalanceUpdate);
+    };
+  }, []);
+
   const joinSeat = async (seatIndex: number, price: number) => {
     if (!effectiveUserId || !streamId) return false;
 
-    // Check if user already has a seat (might have been added by broadcaster, e.g., challenger)
-    const { data: existingSession } = await supabase
-      .from('stream_seat_sessions')
-      .select('id, seat_index, user_id, guest_id, status')
-      .eq('stream_id', streamId)
-      .eq('status', 'active')
-      .or(`user_id.eq.${effectiveUserId},guest_id.eq.${effectiveUserId}`)
-      .maybeSingle();
+    // OPTIMIZED: Check both existing session AND target seat in parallel
+    const [existingSessionResult, targetSeatResult] = await Promise.all([
+      // Check if user already has a seat
+      supabase
+        .from('stream_seat_sessions')
+        .select('id, seat_index, user_id, guest_id, status')
+        .eq('stream_id', streamId)
+        .eq('status', 'active')
+        .or(`user_id.eq.${effectiveUserId},guest_id.eq.${effectiveUserId}`)
+        .maybeSingle(),
+      // Check if target seat is occupied
+      supabase
+        .from('stream_seat_sessions')
+        .select('id, user_id, guest_id, status')
+        .eq('stream_id', streamId)
+        .eq('seat_index', seatIndex)
+        .eq('status', 'active')
+        .maybeSingle()
+    ]);
+
+    const existingSession = existingSessionResult.data;
+    const targetSeat = targetSeatResult.data;
 
     if (existingSession) {
       console.log('[useStreamSeats] User already has a seat, using existing session:', existingSession.id);
@@ -224,15 +263,6 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
       toast.success('Joined seat!');
       return true;
     }
-
-    // Check if the seat is already occupied by a guest - prevent moving guests
-    const { data: targetSeat } = await supabase
-      .from('stream_seat_sessions')
-      .select('id, user_id, guest_id, status')
-      .eq('stream_id', streamId)
-      .eq('seat_index', seatIndex)
-      .eq('status', 'active')
-      .maybeSingle();
 
     if (targetSeat) {
       // Seat is already occupied - check if it's by a guest

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { PreflightStore } from '../lib/preflightStore';
 
 // Define rarity tiers
 export type Rarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
@@ -67,6 +68,7 @@ const SAFE_CONTEXTS = [
   'church',
   'news',
   'tcnn',
+  'broadcast', // Disable trolls when broadcasting or watching
 ];
 
 // Hook for triggering troll events
@@ -147,6 +149,14 @@ export const useTrollEngine = (onBackgroundTrigger?: (event: TrollEvent) => void
   const triggerTroll = useCallback((context?: string, options?: { safe?: boolean }) => {
     console.log('[TrollEngine] Trigger attempt. Context:', context, 'Safe:', options?.safe);
 
+    // Check if user is in battle or broadcast mode (should disable trolls)
+    const isInBattle = PreflightStore.getInBattle();
+    const isInBroadcast = PreflightStore.getInBroadcast();
+    if (isInBattle || isInBroadcast) {
+      console.log('[TrollEngine] Blocked - user is in battle or broadcast mode');
+      return null;
+    }
+
     // Check if safe mode or safe context
     if (options?.safe || (context && SAFE_CONTEXTS.some(safeContext =>
       context.toLowerCase().includes(safeContext.toLowerCase())
@@ -185,6 +195,15 @@ export const useTrollEngine = (onBackgroundTrigger?: (event: TrollEvent) => void
   useEffect(() => {
     // Trigger a background troll check every 1-3 minutes
     const checkInterval = setInterval(() => {
+      // Check if user is in battle or broadcast mode (should disable background trolls)
+      const isInBattle = PreflightStore.getInBattle();
+      const isInBroadcast = PreflightStore.getInBroadcast();
+      
+      if (isInBattle || isInBroadcast) {
+        // Skip background troll when in battle or broadcast mode
+        return;
+      }
+      
       if (!isTrollActive) {
         const roll = Math.random();
         // 20% chance every 1-3 minutes for background trolls

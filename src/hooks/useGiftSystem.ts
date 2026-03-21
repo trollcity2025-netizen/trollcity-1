@@ -111,15 +111,62 @@ export function useGiftSystem(
         txnKey
       });
 
-      // Use the new idempotent send_gift_in_stream RPC
-      const { data, error } = await supabase.rpc('send_gift_in_stream', {
-        p_sender_id: user.id,
-        p_receiver_id: finalRecipientId,
-        p_stream_id: streamId || null,
-        p_gift_id: gift.id,
-        p_quantity: quantity,
-        p_metadata: { txn_key: txnKey }
-      });
+      // Deduct 100 trollmonds for ANY gift sent (if sender has 100+ trollmonds)
+      // This applies to all gifts regardless of currency
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('trollmonds')
+        .eq('id', user.id)
+        .single();
+      
+      const senderTrollmonds = profileData?.trollmonds || 0;
+      
+      // Deduct 100 trollmonds per gift if sender has 100+
+      if (senderTrollmonds >= 100) {
+        const trollmondDeduction = 100 * quantity;
+        await supabase.rpc('increment_trollmonds', {
+          p_user_id: user.id,
+          p_amount: -trollmondDeduction
+        });
+      }
+      
+      // Now send the gift via the appropriate RPC
+      let data, error;
+      
+      // First, check the currency from gift_items table
+      const { data: giftData } = await supabase
+        .from('gift_items')
+        .select('currency, value')
+        .eq('id', gift.id)
+        .maybeSingle();
+      
+      const giftCurrency = giftData?.currency || 'troll_coins';
+      
+      if (giftCurrency === 'trollmonds') {
+        // Use send_gift_in_stream for trollmonds gifts (as they're stored in gifts table too)
+        const result = await supabase.rpc('send_gift_in_stream', {
+          p_sender_id: user.id,
+          p_receiver_id: finalRecipientId,
+          p_stream_id: streamId || null,
+          p_gift_id: gift.id,
+          p_quantity: quantity,
+          p_metadata: { txn_key: txnKey, trollmonds_deducted: senderTrollmonds >= 100 ? 100 * quantity : 0 }
+        });
+        data = result.data;
+        error = result.error;
+      } else {
+        // Use send_gift_in_stream for troll_coins
+        const result = await supabase.rpc('send_gift_in_stream', {
+          p_sender_id: user.id,
+          p_receiver_id: finalRecipientId,
+          p_stream_id: streamId || null,
+          p_gift_id: gift.id,
+          p_quantity: quantity,
+          p_metadata: { txn_key: txnKey, trollmonds_deducted: senderTrollmonds >= 100 ? 100 * quantity : 0 }
+        });
+        data = result.data;
+        error = result.error;
+      }
 
       console.log('[GiftDebugger-2] RPC Result:', { data, error });
 
@@ -182,9 +229,14 @@ export function useGiftSystem(
               });
               console.log('[GiftSystem] Gift broadcast via shared channel');
             } else {
-              // Fallback: create ephemeral channel with the SAME name as the main stream channel
-              // This ensures all users receive the broadcast regardless of when they joined
-              const channel = supabase.channel(`stream:${streamId}`);
+              // Use a DIFFERENT channel name to avoid triggering presence 'leave' events
+              // The presence channel uses stream:${streamId}, so we use broadcast-gift:${streamId}
+              // Also, don't track presence on this channel to avoid any leave events
+              const channel = supabase.channel(`broadcast-gift:${streamId}`, {
+                config: {
+                  presence: { key: null }  // Don't track presence on this channel
+                }
+              });
               
               // Subscribe and send immediately
               channel.subscribe((status) => {
@@ -194,7 +246,7 @@ export function useGiftSystem(
                     event: 'gift_sent',
                     payload
                   });
-                  console.log('[GiftSystem] Gift broadcast via ephemeral channel (stream:${streamId})');
+                  console.log('[GiftSystem] Gift broadcast via ephemeral channel (broadcast-gift:${streamId})');
                   
                   // Clean up after a short delay
                   setTimeout(() => {
@@ -212,7 +264,9 @@ export function useGiftSystem(
         try {
           if (streamId) {
             const txnId = generateUUID();
-            const chatChannel = supabase.channel(`stream:${streamId}`);
+            // Use the SAME channel name as BroadcastChat to ensure messages are received
+            // BroadcastChat has a fix to ignore leave events for the current user
+            const chatChannel = supabase.channel(`stream-chat-${streamId}`);
             await chatChannel.subscribe((status) => {
               if (status === 'SUBSCRIBED') {
                 chatChannel.send({

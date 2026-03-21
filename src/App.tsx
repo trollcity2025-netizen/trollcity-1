@@ -77,6 +77,8 @@ const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
 // Sidebar pages (instant load)
 const TCPS = lazyWithRetry(() => import("./pages/TCPS"));
+const MatchPage = lazyWithRetry(() => import("./pages/MatchPage"));
+const TMFamilyInviteHandler = lazyWithRetry(() => import("./components/trollmatch/TMFamilyInviteHandler"));
 const TrollPodsListing = lazyWithRetry(() => import("./pages/pods/TrollPodsListing"));
 const TrollPodRoom = lazyWithRetry(() => import("./pages/pods/TrollPodRoom"));
 const PodSummary = lazyWithRetry(() => import("./pages/pods/PodSummary"));
@@ -187,6 +189,7 @@ const PaymentCallback = lazyWithRetry(() => import("./pages/PaymentCallback"));
 const CoinsComplete = lazyWithRetry(() => import("./pages/CoinsComplete"));
 const PayoutSetupPage = lazyWithRetry(() => import("./pages/PayoutSetupPage"));
 const Withdraw = lazyWithRetry(() => import("./pages/Withdraw"));
+
 const Profile = lazyWithRetry(() => import("./pages/Profile"));
 const ProfileSetup = lazyWithRetry(() => import("./pages/ProfileSetup"));
 const BadgesPage = lazyWithRetry(() => import("./pages/BadgesPage"));
@@ -1120,6 +1123,7 @@ function AppContent() {
                   <Route path="/live" element={<ExploreFeed />} />
                   <Route path="/messages" element={<Navigate to="/tcps" replace />} />
                   <Route path="/tcps" element={<TCPS />} />
+                  <Route path="/match" element={<MatchPage />} />
           <Route path="/city-hall" element={<CityHall />} />
                   <Route path="/city-registry" element={<CityRegistry />} />
                 <Route path="/universe-event" element={<UniverseEventPage />} />
@@ -1891,7 +1895,13 @@ function App() {
     return cleanup;
   }, []);
 
-  return <TrollProvider><AppContent /></TrollProvider>;
+  return (
+    <TrollProvider>
+      <AppContent />
+      {/* TM Family Invite Handler - shows pending invites as notifications */}
+      <TMFamilyInviteHandler />
+    </TrollProvider>
+  );
 }
 
 export default App;

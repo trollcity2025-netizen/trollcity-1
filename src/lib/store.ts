@@ -297,6 +297,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        // Cleanup realtime profile subscription
+        cleanupProfileRealtime()
+        
         console.log('Logging out');
         const currentState = get();
 
@@ -376,6 +379,54 @@ export const useAuthStore = create<AuthState>()(
 
 let initDone = false
 let initialAuthHandled = false
+let profileChannel: any = null
+
+// Setup realtime subscription for profile changes
+export function setupProfileRealtime(userId: string) {
+  // Remove existing subscription if any
+  if (profileChannel) {
+    supabase.removeChannel(profileChannel)
+    profileChannel = null
+  }
+
+  // Subscribe to profile changes for real-time balance updates
+  profileChannel = supabase
+    .channel(`profile-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'user_profiles',
+        filter: `id=eq.${userId}`
+      },
+      (payload) => {
+        console.log('[ProfileRealtime] Profile updated:', payload.new)
+        // Update the profile in store immediately - bypass debounce for realtime updates
+        const currentProfile = useAuthStore.getState().profile
+        if (currentProfile && currentProfile.id === userId) {
+          // Force bypass debounce by resetting the debounce timer
+          lastProfileUpdateTime = 0
+          useAuthStore.getState().setProfile({
+            ...currentProfile,
+            ...payload.new
+          } as UserProfile)
+        }
+      }
+    )
+    .subscribe()
+
+  console.log('[ProfileRealtime] Subscribed to profile changes for user:', userId)
+}
+
+// Cleanup realtime subscription
+export function cleanupProfileRealtime() {
+  if (profileChannel) {
+    supabase.removeChannel(profileChannel)
+    profileChannel = null
+    console.log('[ProfileRealtime] Cleaned up profile subscription')
+  }
+}
 
 export async function initAuthAndData() {
   if (initDone) return
@@ -387,6 +438,9 @@ export async function initAuthAndData() {
 
   if (session?.user) {
     useAuthStore.getState().setAuth(session.user, session)
+    
+    // Setup realtime profile subscription for real-time balance updates
+    setupProfileRealtime(session.user.id)
     
     // Check for concurrent login from other devices
     const sessionId = (session as any)?.access_token
@@ -436,6 +490,9 @@ export async function initAuthAndData() {
     if (session?.user) {
       useAuthStore.getState().setAuth(session.user, session)
       
+      // Setup realtime profile subscription for real-time balance updates
+      setupProfileRealtime(session.user.id)
+      
       // Check for concurrent login when session changes
       const sessionId = (session as any)?.access_token
       if (sessionId) {
@@ -449,6 +506,8 @@ export async function initAuthAndData() {
       
       await useAuthStore.getState().refreshProfile()
     } else {
+      // Cleanup realtime subscription on logout
+      cleanupProfileRealtime()
       useAuthStore.getState().setAuth(null, null)
       useAuthStore.getState().setProfile(null)
       useAuthStore.getState().setAdmin(null)

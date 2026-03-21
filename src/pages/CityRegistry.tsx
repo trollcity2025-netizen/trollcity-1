@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
@@ -18,7 +18,8 @@ import {
   Eye,
   Scale,
   Gavel,
-  Building2
+  Building2,
+  Video
 } from 'lucide-react';
 import { trollCityTheme } from '../styles/trollCityTheme';
 
@@ -78,8 +79,29 @@ const STATUS_COLORS: Record<AppealStatus, string> = {
 export default function CityRegistry() {
   const { user, profile } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Check for tab query parameter
+  const tabParam = searchParams.get('tab');
   
   const [activeTab, setActiveTab] = useState<'file' | 'history'>('file');
+  
+  // Check if user is staff (Admin, CEO, Lead Troll Officers, Troll Officers, Secretary)
+  const isStaffUser = profile && (
+    profile.role === 'admin' ||
+    profile.is_admin ||
+    profile.is_lead_officer ||
+    profile.is_troll_officer ||
+    profile.role === 'secretary' ||
+    profile.troll_role === 'lead_troll_officer' ||
+    profile.troll_role === 'troll_officer'
+  );
+  
+  // Update tab when URL changes
+  useEffect(() => {
+    const newTab = searchParams.get('tab') === 'history' ? 'history' : 'file';
+    setActiveTab(newTab);
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   

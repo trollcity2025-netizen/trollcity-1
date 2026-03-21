@@ -39,6 +39,7 @@ export default function TCPS() {
   const [activeConversation, setActiveConversation] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<string>('inbox')
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0)
   const [showNewMessageModal, setShowNewMessageModal] = useState(false)
 
   const [otherUserInfo, setOtherUserInfo] = useState<{
@@ -230,6 +231,7 @@ export default function TCPS() {
               onlineUsers={onlineUsersRecord}
               onConversationsLoaded={handleConversationsLoaded}
               onOpenNewMessage={() => setShowNewMessageModal(true)}
+              refreshKey={sidebarRefreshKey}
             />
           </div>
 
@@ -242,6 +244,10 @@ export default function TCPS() {
               onBack={() => {
                 setActiveConversation(null)
                 navigate('/tcps')
+              }}
+              onMessageSent={() => {
+                // Refresh sidebar when message is sent
+                setSidebarRefreshKey(prev => prev + 1)
               }}
             />
           </div>

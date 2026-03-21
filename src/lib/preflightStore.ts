@@ -9,6 +9,8 @@ interface PreflightState {
   isAudioEnabled: boolean;
   // Battle mode flag - when true, TrollEngine should be hidden
   isInBattle: boolean;
+  // Broadcast mode flag - when true, TrollEngine should be hidden (hosting or watching)
+  isInBroadcast: boolean;
   // Global flag to disable battles - no users can start battles when true
   battlesDisabled: boolean;
   // LiveKit room and tracks from SetupPage
@@ -23,6 +25,7 @@ const state: PreflightState = {
   isVideoEnabled: true,
   isAudioEnabled: true,
   isInBattle: false,
+  isInBroadcast: false,
   battlesDisabled: true, // Default to disabled until further notice
   livekitRoom: null,
   livekitTracks: null,
@@ -58,6 +61,17 @@ export const PreflightStore = {
   // Get battle mode status
   getInBattle(): boolean {
     return state.isInBattle;
+  },
+
+  // Set broadcast mode - used to hide TrollEngine when broadcasting or watching
+  setInBroadcast(inBroadcast: boolean) {
+    state.isInBroadcast = inBroadcast;
+    console.log('[PreflightStore] setInBroadcast:', inBroadcast);
+  },
+
+  // Get broadcast mode status
+  getInBroadcast(): boolean {
+    return state.isInBroadcast;
   },
 
   // Set battles disabled/enabled - globally blocks battle functionality when true
@@ -98,6 +112,7 @@ export const PreflightStore = {
     state.isVideoEnabled = true;
     state.isAudioEnabled = true;
     state.isInBattle = false;
+    state.isInBroadcast = false;
     state.battlesDisabled = true; // Keep battles disabled on clear
     state.livekitRoom = null;
     state.livekitTracks = null;

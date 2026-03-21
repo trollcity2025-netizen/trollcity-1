@@ -1,165 +1,149 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Home, Trophy, Users, Heart, Gift, Loader2 } from 'lucide-react';
+import { Home, Trophy, Coins, Gift, Heart, UserPlus, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
+
+interface StreamStats {
+  title: string;
+  totalLikes: number;
+  createdAt: string;
+  endedAt?: string;
+  broadcasterId: string;
+}
+
+interface UserStats {
+  trollmondsSpent: number;
+  giftsReceived: number;
+  newFollowers: number;
+}
 
 export default function StreamSummary() {
   const navigate = useNavigate();
   const location = useLocation();
   const { streamId } = useParams();
-  const { user } = useAuthStore();
-  const [stats, setStats] = useState(location.state || null);
-  const [loading, setLoading] = useState(!location.state);
-  const [myGifts, setMyGifts] = useState(0);
-  const [broadcasterGiftTotal, setBroadcasterGiftTotal] = useState(0);
-  const [guestGiftTotal, setGuestGiftTotal] = useState(0);
+  const { user, profile } = useAuthStore();
+  const [loading, setLoading] = useState(true);
+  const [streamStats, setStreamStats] = useState<StreamStats | null>(null);
+  const [userStats, setUserStats] = useState<UserStats>({
+    trollmondsSpent: 0,
+    giftsReceived: 0,
+    newFollowers: 0
+  });
+  const [isBroadcaster, setIsBroadcaster] = useState(false);
 
-   useEffect(() => {
-     // If we have stats from location.state (passed from BroadcastPage), use them
-     if (location.state) {
-       setStats({
-         title: location.state.title || 'Broadcast Ended',
-         viewers: location.state.viewers || 0,
-         likes: location.state.likes || 0
-       });
-       setMyGifts(location.state.myGifts || 0);
-       setBroadcasterGiftTotal(location.state.broadcasterGiftTotal || 0);
-       setGuestGiftTotal(location.state.guestGiftTotal || 0);
-       setLoading(false);
-       return;
-     }
- 
-     if (!streamId) {
-       setLoading(false);
-       return;
-     }
- 
-     const fetchStreamStats = async () => {
-       try {
-         // First get stream info and broadcaster ID
-         const { data: stream, error } = await supabase
-           .from('streams')
-           .select('title, viewer_count, current_viewers, total_likes, user_id')
-           .eq('id', streamId)
-           .single();
- 
-         if (error) throw error;
- 
-         // Fetch broadcaster's received gifts (gifts sent to broadcaster)
-         let broadcasterGifts = 0;
-         if (stream?.user_id) {
-           // Try gift_ledger first
-           const { data: broadcasterGiftData } = await supabase
-             .from('gift_ledger')
-             .select('amount')
-             .eq('stream_id', streamId)
-             .eq('receiver_id', stream.user_id)
-             .eq('status', 'processed');
-           
-           if (broadcasterGiftData && broadcasterGiftData.length > 0) {
-             broadcasterGifts = broadcasterGiftData.reduce((sum, g) => sum + (g.amount || 0), 0);
-           } else {
-             // Fallback to gifts table
-             const { data: fallbackBroadcasterGifts } = await supabase
-               .from('gifts')
-               .select('coins_spent')
-               .eq('stream_id', streamId)
-               .eq('receiver_id', stream.user_id);
-             
-             if (fallbackBroadcasterGifts && fallbackBroadcasterGifts.length > 0) {
-               broadcasterGifts = fallbackBroadcasterGifts.reduce((sum, g) => sum + (g.coins_spent || 0), 0);
-             }
-           }
-         }
- 
-         // Fetch guest gifts (gifts sent to guests in seats)
-         // First get all guest user_ids from seat sessions
-         const { data: seatSessions } = await supabase
-           .from('stream_seat_sessions')
-           .select('user_id, guest_id')
-           .eq('stream_id', streamId)
-           .eq('status', 'active');
+  useEffect(() => {
+    if (!streamId) {
+      setLoading(false);
+      return;
+    }
 
-         let guestGifts = 0;
-         if (seatSessions && seatSessions.length > 0) {
-           // Get all guest user IDs (both user_id and guest_id columns)
-           const guestUserIds = seatSessions
-             .filter(s => s.user_id || s.guest_id)
-             .map(s => s.user_id || s.guest_id)
-             .filter(Boolean);
+    const fetchStreamStats = async () => {
+      try {
+        // Get stream info with timing data
+        const { data: stream, error } = await supabase
+          .from('streams')
+          .select('title, total_likes, created_at, ended_at, user_id')
+          .eq('id', streamId)
+          .single();
 
-           if (guestUserIds.length > 0) {
-             // Try gift_ledger for guests
-             const { data: guestGiftData } = await supabase
-               .from('gift_ledger')
-               .select('amount')
-               .eq('stream_id', streamId)
-               .in('receiver_id', guestUserIds)
-               .eq('status', 'processed');
-             
-             if (guestGiftData && guestGiftData.length > 0) {
-               guestGifts = guestGiftData.reduce((sum, g) => sum + (g.amount || 0), 0);
-             } else {
-               // Fallback to gifts table
-               const { data: fallbackGuestGifts } = await supabase
-                 .from('gifts')
-                 .select('coins_spent')
-                 .eq('stream_id', streamId)
-                 .in('receiver_id', guestUserIds);
-               
-               if (fallbackGuestGifts && fallbackGuestGifts.length > 0) {
-                 guestGifts = fallbackGuestGifts.reduce((sum, g) => sum + (g.coins_spent || 0), 0);
-               }
-             }
-           }
-         }
- 
-         // Fetch user's received gifts (gifts user received on this stream)
-         let userGifts = 0;
-         if (user?.id) {
-           // Try gift_ledger first
-           const { data: giftData } = await supabase
-             .from('gift_ledger')
-             .select('amount')
-             .eq('stream_id', streamId)
-             .eq('receiver_id', user.id)
-             .eq('status', 'processed');
-           
-           if (giftData && giftData.length > 0) {
-             userGifts = giftData.reduce((sum, g) => sum + (g.amount || 0), 0);
-           } else {
-             // Fallback to gifts table
-             const { data: fallbackGifts } = await supabase
-               .from('gifts')
-               .select('coins_spent')
-               .eq('stream_id', streamId)
-               .eq('receiver_id', user.id);
-             
-             if (fallbackGifts && fallbackGifts.length > 0) {
-               userGifts = fallbackGifts.reduce((sum, g) => sum + (g.coins_spent || 0), 0);
-             }
-           }
-         }
- 
-         setStats({
-           title: stream.title || 'Stream Ended',
-           viewers: stream.current_viewers || stream.viewer_count || 0,
-           likes: stream.total_likes || 0
-         });
-         setMyGifts(userGifts);
-         setBroadcasterGiftTotal(broadcasterGifts);
-         setGuestGiftTotal(guestGifts);
-       } catch (err) {
-         console.error('Error fetching stream stats:', err);
-         setStats({ title: 'Stream Ended', viewers: 0, likes: 0 });
-       } finally {
-         setLoading(false);
-       }
-     };
- 
-     fetchStreamStats();
-   }, [streamId, user?.id, location.state]);
+        if (error) throw error;
+
+        const broadcasterId = stream?.user_id || '';
+        const streamCreatedAt = stream?.created_at || new Date().toISOString();
+        const streamEndedAt = stream?.ended_at || new Date().toISOString();
+
+        setStreamStats({
+          title: stream?.title || 'Stream Ended',
+          totalLikes: stream?.total_likes || 0,
+          createdAt: streamCreatedAt,
+          endedAt: streamEndedAt,
+          broadcasterId
+        });
+
+        // Check if current user is the broadcaster
+        const userIsBroadcaster = user?.id === broadcasterId;
+        setIsBroadcaster(userIsBroadcaster);
+
+        // Initialize user stats
+        let trollmondsSpent = 0;
+        let giftsReceived = 0;
+        let newFollowers = 0;
+
+        if (user?.id) {
+          console.log('[StreamSummary] Fetching gift data for user:', user.id, 'stream:', streamId);
+          
+          // 1. Get trollmonds spent by this user (as sender)
+          // Each gift costs 100 trollmonds to send
+          const { data: streamGiftsSpent, error: streamGiftsSpentError } = await supabase
+            .from('stream_gifts')
+            .select('quantity')
+            .eq('stream_id', streamId)
+            .eq('sender_id', user.id);
+
+          console.log('[StreamSummary] stream_gifts spent data:', streamGiftsSpent, 'error:', streamGiftsSpentError);
+
+          if (streamGiftsSpent && streamGiftsSpent.length > 0) {
+            // Each gift costs 100 trollmonds × quantity
+            trollmondsSpent = streamGiftsSpent.reduce((sum: number, g: any) => {
+              return sum + (100 * (g.quantity || 1));
+            }, 0);
+          }
+
+          // 2. Get gifts received by this user (as receiver)
+          // Receiver gets 100 trollmonds per gift
+          const { data: streamGiftsReceived, error: streamGiftsReceivedError } = await supabase
+            .from('stream_gifts')
+            .select('quantity')
+            .eq('stream_id', streamId)
+            .eq('receiver_id', user.id);
+
+          console.log('[StreamSummary] stream_gifts received data:', streamGiftsReceived, 'error:', streamGiftsReceivedError);
+
+          if (streamGiftsReceived && streamGiftsReceived.length > 0) {
+            // Each gift received gives 100 trollmonds × quantity
+            giftsReceived = streamGiftsReceived.reduce((sum: number, g: any) => {
+              return sum + (100 * (g.quantity || 1));
+            }, 0);
+          }
+          
+          console.log('[StreamSummary] Final user stats:', { trollmondsSpent, giftsReceived });
+
+          // 3. Get new followers gained during this stream
+          // Check if user has an artist profile
+          const { data: artistProfile } = await supabase
+            .from('artist_profiles')
+            .select('id')
+            .eq('user_id', broadcasterId)
+            .maybeSingle();
+
+          if (artistProfile?.id) {
+            // Count followers created during the stream
+            const { count: followerCount } = await supabase
+              .from('artist_followers')
+              .select('id', { count: 'exact' })
+              .eq('artist_id', artistProfile.id)
+              .gte('created_at', streamCreatedAt)
+              .lte('created_at', streamEndedAt);
+
+            newFollowers = followerCount || 0;
+          }
+        }
+
+        setUserStats({
+          trollmondsSpent,
+          giftsReceived,
+          newFollowers
+        });
+      } catch (err) {
+        console.error('Error fetching stream stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStreamStats();
+  }, [streamId, user?.id]);
 
   if (loading) {
     return (
@@ -169,7 +153,22 @@ export default function StreamSummary() {
     );
   }
 
-  const displayStats = stats || { viewers: 0, likes: 0, title: 'Stream Ended' };
+  const displayStreamStats = streamStats || { 
+    title: 'Stream Ended', 
+    totalLikes: 0, 
+    broadcasterId: '' 
+  };
+
+  // Format the stat value for display
+  const formatValue = (value: number): string => {
+    if (value >= 1000000) {
+      return (value / 1000000).toFixed(1) + 'M';
+    }
+    if (value >= 1000) {
+      return (value / 1000).toFixed(1) + 'K';
+    }
+    return value.toLocaleString();
+  };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
@@ -179,45 +178,64 @@ export default function StreamSummary() {
         </div>
         
         <h1 className="text-3xl font-bold mb-2">Broadcast Ended</h1>
-        <p className="text-zinc-400 mb-8">{displayStats.title || "Great stream! Here's how it went:"}</p>
+        <p className="text-zinc-400 mb-8">{displayStreamStats.title || "Great stream! Here's how it went:"}</p>
 
-         <div className="grid grid-cols-3 gap-4 w-full mb-8">
-             <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-                 <Users className="text-blue-400 mb-2" size={24} />
-                 <span className="text-2xl font-bold">{displayStats.viewers || 0}</span>
-                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Viewers</span>
-             </div>
-             <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-                 <Heart className="text-pink-500 mb-2" size={24} />
-                 <span className="text-2xl font-bold">{displayStats.likes || 0}</span>
-                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Likes</span>
-             </div>
-             <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-                 <Gift className="text-yellow-500 mb-2" size={24} />
-                 <span className="text-2xl font-bold">{broadcasterGiftTotal || 0}</span>
-                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Broadcaster Gifts</span>
-             </div>
-         </div>
-         
-         <div className="grid grid-cols-2 gap-4 w-full mb-6">
-             <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-                 <Gift className="text-yellow-500 mb-2" size={24} />
-                 <span className="text-2xl font-bold">{myGifts || 0}</span>
-                 <span className="text-xs text-zinc-500 uppercase tracking-wider">My Gifts</span>
-             </div>
-             <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-                 <Users className="text-green-400 mb-2" size={24} />
-                 <span className="text-2xl font-bold">{guestGiftTotal || 0}</span>
-                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Guest Gifts</span>
-             </div>
-         </div>
+        <div className="grid grid-cols-2 gap-4 w-full mb-8">
+          {/* Trollmonds Spent - What the user spent on this stream */}
+          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
+            <Coins className="text-yellow-400 mb-2" size={28} />
+            <span className="text-3xl font-bold text-yellow-400">
+              {formatValue(userStats.trollmondsSpent)}
+            </span>
+            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Trollmonds Spent</span>
+          </div>
+
+          {/* Gifts Received - What the user received */}
+          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
+            <Gift className="text-pink-400 mb-2" size={28} />
+            <span className="text-3xl font-bold text-pink-400">
+              {formatValue(userStats.giftsReceived)}
+            </span>
+            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Gifts Received</span>
+          </div>
+
+          {/* Total Likes - Stream likes */}
+          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
+            <Heart className="text-red-400 mb-2" size={28} />
+            <span className="text-3xl font-bold text-red-400">
+              {formatValue(displayStreamStats.totalLikes)}
+            </span>
+            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Total Likes</span>
+          </div>
+
+          {/* New Followers - Followers gained during stream */}
+          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
+            <UserPlus className="text-green-400 mb-2" size={28} />
+            <span className="text-3xl font-bold text-green-400">
+              {formatValue(userStats.newFollowers)}
+            </span>
+            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">New Followers</span>
+          </div>
+        </div>
+
+        {/* User info */}
+        {user && (
+          <div className="mb-6 p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 w-full">
+            <p className="text-sm text-purple-300">
+              {isBroadcaster 
+                ? "You're the broadcaster!"
+                : `Watching as: ${profile?.username || 'User'}`
+              }
+            </p>
+          </div>
+        )}
 
         <button 
-            onClick={() => navigate('/')}
-            className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition flex items-center justify-center gap-2"
+          onClick={() => navigate('/')}
+          className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition flex items-center justify-center gap-2"
         >
-            <Home size={20} />
-            Back to Home
+          <Home size={20} />
+          Back to Home
         </button>
       </div>
     </div>

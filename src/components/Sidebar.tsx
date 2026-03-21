@@ -72,6 +72,7 @@ export default function Sidebar() {
   const [isFamilyLeader, setIsFamilyLeader] = useState(false)
   const [isFamilyMember, setIsFamilyMember] = useState(false)
   const [canSeeSecretary, setCanSeeSecretary] = useState(false)
+  const [isStaff, setIsStaff] = useState(false)
 
   const [showCourtModal, setShowCourtModal] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -207,9 +208,13 @@ export default function Sidebar() {
           setCanSeeSecretary(false)
         }
       }
+
+      // Staff roles: Admin, CEO, Lead Troll Officers, Troll Officers, Secretary
+      const hasStaffAccess = isAdmin || isLead || isOfficer || isSecretary;
+      setIsStaff(!!hasStaffAccess);
     }
     checkAccess()
-  }, [profile, isOfficer, isAdmin, isSecretary])
+  }, [profile, isOfficer, isAdmin, isSecretary, isLead])
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']

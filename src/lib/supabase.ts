@@ -230,6 +230,13 @@ export interface UserProfile {
   // Wheel fields
   wheel_balance?: number;
   wheel_troll_locked_until?: string | null;
+
+  // TM (Troll Match) System fields
+  interests?: string[];
+  dating_enabled?: boolean;
+  preference?: string[];
+  message_price?: number;
+  last_active?: string | null;
 }
 
 

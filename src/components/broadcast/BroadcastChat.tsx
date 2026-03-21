@@ -538,6 +538,15 @@ export default function BroadcastChat({
                     setMessages(prev => prev.filter(m => !(m.type === 'system' && m.user_id === p.user_id && m.content === 'joined the broadcast')));
                     return; // Don't show the leave either
                 }
+                
+                // Skip showing leave message if it's for the current user (they might have just sent a gift or performed another action)
+                // This prevents spurious "left the broadcast" messages when users are active
+                if (p.user_id === user?.id) {
+                    console.log('[BroadcastChat] Ignoring own leave event (user is still active)');
+                    recentPresenceRef.current.set(p.user_id, now);
+                    return;
+                }
+                
                 recentPresenceRef.current.set(p.user_id, now);
                 
                 const systemMsg: Message = {

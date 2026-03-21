@@ -33,6 +33,9 @@ export interface Stream {
   is_featured?: boolean;
   featured_at?: string | null;
   featured_by?: string | null;
+  // Password protection fields
+  is_protected?: boolean;
+  password_hash?: string;
 }
 
 export interface StreamGuest {

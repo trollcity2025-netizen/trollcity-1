@@ -270,7 +270,19 @@ export default function BroadcastGrid({
       console.log('[BroadcastGrid] Stream box_count changed:', prevStreamRef.current, '->', stream?.box_count);
       prevStreamRef.current = stream?.box_count;
     }
-  }, [stream?.box_count]);
+    
+    // Log broadcaster balance updates for debugging real-time gift updates
+    if (broadcasterProfile) {
+      console.log('[BroadcastGrid] Broadcaster Profile Data:', {
+        username: broadcasterProfile.username,
+        troll_coins: broadcasterProfile.troll_coins,
+        trollmonds: broadcasterProfile.trollmonds,
+        battle_crowns: broadcasterProfile.battle_crowns,
+        current_viewers: stream?.current_viewers,
+        stream_id: stream?.id
+      });
+    }
+  }, [stream?.box_count, stream?.current_viewers, stream?.id, broadcasterProfile?.troll_coins, broadcasterProfile?.trollmonds, broadcasterProfile?.battle_crowns]);
   
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   const [showHostStats, setShowHostStats] = useState(false);

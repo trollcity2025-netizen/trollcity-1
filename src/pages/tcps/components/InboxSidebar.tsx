@@ -17,6 +17,7 @@ interface SidebarConversation {
   rgb_username_expires_at?: string | null
   glowing_username_color?: string | null
   other_created_at?: string
+  conversation_id?: string // Add conversation_id for proper tracking
 }
 
 interface InboxSidebarProps {
@@ -27,6 +28,7 @@ interface InboxSidebarProps {
   setActiveTab: (tab: string) => void
   onOpenNewMessage: () => void
   onConversationsLoaded: (conversations: SidebarConversation[]) => void
+  refreshKey?: number // When changed, triggers a fresh fetch
 }
 
 const CACHE_KEY = 'tcps_conversations_cache'
@@ -39,7 +41,8 @@ export default function InboxSidebar({
   activeTab,
   setActiveTab,
   onOpenNewMessage,
-  onConversationsLoaded
+  onConversationsLoaded,
+  refreshKey
 }: InboxSidebarProps) {
   const { user } = useAuthStore()
   const { openChatBubble } = useChatStore()
@@ -54,37 +57,59 @@ export default function InboxSidebar({
   const menuRef = useRef<HTMLDivElement>(null)
   const hasLoadedFromCache = useRef(false)
 
-  // Get hidden conversations from localStorage on mount
-  const getHiddenConvIds = useCallback(() => {
+  // Get hidden conversations mapping from localStorage
+  const getHiddenConvMapping = useCallback(() => {
     try {
-      return new Set<string>(JSON.parse(localStorage.getItem('hidden_conversations') || '[]'))
+      const stored = localStorage.getItem('hidden_conversations')
+      if (!stored) return {}
+      const parsed = JSON.parse(stored)
+      // Handle both old format (array) and new format (object)
+      if (Array.isArray(parsed)) {
+        // Convert old array format to object format
+        const mapping: Record<string, string> = {}
+        parsed.forEach((convId: string) => {
+          mapping[convId] = '' // Unknown user for old entries
+        })
+        return mapping
+      }
+      return parsed || {}
     } catch {
-      return new Set<string>()
+      return {}
     }
   }, [])
 
   // Load from cache immediately on mount - show cached data even if slightly stale
   useEffect(() => {
-    if (!user?.id || hasLoadedFromCache.current) return
+    // Always try to load from cache first, regardless of user ID state
+    const cachedKey = localStorage.getItem('tcps_current_user_id')
+    const cached = localStorage.getItem(`${CACHE_KEY}_${cachedKey}`)
     
-    try {
-      const cached = localStorage.getItem(`${CACHE_KEY}_${user.id}`)
-      if (cached) {
+    if (cached) {
+      try {
         const { data, timestamp } = JSON.parse(cached)
-        // Allow stale cache up to 1 hour - show immediately while fetching fresh data
-        const isValid = Date.now() - timestamp < 60 * 60 * 1000
+        // Allow stale cache up to 2 hours for instant load
+        const isValid = Date.now() - timestamp < 2 * 60 * 60 * 1000
         
         if (isValid && Array.isArray(data) && data.length > 0) {
-          setConversations(data)
-          onConversationsLoaded(data)
+          // Get hidden conversations from localStorage
+          const hiddenMapping = getHiddenConvMapping()
+          const hiddenConvIds = new Set(Object.keys(hiddenMapping))
+          
+          // Separate visible and hidden conversations
+          const visibleConvs = data.filter((c: SidebarConversation) => !hiddenConvIds.has(c.conversation_id || ''))
+          const hiddenConvs = data.filter((c: SidebarConversation) => hiddenConvIds.has(c.conversation_id || ''))
+          
+          setConversations(visibleConvs)
+          setHiddenConversations(hiddenConvs)
+          onConversationsLoaded(visibleConvs)
           hasLoadedFromCache.current = true
           setIsInitialLoad(false)
         }
+      } catch (e) {
+        console.error('Error loading from cache:', e)
       }
-    } catch (e) {
-      console.error('Error loading from cache:', e)
     }
-  }, [user?.id, onConversationsLoaded])
+  }, [getHiddenConvMapping, onConversationsLoaded])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -221,8 +246,9 @@ export default function InboxSidebar({
           
         const blockedUserIds = new Set(blockedData?.map(b => b.related_user_id) || [])
 
-        // 2.6 Get hidden conversations from localStorage
-        const hiddenConvIds = getHiddenConvIds()
+        // 2.6 Get hidden conversations mapping from localStorage
+        const hiddenConvMapping = getHiddenConvMapping()
+        const hiddenConvIds = new Set(Object.keys(hiddenConvMapping))
 
         // Array to collect hidden conversations
         const hiddenConvsArray: SidebarConversation[] = []
@@ -259,7 +285,8 @@ export default function InboxSidebar({
             other_created_at: profile.created_at,
             last_message: lastMsg.body,
             last_timestamp: lastMsg.created_at || '',
-            unread_count: unreadCount
+            unread_count: unreadCount,
+            conversation_id: cid // Include for cache
           }
         })
         
@@ -286,7 +313,8 @@ export default function InboxSidebar({
                   other_created_at: profile.created_at,
                   last_message: lastMsg.body,
                   last_timestamp: lastMsg.created_at || '',
-                  unread_count: unreadCounts[cid] || 0
+                  unread_count: unreadCounts[cid] || 0,
+                  conversation_id: cid // Store conversation_id for proper tracking
                 })
               }
             }
@@ -409,17 +437,8 @@ export default function InboxSidebar({
         return
       }
 
-      // Immediately remove from local state for instant feedback
-      setConversations(prev => prev.filter(c => c.other_user_id !== otherUserId))
-      
-      // Add to hidden conversations for the hidden tab
-      if (conv) {
-        setHiddenConversations(prev => [...prev, conv])
-      }
-      
-      toast.success('Chat hidden')
-
-      // Find and store the conversation_id in localStorage
+      // Find and store the conversation_id FIRST before removing from UI
+      let targetConvId: string | null = null
       const { data: memberData, error: memberError } = await supabase
         .from('conversation_members')
         .select('conversation_id')
@@ -445,27 +464,40 @@ export default function InboxSidebar({
         }
         
         if (shared?.conversation_id) {
-          // Safely get hidden conversations from localStorage
-          let hiddenChats: string[] = []
+          targetConvId = shared.conversation_id
+          
+          // Store in localStorage with both conversation_id and user mapping
+          let hiddenChats: Record<string, string> = {}
           try {
             const stored = localStorage.getItem('hidden_conversations')
             if (stored) {
               hiddenChats = JSON.parse(stored)
-              if (!Array.isArray(hiddenChats)) {
-                hiddenChats = []
+              if (typeof hiddenChats !== 'object' || hiddenChats === null) {
+                hiddenChats = {}
               }
             }
           } catch (e) {
             console.warn('Hide chat: invalid localStorage data, resetting', e)
-            hiddenChats = []
+            hiddenChats = {}
           }
           
-          if (!hiddenChats.includes(shared.conversation_id)) {
-            hiddenChats.push(shared.conversation_id)
-            localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
-          }
+          // Store mapping: conversation_id -> other_user_id
+          hiddenChats[targetConvId] = otherUserId
+          localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
         }
       }
+
+      // Now update state AFTER storing the mapping
+      // Add conversation_id to the hidden conversation object
+      const convWithConvId = { ...conv, conversation_id: targetConvId }
+      
+      // Immediately remove from local state for instant feedback
+      setConversations(prev => prev.filter(c => c.other_user_id !== otherUserId))
+      
+      // Add to hidden conversations for the hidden tab (with conversation_id)
+      setHiddenConversations(prev => [...prev, convWithConvId])
+      
+      toast.success('Chat hidden')
     } catch (err) {
       console.error('Hide chat: unexpected error', err)
       // Silently fail - chat is already hidden in UI
@@ -479,55 +511,33 @@ export default function InboxSidebar({
     setOpenMenuId(null)
     
     try {
+      // Find the conversation with this user to get its conversation_id
+      const hiddenConv = hiddenConversations.find(c => c.other_user_id === otherUserId)
+      const targetConvId = hiddenConv?.conversation_id
+      
       // Remove from hidden conversations in local state
       setHiddenConversations(prev => prev.filter(c => c.other_user_id !== otherUserId))
       toast.success('Chat unhidden')
 
-      // Find and remove the conversation_id from localStorage
-      const { data: memberData, error: memberError } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', user.id)
-      
-      if (memberError) {
-        console.error('Unhide chat: member query error', memberError)
-        return
-      }
-      
-      if (memberData && memberData.length > 0) {
-        const myConvIds = memberData.map(m => m.conversation_id)
-        const { data: shared, error: sharedError } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .in('conversation_id', myConvIds)
-          .eq('user_id', otherUserId)
-          .maybeSingle()
-        
-        if (sharedError) {
-          console.error('Unhide chat: shared query error', sharedError)
-          return
-        }
-        
-        if (shared?.conversation_id) {
-          // Safely get hidden conversations from localStorage
-          let hiddenChats: string[] = []
-          try {
-            const stored = localStorage.getItem('hidden_conversations')
-            if (stored) {
-              hiddenChats = JSON.parse(stored)
-              if (!Array.isArray(hiddenChats)) {
-                hiddenChats = []
-              }
+      // Remove from localStorage using the conversation_id
+      if (targetConvId) {
+        let hiddenChats: Record<string, string> = {}
+        try {
+          const stored = localStorage.getItem('hidden_conversations')
+          if (stored) {
+            hiddenChats = JSON.parse(stored)
+            if (typeof hiddenChats !== 'object' || hiddenChats === null) {
+              hiddenChats = {}
             }
-          } catch (e) {
-            console.warn('Unhide chat: invalid localStorage data, resetting', e)
-            hiddenChats = []
           }
-          
-          // Remove this conversation from hidden list
-          const newHiddenChats = hiddenChats.filter((id: string) => id !== shared.conversation_id)
-          localStorage.setItem('hidden_conversations', JSON.stringify(newHiddenChats))
+        } catch (e) {
+          console.warn('Unhide chat: invalid localStorage data, resetting', e)
+          hiddenChats = {}
         }
+        
+        // Remove this conversation_id from hidden list
+        delete hiddenChats[targetConvId]
+        localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
       }
       
       // Refresh to show the conversation in inbox
@@ -545,16 +555,38 @@ export default function InboxSidebar({
     }
   }, [activeConversation])
 
+  // Force refresh when refreshKey changes
   useEffect(() => {
-    // Initial fetch - will use cache first, then refresh
-    fetchConversations()
+    if (refreshKey !== undefined && refreshKey > 0) {
+      // Skip cache and fetch fresh data
+      hasLoadedFromCache.current = true // Prevent cache from overriding
+      fetchConversations(false)
+    }
+  }, [refreshKey])
+
+  // Main effect for fetching and realtime - runs when user.id or fetchConversations changes
+  useEffect(() => {
+    if (!user?.id) return
+    
+    // Save user ID for cache key
+    localStorage.setItem('tcps_current_user_id', user.id)
+    
+    // Only do full fetch if we didn't load from cache
+    if (!hasLoadedFromCache.current) {
+      fetchConversations(false)
+    } else {
+      // Already have cache, do background refresh
+      fetchConversations(true)
+    }
     
     // Debounce fetch for real-time updates
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
     const debouncedFetch = () => {
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
-        fetchConversations(true) // Background refresh
+        if (user?.id) {
+          fetchConversations(true) // Background refresh
+        }
       }, 500)
     }
     
@@ -564,6 +596,9 @@ export default function InboxSidebar({
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (payload) => {
          const newMsg = payload.new
          if (newMsg && user?.id) {
+           // Immediately fetch fresh data when a new message is inserted
+           fetchConversations(true)
+           
            if (newMsg.sender_id !== user.id) {
              supabase
                .from('conversation_members')
@@ -577,7 +612,6 @@ export default function InboxSidebar({
                })
            }
          }
-         debouncedFetch()
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, (_payload) => {
          debouncedFetch()
@@ -593,7 +627,9 @@ export default function InboxSidebar({
       opsChannel = supabase
         .channel('sidebar-ops')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'officer_chat_messages' }, () => {
-           debouncedFetch()
+           if (user?.id) {
+             fetchConversations(true)
+           }
         })
         .subscribe()
     }
@@ -603,7 +639,7 @@ export default function InboxSidebar({
       supabase.removeChannel(messagesChannel)
       if (opsChannel) supabase.removeChannel(opsChannel)
     }
-  }, [fetchConversations, isUserOfficer, activeConversation, user?.id])
+  }, [user?.id, isUserOfficer, activeConversation]) // Note: fetchConversations intentionally excluded to avoid infinite loops
 
   // Determine which conversations to show based on active tab
   const displayedConversations = activeTab === 'hidden' 

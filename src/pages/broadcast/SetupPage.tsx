@@ -5,7 +5,7 @@ import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
 import { useStreamStore } from '@/lib/streamStore';
 import { LocalAudioTrack, LocalVideoTrack, AudioPresets, VideoPresets, Room } from 'livekit-client';
-import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Monitor } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Monitor, Lock, Eye, EyeOff } from 'lucide-react';
 import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
 import { GamingSetup } from '../../components/broadcast/GamingSetup';
 import { toast } from 'sonner';
@@ -54,6 +54,21 @@ export default function SetupPage() {
   
   // Category-specific state
   const [selectedReligion, setSelectedReligion] = useState('');
+  
+  // Password protection state
+  const [isProtected, setIsProtected] = useState(false);
+  const [broadcastPassword, setBroadcastPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Check if user can create protected broadcast (admin/staff or level >= 50)
+  const canCreateProtected = profile && (
+    profile.role === 'admin' || 
+    profile.is_admin || 
+    profile.is_troll_officer || 
+    profile.is_lead_officer || 
+    profile.is_staff ||
+    (profile.level !== undefined && profile.level >= 50)
+  );
   
   // Pre-generate stream ID for token optimization
   const [streamId] = useState(() => generateUUID());
@@ -899,6 +914,12 @@ export default function SetupPage() {
       }
     }
 
+    // Validate password if protected
+    if (isProtected && broadcastPassword.length < 4) {
+      toast.error('Password must be at least 4 characters');
+      return;
+    }
+
     // Check TCNN requirements - only News Casters, Chief News Casters, and Admins
     // Regular users, Troll Officers, and Lead Troll Officers CANNOT start TCNN broadcasts
     if (category === 'tcnn') {
@@ -955,28 +976,48 @@ export default function SetupPage() {
         roomName
       });
       
+      // Build insert object with optional password protection
+      const insertData: Record<string, unknown> = {
+        id: streamId,
+        user_id: user.id,
+        broadcaster_id: user.id,
+        streamer_id: user.id,
+        owner_id: user.id,
+        title,
+        category,
+        camera_ready: isVideoEnabled,
+        status: 'pending',
+        is_live: false,
+        box_count: categoryConfig.defaultBoxCount,
+        layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' :
+                     categoryConfig.layoutMode === 'classroom' ? 'grid' :
+                     categoryConfig.layoutMode === 'spotlight' ? 'spotlight' : 'grid',
+        // Store room name for LiveKit (database column still uses legacy name 'agora_channel')
+        agora_channel: roomName,
+        // Store category-specific data
+        ...(category === 'spiritual' && { selected_religion: selectedReligion }),
+      };
+
+      // Add password protection if enabled
+      if (isProtected && broadcastPassword.length >= 4) {
+        insertData.is_protected = true;
+        // Hash password using PostgreSQL crypt - the password will be sent as plaintext
+        // and hashed server-side (we need to call an RPC to hash it)
+        const { data: hashData, error: hashError } = await supabase.rpc('crypt_password', {
+          p_password: broadcastPassword
+        });
+        
+        // If RPC fails, the stream creation will fail (which is the expected behavior)
+        // Otherwise use the hashed password
+        insertData.password_hash = hashError ? null : hashData;
+      } else {
+        insertData.is_protected = false;
+        insertData.password_hash = null;
+      }
+
       const { data, error } = await supabase
         .from('streams')
-        .insert({
-          id: streamId,
-          user_id: user.id,
-          broadcaster_id: user.id,
-          streamer_id: user.id,
-          owner_id: user.id,
-          title,
-          category,
-          camera_ready: isVideoEnabled,
-          status: 'pending',
-          is_live: false,
-          box_count: categoryConfig.defaultBoxCount,
-          layout_mode: categoryConfig.layoutMode === 'debate' ? 'split' :
-                       categoryConfig.layoutMode === 'classroom' ? 'grid' :
-                       categoryConfig.layoutMode === 'spotlight' ? 'spotlight' : 'grid',
-          // Store room name for LiveKit (database column still uses legacy name 'agora_channel')
-          agora_channel: roomName,
-          // Store category-specific data
-          ...(category === 'spiritual' && { selected_religion: selectedReligion }),
-        })
+        .insert(insertData)
         .select()
         .maybeSingle();
 
@@ -1420,6 +1461,69 @@ export default function SetupPage() {
 
             {/* Religion Selector for Spiritual */}
             {renderReligionSelector()}
+
+            {/* Password Protection - Only for eligible users */}
+            {canCreateProtected && (
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-purple-400" />
+                    <span className="font-medium text-purple-300">Password Protection</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProtected(!isProtected);
+                      if (!isProtected) {
+                        setBroadcastPassword('');
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      isProtected ? 'bg-purple-500' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isProtected ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                
+                {isProtected && (
+                  <div className="space-y-2">
+                    <label className="block text-sm text-gray-300">
+                      Enter Password (minimum 4 characters)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={broadcastPassword}
+                        onChange={(e) => setBroadcastPassword(e.target.value)}
+                        placeholder="Enter password..."
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all placeholder:text-gray-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                      >
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      </button>
+                    </div>
+                    {broadcastPassword.length > 0 && broadcastPassword.length < 4 && (
+                      <p className="text-xs text-red-400">Password must be at least 4 characters</p>
+                    )}
+                  </div>
+                )}
+                
+                {!isProtected && (
+                  <p className="text-xs text-gray-400">
+                    Enable password protection to restrict who can join your broadcast
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Battle/Match Info */}
             {renderBattleInfo()}

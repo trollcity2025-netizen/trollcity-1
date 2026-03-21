@@ -240,6 +240,12 @@ export default function GovernmentStreams() {
 
   const handleEndLive = async (streamId: string) => {
     if (!confirm('Are you sure you want to FORCE END this stream?')) return;
+    
+    // Close the watch modal if this stream is currently being watched
+    if (selectedStream?.id === streamId) {
+      setSelectedStream(null);
+    }
+    
     try {
       const { error } = await supabase
         .from('streams')
@@ -417,7 +423,10 @@ export default function GovernmentStreams() {
               <StreamCard 
                 key={stream.id} 
                 stream={stream} 
-                onWatch={() => setSelectedStream(stream)}
+                onWatch={() => {
+                  localStorage.setItem('fromGovernmentStreams', 'true');
+                  setSelectedStream(stream);
+                }}
                 onEndLive={() => handleEndLive(stream.id)}
                 onMuteBroadcaster={() => handleMuteBroadcaster(stream)}
                 onDisableChats={() => handleDisableAllChats(stream)}

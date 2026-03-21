@@ -33,9 +33,10 @@ interface ChatWindowProps {
   } | null
   isOnline?: boolean
   onBack?: () => void
+  onMessageSent?: () => void // Callback when a message is sent
 }
 
-const ChatWindow = ({ otherUserInfo, isOnline, onBack }: ChatWindowProps) => {
+const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWindowProps) => {
   const { user, profile } = useAuthStore()
   const [actualConversationId, setActualConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -412,6 +413,10 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack }: ChatWindowProps) => {
         onMessageSent={() => {
           if (actualConversationId) {
             void markConversationRead(actualConversationId).catch(() => {})
+          }
+          // Notify parent to refresh sidebar
+          if (onMessageSent) {
+            onMessageSent()
           }
         }}
         onNewMessage={handleNewMessageOptimistic}
