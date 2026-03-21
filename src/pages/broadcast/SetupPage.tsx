@@ -9,6 +9,7 @@ import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Monitor, Loc
 import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
 import { GamingSetup } from '../../components/broadcast/GamingSetup';
 import { toast } from 'sonner';
+import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown';
 import { generateUUID } from '../../lib/uuid';
 import {
   BROADCAST_CATEGORIES,
@@ -33,6 +34,9 @@ export default function SetupPage() {
   const [category, setCategory] = useState<BroadcastCategoryId>('general');
   const [loading, setLoading] = useState(false);
   const [broadcasterLimitInfo, setBroadcasterLimitInfo] = useState<{ current: number; max: number; canStart: boolean } | null>(null);
+
+  // Broadcast lockdown check
+  const { isLocked: isBroadcastLocked, canBroadcast, isAdmin: isUserAdmin } = useBroadcastLockdown();
 
   useEffect(() => {
     try {
@@ -868,6 +872,12 @@ export default function SetupPage() {
   };
 
   const handleStartStream = async () => {
+    // Check if broadcasting is locked and user is not admin
+    if (isBroadcastLocked && !canBroadcast()) {
+      toast.error('Broadcasting is currently disabled by admin. No one can go live while lockdown is active.');
+      return;
+    }
+
     // Perform all validations first BEFORE setting isStartingStream
     if (!title.trim()) {
       toast.error('Please enter a stream title');

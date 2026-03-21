@@ -1,76 +1,25 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown';
 import { Lock, Unlock, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function BroadcastLockdownControl() {
-  const [locked, setLocked] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { isLocked: locked, loading, toggleLockdown } = useBroadcastLockdown();
   const [updating, setUpdating] = useState(false);
 
-  useEffect(() => {
-    fetchLockdownStatus();
-    
-    // Subscribe to real-time changes
-    const channel = supabase
-      .channel('admin_settings_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'admin_settings',
-          filter: "setting_key=eq.broadcast_lockdown_enabled"
-        },
-        (payload) => {
-          if (payload.new && (payload.new as any).setting_value) {
-            setLocked((payload.new as any).setting_value.enabled || false);
-          }
-        }
-      )
-      .subscribe();
+  // The useBroadcastLockdown hook already handles fetching and real-time updates
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const fetchLockdownStatus = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'broadcast_lockdown_enabled')
-        .maybeSingle();
-
-      if (error) {
-        // If not found, it defaults to false, or we might need to insert it (handled by migration usually)
-        console.error('Error fetching lockdown status:', error);
-        return;
-      }
-
-      if (data) {
-        setLocked(data.setting_value?.enabled || false);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleLockdown = async () => {
+  const handleToggleLockdown = async () => {
     setUpdating(true);
     const newState = !locked;
 
     try {
-      // Use Secure RPC for admin action
-      const { error } = await supabase.rpc('admin_toggle_broadcast_lockdown', {
-        p_enabled: newState
-      });
+      const success = await toggleLockdown(newState);
 
-      if (error) throw error;
+      if (!success) throw new Error('Failed to update');
 
-      setLocked(newState);
-      toast.success(newState ? 'Broadcasts Locked (Admin Only)' : 'Broadcasts Unlocked (Everyone)');
+      toast.success(newState ? 'Broadcasting Disabled' : 'Broadcasting Enabled');
     } catch (error) {
       console.error('Error toggling lockdown:', error);
       toast.error('Failed to update lockdown status');
@@ -83,6 +32,7 @@ export default function BroadcastLockdownControl() {
     return (
       <div className="flex items-center justify-center p-4 bg-slate-900/50 rounded-xl border border-white/10">
         <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+        <span className="ml-2 text-slate-400">Loading broadcast status...</span>
       </div>
     );
   }
@@ -110,15 +60,15 @@ export default function BroadcastLockdownControl() {
             </h3>
             <p className="text-sm text-slate-400">
               {locked 
-                ? 'Only admins can go live. Regular users are blocked.' 
+                ? 'All broadcasting is disabled. No one can go live.' 
                 : 'All users can go live and stream normally.'}
             </p>
           </div>
         </div>
 
         <button
-          onClick={toggleLockdown}
-          disabled={updating}
+          onClick={handleToggleLockdown}
+          disabled={updating || loading}
           className={`
             px-6 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all
             ${locked
@@ -135,7 +85,7 @@ export default function BroadcastLockdownControl() {
           ) : (
             <Lock className="w-4 h-4" />
           )}
-          {locked ? 'Unlock Broadcasts' : 'Lock Broadcasts'}
+          {locked ? 'Enable Broadcasting' : 'Disable Broadcasting'}
         </button>
       </div>
 

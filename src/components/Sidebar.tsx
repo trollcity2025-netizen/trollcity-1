@@ -49,6 +49,7 @@ import { useCoins } from '@/lib/hooks/useCoins'
 import { useXPStore } from '@/stores/useXPStore'
 import { useSidebarUpdates } from '@/hooks/useSidebarUpdates'
 import { useJailMode } from '@/hooks/useJailMode'
+import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown'
 
 import SidebarTopBroadcasters from './sidebar/SidebarTopBroadcasters'
 
@@ -108,6 +109,7 @@ export default function Sidebar() {
   }, [profile])
 
   const { isJailed } = useJailMode(profile?.id)
+  const { isLocked: isBroadcastLocked, canBroadcast } = useBroadcastLockdown()
 
 
   useEffect(() => {
@@ -284,22 +286,38 @@ export default function Sidebar() {
             <SidebarTopBroadcasters isCollapsed={isSidebarCollapsed} />
 
             <div className={`px-4 mb-2 mt-2 ${isSidebarCollapsed ? 'flex justify-center' : ''}`}>
-              <Link
-                to="/broadcast/setup"
-                className={`
-                  relative group flex items-center justify-center gap-2
-                  bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600
-                  hover:from-yellow-500 hover:via-yellow-300 hover:to-yellow-500
-                  text-black font-bold rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.5)]
-                  transition-all duration-300 hover:scale-[1.02] border border-yellow-200/50
-                  ${isSidebarCollapsed ? 'w-10 h-10 p-0' : 'w-full py-3 px-4'}
-                `}
-              >
-                <Video size={isSidebarCollapsed ? 20 : 20} className="text-black" />
-                {!isSidebarCollapsed && (
-                  <span className="uppercase tracking-wide text-sm">Go Live</span>
-                )}
-              </Link>
+              {canBroadcast() ? (
+                <Link
+                  to="/broadcast/setup"
+                  className={`
+                    relative group flex items-center justify-center gap-2
+                    bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600
+                    hover:from-yellow-500 hover:via-yellow-300 hover:to-yellow-500
+                    text-black font-bold rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.5)]
+                    transition-all duration-300 hover:scale-[1.02] border border-yellow-200/50
+                    ${isSidebarCollapsed ? 'w-10 h-10 p-0' : 'w-full py-3 px-4'}
+                  `}
+                >
+                  <Video size={isSidebarCollapsed ? 20 : 20} className="text-black" />
+                  {!isSidebarCollapsed && (
+                    <span className="uppercase tracking-wide text-sm">Go Live</span>
+                  )}
+                </Link>
+              ) : (
+                <div
+                  className={`
+                    relative flex items-center justify-center gap-2
+                    bg-gray-600/50 text-gray-400 font-bold rounded-xl border border-gray-500/30 cursor-not-allowed
+                    ${isSidebarCollapsed ? 'w-10 h-10 p-0' : 'w-full py-3 px-4'}
+                  `}
+                  title="Broadcasting is currently disabled by admin"
+                >
+                  <Video size={isSidebarCollapsed ? 20 : 20} className="text-gray-500" />
+                  {!isSidebarCollapsed && (
+                    <span className="uppercase tracking-wide text-sm">Go Live</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <SidebarGroup 
