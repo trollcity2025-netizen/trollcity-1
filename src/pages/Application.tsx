@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
+import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { Shield, Users, Skull, Crown, Store, CheckCircle, XCircle, BookOpen, Newspaper, Mic, Radio } from 'lucide-react'
 
-type ApplicationType = 'troll_officer' | 'troll_family' | 'troller' | 'lead_officer' | 'seller' | 'pastor' | 'journalist' | 'news_caster' | 'chief_news_caster' | null
+type ApplicationType = 'troll_officer' | 'troll_family' | 'troller' | 'lead_officer' | 'seller' | 'pastor' | 'journalist' | 'news_caster' | 'chief_news_caster' | 'troll_station_dj' | 'troll_station_manager' | null
 
 export default function Application() {
   const { user, profile } = useAuthStore()
@@ -49,12 +50,46 @@ export default function Application() {
       } else if (type === 'seller') {
         // Navigate to seller application - go to sell page
         navigate('/sell')
-      } else if (type === 'journalist') {
-        navigate('/apply/journalist')
-      } else if (type === 'news_caster') {
-        navigate('/apply/news-caster')
-      } else if (type === 'chief_news_caster') {
-        navigate('/apply/chief-news-caster')
+      } else if (type === 'journalist' || type === 'news_caster' || type === 'chief_news_caster') {
+        // Handle TCNN applications - submit directly
+        try {
+          const { error: appError } = await supabase
+            .from('applications')
+            .insert({
+              user_id: user.id,
+              type: type,
+              status: 'pending'
+            })
+          
+          if (appError) throw appError
+          
+          toast.success('Application submitted! We will review it soon.')
+          navigate('/career')
+        } catch (err: any) {
+          console.error('Application error:', err)
+          toast.error(err.message || 'Failed to submit application')
+        }
+        return
+      } else if (type === 'troll_station_dj' || type === 'troll_station_manager') {
+        // Handle Troll Station applications - submit directly
+        try {
+          const { error: appError } = await supabase
+            .from('applications')
+            .insert({
+              user_id: user.id,
+              type: type,
+              status: 'pending'
+            })
+          
+          if (appError) throw appError
+          
+          toast.success('Application submitted! We will review it soon.')
+          navigate('/career')
+        } catch (err: any) {
+          console.error('Application error:', err)
+          toast.error(err.message || 'Failed to submit application')
+        }
+        return
       }
     } catch (error: any) {
       console.error('Error starting application:', error)
@@ -161,6 +196,24 @@ export default function Application() {
       color: 'yellow',
       disabled: profile?.is_chief_news_caster || profile?.role === 'chief_news_caster',
       disabledText: 'You are already a Chief News Caster'
+    },
+    {
+      type: 'troll_station_dj' as ApplicationType,
+      title: 'Troll Station DJ',
+      icon: Radio,
+      description: 'Host live radio shows and manage Troll Station music queue',
+      color: 'pink',
+      disabled: false,
+      disabledText: ''
+    },
+    {
+      type: 'troll_station_manager' as ApplicationType,
+      title: 'Troll Station Manager',
+      icon: Crown,
+      description: 'Manage Troll Station, schedule shows, and assign DJs',
+      color: 'purple',
+      disabled: false,
+      disabledText: ''
     }
   ]
 

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import CourtEntryModal from './CourtEntryModal'
 import SidebarGroup from './ui/SidebarGroup'
-import PromoSlot from './promo/PromoSlot'
 import {
   Home,
   MessageSquare,
@@ -56,6 +55,7 @@ import SidebarTopBroadcasters from './sidebar/SidebarTopBroadcasters'
 
 
 import UserProfileWidget from './sidebar/UserProfileWidget';
+import TrollStationWidget from './troll-station/TrollStationWidget';
 import { getGlowingTextStyle } from '@/lib/perkEffects'
 
 import { useSidebarStore } from '@/stores/useSidebarStore';
@@ -161,7 +161,7 @@ export default function Sidebar() {
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
-  const socialPaths = ['/tcps', '/pool', '/universe-event', '/family/browse']
+  const socialPaths = ['/tcps', '/pool', '/universe-event', '/family/browse', '/troll-station']
   if (canSeeTrollFamily) socialPaths.push('/family/home')
   const specialAccessPaths: string[] = []
   if (canSeeCourt) specialAccessPaths.push('/admin/court-dockets')
@@ -174,7 +174,7 @@ export default function Sidebar() {
   const isAnyUpdated = (paths: string[]) => paths.some(path => isUpdated(path))
 
   return (
-    <div className={`flex flex-col h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl border-r border-white/10 shadow-[10px_0_40px_rgba(0,0,0,0.35)] transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
+    <div className={`flex flex-col h-[100dvh] max-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl border-r border-white/10 shadow-[10px_0_40px_rgba(0,0,0,0.35)] transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
 
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-white/5 bg-white/5/10">
@@ -361,6 +361,14 @@ export default function Sidebar() {
                 highlight={isUpdated('/family/home')} onClick={() => markAsViewed('/family/home')}
                 className="text-amber-400 hover:text-amber-300"
               />
+              <SidebarItem 
+                icon={Radio} 
+                label="Troll Station" 
+                to="/troll-station" 
+                active={location.pathname.startsWith('/troll-station')} 
+                collapsed={isSidebarCollapsed}
+                className="text-pink-400 hover:text-pink-300"
+              />
             </SidebarGroup>
 
             {(canSeeOfficer || canSeeTrollFamily || canSeeSecretary || canSeeCourt) && (
@@ -481,10 +489,10 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Promo Slot - City Ads */}
+      {/* Troll Station Widget */}
       {!isSidebarCollapsed && (
-        <div className="p-2 border-t border-white/10">
-          <PromoSlot placement="left_sidebar_screensaver" variant="sidebar" />
+        <div className="p-2 border-t border-white/10 overflow-y-auto max-h-[40vh]">
+          <TrollStationWidget />
         </div>
       )}
 

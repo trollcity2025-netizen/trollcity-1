@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { toast } from 'sonner'
-import { Check, X, Shield, RefreshCw, User, Crown, Skull } from 'lucide-react'
+import { Check, X, Shield, RefreshCw, User, Crown, Skull, Radio } from 'lucide-react'
 
 interface Application {
   id: string
@@ -186,6 +186,10 @@ export default function AllApplications() {
         return <Crown className="w-4 h-4 text-yellow-400" />
       case 'troller':
         return <Skull className="w-4 h-4 text-red-400" />
+      case 'troll_station_dj':
+        return <Radio className="w-4 h-4 text-pink-400" />
+      case 'troll_station_manager':
+        return <Crown className="w-4 h-4 text-purple-400" />
       default:
         return <User className="w-4 h-4 text-gray-400" />
     }
@@ -201,6 +205,10 @@ export default function AllApplications() {
         return 'Troller'
       case 'troll_family':
         return 'Troll Family'
+      case 'troll_station_dj':
+        return 'Troll Station DJ'
+      case 'troll_station_manager':
+        return 'Troll Station Manager'
       default:
         return type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
     }

@@ -1439,7 +1439,25 @@ Deno.serve(async (req) => {
             } else if (appType === "lead_officer") {
                  await supabaseAdmin.from('user_profiles').update({ is_lead_officer: true }).eq('id', appUserId);
             } else if (appType === "troll_officer") {
-                 await supabaseAdmin.from('user_profiles').update({ is_troll_officer: true }).eq('id', appUserId);
+                  await supabaseAdmin.from('user_profiles').update({ is_troll_officer: true }).eq('id', appUserId);
+            } else if (appType === "troll_station_dj") {
+                  // Add user as Troll Station DJ host
+                  await supabaseAdmin.from('troll_station_hosts').insert({
+                    user_id: appUserId,
+                    role: 'dj',
+                    can_invite: true,
+                    can_moderate: false,
+                    assigned_by: user.id
+                  });
+            } else if (appType === "troll_station_manager") {
+                  // Add user as Troll Station Manager
+                  await supabaseAdmin.from('troll_station_hosts').insert({
+                    user_id: appUserId,
+                    role: 'manager',
+                    can_invite: true,
+                    can_moderate: true,
+                    assigned_by: user.id
+                  });
             }
 
             // 3. Notification

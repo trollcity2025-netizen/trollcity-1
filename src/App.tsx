@@ -70,6 +70,7 @@ const TrollopolyCityDevTest = lazyWithRetry(() => import("./pages/dev/Trollopoly
 const LivingPage = lazyWithRetry(() => import("./pages/LivingPage"));
 const ChurchPage = lazyWithRetry(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazyWithRetry(() => import("./pages/church/PastorDashboard"));
+const TrollStationPage = lazyWithRetry(() => import("./pages/TrollStationPage"));
 const BadgeDesignShowcase = lazyWithRetry(() => import("./pages/dev/BadgeDesignShowcase"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
@@ -1173,9 +1174,11 @@ function AppContent() {
                    
                    <Route path="/pods" element={<TrollPodsListing />} />
                   <Route path="/pods/:roomId" element={<TrollPodRoom />} />
-                  <Route path="/pods/:roomId/summary" element={<PodSummary />} />
-                  
-                  <Route path="/church" element={<ChurchPage />} />
+                   <Route path="/pods/:roomId/summary" element={<PodSummary />} />
+                   
+                   <Route path="/troll-station" element={<TrollStationPage />} />
+                   
+                   <Route path="/church" element={<ChurchPage />} />
                   <Route path="/church/pastor" element={<PastorDashboard />} />
                   <Route path="/dev/xp" element={<XPSimulatorPage />} />
                   <Route path="/dev/badge-showcase" element={<BadgeDesignShowcase />} />
@@ -1255,6 +1258,11 @@ function AppContent() {
                   <Route path="/apply/troller" element={<TrollerApplication />} />
                   <Route path="/apply/lead-officer" element={<LeadOfficerApplication />} />
                   <Route path="/apply/pastor" element={<PastorApplication />} />
+                  <Route path="/apply/journalist" element={<Application />} />
+                  <Route path="/apply/news-caster" element={<Application />} />
+                  <Route path="/apply/chief-news-caster" element={<Application />} />
+                  <Route path="/apply/troll-station-dj" element={<Application />} />
+                  <Route path="/apply/troll-station-manager" element={<Application />} />
                   <Route path="/career" element={<Career />} />
                   <Route path="/interview-room" element={<InterviewRoomPage />} />
                   <Route path="/admin/interview-test" element={<AdminInterviewDashboard />} />

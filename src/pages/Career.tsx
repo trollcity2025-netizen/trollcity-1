@@ -215,6 +215,50 @@ const jobPositions: JobPosition[] = [
     ],
     icon: <Radio className="w-6 h-6" />,
     color: 'from-amber-500 to-yellow-500'
+  },
+  {
+    id: 'troll_station_dj',
+    title: 'Troll Station DJ',
+    department: 'Troll Station',
+    description: 'Host live radio shows on Troll Station. Play music, interact with listeners, and create engaging live broadcasts.',
+    requirements: [
+      'Must be at least 16 years old',
+      'Good microphone and audio equipment',
+      'Ability to engage with an audience',
+      'Knowledge of music across various genres',
+      'Available for scheduled shows'
+    ],
+    benefits: [
+      'DJ badge and recognition',
+      'Host live radio shows',
+      'Manage music queue',
+      'Invite guest speakers',
+      'Build audience following'
+    ],
+    icon: <Radio className="w-6 h-6" />,
+    color: 'from-pink-500 to-rose-500'
+  },
+  {
+    id: 'troll_station_manager',
+    title: 'Troll Station Manager',
+    department: 'Troll Station - Leadership',
+    description: 'Manage Troll Station operations, schedule DJ shows, assign roles, and oversee station content.',
+    requirements: [
+      'Previous DJ or broadcasting experience',
+      'Strong organizational skills',
+      'Ability to manage multiple hosts',
+      'Understanding of content moderation',
+      'Commitment to station growth'
+    ],
+    benefits: [
+      'Manager badge and authority',
+      'Assign DJ roles',
+      'Schedule shows and events',
+      'Manage station settings',
+      'Oversee content moderation'
+    ],
+    icon: <Crown className="w-6 h-6" />,
+    color: 'from-purple-500 to-violet-500'
   }
 ]
 
