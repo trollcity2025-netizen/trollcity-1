@@ -9,6 +9,7 @@ import {
 import { WallPost, WallPostType } from '../types/trollWall'
 import ClickableUsername from '../components/ClickableUsername'
 import { useAuthStore } from '../lib/store'
+import { parseTextWithLinks } from '../lib/utils'
 
 export default function WallPostPage() {
   const { postId } = useParams<{ postId: string }>()
@@ -183,7 +184,7 @@ export default function WallPostPage() {
 
           {/* Post Content */}
           <div className="mb-4">
-            <p className="text-white whitespace-pre-wrap break-words text-lg">{post.content}</p>
+            <p className="text-white whitespace-pre-wrap break-words text-lg">{parseTextWithLinks(post.content)}</p>
             
             {/* Stream Link */}
             {post.metadata?.stream_id && (

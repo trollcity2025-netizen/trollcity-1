@@ -4,7 +4,7 @@ import { useAuthStore } from '../../../lib/store'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import MessageInput from './MessageInput'
 
-const MAX_MESSAGES = 500 // Increased to fetch more messages
+const MAX_MESSAGES = 5000 // Increased to fetch all messages
 
 type ChatMessage = {
   id: string

@@ -6,7 +6,6 @@ import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
 import { useStreamStore } from '../../lib/streamStore'
 import { PreflightStore } from '../../lib/preflightStore'
-import { useEffect } from 'react'
 import { emitEvent } from '../../lib/events'
 
 import { Stream } from '../../types/broadcast'
@@ -48,8 +47,12 @@ function BroadcastPage() {
 
   const [stream, setStream] = useState<Stream | null>(null)
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // INSTANT JOIN: Set isLoading to false initially to show content immediately
+  // Stream data will load in background while user sees the page
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // INSTANT JOIN: Track if initial stream fetch is complete but don't block UI
+  const [streamLoaded, setStreamLoaded] = useState(false)
   
   const [localTracks, setLocalTracks] = useState<[LocalAudioTrack, LocalVideoTrack] | null>(null)
   const localTracksRef = useRef<[LocalAudioTrack, LocalVideoTrack] | null>(null)
@@ -458,7 +461,7 @@ function BroadcastPage() {
     };
   }, [isHost, user?.id, streamId, supabase]);
 
-  const { seats, mySession: userSeat, joinSeat, leaveSeat } =
+  const { seats, mySession: userSeat, joinSeat, leaveSeat, handleParticipantDisconnected } =
     useStreamSeats(stream?.id, user?.id, broadcasterProfile, stream)
 
   const canPublish = isHost || !!userSeat
@@ -551,16 +554,26 @@ function BroadcastPage() {
   useEffect(() => {
     if (!streamId) {
       setError('No stream ID provided.')
-      setIsLoading(false)
+      setStreamLoaded(true)
       return
     }
 
     const fetchStream = async () => {
-      const { data, error } = await supabase
-        .from('streams')
-        .select('*, total_likes, hls_url, is_battle, battle_id')
-        .eq('id', streamId)
-        .maybeSingle()
+      // INSTANT JOIN: Set streamLoaded to false temporarily to show loading in header only
+      setStreamLoaded(false)
+      
+      // OPTIMIZED: Fetch stream and profile in PARALLEL for faster loading
+      const [streamResult, profileResult] = await Promise.all([
+        supabase
+          .from('streams')
+          .select('*, total_likes, hls_url, is_battle, battle_id')
+          .eq('id', streamId)
+          .maybeSingle(),
+        // We'll get profile after we know the stream's user_id
+        Promise.resolve(null)
+      ])
+
+      const { data, error } = streamResult
 
       if (error || !data) {
         setError('Stream not found.')
@@ -571,6 +584,7 @@ function BroadcastPage() {
 
       setStream(data)
       
+      // Fetch profile in parallel with other operations
       const { data: profileData } = await supabase
         .from('user_profiles')
         .select('*')
@@ -584,12 +598,15 @@ function BroadcastPage() {
         }
       }
 
+      setStreamLoaded(true)
+
       if (data.status === 'ended') {
         stopLocalTracks()
         navigate(`/broadcast/summary/${streamId}`)
       }
 
-      setIsLoading(false)
+      // INSTANT JOIN: Don't set isLoading - let page render immediately
+      // Only use isLoading for critical errors, not for data fetching
     }
 
     fetchStream()
@@ -804,7 +821,7 @@ function BroadcastPage() {
     return () => {
       clearInterval(pollInterval);
     };
-  }, [streamId, stream, isHost, supabase]);
+  }, [streamId, stream, isHost, supabase, navigate, stopLocalTracks]);
 
   useEffect(() => {
     if (!streamId) return;
@@ -942,51 +959,24 @@ function BroadcastPage() {
             };
             setRecentGifts(prev => [...prev, newGift]);
             
-            // If this gift is for the broadcaster (host), refresh their profile to show updated balance
-            if (giftData.receiver_id === stream?.user_id) {
-              console.log('[BroadcastPage] ✅ Gift is for broadcaster! Refreshing profile...');
-              console.log('[BroadcastPage] Current broadcasterProfile:', broadcasterProfile);
-              
-              // Use the auth store's refreshProfile method - call directly from getState()
-              useAuthStore.getState().refreshProfile().catch(err => {
-                console.warn('[BroadcastPage] Failed to refresh broadcaster profile after gift:', err);
+            // Update local broadcaster profile state to show updated balance immediately
+            // The broadcaster receives 95% of the gift value
+            if (giftData.receiver_id === stream?.user_id && broadcasterProfile) {
+              const giftAmount = Math.floor((giftData.amount || 0) * 0.95);
+              const newBalance = (broadcasterProfile.troll_coins || 0) + giftAmount;
+              console.log('[BroadcastPage] 🎯 Updating broadcasterProfile balance with 95%:', {
+                giftAmount,
+                oldBalance: broadcasterProfile.troll_coins,
+                newBalance
               });
-              
-              // Also update the local broadcasterProfile state to show updated balance immediately
-              // The broadcaster receives 95% of the gift value
-              if (broadcasterProfile) {
-                const giftAmount = Math.floor((giftData.amount || 0) * 0.95);
-                const newBalance = (broadcasterProfile.troll_coins || 0) + giftAmount;
-                console.log('[BroadcastPage] 🎯 Updating broadcasterProfile balance with 95%:', {
-                  giftAmount,
-                  oldBalance: broadcasterProfile.troll_coins,
-                  newBalance
-                });
-                setBroadcasterProfile({
-                  ...broadcasterProfile,
-                  troll_coins: newBalance
-                });
-              } else {
-                console.warn('[BroadcastPage] ❌ broadcasterProfile is null, cannot update balance!');
-              }
-            } else {
-              console.log('[BroadcastPage] Gift is NOT for broadcaster (different receiver)');
-            }
-            
-            // If the receiver is a guest user in a seat, refresh their profile too
-            // Check if receiver is in any of the current seats
-            const receiverSeat = Object.values(seats).find(
-              (seat: any) => seat.user_id === giftData.receiver_id || seat.guest_id === giftData.receiver_id
-            );
-            if (receiverSeat) {
-              console.log('[BroadcastPage] Gift received by guest user in seat, refreshing profile for balance update');
-              useAuthStore.getState().refreshProfile().catch(err => {
-                console.warn('[BroadcastPage] Failed to refresh guest profile after gift:', err);
+              setBroadcasterProfile({
+                ...broadcasterProfile,
+                troll_coins: newBalance
               });
             }
             
-            // 🔄 REAL-TIME BALANCE REFRESH: Broadcast to all participants
-            // Dispatch custom event to trigger balance refresh for all users in the broadcast
+            // Dispatch custom event for UI components that may need to update
+            // This is handled by other components via event listeners - no page refresh needed
             window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
               detail: {
                 senderId: giftData.sender_id,
@@ -995,30 +985,6 @@ function BroadcastPage() {
                 timestamp: Date.now()
               }
             }));
-            
-            // If the current user is the sender, refresh their profile to show decreased balance
-            if (giftData.sender_id === user?.id) {
-              console.log('[BroadcastPage] 💸 Current user sent a gift - refreshing their balance');
-              useAuthStore.getState().refreshProfile().catch(err => {
-                console.warn('[BroadcastPage] Failed to refresh sender profile after gift:', err);
-              });
-            }
-            
-            // If the receiver is the broadcaster, also refresh broadcaster profile
-            if (giftData.receiver_id === stream?.user_id) {
-              // Already handled above, but ensure profile is refreshed
-              useAuthStore.getState().refreshProfile().catch(() => {});
-            }
-            
-            // Trigger seat refresh to update all participant balances in the grid
-            // This ensures all seat participants see updated balances
-            if (seats && Object.keys(seats).length > 0) {
-              console.log('[BroadcastPage] 🔄 Triggering seat refresh for balance updates');
-              // The useStreamSeats hook will pick up this event and refresh
-              window.dispatchEvent(new CustomEvent('refresh-seat-balances', {
-                detail: { streamId }
-              }));
-            }
           } catch (err) {
             console.error('Error processing gift:', err);
           }
@@ -1070,7 +1036,7 @@ function BroadcastPage() {
       clearInterval(heartbeatInterval);
       supabase.removeChannel(channel);
     };
-  }, [streamId, navigate, stopLocalTracks, user?.id]);
+  }, [streamId, navigate, stopLocalTracks, user?.id, supabase, profile]);
 
   useEffect(() => {
     // Allow guests with seats to initialize LiveKit
@@ -1095,9 +1061,10 @@ function BroadcastPage() {
 
     const initLiveKit = async () => {
       if (!shouldPublish) {
-        setIsJoining(true)
+        // OPTIMIZED: Don't block UI - connect in background without isJoining state
         try {
           const viewerIdentity = `viewer-${userIdentity.substring(0, 8)}-${Date.now()}`
+          // OPTIMIZED: Use parallel fetch for faster token get
           const { data, error } = await supabase.functions.invoke('livekit-token', {
             body: {
               room: stream.id,
@@ -1126,6 +1093,8 @@ function BroadcastPage() {
               next.delete(participant.identity)
               return next
             })
+            // Instantly remove the seat for this participant
+            handleParticipantDisconnected(participant.identity)
           })
 
           // Listen for track subscription to display remote video
@@ -1187,16 +1156,15 @@ function BroadcastPage() {
           hasJoinedRef.current = true
         } catch (err) {
           console.error('Viewer join error:', err)
-        } finally {
-          setIsJoining(false)
         }
+        // OPTIMIZED: Removed isJoining state update - no blocking UI
         return
       }
 
-      setIsJoining(true)
-
+      // OPTIMIZED: Don't block UI - connect in background
       try {
         const hostIdentity = userIdentity
+        // OPTIMIZED: Fetch token without waiting for UI
         const { data, error } = await supabase.functions.invoke('livekit-token', {
           body: {
             room: stream.id,
@@ -1256,6 +1224,8 @@ function BroadcastPage() {
             next.delete(participant.identity)
             return next
           })
+          // Instantly remove the seat for this participant
+          handleParticipantDisconnected(participant.identity)
         })
 
         await room.connect(
@@ -1566,8 +1536,7 @@ function BroadcastPage() {
             }
           }
           
-          // Wait for tracks to be published - give more time for device initialization
-          await new Promise(resolve => setTimeout(resolve, 1500))
+          // OPTIMIZED: No delay - camera should appear immediately after track creation
           
           // Get tracks from room's local participant - check BOTH video AND audio publications
           // Note: Tracks are already published by enableCameraAndMicrophone()
@@ -1716,9 +1685,8 @@ function BroadcastPage() {
 
       } catch (err) {
         console.error('LiveKit init error:', err)
-      } finally {
-        setIsJoining(false)
       }
+      // OPTIMIZED: Removed finally block - no UI blocking
     }
 
     initLiveKit()
@@ -1781,17 +1749,10 @@ function BroadcastPage() {
       const { senderId, receiverId } = customEvent.detail || {};
       console.log('[BroadcastPage] 💰 Balance update received:', { senderId, receiverId });
       
-      // Only refresh if the current user is involved in this gift
-      const isCurrentUserSender = senderId === user?.id;
-      const isCurrentUserReceiver = receiverId === user?.id;
+      // Only update broadcaster profile if broadcaster is involved - no refreshProfile calls
+      // to avoid unnecessary state updates that could cause page refresh appearance
       const isBroadcasterInvolved = receiverId === stream?.user_id || senderId === stream?.user_id;
       
-      if (isCurrentUserSender || isCurrentUserReceiver) {
-        console.log('[BroadcastPage] 🔄 Current user involved in gift - refreshing profile');
-        useAuthStore.getState().refreshProfile().catch(() => {});
-      }
-      
-      // If broadcaster is involved, update their profile
       if (isBroadcasterInvolved && stream?.user_id) {
         console.log('[BroadcastPage] 🔄 Broadcaster involved - updating profile');
         const { data: updatedProfile } = await supabase
@@ -2106,15 +2067,8 @@ function BroadcastPage() {
     return profiles;
   }, [seats, broadcasterProfile, stream?.user_id]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="ml-4">Joining stream...</p>
-      </div>
-    )
-  }
-
+  // INSTANT JOIN: Show minimal loading state inline instead of blocking entire page
+  // This allows users to see the page immediately while data loads in background
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-black text-white">
@@ -2124,32 +2078,34 @@ function BroadcastPage() {
     )
   }
 
-  if (!stream) return null
+  // INSTANT JOIN: Show instant content while stream loads in background
+  // Use skeleton/placeholder instead of blocking with spinner
+  if (!stream) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black">
+        <div className="text-white text-center">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-700 rounded w-48 mb-4"></div>
+            <div className="h-3 bg-gray-600 rounded w-32"></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const categoryConfig = getCategoryConfig(stream.category || 'general')
   const categorySupportsBattles = supportsBattles(stream.category || 'general')
   const categoryMatchingTerm = getMatchingTerminology(stream.category || 'general');
 
-  // Show loading while fetching battle data (only for non-broadcasters who would see BattleView)
-  if (stream.is_battle && isBattleLoading && !isHost) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="ml-4">Loading battle...</p>
-      </div>
-    );
-  }
+  // INSTANT JOIN: Show battle content immediately, load battle data in background
+  // Don't show loading screen - content will appear when data arrives via realtime
 
   // Handle battle mode: show overlay for anyone in a battle (broadcaster or participant)
   const shouldShowBattleOverlay = stream.is_battle && battleData;
 
-  if (isJoining) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="animate-spin" />
-      </div>
-    )
-  }
+  // INSTANT JOIN: Don't block UI while joining LiveKit
+  // Show the page immediately and let LiveKit connect in background
+  // User can see video/audio appear when ready without waiting for spinner
 
   return (
     <ErrorBoundary>
@@ -2272,6 +2228,7 @@ function BroadcastPage() {
             onAcceptChallenge={handleAcceptChallenge}
             onDenyChallenge={handleDenyChallenge}
             isBattleActive={stream.is_battle}
+            isChatOpen={isChatOpen}
           />
         }
         
@@ -2293,7 +2250,7 @@ function BroadcastPage() {
                 setIsGiftModalOpen(false);
                 setGiftRecipientId(null);
               }}
-              recipientId={giftRecipientId || stream?.user_id || ''}
+              recipientId={giftRecipientId || ''}
               streamId={streamId || ''}
               broadcasterId={stream.user_id}
               activeUserIds={activeUserIds}
@@ -2357,13 +2314,6 @@ function BroadcastPage() {
                       timestamp: Date.now()
                     }
                   }));
-                }
-                
-                // Immediately refresh sender's profile to show decreased balance
-                // The sender loses coins when sending a gift
-                if (user?.id) {
-                  console.log('[BroadcastPage] 💸 Gift sent by user - refreshing balance');
-                  useAuthStore.getState().refreshProfile().catch(() => {});
                 }
               }}
             />

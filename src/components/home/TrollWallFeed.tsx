@@ -10,6 +10,7 @@ import NeonGlowUsername from '@/components/NeonGlowUsername'
 import CreatePostComposer from './CreatePostComposer'
 import { Virtuoso } from 'react-virtuoso'
 import UserProfilePopup from '@/components/UserProfilePopup'
+import { parseTextWithLinks } from '@/lib/utils'
 
 interface TrollWallFeedProps {
   onRequireAuth: (intent?: string) => boolean
@@ -250,7 +251,7 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
               <p className="mt-1 text-xs text-purple-300">Replying to a post</p>
             )}
             <p className="mt-3 text-white/90 whitespace-pre-wrap break-words">
-              {post.content}
+              {parseTextWithLinks(post.content)}
             </p>
             {post.metadata?.image_url && (
               <div className="mt-3 overflow-hidden rounded-xl border border-white/10">

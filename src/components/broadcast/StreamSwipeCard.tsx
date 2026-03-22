@@ -222,10 +222,15 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
   
   // Handle share
   const handleShare = async () => {
+    // Use username for personalized URL if available, otherwise fall back to stream ID
+    const shareUrl = broadcaster?.username 
+      ? `${window.location.origin}/watch/${broadcaster.username}`
+      : `${window.location.origin}/watch/${stream.id}`;
+    
     const shareData = {
       title: stream.title || 'Live Stream',
-      text: `Check out this live stream!`,
-      url: `${window.location.origin}/watch/${stream.id}`
+      text: `Check out this live stream by @${broadcaster?.username || 'someone'}!`,
+      url: shareUrl
     };
     
     if (navigator.share) {

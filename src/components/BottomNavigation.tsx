@@ -68,15 +68,27 @@ export default function BottomNavigation() {
     }
   }, [isMenuOpen])
 
-  // Fetch TCPS unread count
+  // Fetch TCPS unread count - with debounce to prevent excessive requests
   useEffect(() => {
     if (!user?.id) return
     
+    let isMounted = true
+    let lastFetchTime = 0
+    const MIN_FETCH_INTERVAL = 5000 // Only fetch every 5 seconds max
+    
     const fetchUnreadCount = async () => {
+      const now = Date.now()
+      if (now - lastFetchTime < MIN_FETCH_INTERVAL) return
+      if (!isMounted) return
+      
+      lastFetchTime = now
+      
       const { data } = await supabase
         .from('conversation_members')
         .select('conversation_id')
         .eq('user_id', user.id)
+      
+      if (!isMounted) return
       
       if (!data || data.length === 0) {
         setTcpsUnreadCount(0)
@@ -100,22 +112,50 @@ export default function BottomNavigation() {
         totalCount += count || 0
       }
       
-      setTcpsUnreadCount(totalCount)
+      if (isMounted) {
+        setTcpsUnreadCount(totalCount)
+      }
     }
     
     fetchUnreadCount()
     
-    const channel = supabase
-      .channel('nav-unread-count')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, () => {
-        fetchUnreadCount()
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, () => {
-        fetchUnreadCount()
-      })
-      .subscribe()
+    // Build filter for only the user's conversations
+    const fetchUserConvs = async () => {
+      const { data } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id)
+      return data?.map(d => d.conversation_id) || []
+    }
     
-    return () => { supabase.removeChannel(channel) }
+    // Subscribe only to the user's conversation messages
+    const setupSubscription = async () => {
+      const userConvIds = await fetchUserConvs()
+      if (!isMounted || userConvIds.length === 0) return
+      
+      const channel = supabase
+        .channel('nav-unread-count')
+        .on('postgres_changes', 
+          { event: 'INSERT', schema: 'public', table: 'conversation_messages', filter: `conversation_id=in.(${userConvIds.join(',')})` }, 
+          () => { fetchUnreadCount() }
+        )
+        .on('postgres_changes', 
+          { event: 'UPDATE', schema: 'public', table: 'conversation_messages', filter: `conversation_id=in.(${userConvIds.join(',')})` }, 
+          () => { fetchUnreadCount() }
+        )
+        .subscribe()
+      
+      return channel
+    }
+    
+    const channelPromise = setupSubscription()
+    
+    return () => {
+      isMounted = false
+      channelPromise.then(channel => {
+        if (channel) supabase.removeChannel(channel)
+      })
+    }
   }, [user?.id])
 
   // Fetch notification count

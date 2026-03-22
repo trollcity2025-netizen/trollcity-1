@@ -338,7 +338,7 @@ serve(async (req) => {
       const rateLimitKey = `ratelimit:${user.id}:${type}`;
       try {
         const count = await redis.incr(rateLimitKey);
-        if (count === 1) await redis.expire(rateLimitKey, 1);
+        if (count === 1) await redis.expire(rateLimitKey, 10); // 10 second window for 5 messages
         if (count > 5) {
           console.warn(`[AUTH] Rate limit exceeded: user_id=${user.id} type=${type}`);
           return new Response(JSON.stringify({ error: "Rate limit exceeded", code: "RATE_LIMITED" }), {

@@ -268,7 +268,7 @@ export default function ChatBubble() {
     const loadMessages = async () => {
       setLoading(true)
       try {
-        const rows = await getConversationMessages(actualConversationId, { limit: 100 })
+        const rows = await getConversationMessages(actualConversationId, { limit: 5000 })
         if (!mounted) return
 
         if (!rows || rows.length === 0) {
@@ -328,7 +328,7 @@ export default function ChatBubble() {
     if (!actualConversationId || !profile?.id || !isOpen) return
 
     const channel = supabase
-      .channel(`chat-bubble:${actualConversationId}`)
+      .channel(`tcps:${actualConversationId}`)
       .on(
         'postgres_changes',
         {

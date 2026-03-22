@@ -22,13 +22,14 @@ export const COIN_PACKAGES = [
 // Legacy export for backward compatibility (if needed) or can be removed if unused
 export const coinPackages = COIN_PACKAGES;
 
-// Cashout Tiers (5 total) - Average 200 coins = $1
+// Cashout Tiers (6 total)
 export const cashoutTiers = [
-  { id: "basic", name: "Basic", coins: 15000, payout: 50 },
-  { id: "pro", name: "Pro", coins: 30000, payout: 150 },
-  { id: "elite", name: "Elite", coins: 60000, payout: 300 },
-  { id: "diamond", name: "Diamond", coins: 120000, payout: 600 },
-  { id: "legendary", name: "Legendary", coins: 200000, payout: 1000 }
+  { id: "tier1", name: "Tier 1", coins: 5000, payout: 10 },
+  { id: "tier2", name: "Tier 2", coins: 15000, payout: 50 },
+  { id: "tier3", name: "Tier 3", coins: 30000, payout: 150 },
+  { id: "tier4", name: "Tier 4", coins: 60000, payout: 300 },
+  { id: "tier5", name: "Tier 5", coins: 120000, payout: 600 },
+  { id: "tier6", name: "Tier 6", coins: 200000, payout: 1000, manualReview: true }
 ];
 
 /**

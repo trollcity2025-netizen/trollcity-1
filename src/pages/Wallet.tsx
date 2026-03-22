@@ -309,18 +309,21 @@ export default function Wallet() {
 
       <div className="grid md:grid-cols-2 gap-4 mb-6">
         <div className="rounded-xl bg-black/40 border border-gray-600 p-4">
-          <h3 className="text-lg font-semibold mb-3">Cashout Tiers</h3>
+          <h3 className="text-lg font-semibold mb-3">Quick Stats</h3>
           <div className="space-y-2">
-            {TIERS.map((tier) => (
-              <div key={tier.coins} className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">{(tier.coins / 1000).toFixed(1)}k coins</span>
-                <span className="font-mono text-green-400">${tier.usd} USD {tier.manualReview && <span className="text-yellow-500 text-xs ml-1">(Manual Review)</span>}</span>
-              </div>
-            ))}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300">Total Transactions:</span>
+              <span className="font-mono text-white">{txs.length}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300">Total Earned:</span>
+              <span className="font-mono text-green-400">{balanceStats.totalEarned.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300">Total Spent:</span>
+              <span className="font-mono text-red-400">{balanceStats.totalSpent.toLocaleString()}</span>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-4">
-            Request a payout when you reach these milestones.
-          </p>
         </div>
       </div>
 

@@ -25,7 +25,7 @@ const PROVIDERS = {
   },
   cashapp: {
     name: 'Cash App',
-    handle: 'trollcity95',
+    handle: 'trollcity26',
     prefix: '$',
     color: 'bg-[#00D632]',
     icon: '💲'

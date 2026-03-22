@@ -68,7 +68,7 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
 
   useEffect(() => {
     if (!conversationId) return
-    const channel = supabase.channel(`chat:${conversationId}`)
+    const channel = supabase.channel(`tcps:${conversationId}`)
     channel.subscribe()
     channelRef.current = channel
     return () => { supabase.removeChannel(channel) }
@@ -142,6 +142,7 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
       }
 
       // Proactively notify receiver via broadcast for instant UI update
+      // Also triggers immediate database sync
       if (channelRef.current) {
         channelRef.current.send({
             type: 'broadcast',
@@ -152,6 +153,9 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
             }
         })
       }
+      
+      // Force immediate sidebar refresh for sender
+      emitEvent('tcps_message_sent', profile.id, { conversationId })
 
     try {
       // Handle OPS group message

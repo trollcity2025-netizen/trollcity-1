@@ -7,12 +7,80 @@ interface TrollJumpScareProps {
 
 const TrollJumpScare: React.FC<TrollJumpScareProps> = ({ rarity }) => {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const [scaryImageIndex, setScaryImageIndex] = useState<number>(0);
+
+  // Scary images - local jumpscare images
+  const scaryImages = [
+    '/img/jumpscares/jumpscare1.png',
+    '/img/jumpscares/jumpscare2.png',
+    '/img/jumpscares/jumpscare3.png',
+    '/img/jumpscares/jumpscare4.png',
+    '/img/jumpscares/jumpscare5.png',
+    '/img/jumpscares/jumpscare6.png',
+    '/img/jumpscares/jumpscare7.jpeg',
+    '/img/jumpscares/jumpscare8.jpeg',
+    '/img/jumpscares/jumpscare9.jpeg',
+    '/img/jumpscares/jumpscare10.jpeg',
+    '/img/jumpscares/jumpscare11.jpeg',
+  ];
+
+  // Generate scary sounds using Web Audio API
+  const playScarySound = (index: number, volume: number) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Different scary sounds based on image index
+      const soundConfigs = [
+        // Scream - high pitched
+        { type: 'sawtooth' as OscillatorType, freq: 800, freqEnd: 1200, duration: 0.8 },
+        // Deep monster growl
+        { type: 'sawtooth' as OscillatorType, freq: 80, freqEnd: 60, duration: 1.0 },
+        // Eerie wail
+        { type: 'sine' as OscillatorType, freq: 300, freqEnd: 600, duration: 1.2 },
+        // Creepy whisper
+        { type: 'triangle' as OscillatorType, freq: 200, freqEnd: 150, duration: 0.6 },
+        // Scary beep
+        { type: 'square' as OscillatorType, freq: 400, freqEnd: 200, duration: 0.3 },
+        // Low rumble
+        { type: 'sawtooth' as OscillatorType, freq: 50, freqEnd: 100, duration: 1.5 },
+        // Jagged scream
+        { type: 'sawtooth' as OscillatorType, freq: 600, freqEnd: 400, duration: 0.5 },
+        // Horror drone
+        { type: 'sine' as OscillatorType, freq: 100, freqEnd: 80, duration: 2.0 },
+      ];
+      
+      const config = soundConfigs[index % soundConfigs.length];
+      oscillator.type = config.type;
+      oscillator.frequency.setValueAtTime(config.freq, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(config.freqEnd, audioContext.currentTime + config.duration);
+      
+      gainNode.gain.setValueAtTime(volume * 0.5, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + config.duration);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + config.duration);
+    } catch (e) {
+      console.log('Audio generation failed:', e);
+    }
+  };
 
   useEffect(() => {
     // Start animation after a short delay to ensure the overlay is visible
     const timer = setTimeout(() => {
       setIsAnimating(true);
+      
+      // Play scary sound based on image index with volume based on rarity
+      const volume = rarity === 'LEGENDARY' ? 1.0 : rarity === 'EPIC' ? 0.8 : 0.6;
+      playScarySound(scaryImageIndex, volume);
     }, 100);
+
+    // Randomly select a scary image
+    setScaryImageIndex(Math.floor(Math.random() * scaryImages.length));
 
     return () => clearTimeout(timer);
   }, []);
@@ -40,12 +108,15 @@ const TrollJumpScare: React.FC<TrollJumpScareProps> = ({ rarity }) => {
           isAnimating ? getJumpScareStyle() : 'w-0 h-0'
         }`}
       >
-        {/* Troll face image - this should be replaced with a real image */}
+        {/* Scary image - jumps out at user */}
         <img 
-          src="https://picsum.photos/400/400" 
+          src={scaryImages[scaryImageIndex]} 
           alt="Troll Jumpscare" 
           className="object-cover rounded-full shadow-2xl animate-pulse"
-          style={{ filter: 'brightness(1.2) saturate(1.5)' }}
+          style={{ 
+            filter: 'brightness(1.3) saturate(1.4) contrast(1.2)',
+            animation: 'pulse 0.3s ease-in-out infinite'
+          }}
         />
         
         {/* Neon border effect based on rarity */}
@@ -56,8 +127,8 @@ const TrollJumpScare: React.FC<TrollJumpScareProps> = ({ rarity }) => {
             rarity === 'EPIC' ? 'border-purple-500' : 'border-yellow-500'
           } animate-pulse`}
           style={{ 
-            animationDuration: rarity === 'LEGENDARY' ? '0.5s' : '1s',
-            boxShadow: `0 0 ${rarity === 'LEGENDARY' ? '50' : '20'}px ${
+            animationDuration: rarity === 'LEGENDARY' ? '0.2s' : '0.5s',
+            boxShadow: `0 0 ${rarity === 'LEGENDARY' ? '80' : '40'}px ${
               rarity === 'COMMON' ? 'rgba(0, 255, 0, 0.8)' :
               rarity === 'RARE' ? 'rgba(0, 0, 255, 0.8)' :
               rarity === 'EPIC' ? 'rgba(128, 0, 128, 0.8)' : 'rgba(255, 255, 0, 0.8)'

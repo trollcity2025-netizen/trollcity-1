@@ -191,7 +191,7 @@ export default function KickFee() {
                 <div className="font-semibold">Manual Cash App payment</div>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
-                    Send payment to <span className="font-mono font-semibold">$trollcity95</span>
+                    Send payment to <span className="font-mono font-semibold">$trollcity26</span>
                   </li>
                   <li>
                     In the Cash App note include:{" "}

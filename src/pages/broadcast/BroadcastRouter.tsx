@@ -81,19 +81,53 @@ function BroadcastRouter() {
     }
 
     const fetchStream = async () => {
-      const { data, error: fetchError } = await supabase
-        .from('streams')
-        .select('*, total_likes, is_protected, password_hash')
-        .eq('id', streamId)
-        .maybeSingle()
+      // Check if streamId looks like a UUID or a username
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(streamId);
+      
+      let streamData = null;
+      
+      if (isUUID) {
+        // It's a UUID - direct stream lookup
+        const { data, error: fetchError } = await supabase
+          .from('streams')
+          .select('*, total_likes, is_protected, password_hash')
+          .eq('id', streamId)
+          .maybeSingle();
+        
+        if (!fetchError && data) {
+          streamData = data;
+        }
+      } else {
+        // It's a username - look up user first, then their active stream
+        const { data: userData, error: userError } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('username', streamId)
+          .maybeSingle();
+        
+        if (!userError && userData) {
+          // Found user, now look for their active stream
+          const { data: streamDataByUser, error: streamError } = await supabase
+            .from('streams')
+            .select('*, total_likes, is_protected, password_hash')
+            .eq('user_id', userData.id)
+            .eq('is_live', true)
+            .eq('status', 'live')
+            .maybeSingle();
+          
+          if (!streamError && streamDataByUser) {
+            streamData = streamDataByUser;
+          }
+        }
+      }
 
-      if (fetchError || !data) {
+      if (!streamData) {
         setError('Stream not found.')
         setIsLoading(false)
         return
       }
 
-      setStream(data)
+      setStream(streamData)
       setIsLoading(false)
     }
 

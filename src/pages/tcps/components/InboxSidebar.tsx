@@ -56,6 +56,10 @@ export default function InboxSidebar({
   const [newMessagesMap, setNewMessagesMap] = useState<Record<string, boolean>>({})
   const menuRef = useRef<HTMLDivElement>(null)
   const hasLoadedFromCache = useRef(false)
+  const isFetchingRef = useRef(false)
+  const lastFetchTimeRef = useRef(0)
+  const activeConversationRef = useRef<string | null>(null)
+  const isMountedRef = useRef(false)
 
   // Get hidden conversations mapping from localStorage
   const getHiddenConvMapping = useCallback(() => {
@@ -146,6 +150,19 @@ export default function InboxSidebar({
 
   const fetchConversations = useCallback(async (isBackground = false) => {
     if (!user?.id) return
+    
+    // Debounce: Don't fetch if we just fetched within 1 second
+    const now = Date.now()
+    if (lastFetchTimeRef.current && now - lastFetchTimeRef.current < 1000) {
+      return
+    }
+    
+    // Prevent concurrent fetches
+    if (isFetchingRef.current) {
+      return
+    }
+    isFetchingRef.current = true
+    lastFetchTimeRef.current = now
     
     // Only show loading state if not background refresh and we don't have cached data
     if (!isBackground && conversations.length === 0) {
@@ -398,8 +415,9 @@ export default function InboxSidebar({
     } finally {
       setLoading(false)
       setIsInitialLoad(false)
+      isFetchingRef.current = false
     }
-  }, [user?.id, isUserOfficer, onConversationsLoaded, saveToCache, conversations.length])
+  }, [user?.id, isUserOfficer, onConversationsLoaded, saveToCache, getHiddenConvMapping])
 
   const handleBlockUser = async (otherUserId: string) => {
     if (!user) return
@@ -550,6 +568,7 @@ export default function InboxSidebar({
 
   // Clear new message notification when user selects a conversation
   useEffect(() => {
+    activeConversationRef.current = activeConversation
     if (activeConversation) {
       setNewMessagesMap({})
     }
@@ -567,6 +586,10 @@ export default function InboxSidebar({
   // Main effect for fetching and realtime - runs when user.id or fetchConversations changes
   useEffect(() => {
     if (!user?.id) return
+    
+    // Prevent multiple initial fetches - only run once on mount
+    if (isMountedRef.current) return
+    isMountedRef.current = true
     
     // Save user ID for cache key
     localStorage.setItem('tcps_current_user_id', user.id)
@@ -591,29 +614,38 @@ export default function InboxSidebar({
     }
     
     // Subscribe to new messages to update sidebar ordering/preview
+    // Only listen for messages in this user's conversations - with proper filtering
+    // Note: We can't filter by many conversation_ids, so we use a minimal filter and validate in callback
     const messagesChannel = supabase
       .channel('sidebar-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages', filter: `sender_id=eq.${user?.id}` }, (_payload) => {
+        // Only trigger on our own messages (to update the list after sending)
+        fetchConversations(true)
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (payload) => {
          const newMsg = payload.new
-         if (newMsg && user?.id) {
-           // Immediately fetch fresh data when a new message is inserted
-           fetchConversations(true)
-           
-           if (newMsg.sender_id !== user.id) {
-             supabase
-               .from('conversation_members')
-               .select('conversation_id')
-               .eq('user_id', user.id)
-               .eq('conversation_id', newMsg.conversation_id)
-               .then(({ data }) => {
-                 if (data && data.length > 0 && activeConversation !== newMsg.conversation_id) {
+         if (newMsg && user?.id && newMsg.sender_id !== user.id) {
+           // Check if this message is in one of our conversations before fetching
+           supabase
+             .from('conversation_members')
+             .select('conversation_id')
+             .eq('user_id', user.id)
+             .eq('conversation_id', newMsg.conversation_id)
+             .then(({ data }) => {
+               if (data && data.length > 0) {
+                 // Only fetch if message is from our conversations
+                 fetchConversations(true)
+                 if (activeConversation !== newMsg.conversation_id) {
                    setNewMessagesMap(prev => ({ ...prev, [newMsg.conversation_id]: true }))
                  }
-               })
-           }
+               }
+             })
          }
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages' }, (_payload) => {
+      // Only listen for message updates in our own conversations - filter by sender_id not being us
+      // This reduces unnecessary triggers significantly
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_messages', filter: `sender_id=neq.${user?.id}` }, (_payload) => {
+         // Only fetch when someone else's message is updated (e.g., read status)
          debouncedFetch()
       })
       .on('broadcast', { event: 'new-message' }, () => {
@@ -639,7 +671,7 @@ export default function InboxSidebar({
       supabase.removeChannel(messagesChannel)
       if (opsChannel) supabase.removeChannel(opsChannel)
     }
-  }, [user?.id, isUserOfficer, activeConversation]) // Note: fetchConversations intentionally excluded to avoid infinite loops
+  }, [user?.id, isUserOfficer]) // Note: fetchConversations and activeConversation ref used to avoid infinite loops
 
   // Determine which conversations to show based on active tab
   const displayedConversations = activeTab === 'hidden' 

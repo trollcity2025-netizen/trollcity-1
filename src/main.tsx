@@ -282,7 +282,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 60 * 1000, // 1 minute - increased for better cache utilization
       gcTime: 15 * 60 * 1000, // 15 minutes - increased to prevent premature garbage collection
-      refetchOnWindowFocus: false, // Disable to prevent unnecessary refetches
+      refetchOnWindowFocus: true, // Enable to refresh data when user returns to tab
       refetchOnReconnect: true, // Refetch when reconnecting
       retry: 1, // Allow one retry on failure
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff

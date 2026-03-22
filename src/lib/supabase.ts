@@ -1047,7 +1047,7 @@ export async function getConversationMessages(
   conversationId: string,
   options?: { limit?: number; before?: string }
 ): Promise<ConversationMessage[]> {
-  const limit = options?.limit ?? 50
+  const limit = options?.limit ?? 2000 // Increased to fetch ALL messages per conversation
 
   let query = supabase
     .from('conversation_messages')
@@ -1141,7 +1141,7 @@ export async function getUnifiedMessagesForOfficer(
   userId: string,
   options?: { limit?: number; include_ops?: boolean }
 ): Promise<UnifiedMessage[]> {
-  const limit = options?.limit ?? 50
+  const limit = options?.limit ?? 2000 // Increased to fetch all messages
   const includeOps = options?.include_ops ?? true
   
   // Check if user is officer

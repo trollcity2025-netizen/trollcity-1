@@ -144,7 +144,7 @@ export function useConversations() {
     enabled: !!userId,
     staleTime: 60 * 1000, // 1 minute
     gcTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnMount: false,
   });
 }
@@ -158,7 +158,7 @@ export function useMessages(conversationId: string | null) {
     enabled: !!conversationId && !!userId,
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 }
 

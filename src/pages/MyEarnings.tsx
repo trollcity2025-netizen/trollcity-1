@@ -11,10 +11,12 @@ import { EarningsView, MonthlyEarnings } from '../types/earnings'
 import RequestPayoutModal from '../components/RequestPayoutModal'
 // Payment tiers based on payout amounts
 const PAYOUT_TIERS = [
-  { name: 'Starter', coins: 7000, usd: 21.00, color: '#cd7f32' },
-  { name: 'Bronze', coins: 14000, usd: 49.50, color: '#c0c0c0' },
-  { name: 'Silver', coins: 27000, usd: 90.00, color: '#ffd700' },
-  { name: 'Gold', coins: 47000, usd: 150.00, color: '#ff4dd2' },
+  { name: 'Tier 1', coins: 5000, usd: 10.00, color: '#cd7f32', label: '' },
+  { name: 'Tier 2', coins: 15000, usd: 50.00, color: '#c0c0c0', label: '' },
+  { name: 'Tier 3', coins: 30000, usd: 150.00, color: '#ffd700', label: '' },
+  { name: 'Tier 4', coins: 60000, usd: 300.00, color: '#ff4dd2', label: '' },
+  { name: 'Tier 5', coins: 120000, usd: 600.00, color: '#00ff00', label: '' },
+  { name: 'Tier 6', coins: 200000, usd: 1000.00, color: '#ff0000', label: 'Manual Review' },
 ]
 
 function getPayoutTier(coins: number) {

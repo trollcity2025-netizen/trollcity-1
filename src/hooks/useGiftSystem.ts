@@ -45,7 +45,7 @@ export function useGiftSystem(
   const [isSending, setIsSending] = useState(false);
   const [giftsDisabled, setGiftsDisabled] = useState(false);
   const [giftsDisabledReason, setGiftsDisabledReason] = useState<string | null>(null);
-  const { user, refreshProfile } = useAuthStore();
+  const { user } = useAuthStore();
 
   // Simple client-side circuit breaker
   const circuitRef = useRef<{ openUntil: number }>({ openUntil: 0 });
@@ -172,21 +172,21 @@ export function useGiftSystem(
 
       if (error) throw error;
 
-       if (data && data.success) {
-         // Get sender's profile for username
-         let senderName = 'Someone';
-         try {
-           const { data: profileData } = await supabase
-             .from('user_profiles')
-             .select('username')
-             .eq('id', user.id)
-             .single();
-           if (profileData?.username) {
-             senderName = profileData.username;
-           }
-         } catch (profileErr) {
-           console.warn('[GiftSystem] Could not fetch sender profile:', profileErr);
-         }
+      if (data && data.success) {
+        // Get sender's profile for username
+        let senderName = 'Someone';
+        try {
+          const { data: profileData } = await supabase
+            .from('user_profiles')
+            .select('username')
+            .eq('id', user.id)
+            .single();
+          if (profileData?.username) {
+            senderName = profileData.username;
+          }
+        } catch (profileErr) {
+          console.warn('[GiftSystem] Could not fetch sender profile:', profileErr);
+        }
         
         // Get gift icon - try multiple lookups to find the correct icon
         let giftIcon = '🎁';
@@ -260,10 +260,25 @@ export function useGiftSystem(
           console.warn('[GiftSystem] Could not broadcast gift event:', broadcastErr);
         }
         
-         // Also send a chat message via Supabase broadcast
+        // Also send a chat message via Supabase broadcast
         try {
           if (streamId) {
             const txnId = generateUUID();
+            // Get recipient username for display in chat
+            let receiverName = 'user';
+            try {
+              const { data: receiverProfile } = await supabase
+                .from('user_profiles')
+                .select('username')
+                .eq('id', finalRecipientId)
+                .single();
+              if (receiverProfile?.username) {
+                receiverName = receiverProfile.username;
+              }
+            } catch (recErr) {
+              console.warn('[GiftSystem] Could not fetch receiver profile:', recErr);
+            }
+            
             // Use the SAME channel name as BroadcastChat to ensure messages are received
             // BroadcastChat has a fix to ignore leave events for the current user
             const chatChannel = supabase.channel(`stream-chat-${streamId}`);
@@ -282,6 +297,8 @@ export function useGiftSystem(
                     gift_type: gift.slug,
                     gift_amount: quantity,
                     sender_name: senderName,
+                    receiver_id: finalRecipientId,
+                    receiver_name: receiverName,
                     user_profiles: {
                       username: senderName,
                       avatar_url: null
@@ -299,14 +316,7 @@ export function useGiftSystem(
           console.warn('[GiftSystem] Could not send chat message:', chatErr);
         }
         
-         // Refresh sender's profile to update balance in real-time
-        // Use non-blocking refresh to avoid disrupting Agora connection
-        refreshProfile().catch(err => {
-          console.warn('[GiftSystem] Profile refresh failed:', err);
-        });
-
         // Create notification for the receiver (if not sending to self)
-        // Also refresh receiver's profile so they see updated balance in real-time
         if (finalRecipientId !== user.id) {
           const totalCoins = gift.coinCost * quantity;
           
@@ -318,18 +328,6 @@ export function useGiftSystem(
             streamId || undefined
           ).catch(err => {
             console.warn('[GiftSystem] Failed to create notification:', err);
-          });
-          
-          // If receiver is different from sender, we need to trigger a profile refresh for them
-          // This is done via the notification system which will cause a refresh when they check it
-          // For real-time update, we also need to inform the receiver's client
-          // The realtime channel will broadcast this via gift_sent event
-        }
-
-        // If the receiver is the current user, refresh their profile to see updated balance (e.g., broadcaster receiving gift)
-        if (finalRecipientId === user.id) {
-          refreshProfile().catch(err => {
-            console.warn('[GiftSystem] Profile refresh failed for receiver:', err);
           });
         }
         

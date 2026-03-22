@@ -9,6 +9,7 @@ import { useAuthStore } from '../../lib/store'
 import { useChatStore } from '../../lib/chatStore'
 import { setupGlobalMessageNotifications, OFFICER_GROUP_CONVERSATION_ID } from '../../lib/supabase'
 import ChatBubble from '../ChatBubble'
+import { useSidebarStore } from '../../stores/useSidebarStore'
 
 
 import GlobalTicker from '../header/GlobalTicker';
@@ -29,6 +30,7 @@ export default function AppLayout({
   const location = useLocation();
   const showLegacySidebar = useAuthStore((s) => s.showLegacySidebar)
   const user = useAuthStore((s) => s.user)
+  const { isCollapsed } = useSidebarStore()
   useChatStore()
   const isAuthPage = location.pathname.startsWith('/auth');
   const isLivePage = location.pathname.startsWith('/live/') || location.pathname.startsWith('/broadcast/');
@@ -69,7 +71,7 @@ export default function AppLayout({
       <PurchaseRequiredModal />
       {/* Desktop Sidebar - Hidden on Mobile */}
       {effectiveShowSidebar && (
-        <div className="hidden md:block w-64 h-full shrink-0 border-r border-white/5 bg-[#0A0814] z-20">
+        <div className={`hidden md:block h-full shrink-0 border-r border-white/5 bg-[#0A0814] z-20 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
           <Sidebar />
         </div>
       )}

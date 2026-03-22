@@ -683,7 +683,8 @@ export default function BroadcastControls({
                      </button>
                  )}
 
-                 {/* Like Button */}
+                 {/* Like Button - Only show for non-hosts (viewers) */}
+                 {!isHost && (
                  <button
                     onClick={(e) => { e.stopPropagation(); handleLike(); }}
                     disabled={isLiking}
@@ -692,6 +693,7 @@ export default function BroadcastControls({
                  >
                     <Heart size={20} className={cn("text-zinc-400 group-hover:text-pink-500 transition-colors", isLiking && "scale-125 text-pink-500 fill-pink-500")} />
                  </button>
+                 )}
 
                  {/* Challenge Button - For Viewers */}
                  {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (

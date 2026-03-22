@@ -467,6 +467,52 @@ export default function CoinStore() {
   const isOfficer = profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.is_lead_officer === true || profile?.troll_role === 'troll_officer' || profile?.troll_role === 'lead_troll_officer';
   const isEmployee = isAdmin || isSecretary || isOfficer;
 
+  // New user state - check if user has made any previous coin purchases
+  const [isNewUser, setIsNewUser] = useState(true);
+  const [checkingNewUser, setCheckingNewUser] = useState(true);
+
+  // Check if user is a new user (less than 1 week on platform)
+  const checkNewUserStatus = useCallback(async () => {
+    if (!user?.id) {
+      setCheckingNewUser(false);
+      return;
+    }
+    
+    try {
+      // Check user's account creation date
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('created_at')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      
+      if (profileData?.created_at) {
+        const createdAt = new Date(profileData.created_at);
+        const now = new Date();
+        const daysSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+        
+        // User is "new" if less than 7 days since account creation
+        setIsNewUser(daysSinceCreation < 7);
+      } else {
+        setIsNewUser(false);
+      }
+    } catch (err) {
+      console.error('Error checking new user status:', err);
+      // Default to false on error to avoid giving discount incorrectly
+      setIsNewUser(false);
+    } finally {
+      setCheckingNewUser(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    checkNewUserStatus();
+  }, [checkNewUserStatus]);
+
+  const NEW_USER_COIN_DISCOUNT = 0.05; // 5% off for new users
+
   const EMPLOYEE_CALL_DISCOUNT = 0.5;
   const EMPLOYEE_COIN_DISCOUNT = 0.015;
 
@@ -1402,6 +1448,17 @@ export default function CoinStore() {
                 Coin Packages
               </h2>
 
+              {/* New User Discount Banner */}
+              {!checkingNewUser && isNewUser && (
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-3">
+                  <span className="text-2xl">🎁</span>
+                  <div>
+                    <div className="font-bold text-blue-400">Welcome! New User Discount</div>
+                    <div className="text-sm text-gray-300">Get <span className="font-bold text-blue-400">5% OFF</span> all coin packs as a new member!</div>
+                  </div>
+                </div>
+              )}
+
               {isEmployee && (
                 <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-3">
                   <span className="text-2xl">🎉</span>
@@ -1444,16 +1501,32 @@ export default function CoinStore() {
                   {coinPackages.map((pkg) => {
                     const priceMatch = pkg.price.match(/\$(\d+\.?\d*)/);
                     const originalPrice = priceMatch ? parseFloat(priceMatch[1]) : 0;
-                    const discountedPrice = isEmployee ? originalPrice * (1 - EMPLOYEE_COIN_DISCOUNT) : originalPrice;
+                    // Apply new user discount (4%) or employee discount (1.5%)
+                    let discountedPrice = originalPrice;
+                    let appliedDiscount = 0;
+                    if (isEmployee) {
+                      discountedPrice = originalPrice * (1 - EMPLOYEE_COIN_DISCOUNT);
+                      appliedDiscount = EMPLOYEE_COIN_DISCOUNT;
+                    } else if (!checkingNewUser && isNewUser) {
+                      discountedPrice = originalPrice * (1 - NEW_USER_COIN_DISCOUNT);
+                      appliedDiscount = NEW_USER_COIN_DISCOUNT;
+                    }
+                    
+                    const showNewUserBadge = !checkingNewUser && isNewUser && !isEmployee;
                     
                     return (
-                      <div key={pkg.id} className={`bg-black/40 p-4 rounded-lg border ${pkg.promo ? 'border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : (pkg.popular || pkg.bestValue ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-purple-500/20')} relative overflow-hidden group ${isEmployee ? 'border-green-500/30' : ''}`}>
+                      <div key={pkg.id} className={`bg-black/40 p-4 rounded-lg border ${pkg.promo ? 'border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : (pkg.popular || pkg.bestValue ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-purple-500/20')} relative overflow-hidden group ${isEmployee ? 'border-green-500/30' : (showNewUserBadge ? 'border-blue-500/30' : '')}`}>
                         {isEmployee && (
                           <div className="absolute top-3 left-3 bg-green-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                             1.5% OFF
                           </div>
                         )}
-                        {(pkg.popular || pkg.bestValue || pkg.promo) && !isEmployee && (
+                        {showNewUserBadge && (
+                          <div className="absolute top-3 left-3 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            5% OFF
+                          </div>
+                        )}
+                        {(pkg.popular || pkg.bestValue || pkg.promo) && !isEmployee && !showNewUserBadge && (
                           <div className={`absolute top-3 right-3 ${pkg.promo ? 'bg-green-500' : 'bg-yellow-500'} text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider`}>
                             {pkg.promo ? 'Limited Offer' : (pkg.popular ? 'Popular' : 'Best Value')}
                           </div>
@@ -1461,7 +1534,7 @@ export default function CoinStore() {
                         <div className="flex flex-col items-center text-center p-2">
                           <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">{pkg.emoji}</div>
                           <div className="font-bold text-2xl text-white mb-1">{formatCoins(pkg.coins)}</div>
-                          {isEmployee ? (
+                          {(isEmployee || showNewUserBadge) ? (
                             <div className="mb-1">
                               <span className="text-lg font-semibold text-gray-400 line-through">{pkg.price}</span>
                               <span className="text-lg font-semibold text-green-400 ml-2">${discountedPrice.toFixed(2)}</span>
@@ -1473,10 +1546,10 @@ export default function CoinStore() {
                           
                           <button
                             onClick={() => {
-                              const purchasePkg = isEmployee ? { ...pkg, price: `${discountedPrice.toFixed(2)}` } : pkg;
+                              const purchasePkg = (isEmployee || showNewUserBadge) ? { ...pkg, price: `${discountedPrice.toFixed(2)}` } : pkg;
                               handleManualPurchase(purchasePkg);
                             }}
-                            className={`w-full py-2 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isEmployee ? 'bg-green-600 hover:bg-green-500' : (MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.color || 'bg-purple-600')} hover:brightness-110`}
+                            className={`w-full py-2 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isEmployee ? 'bg-green-600 hover:bg-green-500' : (showNewUserBadge ? 'bg-blue-600 hover:bg-blue-500' : (MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.color || 'bg-purple-600'))} hover:brightness-110`}
                           >
                             Buy with {MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.name}
                           </button>

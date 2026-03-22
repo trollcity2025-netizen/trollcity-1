@@ -104,8 +104,8 @@ export default function SetupPage() {
       }
     };
     
-    // Delay slightly to not block initial page load
-    const timeout = setTimeout(prefetchToken, 1000);
+    // OPTIMIZED: Prefetch token immediately for faster broadcast start
+    const timeout = setTimeout(prefetchToken, 100);
     return () => clearTimeout(timeout);
   }, [user?.id, streamId]);
 
@@ -188,7 +188,7 @@ export default function SetupPage() {
       setStreamMode('camera');
     }
     // Note: For gaming, we don't auto-switch - let user choose between camera/screen
-  }, [category]);
+  }, [category, setStreamMode]);
 
   // Handle camera facing mode based on category
   useEffect(() => {

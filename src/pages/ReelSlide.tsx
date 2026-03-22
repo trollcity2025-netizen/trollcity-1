@@ -3,6 +3,7 @@ import ReelActions from "./ReelActions";
 import ReelCommentsOverlay from "../components/ReelCommentsOverlay";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../lib/store";
+import { parseTextWithLinks } from "../lib/utils";
 
 const ReelSlide: React.FC<{ post: any; isActive: boolean }> = ({
   post,
@@ -78,7 +79,7 @@ const ReelSlide: React.FC<{ post: any; isActive: boolean }> = ({
         <div className="font-semibold text-sm">@{post.user_profiles?.username}</div>
         {post.content && (
           <div className="text-[11px] text-gray-200 line-clamp-3">
-            {post.content}
+            {parseTextWithLinks(post.content)}
           </div>
         )}
         <div className="text-[10px] text-gray-400">

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import CourtEntryModal from './CourtEntryModal'
 import SidebarGroup from './ui/SidebarGroup'
+import PromoSlot from './promo/PromoSlot'
 import {
   Home,
   MessageSquare,
@@ -76,9 +77,62 @@ export default function Sidebar() {
   const [isStaff, setIsStaff] = useState(false)
 
   const [showCourtModal, setShowCourtModal] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const { isCollapsed, setCollapsed, expandedGroups, toggleGroup, expandGroup } = useSidebarStore();
+  const isSidebarCollapsed = isCollapsed;
+  const setIsSidebarCollapsed = setCollapsed;
 
-  const { expandedGroups, toggleGroup, expandGroup } = useSidebarStore();
+  const { isJailed } = useJailMode();
+  const { isBroadcastLockedDown } = useBroadcastLockdown();
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!profile?.id) return
+      
+      try {
+        // Check if user is officer
+        const { data: officerData } = await supabase
+          .from('officer_members')
+          .select('*')
+          .eq('user_id', profile.id)
+          .single()
+        setCanSeeOfficer(!!officerData)
+
+        // Check if user has a family
+        const { data: familyData } = await supabase
+          .from('troll_families')
+          .select('*, troll_family_members!inner(*)')
+          .eq('troll_family_members.user_id', profile.id)
+          .single()
+        
+        if (familyData) {
+          setHasFamily(true)
+          setIsFamilyLeader(familyData.leader_id === profile.id)
+          setIsFamilyMember(true)
+        } else {
+          setHasFamily(false)
+          setIsFamilyLeader(false)
+          setIsFamilyMember(false)
+        }
+
+        // Check if user can see Troll Family
+        setCanSeeTrollFamily(!!familyData || profile?.role === 'admin')
+
+        // Check if user is secretary
+        const { data: secData } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', profile.id)
+          .single()
+        setCanSeeSecretary(secData?.role === 'secretary' || secData?.role === 'admin')
+        setIsStaff(secData?.role === 'secretary' || secData?.role === 'admin' || !!officerData)
+        
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+      }
+    }
+
+    fetchUserData()
+  }, [profile?.id])
 
   useEffect(() => {
     const path = location.pathname;
@@ -98,125 +152,12 @@ export default function Sidebar() {
   const isAdmin = profile?.role === UserRole.ADMIN || profile?.troll_role === UserRole.ADMIN || profile?.role === UserRole.HR_ADMIN || profile?.is_admin;
   const isSecretary = profile?.role === UserRole.SECRETARY || profile?.troll_role === UserRole.SECRETARY;
   const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
-  const isOfficer = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.is_lead_officer || profile?.troll_role === UserRole.TROLL_OFFICER || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
-  // Court dockets visible to all users (logged in or not)
-  const canSeeCourt = true;
-  
-  const needsLicense = useMemo(() => {
-    if (!profile) return false
-    const status = (profile as any).drivers_license_status
-    return !status || status === 'revoked' || status === 'suspended'
-  }, [profile])
 
-  const { isJailed } = useJailMode(profile?.id)
-  const { isLocked: isBroadcastLocked, canBroadcast } = useBroadcastLockdown()
+  const canSeeCourt = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.role === UserRole.ADMIN || profile?.is_troll_officer;
 
-
-  useEffect(() => {
-    if (profile?.id) {
-        fetchXP(profile.id)
-        subscribeToXP(profile.id)
-        return () => unsubscribe()
-    }
-  }, [profile?.id])
-
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!profile) { 
-        setCanSeeOfficer(false)
-        setCanSeeTrollFamily(false)
-        setCanSeeSecretary(false)
-        return 
-      }
-      
-      let activeAdmin = false
-      try {
-        const { data } = await supabase
-            .from('admin_for_week_queue')
-            .select('user_id')
-            .eq('status', 'active')
-            .eq('user_id', profile.id)
-            .maybeSingle()
-        activeAdmin = !!data
-      } catch {}
-
-      setCanSeeOfficer(isOfficer || activeAdmin)
-
-      // Check if user is in a family (more accurate than checking applications)
-      // Officers also need to check if they have a family
-      // Also check if user has submitted a troll family application
-      try {
-        // Check profile role first (most reliable after approval)
-        const profileRole = profile?.role
-        const hasTrollFamilyRole = profileRole === 'troll_family' || profileRole === 'family_leader'
-        
-        // Check for pending/approved troll family application
-        const { data: familyApp } = await supabase
-          .from('applications')
-          .select('id, status')
-          .eq('user_id', profile.id)
-          .eq('type', 'troll_family')
-          .in('status', ['pending', 'approved'])
-          .maybeSingle()
-        
-        const hasPendingApplication = !!familyApp && familyApp.status === 'pending'
-        const hasApprovedApplication = !!familyApp && familyApp.status === 'approved'
-        
-        // Check family_members table
-        const { data: familyMember } = await supabase
-          .from('family_members')
-          .select('id, role')
-          .eq('user_id', profile.id)
-          .maybeSingle()
-
-        // Also check if user is a leader in troll_families
-        const { data: leaderFamily } = await supabase
-          .from('troll_families')
-          .select('id')
-          .eq('leader_id', profile.id)
-          .maybeSingle()
-
-        const hasFamilyMembership = !!familyMember
-        const isLeader = !!leaderFamily
-        const inFamily = hasFamilyMembership || isLeader || hasTrollFamilyRole || hasApprovedApplication
-        
-        // Officers can see troll families, but also show "My Family" if they're in one
-        // Also show if they have a pending application
-        setCanSeeTrollFamily(isOfficer || inFamily || hasPendingApplication)
-        setHasFamily(inFamily)
-        
-        // Set leader/member status for role-based access
-        setIsFamilyLeader(isLeader || hasTrollFamilyRole)
-        setIsFamilyMember(hasFamilyMembership)
-      } catch {
-        setCanSeeTrollFamily(isOfficer)
-        setHasFamily(false)
-        setIsFamilyLeader(false)
-        setIsFamilyMember(false)
-      }
-
-      if (isAdmin || isSecretary) {
-        setCanSeeSecretary(true)
-      } else {
-        try {
-          const { data: secData } = await supabase
-            .from('secretary_assignments')
-            .select('id')
-            .eq('secretary_id', profile.id)
-            .maybeSingle()
-          
-          setCanSeeSecretary(!!secData)
-        } catch {
-          setCanSeeSecretary(false)
-        }
-      }
-
-      // Staff roles: Admin, CEO, Lead Troll Officers, Troll Officers, Secretary
-      const hasStaffAccess = isAdmin || isLead || isOfficer || isSecretary;
-      setIsStaff(!!hasStaffAccess);
-    }
-    checkAccess()
-  }, [profile, isOfficer, isAdmin, isSecretary, isLead])
+  const canBroadcast = () => {
+    return !isBroadcastLockedDown && (profile?.role === 'broadcaster' || profile?.is_broadcaster || profile?.troll_role === 'broadcaster');
+  }
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
@@ -384,18 +325,6 @@ export default function Sidebar() {
                 highlight={isUpdated('/pods')} onClick={() => markAsViewed('/pods')}
                 className="text-purple-400 hover:text-purple-300"
               />
-              {/* MAI TALENT - UNDER CONSTRUCTION - Disabled for all users
-              <SidebarItem 
-                icon={Mic} 
-                label="Mai Talent" 
-                to="/mai-talent/stage" 
-                active={location.pathname.startsWith('/mai-talent')}
-                collapsed={isSidebarCollapsed}
-                highlight={isUpdated('/mai-talent/stage')} onClick={() => markAsViewed('/mai-talent/stage')}
-                className="text-pink-400 hover:text-pink-300"
-              />
-              */}
-              {/* END MAI TALENT DISABLED */}
               <SidebarItem 
                 icon={Waves} 
                 label="Public Pool" 
@@ -551,6 +480,13 @@ export default function Sidebar() {
           </>
         )}
       </div>
+
+      {/* Promo Slot - City Ads */}
+      {!isSidebarCollapsed && (
+        <div className="p-4 border-t border-white/10">
+          <PromoSlot placement="left_sidebar_screensaver" variant="sidebar" />
+        </div>
+      )}
 
       {/* Footer Actions */}
       <div className="p-4 border-t border-white/10 space-y-2">

@@ -28,6 +28,27 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
   const [seats, setSeats] = useState<Record<number, SeatSession>>({});
   const { user, profile } = useAuthStore();
   const [mySession, setMySession] = useState<SeatSession | null>(null);
+  
+  // For instant seat removal when LiveKit participant disconnects
+  // This is called from BroadcastPage when a participantDisconnected event fires
+  const handleParticipantDisconnected = useCallback((participantIdentity: string) => {
+    // Find the seat with this guest_id or user_id and remove it instantly
+    setSeats(prev => {
+      const next = { ...prev };
+      let found = false;
+      Object.keys(next).forEach(key => {
+        const seat = next[Number(key)];
+        if (seat?.guest_id === participantIdentity || seat?.user_id === participantIdentity) {
+          delete next[Number(key)];
+          found = true;
+        }
+      });
+      if (found) {
+        console.log('[useStreamSeats] Instantly removed seat for disconnected participant:', participantIdentity);
+      }
+      return next;
+    });
+  }, []);
 
   // Use passed userId or fall back to auth user id
   const effectiveUserId = userId || user?.id;
@@ -110,8 +131,8 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
     fetchSeats();
 
     // Polling fallback to ensure consistency even if Realtime fails
-    // Reduced to 10 seconds for faster updates while reducing DB load
-    const interval = setInterval(fetchSeats, 10000);
+    // Reduced to 3 seconds for faster seat updates (guest leaving shows instantly)
+    const interval = setInterval(fetchSeats, 3000);
 
     const channel = supabase
       .channel(`seats:${streamId}`)
@@ -468,5 +489,5 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
     }
   };
 
-  return { seats, mySession, joinSeat, leaveSeat, kickParticipant, refreshSeats: fetchSeats };
+  return { seats, mySession, joinSeat, leaveSeat, kickParticipant, refreshSeats: fetchSeats, handleParticipantDisconnected };
 }

@@ -29,8 +29,9 @@ import SecretaryDashboard from '../president/SecretaryDashboard'
 import ProposalManagementPanel from '../admin/components/shared/ProposalManagementPanel'
 import CashoutForecastPanel from './components/CashoutForecastPanel'
 import NeighborApprovals from './components/NeighborApprovals'
+import CityAdsManager from './components/CityAdsManager'
 
-type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors'
+type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads'
 
 interface TabInfo {
   id: Tab
@@ -55,6 +56,7 @@ const tabs: TabInfo[] = [
   { id: 'giftcards', label: 'Gift Cards', icon: <Gift className="w-4 h-4" />, color: 'pink' },
   { id: 'alerts', label: 'Alerts', icon: <AlertTriangle className="w-4 h-4" />, color: 'red' },
   { id: 'staff', label: 'Staff', icon: <Users className="w-4 h-4" />, color: 'purple' },
+  { id: 'promo_ads', label: 'Promo Ads', icon: <FileText className="w-4 h-4" />, color: 'orange' },
 ]
 
 const getColorClasses = (color: string, active: boolean) => {
@@ -207,6 +209,16 @@ export default function SecretaryConsole() {
         return (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <StaffManagement />
+          </div>
+        )
+      case 'promo_ads':
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">Promo Ads Manager</h2>
+              <p className="text-slate-400">Create and manage Troll City promotional ads.</p>
+            </div>
+            <CityAdsManager />
           </div>
         )
       default:

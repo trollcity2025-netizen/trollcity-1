@@ -19,6 +19,8 @@ interface Message {
   gift_type?: string;
   gift_amount?: number;
   sender_name?: string;
+  receiver_id?: string;
+  receiver_name?: string;
   // Challenge-specific fields
   challenge_id?: string;
   challenger_id?: string;
@@ -73,6 +75,8 @@ interface BroadcastChatProps {
     onAcceptChallenge?: (challengeId: string, challengerId: string) => void;
     onDenyChallenge?: (challengeId: string) => void;
     isBattleActive?: boolean;
+    // Chat visibility - only load/render messages when chat is open
+    isChatOpen?: boolean;
 }
 
 export default function BroadcastChat({ 
@@ -88,7 +92,8 @@ export default function BroadcastChat({
   pendingChallenges = [],
   onAcceptChallenge,
   onDenyChallenge,
-  isBattleActive = false
+  isBattleActive = false,
+  isChatOpen = true
 }: BroadcastChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -127,9 +132,10 @@ export default function BroadcastChat({
   const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
   const [streamEnded, setStreamEnded] = useState(false);
 
-  // Rate limiting
-  const lastSentRef = useRef<number>(0);
-  const RATE_LIMIT_MS = 1000; // 1 message per second
+  // Rate limiting - 5 messages every 10 seconds per user
+  const messageTimestampsRef = useRef<number[]>([]);
+  const MAX_MESSAGES_PER_WINDOW = 5;
+  const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds
 
   // Realtime broadcast channel ref
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -352,15 +358,31 @@ export default function BroadcastChat({
     };
   }, [streamId, onStreamEnd]);
 
-  // Fetch initial messages (last 50) and setup realtime broadcast
+  // Track if messages have been fetched
+  const messagesFetchedRef = useRef(false);
+  
+  // Fetch initial messages (last 50) only when chat is opened
   useEffect(() => {
       if (!streamId) return;
 
+      // Only fetch messages when chat is OPEN
+      if (!isChatOpen) {
+          console.log('[BroadcastChat] Chat is closed, skipping message fetch');
+          return;
+      }
+      
+      // Skip if already fetched
+      if (messagesFetchedRef.current) {
+          console.log('[BroadcastChat] Messages already fetched, skipping');
+          return;
+      }
+
       // Fetch historical messages - only get messages from last 2 minutes to prevent old messages from reappearing
       const fetchMessages = async () => {
+          messagesFetchedRef.current = true;
           const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-        // Thundering Herd Prevention: Jitter on initial chat load (0-800ms)
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
+        // Thundering Herd Prevention: Jitter on initial chat load (0-400ms when lazy loading)
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 400));
 
         const { data } = await supabase
             .from('stream_messages')
@@ -420,6 +442,7 @@ export default function BroadcastChat({
     fetchMessages();
 
     // Setup Realtime Broadcast Channel for INSTANT message delivery
+    // Always subscribe to realtime, but only add messages to UI when chat is open
     const broadcastChannel = supabase
         .channel(`stream-chat-${streamId}`)
         .on(
@@ -451,7 +474,15 @@ export default function BroadcastChat({
                     processedMessageIds.current.add(msg.id);
                 }
 
-                // Add message to UI immediately
+                // Only add to UI when chat is OPEN
+                if (!isChatOpen) {
+                    // When chat is closed, just increment unread count but don't render messages
+                    console.log('[BroadcastChat] Message received while chat closed, incrementing unread');
+                    setUnreadCount(prev => prev + 1);
+                    return;
+                }
+
+                // Add message to UI when chat is open
                 setMessages(prev => {
                     // Triple-check for duplicates by txn_id, id, and content+user+timestamp
                     if (msg.txn_id && prev.some(m => m.txn_id === msg.txn_id)) {
@@ -609,7 +640,7 @@ export default function BroadcastChat({
         supabase.removeChannel(presenceChannel);
         broadcastChannelRef.current = null;
     };
-  }, [streamId, isViewer, user, profile, isChatFocused]);
+  }, [streamId, isViewer, user, profile, isChatFocused, isChatOpen]);
 
   // Track chat focus/visibility
   useEffect(() => {
@@ -660,13 +691,18 @@ export default function BroadcastChat({
         return;
     }
 
-    // Rate Limit Check
+    // Rate Limit Check - 5 messages per 10 seconds
     const now = Date.now();
-    if (now - lastSentRef.current < RATE_LIMIT_MS) {
-        console.log('💬 [BroadcastChat] Rate limited');
-        return; // Silent fail or show UI feedback
+    const windowStart = now - RATE_LIMIT_WINDOW_MS;
+    
+    // Filter to keep only timestamps within the window
+    messageTimestampsRef.current = messageTimestampsRef.current.filter(ts => ts > windowStart);
+    
+    if (messageTimestampsRef.current.length >= MAX_MESSAGES_PER_WINDOW) {
+        console.log('💬 [BroadcastChat] Rate limited - too many messages');
+        toast.error('Slow down! You can only send 5 messages every 10 seconds.');
+        return;
     }
-    lastSentRef.current = now;
 
     const content = input.trim();
     console.log('💬 [BroadcastChat] Preparing to send:', { content, userId: user.id });
@@ -704,6 +740,10 @@ export default function BroadcastChat({
 
     // 4. Track txn_id to prevent duplicates
     receivedTxnIdsRef.current.add(txnId);
+
+    // 5. Add timestamp for rate limiting (after optimistic UI update)
+    // This ensures we only count successfully displayed messages
+    messageTimestampsRef.current.push(Date.now());
 
     // 5. Broadcast over realtime channel for instant delivery to all viewers
     if (broadcastChannelRef.current) {
@@ -996,6 +1036,8 @@ export default function BroadcastChat({
                         let giftAmount = msg.gift_amount || 1;
                         // Use sender_name from message data, user_profiles, or enriched data
                         const senderName = msg.sender_name || msg.user_profiles?.username || 'Someone';
+                        // Use receiver_name from message data
+                        const receiverName = msg.receiver_name || 'user';
                         
                         // If not already parsed, try to parse from content
                         if (!msg.gift_type && msg.content) {
@@ -1028,6 +1070,18 @@ export default function BroadcastChat({
                                     <span className="text-zinc-400"> {giftText}</span>
                                     {giftAmount > 1 && (
                                         <span className="text-yellow-400 ml-1">x{giftAmount}</span>
+                                    )}
+                                    {msg.receiver_name && (
+                                        <span className="text-blue-400">
+                                            {' '}to <button
+                                                type="button"
+                                                onClick={() => openGiftForUser(msg.receiver_id)}
+                                                className="font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                                                title="Send gift"
+                                            >
+                                                {receiverName}
+                                            </button>
+                                        </span>
                                     )}
                                 </span>
                             </div>

@@ -15,6 +15,7 @@ import UserNameWithAge from '../components/UserNameWithAge'
 import { emitEvent } from '../lib/events'
 import { Virtuoso } from 'react-virtuoso'
 import UserProfilePopup from '../components/UserProfilePopup'
+import { parseTextWithLinks } from '../lib/utils'
 
 // Available reactions
 const REACTIONS = [
@@ -64,10 +65,13 @@ export default function TrollCityWall() {
 
   const loadPosts = useCallback(async () => {
     // Thundering Herd Prevention: Add random jitter to fetch (0-800ms)
-    await new Promise(resolve => setTimeout(resolve, Math.random() * 800));
+    // Note: We don't await here to avoid blocking - jitter is applied inside
+    const jitter = Math.random() * 800;
     
     setLoading(true)
     try {
+      // Apply jitter delay if this is not a background refresh
+      await new Promise(resolve => setTimeout(resolve, jitter));
       const { data, error } = await supabase
         .from('troll_wall_posts')
         .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user, created_at)')
@@ -621,7 +625,7 @@ export default function TrollCityWall() {
           className={`mb-4 ${post.metadata?.stream_id || post.metadata?.battle_id ? 'cursor-pointer hover:text-purple-400 transition-colors' : ''}`}
           onClick={() => handlePostClick(post)}
         >
-          <p className="text-white whitespace-pre-wrap break-words">{post.content}</p>
+          <p className="text-white whitespace-pre-wrap break-words">{parseTextWithLinks(post.content)}</p>
           {post.metadata?.stream_id && (
             <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm">
               <ExternalLink className="w-4 h-4" />
@@ -804,7 +808,7 @@ export default function TrollCityWall() {
                   )}
                 </div>
                 {/* Reply Content */}
-                <p className="text-gray-300 text-sm whitespace-pre-wrap break-words">{reply.content}</p>
+                <p className="text-gray-300 text-sm whitespace-pre-wrap break-words">{parseTextWithLinks(reply.content)}</p>
                 {/* Reply Actions */}
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700">
                   <button

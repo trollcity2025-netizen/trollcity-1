@@ -6,6 +6,7 @@ import { Heart, MessageCircle, Gift, Share2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
 import GiftModal from '../trollWall/GiftModal';
+import { parseTextWithLinks } from '../../lib/utils';
 
 interface Comment {
   id: string;
@@ -335,7 +336,7 @@ export default function PostItem({ post, onDelete }: PostItemProps) {
 
       {/* Content */}
       <div className="mb-4 text-gray-100 whitespace-pre-wrap leading-relaxed">
-        {post.content}
+        {parseTextWithLinks(post.content)}
       </div>
       
       {post.image_url && (
