@@ -247,14 +247,14 @@ export const useTrollStationStore = create<TrollStationState>((set, get) => ({
         .from('troll_station_hosts')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       // Check user role from profiles
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('role, is_admin')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       const isAdmin = profile?.role === 'admin' || profile?.is_admin;
       const isHost = !!hostData;
@@ -427,11 +427,16 @@ export const useTrollStationStore = create<TrollStationState>((set, get) => ({
         .from('troll_station')
         .select('id')
         .eq('id', '00000000-0000-0000-0000-000000000001')
-        .single();
+        .maybeSingle();
 
-      if (stationCheckError) {
+      if (stationCheckError && stationCheckError.code !== 'PGRST116') {
         console.error('Station check error:', stationCheckError);
-        throw new Error('Station not found. Please run the SQL first.');
+      }
+      
+      if (!stationData) {
+        console.log('Station not found, skipping station update');
+        return;
+      }
       }
 
       console.log('Station exists:', stationData);
@@ -585,7 +590,7 @@ export const useTrollStationStore = create<TrollStationState>((set, get) => ({
           .from('troll_station_invitations')
           .select('session_id, role')
           .eq('id', invitationId)
-          .single();
+          .maybeSingle();
 
         if (invitation) {
           const { data: { user } } = await supabase.auth.getUser();
