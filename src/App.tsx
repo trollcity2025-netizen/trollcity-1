@@ -72,6 +72,7 @@ const ChurchPage = lazyWithRetry(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazyWithRetry(() => import("./pages/church/PastorDashboard"));
 const TrollStationPage = lazyWithRetry(() => import("./pages/TrollStationPage"));
 const BadgeDesignShowcase = lazyWithRetry(() => import("./pages/dev/BadgeDesignShowcase"));
+const HomepageBackgroundShowcase = lazyWithRetry(() => import("./pages/dev/HomepageBackgroundShowcase"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
@@ -1182,6 +1183,7 @@ function AppContent() {
                   <Route path="/church/pastor" element={<PastorDashboard />} />
                   <Route path="/dev/xp" element={<XPSimulatorPage />} />
                   <Route path="/dev/badge-showcase" element={<BadgeDesignShowcase />} />
+                  <Route path="/dev/homepage-bg-showcase" element={<HomepageBackgroundShowcase />} />
                   
                   {/* 🎥 Streaming */}
 
