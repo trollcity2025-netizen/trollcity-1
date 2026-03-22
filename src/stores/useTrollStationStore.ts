@@ -437,7 +437,6 @@ export const useTrollStationStore = create<TrollStationState>((set, get) => ({
         console.log('Station not found, skipping station update');
         return;
       }
-      }
 
       console.log('Station exists:', stationData);
 
