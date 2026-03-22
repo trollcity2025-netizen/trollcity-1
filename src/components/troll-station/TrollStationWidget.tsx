@@ -53,7 +53,6 @@ export default function TrollStationWidget() {
   const [showPanel, setShowPanel] = useState(false);
   const [localVolume, setLocalVolume] = useState(0.8);
   const [musicVolume, setMusicVolume] = useState(0.7);
-  const [micMuted, setMicMuted] = useState(false);
 
   // Initialize
   useEffect(() => {
@@ -125,8 +124,8 @@ export default function TrollStationWidget() {
     setVolume(newVolume);
   }, []);
 
-  // Toggle mute
-  const toggleMute = useCallback(() => {
+  // Toggle music mute (not mic)
+  const toggleMusicMute = useCallback(() => {
     setMuted(!audio.isMuted);
   }, [audio.isMuted]);
 
@@ -336,7 +335,7 @@ export default function TrollStationWidget() {
 
             <div className="flex-1 flex items-center gap-2">
               <button
-                onClick={toggleMute}
+                onClick={toggleMusicMute}
                 className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
               >
                 {audio.isMuted || localVolume === 0 ? (
