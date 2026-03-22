@@ -138,9 +138,5 @@
       "url": "https://apps.apple.com/app/troll-city/id123456789"
     }
   ],
-  "prefer_related_applications": false,
-  "scope_extensions": [
-    { "origin": "*.maitrollcity.com", "type": "secure" },
-    { "origin": "maitrollcity.com", "type": "secure" }
-  ]
+  "prefer_related_applications": false
 }

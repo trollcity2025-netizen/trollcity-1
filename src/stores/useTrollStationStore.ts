@@ -138,9 +138,14 @@ export const useTrollStationStore = create<TrollStationState>((set, get) => ({
         .from('troll_station')
         .select('*')
         .eq('id', '00000000-0000-0000-0000-000000000001')
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (!data) {
+        set({ station: null, currentSong: null, isLoading: false });
+        return;
+      }
       
       // Fetch current song if there's a song ID
       let currentSong = null;
@@ -149,7 +154,7 @@ export const useTrollStationStore = create<TrollStationState>((set, get) => ({
           .from('troll_station_songs')
           .select('*, submitter:user_profiles(id, username, avatar_url)')
           .eq('id', data.current_song_id)
-          .single();
+          .maybeSingle();
         currentSong = songData;
       }
 
