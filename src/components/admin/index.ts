@@ -23,3 +23,6 @@ export { CreatorApplicationsPanel } from './CreatorApplicationsPanel'
 // Default export components
 export { default as UserDetailsModal } from './UserDetailsModal'
 
+// RTC Monitor
+export { default as RTCAdminMonitor } from './RTCAdminMonitor'
+

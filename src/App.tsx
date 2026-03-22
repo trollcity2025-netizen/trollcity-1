@@ -35,6 +35,7 @@ import { AnimationsContainer } from "./components/animations";
 // Layout
 import OfficerAlertBanner from "./components/OfficerAlertBanner";
 import AdminOfficerQuickMenu from "./components/AdminOfficerQuickMenu";
+import { RTCAdminMonitor } from "./components/admin";
 
 
 import AdminErrors from "./pages/admin/AdminErrors";
@@ -1041,6 +1042,7 @@ function AppContent() {
       <AppLayout showSidebar={!isMobileUI} showHeader={!isMobileUI} showBottomNav={true}>
         <GlobalPresenceTracker />
         {user && <AdminOfficerQuickMenu />}
+        <RTCAdminMonitor />
         {user && (
           <Suspense fallback={null}>
             <BadgePopup />
