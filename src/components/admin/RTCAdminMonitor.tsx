@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { X, Users, Clock, Radio, RefreshCw, Monitor, TrendingUp } from 'lucide-react';
+import { X, Users, Clock, Radio, RefreshCw, Monitor, TrendingUp, Play } from 'lucide-react';
 
 interface LiveStream {
   id: string;
@@ -23,11 +23,30 @@ interface RTSSession {
   is_active: boolean;
 }
 
+interface StreamDetail {
+  id: string;
+  title: string;
+  startedAt: string;
+  viewers: number;
+  duration: number; // in seconds
+  isLive: boolean;
+}
+
 interface RTCStats {
   totalMinutes: number;
   activeSessions: number;
   liveStreams: number;
-  liveStreamDetails: { id: string; title: string; startedAt: string; viewers: number }[];
+  liveStreamDetails: StreamDetail[];
+}
+
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hrs > 0) {
+    return `${hrs}h ${mins}m`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 export default function RTCAdminMonitor() {
@@ -43,17 +62,19 @@ export default function RTCAdminMonitor() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [now, setNow] = useState(Date.now());
+  const timerRef = useRef<number | null>(null);
 
   const fetchRTCStats = useCallback(async () => {
     if (!isAdmin) return;
     
     setIsLoading(true);
     try {
-      // Get all live streams with more details
+      // Get all streams with is_live = true OR status = 'live' to catch all active streams
       const { data: streams, error: streamsError } = await supabase
         .from('streams')
         .select('id, broadcaster_id, user_id, title, is_live, status, started_at')
-        .eq('is_live', true)
+        .or('is_live.eq.true,status.eq.live')
         .order('started_at', { ascending: false });
 
       if (streamsError) {
@@ -63,23 +84,38 @@ export default function RTCAdminMonitor() {
       }
 
       const liveStreams = (streams as LiveStream[]) || [];
+      const currentTime = Date.now();
       
       // Get viewer counts for each stream
       const streamDetails = await Promise.all(
         liveStreams.slice(0, 10).map(async (stream) => {
+          // Count viewers from stream_seat_sessions table
           const { count } = await supabase
-            .from('stream_seats')
+            .from('stream_seat_sessions')
             .select('id', { count: 'exact', head: true })
-            .eq('stream_id', stream.id);
+            .eq('stream_id', stream.id)
+            .eq('status', 'active');
+
+          const startedAt = stream.started_at ? new Date(stream.started_at).getTime() : currentTime;
+          const durationSeconds = Math.floor((currentTime - startedAt) / 1000);
 
           return {
-            id: stream.id.slice(0, 8),
-            title: stream.title?.slice(0, 20) || 'Untitled',
+            id: stream.id,
+            title: stream.title || 'Untitled',
             startedAt: stream.started_at || new Date().toISOString(),
-            viewers: count || 0
+            viewers: count || 0,
+            duration: durationSeconds,
+            isLive: stream.is_live || stream.status === 'live'
           };
         })
       );
+
+      // Filter to only truly live streams (either is_live is true or started within last hour)
+      const activeStreams = streamDetails.filter(s => {
+        const hourAgo = Date.now() - (60 * 60 * 1000);
+        const streamStartTime = new Date(s.startedAt).getTime();
+        return s.isLive || streamStartTime > hourAgo;
+      });
 
       // Get all RTC sessions for total stats
       const { data: sessions, error: sessionsError } = await supabase
@@ -98,17 +134,32 @@ export default function RTCAdminMonitor() {
       setStats({
         totalMinutes,
         activeSessions: activeCount,
-        liveStreams: liveStreams.length,
-        liveStreamDetails: streamDetails
+        liveStreams: activeStreams.length,
+        liveStreamDetails: activeStreams
       });
 
       setLastRefresh(new Date());
+      setNow(Date.now());
     } catch (err) {
       console.error('[RTC Monitor] Error:', err);
     } finally {
       setIsLoading(false);
     }
   }, [isAdmin]);
+
+  // Update timer every second for live durations
+  useEffect(() => {
+    if (isOpen && isAdmin) {
+      timerRef.current = window.setInterval(() => {
+        setNow(Date.now());
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isOpen, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -121,7 +172,17 @@ export default function RTCAdminMonitor() {
 
   if (!isAdmin) return null;
 
-  const totalViewers = stats.liveStreamDetails.reduce((sum, s) => sum + s.viewers, 0);
+  // Calculate durations with current time
+  const streamDetailsWithDuration = stats.liveStreamDetails.map(stream => {
+    const startedAt = stream.startedAt ? new Date(stream.startedAt).getTime() : now;
+    const durationSeconds = Math.floor((now - startedAt) / 1000);
+    return {
+      ...stream,
+      duration: durationSeconds
+    };
+  });
+
+  const totalViewers = streamDetailsWithDuration.reduce((sum, s) => sum + s.viewers, 0);
 
   return (
     <>
@@ -207,11 +268,11 @@ export default function RTCAdminMonitor() {
             </div>
 
             {/* Live Stream List */}
-            {stats.liveStreamDetails.length > 0 && (
+            {streamDetailsWithDuration.length > 0 && (
               <div className="pt-3 border-t border-white/10">
                 <span className="text-gray-500 text-xs">Active Streams</span>
                 <div className="mt-2 space-y-1 max-h-[140px] overflow-y-auto">
-                  {stats.liveStreamDetails.map((stream, idx) => (
+                  {streamDetailsWithDuration.map((stream, idx) => (
                     <div key={idx} className="flex items-center justify-between bg-white/5 rounded px-2 py-1.5">
                       <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
@@ -219,9 +280,15 @@ export default function RTCAdminMonitor() {
                           {stream.title}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-xs">
-                        <Users className="w-3 h-3 text-cyan-400" />
-                        <span className="text-cyan-400">{stream.viewers}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-xs">
+                          <Users className="w-3 h-3 text-cyan-400" />
+                          <span className="text-cyan-400">{stream.viewers}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-yellow-400">
+                          <Clock className="w-3 h-3" />
+                          <span>{formatDuration(stream.duration)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}

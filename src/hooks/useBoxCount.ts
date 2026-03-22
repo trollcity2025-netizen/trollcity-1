@@ -27,10 +27,11 @@ export function useBoxCount({ streamId, initialBoxCount, isHost }: UseBoxCountOp
   }, [initialBoxCount]);
 
   // Setup broadcast channel for receiving box count updates
+  // Listen on stream:{streamId} to match useBattleManagement's broadcast
   useEffect(() => {
     if (!streamId) return;
 
-    const channel = supabase.channel(`stream-boxes:${streamId}`);
+    const channel = supabase.channel(`stream:${streamId}`);
     channelRef.current = channel;
 
     channel
@@ -58,9 +59,31 @@ export function useBoxCount({ streamId, initialBoxCount, isHost }: UseBoxCountOp
         }
       });
 
+    // Also listen for postgres_changes on streams table as backup
+    const dbChannel = supabase
+      .channel(`stream-db:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'streams',
+          filter: `id=eq.${streamId}`,
+        },
+        (payload: any) => {
+          const newData = payload.new;
+          if (newData && newData.box_count !== undefined && newData.box_count !== boxCountRef.current) {
+            console.log('[useBoxCount] Received box_count update from DB:', newData.box_count);
+            setBoxCount(newData.box_count);
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       isSubscribedRef.current = false;
       supabase.removeChannel(channel);
+      supabase.removeChannel(dbChannel);
       channelRef.current = null;
     };
   }, [streamId]);

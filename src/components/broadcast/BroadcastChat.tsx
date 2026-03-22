@@ -362,7 +362,9 @@ export default function BroadcastChat({
   const messagesFetchedRef = useRef(false);
   
   // Fetch initial messages (last 50) only when chat is opened
+  // Fetch initial messages (last 50) only when chat is opened
   useEffect(() => {
+      console.log('[BroadcastChat] 🔄 Message fetch useEffect triggered, streamId:', streamId, 'isChatOpen:', isChatOpen);
       if (!streamId) return;
 
       // Only fetch messages when chat is OPEN
@@ -373,7 +375,7 @@ export default function BroadcastChat({
       
       // Skip if already fetched
       if (messagesFetchedRef.current) {
-          console.log('[BroadcastChat] Messages already fetched, skipping');
+          console.log('[BroadcastChat] Messages already fetched, skipping fetch');
           return;
       }
 
@@ -440,19 +442,60 @@ export default function BroadcastChat({
         }
     };
     fetchMessages();
+  }, [streamId, isViewer, user, profile, isChatFocused, isChatOpen]);
+
+  // Auto-delete messages after 30 seconds (faster removal for better UX)
+  useEffect(() => {
+    const MESSAGE_LIFETIME_MS = 30000; // 30 seconds
+    const autoDeleteInterval = setInterval(() => {
+        const now = Date.now();
+        setMessages(prev => {
+            const filtered = prev.filter(msg => {
+                const msgTime = new Date(msg.created_at).getTime();
+                const age = now - msgTime;
+                // Keep messages younger than 30 seconds
+                return age < MESSAGE_LIFETIME_MS;
+            });
+            // Only update state if messages were actually removed
+            if (filtered.length !== prev.length) {
+                return filtered;
+            }
+            return prev;
+        });
+    }, 3000); // Check every 3 seconds for faster removal
+
+    return () => {
+        clearInterval(autoDeleteInterval);
+    };
+  }, []); // Empty deps - only run on mount/unmount for message cleanup
+
+  // Setup Realtime Broadcast Channel - SEPARATE useEffect to ensure it always runs
+  // This is critical for receiving gift messages in real-time
+  useEffect(() => {
+    if (!streamId) return;
+    
+    console.log('[BroadcastChat] 📡 Setting up realtime channel for stream:', streamId);
 
     // Setup Realtime Broadcast Channel for INSTANT message delivery
-    // Always subscribe to realtime, but only add messages to UI when chat is open
+    // Listen on stream-chat:{streamId} for chat messages (matches send-message edge function)
+    // Also listen on stream:{streamId} for backward compatibility
+    console.log('[BroadcastChat] 🔌 Creating broadcast channel for stream:' + streamId);
     const broadcastChannel = supabase
-        .channel(`stream-chat-${streamId}`)
+        .channel(`stream-chat:${streamId}`)
         .on(
             'broadcast',
-            { event: 'chat-message' },
+            { event: 'chat' },
             (payload: any) => {
                 const msg = payload.payload as Message;
                 
-                // Skip if this is our own message (already shown via optimistic update)
-                if (msg.user_id === user?.id) {
+                console.log('[BroadcastChat] 💬 Received chat-message:', msg.type, msg.content, 'from user:', msg.user_id);
+                
+                // Skip if this is our own chat message (already shown via optimistic update)
+                // But allow gift messages through since they don't have optimistic UI
+                const isGiftMessage = msg.type === 'gift' || msg.content?.startsWith('GIFT_EVENT:');
+                console.log('[BroadcastChat] isGiftMessage:', isGiftMessage);
+                
+                if (msg.user_id === user?.id && !isGiftMessage) {
                     return;
                 }
 
@@ -512,9 +555,103 @@ export default function BroadcastChat({
                 }
             }
         )
-        .subscribe();
+        // Also listen for gift_sent events to show in chat
+        .on(
+          'broadcast',
+          { event: 'gift_sent' },
+          (payload: any) => {
+            const giftData = payload.payload;
+            console.log('[BroadcastChat] 🎁🎁🎁 Gift received for chat (gift_sent listener):', giftData);
+            
+            const giftMessage: Message = {
+              id: giftData.id || `gift-${Date.now()}`,
+              user_id: giftData.sender_id || 'system',
+              content: `GIFT_EVENT:${giftData.gift_slug || giftData.gift_name}:${giftData.quantity || 1}`,
+              created_at: giftData.timestamp || new Date().toISOString(),
+              type: 'gift',
+              gift_type: giftData.gift_slug || giftData.gift_name?.toLowerCase().replace(/\s+/g, '-'),
+              gift_amount: giftData.quantity || 1,
+              sender_name: giftData.sender_name || 'Someone',
+              receiver_id: giftData.receiver_id,
+              receiver_name: giftData.receiver_name || 'user',
+              user_profiles: {
+                username: giftData.sender_name || 'Someone',
+                avatar_url: null
+              }
+            };
+            
+            setMessages(prev => [...prev, giftMessage]);
+          }
+        )
+        .subscribe((status) => {
+          console.log('[BroadcastChat] 📡 Broadcast channel subscription status:', status);
+        });
 
     broadcastChannelRef.current = broadcastChannel;
+
+    // Also subscribe to postgres_changes for INSERT on stream_messages as backup
+    // This ensures messages are received even if broadcast fails
+    const dbChannel = supabase
+      .channel(`stream-messages-db:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'stream_messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        async (payload: any) => {
+          const newMessage = payload.new;
+          
+          // Skip our own messages (already shown via optimistic update)
+          if (newMessage.user_id === user?.id) {
+            return;
+          }
+
+          // Deduplicate using id
+          if (newMessage.id && processedMessageIds.current.has(newMessage.id)) {
+            return;
+          }
+
+          // Fetch user profile for the message
+          const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
+            .eq('id', newMessage.user_id)
+            .single();
+
+          const msg: Message = {
+            ...newMessage,
+            type: 'chat',
+            user_profiles: profile,
+          };
+
+          if (newMessage.id) {
+            processedMessageIds.current.add(newMessage.id);
+          }
+
+          // Only add to UI when chat is OPEN
+          if (!isChatOpen) {
+            setUnreadCount(prev => prev + 1);
+            return;
+          }
+
+          setMessages(prev => {
+            if (newMessage.id && prev.some(m => m.id === newMessage.id)) {
+              return prev;
+            }
+            const updated = [...prev, msg];
+            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+            return updated;
+          });
+
+          if (!isChatFocused) {
+            setUnreadCount(prev => prev + 1);
+          }
+        }
+      )
+      .subscribe();
 
     // Subscribe to room presence to show join/leave messages in chat
     // Use the same channel name as BroadcastPage for shared presence
@@ -562,24 +699,16 @@ export default function BroadcastChat({
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
             const now = Date.now();
             leftPresences.forEach((p: any) => {
-                // Debounce: Don't show leave if we recently showed join for same user
-                const lastEvent = recentPresenceRef.current.get(p.user_id);
-                if (lastEvent && (now - lastEvent) < PRESENCE_DEBOUNCE_MS) {
-                    // Remove the join message if it was just added
-                    setMessages(prev => prev.filter(m => !(m.type === 'system' && m.user_id === p.user_id && m.content === 'joined the broadcast')));
-                    return; // Don't show the leave either
-                }
+                // Track when we get a leave event - debounce future joins
+                recentPresenceRef.current.set(p.user_id, now);
                 
-                // Skip showing leave message if it's for the current user (they might have just sent a gift or performed another action)
-                // This prevents spurious "left the broadcast" messages when users are active
+                // Skip showing leave for our own user (handled by parent)
                 if (p.user_id === user?.id) {
                     console.log('[BroadcastChat] Ignoring own leave event (user is still active)');
-                    recentPresenceRef.current.set(p.user_id, now);
                     return;
                 }
                 
-                recentPresenceRef.current.set(p.user_id, now);
-                
+                console.log('[BroadcastChat] User left, showing message:', p.username || p.user_id);
                 const systemMsg: Message = {
                     id: `sys-leave-${p.user_id}-${now}`,
                     user_id: p.user_id,
@@ -588,10 +717,7 @@ export default function BroadcastChat({
                     type: 'system',
                     user_profiles: {
                         username: p.username || 'Guest',
-                        avatar_url: p.avatar_url || '',
-                        created_at: p.joined_at,
-                        role: p.role,
-                        troll_role: p.troll_role
+                        avatar_url: p.avatar_url || ''
                     }
                 };
                 setMessages(prev => {
@@ -610,37 +736,84 @@ export default function BroadcastChat({
                     avatar_url: profile.avatar_url,
                     role: profile.role,
                     troll_role: profile.troll_role,
-                    joined_at: new Date().toISOString(),
+                    online_at: new Date().toISOString()
                 });
             }
+            console.log('[BroadcastChat] Presence channel subscription status:', status);
         });
 
-    // Auto-delete messages after 30 seconds (faster removal for better UX)
-    const MESSAGE_LIFETIME_MS = 30000; // 30 seconds
-    const autoDeleteInterval = setInterval(() => {
-        const now = Date.now();
-        setMessages(prev => {
-            const filtered = prev.filter(msg => {
-                const msgTime = new Date(msg.created_at).getTime();
-                const age = now - msgTime;
-                // Keep messages younger than 30 seconds
-                return age < MESSAGE_LIFETIME_MS;
-            });
-            // Only update state if messages were actually removed
-            if (filtered.length !== prev.length) {
-                return filtered;
+    // Need to store dbChannel for cleanup - create a ref for it
+    const dbChannelRef = supabase
+      .channel(`stream-messages-db:${streamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'stream_messages',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        async (payload: any) => {
+          const newMessage = payload.new;
+          
+          // Skip our own messages (already shown via optimistic update)
+          if (newMessage.user_id === user?.id) {
+            return;
+          }
+
+          // Deduplicate using id
+          if (newMessage.id && processedMessageIds.current.has(newMessage.id)) {
+            return;
+          }
+
+          // Fetch user profile for the message
+          const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
+            .eq('id', newMessage.user_id)
+            .single();
+
+          const msg: Message = {
+            ...newMessage,
+            type: 'chat',
+            user_profiles: profile,
+          };
+
+          if (newMessage.id) {
+            processedMessageIds.current.add(newMessage.id);
+          }
+
+          // Only add to UI when chat is OPEN
+          if (!isChatOpen) {
+            setUnreadCount(prev => prev + 1);
+            return;
+          }
+
+          setMessages(prev => {
+            if (newMessage.id && prev.some(m => m.id === newMessage.id)) {
+              return prev;
             }
-            return prev;
-        });
-    }, 3000); // Check every 3 seconds for faster removal
+            const updated = [...prev, msg];
+            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+            return updated;
+          });
 
+          if (!isChatFocused) {
+            setUnreadCount(prev => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup: remove channels when component unmounts or streamId changes
     return () => {
-        clearInterval(autoDeleteInterval);
+        console.log('[BroadcastChat] 🧹 Cleaning up realtime channels');
         supabase.removeChannel(broadcastChannel);
         supabase.removeChannel(presenceChannel);
+        supabase.removeChannel(dbChannel);
         broadcastChannelRef.current = null;
     };
-  }, [streamId, isViewer, user, profile, isChatFocused, isChatOpen]);
+  }, [streamId, isChatOpen, isChatFocused, user, profile]);
 
   // Track chat focus/visibility
   useEffect(() => {
@@ -959,11 +1132,6 @@ export default function BroadcastChat({
                     // Check if this is a gift message
                     const isGift = msg.type === 'gift' || msg.content?.startsWith('GIFT_EVENT:');
                     
-                    // Skip gift messages - they are shown as animations instead
-                    if (isGift) {
-                        return null;
-                    }
-                    
                     if (isSystem) {
                         return (
                             <div 
@@ -1163,6 +1331,7 @@ export default function BroadcastChat({
           }}
           recipientId={giftRecipientId || hostId}
           streamId={streamId}
+          sharedChannel={broadcastChannelRef.current}
         />
     </div>
   );

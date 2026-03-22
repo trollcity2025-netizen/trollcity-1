@@ -55,6 +55,11 @@ self.addEventListener('install', (event) => {
       // Cache offline page and icons
       const essentialAssets = [
         OFFLINE_URL,
+        '/icons/icon-72.png',
+        '/icons/icon-96.png',
+        '/icons/icon-128.png',
+        '/icons/icon-144.png',
+        '/icons/icon-152.png',
         '/icons/icon-192.png',
         '/icons/icon-512.png',
         '/favicon.svg'
