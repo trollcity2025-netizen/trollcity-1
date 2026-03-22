@@ -61,6 +61,7 @@ self.addEventListener('install', (event) => {
         '/icons/icon-144.png',
         '/icons/icon-152.png',
         '/icons/icon-192.png',
+        '/icons/icon-256.png',
         '/icons/icon-512.png',
         '/favicon.svg'
       ];
