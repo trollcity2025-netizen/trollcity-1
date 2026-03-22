@@ -1073,11 +1073,25 @@ export default function SetupPage() {
           started_at: new Date().toISOString()
         })
         .eq('id', streamId)
-        .then(({ error: liveUpdateError }) => {
+        .then(async ({ error: liveUpdateError }) => {
           if (liveUpdateError) {
             console.error('[SetupPage] Background: FAILED to update stream to live:', liveUpdateError);
           } else {
             console.log('[SetupPage] Background: Stream updated to live');
+            
+            // Create RTC session tracking
+            try {
+              await supabase.from('rtc_sessions').insert({
+                user_id: user?.id,
+                room_name: `stream-${streamId}`,
+                started_at: new Date().toISOString(),
+                is_active: true,
+                duration_seconds: 0
+              });
+              console.log('[SetupPage] RTC session created for stream:', streamId);
+            } catch (rtcErr) {
+              console.error('[SetupPage] Failed to create RTC session:', rtcErr);
+            }
           }
         });
 

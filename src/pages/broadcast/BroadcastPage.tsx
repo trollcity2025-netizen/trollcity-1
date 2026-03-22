@@ -2012,6 +2012,30 @@ function BroadcastPage() {
         toast.error('Failed to end stream properly.');
         return;
       }
+
+      // End RTC session
+      const endTime = new Date().toISOString();
+      const { data: session } = await supabase
+        .from('rtc_sessions')
+        .select('id, started_at')
+        .eq('room_name', `stream-${stream.id}`)
+        .eq('is_active', true)
+        .single();
+
+      if (session) {
+        const startTime = new Date(session.started_at);
+        const durationSeconds = Math.floor((new Date(endTime).getTime() - startTime.getTime()) / 1000);
+        
+        await supabase
+          .from('rtc_sessions')
+          .update({
+            is_active: false,
+            ended_at: endTime,
+            duration_seconds: durationSeconds
+          })
+          .eq('id', session.id);
+        console.log('[BroadcastPage] RTC session ended, duration:', durationSeconds, 'seconds');
+      }
     } catch (endErr) {
       console.error('Exception marking stream as ended:', endErr);
     }
@@ -2234,8 +2258,6 @@ function BroadcastPage() {
         
         overlays={
           <>
-            {/* Gift animations disabled - not working */}
-            
             {!isHost && pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
             )}
