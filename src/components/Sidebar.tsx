@@ -94,7 +94,7 @@ export default function Sidebar() {
           .from('officer_members')
           .select('*')
           .eq('user_id', profile.id)
-          .single()
+          .maybeSingle()
         setCanSeeOfficer(!!officerData)
 
         // Check if user has a family
@@ -102,7 +102,7 @@ export default function Sidebar() {
           .from('troll_families')
           .select('*, troll_family_members!inner(*)')
           .eq('troll_family_members.user_id', profile.id)
-          .single()
+          .maybeSingle()
         
         if (familyData) {
           setHasFamily(true)
