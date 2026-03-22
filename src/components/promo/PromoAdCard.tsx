@@ -47,7 +47,7 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
   const baseClasses = `relative overflow-hidden rounded-xl transition-all duration-300 cursor-pointer`;
   
   const sizeClasses = isSidebar 
-    ? 'w-full h-full min-h-[300px] max-h-[400px]' 
+    ? 'w-full h-full min-h-[150px] max-h-[180px]' 
     : 'w-full h-full min-h-[350px] max-h-[500px]';
 
   const hoverClasses = isHovered 
@@ -85,24 +85,24 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
       </div>
 
       {/* Content */}
-      <div className="relative z-10 h-full flex flex-col justify-end p-4">
+      <div className="relative z-10 h-full flex flex-col justify-end p-3">
         {/* Label */}
         {ad.label && (
-          <div className="mb-2 inline-flex">
-            <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-purple-600/80 text-white border border-purple-400/30">
+          <div className="mb-1 inline-flex">
+            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-purple-600/80 text-white border border-purple-400/30">
               {ad.label}
             </span>
           </div>
         )}
 
         {/* Title */}
-        <h3 className={`font-bold text-white mb-1 ${isSidebar ? 'text-lg' : 'text-xl'}`}>
+        <h3 className={`font-bold text-white mb-0.5 ${isSidebar ? 'text-sm' : 'text-xl'}`}>
           {ad.title}
         </h3>
 
         {/* Subtitle */}
         {ad.subtitle && (
-          <p className="text-sm text-purple-200 mb-2">{ad.subtitle}</p>
+          <p className="text-xs text-purple-200 mb-1">{ad.subtitle}</p>
         )}
 
         {/* Description (featured only) */}
@@ -113,7 +113,7 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
         {/* CTA Button */}
         {ad.cta_text && (
           <button 
-            className={`mt-auto self-start px-4 py-2 rounded-lg font-semibold text-sm
+            className={`mt-auto self-start px-3 py-1.5 rounded-lg font-semibold text-xs
               bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500
               text-white border border-purple-400/30 shadow-lg shadow-purple-900/30
               transition-all duration-200 hover:scale-105`}

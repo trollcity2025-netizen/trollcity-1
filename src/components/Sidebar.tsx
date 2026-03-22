@@ -483,7 +483,7 @@ export default function Sidebar() {
 
       {/* Promo Slot - City Ads */}
       {!isSidebarCollapsed && (
-        <div className="p-4 border-t border-white/10">
+        <div className="p-2 border-t border-white/10">
           <PromoSlot placement="left_sidebar_screensaver" variant="sidebar" />
         </div>
       )}

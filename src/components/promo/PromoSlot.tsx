@@ -169,7 +169,7 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
   // Loading state
   if (loading) {
     return (
-      <div className={`w-full ${variant === 'sidebar' ? 'h-[300px]' : 'h-[400px]'} 
+      <div className={`w-full ${variant === 'sidebar' ? 'h-[180px]' : 'h-[400px]'} 
         bg-slate-900/50 rounded-xl animate-pulse border border-slate-800`}>
         <div className="flex items-center justify-center h-full">
           <div className="text-slate-500 text-sm">Loading promo...</div>
@@ -212,7 +212,7 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
 
           {/* Navigation dots (if multiple ads) */}
           {ads.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
               {ads.map((_, index) => (
                 <button
                   key={index}
@@ -220,9 +220,9 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
                     setCurrentIndex(index);
                     trackImpression(ads[index].id);
                   }}
-                  className={`w-2 h-2 rounded-full transition-all ${
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${
                     index === currentIndex
-                      ? 'bg-purple-500 w-4'
+                      ? 'bg-purple-500 w-3'
                       : 'bg-slate-600 hover:bg-slate-500'
                   }`}
                   aria-label={`View ad ${index + 1}`}
