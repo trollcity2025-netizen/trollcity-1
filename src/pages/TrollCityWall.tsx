@@ -516,6 +516,30 @@ export default function TrollCityWall() {
     }
   }
 
+  const handlePinToggle = async (postId: string, currentlyPinned: boolean) => {
+    if (!user?.id) return
+
+    try {
+      const { data, error } = await supabase.rpc('toggle_wall_post_pin', {
+        p_post_id: postId,
+        p_user_id: user.id
+      })
+
+      if (error) throw error
+
+      const pinned = typeof data === 'boolean' ? data : !currentlyPinned
+      setPosts(prev =>
+        prev.map(post =>
+          post.id === postId ? { ...post, is_pinned: pinned } : post
+        )
+      )
+      toast.success(pinned ? 'Post pinned' : 'Post unpinned')
+    } catch (err: any) {
+      console.error('Error toggling pin:', err)
+      toast.error('Failed to pin/unpin post')
+    }
+  }
+
 
 
   const handleShare = (post: WallPost) => {
@@ -609,6 +633,18 @@ export default function TrollCityWall() {
           </div>
           {user && (post.user_id === user.id || isAdmin) && (
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handlePinToggle(post.id, !!post.is_pinned)}
+                className={`p-2 rounded-lg transition-colors ${
+                  post.is_pinned
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'hover:bg-yellow-500/20 text-gray-400 hover:text-yellow-400'
+                }`}
+                title={post.is_pinned ? 'Unpin post' : 'Pin post'}
+              >
+                <Pin className={`w-4 h-4 ${post.is_pinned ? 'fill-current' : ''}`} />
+              </button>
               <button
                 type="button"
                 onClick={() => handleDelete(post.id)}

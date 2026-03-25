@@ -54,6 +54,8 @@
           window.OneSignalDeferred.push(async function (OneSignal) {
             await OneSignal.init({
               appId: '5eec8cd7-849b-4e7c-b143-d6e2bf50c39a',
+              serviceWorkerParam: { scope: '/onesignal/' },
+              serviceWorkerPath: 'OneSignalSDKWorker.js',
             })
           })
         } catch {

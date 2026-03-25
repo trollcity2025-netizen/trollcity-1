@@ -136,7 +136,7 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
             onChange={setContent}
             placeholder="What's happening in the City? Use # to tag users"
             className="w-full min-h-[90px] bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-purple-400/60"
-            maxLength={240}
+            maxLength={5000}
             onFocus={() => handleRequireAuth('create a post')}
           />
           {imageFile && (

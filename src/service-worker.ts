@@ -34,6 +34,66 @@ const SYNC_QUEUES: Record<string, QueuedRequest[]> = {
   'profile-updates': []
 };
 
+// ===== INDEXEDDB QUEUE PERSISTENCE =====
+const QUEUE_DB_NAME = 'trollcity-sw-queues';
+const QUEUE_DB_VERSION = 1;
+const QUEUE_STORE_NAME = 'sync-queues';
+
+function openQueueDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(QUEUE_DB_NAME, QUEUE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(QUEUE_STORE_NAME)) {
+        db.createObjectStore(QUEUE_STORE_NAME, { keyPath: 'queueName' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadPersistedQueues() {
+  try {
+    const db = await openQueueDB();
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readonly');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    const request = store.getAll();
+    await new Promise<void>((resolve, reject) => {
+      request.onsuccess = () => {
+        const records = request.result || [];
+        for (const record of records) {
+          if (record.queueName && record.items) {
+            SYNC_QUEUES[record.queueName] = record.items;
+          }
+        }
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    console.log('[SW] Loaded persisted queues');
+  } catch (err) {
+    console.warn('[SW] Failed to load persisted queues:', err);
+  }
+}
+
+async function clearPersistedQueue(queueName: string) {
+  try {
+    const db = await openQueueDB();
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    store.delete(queueName);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (err) {
+    console.warn(`[SW] Failed to clear persisted queue ${queueName}:`, err);
+  }
+}
+
 // ===== PRECACHE MANIFEST (injected by Workbox) =====
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const PRECACHE_MANIFEST: any[] = (self as unknown as { __WB_MANIFEST: any[] }).__WB_MANIFEST || [];
@@ -96,6 +156,9 @@ self.addEventListener('activate', (event) => {
     (async () => {
       // Claim clients immediately
       await self.clients.claim();
+      
+      // Load persisted sync queues from IndexedDB
+      await loadPersistedQueues();
       
       // Clean up old caches
       const cacheNames = await caches.keys();
@@ -609,9 +672,20 @@ function queueForSync(queueName: string, data: any) {
 }
 
 async function persistQueue(queueName: string) {
-  // Implementation would persist to IndexedDB
-  // For now, keep in memory
-  console.log(`[SW] Persisting queue: ${queueName}, items: ${SYNC_QUEUES[queueName].length}`);
+  try {
+    const db = await openQueueDB();
+    const tx = db.transaction(QUEUE_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(QUEUE_STORE_NAME);
+    store.put({ queueName, items: SYNC_QUEUES[queueName], updatedAt: Date.now() });
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    console.log(`[SW] Persisted queue: ${queueName}, items: ${SYNC_QUEUES[queueName].length}`);
+  } catch (err) {
+    console.warn(`[SW] Failed to persist queue ${queueName}:`, err);
+  }
 }
 
 async function processSyncQueue(queueName: string) {
@@ -636,6 +710,13 @@ async function processSyncQueue(queueName: string) {
   
   // Keep failed items for next sync
   SYNC_QUEUES[queueName] = failed;
+  
+  // Persist updated queue state
+  if (failed.length === 0) {
+    await clearPersistedQueue(queueName);
+  } else {
+    await persistQueue(queueName);
+  }
   
   // Notify clients about sync completion
   const clients = await self.clients.matchAll({ type: 'window' });

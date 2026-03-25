@@ -81,7 +81,7 @@ export default defineConfig(({ mode: _mode }) => ({
       filename: 'service-worker.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        globIgnores: ['index.html'],
+        globIgnores: ['index.html', 'OneSignalSDKWorker.js'],
         maximumFileSizeToCacheInBytes: 10000000,
       },
       workbox: {

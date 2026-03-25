@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
-import { subscribeToNtfyGlobal } from '../lib/ntfySubscribe'
 import { trollCityTheme } from '@/styles/trollCityTheme'
 import PWAInstallPrompt from '../components/PWAInstallPrompt'
 import EventCountdown from '@/components/EventCountdown'
@@ -63,10 +62,9 @@ export default function Home() {
   const [loadingLive, setLoadingLive] = useState(true)
   const [showLiveGrid, setShowLiveGrid] = useState(false)
 
-  // Auto-scroll to top and subscribe to push notifications on page load
+  // Auto-scroll to top on page load
   useEffect(() => {
     window.scrollTo(0, 0)
-    subscribeToNtfyGlobal()
   }, [])
 
   // Fetch live streams and podcasts

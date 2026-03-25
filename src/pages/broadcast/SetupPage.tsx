@@ -1266,8 +1266,8 @@ export default function SetupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8 flex items-center justify-center">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 flex items-start md:items-center justify-center overflow-y-auto">
+      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
         
         {/* Preview Section */}
         <div className="space-y-4">
@@ -1381,7 +1381,7 @@ export default function SetupPage() {
 
         {/* Form Section */}
         
-        <div className="space-y-6 bg-slate-900/50 p-8 rounded-3xl border border-white/5 shadow-xl overflow-y-auto max-h-[90vh]">
+        <div className="space-y-6 bg-slate-900/50 p-4 md:p-8 rounded-3xl border border-white/5 shadow-xl">
           <div>
             <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">Go Live</h1>
             <p className="text-gray-400">Set up your broadcast details</p>

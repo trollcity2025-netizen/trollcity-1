@@ -305,10 +305,14 @@ export function PWAProvider({ children }: PWAProviderProps) {
         setConnectionHealth('healthy');
         reconnectAttempts.current = 0;
         
-        // Trigger background sync
+        // Trigger background sync for all pending queues
         if ('sync' in (swRegistrationRef.current || {})) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (swRegistrationRef.current as any)?.sync?.register('background-sync');
+          const syncManager = (swRegistrationRef.current as any)?.sync;
+          if (syncManager) {
+            for (const queueName of ['chat-messages', 'reactions', 'gifts', 'follows', 'profile-updates']) {
+              syncManager.register(queueName).catch(() => {});
+            }
+          }
         }
       }
       

@@ -47,28 +47,44 @@ export async function sendNotification(
     }
   }
 
-  // Send push notification via Edge Function
+  // Send push notifications via both Edge Functions (fire-and-forget)
   if (userId) {
-    try {
-      let url = '/';
-      if (type === 'message' && metadata?.sender_id) {
-        url = `/tcps?user=${metadata.sender_id}`;
-      } else if (metadata?.url) {
-        url = metadata.url;
-      }
+    let url = '/';
+    if (type === 'message' && metadata?.sender_id) {
+      url = `/tcps?user=${metadata.sender_id}`;
+    } else if (metadata?.url) {
+      url = metadata.url;
+    }
 
-      await supabase.functions.invoke('send-push-notification', {
-        body: {
-          user_id: userId,
+    // Primary: OneSignal push
+    supabase.functions.invoke('send-push-notification', {
+      body: {
+        user_id: userId,
+        title,
+        body: message,
+        url,
+        data: metadata
+      }
+    }).catch((pushErr: unknown) => {
+      console.warn('OneSignal push failed:', pushErr);
+    });
+
+    // Fallback: Web Push (VAPID) — delivers even when device is offline,
+    // the browser push service queues it until the device reconnects
+    supabase.functions.invoke('push-notifications', {
+      body: {
+        userId,
+        notification: {
+          type: type.toUpperCase(),
           title,
           body: message,
           url,
           data: metadata
-        }
-      });
-    } catch (pushErr) {
-      console.warn('Failed to send push notification:', pushErr);
-      // Non-blocking error
-    }
+        },
+        options: { ttl: 86400, urgency: 'normal' }
+      }
+    }).catch((pushErr: unknown) => {
+      console.warn('Web Push failed:', pushErr);
+    });
   }
 }

@@ -150,8 +150,8 @@ Deno.serve(async (req) => {
           const notificationUntil = new Date(profileData.broadcast_notification_until);
           if (notificationUntil > new Date()) {
             // Use the send-push-notification edge function which handles:
-            // - Online users: sends OneSignal push notification
-            // - Offline users: stores in offline_notifications for later
+            // - Sends OneSignal push notification to all users with tokens
+            // - Push messages queue at the OS/browser level when device is offline
             await supabase.functions.invoke('send-push-notification', {
               body: {
                 broadcast_followers_id: user_id,

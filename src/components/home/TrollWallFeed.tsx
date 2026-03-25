@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Heart, MessageSquare, Reply } from 'lucide-react'
+import { Heart, MessageSquare, Pin, Reply, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
@@ -21,7 +21,7 @@ interface TrollWallFeedProps {
 const PAGE_SIZE = 15
 
 export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
-  const { user } = useAuthStore()
+  const { user, isAdmin } = useAuthStore()
   const location = useLocation()
   const isMountedRef = useRef(true)
   const latestRequestId = useRef(0)
@@ -236,6 +236,66 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
     }
   }
 
+  const handlePinToggle = async (postId: string, currentlyPinned: boolean) => {
+    if (!user?.id) {
+      onRequireAuth('pin a post')
+      return
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('toggle_wall_post_pin', {
+        p_post_id: postId,
+        p_user_id: user.id
+      })
+
+      if (error) throw error
+
+      const pinned = typeof data === 'boolean' ? data : !currentlyPinned
+      setPosts(prev =>
+        prev.map(post =>
+          post.id === postId ? { ...post, is_pinned: pinned } : post
+        )
+      )
+      toast.success(pinned ? 'Post pinned' : 'Post unpinned')
+    } catch (err: any) {
+      console.error('Error toggling pin:', err)
+      toast.error('Failed to pin/unpin post')
+    }
+  }
+
+  const handleDelete = async (postId: string) => {
+    if (!user?.id) {
+      onRequireAuth('delete a post')
+      return
+    }
+
+    if (!confirm('Are you sure you want to delete this post?')) return
+
+    try {
+      let query = supabase
+        .from('troll_wall_posts')
+        .delete()
+        .eq('id', postId)
+
+      if (!isAdmin) {
+        query = query.eq('user_id', user.id)
+      }
+
+      const { error } = await query
+
+      if (error) {
+        toast.error('Failed to delete post: ' + error.message)
+        return
+      }
+
+      setPosts(prev => prev.filter(p => p.id !== postId))
+      toast.success('Post deleted')
+    } catch (err: any) {
+      console.error('Error deleting post:', err)
+      toast.error('Failed to delete post')
+    }
+  }
+
   const renderPost = (index: number, post: WallPost) => (
     <div className="pb-4">
         <div className="flex-1 min-w-0">
@@ -270,6 +330,12 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
               <span className="text-xs text-white/40">
                 {new Date(post.created_at).toLocaleString()}
               </span>
+              {post.is_pinned && (
+                <span className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
+                  <Pin className="w-3 h-3 fill-current" />
+                  PINNED
+                </span>
+              )}
             </div>
             {post.reply_to_post_id && (
               <p className="mt-1 text-xs text-purple-300">Replying to a post</p>
@@ -311,6 +377,32 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                 <Reply className="h-4 w-4" />
                 Reply
               </button>
+              {user && (post.user_id === user.id || isAdmin) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handlePinToggle(post.id, !!post.is_pinned)}
+                    className={`flex items-center gap-1 rounded-lg px-3 py-1.5 transition-colors ${
+                      post.is_pinned
+                        ? 'bg-yellow-500/20 text-yellow-400'
+                        : 'hover:bg-white/5 text-white/60'
+                    }`}
+                    title={post.is_pinned ? 'Unpin post' : 'Pin post'}
+                  >
+                    <Pin className={`h-4 w-4 ${post.is_pinned ? 'fill-current' : ''}`} />
+                    {post.is_pinned ? 'Unpin' : 'Pin'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(post.id)}
+                    className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-red-500/20 text-red-400 transition-colors"
+                    title={isAdmin && post.user_id !== user.id ? 'Admin delete post' : 'Delete post'}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
             {replyingTo === post.id && (
               <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
