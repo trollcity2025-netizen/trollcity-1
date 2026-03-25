@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../lib/store';
+import { prefetchTMUsers } from '../../hooks/useTrollMatch';
 
 interface TMButtonProps {
   className?: string;
@@ -12,9 +13,18 @@ export function TMButton({ className = '' }: TMButtonProps) {
 
   if (!user) return null;
 
+  const handleClick = () => {
+    navigate('/match');
+  };
+
+  const handleHover = () => {
+    prefetchTMUsers();
+  };
+
   return (
     <motion.button
-      onClick={() => navigate('/match')}
+      onClick={handleClick}
+      onMouseEnter={handleHover}
       className={`
         relative px-4 py-2 font-bold text-white rounded-xl
         bg-gradient-to-r from-purple-600 to-purple-500

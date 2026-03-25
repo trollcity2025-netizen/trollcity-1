@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Heart, MessageSquare, Reply } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
@@ -11,6 +12,7 @@ import CreatePostComposer from './CreatePostComposer'
 import { Virtuoso } from 'react-virtuoso'
 import UserProfilePopup from '@/components/UserProfilePopup'
 import { parseTextWithLinks } from '@/lib/utils'
+import MentionTextarea from '@/components/MentionTextarea'
 
 interface TrollWallFeedProps {
   onRequireAuth: (intent?: string) => boolean
@@ -20,6 +22,9 @@ const PAGE_SIZE = 15
 
 export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   const { user } = useAuthStore()
+  const location = useLocation()
+  const isMountedRef = useRef(true)
+  const latestRequestId = useRef(0)
   const [posts, setPosts] = useState<WallPost[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
@@ -32,6 +37,10 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null)
 
   const loadPosts = useCallback(async (pageIndex: number, append: boolean) => {
+    const requestId = ++latestRequestId.current
+
+    const isActiveRequest = () => isMountedRef.current && requestId === latestRequestId.current
+
     if (append) {
       setLoadingMore(true)
     } else {
@@ -51,6 +60,8 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
         .range(start, end)
 
       if (error) throw error
+
+      if (!isActiveRequest()) return
 
       const rows = (data as any[]) || []
       const postIds = rows.map((row) => row.id)
@@ -121,23 +132,36 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
         replies: repliesMap[post.id] || []
       })) as WallPost[]
 
+      if (!isActiveRequest()) return
+
       setPosts((prev) => (append ? [...prev, ...postsWithReplies] : postsWithReplies))
       setHasMore(rows.length === PAGE_SIZE)
     } catch (err: any) {
+      if (!isActiveRequest()) return
       console.error('Error loading wall posts:', err)
       // Only show error toast to authenticated users to avoid RLS-related confusion on landing page
       if (user) {
         toast.error('Failed to load Wall posts')
       }
     } finally {
+      if (!isActiveRequest()) return
       setLoading(false)
       setLoadingMore(false)
     }
   }, [user])
 
   useEffect(() => {
-    loadPosts(0, false)
-  }, [loadPosts])
+    isMountedRef.current = true
+
+    // On initial mount and when returning to home via navigation
+    if (location.pathname === '/') {
+      loadPosts(0, false)
+    }
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [loadPosts, location.pathname])
 
   const handlePostCreated = (post: WallPost) => {
     setPosts((prev) => [post, ...prev])
@@ -290,10 +314,10 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
             </div>
             {replyingTo === post.id && (
               <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
-                <textarea
+                <MentionTextarea
                   value={replyText}
-                  onChange={(event) => setReplyText(event.target.value)}
-                  placeholder="Write a reply..."
+                  onChange={setReplyText}
+                  placeholder="Write a reply... Use # to tag users"
                   className="w-full min-h-[80px] bg-transparent text-white placeholder-white/40 focus:outline-none"
                 />
                 <div className="mt-2 flex items-center justify-end gap-2">
@@ -400,7 +424,7 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
       <CreatePostComposer onPostCreated={handlePostCreated} onRequireAuth={onRequireAuth} />
 
       <div className="space-y-4">
-        {loading ? (
+        {loading && posts.length === 0 ? (
           <div className="py-10 text-center text-white/50">Loading Wall...</div>
         ) : posts.length === 0 ? (
           <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-10 text-center text-white/50`}>

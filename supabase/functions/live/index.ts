@@ -137,6 +137,47 @@ Deno.serve(async (req) => {
         // Non-critical error, log but don't fail stream creation
         console.warn('[Live] Birthday coin check failed:', birthdayErr);
       }
+
+      // Check if user has active broadcast notification feature and send to followers via push
+      try {
+        const { data: profileData } = await supabase
+          .from('user_profiles')
+          .select('username, broadcast_notification_until')
+          .eq('id', user_id)
+          .maybeSingle();
+
+        if (profileData?.broadcast_notification_until) {
+          const notificationUntil = new Date(profileData.broadcast_notification_until);
+          if (notificationUntil > new Date()) {
+            // Use the send-push-notification edge function which handles:
+            // - Online users: sends OneSignal push notification
+            // - Offline users: stores in offline_notifications for later
+            await supabase.functions.invoke('send-push-notification', {
+              body: {
+                broadcast_followers_id: user_id,
+                title: `${profileData.username} is now live!`,
+                body: `${profileData.username} just started streaming. Tap to watch!`,
+                url: `/live/${streamRow.id}`,
+                type: 'stream_notification',
+                data: {
+                  stream_id: streamRow.id,
+                  broadcaster_id: user_id,
+                  broadcaster_username: profileData.username
+                }
+              }
+            });
+            console.log(`[Live] Stream notifications sent to followers via push system`);
+          }
+
+          // Clear the notification feature after using it (one-time use)
+          await supabase
+            .from('user_profiles')
+            .update({ broadcast_notification_until: null })
+            .eq('id', user_id);
+        }
+      } catch (notifyErr) {
+        console.warn('[Live] Failed to send stream notifications:', notifyErr);
+      }
       
       return new Response(JSON.stringify({ success: true, stream: streamRow }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }

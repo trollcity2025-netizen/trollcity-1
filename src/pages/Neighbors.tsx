@@ -194,7 +194,7 @@ const NeighborsPage = () => {
         const { data, error } = await supabase
           .from('neighbors_businesses')
           .select('*')
-          .eq('approval_status', 'approved');
+          .eq('verified', true);
 
         if (error) {
           console.error('Error fetching nearby businesses:', error);
@@ -274,8 +274,7 @@ const NeighborsPage = () => {
             ...eventFormData,
             created_by_user_id: userData.user?.id,
             start_time: new Date(eventFormData.start_time).toISOString(),
-            end_time: new Date(eventFormData.end_time).toISOString(),
-            approval_status: 'pending'
+            end_time: new Date(eventFormData.end_time).toISOString()
           }
         ])
         .select()
@@ -329,7 +328,6 @@ const NeighborsPage = () => {
           {
             ...businessFormData,
             owner_user_id: userData.user?.id,
-            approval_status: 'pending',
             verified: false
           }
         ])
@@ -520,7 +518,7 @@ const NeighborsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 relative overflow-hidden">
       {/* Animated gradient background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 animate-gradient-shift" />
@@ -1121,14 +1119,10 @@ const NeighborsPage = () => {
                           <div key={business.id} className="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
                             <div className="flex justify-between items-start mb-2">
                               <h4 className="font-bold text-white">{business.business_name}</h4>
-                              {business.approval_status === 'approved' ? (
+                              {business.verified ? (
                                 <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full flex items-center">
                                   <CheckCircleIcon className="w-3 h-3 mr-1" />
                                   Approved
-                                </span>
-                              ) : business.approval_status === 'rejected' ? (
-                                <span className="px-2 py-1 bg-red-600 text-white text-xs rounded-full">
-                                  Rejected
                                 </span>
                               ) : (
                                 <span className="px-2 py-1 bg-yellow-600 text-white text-xs rounded-full">

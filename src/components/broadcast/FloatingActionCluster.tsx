@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Gift, Share2, MoreVertical, Users } from 'lucide-react';
+import { Heart, Share2, MoreVertical, Users } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface FloatingActionClusterProps {
@@ -41,14 +41,6 @@ export default function FloatingActionCluster({
           <Heart size={18} className={cn(isLiked && "fill-current")} />
         </button>
 
-        {/* Gift Button */}
-        <button 
-          onClick={onGift}
-          className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"
-        >
-          <Gift size={18} />
-        </button>
-
         {/* Menu Button */}
         <button 
           onClick={onMenu}
@@ -79,17 +71,6 @@ export default function FloatingActionCluster({
             {likesCount}
           </span>
         )}
-      </div>
-
-      {/* Gift Button - Prominent */}
-      <div className="flex flex-col items-center gap-1">
-        <button 
-          onClick={onGift}
-          className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform animate-pulse-slow"
-        >
-          <Gift size={24} />
-        </button>
-        <span className="text-[10px] font-bold text-white drop-shadow-md">Gift</span>
       </div>
 
       {/* Participants Button (if host) */}
@@ -173,13 +154,6 @@ export function HorizontalActionBar({
       </button>
 
       <div className="flex items-center gap-2">
-        <button 
-          onClick={onGift}
-          className="w-9 h-9 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 hover:bg-yellow-500/30 transition-colors"
-        >
-          <Gift size={18} />
-        </button>
-        
         {onMenu && (
           <button 
             onClick={onMenu}

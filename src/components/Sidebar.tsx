@@ -55,7 +55,6 @@ import SidebarTopBroadcasters from './sidebar/SidebarTopBroadcasters'
 
 
 import UserProfileWidget from './sidebar/UserProfileWidget';
-import TrollStationWidget from './troll-station/TrollStationWidget';
 import { getGlowingTextStyle } from '@/lib/perkEffects'
 
 import { useSidebarStore } from '@/stores/useSidebarStore';
@@ -159,9 +158,9 @@ export default function Sidebar() {
     return !isBroadcastLockedDown && (profile?.role === 'broadcaster' || profile?.is_broadcaster || profile?.troll_role === 'broadcaster');
   }
 
-  const mainPaths = ['/', '/trollstown', '/inventory', '/troting', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
+  const mainPaths = ['/', '/trollstown', '/inventory', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
-  const socialPaths = ['/tcps', '/pool', '/universe-event', '/family/browse', '/troll-station']
+  const socialPaths = ['/tcps', '/pool', '/universe-event', '/family/browse']
   if (canSeeTrollFamily) socialPaths.push('/family/home')
   const specialAccessPaths: string[] = []
   if (canSeeCourt) specialAccessPaths.push('/admin/court-dockets')
@@ -174,13 +173,13 @@ export default function Sidebar() {
   const isAnyUpdated = (paths: string[]) => paths.some(path => isUpdated(path))
 
   return (
-    <div className={`flex flex-col h-[100dvh] max-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl border-r border-white/10 shadow-[10px_0_40px_rgba(0,0,0,0.35)] transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
+    <div className={`flex flex-col h-[100dvh] max-h-screen bg-gradient-to-b from-[#0c101f] to-[#080b16] backdrop-blur-2xl border-r border-yellow-500/40 shadow-[12px_0_48px_rgba(0,0,0,0.4),0_0_20px_rgba(234,179,8,0.12),inset_0_0_20px_rgba(234,179,8,0.04)] transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50`}>
 
       {/* Header */}
-      <div className="p-4 flex items-center justify-between border-b border-white/5 bg-white/5/10">
+      <div className="p-3 flex items-center justify-between border-b border-yellow-500/20 bg-white/[0.02]">
         {!isSidebarCollapsed && (
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-[0_10px_30px_rgba(99,102,241,0.35)]">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(147,51,234,0.3)]">
               <span className="text-xl font-bold text-white">T</span>
             </div>
             <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
@@ -188,9 +187,9 @@ export default function Sidebar() {
             </span>
           </Link>
         )}
-        <button 
+        <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className={`p-1.5 hover:bg-white/10 rounded-lg text-gray-300 transition-colors ${isSidebarCollapsed ? 'mx-auto' : ''}`}
+          className={`p-2 hover:bg-white/[0.06] rounded-lg text-slate-400 hover:text-white transition-all duration-200 ${isSidebarCollapsed ? 'mx-auto' : ''}`}
         >
           {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -198,13 +197,13 @@ export default function Sidebar() {
 
       {/* User Profile Summary - Show for all logged-in users */}
       {!isSidebarCollapsed && profile && (
-        <div className="p-4">
+        <div className="px-2 pt-2">
             <UserProfileWidget />
           </div>
       )}
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar min-h-0">
+      <div className="flex-1 overflow-y-auto py-3 space-y-4 custom-scrollbar min-h-0">
         {isJailed ? (
           <>
             <div className="px-4 py-6 text-center space-y-4">
@@ -273,7 +272,6 @@ export default function Sidebar() {
               <SidebarItem icon={Landmark} label="City Hall" to="/city-hall" active={isActive('/city-hall')} collapsed={isSidebarCollapsed} highlight={isUpdated('/city-hall')} onClick={() => markAsViewed('/city-hall')} />
               <SidebarItem icon={Warehouse} label="Living" to="/living" active={isActive('/living')} collapsed={isSidebarCollapsed} highlight={isUpdated('/living')} onClick={() => markAsViewed('/living')} />
               <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} highlight={isUpdated('/inventory')} onClick={() => markAsViewed('/inventory')} />
-              <SidebarItem icon={Vote} label="Troting" to="/troting" active={isActive('/troting')} collapsed={isSidebarCollapsed} highlight={isUpdated('/troting')} onClick={() => markAsViewed('/troting')} />
               <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} highlight={isUpdated('/marketplace')} onClick={() => markAsViewed('/marketplace')} />
               <SidebarItem icon={Trophy} label="Leaderboard" to="/leaderboard" active={isActive('/leaderboard')} collapsed={isSidebarCollapsed} highlight={isUpdated('/leaderboard')} onClick={() => markAsViewed('/leaderboard')} />
               <SidebarItem icon={TrendingUp} label="Credit Scores" to="/credit-scores" active={isActive('/credit-scores')} collapsed={isSidebarCollapsed} highlight={isUpdated('/credit-scores')} onClick={() => markAsViewed('/credit-scores')} />
@@ -360,14 +358,6 @@ export default function Sidebar() {
                 collapsed={isSidebarCollapsed}
                 highlight={isUpdated('/family/home')} onClick={() => markAsViewed('/family/home')}
                 className="text-amber-400 hover:text-amber-300"
-              />
-              <SidebarItem 
-                icon={Radio} 
-                label="Troll Station" 
-                to="/troll-station" 
-                active={location.pathname.startsWith('/troll-station')} 
-                collapsed={isSidebarCollapsed}
-                className="text-pink-400 hover:text-pink-300"
               />
             </SidebarGroup>
 
@@ -489,22 +479,14 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Troll Station Widget */}
-      {!isSidebarCollapsed && (
-        <div className="p-2 border-t border-white/10 overflow-y-auto max-h-[40vh]">
-          <TrollStationWidget />
-        </div>
-      )}
-
       {/* Footer Actions */}
-      <div className="p-4 border-t border-white/10 space-y-2">
-        {/* Stats Button */}
-        <Link 
+      <div className="p-3 border-t border-yellow-500/20">
+        <Link
           to="/stats"
-          className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-white/5 text-gray-400 transition-colors ${isSidebarCollapsed ? 'justify-center' : ''}`}
+          className={`flex items-center gap-3 w-full p-2.5 rounded-lg hover:bg-white/[0.04] text-slate-400 hover:text-white transition-all duration-200 ${isSidebarCollapsed ? 'justify-center' : ''}`}
         >
-          <LayoutDashboard size={20} />
-          {!isSidebarCollapsed && <span className="text-sm font-medium">Stats</span>}
+          <LayoutDashboard size={18} />
+          {!isSidebarCollapsed && <span className="text-[13px] font-medium">Stats</span>}
         </Link>
       </div>
 
@@ -540,22 +522,22 @@ function SidebarItem({
       to={to}
       onClick={onClick}
       className={`
-        relative z-0 
-        flex items-center gap-3 px-4 py-2 mx-2 rounded-xl transition-all duration-200 group
-        ${active ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}
+        relative z-0
+        flex items-center gap-3 px-3 py-2 mx-2 rounded-lg transition-all duration-200 group
+        ${active ? 'bg-white/[0.07] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'text-slate-400 hover:bg-white/[0.04] hover:text-white'}
         ${collapsed ? 'justify-center' : ''}
         ${className}
       `}
     >
-      <Icon size={20} className="shrink-0" />
-      {!collapsed && <span className="text-sm font-medium">{label}</span>}
+      <Icon size={18} className="shrink-0" />
+      {!collapsed && <span className="text-[13px] font-medium">{label}</span>}
       {badge && !collapsed && (
-        <span className="ml-auto text-xs font-semibold bg-red-500 text-white px-2 py-0.5 rounded-full">
+        <span className="ml-auto text-[10px] font-bold bg-red-500/90 text-white px-2 py-0.5 rounded-full">
           {badge}
         </span>
       )}
       {highlight && !collapsed && (
-        <span className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full"></span>
+        <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_rgba(52,211,153,0.5)]"></span>
       )}
     </Link>
   );

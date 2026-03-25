@@ -5,6 +5,7 @@ import { useAuthStore } from '../../lib/store'
 import { supabase } from '../../lib/supabase'
 import { WallPostType } from '../../types/trollWall'
 import { useNavigate } from 'react-router-dom'
+import MentionTextarea from '../MentionTextarea'
 
 interface CreatePostModalProps {
   isOpen: boolean
@@ -301,10 +302,10 @@ export default function CreatePostModal({
             <label className="block text-sm font-semibold text-gray-300 mb-2">
               Content <span className="text-gray-500">({content.length}/240)</span>
             </label>
-            <textarea
+            <MentionTextarea
               value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder={postType === 'video' ? "Describe your video..." : postType === 'image' ? "Describe your photo..." : "What's on your mind?"}
+              onChange={setContent}
+              placeholder={postType === 'video' ? "Describe your video..." : postType === 'image' ? "Describe your photo..." : "What's on your mind? Use # to tag users"}
               rows={4}
               maxLength={240}
               className="w-full px-4 py-3 bg-zinc-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"

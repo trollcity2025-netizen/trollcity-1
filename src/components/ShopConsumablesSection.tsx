@@ -3,6 +3,7 @@ import { Coins, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePurchases } from '../hooks/usePurchases';
 import { useAuthStore } from '../lib/store';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 // Mock consumables (should match TrollMart)
 const CONSUMABLES = [
@@ -38,22 +39,47 @@ export default function ShopConsumablesSection() {
     }
     setPurchasingId(item.id);
     try {
-      const result = await addPurchase(
+      // Deduct coins first
+      const newBalance = (profile.troll_coins || 0) - item.price_coins;
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ troll_coins: newBalance })
+        .eq('id', user.id);
+
+      if (updateError) {
+        throw new Error('Failed to deduct coins');
+      }
+
+      // Set the feature expiry time directly in user_profiles
+      const expiresAt = new Date(Date.now() + item.durationMinutes * 60 * 1000).toISOString();
+      
+      if (item.category === 'broadcast_notification') {
+        await supabase
+          .from('user_profiles')
+          .update({ broadcast_notification_until: expiresAt })
+          .eq('id', user.id);
+        toast.success('Stream Notification activated! It will send when you go live.');
+      } else if (item.category === 'broadcast_feature') {
+        await supabase
+          .from('user_profiles')
+          .update({ top_broadcaster_until: expiresAt })
+          .eq('id', user.id);
+        toast.success('Top Broadcaster feature activated for 1 hour!');
+      }
+
+      // Create purchase record for history
+      await addPurchase(
         'broadcast_consumable',
         item.id,
         item.name,
         item.price_coins,
         {
           autoActivate: true,
-          expiresAt: new Date(Date.now() + item.durationMinutes * 60 * 1000),
+          expiresAt: new Date(expiresAt),
           metadata: { category: item.category },
         }
       );
-      if (!result.success) {
-        toast.error(result.error || 'Failed to purchase');
-        return;
-      }
-      toast.success(item.name + ' activated!');
+
       refreshProfile();
     } catch (err: any) {
       toast.error(err?.message || 'Purchase failed');

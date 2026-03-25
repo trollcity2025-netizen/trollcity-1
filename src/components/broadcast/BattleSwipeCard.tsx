@@ -252,7 +252,7 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
   };
   
   return (
-    <div className="w-full h-full relative bg-black overflow-hidden">
+    <div className="w-full h-full relative bg-black overflow-hidden" style={{ touchAction: 'none' }}>
       {/* Video/Stream Container */}
       <div 
         ref={videoContainerRef}
@@ -336,14 +336,14 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
       
       {/* Battle score bar */}
       {battleData && (
-        <div className="absolute top-24 left-4 right-4 z-10">
-          <div className="bg-black/60 backdrop-blur-md rounded-full h-8 overflow-hidden flex">
+        <div className="absolute top-24 left-3 right-3 z-10 sm:left-4 sm:right-4">
+          <div className="bg-black/60 backdrop-blur-md rounded-full h-7 overflow-hidden flex sm:h-8">
             {/* Challenger score */}
             <div 
               className="h-full bg-gradient-to-r from-yellow-600 to-orange-500 flex items-center justify-start pl-3"
               style={{ width: `${challengerPercent}%` }}
             >
-              <span className="text-white font-bold text-sm">{challengerScore.toLocaleString()}</span>
+              <span className="text-white font-bold text-xs sm:text-sm">{challengerScore.toLocaleString()}</span>
             </div>
             
             {/* Opponent score */}
@@ -351,14 +351,14 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
               className="h-full bg-gradient-to-l from-blue-600 to-purple-500 flex items-center justify-end pr-3"
               style={{ width: `${100 - challengerPercent}%` }}
             >
-              <span className="text-white font-bold text-sm">{opponentScore.toLocaleString()}</span>
+              <span className="text-white font-bold text-xs sm:text-sm">{opponentScore.toLocaleString()}</span>
             </div>
           </div>
           
           {/* Names */}
-          <div className="flex justify-between mt-1 px-1">
-            <span className="text-yellow-400 text-xs font-medium">{battleData.challenger?.username || 'Challenger'}</span>
-            <span className="text-blue-400 text-xs font-medium">{battleData.opponent?.username || 'Opponent'}</span>
+          <div className="flex justify-between mt-1 px-1 gap-3">
+            <span className="text-yellow-400 text-[11px] font-medium truncate">{battleData.challenger?.username || 'Challenger'}</span>
+            <span className="text-blue-400 text-[11px] font-medium truncate">{battleData.opponent?.username || 'Opponent'}</span>
           </div>
         </div>
       )}
@@ -367,26 +367,27 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
       
       {/* Battle badge */}
-      <div className="absolute top-20 left-4 z-10">
+      <div className="absolute top-20 left-3 z-10 flex items-center gap-2 sm:left-4">
         <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-red-600 to-purple-600 rounded-full">
           <Sword className="w-4 h-4 text-white" />
           <span className="text-white font-bold text-xs uppercase">Battle</span>
         </div>
+        <div className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-md">
+          <Eye className="w-3.5 h-3.5 text-white/80" />
+          <span className="text-xs font-medium text-white">{viewerCount.toLocaleString()}</span>
+        </div>
       </div>
       
       {/* Stream info overlay - Bottom left */}
-      <div className="absolute bottom-20 left-4 right-20 z-10">
+      <div className="absolute bottom-16 left-3 right-16 z-10 sm:bottom-20 sm:left-4 sm:right-20">
         {/* Title */}
-        <h3 className="text-white font-medium text-lg line-clamp-2 mb-2">
+        <h3 className="text-white font-medium text-base line-clamp-2 mb-1 sm:text-lg sm:mb-2">
           {stream.title || 'Battle Arena'}
         </h3>
         
-        {/* Viewer count */}
         <div className="flex items-center gap-2 text-white/70">
-          <Eye className="w-4 h-4" />
-          <span className="text-sm">{viewerCount.toLocaleString()} watching</span>
           {battleData && (
-            <span className="text-red-400 text-sm ml-2 flex items-center gap-1">
+            <span className="text-red-400 text-xs sm:text-sm flex items-center gap-1">
               <Trophy className="w-3 h-3" />
               {totalScore.toLocaleString()} votes
             </span>
@@ -395,14 +396,14 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
       </div>
       
       {/* Action buttons - Bottom right */}
-      <div className="absolute bottom-20 right-4 z-10 flex flex-col items-center gap-4">
+      <div className="absolute bottom-16 right-3 z-10 flex flex-col items-center gap-3 sm:bottom-20 sm:right-4 sm:gap-4">
         {/* Like button */}
         <button
           onClick={(e) => { e.stopPropagation(); handleLike(); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <Heart className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <Heart className="w-5 h-5 text-white sm:w-6 sm:h-6" />
           </div>
         </button>
         
@@ -411,8 +412,8 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
           onClick={(e) => { e.stopPropagation(); navigate(`/watch/${stream.id}?from=swipe`); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <MessageCircle className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <MessageCircle className="w-5 h-5 text-white sm:w-6 sm:h-6" />
           </div>
         </button>
         
@@ -421,8 +422,8 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
           onClick={(e) => { e.stopPropagation(); navigate(`/watch/${stream.id}?from=swipe`); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <Gift className="w-6 h-6 text-pink-400" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <Gift className="w-5 h-5 text-pink-400 sm:w-6 sm:h-6" />
           </div>
         </button>
         
@@ -431,8 +432,8 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
           onClick={(e) => { e.stopPropagation(); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <Share2 className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <Share2 className="w-5 h-5 text-white sm:w-6 sm:h-6" />
           </div>
         </button>
       </div>

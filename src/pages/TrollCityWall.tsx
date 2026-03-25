@@ -16,6 +16,7 @@ import { emitEvent } from '../lib/events'
 import { Virtuoso } from 'react-virtuoso'
 import UserProfilePopup from '../components/UserProfilePopup'
 import { parseTextWithLinks } from '../lib/utils'
+import MentionTextarea from '../components/MentionTextarea'
 
 // Available reactions
 const REACTIONS = [
@@ -899,10 +900,10 @@ export default function TrollCityWall() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl p-6 w-full max-w-md border border-[#2C2C2C]">
             <h3 className="text-xl font-bold text-white mb-4">Reply to Post</h3>
-            <textarea
+            <MentionTextarea
               value={replyContent}
-              onChange={(e) => setReplyContent(e.target.value)}
-              placeholder="Write your reply..."
+              onChange={setReplyContent}
+              placeholder="Write your reply... Use # to tag users"
               className="w-full h-32 bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
             />
             <div className="flex justify-end gap-3 mt-4">

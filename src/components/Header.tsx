@@ -235,32 +235,30 @@ const Header = () => {
   }
 
   return (
-    <header className="h-20 bg-troll-dark-bg/80 border-b border-troll-neon-pink/20 flex items-center justify-between px-4 md:px-8 backdrop-blur-lg sticky top-0 z-50">
-      <div className="absolute inset-0 bg-gradient-to-r from-troll-neon-pink/5 via-transparent to-troll-neon-green/5 pointer-events-none"></div>
-
+    <header className="h-[72px] bg-[#0c101f]/80 backdrop-blur-2xl border-b border-white/[0.06] flex items-center justify-between px-4 md:px-8 sticky top-0 z-50">
       {/* Left: Search Bar */}
       <div className="flex-none z-10">
         <RGBSearchBar />
       </div>
 
       {/* Center: Global Ticker */}
-      <div className="flex-1 hidden md:block mx-4 z-10 overflow-hidden">
+      <div className="flex-1 hidden md:block mx-6 z-10 overflow-hidden">
         <GlobalTicker />
       </div>
 
       {/* Right: Icons and User Menu */}
-      <div className="flex-none relative z-10 flex items-center space-x-6">
+      <div className="flex-none relative z-10 flex items-center space-x-5">
         {!user && (
-          <div className="flex items-center gap-4">
-            <button 
+          <div className="flex items-center gap-3">
+            <button
               onClick={() => navigate('/auth?mode=login')}
-              className="px-4 py-2 text-sm font-semibold text-white/80 hover:text-white transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors duration-200"
             >
               Log In
             </button>
-            <button 
+            <button
               onClick={() => navigate('/auth?mode=signup')}
-              className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 rounded-lg shadow-lg shadow-purple-500/20 transition-all hover:scale-105 active:scale-95"
+              className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 rounded-xl shadow-[0_0_20px_rgba(147,51,234,0.2)] hover:shadow-[0_0_30px_rgba(147,51,234,0.35)] transition-all duration-300 hover:scale-[1.03] active:scale-95 text-white"
             >
               Sign Up
             </button>
@@ -275,9 +273,7 @@ const Header = () => {
         <button
           onClick={async () => {
             if (user && unreadNotifications > 0) {
-              // Clear local count immediately
               setUnreadNotifications(0)
-              // Mark all notifications as read in the background
               try {
                 await supabase.rpc('mark_all_notifications_read', { p_user_id: user.id })
               } catch (err) {
@@ -286,11 +282,11 @@ const Header = () => {
             }
             navigate(user ? '/trollifications' : '/auth?mode=signup')
           }}
-          className="relative p-3 text-purple-400 hover:text-purple-300 transition-all duration-300 group"
+          className="relative p-2.5 text-slate-400 hover:text-purple-300 transition-all duration-200 hover:bg-white/[0.04] rounded-xl"
         >
-          <Bell className="w-6 h-6" />
+          <Bell className="w-5 h-5" />
           {user && unreadNotifications > 0 && (
-            <span className="absolute -top-1 -right-1 text-xs px-2 py-1 rounded-full min-w-[20px] text-center bg-red-500 text-white animate-pulse">
+            <span className="absolute -top-0.5 -right-0.5 text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center bg-red-500 text-white font-bold shadow-[0_0_8px_rgba(239,68,68,0.4)]">
               {unreadNotifications > 99 ? '99+' : unreadNotifications}
             </span>
           )}
@@ -304,11 +300,11 @@ const Header = () => {
             <div className="hidden md:flex items-center gap-2">
               <button
                 onClick={handleLogout}
-                className="p-3 text-red-400 hover:text-red-300 transition-all duration-300 hover:bg-red-500/10 rounded-xl"
+                className="p-2.5 text-red-400/70 hover:text-red-300 transition-all duration-200 hover:bg-red-500/[0.06] rounded-xl"
                 title="Logout"
                 type="button"
               >
-                <LogOut className="w-6 h-6" />
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
             <button

@@ -101,7 +101,7 @@ export default function GiftBoxModal({
       try {
         const { data, error } = await supabase
           .from('gifts')
-          .select('id, name, icon_url, cost, category, rarity, class')
+          .select('id, name, icon_url, cost, category, rarity, class, animation_type, gift_slug')
           .eq('is_active', true)
           .order('cost', { ascending: true });
 
@@ -114,7 +114,8 @@ export default function GiftBoxModal({
           icon: g.icon_url || '🎁',
           coinCost: g.cost || 0,
           type: g.cost > 0 ? 'paid' : 'free',
-          slug: g.name.toLowerCase().replace(/\s+/g, '-'),
+          slug: g.gift_slug || g.name.toLowerCase().replace(/\s+/g, '-'),
+          animationType: g.animation_type || undefined,
         }));
 
         setGifts(transformedGifts);
@@ -177,7 +178,25 @@ export default function GiftBoxModal({
   }, [gifts, selectedCategory, searchQuery]);
 
   const handleSendGift = async () => {
-    if (!selectedGift || !user) return;
+    console.log('[GiftBoxModal] handleSendGift clicked', {
+      selectedGiftId: selectedGift?.id || null,
+      selectedGiftName: selectedGift?.name || null,
+      userId: user?.id || null,
+      giftTarget,
+      recipientId,
+      broadcasterId,
+      quantity,
+      canAfford,
+      isSending,
+    });
+
+    if (!selectedGift || !user) {
+      console.warn('[GiftBoxModal] send aborted before sendGift', {
+        hasSelectedGift: !!selectedGift,
+        hasUser: !!user,
+      });
+      return;
+    }
 
     try {
       let success = false;
@@ -200,19 +219,15 @@ export default function GiftBoxModal({
           onGiftSent?.(selectedGift, { type: 'all', quantity });
         }
       } else if (giftTarget.type === 'broadcaster') {
-        // Send to broadcaster only
         success = await sendGift(selectedGift, broadcasterId, quantity);
         if (success) {
-          // Gift animation disabled per user request
           toast.success(`Sent ${quantity}x ${selectedGift.name} to broadcaster!`);
           onGiftSent?.(selectedGift, { type: 'broadcaster', userId: broadcasterId, quantity });
         }
       } else {
-        // Send to specific user
         const targetId = giftTarget.userId || recipientId;
         success = await sendGift(selectedGift, targetId, quantity);
         if (success) {
-          // Gift animation disabled per user request
           const targetName = userProfiles[targetId]?.username || 'user';
           toast.success(`Sent ${quantity}x ${selectedGift.name} to ${targetName}!`);
           onGiftSent?.(selectedGift, { type: 'specific', userId: targetId, username: targetName, quantity });

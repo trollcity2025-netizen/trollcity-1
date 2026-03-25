@@ -77,6 +77,9 @@ interface BroadcastChatProps {
     isBattleActive?: boolean;
     // Chat visibility - only load/render messages when chat is open
     isChatOpen?: boolean;
+    // Seat users for the users-in-seats strip
+    seats?: Record<number, { user_id?: string | null; guest_id?: string | null; user_profile?: { username?: string; avatar_url?: string | null } | null }>;
+    broadcasterProfile?: { username?: string; avatar_url?: string | null } | null;
 }
 
 export default function BroadcastChat({ 
@@ -93,13 +96,109 @@ export default function BroadcastChat({
   onAcceptChallenge,
   onDenyChallenge,
   isBattleActive = false,
-  isChatOpen = true
+  isChatOpen = true,
+  seats = {},
+  broadcasterProfile
 }: BroadcastChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
+
+  const buildUserProfile = (source: any) => ({
+    username:
+      source?.user_name ||
+      source?.username ||
+      source?.user_profiles?.username ||
+      'Unknown',
+    avatar_url:
+      source?.user_avatar ||
+      source?.avatar_url ||
+      source?.user_profiles?.avatar_url ||
+      '',
+    role:
+      source?.user_role ||
+      source?.role ||
+      source?.user_profiles?.role,
+    troll_role:
+      source?.user_troll_role ||
+      source?.troll_role ||
+      source?.user_profiles?.troll_role,
+    created_at:
+      source?.user_created_at ||
+      source?.created_at ||
+      source?.user_profiles?.created_at,
+    rgb_username_expires_at:
+      source?.user_rgb_expires_at ||
+      source?.rgb_username_expires_at ||
+      source?.user_profiles?.rgb_username_expires_at,
+    glowing_username_color:
+      source?.user_glowing_username_color ||
+      source?.glowing_username_color ||
+      source?.user_profiles?.glowing_username_color
+  });
+
+  const normalizeIncomingMessage = (incoming: any): Message | null => {
+    if (!incoming) return null;
+
+    if (incoming.v === 1 && incoming.t && incoming.d) {
+      const payload = incoming.d;
+      const normalizedType: Message['type'] =
+        incoming.t === 'gift'
+          ? 'gift'
+          : incoming.t === 'sys'
+            ? 'system'
+            : incoming.t === 'battle'
+              ? 'challenge'
+              : 'chat';
+
+      return {
+        id: incoming.txn_id || `${incoming.s}-${incoming.ts}`,
+        txn_id: incoming.txn_id,
+        user_id: incoming.s || payload.user_id || 'system',
+        content:
+          payload.content ||
+          payload.message ||
+          (incoming.t === 'gift'
+            ? `GIFT_EVENT:${payload.gift_slug || payload.gift_name || 'gift'}:${payload.quantity || 1}`
+            : ''),
+        created_at: incoming.ts
+          ? new Date(incoming.ts).toISOString()
+          : new Date().toISOString(),
+        type: normalizedType,
+        gift_type: payload.gift_slug || payload.gift_name?.toLowerCase().replace(/\s+/g, '-'),
+        gift_amount: payload.quantity || payload.amount || 1,
+        sender_name: payload.sender_name || payload.user_name,
+        receiver_id: payload.receiver_id,
+        receiver_name: payload.receiver_name,
+        challenge_id: payload.challenge_id,
+        challenger_id: payload.challenger_id,
+        challenger_username: payload.challenger_username,
+        challenger_avatar: payload.challenger_avatar,
+        challenger_crowns: payload.challenger_crowns,
+        challenge_status: payload.challenge_status,
+        user_name: payload.user_name,
+        user_avatar: payload.user_avatar,
+        user_role: payload.user_role,
+        user_troll_role: payload.user_troll_role,
+        user_created_at: payload.user_created_at,
+        user_rgb_expires_at: payload.user_rgb_expires_at,
+        user_glowing_username_color: payload.user_glowing_username_color,
+        user_profiles: buildUserProfile(payload),
+      };
+    }
+
+    if (!incoming.user_id && !incoming.content && !incoming.type) {
+      return null;
+    }
+
+    return {
+      ...incoming,
+      type: incoming.type || 'chat',
+      user_profiles: buildUserProfile(incoming),
+    } as Message;
+  };
 
   const parseGiftMessage = (content: string) => {
     if (!content.startsWith('GIFT_EVENT:')) return null;
@@ -120,9 +219,8 @@ export default function BroadcastChat({
   // Track processed message IDs to prevent duplicates from broadcast
   const processedMessageIds = useRef<Set<string>>(new Set());
   
-  // Track recent presence events to prevent join/leave flickering
-  const recentPresenceRef = useRef<Map<string, number>>(new Map());
-  const PRESENCE_DEBOUNCE_MS = 5000; // 5 seconds between showing same user's join/leave
+  // Track which users have join messages shown (Set-based dedup prevents re-showing on re-subscribe)
+  const joinedUsersRef = useRef<Set<string>>(new Set());
   
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
@@ -132,10 +230,10 @@ export default function BroadcastChat({
   const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
   const [streamEnded, setStreamEnded] = useState(false);
 
-  // Rate limiting - 5 messages every 10 seconds per user
-  const messageTimestampsRef = useRef<number[]>([]);
-  const MAX_MESSAGES_PER_WINDOW = 5;
-  const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds
+  const redirectGuestToAuth = () => {
+    if (!isGuest) return;
+    navigate('/auth?mode=signup');
+  };
 
   // Realtime broadcast channel ref
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -444,16 +542,16 @@ export default function BroadcastChat({
     fetchMessages();
   }, [streamId, isViewer, user, profile, isChatFocused, isChatOpen]);
 
-  // Auto-delete messages after 30 seconds (faster removal for better UX)
+  // Auto-delete messages after 1 minute
   useEffect(() => {
-    const MESSAGE_LIFETIME_MS = 30000; // 30 seconds
+    const MESSAGE_LIFETIME_MS = 60000; // 1 minute
     const autoDeleteInterval = setInterval(() => {
         const now = Date.now();
         setMessages(prev => {
             const filtered = prev.filter(msg => {
                 const msgTime = new Date(msg.created_at).getTime();
                 const age = now - msgTime;
-                // Keep messages younger than 30 seconds
+                // Keep messages younger than 1 minute
                 return age < MESSAGE_LIFETIME_MS;
             });
             // Only update state if messages were actually removed
@@ -462,7 +560,7 @@ export default function BroadcastChat({
             }
             return prev;
         });
-    }, 3000); // Check every 3 seconds for faster removal
+    }, 3000); // Check every 3 seconds
 
     return () => {
         clearInterval(autoDeleteInterval);
@@ -486,7 +584,8 @@ export default function BroadcastChat({
             'broadcast',
             { event: 'chat' },
             (payload: any) => {
-                const msg = payload.payload as Message;
+                const msg = normalizeIncomingMessage(payload.payload);
+                if (!msg) return;
                 
                 console.log('[BroadcastChat] 💬 Received chat-message:', msg.type, msg.content, 'from user:', msg.user_id);
                 
@@ -555,32 +654,71 @@ export default function BroadcastChat({
                 }
             }
         )
+        .on(
+            'broadcast',
+            { event: 'message' },
+            (payload: any) => {
+                const msg = normalizeIncomingMessage(payload.payload);
+                if (!msg) return;
+
+                console.log('[BroadcastChat] Received message event:', msg.type, msg.content, 'from user:', msg.user_id);
+
+                if (!isChatOpen) {
+                    setUnreadCount(prev => prev + 1);
+                    return;
+                }
+
+                setMessages(prev => {
+                    if (msg.txn_id && prev.some(m => m.txn_id === msg.txn_id)) {
+                        return prev;
+                    }
+                    if (msg.id && prev.some(m => m.id === msg.id)) {
+                        return prev;
+                    }
+                    const updated = [...prev, msg];
+                    if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+                    return updated;
+                });
+            }
+        )
         // Also listen for gift_sent events to show in chat
         .on(
           'broadcast',
           { event: 'gift_sent' },
           (payload: any) => {
-            const giftData = payload.payload;
+            const giftEnvelope = payload.payload;
+            const giftData = giftEnvelope?.d || giftEnvelope;
             console.log('[BroadcastChat] 🎁🎁🎁 Gift received for chat (gift_sent listener):', giftData);
             
             const giftMessage: Message = {
-              id: giftData.id || `gift-${Date.now()}`,
-              user_id: giftData.sender_id || 'system',
+              id: giftEnvelope?.txn_id || giftData.id || `gift-${Date.now()}`,
+              txn_id: giftEnvelope?.txn_id,
+              user_id: giftEnvelope?.s || giftData.sender_id || 'system',
               content: `GIFT_EVENT:${giftData.gift_slug || giftData.gift_name}:${giftData.quantity || 1}`,
-              created_at: giftData.timestamp || new Date().toISOString(),
+              created_at: giftEnvelope?.ts ? new Date(giftEnvelope.ts).toISOString() : (giftData.timestamp || new Date().toISOString()),
               type: 'gift',
               gift_type: giftData.gift_slug || giftData.gift_name?.toLowerCase().replace(/\s+/g, '-'),
               gift_amount: giftData.quantity || 1,
-              sender_name: giftData.sender_name || 'Someone',
+              sender_name: giftData.sender_name || giftData.user_name || 'Someone',
               receiver_id: giftData.receiver_id,
               receiver_name: giftData.receiver_name || 'user',
               user_profiles: {
-                username: giftData.sender_name || 'Someone',
+                username: giftData.sender_name || giftData.user_name || 'Someone',
                 avatar_url: null
               }
             };
             
-            setMessages(prev => [...prev, giftMessage]);
+            setMessages(prev => {
+              if (giftMessage.txn_id && prev.some(m => m.txn_id === giftMessage.txn_id)) {
+                return prev;
+              }
+              if (giftMessage.id && prev.some(m => m.id === giftMessage.id)) {
+                return prev;
+              }
+              const updated = [...prev, giftMessage];
+              if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+              return updated;
+            });
           }
         )
         .subscribe((status) => {
@@ -614,17 +752,23 @@ export default function BroadcastChat({
             return;
           }
 
-          // Fetch user profile for the message
-          const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
-            .eq('id', newMessage.user_id)
-            .single();
+          const isSystemMessage = newMessage.type === 'system';
+          const { data: profile } = isSystemMessage
+            ? { data: null }
+            : await supabase
+                .from('user_profiles')
+                .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
+                .eq('id', newMessage.user_id)
+                .single();
 
           const msg: Message = {
             ...newMessage,
-            type: 'chat',
-            user_profiles: profile,
+            type: newMessage.type === 'gift'
+              ? 'gift'
+              : newMessage.type === 'system'
+                ? 'system'
+                : 'chat',
+            user_profiles: profile ? buildUserProfile(profile) : buildUserProfile(newMessage),
           };
 
           if (newMessage.id) {
@@ -660,19 +804,16 @@ export default function BroadcastChat({
         .on('presence', { event: 'join' }, ({ newPresences }) => {
             const now = Date.now();
             newPresences.forEach((p: any) => {
-                // Skip showing join message for ourselves (we track our own presence)
-                // But still show it for testing/verification
+                // Skip showing join message for ourselves
                 if (p.user_id === user?.id) {
-                    console.log('[BroadcastChat] Our own join detected, user_id:', p.user_id?.substring(0, 8));
                     return;
                 }
                 
-                // Debounce: Don't show join if we recently showed leave for same user
-                const lastEvent = recentPresenceRef.current.get(p.user_id);
-                if (lastEvent && (now - lastEvent) < PRESENCE_DEBOUNCE_MS) {
-                    return; // Skip this join - too soon after previous event
+                // Skip if we already showed a join for this user
+                if (joinedUsersRef.current.has(p.user_id)) {
+                    return;
                 }
-                recentPresenceRef.current.set(p.user_id, now);
+                joinedUsersRef.current.add(p.user_id);
                 
                 console.log('[BroadcastChat] User joined, showing message:', p.username || p.user_id);
                 const systemMsg: Message = {
@@ -699,14 +840,16 @@ export default function BroadcastChat({
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
             const now = Date.now();
             leftPresences.forEach((p: any) => {
-                // Track when we get a leave event - debounce future joins
-                recentPresenceRef.current.set(p.user_id, now);
-                
-                // Skip showing leave for our own user (handled by parent)
+                // Skip showing leave for our own user
                 if (p.user_id === user?.id) {
-                    console.log('[BroadcastChat] Ignoring own leave event (user is still active)');
                     return;
                 }
+                
+                // Only show leave if we showed a join for this user
+                if (!joinedUsersRef.current.has(p.user_id)) {
+                    return;
+                }
+                joinedUsersRef.current.delete(p.user_id);
                 
                 console.log('[BroadcastChat] User left, showing message:', p.username || p.user_id);
                 const systemMsg: Message = {
@@ -741,69 +884,6 @@ export default function BroadcastChat({
             }
             console.log('[BroadcastChat] Presence channel subscription status:', status);
         });
-
-    // Need to store dbChannel for cleanup - create a ref for it
-    const dbChannelRef = supabase
-      .channel(`stream-messages-db:${streamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'stream_messages',
-          filter: `stream_id=eq.${streamId}`,
-        },
-        async (payload: any) => {
-          const newMessage = payload.new;
-          
-          // Skip our own messages (already shown via optimistic update)
-          if (newMessage.user_id === user?.id) {
-            return;
-          }
-
-          // Deduplicate using id
-          if (newMessage.id && processedMessageIds.current.has(newMessage.id)) {
-            return;
-          }
-
-          // Fetch user profile for the message
-          const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
-            .eq('id', newMessage.user_id)
-            .single();
-
-          const msg: Message = {
-            ...newMessage,
-            type: 'chat',
-            user_profiles: profile,
-          };
-
-          if (newMessage.id) {
-            processedMessageIds.current.add(newMessage.id);
-          }
-
-          // Only add to UI when chat is OPEN
-          if (!isChatOpen) {
-            setUnreadCount(prev => prev + 1);
-            return;
-          }
-
-          setMessages(prev => {
-            if (newMessage.id && prev.some(m => m.id === newMessage.id)) {
-              return prev;
-            }
-            const updated = [...prev, msg];
-            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
-            return updated;
-          });
-
-          if (!isChatFocused) {
-            setUnreadCount(prev => prev + 1);
-          }
-        }
-      )
-      .subscribe();
 
     // Cleanup: remove channels when component unmounts or streamId changes
     return () => {
@@ -864,19 +944,6 @@ export default function BroadcastChat({
         return;
     }
 
-    // Rate Limit Check - 5 messages per 10 seconds
-    const now = Date.now();
-    const windowStart = now - RATE_LIMIT_WINDOW_MS;
-    
-    // Filter to keep only timestamps within the window
-    messageTimestampsRef.current = messageTimestampsRef.current.filter(ts => ts > windowStart);
-    
-    if (messageTimestampsRef.current.length >= MAX_MESSAGES_PER_WINDOW) {
-        console.log('💬 [BroadcastChat] Rate limited - too many messages');
-        toast.error('Slow down! You can only send 5 messages every 10 seconds.');
-        return;
-    }
-
     const content = input.trim();
     console.log('💬 [BroadcastChat] Preparing to send:', { content, userId: user.id });
     setInput('');
@@ -914,15 +981,11 @@ export default function BroadcastChat({
     // 4. Track txn_id to prevent duplicates
     receivedTxnIdsRef.current.add(txnId);
 
-    // 5. Add timestamp for rate limiting (after optimistic UI update)
-    // This ensures we only count successfully displayed messages
-    messageTimestampsRef.current.push(Date.now());
-
     // 5. Broadcast over realtime channel for instant delivery to all viewers
     if (broadcastChannelRef.current) {
         broadcastChannelRef.current.send({
             type: 'broadcast',
-            event: 'chat-message',
+            event: 'chat',
             payload: msg
         });
     }
@@ -1050,6 +1113,72 @@ export default function BroadcastChat({
                 </button>
             )}
         </div>
+        
+        {/* Users in Seats Strip */}
+        {(() => {
+          const seatUsers: { id: string; username: string; avatar_url: string | null; isBroadcaster: boolean }[] = [];
+          
+          // Add broadcaster first
+          seatUsers.push({
+            id: hostId,
+            username: broadcasterProfile?.username || 'Host',
+            avatar_url: broadcasterProfile?.avatar_url || null,
+            isBroadcaster: true
+          });
+          
+          // Add other seated users
+          Object.values(seats).forEach((seat) => {
+            const userId = seat?.user_id || seat?.guest_id;
+            if (userId && userId !== hostId) {
+              seatUsers.push({
+                id: userId,
+                username: seat?.user_profile?.username || 'User',
+                avatar_url: seat?.user_profile?.avatar_url || null,
+                isBroadcaster: false
+              });
+            }
+          });
+          
+          if (seatUsers.length === 0) return null;
+          
+          return (
+            <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-white/5 bg-zinc-900/30 scrollbar-hide">
+              {seatUsers.map((seatUser) => (
+                <button
+                  key={seatUser.id}
+                  onClick={() => {
+                    setGiftRecipientId(seatUser.id);
+                    setIsGiftModalOpen(true);
+                  }}
+                  className="flex flex-col items-center gap-0.5 min-w-[48px] group"
+                  title={`Gift ${seatUser.username}`}
+                >
+                  <div className={`relative w-9 h-9 rounded-full overflow-hidden border-2 transition-all group-hover:scale-110 group-hover:shadow-lg ${
+                    seatUser.isBroadcaster 
+                      ? 'border-yellow-500 group-hover:shadow-yellow-500/30' 
+                      : 'border-white/20 group-hover:border-yellow-400/60 group-hover:shadow-yellow-400/20'
+                  }`}>
+                    {seatUser.avatar_url ? (
+                      <img src={seatUser.avatar_url} alt={seatUser.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                        {seatUser.username.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    {seatUser.isBroadcaster && (
+                      <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[7px] font-bold px-1 rounded-sm">
+                        HOST
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[9px] text-zinc-400 truncate max-w-[48px] group-hover:text-yellow-400 transition-colors">
+                    {seatUser.username}
+                  </span>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
         
         <div className="flex-1 min-h-0 relative overflow-hidden">
             {/* Challenge Notifications Section - Show active challenges */}
@@ -1296,10 +1425,8 @@ export default function BroadcastChat({
                     type="text" 
                     value={input}
                     onChange={e => setInput(e.target.value)}
-                    onFocus={() => {
-                        // Don't navigate away - just show signup prompt in input placeholder
-                        // The input is already disabled for guests, so this is just for UX
-                    }}
+                    onFocus={redirectGuestToAuth}
+                    onClick={redirectGuestToAuth}
                     placeholder={
                       streamEnded
                         ? "Stream ended"
@@ -1309,13 +1436,15 @@ export default function BroadcastChat({
                             ? "Sign up to chat..."
                             : "Type a message..."
                     }
-                    disabled={hostChatDisabledByOfficer || isGuest || streamEnded}
+                    readOnly={isGuest || streamEnded || hostChatDisabledByOfficer}
+                    disabled={hostChatDisabledByOfficer || streamEnded}
                     className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
                 />
 
                 <button
                     type="submit"
-                    disabled={hostChatDisabledByOfficer || isGuest || streamEnded || !input.trim()}
+                    onClick={isGuest ? redirectGuestToAuth : undefined}
+                    disabled={hostChatDisabledByOfficer || streamEnded || (!isGuest && !input.trim())}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition"
                 >
                     <Send size={16} />

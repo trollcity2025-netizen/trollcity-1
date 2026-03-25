@@ -141,7 +141,7 @@ export default function CreditScorePage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 md:p-8">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex items-center justify-between gap-4 mb-6">

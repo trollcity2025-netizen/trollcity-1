@@ -5,10 +5,13 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { Store, ShoppingCart, Coins, ArrowLeft, Package, Receipt, X } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
+import { addCoins } from '../lib/coinTransactions'
+import { useLiveContextStore } from '../lib/liveContextStore'
 
 export default function ShopView() {
   const { username } = useParams<{ username: string }>()
-  const { user } = useAuthStore()
+  const { user, profile } = useAuthStore()
+  const activeStreamId = useLiveContextStore((s) => s.activeStreamId)
   const navigate = useNavigate()
   const [shop, setShop] = useState<any>(null)
   const [items, setItems] = useState<any[]>([])
@@ -121,10 +124,11 @@ export default function ShopView() {
         .from('marketplace_items')
         .insert([{
           seller_id: shop.owner_id,
+          name: item.name,
           title: item.name,
           description: item.description,
           price_coins: item.price,
-          stock: item.stock_quantity ?? null,
+          stock: item.stock_quantity ?? 0,
           thumbnail_url: item.thumbnail_url ?? null,
           type: item.category,
           status: 'active'
@@ -141,10 +145,19 @@ export default function ShopView() {
         throw new Error('Failed to create marketplace item reference')
       }
 
-      // Create purchase record (uses marketplace item UUID)
-      const platformFee = 0
-      const sellerEarnings = item.price
+      // Validate seller exists in user_profiles before creating purchase
+      const { data: sellerProfile } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('id', shop.owner_id)
+        .single()
 
+      if (!sellerProfile) {
+        toast.error('Seller not found')
+        return
+      }
+
+      // Create purchase record (uses marketplace item UUID)
       const { data: purchaseData, error: purchaseError } = await supabase
         .from('marketplace_purchases')
         .insert([{
@@ -152,9 +165,9 @@ export default function ShopView() {
           seller_id: shop.owner_id,
           item_id: marketplaceItemId,
           price_paid: item.price,
-          platform_fee: platformFee,
-          seller_earnings: sellerEarnings,
-          purchase_date: new Date().toISOString()
+          purchase_date: new Date().toISOString(),
+          status: 'pending',
+          item_type: item.category
         }])
         .select()
         .single()
@@ -192,15 +205,42 @@ export default function ShopView() {
 
       if (inventoryError) throw inventoryError
 
-      const { error: transactionError } = await supabase
-        .from('shop_transactions')
-        .insert({
+      // Add coins to seller after purchase (subtract platform fee)
+      const platformFee = Math.floor(item.price * 0.1) // 10% platform fee
+      const sellerEarnings = item.price - platformFee
+      
+      const addCoinsResult = await addCoins({
+        userId: shop.owner_id,
+        amount: sellerEarnings,
+        type: 'marketplace_sale',
+        description: `Sale: ${item.name}`,
+        metadata: {
+          buyer_id: user.id,
           item_id: item.id,
-          quantity: 1,
-          coins_spent: item.price
-        })
+          price: item.price,
+          platform_fee: platformFee
+        }
+      })
+      
+      if (!addCoinsResult.success) {
+        console.error('Error adding coins to seller:', addCoinsResult.error)
+        // Don't fail purchase, but log the error
+      }
 
-      if (transactionError) throw transactionError
+      // Send notification to seller
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: shop.owner_id,
+          type: 'marketplace_sale',
+          title: 'New Sale!',
+          message: `You sold ${item.name} for ${item.price} coins!`,
+          link: '/marketplace/sales'
+        })
+      
+      if (notifError) {
+        console.error('Error sending notification:', notifError)
+      }
 
       // Handle insurance auto-expire
       if (item.category === 'insurance') {
@@ -225,10 +265,11 @@ export default function ShopView() {
         item: item,
         shop: shop,
         price: item.price,
-        platformFee: platformFee,
-        sellerEarnings: sellerEarnings,
+        sellerEarnings: item.price,
         purchaseDate: purchaseData.purchase_date,
-        buyerId: user.id
+        buyerId: user.id,
+        status: purchaseData.status,
+        itemType: item.category
       }
 
       setPurchaseReceipt(receipt)
@@ -238,6 +279,33 @@ export default function ShopView() {
       useAuthStore.getState().refreshProfile()
 
       toast.success(`Purchased ${item.name}!`)
+
+      // Broadcast purchase notification to live chat if viewing a stream
+      if (activeStreamId) {
+        const chatChannel = supabase.channel(`stream-chat:${activeStreamId}`)
+        chatChannel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            chatChannel.send({
+              type: 'broadcast',
+              event: 'chat',
+              payload: {
+                id: `sys-purchase-${user.id}-${Date.now()}`,
+                txn_id: `purchase-${item.id}-${Date.now()}`,
+                user_id: user.id,
+                content: `purchased ${item.name} from the store`,
+                created_at: new Date().toISOString(),
+                type: 'system',
+                user_profiles: {
+                  username: profile?.username || 'Guest',
+                  avatar_url: profile?.avatar_url || ''
+                }
+              }
+            })
+            // Clean up channel after sending
+            setTimeout(() => supabase.removeChannel(chatChannel), 2000)
+          }
+        })
+      }
 
     } catch (err: any) {
       console.error('Purchase error:', err)
@@ -439,18 +507,10 @@ export default function ShopView() {
                     <span>Item Price:</span>
                     <span className="text-yellow-400">{purchaseReceipt.price.toLocaleString()} coins</span>
                   </div>
-                  {purchaseReceipt.platformFee > 0 && (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span>Platform Fee:</span>
-                        <span className="text-red-400">-{purchaseReceipt.platformFee} coins</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-semibold border-t border-zinc-600 pt-2">
-                        <span>Seller Earnings:</span>
-                        <span className="text-green-400">{purchaseReceipt.sellerEarnings} coins</span>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex justify-between text-sm font-semibold border-t border-zinc-600 pt-2">
+                    <span>You Earned:</span>
+                    <span className="text-green-400">{purchaseReceipt.sellerEarnings} coins</span>
+                  </div>
                 </div>
 
                 {/* Receipt Info */}

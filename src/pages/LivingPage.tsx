@@ -394,10 +394,10 @@ export default function LivingPage() {
 
   // Quick loan for property purchase
   const handleBuyWithLoan = async () => {
-    if (!buyingProp || !user) return;
+    if (!buyingProp || !user || !profile) return;
     
-    if (creditScore <= 650) {
-        toast.error("Credit score must be > 650 for instant loan approval.");
+    if ((profile.level || 0) < 30) {
+        toast.error(`You must be level 30 to purchase property. Current: Level ${profile.level || 0}`);
         return;
     }
 
@@ -693,6 +693,16 @@ export default function LivingPage() {
   };
 
   const initiateBuy = (prop: Property) => {
+    if (!user || !profile) {
+      toast.error('Please log in to purchase property');
+      return;
+    }
+
+    if ((profile.level || 0) < 30) {
+      toast.error(`You must be level 30 to purchase property. Current: Level ${profile.level || 0}`);
+      return;
+    }
+
     setBuyingProp(prop);
     setDownPayment(Math.ceil(prop.price * 0.1).toString());
   };
@@ -770,7 +780,7 @@ export default function LivingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white p-4 pb-20 md:pb-4 md:ml-64">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 pb-20 md:pb-4 md:ml-64">
       <div className="max-w-4xl mx-auto space-y-6">
         
         <header className="flex items-center justify-between mb-8">
@@ -1385,9 +1395,10 @@ export default function LivingPage() {
                                     </button>
                                     <button 
                                         onClick={handleBuyWithLoan}
-                                        className="flex-1 bg-purple-600 hover:bg-purple-500 py-2 rounded-lg font-bold"
+                                        disabled={!profile || (profile.level || 0) < 30}
+                                        className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-700 disabled:text-gray-500 py-2 rounded-lg font-bold"
                                     >
-                                        Confirm Purchase
+                                        {(profile?.level || 0) < 30 ? 'Need Level 30' : 'Confirm Purchase'}
                                     </button>
                                 </div>
                             </div>
@@ -1465,9 +1476,10 @@ export default function LivingPage() {
                             ) : (
                                 <button 
                                     onClick={() => initiateBuy(prop)}
-                                    className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg font-bold text-sm transition-colors"
+                                    disabled={!user || !profile || (profile.level || 0) < 30}
+                                    className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-700 disabled:text-gray-500 text-white py-2 rounded-lg font-bold text-sm transition-colors"
                                 >
-                                    Buy Property
+                                    {(profile?.level || 0) < 30 ? `Need Level 30` : 'Buy Property'}
                                 </button>
                             )}
                         </div>

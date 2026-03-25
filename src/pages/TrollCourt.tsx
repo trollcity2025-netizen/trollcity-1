@@ -78,21 +78,28 @@ export default function TrollCourt() {
     'TrollCity Policy Violation'
   ]
 
-   // Permissions for court operations
-   const canSummonUser =
-     profile?.is_admin === true ||
-     profile?.is_lead_officer === true ||
-     profile?.is_secretary === true ||
-     profile?.is_troll_officer === true ||
-     ['admin', 'lead_troll_officer', 'secretary', 'troll_officer'].includes(String(profile?.role || '')) ||
-     ['admin', 'lead_troll_officer', 'secretary', 'troll_officer'].includes(String(profile?.troll_role || ''));
+  // Permissions for court operations
+  const canSummonUser =
+    profile?.is_admin === true ||
+    profile?.is_lead_officer === true ||
+    profile?.is_secretary === true ||
+    profile?.is_troll_officer === true ||
+    ['admin', 'lead_troll_officer', 'secretary', 'troll_officer'].includes(String(profile?.role || '')) ||
+    ['admin', 'lead_troll_officer', 'secretary', 'troll_officer'].includes(String(profile?.troll_role || ''));
 
-   const canAddCase =
-     profile?.is_admin === true ||
-     profile?.is_lead_officer === true ||
-     profile?.is_secretary === true ||
-     ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.role || '')) ||
-     ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.troll_role || ''));
+  const canAddCase =
+    profile?.is_admin === true ||
+    profile?.is_lead_officer === true ||
+    profile?.is_secretary === true ||
+    ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.role || '')) ||
+    ['admin', 'lead_troll_officer', 'secretary'].includes(String(profile?.troll_role || ''));
+
+  const canStartCourt =
+    profile?.is_admin === true ||
+    profile?.is_lead_officer === true ||
+    profile?.is_troll_officer === true ||
+    ['admin', 'lead_troll_officer', 'troll_officer'].includes(String(profile?.role || '')) ||
+    ['admin', 'lead_troll_officer', 'troll_officer'].includes(String(profile?.troll_role || ''));
 
   // Fetch recent cases
   useEffect(() => {
@@ -165,13 +172,16 @@ export default function TrollCourt() {
     const fetchSelectedDateCases = async () => {
       if (!selectedCalendarDate) return
       
-      // Query court_cases that are linked to dockets with the selected date
-      const { data } = await supabase
-        .from('court_cases')
-        .select('*, defendant:defendant_id(username), plaintiff:plaintiff_id(username), court_dockets(court_date, status)')
-        .eq('court_dockets.court_date', selectedCalendarDate)
+      // Query dockets for the selected date, then get their cases
+      const { data: docketData } = await supabase
+        .from('court_dockets')
+        .select('*, court_cases(*, defendant:defendant_id(username), plaintiff:plaintiff_id(username))')
+        .eq('court_date', selectedCalendarDate)
       
-      if (data) setSelectedDateCases(data)
+      if (docketData) {
+        const cases = docketData.flatMap(d => d.court_cases || []);
+        setSelectedDateCases(cases);
+      }
     }
     fetchSelectedDateCases()
   }, [selectedCalendarDate])
@@ -512,7 +522,7 @@ export default function TrollCourt() {
   }
 
   return (
-    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} ${trollCityTheme.text.primary} p-6`}>
+    <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -1126,7 +1136,10 @@ export default function TrollCourt() {
              <div className="bg-gradient-to-r from-orange-950 to-zinc-900 p-4 border-b border-orange-900/30 flex items-center justify-between">
                <div className="flex items-center gap-2 text-orange-400 font-bold text-lg">
                  <Calendar className="w-5 h-5" />
-                 Cases for {selectedCalendarDate ? new Date(selectedCalendarDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Selected Date'}
+                 Cases for {selectedCalendarDate ? (() => {
+                  const [y, m, d] = selectedCalendarDate.split('-').map(Number);
+                  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                })() : 'Selected Date'}
                </div>
                <button 
                  onClick={() => setShowCaseDetailsModal(false)} 

@@ -1,0 +1,76 @@
+Build a full-featured broadcast page for a live streaming platform called Troll City using React, TypeScript, Tailwind CSS, and Supabase. The page must handle both host (broadcaster) and viewer modes on a single route.
+
+CORE STREAMING:
+- LiveKit WebRTC integration for real-time video/audio (host publishes, viewers subscribe)
+- OBS/RTMP ingest support for Gaming category streams
+- Multi-seat video grid (1-9 configurable boxes) with seat claiming, releasing, and banning
+- Guest co-host billing: per-minute or flat fee pricing per seat
+
+BROADCAST SETUP:
+- Pre-stream config: title, category selection (General, Gaming, IRL, Debate, Education, Fitness, Business, Spiritual, Election, TCNN News), layout mode (grid/split/classroom/spotlight/debate), box count, seat pricing
+- Password-protected streams with bcrypt hashing
+- Broadcast lockdown check (global admin lockdown + per-user lock + broadcaster badge with max limit)
+
+CHAT SYSTEM:
+- Real-time chat via Supabase Realtime with message buffering (250ms batch updates)
+- Chat moderation: broadcaster can disable chat, mute users with escalation (auto-ban after N mutes)
+- Floating chat overlay on mobile, bottom sheet on desktop
+- System messages for joins, gifts, battles
+
+GIFT SYSTEM:
+- Gift tray with category tabs and scrollable gift grid
+- Ledger-based async gift processing with idempotency keys
+- Gift animations with combo tracking (rapid gifts stack into combos)
+- Gift leaderboard showing top gifters, gift ticker scrolling feed, gifter avatar bubble strip
+- Trollmonds discount (up to 10% based on balance)
+
+BATTLE MODE:
+- Challenge system with request/accept/decline flow
+- Battle grid overlay with score bars and countdown timer
+- Separate battle chat and controls
+- Battle animations (3-phase: intro, active, finish)
+
+BROADCAST LEVEL SYSTEM:
+- Level bar (0-100%) with decay: -1% every 5min inactive, -1% if no gift in 2min
+- Sponsor items: Pizza (+5%, 50 coins), Drink (+2%, 20 coins), VIP Badge (+100%, 1000 coins)
+
+THEMES & EFFECTS:
+- Theme selector with purchasable themes (Neon, Gold, Matrix, Retro, Ice, Fire) stored per-user
+- RGB box effect toggle (10 coins)
+- Entrance effect animations with sound on user join
+- Background themes supporting video, image, CSS, and reactive audio modes
+
+FEATURED & RANKINGS:
+- Featured broadcasts (1000+ likes AND 2000+ gifts value)
+- Hourly rankings scored: likes1 + gifts5 + viewers2, top 100
+- Weekly top broadcasters saved for event invitations
+
+LIVE COMMERCE:
+- Pin/unpin products to broadcast overlay
+- Pinned services for Trollifieds marketplace
+- Product display with one-tap purchase
+
+MODERATION & SAFETY:
+- Stream reporting (Harassment, Spam, Inappropriate Content, Minor Unsupervised)
+- Minor safety confirmation modal and badge display
+- Banned users list with unban capability
+- BroadOfficers: assignable sub-moderators with force-release seat permission
+
+MOBILE & RESPONSIVE:
+- Mobile-optimized layout with floating action cluster (like, gift, share, more)
+- Chat bottom sheet with swipe gestures
+- Touch-friendly seat grid and controls
+
+BROADCASTER EARNINGS:
+- Daily reward: 25 coins after 60s of broadcasting
+- Per-minute host billing (2 coins/min, admins exempt)
+- Stats modal: viewers, duration, peak viewers, total coins earned
+- Post-stream summary page with full stats
+
+SUPABASE INTEGRATION:
+- Tables: streams, broadcast_seats, stream_messages, stream_gifts, gift_ledger, stream_likes, featured_broadcasts, broadcast_rankings, broadcast_background_themes, stream_reports
+- RPCs: claim_broadcast_seat, release_broadcast_seat, can_start_broadcast, send_gift_ledger, boost_broadcast_level, validate_broadcast_password, get_stream_recommendations
+- Edge Functions: livekit-token, broadcast-seats, battles, go-live-mark-live, send-like
+- Realtime subscriptions for messages, gifts, likes, presence
+
+Design dark-themed (bg #0A0814), purple/gold accent colors, smooth animations, and ensure all features work on both desktop and mobile viewports.

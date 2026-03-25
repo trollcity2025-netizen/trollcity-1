@@ -155,8 +155,8 @@ export async function completeWar(warId: string) {
 
       await supabase.rpc('increment_family_stats', {
         p_family_id: winnerId,
-        p_coin_bonus: winnerCoinBonus,
-        p_xp_bonus: winnerXpBonus
+        p_coin_bonus: parseInt(String(winnerCoinBonus)),
+        p_xp_bonus: parseInt(String(winnerXpBonus))
       })
 
       // Award participation/consolation to loser
@@ -166,8 +166,8 @@ export async function completeWar(warId: string) {
 
       await supabase.rpc('increment_family_stats', {
         p_family_id: loserId,
-        p_coin_bonus: loserCoinBonus,
-        p_xp_bonus: loserXpBonus
+        p_coin_bonus: parseInt(String(loserCoinBonus)),
+        p_xp_bonus: parseInt(String(loserXpBonus))
       })
 
       // Track war win for tasks

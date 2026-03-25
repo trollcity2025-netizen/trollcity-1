@@ -339,7 +339,12 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
 
       if (error) {
         console.warn('[useStreamSeats] join_seat_atomic RPC error:', error);
-        // Try direct insert as fallback
+        // Only allow a direct insert fallback for free seats.
+        // Paid seats must go through the RPC so coin deductions and host payout stay atomic.
+        if (price > 0) {
+          throw error;
+        }
+
         const { error: insertError } = await supabase.from('stream_seat_sessions').insert({
           stream_id: streamId,
           seat_index: seatIndex,
@@ -391,6 +396,18 @@ export function useStreamSeats(streamId: string | undefined, userId?: string, br
       };
       setMySession(newSession);
       setSeats(prev => ({ ...prev, [seatIndex]: newSession }));
+
+      if ((data.price_paid || price) > 0) {
+        window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
+          detail: {
+            senderId: effectiveUserId,
+            receiverId: data.host_user_id || streamData?.user_id,
+            amount: data.price_paid || price,
+            timestamp: Date.now(),
+          }
+        }));
+        window.dispatchEvent(new CustomEvent('refresh-seat-balances'));
+      }
       
       return true;
     } catch (err: any) {

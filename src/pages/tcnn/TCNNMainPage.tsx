@@ -235,7 +235,7 @@ export default function TCNNMainPage() {
 
   const handleWatchStream = () => {
     if (activeStream) {
-      navigate(`/broadcast/${activeStream.id}`);
+      navigate(`/tcnn/viewer/${activeStream.id}`);
     }
   };
 
@@ -245,15 +245,15 @@ export default function TCNNMainPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="animate-pulse space-y-6">
-            <div className="h-20 bg-white/5 rounded-2xl" />
-            <div className="h-96 bg-white/5 rounded-2xl" />
+            <div className="h-20 bg-slate-200 rounded-2xl" />
+            <div className="h-96 bg-slate-200 rounded-2xl" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="h-48 bg-white/5 rounded-2xl" />
-              <div className="h-48 bg-white/5 rounded-2xl" />
-              <div className="h-48 bg-white/5 rounded-2xl" />
+              <div className="h-48 bg-slate-200 rounded-2xl" />
+              <div className="h-48 bg-slate-200 rounded-2xl" />
+              <div className="h-48 bg-slate-200 rounded-2xl" />
             </div>
           </div>
         </div>
@@ -263,12 +263,12 @@ export default function TCNNMainPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
             <Radio className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Error Loading TCNN</h2>
-            <p className="text-white/60">{error}</p>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Error Loading TCNN</h2>
+            <p className="text-slate-500">{error}</p>
           </div>
         </div>
       </div>
@@ -276,7 +276,7 @@ export default function TCNNMainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900">
       {/* Header */}
       <header className="border-b border-white/10 bg-black/40 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">

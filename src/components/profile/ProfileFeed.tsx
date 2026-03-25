@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import PostItem from './PostItem';
 import { Image, Send, X, Loader2 } from 'lucide-react';
+import MentionTextarea from '../MentionTextarea';
 
 import { toast } from 'sonner';
 
@@ -200,10 +201,10 @@ export default function ProfileFeed({ userId }: ProfileFeedProps) {
                </div>
             </div>
             <div className="flex-1 relative">
-              <textarea
+              <MentionTextarea
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="What's on your mind?"
+                onChange={setContent}
+                placeholder="What's on your mind? Use # to tag users"
                 className="w-full bg-transparent text-white placeholder-gray-500 focus:outline-none resize-none min-h-[80px]"
               />
               

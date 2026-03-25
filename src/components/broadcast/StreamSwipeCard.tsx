@@ -264,7 +264,7 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
   const isHost = user?.id === stream.user_id;
   
   return (
-    <div className="w-full h-full relative bg-black overflow-hidden">
+    <div className="w-full h-full relative bg-black overflow-hidden" style={{ touchAction: 'none' }}>
       {/* Video/Stream Container */}
       <div 
         ref={videoContainerRef}
@@ -280,22 +280,11 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
           )}>
             {remoteUsers.map((remoteUser) => (
               <div key={remoteUser.identity} className="relative bg-black">
-                {false ? (
-                  <div 
-                    ref={(el) => {
-                      if (el) {
-                        // TODO: Get from participant.videoTrackPublications.play(el);
-                      }
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                    <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
-                      <Users className="w-8 h-8 text-zinc-600" />
-                    </div>
+                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                  <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
+                    <Users className="w-8 h-8 text-zinc-600" />
                   </div>
-                )}
+                </div>
               </div>
             ))}
           </div>
@@ -322,10 +311,10 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
       
       {/* Stream info overlay - Bottom left */}
-      <div className="absolute bottom-20 left-4 right-20 z-10">
+      <div className="absolute bottom-16 left-3 right-16 z-10 sm:bottom-20 sm:left-4 sm:right-20">
         {/* Broadcaster info */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-0.5">
+        <div className="flex items-center gap-2.5 mb-2 sm:gap-3 sm:mb-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-0.5 sm:w-12 sm:h-12">
             <div className="w-full h-full rounded-full bg-black overflow-hidden">
               {broadcaster?.avatar_url ? (
                 <img 
@@ -342,42 +331,36 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-lg">
+              <span className="font-bold text-white text-base sm:text-lg">
                 {broadcaster?.username || 'Broadcaster'}
               </span>
               {broadcaster?.level && (
-                <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full sm:text-xs sm:px-2">
                   Lvl {broadcaster.level}
                 </span>
               )}
             </div>
-            <span className="text-white/60 text-sm capitalize">{stream.category}</span>
+            <span className="text-white/60 text-xs capitalize sm:text-sm">{stream.category}</span>
           </div>
         </div>
         
         {/* Title */}
-        <h3 className="text-white font-medium text-lg line-clamp-2 mb-2">
+        <h3 className="text-white font-medium text-base line-clamp-2 mb-1 sm:text-lg sm:mb-2">
           {stream.title || 'Untitled Stream'}
         </h3>
-        
-        {/* Viewer count */}
-        <div className="flex items-center gap-2 text-white/70">
-          <Eye className="w-4 h-4" />
-          <span className="text-sm">{viewerCount.toLocaleString()} watching</span>
-        </div>
       </div>
       
       {/* Action buttons - Bottom right */}
-      <div className="absolute bottom-20 right-4 z-10 flex flex-col items-center gap-4">
+      <div className="absolute bottom-16 right-3 z-10 flex flex-col items-center gap-3 sm:bottom-20 sm:right-4 sm:gap-4">
         {/* Like button */}
         <button
           onClick={(e) => { e.stopPropagation(); handleLike(); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <Heart className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <Heart className="w-5 h-5 text-white sm:w-6 sm:h-6" />
           </div>
-          <span className="text-xs text-white/80">{likeCount > 0 ? likeCount.toLocaleString() : ''}</span>
+          <span className="hidden text-xs text-white/80 sm:block">{likeCount > 0 ? likeCount.toLocaleString() : ''}</span>
         </button>
         
         {/* Comment button */}
@@ -385,8 +368,8 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
           onClick={(e) => { e.stopPropagation(); navigate(`/watch/${stream.id}?from=swipe`); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <MessageCircle className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <MessageCircle className="w-5 h-5 text-white sm:w-6 sm:h-6" />
           </div>
         </button>
         
@@ -395,8 +378,8 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
           onClick={(e) => { e.stopPropagation(); handleGift(); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <Gift className="w-6 h-6 text-pink-400" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <Gift className="w-5 h-5 text-pink-400 sm:w-6 sm:h-6" />
           </div>
         </button>
         
@@ -405,8 +388,8 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
           onClick={(e) => { e.stopPropagation(); handleShare(); }}
           className="flex flex-col items-center gap-1"
         >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors">
-            <Share2 className="w-6 h-6 text-white" />
+          <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
+            <Share2 className="w-5 h-5 text-white sm:w-6 sm:h-6" />
           </div>
         </button>
         
@@ -416,19 +399,23 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
             onClick={(e) => { e.stopPropagation(); handleJoinSeat(); }}
             className="flex flex-col items-center gap-1"
           >
-            <div className="w-12 h-12 rounded-full bg-purple-500/80 backdrop-blur-md flex items-center justify-center border border-purple-400/30 hover:bg-purple-500 transition-colors">
-              <UserPlus className="w-6 h-6 text-white" />
+            <div className="w-11 h-11 rounded-full bg-purple-500/80 backdrop-blur-md flex items-center justify-center border border-purple-400/30 hover:bg-purple-500 transition-colors sm:w-12 sm:h-12">
+              <UserPlus className="w-5 h-5 text-white sm:w-6 sm:h-6" />
             </div>
             <span className="text-xs text-white/80">Join</span>
           </button>
         )}
       </div>
       
-      {/* Live badge */}
-      <div className="absolute top-20 left-4 z-10">
+      {/* Live and viewer badges */}
+      <div className="absolute top-20 left-3 z-10 flex items-center gap-2 sm:left-4">
         <div className="flex items-center gap-2 px-3 py-1.5 bg-red-600 rounded-full">
           <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
           <span className="text-white font-bold text-xs uppercase">Live</span>
+        </div>
+        <div className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-md">
+          <Eye className="w-3.5 h-3.5 text-white/80" />
+          <span className="text-xs font-medium text-white">{viewerCount.toLocaleString()}</span>
         </div>
       </div>
       

@@ -1251,6 +1251,22 @@ export function setupGlobalMessageNotifications(
   userId: string,
   onNewMessage: (senderId: string, senderUsername: string, senderAvatar: string | null, isOpsMessage: boolean, messageBody?: string) => void
 ) {
+  // Cache user's conversation IDs in memory to avoid DB query per message
+  let myConvIds: Set<string> = new Set()
+  let cacheLoaded = false
+
+  // Pre-load conversation IDs once
+  supabase
+    .from('conversation_members')
+    .select('conversation_id')
+    .eq('user_id', userId)
+    .then(({ data }) => {
+      if (data) {
+        myConvIds = new Set(data.map(m => m.conversation_id))
+      }
+      cacheLoaded = true
+    })
+
   // Subscribe to new DMs
   const dmChannel = supabase
     .channel(`global-dms:${userId}`)
@@ -1265,56 +1281,44 @@ export function setupGlobalMessageNotifications(
         const newMsg = payload.new as any
         
         // Validate message data
-        if (!newMsg?.conversation_id || !newMsg?.sender_id) {
-          console.warn('[setupGlobalMessageNotifications] Invalid message payload:', payload)
-          return
-        }
+        if (!newMsg?.conversation_id || !newMsg?.sender_id) return
         
         // Don't notify for own messages
         if (newMsg.sender_id === userId) return
         
-        // Check if this message is in a conversation the user is part of
-        const { data: membership, error: membershipError } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .eq('conversation_id', newMsg.conversation_id)
-          .eq('user_id', userId)
-          .maybeSingle()
+        // Check cache instead of querying DB every time
+        if (cacheLoaded && !myConvIds.has(newMsg.conversation_id)) return
         
-        if (membershipError) {
-          console.error('[setupGlobalMessageNotifications] Error checking membership:', membershipError)
-          return
-        }
-        
-        if (!membership) {
-          console.log('[setupGlobalMessageNotifications] User not in conversation, skipping')
-          return
+        // If cache isn't loaded yet, fall back to DB check (only for first few messages)
+        if (!cacheLoaded) {
+          const { data: membership } = await supabase
+            .from('conversation_members')
+            .select('conversation_id')
+            .eq('conversation_id', newMsg.conversation_id)
+            .eq('user_id', userId)
+            .maybeSingle()
+          
+          if (!membership) return
+          // Add to cache for future messages
+          myConvIds.add(newMsg.conversation_id)
         }
         
         // Get message content
         const messageBody = newMsg.body || newMsg.content || ''
         
         // Fetch sender info
-        const { data: sender, error: senderError } = await supabase
+        const { data: sender } = await supabase
           .from('user_profiles')
           .select('username, avatar_url')
           .eq('id', newMsg.sender_id)
           .maybeSingle()
         
-        if (senderError) {
-          console.error('[setupGlobalMessageNotifications] Error fetching sender:', senderError)
-          return
-        }
-        
         if (sender) {
-          console.log('[setupGlobalMessageNotifications] Opening chat bubble for:', sender.username)
           onNewMessage(newMsg.sender_id, sender.username, sender.avatar_url, false, messageBody)
         }
       }
     )
-    .subscribe((status) => {
-      console.log(`[setupGlobalMessageNotifications] DM channel status: ${status}`)
-    })
+    .subscribe()
 
   // Subscribe to OPS messages (if user is officer)
   let opsChannel: any | null = null

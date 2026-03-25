@@ -109,7 +109,7 @@ export default function TCNNPopupWidget({ onRequireAuth }: TCNNPopupWidgetProps)
 
   const handleWatchClick = () => {
     if (!onRequireAuth('watch TCNN')) return
-    navigate(`/broadcast/${stream?.id}`)
+    navigate(`/tcnn/viewer/${stream?.id}`)
   }
 
   const handleGoToTCNN = () => {

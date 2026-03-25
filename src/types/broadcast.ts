@@ -36,6 +36,8 @@ export interface Stream {
   // Password protection fields
   is_protected?: boolean;
   password_hash?: string;
+  // Battle mode fields
+  battle_enabled?: boolean;
 }
 
 export interface StreamGuest {

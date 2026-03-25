@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import React from "react"
+import { Link } from "react-router-dom"
  
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -21,8 +22,9 @@ export function formatCompactNumber(number: number) {
 }
 
 /**
- * Convert URLs in text to clickable links
+ * Convert URLs and #username tags in text to clickable links
  * Matches URLs starting with http://, https://, or www.
+ * Matches #username tags and converts them to profile links
  * Returns React nodes with anchor tags
  */
 export function parseTextWithLinks(text: string | null | undefined): React.ReactNode[] {
@@ -31,28 +33,43 @@ export function parseTextWithLinks(text: string | null | undefined): React.React
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   
-  // Combined regex to match http://, https://, or www. URLs
-  const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"\s())])|(www\.[^\s<]+[^<.,:;"\s())])/gi;
+  // Combined regex to match URLs and #username tags
+  const combinedRegex = /(https?:\/\/[^\s<]+[^<.,:;"\s())])|(www\.[^\s<]+[^<.,:;"\s())])|#(\w+)/gi;
   
-  // Find all matches
-  const matches = [...text.matchAll(urlRegex)];
+  const matches = [...text.matchAll(combinedRegex)];
   
   if (matches.length === 0) {
     return [text];
   }
   
   for (const match of matches) {
-    const matchText = match[0] || match[1] || '';
     const matchIndex = match.index ?? 0;
     
-    // Add text before the URL
+    // Add text before the match
     if (matchIndex > lastIndex) {
       parts.push(text.slice(lastIndex, matchIndex));
     }
     
-    // Add the URL as a clickable link
+    // Handle #username tag
+    if (match[3]) {
+      const username = match[3];
+      parts.push(
+        <Link
+          key={`tag-${matchIndex}`}
+          to={`/profile/${username}`}
+          className="text-purple-400 font-semibold hover:text-purple-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {username}
+        </Link>
+      );
+      lastIndex = matchIndex + match[0].length;
+      continue;
+    }
+    
+    // Handle URL
+    const matchText = match[0] || match[1] || '';
     let url = matchText;
-    // Ensure URL has protocol for href
     if (url.startsWith('www.')) {
       url = 'https://' + url;
     }
@@ -73,7 +90,7 @@ export function parseTextWithLinks(text: string | null | undefined): React.React
     lastIndex = matchIndex + matchText.length;
   }
   
-  // Add remaining text after last URL
+  // Add remaining text after last match
   if (lastIndex < text.length) {
     parts.push(text.slice(lastIndex));
   }

@@ -341,7 +341,7 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
               data.user.id
             )
           } catch {}
-          navigate('/')
+          navigate('/', { replace: true })
         } else {
           toast.success('Login successful! Please complete your profile.')
           navigate('/profile/setup')
@@ -398,7 +398,7 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
                 .update({ last_known_ip: userIP, ip_address_history: updated })
                 .eq('id', data.user.id)
             } catch {}
-            navigate('/')
+            navigate('/', { replace: true })
           } else {
             toast.success('Login successful! Please complete your profile.')
             navigate('/profile/setup')
@@ -541,7 +541,7 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
   useEffect(() => {
     if (user && profile) {
       if (profile.username) {
-        navigate('/')
+        navigate('/', { replace: true })
       } else {
         navigate('/profile/setup')
       }

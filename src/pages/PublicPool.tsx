@@ -276,7 +276,7 @@ export default function PublicPool() {
   }
 
   return (
-    <div className={`flex flex-col h-screen ${trollCityTheme.backgrounds.primary} text-white overflow-hidden relative`}>
+    <div className={`flex flex-col h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 overflow-hidden relative`}>
       {/* Background Visualizer */}
       <div className="absolute inset-0 z-0">
         <canvas ref={canvasRef} className="w-full h-full" />

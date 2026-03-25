@@ -41,21 +41,21 @@ export default function NeighborApprovals() {
       const { data: businesses } = await supabase
         .from('neighbors_businesses')
         .select('*, profiles(username)')
-        .eq('approval_status', 'pending')
+        .eq('verified', false)
         .order('created_at', { ascending: false })
       
       // Fetch pending events
       const { data: events } = await supabase
         .from('neighbors_events')
         .select('*, profiles(username)')
-        .eq('approval_status', 'pending')
+        .eq('verified', false)
         .order('created_at', { ascending: false })
       
       // Fetch pending jobs
       const { data: jobs } = await supabase
         .from('neighbors_hiring')
         .select('*, profiles(username), neighbors_businesses(business_name)')
-        .eq('approval_status', 'pending')
+        .eq('verified', false)
         .order('created_at', { ascending: false })
       
       setPendingBusinesses(businesses || [])

@@ -390,7 +390,7 @@ export default function BottomNavigation() {
 
   const roleInfo = getRoleInfo()
 
-  // Menu Options based on role
+  // Menu Options - Unified for all users with all navigation options
   const getMenuOptions = () => {
     const baseOptions = [
       { category: 'Navigation', label: 'Home', icon: Home, path: '/' },
@@ -399,80 +399,44 @@ export default function BottomNavigation() {
       { category: 'Navigation', label: 'My Profile', icon: User, path: `/profile/${profile?.username || profile?.id}` },
     ]
 
-    switch (role as string) {
-      case 'broadcaster':
-        return [
-          ...baseOptions,
-          // Streaming
-          { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
-          { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
-          { category: 'Streaming', label: 'My Guests', icon: Users, path: '/guests' },
-          // Finance
-          { category: 'Finance', label: 'My Earnings', icon: DollarSign, path: '/earnings' },
-          { category: 'Finance', label: 'Wallet', icon: Banknote, path: '/wallet' },
-          // Community
-          { category: 'Community', label: 'Creator Dashboard', icon: Star, path: '/creator/dashboard' },
-          // Store
-          { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },
-        ]
-      case 'admin':
-        return [
-          ...baseOptions,
-          // Streaming
-          { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
-          { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
-          // Management
-          { category: 'Management', label: 'Court', icon: Gavel, path: '/troll-court' },
-          { category: 'Management', label: 'Ban Management', icon: Ban, path: '/admin/ban-management' },
-          { category: 'Management', label: 'City Control', icon: Shield, path: '/admin/city-control' },
-          { category: 'Management', label: 'Safety Center', icon: AlertTriangle, path: '/admin/safety' },
-          // Content
-          { category: 'Content', label: 'Applications', icon: FileText, path: '/admin/applications' },
-          { category: 'Content', label: 'Marketplace', icon: ShoppingBag, path: '/admin/marketplace' },
-          { category: 'Content', label: 'Reports', icon: Shield, path: '/admin/officer-reports' },
-          { category: 'Content', label: 'Live Dashboard', icon: Video, path: '/admin/live' },
-          { category: 'Content', label: 'Stats', icon: Star, path: '/admin/stats' },
-          // Finance
-          { category: 'Finance', label: 'Earnings', icon: DollarSign, path: '/admin/earnings' },
-          { category: 'Finance', label: 'Payments', icon: Banknote, path: '/admin/payments' },
-          { category: 'Finance', label: 'Payouts', icon: DollarSign, path: '/admin/payouts' },
-          // System
-          { category: 'System', label: 'System Tools', icon: Settings, path: '/admin/system/health' },
-          { category: 'System', label: 'Policies', icon: FileText, path: '/admin/policies' },
-          { category: 'System', label: 'Policies Docs', icon: FileText, path: '/admin/policies-docs' },
-        ]
-      case 'officer':
-        return [
-          ...baseOptions,
-          { category: 'Moderation', label: 'Mute User', icon: MicOffIcon, path: '/officer/mute' },
-          { category: 'Moderation', label: 'Kick User', icon: AlertTriangle, path: '/officer/kick' },
-          { category: 'Moderation', label: 'Reports', icon: Shield, path: '/officer/reports' },
-          { category: 'Lounge', label: 'Officer Lounge', icon: Briefcase, path: '/officer/lounge' },
-          { category: 'Finance', label: 'Payroll', icon: Banknote, path: '/officer/payroll' }
-        ]
-      case 'viewer':
-      default:
-        return [
-          ...baseOptions,
-          // Streaming
-          { category: 'Streaming', label: 'Go Live', icon: Video, path: '/broadcast/setup' },
-          { category: 'Streaming', label: 'Live Streams', icon: Video, path: '/live' },
-          // Store & Economy
-          { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },
-          { category: 'Store', label: 'Troll Wheel', icon: Star, path: '/troll-wheel' },
-          { category: 'Store', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace' },
-          // Community
-          { category: 'Community', label: 'Troll Pods', icon: Mic, path: '/pods' },
-          { category: 'Community', label: 'Leaderboard', icon: Star, path: '/leaderboard' },
-          { category: 'Community', label: 'Family Wars', icon: Users, path: '/family-wars' },
-          // City
-          { category: 'City', label: 'Trolls Town', icon: Home, path: '/trolls-town' },
-          { category: 'City', label: 'Explore', icon: Users, path: '/explore' },
-          // Support
-          { category: 'Support', label: 'Support', icon: Heart, path: '/support' },
-          { category: 'Support', label: 'Wallet', icon: Banknote, path: '/wallet' },
-        ]
-    }
+    // Unified menu for all users - includes all navigation options
+    return [
+      ...baseOptions,
+      // Streaming
+      { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
+      { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
+      { category: 'Streaming', label: 'My Guests', icon: Users, path: '/guests' },
+      // Management
+      { category: 'Management', label: 'Court', icon: Gavel, path: '/troll-court' },
+      { category: 'Management', label: 'Ban Management', icon: Ban, path: '/admin/ban-management' },
+      { category: 'Management', label: 'City Control', icon: Shield, path: '/admin/city-control' },
+      { category: 'Management', label: 'Safety Center', icon: AlertTriangle, path: '/admin/safety' },
+      // Content
+      { category: 'Content', label: 'Applications', icon: FileText, path: '/admin/applications' },
+      { category: 'Content', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace' },
+      { category: 'Content', label: 'Reports', icon: Shield, path: '/admin/officer-reports' },
+      { category: 'Content', label: 'Live Dashboard', icon: Video, path: '/admin/live' },
+      // Stats
+      { category: 'Stats', label: 'Stats', icon: Star, path: '/stats' },
+      // Finance
+      { category: 'Finance', label: 'Earnings', icon: DollarSign, path: '/earnings' },
+      { category: 'Finance', label: 'Payments', icon: Banknote, path: '/payments' },
+      { category: 'Finance', label: 'Payouts', icon: DollarSign, path: '/payouts' },
+      { category: 'Finance', label: 'Wallet', icon: Banknote, path: '/wallet' },
+      // System
+      { category: 'System', label: 'System Tools', icon: Settings, path: '/admin/system/health' },
+      { category: 'System', label: 'Policies', icon: FileText, path: '/admin/policies' },
+      { category: 'System', label: 'Policies Docs', icon: FileText, path: '/admin/policies-docs' },
+      // Community
+      { category: 'Community', label: 'Leaderboard', icon: Star, path: '/leaderboard' },
+      { category: 'Community', label: 'Family Wars', icon: Users, path: '/family-wars' },
+      { category: 'Community', label: 'Troll Pods', icon: Mic, path: '/pods' },
+      // Store
+      { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },
+      { category: 'Store', label: 'Troll Wheel', icon: Star, path: '/troll-wheel' },
+      // Support
+      { category: 'Support', label: 'Support', icon: Heart, path: '/support' },
+    ]
   }
 
   // Helper for icons not in top import
@@ -543,10 +507,10 @@ export default function BottomNavigation() {
               whileTap={{ scale: 0.9 }}
               whileHover={{ scale: 1.05 }}
               onClick={() => setIsMenuOpen(true)}
-              className={`w-16 h-16 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[3px] shadow-[0_0_25px_rgba(124,58,237,0.7)]`}
+              className={`w-14 h-14 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[2px] shadow-[0_0_25px_rgba(124,58,237,0.5)] hover:shadow-[0_0_35px_rgba(124,58,237,0.7)] transition-shadow duration-300`}
             >
-              <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/10">
-                <roleInfo.icon size={28} className="text-white" />
+              <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center border border-white/[0.08]">
+                <roleInfo.icon size={24} className="text-white" />
               </div>
             </motion.button>
             
@@ -584,37 +548,37 @@ export default function BottomNavigation() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed inset-0 z-[70] overflow-y-auto bg-gradient-to-br from-[#0a0a0a] via-[#121212] to-[#0a0a0a]"
+              className="fixed inset-0 z-[70] overflow-y-auto bg-gradient-to-br from-[#080b14] via-[#0c101f] to-[#080b14]"
             >
               {/* Header */}
-              <div className="sticky top-0 z-10 bg-black/50 backdrop-blur-md border-b border-white/10 p-4">
+              <div className="sticky top-0 z-10 bg-[#0a0e1a]/80 backdrop-blur-2xl border-b border-white/[0.06] p-4">
                 <div className="flex items-center justify-between max-w-4xl mx-auto">
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-tr ${roleInfo.color} p-[2px]`}>
-                      <div className="w-full h-full rounded-full bg-[#0D0D0D] flex items-center justify-center">
-                        <roleInfo.icon size={24} className="text-white" />
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${roleInfo.color} p-[2px] shadow-[0_0_15px_rgba(124,58,237,0.3)]`}>
+                      <div className="w-full h-full rounded-[10px] bg-[#0D0D0D] flex items-center justify-center">
+                        <roleInfo.icon size={22} className="text-white" />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-white">{roleInfo.label}</h3>
-                      <p className="text-xs text-gray-400">Tap to navigate</p>
+                      <h3 className="text-lg font-bold text-white">{roleInfo.label}</h3>
+                      <p className="text-xs text-slate-500">Tap to navigate</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {user && (
                       <button
                         onClick={handleLogout}
-                        className="p-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
+                        className="p-2.5 text-red-400/70 hover:text-red-300 hover:bg-red-500/[0.06] rounded-xl transition-colors"
                         title="Logout"
                       >
-                        <LogOut size={22} />
+                        <LogOut size={20} />
                       </button>
                     )}
                     <button
                       onClick={() => setIsMenuOpen(false)}
-                      className="p-3 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                      className="p-2.5 text-slate-400 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors"
                     >
-                      <X size={24} />
+                      <X size={22} />
                     </button>
                   </div>
                 </div>
@@ -625,54 +589,54 @@ export default function BottomNavigation() {
                 {!user ? (
                   // Guest View
                   <div className="space-y-4 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Link
                         to="/auth"
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-4 p-6 bg-gradient-to-r from-purple-600/20 to-blue-600/20 hover:from-purple-600/30 hover:to-blue-600/30 rounded-2xl border border-purple-500/30 transition-colors group"
+                        className="flex items-center gap-4 p-5 bg-gradient-to-r from-purple-600/[0.08] to-blue-600/[0.08] hover:from-purple-600/[0.14] hover:to-blue-600/[0.14] rounded-xl border border-purple-500/[0.15] transition-all duration-200 group"
                       >
-                        <div className="p-3 rounded-xl bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
-                          <LogIn size={28} />
+                        <div className="p-2.5 rounded-lg bg-purple-500/[0.12] text-purple-400 group-hover:bg-purple-500/[0.2] transition-colors">
+                          <LogIn size={24} />
                         </div>
                         <div className="flex-1">
-                          <span className="text-white font-bold text-lg block">Sign In</span>
-                          <span className="text-gray-400 text-sm">Already have an account?</span>
+                          <span className="text-white font-bold text-base block">Sign In</span>
+                          <span className="text-slate-400 text-xs">Already have an account?</span>
                         </div>
                       </Link>
-                      
+
                       <Link
                         to="/auth?tab=signup"
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-4 p-6 bg-gradient-to-r from-green-600/20 to-emerald-600/20 hover:from-green-600/30 hover:to-emerald-600/30 rounded-2xl border border-green-500/30 transition-colors group"
+                        className="flex items-center gap-4 p-5 bg-gradient-to-r from-green-600/[0.08] to-emerald-600/[0.08] hover:from-green-600/[0.14] hover:to-emerald-600/[0.14] rounded-xl border border-green-500/[0.15] transition-all duration-200 group"
                       >
-                        <div className="p-3 rounded-xl bg-green-500/20 text-green-400 group-hover:bg-green-500/30 transition-colors">
-                          <UserPlus size={28} />
+                        <div className="p-2.5 rounded-lg bg-green-500/[0.12] text-green-400 group-hover:bg-green-500/[0.2] transition-colors">
+                          <UserPlus size={24} />
                         </div>
                         <div className="flex-1">
-                          <span className="text-white font-bold text-lg block">Sign Up</span>
-                          <span className="text-gray-400 text-sm">Create a new account</span>
+                          <span className="text-white font-bold text-base block">Sign Up</span>
+                          <span className="text-slate-400 text-xs">Create a new account</span>
                         </div>
                       </Link>
                     </div>
 
                     <div className="pt-4 border-t border-white/10">
-                      <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 px-1">Browse</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.1em] mb-3 px-1">Browse</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         <Link
                           to="/live"
                           onClick={() => setIsMenuOpen(false)}
-                          className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                          className="flex items-center gap-3 p-3.5 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl border border-white/[0.05] hover:border-white/[0.1] transition-all duration-200"
                         >
-                          <Video size={24} className="text-purple-400" />
-                          <span className="text-white font-medium">Live Streams</span>
+                          <Video size={20} className="text-purple-400" />
+                          <span className="text-white font-medium text-sm">Live Streams</span>
                         </Link>
                         <Link
                           to="/"
                           onClick={() => setIsMenuOpen(false)}
-                          className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors"
+                          className="flex items-center gap-3 p-3.5 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl border border-white/[0.05] hover:border-white/[0.1] transition-all duration-200"
                         >
-                          <Home size={24} className="text-blue-400" />
-                          <span className="text-white font-medium">Home</span>
+                          <Home size={20} className="text-blue-400" />
+                          <span className="text-white font-medium text-sm">Home</span>
                         </Link>
                       </div>
                     </div>
@@ -689,8 +653,8 @@ export default function BottomNavigation() {
                       }, {})
                     ).map(([category, options]: [string, any]) => (
                       <div key={category}>
-                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">{category}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.1em] mb-3 px-1">{category}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                           {options.map((opt: any, i: number) => {
                             const OptIcon = opt.icon
                             return (
@@ -704,12 +668,12 @@ export default function BottomNavigation() {
                                     setIsMenuOpen(false)
                                   }
                                 }}
-                                className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-colors group"
+                                className="flex items-center gap-4 p-3.5 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl border border-white/[0.05] hover:border-white/[0.1] transition-all duration-200 group"
                               >
-                                <div className="p-3 rounded-xl bg-purple-500/20 text-purple-400 group-hover:bg-purple-500/30 transition-colors">
-                                  <OptIcon size={24} />
+                                <div className="p-2.5 rounded-lg bg-purple-500/[0.08] text-purple-400 group-hover:bg-purple-500/[0.14] transition-colors">
+                                  <OptIcon size={20} />
                                 </div>
-                                <span className="text-white font-medium text-base flex-1">{opt.label}</span>
+                                <span className="text-white font-medium text-sm flex-1">{opt.label}</span>
                                 {opt.badge > 0 && (
                                   <span className="px-3 py-1 bg-red-500 text-white text-sm font-bold rounded-full">
                                     {opt.badge > 9 ? '9+' : opt.badge}

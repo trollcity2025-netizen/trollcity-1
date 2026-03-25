@@ -1840,15 +1840,31 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       });
 
       if (endError || !endResult?.success) {
-        if (endResult?.message === 'Battle timer not elapsed') {
-          setHasEnded(false);
-          setTimeout(() => {
-            if (participantInfo?.role === 'host') {
-              setHasEnded(true);
-              endBattle(true);
-            }
-          }, 2000);
+        // If the guarded RPC fails (e.g., timer mismatch), force-end the battle directly
+        console.warn('[BattleView] end_battle_guarded failed, force-ending battle:', endResult?.message || endError?.message);
+        
+        // Force update the battle status in the database
+        await supabase
+          .from('battles')
+          .update({ 
+            status: 'ended',
+            ended_at: new Date().toISOString(),
+            winner_id: winner_id
+          })
+          .eq('id', battle.id);
+        
+        // Update local state
+        setBattle((prev: any) => prev ? { ...prev, status: 'ended', winner_id } : prev);
+        setShowResults(true);
+        
+        // Still try to distribute winnings
+        try {
+          await supabase.rpc('distribute_battle_winnings', { p_battle_id: battle.id });
+        } catch (payoutErr) {
+          console.warn('[BattleView] Payout failed after force-end:', payoutErr);
         }
+        
+        toast.success('Battle Ended!');
         return;
       }
 
@@ -1856,9 +1872,21 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       if (payoutError) toast.error("Battle ended but payout failed.");
       else toast.success(`Battle Ended! Winnings distributed.`);
     } catch (e) {
-      console.error(e);
+      console.error('[BattleView] endBattle error:', e);
+      // Force-end as fallback
+      try {
+        await supabase
+          .from('battles')
+          .update({ status: 'ended', ended_at: new Date().toISOString() })
+          .eq('id', battle.id);
+        setBattle((prev: any) => prev ? { ...prev, status: 'ended' } : prev);
+        setShowResults(true);
+        toast.success('Battle Ended!');
+      } catch (fallbackErr) {
+        console.error('[BattleView] Force-end fallback failed:', fallbackErr);
+      }
     }
-  }, [battle, user, challengerStream, opponentStream, participantInfo?.role]);
+  }, [battle, user, challengerStream, opponentStream]);
 
   const [leaveLoading, setLeaveLoading] = useState(false);
 
@@ -1998,6 +2026,16 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         // Use the synced time from another broadcaster
         setTimeLeft(syncData.timeLeft);
         setIsSuddenDeath(syncData.isSuddenDeath);
+        
+        // If battle ended was broadcast, trigger end for this participant too
+        if (syncData.battleEnded && !hasEnded) {
+          setHasEnded(true);
+          setShowResults(true);
+          if (participantInfo?.role === 'host') {
+            setShowRematchOption(true);
+          }
+          endBattle(true);
+        }
       }
     }).subscribe();
     
@@ -2040,6 +2078,16 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       } else {
         setTimeLeft(0);
         setIsSuddenDeath(true);
+        
+        // Broadcast battle end to all participants
+        if (timerChannelRef.current) {
+          timerChannelRef.current.send({
+            type: 'broadcast',
+            event: 'timer_sync',
+            payload: { timeLeft: 0, isSuddenDeath: true, battleEnded: true }
+          });
+        }
+        
         if (!hasEnded) {
           setHasEnded(true);
           // Award crown to winner
@@ -2262,7 +2310,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       </div>
 
       {/* Header - Troll Battle Royale with Balance */}
-      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-3 md:px-6 py-2 md:py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
             <span className="text-white font-black text-lg">T</span>
@@ -2308,16 +2356,16 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
       {/* Back Button */}
       <button
         onClick={() => navigate('/')}
-        className="absolute top-20 left-6 z-50 flex items-center gap-2 px-4 py-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full border border-white/10 transition-all hover:scale-105"
+        className="absolute top-16 md:top-20 left-3 md:left-6 z-50 flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full border border-white/10 transition-all hover:scale-105"
       >
         <ArrowLeft size={18} />
         <span className="text-sm font-medium">Home</span>
       </button>
 
       {/* Main Content Container */}
-      <div className="relative z-10 flex flex-col h-full pt-20">
-        {/* Battle Arena - Shows all participants with scores */}
-        <div className="flex-1 flex items-center justify-center px-2 md:px-4 pb-36 pr-0 md:pr-80 lg:pr-96 pl-0 md:pl-20 lg:pl-24">
+        <div className="relative z-10 flex flex-col h-full pt-16">
+          {/* Battle Arena - Shows all participants with scores */}
+          <div className="flex-1 flex items-center justify-center px-1 md:px-2 pb-28 md:pb-32 pr-0 md:pr-72 lg:pr-80 pl-0 md:pl-16 lg:pl-20">
 
         {/* Battle Arena */}
         <MemoBattleArena
@@ -2345,7 +2393,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         </div>
 
         {/* Central Floating Timer */}
-        <div className="absolute top-24 md:top-28 left-1/2 -translate-x-1/2 pointer-events-none z-40">
+        <div className="absolute top-16 md:top-20 left-1/2 -translate-x-1/2 pointer-events-none z-40">
           <motion.div 
             animate={isSuddenDeath ? {
               scale: [1, 1.1, 1],
@@ -2386,7 +2434,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         </div>
 
         {/* Progress Bar */}
-        <div className="absolute top-20 md:top-24 left-0 w-full h-1 flex z-30">
+        <div className="absolute top-14 md:top-16 left-0 w-full h-1 flex z-30">
           <div 
             className="h-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-500" 
             style={{ width: `${challengerPercent}%` }}
@@ -2400,7 +2448,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
         <MuteHandler streamId={challengerStream.id} />
         
         {/* Live Chat - Use the challenger stream ID for chat messages (not battle-{id}) */}
-        <div className="absolute top-20 right-0 bottom-0 w-full md:w-80 lg:w-96 pointer-events-none z-40">
+        <div className="absolute top-14 md:top-16 right-0 bottom-0 w-full md:w-72 lg:w-80 pointer-events-none z-40">
           <div className="h-full pointer-events-auto">
             <BroadcastChat
               streamId={challengerStream?.id}
@@ -2415,7 +2463,7 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
         {/* Host Controls */}
         {participantInfo?.role === 'host' && (
-          <div className="absolute top-20 left-2 md:left-4 z-40 flex flex-col gap-2">
+          <div className="absolute top-14 md:top-16 left-2 md:left-4 z-40 flex flex-col gap-2">
             {myStream && (
               <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/20 rounded-full px-3 py-1.5">
                 <span className="text-xs text-white/70">Boxes</span>

@@ -15,6 +15,10 @@ const mapGiftNameToType = (giftName: string): GiftType => {
   if (name.includes('house')) return 'house';
   if (name.includes('rocket')) return 'rocket';
   if (name.includes('dragon')) return 'dragon';
+  if (name.includes('star')) return 'star';
+  if (name.includes('trophy')) return 'trophy';
+  if (name.includes('coffee')) return 'coffee';
+  if (name.includes('pizza')) return 'pizza';
   return 'heart'; // Default
 };
 

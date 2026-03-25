@@ -203,47 +203,20 @@ export default function ChatBubble() {
         setActiveUserGlowingColor(userData.glowing_username_color)
       }
 
-      // Try to find existing conversation
-      const { data: existingConvs } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', user.id)
+      // Single RPC call replaces batched conversation_members lookup
+      const { data: foundConvId } = await supabase
+        .rpc('find_shared_conversation', { p_user_id: user.id, p_other_user_id: activeUserId })
 
-      let targetConvId: string | null = null
+      let targetConvId: string | null = foundConvId || null
 
-      if (existingConvs && existingConvs.length > 0) {
-        const myConvIds = existingConvs.map(c => c.conversation_id)
-        
-        // Batch lookup to avoid URL length limits
-        const BATCH_SIZE = 50
-        let foundConv: string | null = null
-        
-        for (let i = 0; i < myConvIds.length && !foundConv; i += BATCH_SIZE) {
-          const batch = myConvIds.slice(i, i + BATCH_SIZE)
-          const { data: shared, error } = await supabase
-            .from('conversation_members')
-            .select('conversation_id')
-            .in('conversation_id', batch)
-            .eq('user_id', activeUserId)
-            .limit(1)
-          
-          if (!error && shared && shared.length > 0) {
-            foundConv = shared[0].conversation_id
-          }
-        }
-        
-        if (foundConv) {
-          targetConvId = foundConv
-        } else {
-          // Create new conversation
-          try {
-            const newConv = await createConversation([activeUserId])
-            targetConvId = newConv.id
-          } catch (err) {
-            console.error('Failed to create conversation', err)
-            toast.error('Failed to start chat')
-            return
-          }
+      if (!targetConvId) {
+        try {
+          const newConv = await createConversation([activeUserId])
+          targetConvId = newConv.id
+        } catch (err) {
+          console.error('Failed to create conversation', err)
+          toast.error('Failed to start chat')
+          return
         }
       }
 
@@ -412,51 +385,50 @@ export default function ChatBubble() {
     }
   }, [actualConversationId, profile?.id, profile?.username, profile?.avatar_url, profile?.rgb_username_expires_at, profile?.glowing_username_color, isOpen, user?.id, activeUserId, activeUsername, activeUserAvatar, activeUserGlowingColor, scrollToBottom])
 
-  // Poll for new messages and read status updates every second
+  // Poll for read status updates only (new messages handled by realtime subscription above)
   useEffect(() => {
     if (!actualConversationId || !isOpen) return
 
-    const pollMessages = async () => {
+    const pollReadStatus = async () => {
       try {
-        const mappedMessages = await fetchMessagesWithSenders(actualConversationId)
+        // Only fetch read_at timestamps - much lighter than full message+profile fetch
+        const { data } = await supabase
+          .from('conversation_messages')
+          .select('id, read_at')
+          .eq('conversation_id', actualConversationId)
+          .neq('sender_id', user?.id || '')
+          .not('read_at', 'is', null)
+          .limit(100)
+
+        if (!data) return
 
         setMessages(prev => {
-          const prevMap = new Map(prev.map(m => [m.id, m]))
-
-          // Check if there are new messages
-          const hasNewMessages = mappedMessages.some(m => !prevMap.has(m.id))
-          if (hasNewMessages) {
-            return mappedMessages
-          }
-
-          // Check for read status updates on existing messages
-          const hasReadUpdate = mappedMessages.some(m => {
-            const prevMsg = prevMap.get(m.id)
-            return prevMsg && prevMsg.read_at !== m.read_at
+          const readMap = new Map(data.map(m => [m.id, m.read_at]))
+          let changed = false
+          const updated = prev.map(msg => {
+            const newReadAt = readMap.get(msg.id)
+            if (newReadAt && msg.read_at !== newReadAt) {
+              changed = true
+              return { ...msg, read_at: newReadAt }
+            }
+            return msg
           })
-          if (hasReadUpdate) {
-            return mappedMessages
-          }
-
-          return prev
+          return changed ? updated : prev
         })
       } catch {
         // Silent fail for polling
       }
     }
 
-    // Initial poll
-    pollMessages()
-
-    // Poll every second
-    pollIntervalRef.current = setInterval(pollMessages, 1000)
+    // Poll every 5 seconds (not 1s) - only for read status, not full messages
+    pollIntervalRef.current = setInterval(pollReadStatus, 5000)
 
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
       }
     }
-  }, [actualConversationId, isOpen, fetchMessagesWithSenders])
+  }, [actualConversationId, isOpen, user?.id])
 
   const handleLocalNewMessage = (newMsg: any) => {
     // Add message as pending with sender info

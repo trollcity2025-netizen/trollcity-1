@@ -20,7 +20,7 @@ export default function PayoutPolicy() {
           To be eligible for payouts, you must meet all of the following requirements:
         </p>
         <ul>
-          <li>Hold at least <strong>7,000 troll_coins</strong> in your account</li>
+          <li>Hold at least <strong>5,000 troll_coins</strong> in your account</li>
           <li>Complete identity verification (KYC/ID check)</li>
           <li>Submit required tax forms (W-9 for US users, or equivalent for international)</li>
           <li>Have a verified email address on file</li>
@@ -41,19 +41,31 @@ export default function PayoutPolicy() {
         <ul className="list-none space-y-2 pl-0">
           <li className="flex items-center gap-2">
             <span className="w-32 font-bold text-slate-200">Starter Tier:</span>
-            <span>7,000 coins = <span className="text-green-400">$21.00 USD</span></span>
+            <span>5,000 coins = <span className="text-green-400">$25.00 USD</span></span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-32 font-bold text-bronze-400 text-amber-600">Bronze Tier:</span>
-            <span>14,000 coins = <span className="text-green-400">$49.50 USD</span></span>
+            <span>15,000 coins = <span className="text-green-400">$50.00 USD</span></span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-32 font-bold text-slate-400">Silver Tier:</span>
-            <span>27,000 coins = <span className="text-green-400">$90.00 USD</span></span>
+            <span>30,000 coins = <span className="text-green-400">$150.00 USD</span></span>
           </li>
           <li className="flex items-center gap-2">
             <span className="w-32 font-bold text-yellow-400">Gold Tier:</span>
-            <span>47,000 coins = <span className="text-green-400">$150.00 USD</span></span>
+            <span>60,000 coins = <span className="text-green-400">$300.00 USD</span></span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-purple-400">Platinum Tier:</span>
+            <span>120,000 coins = <span className="text-green-400">$600.00 USD</span></span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-cyan-400">Diamond Tier:</span>
+            <span>200,000 coins = <span className="text-green-400">$1,000.00 USD</span> (Manual Review)</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="w-32 font-bold text-pink-400">VIP Tier:</span>
+            <span>400,000 coins = <span className="text-green-400">$2,000.00 USD</span> (3 Day Manual Review)</span>
           </li>
         </ul>
         <p className="mt-4 text-sm text-slate-400">
@@ -62,7 +74,7 @@ export default function PayoutPolicy() {
 
         <h2>4. Minimum and Maximum Payouts</h2>
         <p>
-          Minimum payout: <strong>7,000 troll_coins ($21.00 USD)</strong><br />
+          Minimum payout: <strong>5,000 troll_coins ($25.00 USD)</strong><br />
           Maximum payout per week: <strong>$10,000 USD</strong>
         </p>
 

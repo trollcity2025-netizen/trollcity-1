@@ -312,14 +312,14 @@ export default function UniverseEventPage() {
 
   if (loading && !currentTournament) {
       return (
-          <div className="min-h-screen bg-black text-white p-8 flex items-center justify-center">
+          <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-8 flex items-center justify-center">
               <div className="animate-pulse text-purple-500">Loading Universe Event...</div>
           </div>
       )
   }
 
   return (
-    <div className="min-h-screen bg-[#020202] text-white pb-20 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 pb-20 relative overflow-hidden">
       {/* Background Effects */}
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-[#050505] to-black pointer-events-none z-0" />
       

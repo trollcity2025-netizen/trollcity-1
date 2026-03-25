@@ -45,11 +45,14 @@ export interface BroadcastGift {
   gift_id: string;
   gift_name: string;
   gift_icon: string;
+  gift_slug?: string;
+  animation_type?: string;
   amount: number;
   quantity?: number;
   sender_id: string;
   sender_name: string;
   receiver_id: string;
+  receiver_name?: string;
   created_at: string;
 }
 
@@ -205,7 +208,7 @@ export function useBroadcastRealtime({
     // 3. GIFT REALTIME
     // ============================================
     const giftChannel = supabase
-      .channel(`broadcast-gifts-${streamId}`)
+      .channel(`stream-gifts:${streamId}`)
       .on(
         'broadcast',
         { event: 'gift_sent' },
@@ -217,10 +220,14 @@ export function useBroadcastRealtime({
             gift_id: giftData.gift_id,
             gift_name: giftData.gift_name,
             gift_icon: giftData.gift_icon || '🎁',
+            gift_slug: giftData.gift_slug,
+            animation_type: giftData.animation_type,
             amount: giftData.amount,
+            quantity: giftData.quantity || 1,
             sender_id: giftData.sender_id,
             sender_name: giftData.sender_name || 'Someone',
             receiver_id: giftData.receiver_id,
+            receiver_name: giftData.receiver_name,
             created_at: giftData.timestamp || new Date().toISOString(),
           };
 
@@ -235,6 +242,42 @@ export function useBroadcastRealtime({
       .subscribe();
 
     channels.push(giftChannel);
+
+    const legacyGiftChannel = supabase
+      .channel(`broadcast-gifts-${streamId}`)
+      .on(
+        'broadcast',
+        { event: 'gift_sent' },
+        (payload) => {
+          const giftData = payload.payload;
+
+          const newGift: BroadcastGift = {
+            id: giftData.id,
+            gift_id: giftData.gift_id,
+            gift_name: giftData.gift_name,
+            gift_icon: giftData.gift_icon || '🎁',
+            gift_slug: giftData.gift_slug,
+            animation_type: giftData.animation_type,
+            amount: giftData.amount,
+            quantity: giftData.quantity || 1,
+            sender_id: giftData.sender_id,
+            sender_name: giftData.sender_name || 'Someone',
+            receiver_id: giftData.receiver_id,
+            receiver_name: giftData.receiver_name,
+            created_at: giftData.timestamp || new Date().toISOString(),
+          };
+
+          setState(prev => ({
+            ...prev,
+            recentGifts: [...prev.recentGifts.slice(-19), newGift],
+          }));
+
+          onGiftReceived?.(newGift);
+        }
+      )
+      .subscribe();
+
+    channels.push(legacyGiftChannel);
 
     // ============================================
     // 4. PARTICIPANTS (Presence)

@@ -55,6 +55,7 @@ function ViewerPage() {
   const [viewerCount, setViewerCount] = useState(0)
   
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const giftChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const streamRef = useRef(stream)
   const hasJoinedRef = useRef(false)
 
@@ -91,13 +92,124 @@ function ViewerPage() {
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null)
   const [recentGifts, setRecentGifts] = useState<BroadcastGift[]>([])
+  const [giftNameMap, setGiftNameMap] = useState<Record<string, string>>({})
   const [giftUserPositions, setGiftUserPositions] = useState<Record<string, { top: number; left: number; width: number; height: number }>>({})
   const getGiftUserPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}))
+  const giftNameMapRef = useRef<Record<string, string>>({})
 
   // Callback to get user positions
   const handleGetUserPositions = useCallback((getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => {
     getGiftUserPositionsRef.current = getPositions;
   }, []);
+
+  useEffect(() => {
+    giftNameMapRef.current = giftNameMap
+  }, [giftNameMap])
+
+  const processGiftEvent = useCallback((giftData: any) => {
+    console.log('[ViewerPage] processGiftEvent hit', {giftData});
+    if (!giftData) {
+      console.log('[ViewerPage] ⚠️ processGiftEvent: giftData is null/undefined');
+      return;
+    }
+
+    const giftId = giftData.id || `gift-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const incomingStreamId = giftData.streamId || giftData.stream_id;
+    console.log('[ViewerPage] ✅ Processing gift', { giftId, incomingStreamId, currentStreamId: streamId });
+    
+    if (incomingStreamId && incomingStreamId !== streamId) {
+      console.log('[ViewerPage] ⚠️ Stream ID mismatch, skipping gift:', { incomingStreamId, currentStreamId: streamId });
+      return;
+    }
+
+    const newGift: BroadcastGift = {
+      id: giftId,
+      gift_id: giftData.gift_id,
+      gift_name: giftData.gift_name,
+      gift_icon: giftData.gift_icon || '🎁',
+      animation_type: giftData.animation_type,
+      amount: giftData.amount,
+      quantity: giftData.quantity || 1,
+      sender_id: giftData.sender_id,
+      sender_name: giftData.sender_name || 'Someone',
+      receiver_id: giftData.receiver_id,
+      created_at: giftData.timestamp || new Date().toISOString(),
+    };
+
+    setRecentGifts((prev) => {
+      if (prev.some((g) => g.id === giftId)) {
+        console.log('[ViewerPage] 📌 Gift already in queue (dedupe), skipping:', giftId);
+        return prev;
+      }
+      const updated = [...prev, newGift].slice(-20);
+      console.log('[ViewerPage] ✅ Added gift to queue, now:', updated.length, 'gifts');
+      return updated;
+    });
+
+    const missingIds = [giftData.sender_id, giftData.receiver_id].filter(
+      (id): id is string => !!id && !giftNameMapRef.current[id]
+    )
+
+    if (missingIds.length > 0) {
+      supabase
+        .from('user_profiles')
+        .select('id, username')
+        .in('id', Array.from(new Set(missingIds)))
+        .then(({ data }) => {
+          if (!data || data.length === 0) return
+
+          const resolved = Object.fromEntries(
+            data
+              .filter((row: any) => row?.id && row?.username)
+              .map((row: any) => [row.id, row.username])
+          )
+
+          if (Object.keys(resolved).length === 0) return
+
+          setGiftNameMap((prev) => ({ ...prev, ...resolved }))
+          setRecentGifts((prev) =>
+            prev.map((gift) =>
+              gift.id === giftId
+                ? {
+                    ...gift,
+                    sender_name: gift.sender_name === 'Someone' ? (resolved[gift.sender_id] || gift.sender_name) : gift.sender_name,
+                    receiver_name: !gift.receiver_name ? resolved[gift.receiver_id] : gift.receiver_name,
+                  }
+                : gift
+            )
+          )
+        })
+        .catch((err) => {
+          console.warn('[ViewerPage] Failed to resolve gift usernames:', err)
+        })
+    }
+
+    try {
+      // Temporarily comment out to debug hook error
+      // const broadcastGiftType: GiftType = (giftData.gift_name || '').toLowerCase().includes('rose') ? 'rose' :
+      //   (giftData.gift_name || '').toLowerCase().includes('heart') ? 'heart' :
+      //   (giftData.gift_name || '').toLowerCase().includes('diamond') ? 'diamond' :
+      //   (giftData.gift_name || '').toLowerCase().includes('crown') ? 'crown' :
+      //   (giftData.gift_name || '').toLowerCase().includes('car') ? 'car' :
+      //   (giftData.gift_name || '').toLowerCase().includes('house') ? 'house' :
+      //   (giftData.gift_name || '').toLowerCase().includes('rocket') ? 'rocket' :
+      //   (giftData.gift_name || '').toLowerCase().includes('dragon') ? 'dragon' :
+      //   (giftData.gift_name || '').toLowerCase().includes('star') ? 'star' :
+      //   (giftData.gift_name || '').toLowerCase().includes('trophy') ? 'trophy' :
+      //   (giftData.gift_name || '').toLowerCase().includes('coffee') ? 'coffee' :
+      //   (giftData.gift_name || '').toLowerCase().includes('pizza') ? 'pizza' : 'heart';
+
+      // playGiftAnimation({
+      //   type: broadcastGiftType,
+      //   senderName: giftData.sender_name || 'Someone',
+      //   senderAvatar: undefined,
+      //   receiverName: giftData.receiver_name || 'Broadcast',
+      //   amount: giftData.quantity || 1,
+      // });
+    } catch (err) {
+      console.error('[ViewerPage] playGiftAnimation failed:', err);
+    }
+  }, [streamId]);
 
   // Pin product modal state
   const [isPinProductModalOpen, setIsPinProductModalOpen] = useState(false)
@@ -108,6 +220,10 @@ function ViewerPage() {
 
   /** FETCH STREAM */
   useEffect(() => {
+    if (recentGifts.length > 0) {
+      console.log('[ViewerPage] recentGifts state:', recentGifts.map((g) => ({ id: g.id, gift_name: g.gift_name, sender_id: g.sender_id, receiver_id: g.receiver_id })));
+    }
+
     if (!streamId) {
       setError('No stream ID provided.')
       setIsLoading(false)
@@ -281,10 +397,16 @@ function ViewerPage() {
 
   /** REALTIME STREAM UPDATES */
   useEffect(() => {
+    console.log('[ViewerPage] main effect deps changed', {
+      streamId,
+      userId: user?.id,
+      hasProcessGiftEvent: !!processGiftEvent,
+    });
+
     if (!streamId) return;
 
     console.log('[ViewerPage] Setting up realtime channel for stream:', streamId);
-    const channel = supabase.channel(`stream-viewer:${streamId}`);
+    const channel = supabase.channel(`stream:${streamId}`);
 
     // Track presence for viewer count
     channel
@@ -366,21 +488,7 @@ function ViewerPage() {
           try {
             const giftData = payload.payload;
             console.log('[ViewerPage] Gift received:', giftData);
-            
-            const newGift: BroadcastGift = {
-              id: giftData.id || `gift-${Date.now()}`,
-              gift_id: giftData.gift_id,
-              gift_name: giftData.gift_name,
-              gift_icon: giftData.gift_icon || '🎁',
-              amount: giftData.amount,
-              quantity: giftData.quantity || 1,
-              sender_id: giftData.sender_id,
-              sender_name: giftData.sender_name || 'Someone',
-              receiver_id: giftData.receiver_id,
-              created_at: giftData.timestamp || new Date().toISOString(),
-            };
-            
-            setRecentGifts(prev => [...prev, newGift]);
+            processGiftEvent(giftData);
           } catch (err) {
             console.error('[ViewerPage] Error processing gift:', err);
           }
@@ -428,7 +536,7 @@ function ViewerPage() {
         }
       });
 
-    // Heartbeat to keep connection alive
+    // Fallback to keep connection alive
     const heartbeatInterval = setInterval(() => {
       if (channelRef.current) {
         channelRef.current.send({
@@ -445,7 +553,79 @@ function ViewerPage() {
       clearInterval(heartbeatInterval);
       supabase.removeChannel(channel);
     };
-  }, [streamId, navigate, user?.id]);
+  }, [streamId, navigate, user?.id, processGiftEvent]);
+
+  useEffect(() => {
+    if (!streamId) return;
+
+    const channelName = `stream-gifts:${streamId}`;
+    console.log('[ViewerPage] 🎁 Creating new gift channel:', channelName);
+
+    const channel = supabase
+      .channel(channelName)
+      .on('broadcast', { event: 'gift_sent' }, ({ payload }) => {
+        console.log('[ViewerPage] 🎁 Gift event received:', payload);
+        processGiftEvent(payload);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[ViewerPage] 🎁 Unified gift channel SUBSCRIBED:', channelName);
+        } else {
+          console.log('[ViewerPage] ⚠️ Unified gift channel status:', channelName, status);
+        }
+      });
+
+    return () => {
+      console.log('[ViewerPage] 🔄 Unsubscribing old gift channel:', channel.topic);
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, processGiftEvent]);
+
+  useEffect(() => {
+    if (!streamId) return;
+
+    const channelName = `stream-gifts-db:${streamId}`;
+    console.log('[ViewerPage] Setting up DB gift fallback channel:', channelName);
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'stream_gifts',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload: any) => {
+          const giftRow = payload.new || {};
+          console.log('[ViewerPage] DB gift fallback received:', giftRow);
+
+          processGiftEvent({
+            id: giftRow.id,
+            gift_id: giftRow.gift_id,
+            gift_name: giftRow.metadata?.gift_name || giftRow.gift_name || 'Gift',
+            gift_icon: giftRow.metadata?.gift_icon || '🎁',
+            animation_type: giftRow.metadata?.animation_type || giftRow.animation_type,
+            amount: giftRow.amount || giftRow.coins_spent || giftRow.metadata?.amount || 0,
+            quantity: giftRow.quantity || giftRow.metadata?.quantity || 1,
+            sender_id: giftRow.sender_id,
+            sender_name: giftRow.metadata?.sender_name || 'Someone',
+            receiver_id: giftRow.receiver_id || giftRow.recipient_id,
+            receiver_name: giftRow.metadata?.receiver_name,
+            stream_id: giftRow.stream_id,
+            timestamp: giftRow.created_at,
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('[ViewerPage] DB gift fallback status:', channelName, status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, processGiftEvent]);
 
   // Click rate tracking for autoclicker detection
   const clickHistoryRef = useRef<number[]>([]);
@@ -719,11 +899,22 @@ function ViewerPage() {
         
         overlays={
           <>
-            {/* Gift animations disabled - not working */}
-            
             {pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
             )}
+            <GiftAnimationOverlay 
+              gifts={recentGifts}
+              participantNames={{
+                ...(stream?.user_id && broadcasterProfile?.username
+                  ? { [stream.user_id]: broadcasterProfile.username }
+                  : {}),
+                ...giftNameMap,
+              }}
+              onAnimationComplete={(giftId) => {
+                // Remove the gift from recentGifts after animation
+                setRecentGifts(prev => prev.filter(g => g.id !== giftId));
+              }}
+            />
           </>
         }
         
@@ -742,9 +933,7 @@ function ViewerPage() {
               userProfiles={{}}
               sharedChannel={channelRef.current}
               onGiftSent={(giftData: GiftItem, target: GiftTarget) => {
-                // Gift animations disabled per user request - do not add to recentGifts
-                // The gift is still sent successfully via the GiftBoxModal
-                console.log('[ViewerPage] Gift sent (animations disabled):', giftData.name);
+                console.log('[ViewerPage] Gift sent:', giftData.name);
               }}
             />
             

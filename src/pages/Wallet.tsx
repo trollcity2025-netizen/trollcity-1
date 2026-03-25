@@ -113,7 +113,7 @@ export default function Wallet() {
 
   if (error) {
     return (
-      <div className="p-6 max-w-4xl mx-auto text-white min-h-screen">
+    <div className="p-6 max-w-4xl mx-auto text-slate-900 min-h-screen bg-gradient-to-br from-white via-slate-50 to-white">
         <div className="flex items-center gap-3 mb-6">
           <WalletIcon className="w-8 h-8 text-red-400" />
           <h1 className="text-3xl font-bold">Wallet</h1>
@@ -284,7 +284,7 @@ export default function Wallet() {
               </div>
               {tier.manualReview && (
                 <div className="text-[10px] uppercase tracking-wider font-bold text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
-                  Manual Review
+                  3 Day Manual Review
                 </div>
               )}
             </div>

@@ -73,7 +73,7 @@ export default function Withdraw() {
     }
     
     if (tier.manualReview) {
-       toast.info("This amount requires manual review and may take longer to process.");
+       toast.info("This amount requires 3 day manual review and may take longer to process.");
     }
 
     const { data, error } = await supabase.rpc('request_visa_redemption', {
@@ -100,7 +100,7 @@ export default function Withdraw() {
         <p className="mb-2">
           <strong>Your Balance:</strong> {balance.toLocaleString()} coins  
           {/* Approximate using minimum tier rate */}
-          (${(balance * (25 / 12000)).toFixed(2)})
+          (${(balance * (TIERS[0].usd / TIERS[0].coins)).toFixed(2)})
         </p>
 
         {!payoutWindowOpen && (
@@ -112,7 +112,7 @@ export default function Withdraw() {
         <input
           type="number"
           className="w-full p-2 rounded bg-zinc-800 text-white placeholder-gray-400 mb-3 border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-          placeholder="Enter tier: 12000, 30000, 60000, 120000"
+          placeholder={`Enter tier: ${TIERS.map(t => t.coins).join(', ')}`}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
@@ -120,7 +120,7 @@ export default function Withdraw() {
         <button
           onClick={requestPayout}
           className="bg-green-500 hover:bg-green-600 w-full mt-3 py-2 rounded font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={!amount || ![12000,30000,60000,120000].includes(parseInt(amount)) || parseInt(amount) > balance || !payoutWindowOpen}
+          disabled={!amount || !TIERS.some(t => t.coins === parseInt(amount)) || parseInt(amount) > balance || !payoutWindowOpen}
         >
           Request Withdrawal
         </button>

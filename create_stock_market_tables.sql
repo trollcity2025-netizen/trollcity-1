@@ -462,7 +462,7 @@ END;
 $$;
 
 -- FUNCTION: get_market_stats
-CREATE FUNCTION get_market_stats()
+CREATE OR REPLACE FUNCTION get_market_stats()
 RETURNS TABLE(
     total_stocks INTEGER,
     total_volume BIGINT,
@@ -475,15 +475,15 @@ RETURNS TABLE(
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    RETURN QUERY SELECT
-        COUNT(*)::INTEGER,
-        COALESCE(SUM(volume), 0)::BIGINT,
-        COALESCE(AVG(current_price), 0)::DECIMAL(15,2),
-        FIRST_VALUE(stock_symbol) OVER (ORDER BY price_change_pct_24h DESC),
-        MAX(price_change_pct_24h)::DECIMAL(10,2),
-        FIRST_VALUE(stock_symbol) OVER (ORDER BY volume DESC),
-        MAX(volume)::BIGINT
-    FROM stocks WHERE is_active = TRUE;
+    RETURN QUERY
+    SELECT
+        (SELECT COUNT(*)::INTEGER FROM stocks WHERE is_active = TRUE),
+        (SELECT COALESCE(SUM(volume), 0)::BIGINT FROM stocks WHERE is_active = TRUE),
+        (SELECT COALESCE(AVG(current_price), 0)::DECIMAL(15,2) FROM stocks WHERE is_active = TRUE),
+        (SELECT stock_symbol FROM stocks WHERE is_active = TRUE ORDER BY price_change_pct_24h DESC NULLS LAST LIMIT 1),
+        (SELECT MAX(price_change_pct_24h)::DECIMAL(10,2) FROM stocks WHERE is_active = TRUE),
+        (SELECT stock_symbol FROM stocks WHERE is_active = TRUE ORDER BY volume DESC NULLS LAST LIMIT 1),
+        (SELECT MAX(volume)::BIGINT FROM stocks WHERE is_active = TRUE);
 END;
 $$;
 

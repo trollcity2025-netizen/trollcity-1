@@ -400,7 +400,7 @@ export default function InterviewRoom() {
   if (loading) return <div className="flex items-center justify-center h-screen text-white">Loading Interview Room...</div>
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 flex flex-col items-center">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 flex flex-col items-center">
       <div className="w-full max-w-6xl mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-purple-400">Interview Room</h1>

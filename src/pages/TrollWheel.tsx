@@ -156,7 +156,7 @@ export default function TrollWheel() {
 
   if (IS_UNDER_CONSTRUCTION) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden flex flex-col items-center justify-center">
+    <div className="fixed inset-0 bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 overflow-hidden flex flex-col items-center justify-center">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-slate-950 to-slate-950" />
         </div>

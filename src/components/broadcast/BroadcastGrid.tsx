@@ -1,8 +1,8 @@
-import { useMemo, useState, type CSSProperties, useRef, useEffect, memo } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback, memo, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem, Crown } from 'lucide-react';
+import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 import { supabase } from '../../lib/supabase';
@@ -13,6 +13,23 @@ import { getGlowingTextStyle } from '../../lib/perkEffects';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { useAuthStore } from '../../lib/store';
 import { getAllPersistentGifts, type PersistentGift } from '../../lib/persistentGiftStore';
+
+interface BattleState {
+  active: boolean;
+  battleId: string | null;
+  hostId: string | null;
+  challengerId: string | null;
+  broadcasterScore: number;
+  challengerScore: number;
+  startedAt: Date | null;
+  endsAt: Date | null;
+  suddenDeath: boolean;
+}
+
+interface BattleSupporter {
+  userId: string;
+  team: 'broadcaster' | 'challenger';
+}
 
 interface BroadcastGridProps {
   stream: Stream;
@@ -40,6 +57,19 @@ interface BroadcastGridProps {
   onGetUserPositions?: (getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => void;
   // Optional box count override (from useBoxCount hook for performance)
   boxCount?: number;
+  // Battle mode props
+  battleState?: BattleState;
+  supporters?: Map<string, BattleSupporter>;
+  onPickSide?: (team: 'broadcaster' | 'challenger') => void;
+  joinWindowOpen?: boolean;
+  userTeam?: 'broadcaster' | 'challenger' | null;
+  remainingTime?: number;
+  shouldShowSidePicker?: boolean;
+  onBattleGift?: (team: 'broadcaster' | 'challenger', amount: number) => Promise<boolean>;
+  enableStreamSwipe?: boolean;
+  canSwipe?: boolean;
+  onSwipeUp?: () => void;
+  onSwipeDown?: () => void;
 }
 
 function LiveKitVideoPlayer({
@@ -244,7 +274,7 @@ export default function BroadcastGrid({
   maxItems,
   onGift,
   onGiftAll: _onGiftAll,
-  mode: _mode = 'stage', // Default to stage (legacy behavior)
+  mode: _mode = 'stage',
   seats = {},
   onJoinSeat,
   onKick,
@@ -260,6 +290,18 @@ export default function BroadcastGrid({
   onGetUserPositions,
   streamStatus,
   boxCount: boxCountProp,
+  battleState,
+  supporters = new Map(),
+  onPickSide,
+  joinWindowOpen = false,
+  userTeam,
+  remainingTime = 0,
+  shouldShowSidePicker = false,
+  onBattleGift,
+  enableStreamSwipe = false,
+  canSwipe = true,
+  onSwipeUp,
+  onSwipeDown,
 }: BroadcastGridProps) {
   const { profile } = useAuthStore();
   
@@ -289,6 +331,9 @@ export default function BroadcastGrid({
   const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [persistentGifts, setPersistentGifts] = useState<Map<string, PersistentGift[]>>(new Map());
   const [userReceivedGifts, setUserReceivedGifts] = useState<Record<string, number>>({});
+  const touchStartYRef = useRef<number | null>(null);
+  const touchCurrentYRef = useRef<number | null>(null);
+  const swipeLockedRef = useRef(false);
 
   // Update persistent gifts periodically
   useEffect(() => {
@@ -573,18 +618,100 @@ export default function BroadcastGrid({
     boxes = Array.from({ length: effectiveBoxCount }, (_, i) => i);
   }
 
+  const enforceSquareOnMobile = effectiveBoxCount > 1;
+  const isSingleBoxLayout = effectiveBoxCount === 1;
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!enableStreamSwipe || !canSwipe || e.touches.length !== 1) return;
+    touchStartYRef.current = e.touches[0].clientY;
+    touchCurrentYRef.current = e.touches[0].clientY;
+    swipeLockedRef.current = false;
+  }, [enableStreamSwipe, canSwipe]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!enableStreamSwipe || !canSwipe || touchStartYRef.current === null || swipeLockedRef.current) return;
+    touchCurrentYRef.current = e.touches[0].clientY;
+    const diffY = touchStartYRef.current - touchCurrentYRef.current;
+    if (Math.abs(diffY) > 12) {
+      e.preventDefault();
+    }
+  }, [enableStreamSwipe, canSwipe]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!enableStreamSwipe || !canSwipe || touchStartYRef.current === null || touchCurrentYRef.current === null || swipeLockedRef.current) {
+      touchStartYRef.current = null;
+      touchCurrentYRef.current = null;
+      return;
+    }
+
+    const diffY = touchStartYRef.current - touchCurrentYRef.current;
+    const threshold = 90;
+
+    if (Math.abs(diffY) >= threshold) {
+      swipeLockedRef.current = true;
+      if (diffY > 0) {
+        onSwipeUp?.();
+      } else {
+        onSwipeDown?.();
+      }
+    }
+
+    touchStartYRef.current = null;
+    touchCurrentYRef.current = null;
+  }, [enableStreamSwipe, canSwipe, onSwipeDown, onSwipeUp]);
+
   return (
     <div
       className={cn(
-        'grid gap-2 w-full h-full p-2 min-w-0 overflow-hidden max-w-full',
-        effectiveBoxCount === 1 && 'grid-cols-1 grid-rows-1',
-        effectiveBoxCount === 2 && 'grid-cols-1 md:grid-cols-2 grid-rows-1',
-        effectiveBoxCount === 3 && 'grid-cols-2 grid-rows-2',
-        effectiveBoxCount === 4 && 'grid-cols-2 grid-rows-2',
-        effectiveBoxCount >= 5 && 'grid-cols-2 grid-rows-3',
-        effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
+        'grid gap-2 w-full p-2 min-w-0 overflow-hidden max-w-full md:h-full',
+        isSingleBoxLayout ? 'h-full grid-cols-1 grid-rows-1 auto-rows-fr items-stretch content-stretch' : 'content-start auto-rows-max',
+        effectiveBoxCount === 1 && 'md:grid-rows-1',
+        effectiveBoxCount === 2 && 'grid-cols-2 md:grid-rows-1',
+        effectiveBoxCount === 3 && 'grid-cols-2 md:grid-rows-2',
+        effectiveBoxCount === 4 && 'grid-cols-2 md:grid-rows-2',
+        effectiveBoxCount === 5 && 'grid-cols-3 md:grid-rows-2',
+        effectiveBoxCount === 6 && 'grid-cols-3 md:grid-rows-2'
       )}
+      style={enableStreamSwipe && canSwipe ? { touchAction: 'none' } : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
+      {/* Battle Score Display with Timer */}
+      {battleState?.active && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2">
+          {/* Timer */}
+          <div className={`px-4 py-1.5 rounded-full font-bold text-sm ${
+            battleState.suddenDeath 
+              ? 'bg-red-600 text-white animate-pulse' 
+              : 'bg-black/80 text-white border border-white/20'
+          }`}>
+            {Math.floor(remainingTime / 60)}:{(remainingTime % 60).toString().padStart(2, '0')}
+            {battleState.suddenDeath && ' - SUDDEN DEATH!'}
+          </div>
+          
+          {/* Score - Broadcaster=RED, Challenger=BLUE */}
+          <div className="flex items-center gap-6 bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-white/20">
+            <button 
+              onClick={() => onBattleGift?.('broadcaster', 1)}
+              className="flex items-center gap-2 hover:bg-red-500/20 px-2 py-1 rounded transition-colors"
+            >
+              <Shield className="w-5 h-5 text-red-400" />
+              <span className="text-red-400 font-bold text-lg">{battleState.broadcasterScore}</span>
+            </button>
+            <div className="flex flex-col items-center">
+              <span className="text-zinc-400 text-xs uppercase tracking-wider">VS</span>
+            </div>
+            <button 
+              onClick={() => onBattleGift?.('challenger', 1)}
+              className="flex items-center gap-2 hover:bg-blue-500/20 px-2 py-1 rounded transition-colors"
+            >
+              <span className="text-blue-400 font-bold text-lg">{battleState.challengerScore}</span>
+              <Swords className="w-5 h-5 text-blue-400" />
+            </button>
+          </div>
+        </div>
+      )}
         {boxes.map((seatIndex) => {
           const seat = seats[seatIndex];
           // Use guest_id if user_id is null (for guest users)
@@ -635,10 +762,19 @@ export default function BroadcastGrid({
 
           const hasStreamRgb = !!stream.has_rgb_effect;
 
+          // Battle mode team highlighting
+          const userSupporter = userId ? supporters.get(userId) : null;
+          const isBroadcasterSide = userSupporter?.team === 'broadcaster' || (seatIndex === 0 && isStreamHost);
+          const isChallengerSide = userSupporter?.team === 'challenger';
+
           const boxClass = cn(
             baseBoxClass,
             hasGold && 'border-2 border-yellow-500 shadow-[0_0_15px_rgba(255,215,0,0.3)]',
-            !hasGold && (hasRgbProfile || hasStreamRgb) && 'rgb-box'
+            !hasGold && (hasRgbProfile || hasStreamRgb) && 'rgb-box',
+            // Battle mode: Broadcaster=RED, Challenger=BLUE
+            battleState?.active && isBroadcasterSide && 'border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]',
+            battleState?.active && isChallengerSide && 'border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]',
+            battleState?.suddenDeath && 'animate-pulse'
           );
 
           // Get received gifts for this user
@@ -660,9 +796,13 @@ export default function BroadcastGrid({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
-              className={boxClass}
+              className={cn(
+                boxClass,
+                isSingleBoxLayout && 'h-full min-h-[min(60vw,22rem)] md:min-h-0',
+                enforceSquareOnMobile && 'aspect-square self-start md:aspect-auto md:self-stretch'
+              )}
               onClick={() => {
-                if (isStreamHost && seatIndex === 0) {
+                if (isStreamHost && seatIndex === 0 && isHost) {
                    setShowHostStats(true);
                 } else if (userId) {
                    setSelectedUserForAction(userId);
@@ -724,7 +864,7 @@ export default function BroadcastGrid({
                         )}&background=random`
                       }
                       alt={displayProfile?.username}
-                      className="w-16 h-16 rounded-full border-2 border-white/20"
+                      className="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-white/20"
                     />
                     {!isMicOn && (
                       <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-1">
@@ -732,8 +872,8 @@ export default function BroadcastGrid({
                       </div>
                     )}
                   </div>
-                  <span className="mt-2 text-xs text-zinc-400 flex items-center gap-1">
-                    <VideoOff size={10} />
+                  <span className="mt-2 text-[11px] md:text-xs text-zinc-400 flex items-center gap-1">
+                    <VideoOff size={10} className="md:w-[10px] md:h-[10px]" />
                     Camera Off
                   </span>
                 </div>
@@ -804,10 +944,10 @@ export default function BroadcastGrid({
 
               {/* Metadata Overlay (Bubble Style) - Moved to Top Left to avoid controls */}
               {userId && (
-                <div className="absolute top-3 left-3 flex items-center gap-2 max-w-[85%] z-10 pointer-events-none">
-                  <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 shadow-lg">
+                <div className="absolute top-2 left-2 md:top-3 md:left-3 flex items-center gap-1.5 md:gap-2 max-w-[82%] md:max-w-[85%] z-10 pointer-events-none">
+                  <div className="bg-black/60 backdrop-blur-md px-2 py-1 md:px-3 md:py-1.5 rounded-full border border-white/10 flex items-center gap-1.5 md:gap-2 shadow-lg">
                     <div className="flex flex-col min-w-0">
-                      <div className="text-white text-sm font-bold truncate flex items-center gap-2">
+                      <div className="text-white text-[11px] md:text-sm font-bold truncate flex items-center gap-1 md:gap-2">
                           {(() => {
                           const profile =
                               isStreamHost && broadcasterProfile ? broadcasterProfile : seat?.user_profile;
@@ -844,8 +984,22 @@ export default function BroadcastGrid({
                           );
                           })()}
                           
-                          {isStreamHost && (
-                              <span className="text-[9px] bg-red-600 px-1 rounded text-white font-bold uppercase tracking-wider">
+                          {battleState?.active && (
+                            <>
+                              {isBroadcasterSide && (
+                                <span className="text-[8px] md:text-[9px] bg-red-600 px-1 md:px-1.5 rounded text-white font-bold uppercase tracking-wider">
+                                  BROADCASTER
+                                </span>
+                              )}
+                              {isChallengerSide && (
+                                <span className="text-[8px] md:text-[9px] bg-blue-600 px-1 md:px-1.5 rounded text-white font-bold uppercase tracking-wider">
+                                  CHALLENGER
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {isStreamHost && !battleState?.active && (
+                              <span className="text-[8px] md:text-[9px] bg-red-600 px-1 rounded text-white font-bold uppercase tracking-wider">
                               HOST
                               </span>
                           )}
@@ -862,10 +1016,10 @@ export default function BroadcastGrid({
                   {/* Mic Status Indicator (Outside Bubble) */}
                   {!isMicOn && (
                     <div
-                      className="bg-red-500/90 p-1.5 rounded-full backdrop-blur-md shadow-sm animate-in zoom-in duration-200"
+                      className="bg-red-500/90 p-1 md:p-1.5 rounded-full backdrop-blur-md shadow-sm animate-in zoom-in duration-200"
                       title="Mic Muted"
                     >
-                      <MicOff size={14} className="text-white" />
+                        <MicOff size={12} className="text-white md:w-[14px] md:h-[14px]" />
                     </div>
                   )}
                 </div>
@@ -873,20 +1027,20 @@ export default function BroadcastGrid({
 
               {/* Coin Balance in Top Right - with Crowns */}
               {userId && (
-                <div className="absolute top-3 right-3 z-10 pointer-events-none">
-                  <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-2 shadow-lg">
-                    <Crown size={12} className="text-amber-400" />
-                    <span className="text-sm font-bold text-white">
+                <div className="absolute top-2 right-2 md:top-3 md:right-3 z-10 pointer-events-none">
+                  <div className="bg-black/60 backdrop-blur-md px-2 py-1 md:px-3 md:py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-1 md:gap-2 shadow-lg">
+                    <Crown size={10} className="text-amber-400 md:w-3 md:h-3" />
+                    <span className="text-[11px] md:text-sm font-bold text-white">
                       {(displayProfile?.battle_crowns || 0).toLocaleString()}
                     </span>
-                    <div className="w-px h-4 bg-white/20" />
-                    <Gem size={12} className="text-purple-400" />
-                    <span className="text-sm font-bold text-white">
+                    <div className="w-px h-3 md:h-4 bg-white/20" />
+                    <Gem size={10} className="text-purple-400 md:w-3 md:h-3" />
+                    <span className="text-[11px] md:text-sm font-bold text-white">
                       {(displayProfile?.trollmonds || 0).toLocaleString()}
                     </span>
-                    <div className="w-px h-4 bg-white/20" />
-                    <Coins size={12} className="text-yellow-400" />
-                    <span className="text-sm font-bold text-white">
+                    <div className="w-px h-3 md:h-4 bg-white/20" />
+                    <Coins size={10} className="text-yellow-400 md:w-3 md:h-3" />
+                    <span className="text-[11px] md:text-sm font-bold text-white">
                       {(displayProfile?.troll_coins || 0).toLocaleString()}
                     </span>
                   </div>
@@ -962,6 +1116,48 @@ export default function BroadcastGrid({
               onClose={() => setShowHostStats(false)} 
               broadcasterProfile={broadcasterProfile} 
           />
+      )}
+
+      {/* Battle Side Picker Overlay - for viewers not on a team yet */}
+      {(joinWindowOpen || (!userTeam && battleState.active)) && shouldShowSidePicker && onPickSide && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        >
+          <div className="bg-zinc-900 border border-white/20 rounded-2xl p-6 flex flex-col items-center gap-4 shadow-2xl">
+            <Swords className="w-12 h-12 text-yellow-500" />
+            <h3 className="text-xl font-bold text-white">Pick a Side!</h3>
+            <p className="text-zinc-400 text-sm text-center">Choose who to support in this battle</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => onPickSide('broadcaster')}
+                className={cn(
+                  "px-6 py-3 rounded-xl font-bold transition-all",
+                  userTeam === 'broadcaster' 
+                    ? "bg-blue-600 text-white" 
+                    : "bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/40"
+                )}
+              >
+                <Shield className="w-5 h-5 inline mr-2" />
+                Broadcaster
+              </button>
+              <button
+                onClick={() => onPickSide('challenger')}
+                className={cn(
+                  "px-6 py-3 rounded-xl font-bold transition-all",
+                  userTeam === 'challenger' 
+                    ? "bg-red-600 text-white" 
+                    : "bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/40"
+                )}
+              >
+                <Swords className="w-5 h-5 inline mr-2" />
+                Challenger
+              </button>
+            </div>
+          </div>
+        </motion.div>
       )}
     </div>
   );

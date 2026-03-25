@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAnimationStore, type GiftAnimationData, type GiftType } from '../../lib/animationManager';
 import { cn } from '../../lib/utils';
@@ -43,6 +44,38 @@ const giftConfigs: Record<GiftType, {
     scale: 1.8,
     isLarge: true
   },
+  star: {
+    emoji: '⭐',
+    name: 'Star',
+    color: 'from-yellow-300 to-orange-400',
+    particleColor: '#f59e0b',
+    scale: 1.4,
+    isLarge: true
+  },
+  trophy: {
+    emoji: '🏆',
+    name: 'Trophy',
+    color: 'from-amber-500 to-orange-600',
+    particleColor: '#fb923c',
+    scale: 1.7,
+    isLarge: true
+  },
+  coffee: {
+    emoji: '☕',
+    name: 'Coffee',
+    color: 'from-amber-500 to-amber-700',
+    particleColor: '#d97706',
+    scale: 1.1,
+    isLarge: false
+  },
+  pizza: {
+    emoji: '🍕',
+    name: 'Pizza',
+    color: 'from-orange-500 to-red-500',
+    particleColor: '#f87171',
+    scale: 1.2,
+    isLarge: false
+  },
   car: { 
     emoji: '🚗', 
     name: 'Car', 
@@ -84,13 +117,23 @@ interface GiftAnimationProps {
 // Gift animation component
 const GiftAnimation = ({ gift }: GiftAnimationProps) => {
   const { reducedMotion, isMobile } = useAnimationStore();
+  const [pixelRatio, setPixelRatio] = useState(1);
   const config = giftConfigs[gift.type] || giftConfigs.heart;
+  const displayIcon = gift.giftIcon || config.emoji;
+  const displayName = gift.giftName || config.name;
+
+  useEffect(() => {
+    setPixelRatio(window.devicePixelRatio || 1);
+    const onChange = () => setPixelRatio(window.devicePixelRatio || 1);
+    window.matchMedia('(resolution: 2dppx)').addEventListener('change', onChange);
+    return () => window.matchMedia('(resolution: 2dppx)').removeEventListener('change', onChange);
+  }, []);
 
   // Reduce animation complexity on mobile
   const isSmall = isMobile || !config.isLarge;
 
   if (reducedMotion) {
-    // Simplified version for reduced motion
+    // Simplified version for reduced motion (transparent background)
     return (
       <motion.div
         className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
@@ -101,13 +144,13 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
       >
         <div className={cn(
           'flex flex-col items-center gap-4',
-          'bg-black/70 backdrop-blur-xl px-8 py-6 rounded-3xl',
-          'border border-white/20 shadow-2xl'
+          'bg-transparent px-0 py-0',
+          'border-none shadow-none'
         )}>
-          <div className="text-6xl">{config.emoji}</div>
+          <div className="text-6xl">{displayIcon}</div>
           <div className="text-center">
             <p className="text-white font-bold">
-              <span className="text-cyan-400">{gift.senderName}</span> sent {gift.amount}x {config.name}
+              <span className="text-cyan-400">{gift.senderName}</span> sent {gift.amount}x {displayName}
             </p>
             <p className="text-zinc-400 text-sm">to {gift.receiverName}</p>
           </div>
@@ -116,9 +159,18 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
     );
   }
 
+  const highRes = pixelRatio >= 2;
+  const particleCount = highRes ? 32 : 16;
+
   return (
     <motion.div
       className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
+      style={{
+        perspective: highRes ? 2200 : 1000,
+        transformStyle: 'preserve-3d',
+        imageRendering: 'auto',
+        filter: 'none',
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -127,8 +179,8 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
       <motion.div
         className={cn(
           'relative flex flex-col items-center gap-4',
-          'bg-black/80 backdrop-blur-2xl px-10 py-8 rounded-3xl',
-          'border border-white/20 shadow-[0_0_60px_rgba(255,255,255,0.1)]'
+          'bg-transparent px-0 py-0',
+          'border-none shadow-none'
         )}
         initial={{ scale: 0.5, y: 100 }}
         animate={{ 
@@ -147,20 +199,23 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
           transition: { duration: 0.3 }
         }}
       >
-        {/* Glow background */}
+        {/* Glow background (soft particle aura, no framed box) */}
         <motion.div
           className={cn(
-            'absolute inset-0 rounded-3xl opacity-30',
-            `bg-gradient-to-br ${config.color}`
+            'absolute inset-0 opacity-0',
+            'pointer-events-none'
           )}
           animate={{
-            scale: [1, 1.05, 1],
-            opacity: [0.3, 0.5, 0.3]
+            opacity: [0, 0.1, 0],
           }}
           transition={{
             duration: 2,
             repeat: Infinity,
             ease: 'easeInOut'
+          }}
+          style={{
+            background: `radial-gradient(circle at center, ${config.particleColor}30, transparent 45%)`,
+            filter: 'blur(16px)'
           }}
         />
 
@@ -192,37 +247,43 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
               ease: 'easeInOut'
             }}
           >
-            {config.emoji}
+            {displayIcon}
           </motion.span>
           
           {/* Particle burst */}
-          {[...Array(12)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-2 h-2 rounded-full"
-              style={{ 
-                backgroundColor: config.particleColor,
-                left: '50%',
-                top: '50%'
-              }}
-              initial={{ 
-                x: 0, 
-                y: 0, 
-                scale: 1,
-                opacity: 1
-              }}
-              animate={{
-                x: Math.cos((i * 30) * Math.PI / 180) * 80,
-                y: Math.sin((i * 30) * Math.PI / 180) * 80,
-                opacity: [1, 0],
-                scale: [1, 0]
-              }}
-              transition={{
-                duration: 0.8,
-                ease: 'easeOut'
-              }}
-            />
-          ))}
+          {[...Array(particleCount)].map((_, i) => {
+            const angle = (i * 360 / particleCount) * Math.PI / 180;
+            return (
+              <motion.div
+                key={i}
+                className="absolute rounded-full"
+                style={{ 
+                  width: highRes ? 3 : 2,
+                  height: highRes ? 3 : 2,
+                  backgroundColor: config.particleColor,
+                  left: '50%',
+                  top: '50%',
+                  boxShadow: `0 0 ${highRes ? 18 : 8}px ${config.particleColor}`,
+                }}
+                initial={{ 
+                  x: 0, 
+                  y: 0, 
+                  scale: 1,
+                  opacity: 1
+                }}
+                animate={{
+                  x: Math.cos(angle) * (100 + (highRes ? 80 : 0)),
+                  y: Math.sin(angle) * (100 + (highRes ? 80 : 0)),
+                  opacity: [1, 0],
+                  scale: [1, 0.2]
+                }}
+                transition={{
+                  duration: 1.1,
+                  ease: 'easeOut'
+                }}
+              />
+            )
+          })}
         </motion.div>
 
         {/* Gift info */}
@@ -250,7 +311,7 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            {gift.amount}x {config.name}
+            {gift.amount}x {displayName}
           </motion.p>
 
           {/* Receiver */}
@@ -269,9 +330,9 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
           <motion.div
             className={cn(
               'absolute -top-4 -right-4',
-              'bg-gradient-to-r from-yellow-400 to-orange-500',
-              'px-4 py-2 rounded-full font-bold text-black',
-              'shadow-lg'
+              'bg-transparent',
+              'px-0 py-0 font-bold text-white',
+              'shadow-none'
             )}
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -290,28 +351,40 @@ const GiftAnimation = ({ gift }: GiftAnimationProps) => {
       {/* Full screen particle effect for large gifts */}
       {config.isLarge && !isSmall && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {[...Array(20)].map((_, i) => (
+          {[...Array(Math.max(18, Math.round(particleCount / 2)))].map((_, i) => (
             <motion.div
               key={`particle-${i}`}
-              className="absolute w-3 h-3 rounded-full"
+              className="absolute rounded-full"
               style={{ 
+                width: highRes ? 5 : 3,
+                height: highRes ? 5 : 3,
                 backgroundColor: config.particleColor,
                 left: `${Math.random() * 100}%`,
                 top: '100%'
               }}
               animate={{
-                y: -1000,
-                x: (Math.random() - 0.5) * 200,
+                y: -1600,
+                x: (Math.random() - 0.5) * 300,
                 opacity: [1, 1, 0],
-                scale: [0.5, 1, 0.5]
+                scale: [0.6, 1.3, 0.1]
               }}
               transition={{
-                duration: 2 + Math.random(),
+                duration: 2.6 + Math.random() * 0.8,
                 repeat: 1,
                 ease: 'easeOut'
               }}
             />
           ))}
+
+          {highRes && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.25), transparent 50%)',
+              mixBlendMode: 'screen',
+            }} />
+          )}
         </div>
       )}
     </motion.div>

@@ -33,6 +33,7 @@ export interface GiftItem {
   coinCost: number;
   type: 'paid' | 'free';
   slug: string;
+  animationType?: string;
 }
 
 export function useGiftSystem(
@@ -42,6 +43,8 @@ export function useGiftSystem(
   _targetUserId?: string,
   sharedChannel?: any  // Optional shared channel for broadcasting
 ) {
+  console.log('[GiftSystem] useGiftSystem initialized with sharedChannel:', !!sharedChannel, 'streamId:', streamId);
+  
   const [isSending, setIsSending] = useState(false);
   const [giftsDisabled, setGiftsDisabled] = useState(false);
   const [giftsDisabledReason, setGiftsDisabledReason] = useState<string | null>(null);
@@ -66,32 +69,51 @@ export function useGiftSystem(
 
   const sendGift = async (gift: GiftItem, targetIdOverride?: string, quantity: number = 1): Promise<boolean> => {
     const now = Date.now();
+    const finalRecipientId = targetIdOverride || recipientId;
+
+    console.log('[GiftSystem] sendGift invoked', {
+      senderId: user?.id || null,
+      finalRecipientId,
+      streamId,
+      giftId: gift?.id,
+      quantity,
+      giftsDisabled,
+      circuitOpen: circuitRef.current.openUntil > now,
+    });
+
     if (circuitRef.current.openUntil > now) {
+      console.warn('[GiftSystem] sendGift blocked: circuit open');
       toast.error('Gifting is temporarily paused. Please try again shortly.');
       return false;
     }
 
     if (giftsDisabled) {
+      console.warn('[GiftSystem] sendGift blocked: gifts disabled', { reason: giftsDisabledReason });
       toast.error(giftsDisabledReason || 'Gifting is temporarily disabled.');
       return false;
     }
 
     if (!user) {
+      console.warn('[GiftSystem] sendGift blocked: no authenticated user');
       toast.error("You must be logged in to send gifts");
       return false;
     }
 
-    const finalRecipientId = targetIdOverride || recipientId;
-
     // For logged-in users, check if sending to themselves
     // For guests (no user), they can't send gifts anyway, but we check to be safe
     if (user && user.id === finalRecipientId) {
+      console.warn('[GiftSystem] sendGift blocked: self-send attempted', {
+        userId: user.id,
+        finalRecipientId,
+        streamId,
+      });
       toast.error("You cannot send gifts to yourself");
       return false;
     }
 
     // Guests cannot send gifts - they need to be logged in
     if (!user) {
+      console.warn('[GiftSystem] sendGift blocked: no user after recipient resolution');
       toast.error("You must be logged in to send gifts");
       return false;
     }
@@ -203,6 +225,7 @@ export function useGiftSystem(
         }
         
         // Broadcast event for animations via Supabase realtime channel
+        console.log('[GiftSystem] === BROADCAST SECTION START ===');
         try {
           if (streamId) {
             const payload = {
@@ -211,56 +234,54 @@ export function useGiftSystem(
               gift_slug: gift.slug,
               gift_name: gift.name,
               gift_icon: giftIcon,
+              animation_type: gift.animationType,
               amount: gift.coinCost * quantity,
               quantity: quantity,
               sender_id: user.id,
               sender_name: senderName,
               receiver_id: finalRecipientId,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              streamId: streamId,
+              stream_id: streamId
             };
             
-            // Use shared channel if available, otherwise create new one
-            if (sharedChannel) {
-              // Use the shared channel that's already subscribed
-              await sharedChannel.send({
-                type: 'broadcast',
-                event: 'gift_sent',
-                payload
-              });
-              console.log('[GiftSystem] Gift broadcast via shared channel');
-            } else {
-              // Use a DIFFERENT channel name to avoid triggering presence 'leave' events
-              // The presence channel uses stream:${streamId}, so we use broadcast-gift:${streamId}
-              // Also, don't track presence on this channel to avoid any leave events
-              const channel = supabase.channel(`broadcast-gift:${streamId}`, {
-                config: {
-                  presence: { key: null }  // Don't track presence on this channel
-                }
-              });
-              
-              // Subscribe and send immediately
-              channel.subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                  channel.send({
-                    type: 'broadcast',
-                    event: 'gift_sent',
-                    payload
-                  });
-                  console.log('[GiftSystem] Gift broadcast via ephemeral channel (broadcast-gift:${streamId})');
-                  
-                  // Clean up after a short delay
-                  setTimeout(() => {
-                    supabase.removeChannel(channel);
-                  }, 500);
-                }
-              });
-            }
+            const giftChannelName = `stream-gifts:${streamId}`;
+            console.log('[GiftSystem] 🚀 Publishing gift to unified channel', { giftChannelName, payload });
+
+            // Always use dedicated stream-gifts channel for gifts (not shared channel)
+            const giftChannel = supabase.channel(giftChannelName, {
+              config: {
+                presence: { key: null }  // Don't track presence on this channel
+              }
+            });
+            
+            giftChannel.subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                giftChannel.send({
+                  type: 'broadcast',
+                  event: 'gift_sent',
+                  payload
+                });
+                console.log('[GiftSystem] ✅ Gift published to stream-gifts channel:', giftChannelName);
+                
+                // Clean up after a short delay
+                setTimeout(() => {
+                  supabase.removeChannel(giftChannel);
+                }, 500);
+              } else {
+                console.warn('[GiftSystem] ⚠️ Gift channel subscribe failed:', status);
+              }
+            });
           }
         } catch (broadcastErr) {
           console.warn('[GiftSystem] Could not broadcast gift event:', broadcastErr);
         }
         
         // Also send a chat message via Supabase broadcast
+        console.log('[GiftSystem] === CHAT MESSAGE DEBUG ===');
+        console.log('[GiftSystem] streamId:', streamId);
+        console.log('[GiftSystem] sharedChannel:', sharedChannel ? 'exists' : 'null/undefined');
+        
         try {
           if (streamId) {
             const txnId = generateUUID();
@@ -279,38 +300,53 @@ export function useGiftSystem(
               console.warn('[GiftSystem] Could not fetch receiver profile:', recErr);
             }
             
-            // Use the SAME channel name as BroadcastChat to ensure messages are received
-            // BroadcastChat has a fix to ignore leave events for the current user
-            const chatChannel = supabase.channel(`stream-chat-${streamId}`);
-            await chatChannel.subscribe((status) => {
+            // Use shared channel if available, otherwise create new one
+            // This ensures the message goes to BroadcastChat
+            const chatPayload = {
+              id: txnId,
+              txn_id: txnId,
+              user_id: user.id,
+              content: `GIFT_EVENT:${gift.slug}:${quantity}`,
+              created_at: new Date().toISOString(),
+              type: 'gift',
+              gift_type: gift.slug,
+              gift_amount: quantity,
+              sender_name: senderName,
+              receiver_id: finalRecipientId,
+              receiver_name: receiverName,
+              user_profiles: {
+                username: senderName,
+                avatar_url: null
+              }
+            };
+            
+            // ALWAYS send on a dedicated channel as backup, in addition to sharedChannel
+            const chatChannel = supabase.channel(`stream:${streamId}`);
+            chatChannel.subscribe((status) => {
+              console.log('[GiftSystem] Chat channel subscribe status:', status);
               if (status === 'SUBSCRIBED') {
                 chatChannel.send({
                   type: 'broadcast',
                   event: 'chat-message',
-                  payload: {
-                    id: txnId,
-                    txn_id: txnId,
-                    user_id: user.id,
-                    content: `${senderName} sent ${gift.name} x${quantity}`,
-                    created_at: new Date().toISOString(),
-                    type: 'chat',
-                    gift_type: gift.slug,
-                    gift_amount: quantity,
-                    sender_name: senderName,
-                    receiver_id: finalRecipientId,
-                    receiver_name: receiverName,
-                    user_profiles: {
-                      username: senderName,
-                      avatar_url: null
-                    }
-                  }
+                  payload: chatPayload
                 });
-                // Unsubscribe after sending
+                console.log('[GiftSystem] Gift chat message sent on stream:' + streamId);
+                // Keep channel for a moment then clean up
                 setTimeout(() => {
                   supabase.removeChannel(chatChannel);
-                }, 1000);
+                }, 2000);
               }
             });
+            
+            // Also try sharedChannel if available
+            if (sharedChannel) {
+              console.log('[GiftSystem] Also sending via sharedChannel');
+              sharedChannel.send({
+                type: 'broadcast',
+                event: 'chat-message',
+                payload: chatPayload
+              }).catch(e => console.log('[GiftSystem] sharedChannel send error:', e));
+            }
           }
         } catch (chatErr) {
           console.warn('[GiftSystem] Could not send chat message:', chatErr);

@@ -127,7 +127,7 @@ const AuthCallback = () => {
                   .update({ last_known_ip: userIP, ip_address_history: updated })
                   .eq('id', u.id)
               } catch {}
-              navigate('/')
+              navigate('/', { replace: true })
               clearTimeout(safetyTimer)
               return
             } else {
@@ -149,11 +149,11 @@ const AuthCallback = () => {
                    setReady(true)
                    clearTimeout(safetyTimer)
                    
-                   if (!retryProfile.username) {
-                     navigate('/profile/setup')
-                   } else {
-                     navigate('/')
-                   }
+                 if (!retryProfile.username) {
+                      navigate('/profile/setup')
+                    } else {
+                      navigate('/', { replace: true })
+                    }
                    return
                 }
                 retries++

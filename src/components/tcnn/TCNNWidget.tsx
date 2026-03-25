@@ -127,7 +127,7 @@ export default function TCNNWidget({ onRequireAuth }: TCNNWidgetProps) {
     if (!onRequireAuth('watch TCNN')) return;
     
     if (stream?.isLive) {
-      navigate(`/broadcast/${stream.id}`);
+      navigate(`/tcnn/viewer/${stream.id}`);
     } else {
       navigate('/tcnn');
     }

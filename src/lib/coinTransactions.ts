@@ -66,6 +66,7 @@ export type CoinTransactionType =
   | 'troll_town_upgrade'
   | 'troll_town_upgrade_task'
   | 'broadcast_theme'
+  | 'marketplace_sale'
 
 export type CoinType = 'troll_coins'
 
@@ -507,7 +508,7 @@ export async function addCoins(params: {
             // Use RPC function to atomically update family stats
             const { data: _familyResult, error: familyError } = await sb.rpc('increment_family_stats', {
               p_family_id: familyMember.family_id,
-              p_coin_bonus: familyBonus,
+              p_coin_bonus: parseInt(String(familyBonus)),
               p_xp_bonus: 0
             })
 

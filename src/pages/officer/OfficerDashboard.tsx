@@ -183,7 +183,7 @@ export default function OfficerDashboard() {
   }
 
   return (
-    <div className={`p-6 max-w-5xl mx-auto ${trollCityTheme.text.primary} min-h-screen ${trollCityTheme.backgrounds.app}`}>
+    <div className={`p-6 max-w-5xl mx-auto text-slate-900 min-h-screen bg-gradient-to-br from-white via-slate-50 to-white`}>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Shield className="w-8 h-8 text-purple-400" />

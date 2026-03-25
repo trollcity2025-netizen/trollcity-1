@@ -43,7 +43,7 @@ export async function addXp(userId: string, amount: number, reason?: string) {
           const { data: _familyResult, error: familyError } = await supabase.rpc('increment_family_stats', {
             p_family_id: familyMember.family_id,
             p_coin_bonus: 0,
-            p_xp_bonus: familyXpBonus
+            p_xp_bonus: parseInt(String(familyXpBonus))
           })
 
           if (familyError) {

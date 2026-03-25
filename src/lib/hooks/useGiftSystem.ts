@@ -21,13 +21,12 @@ export interface GiftItem {
 }
 
 // Helper function to calculate trollmonds discount percentage
+// Only applies discount if user has 100+ trollmonds
 export function getTrollmondDiscount(trollmonds: number): number {
   if (trollmonds >= 100) {
-    return 10; // Max 10% off
-  } else if (trollmonds >= 50) {
-    return 5; // 5% off
+    return 10; // 10% off with 100+ trollmonds
   }
-  return 0;
+  return 0; // Under 100 trollmonds = no discount, pay full price
 }
 
 // Helper function to calculate discounted price
@@ -45,6 +44,13 @@ export function useGiftSystem(
 ) {
   const { user, profile, refreshProfile } = useAuthStore()
   const [isSending, setIsSending] = useState(false)
+  
+  useEffect(() => {
+    console.log('[GiftSystem] mounted', { streamId, sharedChannel: !!receiverId });
+    return () => {
+      console.log('[GiftSystem] unmounted', { streamId, sharedChannel: !!receiverId });
+    };
+  }, []);
   
   const _toGiftSlug = (value?: string) => {
     if (!value) return 'gift'
@@ -86,13 +92,19 @@ export function useGiftSystem(
     // Validate balance based on gift type (paid or free)
     const _currency = gift.currency || 'troll_coins'
     
-    // Calculate discount based on trollmonds (max 10% off)
+    // Calculate discount based on trollmonds (max 10% off) OR battle crowns (5% off)
     let discountPercent = 0;
     const trollmonds = profile?.trollmonds || 0;
+    const battleCrowns = profile?.battle_crowns || 0;
+    
+    // Battle crowns discount (5% off for 100+ crowns) - takes precedence if higher
+    if (battleCrowns >= 100) {
+      discountPercent = 5;
+    }
+    
+    // Trollmonds discount - only if 100+ trollmonds (under 100 = full price)
     if (trollmonds >= 100) {
-      discountPercent = 10; // Max 10% off
-    } else if (trollmonds >= 50) {
-      discountPercent = 5; // 5% off
+      discountPercent = Math.max(discountPercent, 10);
     }
     
     // Calculate discounted cost (e.g., 100 coins with 10% off = 90 coins)

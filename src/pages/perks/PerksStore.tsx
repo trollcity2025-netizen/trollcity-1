@@ -20,7 +20,7 @@ export default function PerksStore() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-[#0A0814] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
       </div>
     )
@@ -174,14 +174,14 @@ function PerksStoreContent({ profile, user }: { profile: any, user: any }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0814] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0814] text-white p-6 md:p-8 ml-20 md:ml-64">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6 md:p-8 ml-20 md:ml-64">
       <div className="max-w-6xl mx-auto">
         <header className="mb-8">
           <div className="flex items-center gap-3 mb-2">

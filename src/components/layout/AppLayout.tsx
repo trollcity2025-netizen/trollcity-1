@@ -33,7 +33,7 @@ export default function AppLayout({
   const { isCollapsed } = useSidebarStore()
   useChatStore()
   const isAuthPage = location.pathname.startsWith('/auth');
-  const isLivePage = location.pathname.startsWith('/live/') || location.pathname.startsWith('/broadcast/');
+  const isLivePage = location.pathname.startsWith('/live/') || location.pathname.startsWith('/broadcast/') || location.pathname.startsWith('/stream/') || location.pathname === '/live-swipe';
   const isKeyboardVisible = false;
 
   // Setup global message notifications - opens chat bubble when message received
@@ -63,15 +63,16 @@ export default function AppLayout({
 
   const effectiveShowSidebar = showSidebar && showLegacySidebar && !isAuthPage && !isLivePage;
   const effectiveShowHeader = showHeader && !isAuthPage && !isLivePage;
-  const effectiveShowBottomNav = showBottomNav && !isAuthPage;
-  const mainPaddingClass = effectiveShowBottomNav ? 'pb-[calc(var(--bottom-nav-height,64px)+env(safe-area-inset-bottom,0px))]' : '';
+  const effectiveShowBottomNav = showBottomNav && !isAuthPage && !isLivePage;
+  const mainOverflowClass = isLivePage ? 'overflow-hidden' : 'overflow-x-hidden overflow-y-auto scrollbar-thin scrollbar-thumb-purple-900/30 scrollbar-track-transparent';
+  const mainPaddingClass = effectiveShowBottomNav && !isLivePage ? 'pb-[calc(var(--bottom-nav-height,64px)+env(safe-area-inset-bottom,0px))]' : '';
 
   return (
     <div className="app-viewport w-screen h-screen overflow-hidden text-white flex relative">
       <PurchaseRequiredModal />
       {/* Desktop Sidebar - Hidden on Mobile */}
       {effectiveShowSidebar && (
-        <div className={`hidden md:block h-full shrink-0 border-r border-white/5 bg-[#0A0814] z-20 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
+        <div className={`hidden md:block h-full shrink-0 z-20 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
           <Sidebar />
         </div>
       )}
@@ -88,7 +89,7 @@ export default function AppLayout({
         {!isAuthPage && <UserCompliancePrompt />}
 
         {/* Main Content Area */}
-        <main className={`flex-1 w-full h-full relative overflow-x-hidden overflow-y-auto scrollbar-thin scrollbar-thumb-purple-900/50 scrollbar-track-transparent ${mainPaddingClass}`}>
+        <main className={`flex-1 w-full h-full relative ${mainOverflowClass} ${mainPaddingClass}`}>
           {children}
         </main>
 

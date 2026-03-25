@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 // Animation Types
-export type GiftType = 'rose' | 'heart' | 'diamond' | 'crown' | 'car' | 'house' | 'rocket' | 'dragon';
+export type GiftType = 'rose' | 'heart' | 'diamond' | 'crown' | 'star' | 'trophy' | 'coffee' | 'pizza' | 'car' | 'house' | 'rocket' | 'dragon';
 export type ReactionType = 'heart' | 'fire' | 'laugh' | 'wow' | 'cry' | 'clap' | 'love' | 'fire';
 
 export interface GiftAnimationData {
@@ -11,6 +11,8 @@ export interface GiftAnimationData {
   senderAvatar?: string;
   receiverName: string;
   amount: number;
+  giftName?: string;
+  giftIcon?: string;
   timestamp: number;
 }
 

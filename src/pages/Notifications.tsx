@@ -230,19 +230,140 @@ export default function Notifications() {
     }
   }
 
+  const getDefaultRouteForType = (type: string, metadata?: any): string => {
+    // Admin copy notifications: route to admin panel for the original type
+    if (metadata?.admin_copy) {
+      const originalType = type.replace('admin.', '')
+      return getDefaultRouteForType(originalType, metadata)
+    }
+
+    switch (type) {
+      // User-facing
+      case 'new_follower':
+        if (metadata?.follower_username) return `/profile/${metadata.follower_username}`
+        return '/profile'
+      case 'gift_received':
+      case 'coin_received':
+      case 'coin_gifted':
+        return '/wallet'
+      case 'badge_unlocked':
+        return '/profile?tab=badges'
+      case 'message':
+        return '/messages'
+      case 'stream_live':
+        return metadata?.stream_id ? `/live/${metadata.stream_id}` : '/live'
+      case 'join_approved':
+      case 'announcement':
+      case 'system':
+      case 'system.warning':
+      case 'system_announcement':
+        return '/'
+      case 'vehicle_auction':
+        return '/marketplace'
+      case 'property_purchased':
+        return '/profile?tab=properties'
+      case 'item_purchased':
+        return '/marketplace'
+
+      // Moderation
+      case 'kick':
+      case 'ban':
+      case 'mute':
+      case 'report':
+      case 'moderation_alert':
+      case 'moderation_action':
+      case 'stream.kick':
+      case 'stream.ban':
+      case 'security.alert':
+        return metadata?.user_id
+          ? `/admin/moderation?user=${metadata.user_id}`
+          : metadata?.report_id
+          ? `/admin/moderation?tab=reports&id=${metadata.report_id}`
+          : '/admin/moderation'
+
+      // Officer
+      case 'officer_update':
+      case 'officer_clock_in':
+      case 'officer_clock_out':
+        return '/admin/officers'
+
+      // Finance
+      case 'payout_status':
+      case 'payout_request':
+      case 'payout_update':
+        return metadata?.payout_id
+          ? `/admin/finance?tab=payouts&id=${metadata.payout_id}`
+          : '/admin/finance'
+      case 'coins.fast_spend':
+      case 'coins.manual_purchase':
+        return metadata?.order_id
+          ? `/admin/finance?tab=orders&id=${metadata.order_id}`
+          : '/admin/finance'
+
+      // Support
+      case 'support_ticket':
+      case 'support_reply':
+        return metadata?.ticket_id
+          ? `/admin/support?id=${metadata.ticket_id}`
+          : '/admin/support'
+
+      // Applications
+      case 'application_submitted':
+      case 'application_result':
+        return metadata?.application_id
+          ? `/admin/applications?id=${metadata.application_id}`
+          : '/admin/applications'
+
+      // Seller
+      case 'seller_tier_upgraded':
+      case 'seller_tier_downgraded':
+      case 'new_review_received':
+      case 'appeal_submitted':
+      case 'appeal_decision':
+        return '/marketplace'
+
+      // Battle
+      case 'battle_result':
+        return '/profile'
+
+      // Court / Jail
+      case 'jail_sentence':
+      case 'court_summon':
+        return '/troll-court'
+
+      // Trollg / gifts / orders
+      case 'trollg_application':
+        return '/admin/applications'
+      case 'manual_coin_order':
+        return '/admin/finance'
+      case 'troll_post_gift':
+        return '/admin/finance'
+
+      default:
+        return '/'
+    }
+  }
+
   const handleNotificationClick = (notification: Notification) => {
+    let route: string | null = null
+
     // 1. Standardized routing (Staff & New System)
     if (notification.metadata?.route) {
-      navigate(notification.metadata.route)
+      route = notification.metadata.route
     }
     // 2. Legacy fallback
     else if (notification.metadata?.action_url) {
-      navigate(notification.metadata.action_url)
-    } else if (notification.type === 'new_follower' && notification.metadata?.follower_username) {
-       // Fallback for old follower notifications
-       navigate(`/profile/${notification.metadata.follower_username}`)
+      route = notification.metadata.action_url
     }
-    
+    // 3. Type-based fallback — ensures every notification is clickable
+    else {
+      route = getDefaultRouteForType(notification.type, notification.metadata)
+    }
+
+    if (route) {
+      navigate(route)
+    }
+
     // Mark as read if not already
     if (!notification.is_read) {
       markAsRead(notification.id)
@@ -298,11 +419,9 @@ export default function Notifications() {
               )}
             </p>
             
-            {notification.metadata?.action_url && (
-                <div className="mt-2 text-xs text-troll-neon-blue flex items-center gap-1">
-                  Click to view details →
-                </div>
-            )}
+            <div className="mt-2 text-xs text-troll-neon-blue flex items-center gap-1">
+              Click to view details →
+            </div>
           </div>
 
           <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>

@@ -368,16 +368,42 @@ export function useTMFamilyInvites() {
 // NEW USERS THRESHOLD (in milliseconds) - users created within this time are considered "new"
 const NEW_USER_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Cache for all users
+let allUsersCache: { data: TMAllUser[]; newUserIds: Set<string>; timestamp: number } | null = null;
+
 // Hook to get all users with their live broadcasting status
 export function useTMAllUsers(limit: number = 100) {
   const { user } = useAuthStore();
-  const [users, setUsers] = useState<TMAllUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<TMAllUser[]>(() => {
+    if (allUsersCache && allUsersCache.timestamp > Date.now() - 10000) {
+      return allUsersCache.data;
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (allUsersCache && allUsersCache.timestamp > Date.now() - 10000) {
+      return false;
+    }
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
-  const [newUserIds, setNewUserIds] = useState<Set<string>>(new Set());
+  const [newUserIds, setNewUserIds] = useState<Set<string>>(() => {
+    if (allUsersCache && allUsersCache.timestamp > Date.now() - 10000) {
+      return allUsersCache.newUserIds;
+    }
+    return new Set();
+  });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (useCache: boolean = true) => {
+    // Check cache first if useCache is true
+    if (useCache && allUsersCache && allUsersCache.timestamp > Date.now() - 10000) {
+      setUsers(allUsersCache.data);
+      setNewUserIds(allUsersCache.newUserIds);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -457,6 +483,9 @@ export function useTMAllUsers(limit: number = 100) {
         };
       });
 
+      // Update cache
+      allUsersCache = { data: allUsers, newUserIds: newUsers, timestamp: Date.now() };
+      
       setUsers(allUsers);
       setNewUserIds(newUsers);
     } catch (err: any) {
@@ -583,8 +612,94 @@ export function useTMAllUsers(limit: number = 100) {
   }, [fetchUsers]);
 
   const refetch = useCallback(() => {
-    fetchUsers();
+    allUsersCache = null; // Clear cache on refetch
+    fetchUsers(false);
   }, [fetchUsers]);
 
-  return { users, loading, error, refetch, newUserIds };
+  // Prefetch users - can be called before navigating to the page
+  const prefetch = useCallback(() => {
+    fetchUsers(true);
+  }, [fetchUsers]);
+
+  return { users, loading, error, refetch, newUserIds, prefetch };
+}
+
+// Export a global prefetch function that can be used without the hook
+export function prefetchTMUsers() {
+  if (allUsersCache && allUsersCache.timestamp > Date.now() - 10000) {
+    return; // Already cached
+  }
+  
+  supabase
+    .from('user_profiles')
+    .select('id, username, avatar_url, interests, is_online, last_active, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100)
+    .then(({ data: profilesData, error: profilesError }) => {
+      if (profilesError) return;
+      
+      supabase
+        .from('active_sessions')
+        .select('user_id, is_active, last_active')
+        .eq('is_active', true)
+        .then(({ data: activeSessionsData }) => {
+          const activeSessionsMap = new Map<string, { isActive: boolean; lastActive: string }>();
+          activeSessionsData?.forEach((session) => {
+            activeSessionsMap.set(session.user_id, {
+              isActive: session.is_active,
+              lastActive: session.last_active
+            });
+          });
+          
+          supabase
+            .from('streams')
+            .select('id, user_id, current_viewers')
+            .eq('is_live', true)
+            .eq('status', 'live')
+            .then(({ data: liveStreamsData }) => {
+              const liveStreamsMap = new Map<string, { stream_id: string; current_viewers: number }>();
+              liveStreamsData?.forEach((stream) => {
+                liveStreamsMap.set(stream.user_id, {
+                  stream_id: stream.id,
+                  current_viewers: stream.current_viewers || 0
+                });
+              });
+              
+              // Transform and cache the data
+              const now = new Date();
+              const newUsers = new Set<string>();
+              const allUsers: TMAllUser[] = (profilesData || []).map((profile) => {
+                const createdAt = new Date(profile.created_at || profile.last_active || now);
+                const isNewUser = (now.getTime() - createdAt.getTime()) < NEW_USER_THRESHOLD;
+                
+                if (isNewUser) {
+                  newUsers.add(profile.id);
+                }
+
+                const streamInfo = liveStreamsMap.get(profile.id);
+                const sessionInfo = activeSessionsMap.get(profile.id);
+                const isOnlineNow = sessionInfo?.isActive === true || profile.is_online === true;
+
+                return {
+                  user_id: profile.id,
+                  username: profile.username || 'Unknown',
+                  avatar_url: profile.avatar_url,
+                  interests: (profile.interests || []) as TMInterest[],
+                  is_online: isOnlineNow,
+                  last_active: sessionInfo?.lastActive || profile.last_active,
+                  created_at: profile.created_at,
+                  is_live: !!streamInfo,
+                  stream_id: streamInfo?.stream_id || null,
+                  current_viewers: streamInfo?.current_viewers || 0
+                };
+              });
+              
+              allUsersCache = { 
+                data: allUsers, 
+                newUserIds: newUsers, 
+                timestamp: Date.now() 
+              };
+            });
+        });
+    });
 }

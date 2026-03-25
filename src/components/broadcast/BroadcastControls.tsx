@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import TrollmersBattleControls from './TrollmersBattleControls';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
 import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star, GripVertical, X } from 'lucide-react';
@@ -13,8 +12,8 @@ import { useAuthStore } from '../../lib/store';
 import { PreflightStore } from '../../lib/preflightStore';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { AnimatePresence, motion } from 'framer-motion';
-import ChallengeManager from './ChallengeManager';
 import { LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
+import { trollCityTheme } from '../../styles/trollCityTheme';
 
 interface BroadcastControlsProps {
   stream: Stream;
@@ -52,6 +51,10 @@ interface BroadcastControlsProps {
   // Challenge button props for viewers
   onChallengeBroadcaster?: () => void;
   hasPendingChallenge?: boolean;
+  // Battle mode props
+  onStartBattle?: () => void;
+  battleActive?: boolean;
+  battleEnabled?: boolean;
 }
 
 export default function BroadcastControls({
@@ -84,7 +87,10 @@ export default function BroadcastControls({
   onAcceptChallenge,
   onDenyChallenge,
   onChallengeBroadcaster,
-  hasPendingChallenge = false
+  hasPendingChallenge = false,
+  onStartBattle,
+  battleActive = false,
+  battleEnabled = false
 }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
@@ -477,7 +483,7 @@ export default function BroadcastControls({
       >
         <button
           onClick={() => setIsClosed(false)}
-          className="bg-zinc-900/95 border border-yellow-500/50 rounded-full p-3 shadow-lg hover:bg-zinc-800 transition-colors"
+          className="bg-slate-900/95 border border-yellow-500/50 rounded-full p-3 shadow-lg hover:bg-slate-800 transition-colors"
           title="Show Controls"
         >
           <Settings2 size={20} className="text-yellow-500" />
@@ -510,9 +516,9 @@ export default function BroadcastControls({
   return (
     <div 
       className={cn(
-        "bg-zinc-900/95 border border-white/10 backdrop-blur-sm rounded-2xl shadow-2xl relative transition-all duration-300",
+        "bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.4)] relative transition-all duration-300",
         isMinimized ? "w-56 py-3 px-4" : isFloating ? "w-80 p-4" : "w-full p-4",
-        isFloating ? "fixed z-50 border-2 border-yellow-500/30" : ""
+        isFloating ? "fixed z-50 border-2 border-purple-500/30" : ""
       )}
       style={isFloating ? { left: position.x, top: position.y } : undefined}
       onMouseMove={handleMouseMove}
@@ -536,14 +542,14 @@ export default function BroadcastControls({
               <div className="flex items-center gap-1">
                 <button 
                     onClick={() => setIsFloating(false)}
-                    className="bg-zinc-800 border border-white/10 rounded-full p-1 text-zinc-400 hover:text-white"
+                    className="bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white"
                     title="Dock"
                 >
                     <Settings2 size={14} />
                 </button>
                 <button 
                     onClick={() => setIsMinimized(!isMinimized)}
-                    className="bg-zinc-800 border border-white/10 rounded-full p-1 text-zinc-400 hover:text-white"
+                    className="bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white"
                     title={isMinimized ? "Expand" : "Minimize"}
                 >
                     {isMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -560,7 +566,7 @@ export default function BroadcastControls({
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400 font-bold">Controls</span>
+                <span className="text-xs text-slate-400 font-bold">Controls</span>
               </div>
               <div className="flex items-center gap-1">
                 <button 
@@ -583,7 +589,7 @@ export default function BroadcastControls({
         </div>
 
         {isMinimized ? (
-             <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Controls</span>
+             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Controls</span>
         ) : (
         <>
 
@@ -663,15 +669,6 @@ export default function BroadcastControls({
                     </div>
                  )}
 
-                 {/* Gift Button - Show for EVERYONE (except host maybe, but usually everyone can open tray) */}
-                 <button
-                    onClick={(e) => { e.stopPropagation(); onGiftHost(); }}
-                    className="p-2 hover:bg-yellow-500/20 rounded-lg transition-colors group"
-                    title="Send Gift"
-                 >
-                    <Gift size={20} className="text-zinc-400 group-hover:text-yellow-500 transition-colors" />
-                 </button>
-
                  {/* Share Button */}
                  {onShare && (
                      <button
@@ -679,7 +676,7 @@ export default function BroadcastControls({
                         className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors group"
                         title="Share Stream"
                      >
-                        <Share2 size={20} className="text-zinc-400 group-hover:text-blue-500 transition-colors" />
+                        <Share2 size={20} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
                      </button>
                  )}
 
@@ -691,33 +688,52 @@ export default function BroadcastControls({
                     className="p-2 hover:bg-pink-500/20 rounded-lg transition-colors group"
                     title="Like Stream"
                  >
-                    <Heart size={20} className={cn("text-zinc-400 group-hover:text-pink-500 transition-colors", isLiking && "scale-125 text-pink-500 fill-pink-500")} />
+                    <Heart size={20} className={cn("text-slate-400 group-hover:text-pink-500 transition-colors", isLiking && "scale-125 text-pink-500 fill-pink-500")} />
                  </button>
                  )}
 
-                 {/* Challenge Button - For Viewers */}
-                 {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (
-                     <button
-                         onClick={(e) => { e.stopPropagation(); onChallengeBroadcaster(); }}
-                         disabled={hasPendingChallenge}
-                         className={cn(
-                             "p-2 rounded-lg transition-colors flex items-center gap-2",
-                             hasPendingChallenge
-                                 ? "bg-yellow-500/20 text-yellow-400 cursor-wait"
-                                 : "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"
-                         )}
-                         title={hasPendingChallenge ? "Challenge pending..." : "Challenge broadcaster to a battle!"}
-                     >
-                         <Swords size={20} className={hasPendingChallenge ? "animate-pulse" : ""} />
-                     </button>
-                 )}
+                  {/* Challenge Button - For Viewers */}
+                  {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (
+                      <button
+                          onClick={(e) => { e.stopPropagation(); onChallengeBroadcaster(); }}
+                          disabled={hasPendingChallenge}
+                          className={cn(
+                              "p-2 rounded-lg transition-colors flex items-center gap-2",
+                              hasPendingChallenge
+                                  ? "bg-yellow-500/20 text-yellow-400 cursor-wait"
+                                  : "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"
+                          )}
+                          title={hasPendingChallenge ? "Challenge pending..." : "Challenge broadcaster to a battle!"}
+                      >
+                          <Swords size={20} className={hasPendingChallenge ? "animate-pulse" : ""} />
+                      </button>
+                  )}
+
+                  {/* Start Battle Button - For Guests on Stage when battle is enabled */}
+                  {(() => {
+                    const showStartBattle = onStartBattle && isOnStage && battleEnabled && !battleActive;
+                    return showStartBattle && (
+                      <button
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            console.log('[BroadcastControls] ✅ Start Battle clicked!');
+                            if (onStartBattle) onStartBattle(); 
+                          }}
+                          className="p-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 text-white transition-colors flex items-center gap-2 animate-pulse"
+                          title="Start Battle!"
+                      >
+                          <Swords size={20} />
+                          <span className="text-xs font-bold">Start Battle</span>
+                      </button>
+                    );
+                  })()}
 
                  {/* Chat Toggle */}
                  <button 
                     onClick={(e) => { e.stopPropagation(); toggleChat(); }}
                     className={cn(
                         "p-2 rounded-lg transition-colors flex items-center gap-2",
-                        chatOpen ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-zinc-400"
+                        chatOpen ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-slate-400"
                     )}
                     title="Toggle Chat"
                  >
@@ -733,7 +749,7 @@ export default function BroadcastControls({
                            "p-2 rounded-lg transition-colors flex items-center gap-2",
                            stream.is_featured 
                                ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30" 
-                               : "hover:bg-pink-500/20 text-zinc-400 hover:text-pink-400"
+                               : "hover:bg-pink-500/20 text-slate-400 hover:text-pink-400"
                        )}
                        title={stream.is_featured ? "Unfeature Stream" : "Feature Stream"}
                      >
@@ -749,7 +765,7 @@ export default function BroadcastControls({
                             setShowBannedList(!showBannedList);
                             setShowThemeSelector(false);
                         }}
-                        className={cn("p-2 rounded-lg transition-colors", showBannedList ? "bg-red-500/20 text-red-400" : "hover:bg-white/5 text-zinc-400")}
+                        className={cn("p-2 rounded-lg transition-colors", showBannedList ? "bg-red-500/20 text-red-400" : "hover:bg-white/5 text-slate-400")}
                         title="Banned Users"
                     >
                         <UserX size={20} />
@@ -760,7 +776,7 @@ export default function BroadcastControls({
                             setShowThemeSelector(!showThemeSelector);
                             setShowBannedList(false);
                         }}
-                        className={cn("p-2 rounded-lg transition-colors", showThemeSelector ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-zinc-400")}
+                        className={cn("p-2 rounded-lg transition-colors", showThemeSelector ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-slate-400")}
                         title="Broadcast Theme"
                     >
                         <ImageIcon size={20} />
@@ -777,7 +793,7 @@ export default function BroadcastControls({
                             e.stopPropagation();
                             onPinProduct();
                         }}
-                        className="p-2 rounded-lg hover:bg-white/5 text-zinc-400 transition-colors flex items-center gap-2"
+                        className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors flex items-center gap-2"
                         title="Pin Product"
                     >
                         <Package size={20} />
@@ -822,7 +838,7 @@ export default function BroadcastControls({
                     <div className="flex items-center gap-4">
                         <ChevronDown 
                             size={20} 
-                            className={cn("text-zinc-400 transition-transform duration-200", showStreamControls && "rotate-180")} 
+                            className={cn("text-slate-400 transition-transform duration-200", showStreamControls && "rotate-180")} 
                         />
                     </div>
                 </div>
@@ -840,7 +856,7 @@ export default function BroadcastControls({
                             {/* Box Layout Control - Only show if category allows adding/removing boxes and user has permission */}
                             {canModifyBoxes && canEditElectionBoxes && (
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
-                        <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
+                        <span className="text-slate-400 text-sm font-medium flex items-center gap-2">
                             <LayoutGrid size={16} />
                             Boxes
                         </span>
@@ -849,7 +865,7 @@ export default function BroadcastControls({
                                 type="button"
                                 onClick={() => updateBoxCount(boxCount - 1)}
                                 disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes) || !categoryConfig.allowDeductBox}
-                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
+                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition disabled:opacity-50"
                             >
                                 <Minus size={16} />
                             </button>
@@ -858,7 +874,7 @@ export default function BroadcastControls({
                                 type="button"
                                 onClick={() => updateBoxCount(boxCount + 1)}
                                 disabled={!canEditStream || boxCount >= 6 || !categoryConfig.allowAddBox}
-                                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white transition disabled:opacity-50"
+                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition disabled:opacity-50"
                             >
                                 <Plus size={16} />
                             </button>
@@ -870,7 +886,7 @@ export default function BroadcastControls({
                     {canManageStream && (
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex flex-col gap-3">
                         <div className="flex items-center justify-between">
-                            <label className="text-zinc-400 text-xs font-medium flex items-center gap-1">
+                            <label className="text-slate-400 text-xs font-medium flex items-center gap-1">
                                 <Coins size={12} className="text-yellow-500" />
                                 {enablePerBoxPricing ? 'Per-Box Pricing' : 'Seat Price'}
                             </label>
@@ -880,7 +896,7 @@ export default function BroadcastControls({
                                     "text-[10px] px-2 py-1 rounded-full transition-colors",
                                     enablePerBoxPricing 
                                         ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" 
-                                        : "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
+                                        : "bg-zinc-700 text-slate-400 hover:bg-zinc-600"
                                 )}
                             >
                                 {enablePerBoxPricing ? 'Simple Mode' : 'Advanced Mode'}
@@ -898,7 +914,7 @@ export default function BroadcastControls({
                                     onChange={handlePriceChange}
                                     disabled={!isHost}
                                     className={cn(
-                                        "flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
+                                        "flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
                                         (!isHost) && "opacity-50 cursor-not-allowed"
                                     )}
                                     placeholder="0 = Free"
@@ -921,8 +937,8 @@ export default function BroadcastControls({
                                             onChange={(e) => handleBoxPriceChange(i, e.target.value)}
                                             disabled={!isHost || i === 0} // Host seat is always free
                                             className={cn(
-                                                "w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
-                                                (i === 0) && "opacity-50 cursor-not-allowed bg-zinc-900"
+                                                "w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
+                                                (i === 0) && "opacity-50 cursor-not-allowed bg-slate-900"
                                             )}
                                             placeholder="0"
                                             title={i === 0 ? "Host seat is always free" : `Price for seat ${i}`}
@@ -943,7 +959,7 @@ export default function BroadcastControls({
                     {/* Visual Effects - HOST ONLY */}
                     {isHost && (
                     <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
-                         <span className="text-zinc-400 text-sm font-medium flex items-center gap-2">
+                         <span className="text-slate-400 text-sm font-medium flex items-center gap-2">
                             <Palette size={16} className="text-purple-400" />
                             Visuals
                          </span>
@@ -953,40 +969,7 @@ export default function BroadcastControls({
                     </div>
                     )}
 
-                    {/* Challenge Manager moved to live chat only */}
 
-                    {/* Trollmers Battle Controls - Only for trollmers category */}
-                    {(stream.category === 'trollmers' || stream.category === 'trollmers head to head') && (
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 md:col-span-3">
-                         <div className="flex items-center gap-2 mb-2">
-                            <Swords size={16} className="text-amber-500" />
-                            <span className="text-zinc-400 text-sm font-medium">Trollmers Battles</span>
-                         </div>
-                         {(() => {
-                           // DEBUG: Verify stream data before passing to battle controls
-                           console.log('[BroadcastControls] Passing stream to TrollmersBattleControls:', {
-                             stream_id: stream?.id,
-                             user_id: stream?.user_id,
-                             category: stream?.category,
-                             title: stream?.title
-                           });
-                           return null;
-                         })()}
-                         <TrollmersBattleControls
-                           currentStream={stream}
-                           onBattleAccepted={async () => {
-                             // Toggle battle mode UI
-                             toggleBattleMode();
-                             // Refresh stream data to get updated is_battle status
-                             // This triggers BattleView to render
-                             console.log('[BroadcastControls] Battle accepted, refreshing stream data...');
-                             if (onRefreshStream) {
-                               await onRefreshStream();
-                             }
-                           }}
-                         />
-                    </div>
-                    )}
                 </div>
                 </motion.div>
                 )}

@@ -63,6 +63,8 @@ export default function SetupPage() {
   const [isProtected, setIsProtected] = useState(false);
   const [broadcastPassword, setBroadcastPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // Battle enabled state
+  const [battleEnabled, setBattleEnabled] = useState(false);
   
   // Check if user can create protected broadcast (admin/staff or level >= 50)
   const canCreateProtected = profile && (
@@ -1025,6 +1027,9 @@ export default function SetupPage() {
         insertData.password_hash = null;
       }
 
+      // Add battle enabled setting
+      insertData.battle_enabled = battleEnabled;
+
       const { data, error } = await supabase
         .from('streams')
         .insert(insertData)
@@ -1545,6 +1550,34 @@ export default function SetupPage() {
                   <p className="text-xs text-gray-400">
                     Enable password protection to restrict who can join your broadcast
                   </p>
+                )}
+
+                {/* Battle Enabled Toggle - Only for General Chat category */}
+                {category === 'general' && (
+                  <div className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-3">
+                      <Swords size={20} className="text-orange-500" />
+                      <div>
+                        <span className="font-medium text-orange-300">Battle Mode</span>
+                        <p className="text-xs text-gray-400">
+                          Allow guests to start battles during your broadcast
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBattleEnabled(!battleEnabled)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        battleEnabled ? 'bg-orange-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          battleEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 )}
               </div>
             )}

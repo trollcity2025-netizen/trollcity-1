@@ -5,12 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import { cn } from '../../lib/utils';
 import { OFFICIAL_GIFTS } from '../../lib/giftConstants';
+import { useAnimationStore, type GiftType } from '../../lib/animationManager';
 
 interface GiftAnimationOverlayProps {
   gifts?: BroadcastGift[];
   onAnimationComplete?: (giftId: string) => void;
   userPositions?: Record<string, { top: number; left: number; width: number; height: number }>;
   getUserPositions?: () => Record<string, { top: number; left: number; width: number; height: number }>;
+  participantNames?: Record<string, string>;
 }
 
 // Configuration - show multiple gifts simultaneously
@@ -99,6 +101,54 @@ const triggerScreenShake = (cost: number) => {
   }
 };
 
+// Get gift type mapping from gift name / slug
+const mapGiftToType = (
+  gift: BroadcastGift,
+  details: { name: string; icon: string; cost: number }
+): GiftType => {
+  const haystack = [
+    gift.animation_type,
+    gift.gift_slug,
+    gift.gift_id,
+    gift.gift_name,
+    details.name,
+    gift.gift_icon,
+    details.icon,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (haystack.includes('rose') || haystack.includes('🌹')) return 'rose';
+  if (haystack.includes('heart') || haystack.includes('💓') || haystack.includes('💕') || haystack.includes('❤️')) return 'heart';
+  if (haystack.includes('diamond') || haystack.includes('💎')) return 'diamond';
+  if (haystack.includes('crown') || haystack.includes('throne') || haystack.includes('👑') || haystack.includes('🪑')) return 'crown';
+  if (haystack.includes('car') || haystack.includes('convoy') || haystack.includes('🚗') || haystack.includes('🏎')) return 'car';
+  if (haystack.includes('house') || haystack.includes('🏠')) return 'house';
+  if (haystack.includes('rocket') || haystack.includes('🚀')) return 'rocket';
+  if (haystack.includes('dragon') || haystack.includes('🐉')) return 'dragon';
+  if (haystack.includes('star') || haystack.includes('⭐')) return 'star';
+  if (haystack.includes('trophy') || haystack.includes('🏆')) return 'trophy';
+  if (haystack.includes('coffee') || haystack.includes('☕')) return 'coffee';
+  if (haystack.includes('pizza') || haystack.includes('🍕')) return 'pizza';
+
+  if (gift.animation_type) {
+    const animationType = gift.animation_type.toLowerCase();
+    if (animationType.includes('fireworks')) return 'trophy';
+    if (animationType.includes('spotlight')) return 'crown';
+    if (animationType.includes('orbit')) return 'diamond';
+    if (animationType.includes('spin')) return 'diamond';
+    if (animationType.includes('burst')) return 'star';
+    if (animationType.includes('drop')) return 'rose';
+    if (animationType.includes('float')) return 'heart';
+  }
+
+  // Better visual fallback than always heart for unknown gifts.
+  if (details.cost >= 2500) return 'diamond';
+  if (details.cost >= 500) return 'star';
+  return 'heart';
+};
+
 // Get combo count from gift quantity - only show combo when quantity > 1
 const getComboCount = (gift: BroadcastGift): number => {
   // Use the quantity field if available, otherwise default to 1
@@ -111,9 +161,11 @@ export default function GiftAnimationOverlay({
   gifts = [], 
   onAnimationComplete, 
   userPositions, 
-  getUserPositions 
+  getUserPositions,
+  participantNames = {},
 }: GiftAnimationOverlayProps) {
   const [visibleGifts, setVisibleGifts] = useState<BroadcastGift[]>([]);
+  const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation);
   // Track which gifts already have timers to avoid resetting them
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
    
@@ -122,12 +174,14 @@ export default function GiftAnimationOverlay({
     if (!gifts || gifts.length === 0) {
       // Clear visible gifts when there are no gifts
       if (visibleGifts.length > 0) {
+        console.log('[GiftOverlay] 🧹 Clearing visible gifts, input is empty');
         setVisibleGifts([]);
       }
       return;
     }
     
-    console.log('[GiftOverlay] Processing gifts:', gifts.length, gifts);
+    console.log('[GiftOverlay] 📥 INPUT gifts changed:', gifts.length, 'gifts | current visible:', visibleGifts.length);
+    console.log('[GiftOverlay] 📊 Gift IDs:', gifts.map(g => g.id));
     
     setVisibleGifts(prev => {
       // Create a map of existing gift IDs for quick lookup
@@ -138,12 +192,13 @@ export default function GiftAnimationOverlay({
       const newGifts = gifts.filter(g => !existingIds.has(g.id));
       
       if (newGifts.length === 0) {
+        console.log('[GiftOverlay] ⏭️ No new gifts, updating visible to match input');
         // No new gifts, but make sure we have the latest gifts from props
         // Take the most recent MAX_VISIBLE_GIFTS
         return gifts.slice(-MAX_VISIBLE_GIFTS);
       }
       
-      console.log('[GiftOverlay] New gifts found:', newGifts.length);
+      console.log('[GiftOverlay] ✨ New gifts found:', newGifts.length, 'gift IDs:', newGifts.map(g => g.id));
       
       // Process each new gift - but only trigger effects once per batch
       const processedBatches = new Set<string>();
@@ -160,7 +215,31 @@ export default function GiftAnimationOverlay({
           triggerVibration(details.cost);
           triggerScreenShake(details.cost);
         }
-        
+
+        // Central new animation call for all broadcast participants (host, seats, viewers)
+        try {
+          const resolvedSenderName =
+            gift.sender_name ||
+            participantNames[gift.sender_id] ||
+            'Someone';
+          const resolvedReceiverName =
+            gift.receiver_name ||
+            participantNames[gift.receiver_id] ||
+            'Broadcaster';
+
+          playGiftAnimation({
+            type: mapGiftToType(gift, details),
+            senderName: resolvedSenderName,
+            senderAvatar: undefined,
+            receiverName: resolvedReceiverName,
+            amount: gift.quantity || 1,
+            giftName: details.name,
+            giftIcon: details.icon,
+          });
+        } catch (err) {
+          console.error('[GiftOverlay] playGiftAnimation failed:', err);
+        }
+
         console.log('[GiftOverlay] Gift processed:', gift.gift_name, 'tier:', tier, 'cost:', details.cost, 'sender:', gift.sender_name, 'batch:', batchId);
       });
       
@@ -225,8 +304,8 @@ export default function GiftAnimationOverlay({
   
   // Debug: log visible gifts
   useEffect(() => {
-    console.log('[GiftOverlay] Visible gifts:', visibleGifts.length);
-  }, [visibleGifts.length]); // Only log when length changes, not every render
+    console.log('[GiftOverlay] 📺 VISIBLE GIFTS STATE:', visibleGifts.length, visibleGifts.map(g => ({ id: g.id, gift_name: g.gift_name, sender: g.sender_name })));
+  }, [visibleGifts.length, visibleGifts]); // Only log when length changes, not every render
   
   const dismissGift = useCallback((giftId: string) => {
     // Clear timer for this gift
@@ -244,32 +323,8 @@ export default function GiftAnimationOverlay({
     });
   }, [onAnimationComplete]); // Empty deps - dismissGift never changes
   
-  // Render using portal
-  if (visibleGifts.length === 0) return null;
-  
-  // Always use document.body for portal
-  const target = document.body;
-  
-  return createPortal(
-    <div
-      className="fixed inset-0 pointer-events-none z-[99999]"
-      style={{ position: 'fixed', inset: 0, zIndex: 99999 }}
-    >
-      <AnimatePresence>
-        {visibleGifts.map((gift, index) => (
-          <GiftAnimationItem
-            key={gift.id}
-            gift={gift}
-            index={index}
-            getUserPositions={getUserPositions}
-            userPositions={userPositions}
-            onDismiss={() => dismissGift(gift.id)}
-          />
-        ))}
-      </AnimatePresence>
-    </div>,
-    target
-  );
+  // Legacy overlay UI is disabled; the central animation store drives the visual gift effect.
+  return null;
 }
 
 // Individual gift animation item that gets fresh positions on each render

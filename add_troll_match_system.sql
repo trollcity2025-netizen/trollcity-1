@@ -110,13 +110,20 @@ BEGIN
             CASE WHEN up.last_active > NOW() - INTERVAL '1 hour' THEN 3 
                  WHEN up.last_active > NOW() - INTERVAL '24 hours' THEN 2 
                  WHEN up.last_active > NOW() - INTERVAL '7 days' THEN 1 
-                 ELSE 0 END
+                 ELSE 0 END +
+            -- Boost users without interests (they haven't filled TM form yet)
+            CASE WHEN (up.interests IS NULL OR array_length(up.interests, 1) IS NULL) THEN 10 ELSE 0 END
         )::INTEGER as match_score,
         up.is_online::BOOLEAN,
         up.last_active::TIMESTAMPTZ
     FROM user_profiles up
     WHERE up.id != p_user_id
-    AND up.interests && v_interests
+    -- Match if user has interests that overlap OR if either user has no interests
+    AND (
+        v_interests && COALESCE(up.interests, '{}'::TEXT[])
+        OR array_length(v_interests, 1) IS NULL
+        OR array_length(up.interests, 1) IS NULL
+    )
     AND (
         NOT p_dating 
         OR (

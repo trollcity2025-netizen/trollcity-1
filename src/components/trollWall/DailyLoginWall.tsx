@@ -4,6 +4,7 @@ import { useAuthStore } from '../../lib/store'
 import { useDailyLoginPost } from '../../lib/hooks/useDailyLoginPost'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
+import MentionTextarea from '../MentionTextarea'
 
 interface DailyLoginWallProps {
   onPostCreated?: (postId: string) => void
@@ -168,10 +169,10 @@ export default function DailyLoginWall({ onPostCreated }: DailyLoginWallProps) {
       {canPostToday ? (
         <form onSubmit={handleSubmit}>
           {/* Textarea */}
-          <textarea
+          <MentionTextarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What's on your mind? Share your daily troll thoughts..."
+            onChange={setContent}
+            placeholder="What's on your mind? Share your daily troll thoughts... Use # to tag users"
             maxLength={500}
             disabled={posting || loading}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-cyan-400 disabled:opacity-50"

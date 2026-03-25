@@ -10,12 +10,10 @@ import { useCallback } from 'react';
 const CONVERSATIONS_CACHE_KEY = 'tcps_conversations';
 const MESSAGES_CACHE_KEY = 'tcps_messages';
 
-// Optimized conversation fetch - fewer queries, more efficient
+// Optimized conversation fetch - single RPC call
 async function fetchConversations(userId: string) {
-  // Single optimized query that fetches conversations with last message and unread count
   const { data: conversations, error } = await supabase
-    .rpc('get_user_conversations_optimized', { p_user_id: userId })
-    .limit(50);
+    .rpc('get_user_conversations_optimized', { p_user_id: userId });
 
   if (error) {
     console.error('Error fetching conversations:', error);
@@ -58,29 +56,13 @@ async function fetchMessages(conversationId: string, limit = 50) {
   return (messages || []).reverse();
 }
 
-// Create or get existing conversation
+// Create or get existing conversation - uses single RPC
 async function getOrCreateConversation(userId: string, otherUserId: string) {
-  // First try to find existing conversation
-  const { data: existing } = await supabase
-    .from('conversation_members')
-    .select('conversation_id')
-    .eq('user_id', userId);
+  const { data: foundConvId } = await supabase
+    .rpc('find_shared_conversation', { p_user_id: userId, p_other_user_id: otherUserId });
 
-  if (existing && existing.length > 0) {
-    const convIds = existing.map(c => c.conversation_id);
-    
-    // Find conversation with the other user
-    const { data: shared } = await supabase
-      .from('conversation_members')
-      .select('conversation_id')
-      .in('conversation_id', convIds)
-      .eq('user_id', otherUserId)
-      .limit(1)
-      .maybeSingle();
-
-    if (shared?.conversation_id) {
-      return { id: shared.conversation_id, is_new: false };
-    }
+  if (foundConvId) {
+    return { id: foundConvId, is_new: false };
   }
 
   // Create new conversation

@@ -1,0 +1,525 @@
+{
+  "executiveSummary": {
+    "totalAccountsCreatedByRole": {
+      "Lead Troll Officer": 0,
+      "Troll Officer": 0,
+      "Secretary": 0,
+      "Pastor": 0,
+      "TCNN": 0,
+      "Regular User": 0
+    },
+    "totalRoutesVisited": 0,
+    "totalActionsClicked": 15,
+    "totalFormsSubmitted": 15,
+    "totalModerationActionsTested": 0,
+    "totalPassedChecks": 0,
+    "totalFailedChecks": 15
+  },
+  "accountsUsed": [
+    {
+      "key": "lead_troll_officer",
+      "role": "Lead Troll Officer",
+      "email": "qa_lead_troll_officer_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_lead_troll_officer_16",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "troll_officer",
+      "role": "Troll Officer",
+      "email": "qa_troll_officer_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_troll_officer_1636156",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "secretary",
+      "role": "Secretary",
+      "email": "qa_secretary_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_secretary_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "pastor",
+      "role": "Pastor",
+      "email": "qa_pastor_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_pastor_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "tcnn",
+      "role": "TCNN",
+      "email": "qa_tcnn_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_tcnn_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_01",
+      "role": "Regular User",
+      "email": "qa_user_01_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_01_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_02",
+      "role": "Regular User",
+      "email": "qa_user_02_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_02_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_03",
+      "role": "Regular User",
+      "email": "qa_user_03_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_03_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_04",
+      "role": "Regular User",
+      "email": "qa_user_04_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_04_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_05",
+      "role": "Regular User",
+      "email": "qa_user_05_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_05_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_06",
+      "role": "Regular User",
+      "email": "qa_user_06_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_06_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_07",
+      "role": "Regular User",
+      "email": "qa_user_07_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_07_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_08",
+      "role": "Regular User",
+      "email": "qa_user_08_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_08_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_09",
+      "role": "Regular User",
+      "email": "qa_user_09_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_09_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    },
+    {
+      "key": "user_10",
+      "role": "Regular User",
+      "email": "qa_user_10_2026-03-25t16-36-15-668z@example.test",
+      "username": "qa_user_10_163615668z",
+      "signupStatus": "failed",
+      "loginStatus": "not_run",
+      "sessionPersistence": "not_run",
+      "logoutStatus": "not_run",
+      "actualProfile": null,
+      "storageStatePath": null,
+      "notes": [
+        "Initial signup did not leave /auth.",
+        "locator.click: Error: strict mode violation: getByRole('button', { name: 'Sign In' }) resolved to 2 elements:\n    1) <button class=\"px-6 py-2 rounded-lg font-semibold transition-all duration-300 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white shadow-[0_4px_12px_rgba(147,51,234,0.3)]\">Sign In</button> aka getByRole('button', { name: 'Sign In' }).first()\n    2) <button type=\"submit\" class=\"w-full py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-[0_15px_40px_rgba(147,51,234,0.3)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed\">Sign In</button> aka locator('form').getByRole('button', { name: 'Sign In' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Sign In' })\u001b[22m\n"
+      ]
+    }
+  ],
+  "roleCoverageMatrix": [],
+  "moderationResultsMatrix": [
+    {
+      "accountKey": "user_01",
+      "email": "qa_user_01_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_02",
+      "email": "qa_user_02_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_03",
+      "email": "qa_user_03_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_04",
+      "email": "qa_user_04_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_05",
+      "email": "qa_user_05_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_06",
+      "email": "qa_user_06_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_07",
+      "email": "qa_user_07_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_08",
+      "email": "qa_user_08_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_09",
+      "email": "qa_user_09_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    },
+    {
+      "accountKey": "user_10",
+      "email": "qa_user_10_2026-03-25t16-36-15-668z@example.test",
+      "initialState": "Unknown",
+      "actionsApplied": [],
+      "finalState": "Untested",
+      "uiUpdatedInstantly": "Blocked",
+      "restrictionsWorked": "Blocked",
+      "reversalWorked": "Blocked"
+    }
+  ],
+  "bugsFound": [],
+  "backendIssues": [
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Lead Troll Officer",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Troll Officer",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Secretary",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Pastor",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "TCNN",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    },
+    {
+      "category": "Supabase / Backend / Schema",
+      "role": "Regular User",
+      "page": "/auth",
+      "operation": "provision_account",
+      "exactError": "HEAD https://yjxpwfalenorzrqxwmtr.supabase.co/rest/v1/user_profiles?select=*&created_at=gte.2026-03-25T00%3A00%3A00.000Z -> net::ERR_ABORTED",
+      "suspectedCause": "Unknown backend mismatch",
+      "suggestedFix": "Inspect the failing request and align the frontend contract with the deployed backend."
+    }
+  ],
+  "visibilityAndAuthorizationFindings": {
+    "pagesIncorrectlyExposed": [],
+    "pagesIncorrectlyHidden": [],
+    "actionsIncorrectlyExposed": [],
+    "actionsIncorrectlyBlocked": []
+  },
+  "blockedOrUntestableAreas": [
+    "Lead Troll Officer coverage blocked because account provisioning failed.",
+    "Troll Officer coverage blocked because account provisioning failed.",
+    "Secretary coverage blocked because account provisioning failed.",
+    "Pastor coverage blocked because account provisioning failed.",
+    "TCNN coverage blocked because account provisioning failed.",
+    "Regular User coverage blocked because account provisioning failed.",
+    "Moderation matrix blocked because no real officer-capable account exists in the frontend run."
+  ],
+  "recommendedFixOrder": [
+    "Fix any route guards or RLS policies that prevent legitimate staff pages from loading.",
+    "Fix moderation actions that do not update the moderator UI, target session, and backend state immediately.",
+    "Fix schema drift between frontend expectations and deployed Supabase tables, columns, and RPCs.",
+    "Add or expose a legitimate non-admin role assignment path if QA is expected to create staff users through the app.",
+    "Tighten hidden/exposed navigation so regular users never see staff-only destinations."
+  ],
+  "routeVisits": [],
+  "actionRecords": []
+}

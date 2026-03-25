@@ -119,14 +119,14 @@ export default function SecretaryConsole() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex items-center justify-center text-slate-400">
         Verifying credentials...
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex text-slate-900">
       {/* Sidebar */}
       <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col">
         <div className="p-6 border-b border-slate-800">

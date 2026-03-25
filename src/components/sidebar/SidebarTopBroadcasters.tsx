@@ -46,13 +46,29 @@ export default function SidebarTopBroadcasters({ isCollapsed }: SidebarTopBroadc
       });
       
       const broadcasterIds = Array.from(giftMap.keys());
+      
+      // 2. Get users with active top_broadcaster feature (purchased)
+      const { data: featuredData } = await supabase
+        .rpc('get_top_broadcasters_with_featured');
+
+      // Add featured users to the map if not already present
+      if (featuredData && featuredData.length > 0) {
+        featuredData.forEach((f: any) => {
+          if (!broadcasterIds.includes(f.user_id)) {
+            broadcasterIds.push(f.user_id);
+            // Give them a boost in ranking (use 1 as placeholder, will be sorted by recency)
+            giftMap.set(f.user_id, 1);
+          }
+        });
+      }
+
       if (broadcasterIds.length === 0) {
           setBroadcasters([]);
           setLoading(false);
           return;
       }
 
-      // 2. Check live status for these users
+      // 3. Check live status for these users
       const { data: streams } = await supabase
         .from('streams')
         .select('broadcaster_id, id, is_live')
@@ -62,14 +78,16 @@ export default function SidebarTopBroadcasters({ isCollapsed }: SidebarTopBroadc
       const liveMap = new Map<string, string>(); // userId -> streamId
       streams?.forEach((s: any) => liveMap.set(s.broadcaster_id, s.id));
 
-      // 3. Fetch profiles
+      // 4. Fetch profiles
       const { data: profiles } = await supabase
         .from('user_profiles')
         .select('id, username, avatar_url')
         .in('id', broadcasterIds);
 
-      // 4. Combine data
+      // 5. Combine data
       const combined: TopBroadcaster[] = [];
+      const featuredIds = new Set(featuredData?.map((f: any) => f.user_id) || []);
+      
       profiles?.forEach((p: any) => {
         combined.push({
           user_id: p.id,
@@ -81,8 +99,14 @@ export default function SidebarTopBroadcasters({ isCollapsed }: SidebarTopBroadc
         });
       });
 
-      // Sort by gifts
-      combined.sort((a, b) => b.total_gifts - a.total_gifts);
+      // Sort by: featured users first, then by gifts
+      combined.sort((a, b) => {
+        const aFeatured = featuredIds.has(a.user_id);
+        const bFeatured = featuredIds.has(b.user_id);
+        if (aFeatured && !bFeatured) return -1;
+        if (!aFeatured && bFeatured) return 1;
+        return b.total_gifts - a.total_gifts;
+      });
 
       // Take top 5
       setBroadcasters(combined.slice(0, 5));

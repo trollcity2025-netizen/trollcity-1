@@ -24,63 +24,43 @@ const TrollJumpScare: React.FC<TrollJumpScareProps> = ({ rarity }) => {
     '/img/jumpscares/jumpscare11.jpeg',
   ];
 
-  // Generate scary sounds using Web Audio API
+  // Scary sound files - real screams and shocking sounds
+  const scarySounds = [
+    '/sounds/scare1.mp3',
+    '/sounds/scare2.mp3',
+    '/sounds/scare3.mp3',
+    '/sounds/scare4.mp3',
+    '/sounds/scare5.mp3',
+    '/sounds/scare6.mp3',
+    '/sounds/scare7.mp3',
+    '/sounds/scare8.mp3',
+  ];
+
+  // Play actual scary sound files
   const playScarySound = (index: number, volume: number) => {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      // Different scary sounds based on image index
-      const soundConfigs = [
-        // Scream - high pitched
-        { type: 'sawtooth' as OscillatorType, freq: 800, freqEnd: 1200, duration: 0.8 },
-        // Deep monster growl
-        { type: 'sawtooth' as OscillatorType, freq: 80, freqEnd: 60, duration: 1.0 },
-        // Eerie wail
-        { type: 'sine' as OscillatorType, freq: 300, freqEnd: 600, duration: 1.2 },
-        // Creepy whisper
-        { type: 'triangle' as OscillatorType, freq: 200, freqEnd: 150, duration: 0.6 },
-        // Scary beep
-        { type: 'square' as OscillatorType, freq: 400, freqEnd: 200, duration: 0.3 },
-        // Low rumble
-        { type: 'sawtooth' as OscillatorType, freq: 50, freqEnd: 100, duration: 1.5 },
-        // Jagged scream
-        { type: 'sawtooth' as OscillatorType, freq: 600, freqEnd: 400, duration: 0.5 },
-        // Horror drone
-        { type: 'sine' as OscillatorType, freq: 100, freqEnd: 80, duration: 2.0 },
-      ];
-      
-      const config = soundConfigs[index % soundConfigs.length];
-      oscillator.type = config.type;
-      oscillator.frequency.setValueAtTime(config.freq, audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(config.freqEnd, audioContext.currentTime + config.duration);
-      
-      gainNode.gain.setValueAtTime(volume * 0.5, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + config.duration);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + config.duration);
+      const soundIndex = index % scarySounds.length;
+      const audio = new Audio(scarySounds[soundIndex]);
+      audio.volume = volume;
+      audio.play().catch(e => console.log('Audio play failed:', e));
     } catch (e) {
-      console.log('Audio generation failed:', e);
+      console.log('Audio playback failed:', e);
     }
   };
 
   useEffect(() => {
+    // Randomly select a scary image and sound
+    const randomIndex = Math.floor(Math.random() * scaryImages.length);
+    setScaryImageIndex(randomIndex);
+    
     // Start animation after a short delay to ensure the overlay is visible
     const timer = setTimeout(() => {
       setIsAnimating(true);
       
-      // Play scary sound based on image index with volume based on rarity
+      // Play scary sound based on random index with volume based on rarity
       const volume = rarity === 'LEGENDARY' ? 1.0 : rarity === 'EPIC' ? 0.8 : 0.6;
-      playScarySound(scaryImageIndex, volume);
+      playScarySound(randomIndex, volume);
     }, 100);
-
-    // Randomly select a scary image
-    setScaryImageIndex(Math.floor(Math.random() * scaryImages.length));
 
     return () => clearTimeout(timer);
   }, []);

@@ -3,6 +3,7 @@
  * Used in both sidebar and right panel slots
  */
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CityAd } from '../../types/cityAds';
 import { supabase } from '../../lib/supabase';
 
@@ -13,11 +14,15 @@ interface PromoAdCardProps {
 }
 
 export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoAdCardProps) {
+  const navigate = useNavigate();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const isSidebar = variant === 'sidebar';
   const isFeatured = variant === 'featured';
+
+  // Check if URL is internal (Troll City route) vs external
+  const isInternalLink = (url: string) => url.startsWith('/');
 
   // Handle click - track and navigate
   const handleClick = async () => {
@@ -38,7 +43,11 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
 
     // Navigate if CTA link exists
     if (ad.cta_link) {
-      window.open(ad.cta_link, '_blank', 'noopener,noreferrer');
+      if (isInternalLink(ad.cta_link)) {
+        navigate(ad.cta_link);
+      } else {
+        window.open(ad.cta_link, '_blank', 'noopener,noreferrer');
+      }
     }
     
     onClick?.();

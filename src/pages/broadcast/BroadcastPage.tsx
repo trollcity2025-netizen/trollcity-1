@@ -7,6 +7,7 @@ import { useAuthStore } from '../../lib/store'
 import { useStreamStore } from '../../lib/streamStore'
 import { PreflightStore } from '../../lib/preflightStore'
 import { emitEvent } from '../../lib/events'
+// import { useAnimationStore, type GiftType } from '../../lib/animationManager'
 
 import { Stream } from '../../types/broadcast'
 import StreamLayout from '../../components/broadcast/StreamLayout'
@@ -25,13 +26,13 @@ import PinProductModal from '../../components/broadcast/PinProductModal'
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime'
 import { useBroadcastPinnedProducts } from '../../hooks/useBroadcastPinnedProducts'
 import { useBoxCount } from '../../hooks/useBoxCount'
+import { useBattleState } from '../../hooks/useBattleState'
 import {
   getCategoryConfig,
   supportsBattles,
   getMatchingTerminology,
 } from '../../config/broadcastCategories'
 import ChallengeManager from '../../components/broadcast/ChallengeManager'
-import BattleGridOverlay from '../../components/broadcast/BattleGridOverlay'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -89,6 +90,7 @@ function BroadcastPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isBattleMode, setIsBattleMode] = useState(false)
+  const [canSwipe, setCanSwipe] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
   const [hostMicMutedByOfficer, setHostMicMutedByOfficer] = useState(false)
   const [battleData, setBattleData] = useState<any>(null)
@@ -96,6 +98,9 @@ function BroadcastPage() {
   
   const hasJoinedRef = useRef(false)
   const roomRef = useRef<Room | null>(null)
+  const anonymousViewerIdRef = useRef(`anon-viewer-${Math.random().toString(36).slice(2, 10)}`)
+  const stageTouchStartYRef = useRef<number | null>(null)
+  const stageTouchCurrentYRef = useRef<number | null>(null)
   
   // Debug: Log when remoteParticipants changes
   useEffect(() => {
@@ -108,12 +113,140 @@ function BroadcastPage() {
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null)
   const [recentGifts, setRecentGifts] = useState<BroadcastGift[]>([])
+  const [giftNameMap, setGiftNameMap] = useState<Record<string, string>>({})
   const [giftUserPositions, setGiftUserPositions] = useState<Record<string, { top: number; left: number; width: number; height: number }>>({})
   const getGiftUserPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}))
+  const giftNameMapRef = useRef<Record<string, string>>({})
+  // const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation)
 
   const handleGetUserPositions = useCallback((getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => {
     getGiftUserPositionsRef.current = getPositions;
   }, []);
+
+  useEffect(() => {
+    giftNameMapRef.current = giftNameMap;
+  }, [giftNameMap]);
+
+  const processGiftEvent = useCallback((giftData: any) => {
+    console.log('[BroadcastPage] processGiftEvent hit', {giftData});
+    if (!giftData) {
+      console.log('[BroadcastPage] ⚠️ processGiftEvent: giftData is null/undefined');
+      return;
+    }
+
+    const giftId = giftData.id || `gift-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const incomingStreamId = giftData.streamId || giftData.stream_id;
+    console.log('[BroadcastPage] ✅ Processing gift', { giftId, incomingStreamId, currentStreamId: streamId });
+    
+    if (incomingStreamId && incomingStreamId !== streamId) {
+      console.log('[BroadcastPage] ⚠️ Stream ID mismatch, skipping gift:', { incomingStreamId, currentStreamId: streamId });
+      return;
+    }
+
+    const newGift: BroadcastGift = {
+      id: giftId,
+      gift_id: giftData.gift_id,
+      gift_name: giftData.gift_name,
+      gift_icon: giftData.gift_icon || '🎁',
+      animation_type: giftData.animation_type,
+      amount: giftData.amount,
+      quantity: giftData.quantity || 1,
+      sender_id: giftData.sender_id,
+      sender_name: giftData.sender_name || 'Someone',
+      receiver_id: giftData.receiver_id,
+      created_at: giftData.timestamp || new Date().toISOString(),
+    };
+
+    setRecentGifts((prev) => {
+      if (prev.some((g) => g.id === giftId)) {
+        console.log('[BroadcastPage] 📌 Gift already in queue (dedupe), skipping:', giftId);
+        return prev;
+      }
+      const updated = [...prev, newGift].slice(-20);
+      console.log('[BroadcastPage] ✅ Added gift to queue, now:', updated.length, 'gifts');
+      return updated;
+    });
+
+    const missingIds = [giftData.sender_id, giftData.receiver_id].filter(
+      (id): id is string => !!id && !giftNameMapRef.current[id]
+    );
+
+    if (missingIds.length > 0) {
+      supabase
+        .from('user_profiles')
+        .select('id, username')
+        .in('id', Array.from(new Set(missingIds)))
+        .then(({ data }) => {
+          if (!data || data.length === 0) return;
+
+          const resolved = Object.fromEntries(
+            data
+              .filter((row: any) => row?.id && row?.username)
+              .map((row: any) => [row.id, row.username])
+          );
+
+          if (Object.keys(resolved).length === 0) return;
+
+          setGiftNameMap((prev) => ({ ...prev, ...resolved }));
+          setRecentGifts((prev) =>
+            prev.map((gift) =>
+              gift.id === giftId
+                ? {
+                    ...gift,
+                    sender_name: gift.sender_name === 'Someone' ? (resolved[gift.sender_id] || gift.sender_name) : gift.sender_name,
+                    receiver_name: !gift.receiver_name ? resolved[gift.receiver_id] : gift.receiver_name,
+                  }
+                : gift
+            )
+          );
+        })
+        .catch((err) => {
+          console.warn('[BroadcastPage] Failed to resolve gift usernames:', err);
+        });
+    }
+
+    // Start animation via centralized store; all participants should see this.
+    try {
+      // Temporarily comment out to debug hook error
+      // const broadcastGiftType: GiftType = (giftData.gift_name || '').toLowerCase().includes('rose') ? 'rose' :
+      //   (giftData.gift_name || '').toLowerCase().includes('heart') ? 'heart' :
+      //   (giftData.gift_name || '').toLowerCase().includes('diamond') ? 'diamond' :
+      //   (giftData.gift_name || '').toLowerCase().includes('crown') ? 'crown' :
+      //   (giftData.gift_name || '').toLowerCase().includes('car') ? 'car' :
+      //   (giftData.gift_name || '').toLowerCase().includes('house') ? 'house' :
+      //   (giftData.gift_name || '').toLowerCase().includes('rocket') ? 'rocket' :
+      //   (giftData.gift_name || '').toLowerCase().includes('dragon') ? 'dragon' :
+      //   (giftData.gift_name || '').toLowerCase().includes('star') ? 'star' :
+      //   (giftData.gift_name || '').toLowerCase().includes('trophy') ? 'trophy' :
+      //   (giftData.gift_name || '').toLowerCase().includes('coffee') ? 'coffee' :
+      //   (giftData.gift_name || '').toLowerCase().includes('pizza') ? 'pizza' : 'heart';
+
+      // playGiftAnimation({
+      //   type: broadcastGiftType,
+      //   senderName: giftData.sender_name || 'Someone',
+      //   senderAvatar: undefined,
+      //   receiverName: giftData.receiver_name || 'Broadcast',
+      //   amount: giftData.quantity || 1,
+      // });
+    } catch (err) {
+      console.error('[BroadcastPage] playGiftAnimation failed:', err);
+    }
+
+    if (giftData.receiver_id === streamRef.current?.user_id && broadcasterProfileRef.current) {
+      const giftAmount = Math.floor((giftData.amount || 0) * 0.95);
+      const newBalance = (broadcasterProfileRef.current.troll_coins || 0) + giftAmount;
+      setBroadcasterProfile({ ...broadcasterProfileRef.current, troll_coins: newBalance });
+    }
+
+    window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
+      detail: {
+        senderId: giftData.sender_id,
+        receiverId: giftData.receiver_id,
+        amount: giftData.amount,
+        timestamp: Date.now(),
+      }
+    }));
+  }, [streamId]);
 
   const stopLocalTracks = useCallback(() => {
     if (localTracks) {
@@ -291,10 +424,15 @@ function BroadcastPage() {
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const streamRef = useRef(stream)
+  const broadcasterProfileRef = useRef(broadcasterProfile)
 
   useEffect(() => {
     streamRef.current = stream
   }, [stream])
+
+  useEffect(() => {
+    broadcasterProfileRef.current = broadcasterProfile
+  }, [broadcasterProfile])
 
   const {
     boxCount,
@@ -464,6 +602,26 @@ function BroadcastPage() {
   const { seats, mySession: userSeat, joinSeat, leaveSeat, handleParticipantDisconnected } =
     useStreamSeats(stream?.id, user?.id, broadcasterProfile, stream)
 
+  // Battle state hook - integrates with existing BroadcastGrid
+  const { 
+    battleState, 
+    supporters, 
+    userTeam, 
+    joinWindowOpen,
+    remainingTime,
+    startBattle, 
+    pickSide, 
+    endBattle,
+    canGift: battleCanGift,
+    sendBattleGift,
+    shouldShowSidePicker 
+  } = useBattleState({
+    streamId: stream?.id || '',
+    localUserId: user?.id || userSeat?.guest_id || '',
+    isHost,
+    hostId: stream?.user_id,
+  });
+
   const canPublish = isHost || !!userSeat
 
   const justJoinedSeatRef = useRef(false);
@@ -479,6 +637,32 @@ function BroadcastPage() {
   // Handle leaving seat with instant track cleanup
   const handleLeaveSeat = useCallback(async () => {
     const room = roomRef.current
+    
+    // Check if battle is active and user is on a team
+    const isUserOnBroadcasterTeam = userSeat && (
+      userSeat.user_id === stream.user_id || 
+      supporters.get(userSeat.user_id || userSeat.guest_id || '')?.team === 'broadcaster'
+    );
+    const isUserOnChallengerTeam = userSeat && (
+      userSeat.user_id === battleState.challengerId || 
+      supporters.get(userSeat.user_id || userSeat.guest_id || '')?.team === 'challenger'
+    );
+    
+    // If user leaves during battle, their team loses and other team gets 2 crowns each
+    if (battleState.active && battleState.battleId && (isUserOnBroadcasterTeam || isUserOnChallengerTeam)) {
+      const leavingTeam = isUserOnBroadcasterTeam ? 'broadcaster' : 'challenger';
+      console.log(`[BattleState] User leaving during battle from ${leavingTeam} team - awarding win to other team`);
+      
+      // Call end battle with the other team as winner
+      try {
+        await supabase.rpc('end_battle_early', {
+          p_battle_id: battleState.battleId,
+          p_leaving_team: leavingTeam,
+        });
+      } catch (err) {
+        console.error('[BattleState] Error ending battle early:', err);
+      }
+    }
     
     // Instantly stop publishing tracks before clearing seat
     if (room && room.localParticipant) {
@@ -517,7 +701,7 @@ function BroadcastPage() {
     // Call the seat leave function
     await leaveSeat()
     console.log('[BroadcastPage] Left seat with instant track cleanup')
-  }, [leaveSeat, localTracks])
+  }, [leaveSeat, localTracks, battleState, userSeat, stream, supporters])
 
   const handleJoinSeat = useCallback(async (index: number, price: number) => {
     justJoinedSeatRef.current = true
@@ -824,6 +1008,14 @@ function BroadcastPage() {
   }, [streamId, stream, isHost, supabase, navigate, stopLocalTracks]);
 
   useEffect(() => {
+    console.log('[BroadcastPage] gift effect deps changed', {
+      streamId,
+      isHost,
+      hasProfile: !!broadcasterProfile,
+      remoteParticipantsCount: remoteParticipants.size,
+      localTracksLength: localTracks?.length || 0,
+    });
+
     if (!streamId) return;
 
     const channel = supabase.channel(`stream:${streamId}`);
@@ -941,50 +1133,7 @@ function BroadcastPage() {
           try {
             const giftData = payload.payload;
             console.log('[BroadcastPage] 🎁 GIFT RECEIVED via realtime:', giftData);
-            console.log('[BroadcastPage] Stream user_id:', stream?.user_id);
-            console.log('[BroadcastPage] Gift receiver_id:', giftData.receiver_id);
-            console.log('[BroadcastPage] Match?:', giftData.receiver_id === stream?.user_id);
-            
-            const newGift: BroadcastGift = {
-              id: giftData.id || `gift-${Date.now()}`,
-              gift_id: giftData.gift_id,
-              gift_name: giftData.gift_name,
-              gift_icon: giftData.gift_icon || '🎁',
-              amount: giftData.amount,
-              quantity: giftData.quantity || 1,
-              sender_id: giftData.sender_id,
-              sender_name: giftData.sender_name || 'Someone',
-              receiver_id: giftData.receiver_id,
-              created_at: giftData.timestamp || new Date().toISOString(),
-            };
-            setRecentGifts(prev => [...prev, newGift]);
-            
-            // Update local broadcaster profile state to show updated balance immediately
-            // The broadcaster receives 95% of the gift value
-            if (giftData.receiver_id === stream?.user_id && broadcasterProfile) {
-              const giftAmount = Math.floor((giftData.amount || 0) * 0.95);
-              const newBalance = (broadcasterProfile.troll_coins || 0) + giftAmount;
-              console.log('[BroadcastPage] 🎯 Updating broadcasterProfile balance with 95%:', {
-                giftAmount,
-                oldBalance: broadcasterProfile.troll_coins,
-                newBalance
-              });
-              setBroadcasterProfile({
-                ...broadcasterProfile,
-                troll_coins: newBalance
-              });
-            }
-            
-            // Dispatch custom event for UI components that may need to update
-            // This is handled by other components via event listeners - no page refresh needed
-            window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
-              detail: {
-                senderId: giftData.sender_id,
-                receiverId: giftData.receiver_id,
-                amount: giftData.amount,
-                timestamp: Date.now()
-              }
-            }));
+            processGiftEvent(giftData);
           } catch (err) {
             console.error('Error processing gift:', err);
           }
@@ -1036,12 +1185,88 @@ function BroadcastPage() {
       clearInterval(heartbeatInterval);
       supabase.removeChannel(channel);
     };
-  }, [streamId, navigate, stopLocalTracks, user?.id, supabase, profile]);
+  }, [streamId, navigate, stopLocalTracks, user?.id, supabase, profile, processGiftEvent]);
+
+  // Stable gift channel subscription - depends only on streamId
+  useEffect(() => {
+    if (!streamId) return;
+
+    const channelName = `stream-gifts:${streamId}`;
+    console.log('[BroadcastPage] 🎁 Creating new gift channel:', channelName);
+
+    const channel = supabase
+      .channel(channelName)
+      .on('broadcast', { event: 'gift_sent' }, ({ payload }) => {
+        console.log('[BroadcastPage] 🎁 Gift event received:', payload);
+        processGiftEvent(payload);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[BroadcastPage] 🎁 Unified gift channel SUBSCRIBED:', channelName);
+        } else {
+          console.log('[BroadcastPage] ⚠️ Unified gift channel status:', channelName, status);
+        }
+      });
+
+    return () => {
+      console.log('[BroadcastPage] 🔄 Unsubscribing old gift channel:', channel.topic);
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, processGiftEvent]);
 
   useEffect(() => {
-    // Allow guests with seats to initialize LiveKit
-    // Guests may not have user.id but can have userSeat from joinSeat
-    const hasUserIdentity = !!user?.id || !!userSeat;
+    if (!streamId) return;
+
+    const channelName = `stream-gifts-db:${streamId}`;
+    console.log('[BroadcastPage] Setting up DB gift fallback channel:', channelName);
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'stream_gifts',
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload: any) => {
+          const giftRow = payload.new || {};
+          console.log('[BroadcastPage] DB gift fallback received:', giftRow);
+
+          processGiftEvent({
+            id: giftRow.id,
+            gift_id: giftRow.gift_id,
+            gift_name: giftRow.metadata?.gift_name || giftRow.gift_name || 'Gift',
+            gift_icon: giftRow.metadata?.gift_icon || '🎁',
+            animation_type: giftRow.metadata?.animation_type || giftRow.animation_type,
+            amount: giftRow.amount || giftRow.coins_spent || giftRow.metadata?.amount || 0,
+            quantity: giftRow.quantity || giftRow.metadata?.quantity || 1,
+            sender_id: giftRow.sender_id,
+            sender_name: giftRow.metadata?.sender_name || 'Someone',
+            receiver_id: giftRow.receiver_id || giftRow.recipient_id,
+            receiver_name: giftRow.metadata?.receiver_name,
+            stream_id: giftRow.stream_id,
+            timestamp: giftRow.created_at,
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('[BroadcastPage] DB gift fallback status:', channelName, status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [streamId, processGiftEvent]);
+
+  useEffect(() => {
+    if (recentGifts.length > 0) {
+      console.log('[BroadcastPage] recentGifts state:', recentGifts.map((g) => ({ id: g.id, gift_name: g.gift_name, sender_id: g.sender_id, receiver_id: g.receiver_id })));
+    }
+    // Allow anonymous viewers to watch without authentication.
+    // Only publishers still require a real user or guest seat identity.
+    const hasUserIdentity = !isHost || !!user?.id || !!userSeat;
     
     if (!stream || !stream.id || !hasUserIdentity) {
       return;
@@ -1055,7 +1280,7 @@ function BroadcastPage() {
     
     // Determine the user identity for LiveKit
     // Use user.id for logged-in users, or guest_id from userSeat for guests
-    const userIdentity = user?.id || userSeat?.guest_id || `guest-${Date.now()}`;
+    const userIdentity = user?.id || userSeat?.guest_id || anonymousViewerIdRef.current;
     
     let mounted = true
 
@@ -1063,13 +1288,13 @@ function BroadcastPage() {
       if (!shouldPublish) {
         // OPTIMIZED: Don't block UI - connect in background without isJoining state
         try {
-          const viewerIdentity = `viewer-${userIdentity.substring(0, 8)}-${Date.now()}`
+          const viewerIdentity = `viewer-${userIdentity.substring(0, 12)}`
           // OPTIMIZED: Use parallel fetch for faster token get
           const { data, error } = await supabase.functions.invoke('livekit-token', {
             body: {
               room: stream.id,
               identity: viewerIdentity,
-              name: profile?.username || user?.email || userSeat?.user_profile?.username || 'Viewer',
+              name: profile?.username || user?.email || userSeat?.user_profile?.username || 'Guest Viewer',
               role: 'audience',
               isHost: false
             }
@@ -2044,6 +2269,127 @@ function BroadcastPage() {
     navigate(`/broadcast/summary/${stream?.id}`);
   };
 
+  const swipeNavigateLockRef = useRef(false);
+
+  // Check if there are adjacent streams to swipe to
+  useEffect(() => {
+    if (!stream?.id || isHost) {
+      setCanSwipe(false);
+      return;
+    }
+
+    const checkAdjacentStreams = async () => {
+      try {
+        const currentCategory = stream.category || 'general';
+        const { data } = await supabase
+          .from('streams')
+          .select('id')
+          .eq('is_live', true)
+          .eq('status', 'live')
+          .eq('category', currentCategory)
+          .limit(2);
+
+        const liveStreams = (data || []).filter((item) => item?.id);
+        setCanSwipe(liveStreams.length > 1);
+      } catch {
+        setCanSwipe(false);
+      }
+    };
+
+    checkAdjacentStreams();
+
+    const channel = supabase.channel(`swipe-check-${stream.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'streams',
+        filter: `category=eq.${stream.category || 'general'}`
+      }, () => {
+        checkAdjacentStreams();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [stream?.id, stream?.category, isHost]);
+
+  const navigateToAdjacentStream = useCallback(async (direction: 'up' | 'down') => {
+    if (!stream?.id || swipeNavigateLockRef.current) return;
+
+    swipeNavigateLockRef.current = true;
+
+    try {
+      const currentCategory = stream.category || 'general';
+      const { data, error } = await supabase
+        .from('streams')
+        .select('id, category, current_viewers, created_at')
+        .eq('is_live', true)
+        .eq('status', 'live')
+        .eq('category', currentCategory)
+        .order('current_viewers', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('[BroadcastPage] Failed to fetch swipe stream list:', error);
+        return;
+      }
+
+      const liveStreams = (data || []).filter((item) => item?.id);
+      if (liveStreams.length <= 1) return;
+
+      const currentIndex = liveStreams.findIndex((item) => item.id === stream.id);
+      if (currentIndex === -1) return;
+
+      const nextIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
+      const targetStream = liveStreams[nextIndex];
+
+      if (!targetStream?.id) return;
+
+      navigate(`/watch/${targetStream.id}`);
+    } catch (err) {
+      console.error('[BroadcastPage] Swipe navigation failed:', err);
+    } finally {
+      window.setTimeout(() => {
+        swipeNavigateLockRef.current = false;
+      }, 400);
+    }
+  }, [navigate, stream?.category, stream?.id]);
+
+  const handleStageTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (isHost || e.touches.length !== 1) return;
+    stageTouchStartYRef.current = e.touches[0].clientY;
+    stageTouchCurrentYRef.current = e.touches[0].clientY;
+  }, [isHost]);
+
+  const handleStageTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (isHost || stageTouchStartYRef.current === null) return;
+    stageTouchCurrentYRef.current = e.touches[0].clientY;
+    const diffY = stageTouchStartYRef.current - stageTouchCurrentYRef.current;
+    if (Math.abs(diffY) > 12) {
+      e.preventDefault();
+    }
+  }, [isHost]);
+
+  const handleStageTouchEnd = useCallback(() => {
+    if (isHost || stageTouchStartYRef.current === null || stageTouchCurrentYRef.current === null) {
+      stageTouchStartYRef.current = null;
+      stageTouchCurrentYRef.current = null;
+      return;
+    }
+
+    const diffY = stageTouchStartYRef.current - stageTouchCurrentYRef.current;
+    const threshold = 90;
+
+    if (Math.abs(diffY) >= threshold) {
+      navigateToAdjacentStream(diffY > 0 ? 'up' : 'down');
+    }
+
+    stageTouchStartYRef.current = null;
+    stageTouchCurrentYRef.current = null;
+  }, [isHost, navigateToAdjacentStream]);
+
   const activeUserIds = useMemo(() => {
     if (!stream) return [];
     const ids: string[] = [];
@@ -2151,65 +2497,50 @@ function BroadcastPage() {
         }
         
         video={
-          <div className="flex flex-col h-full">
-            {/* When in battle mode, show battle grid instead of regular broadcast */}
-            {shouldShowBattleOverlay && battleData ? (
-              <BattleGridOverlay
-                battleId={stream.battle_id}
-                streamId={stream.id}
+          <div
+            className="flex flex-col h-full"
+            style={!isHost ? { touchAction: 'none' } : undefined}
+            onTouchStart={handleStageTouchStart}
+            onTouchMove={handleStageTouchMove}
+            onTouchEnd={handleStageTouchEnd}
+          >
+            {/* Always show BroadcastGrid - battle mode is integrated into the grid */}
+            <>
+              <GiftersBubbleStrip 
+                streamId={streamId || ''} 
+                hostId={stream.user_id}
+              />
+              <BroadcastGrid
+                stream={stream}
+                seats={seats}
+                onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
                 isHost={isHost}
                 localTracks={localTracks}
-                remoteParticipants={Array.from(remoteParticipants.values())}
-                userId={user?.id || ''}
-                userProfile={broadcasterProfile}
-                onEndBattle={async () => {
-                  // End the battle and return to normal broadcast
-                  try {
-                    await supabase
-                      .from('battles')
-                      .update({ status: 'ended' })
-                      .eq('id', stream.battle_id);
-                    
-                    await supabase
-                      .from('streams')
-                      .update({ is_battle: false, battle_id: null })
-                      .eq('id', stream.id);
-                    
-                    setBattleData(null);
-                    setStream((prev: any) => prev ? { ...prev, is_battle: false, battle_id: null } : prev);
-                    toast.success('Battle ended');
-                  } catch (err) {
-                    console.error('Error ending battle:', err);
-                    toast.error('Failed to end battle');
-                  }
-                }}
+                room={roomRef.current}
+                remoteUsers={Array.from(remoteParticipants.values())}
+                localUserId={user?.id || userSeat?.guest_id || ''}
+                onGift={onGift}
+                onGiftAll={onGiftAll}
+                toggleCamera={toggleCamera}
+                toggleMicrophone={toggleMicrophone}
+                onGetUserPositions={handleGetUserPositions}
+                broadcasterProfile={broadcasterProfile}
+                streamStatus={stream.status}
+                boxCount={boxCount}
+                battleState={battleState}
+                supporters={supporters}
+                onPickSide={pickSide}
+                joinWindowOpen={joinWindowOpen}
+                userTeam={userTeam}
+                remainingTime={remainingTime}
+                shouldShowSidePicker={shouldShowSidePicker}
+                onBattleGift={sendBattleGift}
+                enableStreamSwipe={!isHost}
+                canSwipe={canSwipe}
+                onSwipeUp={() => navigateToAdjacentStream('up')}
+                onSwipeDown={() => navigateToAdjacentStream('down')}
               />
-            ) : (
-              <>
-                <GiftersBubbleStrip 
-                  streamId={streamId || ''} 
-                  hostId={stream.user_id}
-                />
-                <BroadcastGrid
-                  stream={stream}
-                  seats={seats}
-                  onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
-                  isHost={isHost}
-                  localTracks={localTracks}
-                  room={roomRef.current}
-                  remoteUsers={Array.from(remoteParticipants.values())}
-                  localUserId={user?.id}
-                  onGift={onGift}
-                  onGiftAll={onGiftAll}
-                  toggleCamera={toggleCamera}
-                  toggleMicrophone={toggleMicrophone}
-                  onGetUserPositions={handleGetUserPositions}
-                  broadcasterProfile={broadcasterProfile}
-                  streamStatus={stream.status}
-                  boxCount={boxCount}
-                />
-              </>
-            )}
+            </>
           </div>
         }
 
@@ -2236,6 +2567,9 @@ function BroadcastPage() {
             onRefreshStream={refreshStream}
             onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
             hasPendingChallenge={hasPendingChallenge}
+            onStartBattle={userSeat && (stream.battle_enabled === true) && !battleState.active && stream.category === 'general' ? startBattle : undefined}
+            battleActive={battleState.active}
+            battleEnabled={stream.battle_enabled === true && stream.category === 'general'}
           />
         }
         
@@ -2253,6 +2587,8 @@ function BroadcastPage() {
             onDenyChallenge={handleDenyChallenge}
             isBattleActive={stream.is_battle}
             isChatOpen={isChatOpen}
+            seats={seats}
+            broadcasterProfile={broadcasterProfile}
           />
         }
         
@@ -2261,6 +2597,19 @@ function BroadcastPage() {
             {!isHost && pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
             )}
+            <GiftAnimationOverlay 
+              gifts={recentGifts}
+              participantNames={Object.fromEntries(
+                [
+                  ...Object.entries(userProfiles).map(([id, profile]) => [id, profile.username || 'User'] as const),
+                  ...Object.entries(giftNameMap),
+                ]
+              )}
+              onAnimationComplete={(giftId) => {
+                // Remove the gift from recentGifts after animation
+                setRecentGifts(prev => prev.filter(g => g.id !== giftId));
+              }}
+            />
           </>
         }
         
@@ -2278,9 +2627,32 @@ function BroadcastPage() {
               activeUserIds={activeUserIds}
               userProfiles={userProfiles}
               sharedChannel={channelRef.current}
-              onGiftSent={(giftData: GiftItem, target: GiftTarget) => {
+              onGiftSent={async (giftData: GiftItem, target: GiftTarget) => {
                 const quantity = target.quantity || 1;
                 const totalAmount = giftData.coinCost * quantity;
+                
+                // Record battle gift if battle is active
+                if (battleState.active && battleState.battleId) {
+                  const giftAmount = giftData.coinCost * quantity;
+                  
+                  // Determine which team to credit based on recipient
+                  const creditTeam = (recipientId: string) => {
+                    if (recipientId === stream.user_id) return 'broadcaster';
+                    if (recipientId === battleState.challengerId) return 'challenger';
+                    // Default to broadcaster for untracked recipients
+                    return 'broadcaster';
+                  };
+                  
+                  if (target.type === 'all') {
+                    const allRecipients = [stream.user_id, ...activeUserIds];
+                    // Credit the broadcaster team for gifts to all
+                    await sendBattleGift?.('broadcaster', giftAmount);
+                  } else {
+                    const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
+                    const team = creditTeam(recipientId);
+                    await sendBattleGift?.(team, giftAmount);
+                  }
+                }
                 
                 if (target.type === 'all') {
                   const allRecipients = [stream.user_id, ...activeUserIds];

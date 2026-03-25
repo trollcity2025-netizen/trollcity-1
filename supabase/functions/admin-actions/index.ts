@@ -2133,18 +2133,33 @@ Deno.serve(async (req) => {
       case "get_secretary_assignments": {
         if (!isAdmin) throw new Error("Unauthorized");
         
-        const { data, error } = await supabaseAdmin
+        const { data: assignments, error } = await supabaseAdmin
           .from('secretary_assignments')
-          .select(`
-            *,
-            secretary:user_profiles!secretary_id (
-              username,
-              avatar_url
-            )
-          `);
+          .select('*');
         
         if (error) throw error;
-        result = { assignments: data };
+        
+        // Fetch profiles separately since FK points to auth.users, not user_profiles
+        const secretaryIds = (assignments || []).map(a => a.secretary_id);
+        let profilesMap: Record<string, { username: string; avatar_url: string }> = {};
+        
+        if (secretaryIds.length > 0) {
+          const { data: profiles } = await supabaseAdmin
+            .from('user_profiles')
+            .select('id, username, avatar_url')
+            .in('id', secretaryIds);
+          
+          if (profiles) {
+            profilesMap = Object.fromEntries(profiles.map(p => [p.id, { username: p.username, avatar_url: p.avatar_url }]));
+          }
+        }
+        
+        result = { 
+          assignments: (assignments || []).map(a => ({
+            ...a,
+            secretary: profilesMap[a.secretary_id] || { username: 'Unknown', avatar_url: '' }
+          }))
+        };
         break;
       }
 

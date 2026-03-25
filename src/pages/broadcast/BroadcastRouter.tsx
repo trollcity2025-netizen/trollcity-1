@@ -310,6 +310,17 @@ function BroadcastRouter() {
     )
   }
 
+  // TCNN streams route to dedicated TCNN pages (not the generic broadcast UI)
+  const isTCNN = stream.category === 'tcnn'
+  if (isTCNN && hasAccess) {
+    if (isHost) {
+      console.log('[BroadcastRouter] TCNN host → redirecting to TCNN broadcaster studio')
+      return <Navigate to={`/tcnn/broadcaster/${streamId}`} replace />
+    }
+    console.log('[BroadcastRouter] TCNN viewer → redirecting to TCNN viewer page')
+    return <Navigate to={`/tcnn/viewer/${streamId}`} replace />
+  }
+
   // Route based on user role
   // ALL users (hosts AND viewers) now use BroadcastPage with LiveKit
   // BroadcastPage handles both publisher (host) and audience (viewer) roles

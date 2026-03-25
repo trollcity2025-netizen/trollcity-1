@@ -181,7 +181,7 @@ export default function TrollPodsListing() {
   // If under construction, show full page message
   if (IS_UNDER_CONSTRUCTION) {
     return (
-      <div className={`min-h-screen w-full ${trollCityTheme.backgrounds.primary} relative overflow-x-hidden flex items-center justify-center p-4`}>
+      <div className={`min-h-screen w-full bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 relative overflow-x-hidden flex items-center justify-center p-4`}>
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPurple}`} />
         </div>
@@ -202,7 +202,7 @@ export default function TrollPodsListing() {
   }
 
   return (
-    <div className={`min-h-screen w-full ${trollCityTheme.backgrounds.primary} relative overflow-x-hidden p-4 md:p-8`}>
+    <div className={`min-h-screen w-full bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 relative overflow-x-hidden p-4 md:p-8`}>
        {/* Background Effects */}
        <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute inset-0 ${trollCityTheme.overlays.radialPurple}`} />

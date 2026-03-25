@@ -32,8 +32,7 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
 
   // Discount label for display
   const discountLabel = useMemo(() => {
-    if (trollmondDiscount >= 10) return 'MAX 10% OFF';
-    if (trollmondDiscount >= 5) return '5% OFF';
+    if (trollmondDiscount >= 10) return '10% OFF';
     return null;
   }, [trollmondDiscount]);
 
@@ -163,7 +162,6 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
         );
         
         await Promise.all(promises);
-        // Gift animations disabled per user request
         toast.success(`Gift sent to ${allRecipients.length} users!`);
         
       } catch (e) {
@@ -179,9 +177,6 @@ export default function GiftTray({ recipientId, streamId, onClose, battleId, all
     if (success) {
       setSelectedGift(gift);
       
-      // Gift animations disabled per user request
-      
-      // Close after a short delay
       setTimeout(() => {
         onClose();
       }, 1000);

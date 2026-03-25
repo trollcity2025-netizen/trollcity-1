@@ -70,9 +70,9 @@ const TrollopolyCityDevTest = lazyWithRetry(() => import("./pages/dev/Trollopoly
 const LivingPage = lazyWithRetry(() => import("./pages/LivingPage"));
 const ChurchPage = lazyWithRetry(() => import("./pages/ChurchPage"));
 const PastorDashboard = lazyWithRetry(() => import("./pages/church/PastorDashboard"));
-const TrollStationPage = lazyWithRetry(() => import("./pages/TrollStationPage"));
 const BadgeDesignShowcase = lazyWithRetry(() => import("./pages/dev/BadgeDesignShowcase"));
 const HomepageBackgroundShowcase = lazyWithRetry(() => import("./pages/dev/HomepageBackgroundShowcase"));
+const GiftAnimationShowcase = lazyWithRetry(() => import("./pages/dev/GiftAnimationShowcase"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
@@ -236,6 +236,8 @@ const NeighborsPage = lazyWithRetry(() => import("./pages/Neighbors"));
 const TCNNMainPage = lazyWithRetry(() => import("./pages/tcnn/TCNNMainPage"));
 const TCNNInternalDashboard = lazyWithRetry(() => import("./pages/tcnn/TCNNInternalDashboard"));
 const ArticleReader = lazyWithRetry(() => import("./pages/tcnn/ArticleReader"));
+const TCNNBroadcasterPage = lazyWithRetry(() => import("./pages/tcnn/TCNNBroadcasterPage"));
+const TCNNViewerPage = lazyWithRetry(() => import("./pages/tcnn/TCNNViewerPage"));
 
 const ShopView = lazyWithRetry(() => import("./pages/ShopView"));
 const CourtRoom = lazyWithRetry(() => import("./pages/CourtRoom"));
@@ -343,7 +345,6 @@ const LoadingScreen = () => (
     );
   };
 
-import ChatBubble from "./components/ChatBubble";
 import AdminPoolTab from './pages/admin/components/AdminPoolTab'
 
 import { useSidebarStore } from './stores/useSidebarStore';
@@ -622,7 +623,7 @@ function AppContent() {
     if (profileRole === 'troll_family') {
       navigate('/family', { replace: true });
     }
-  }, [profile, location.pathname, navigate, userId]);
+  }, [profile, location.pathname, navigate, userId, profileRole]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -1137,6 +1138,9 @@ function AppContent() {
                 <Route path="/tcnn" element={<TCNNMainPage />} />
                 <Route path="/tcnn/article/:id" element={<ArticleReader />} />
                 <Route path="/tcnn/dashboard" element={<TCNNInternalDashboard />} />
+                <Route path="/tcnn/broadcaster" element={<TCNNBroadcasterPage />} />
+                <Route path="/tcnn/broadcaster/:streamId" element={<TCNNBroadcasterPage />} />
+                <Route path="/tcnn/viewer/:streamId" element={<TCNNViewerPage />} />
                 
                 <Route path="/call/:roomId/:type/:userId" element={<Call />} />
                   <Route path="/notifications" element={<Notifications />} />
@@ -1145,6 +1149,8 @@ function AppContent() {
                   <Route path="/trollifications" element={<Trollifications />} />
                   <Route path="/trollifieds" element={<Trollifieds />} />
                   <Route path="/marketplace" element={<Marketplace />} />
+                  <Route path="/marketplace/orders" element={<Marketplace />} />
+                  <Route path="/marketplace/sales" element={<Marketplace />} />
                   <Route path="/pool" element={<PublicPool />} />
                   <Route path="/troll-games" element={<TrollGamesPage />} />
                   <Route path="/troll-games/queue" element={<TrollGamesPage />} />
@@ -1177,13 +1183,13 @@ function AppContent() {
                   <Route path="/pods/:roomId" element={<TrollPodRoom />} />
                    <Route path="/pods/:roomId/summary" element={<PodSummary />} />
                    
-                   <Route path="/troll-station" element={<TrollStationPage />} />
                    
                    <Route path="/church" element={<ChurchPage />} />
                   <Route path="/church/pastor" element={<PastorDashboard />} />
                   <Route path="/dev/xp" element={<XPSimulatorPage />} />
                   <Route path="/dev/badge-showcase" element={<BadgeDesignShowcase />} />
                   <Route path="/dev/homepage-bg-showcase" element={<HomepageBackgroundShowcase />} />
+                  <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
                   
                   {/* 🎥 Streaming */}
 
@@ -1263,8 +1269,6 @@ function AppContent() {
                   <Route path="/apply/journalist" element={<Application />} />
                   <Route path="/apply/news-caster" element={<Application />} />
                   <Route path="/apply/chief-news-caster" element={<Application />} />
-                  <Route path="/apply/troll-station-dj" element={<Application />} />
-                  <Route path="/apply/troll-station-manager" element={<Application />} />
                   <Route path="/career" element={<Career />} />
                   <Route path="/interview-room" element={<InterviewRoomPage />} />
                   <Route path="/admin/interview-test" element={<AdminInterviewDashboard />} />
@@ -1868,7 +1872,6 @@ function AppContent() {
                   </Routes>
                 </Suspense>
               </ErrorBoundary>
-        <ChatBubble />
         <GlobalPodBanner />
         <BugAlertPopup />
       </AppLayout>

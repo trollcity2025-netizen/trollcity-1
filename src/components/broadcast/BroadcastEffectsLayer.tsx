@@ -3,9 +3,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { EffectConfig } from '../../lib/entranceEffects';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
+import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 
 interface BroadcastEffectsLayerProps {
   streamId: string;
+  recentGifts?: BroadcastGift[];
+  onGiftAnimationComplete?: (giftId: string) => void;
 }
 
 interface ActiveEffect {
@@ -14,7 +17,7 @@ interface ActiveEffect {
   effect: EffectConfig;
 }
 
-export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLayerProps) {
+export default function BroadcastEffectsLayer({ streamId, recentGifts = [], onGiftAnimationComplete }: BroadcastEffectsLayerProps) {
   const [activeEffects, setActiveEffects] = useState<ActiveEffect[]>([]);
   const effectBufferRef = useRef<ActiveEffect[]>([]);
   const shownUsersRef = useRef<Set<string>>(new Set());
@@ -103,7 +106,10 @@ export default function BroadcastEffectsLayer({ streamId }: BroadcastEffectsLaye
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-[40]">
-      <GiftAnimationOverlay streamId={streamId} />
+      <GiftAnimationOverlay 
+        gifts={recentGifts}
+        onAnimationComplete={onGiftAnimationComplete}
+      />
       <AnimatePresence>
         {activeEffects.map(({ id, username, effect }) => (
           <EffectRenderer key={id} username={username} effect={effect} />

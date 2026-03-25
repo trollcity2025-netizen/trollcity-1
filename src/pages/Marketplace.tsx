@@ -2,14 +2,43 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { Store, ShoppingCart, Coins, Plus } from 'lucide-react'
+import { Store, ShoppingCart, Coins, Plus, Package, Tag } from 'lucide-react'
 import { trollCityTheme } from '../styles/trollCityTheme'
+import { cn } from '../lib/utils'
+import { useAuthStore } from '../lib/store'
+import BuyerOrders from './BuyerOrders'
+import MarketplaceSellerOrders from './MarketplaceSellerOrders'
+
+type TabType = 'browse' | 'orders' | 'sales'
 
 export default function Marketplace() {
-  console.log('🛒 Marketplace component rendering')
   const navigate = useNavigate()
+  const { user } = useAuthStore()
   const [shops, setShops] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<TabType>('browse')
+  const [hasShop, setHasShop] = useState(false)
+
+  useEffect(() => {
+    checkIfSeller()
+  }, [user])
+
+  const checkIfSeller = async () => {
+    if (!user) return
+    const { data } = await supabase
+      .from('trollcity_shops')
+      .select('id')
+      .eq('owner_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle()
+    setHasShop(!!data)
+  }
+
+  useEffect(() => {
+    if (activeTab === 'browse') {
+      loadShops()
+    }
+  }, [activeTab])
 
   useEffect(() => {
     loadShops()
@@ -67,7 +96,7 @@ export default function Marketplace() {
   }
 
   return (
-    <div className={`min-h-screen ${trollCityTheme.backgrounds.app} ${trollCityTheme.text.primary} p-6`}>
+    <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-2 flex items-center justify-center gap-3">
@@ -75,79 +104,134 @@ export default function Marketplace() {
             Troll City Marketplace
           </h1>
           <p className={`${trollCityTheme.text.muted}`}>Discover and purchase items from fellow Troll City members</p>
-          <div className={`mt-4 max-w-3xl mx-auto ${trollCityTheme.backgrounds.glass} border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-300`}>
-            All sales are final. Illegal items or sales are strictly prohibited and will result in enforcement actions.
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex justify-center">
+          <div className={`flex gap-2 p-1 rounded-xl ${trollCityTheme.backgrounds.glass} border ${trollCityTheme.borders.glass}`}>
+            <button
+              onClick={() => setActiveTab('browse')}
+              className={cn(
+                'px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all',
+                activeTab === 'browse' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              )}
+            >
+              <Store className="w-4 h-4" />
+              Browse
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={cn(
+                'px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all',
+                activeTab === 'orders' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              )}
+            >
+              <Package className="w-4 h-4" />
+              My Orders
+            </button>
+            {hasShop && (
+              <button
+                onClick={() => setActiveTab('sales')}
+                className={cn(
+                  'px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all',
+                  activeTab === 'sales' 
+                    ? 'bg-pink-600 text-white' 
+                    : 'text-gray-400 hover:text-white'
+                )}
+              >
+                <Tag className="w-4 h-4" />
+                Sales
+              </button>
+            )}
           </div>
         </div>
-        {shops.length > 0 && (
-          <div className="flex justify-center">
-            <button
-              onClick={() => navigate('/sell')}
-              className={`${trollCityTheme.gradients.button} px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity text-white`}
-            >
-              <Plus className="w-4 h-4" />
-              Create Your Shop
-            </button>
-          </div>
-        )}
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1,2,3,4,5,6].map(i => (
-              <div key={i} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6 animate-pulse`}>
-                <div className={`h-4 ${trollCityTheme.backgrounds.glass} rounded w-1/2 mb-2`}></div>
-                <div className={`h-8 ${trollCityTheme.backgrounds.glass} rounded w-3/4`}></div>
-              </div>
-            ))}
-          </div>
-        ) : shops.length === 0 ? (
-          <div className="text-center py-12">
-            <Store className={`w-16 h-16 ${trollCityTheme.text.muted} mx-auto mb-4`} />
-            <h2 className="text-2xl font-bold mb-2">No Shops Available</h2>
-            <p className={`${trollCityTheme.text.muted} mb-6`}>Be the first to create a shop and start selling!</p>
-            <button
-              onClick={() => navigate('/sell')}
-              className={`${trollCityTheme.gradients.button} px-6 py-3 rounded-lg font-semibold text-white`}
-            >
-              Create Your Shop
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {shops.map((shop) => (
-              <div key={shop.id} className={`${trollCityTheme.components.card}`}>
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-purple-300">{shop.name}</h3>
-                  <p className={`text-sm ${trollCityTheme.text.muted}`}>by {shop.owner_username}</p>
-                </div>
+        <div className={`mt-4 max-w-3xl mx-auto ${trollCityTheme.backgrounds.glass} border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-300`}>
+          All sales are final. Illegal items or sales are strictly prohibited and will result in enforcement actions.
+        </div>
 
-                <div className="space-y-3 mb-4">
-                  {shop.shop_items?.length > 0 ? (
-                    shop.shop_items.slice(0, 3).map((item: any) => (
-                      <div key={item.id} className={`flex items-center justify-between ${trollCityTheme.backgrounds.glass} p-2 rounded border ${trollCityTheme.borders.glass}`}>
-                        <span className="text-sm">{item.name}</span>
-                        <span className="text-yellow-400 font-bold flex items-center gap-1">
-                          <Coins className="w-3 h-3" />
-                          {item.price}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className={`${trollCityTheme.text.muted} text-sm`}>No items listed yet</p>
-                  )}
-                </div>
-
+        {activeTab === 'browse' && (
+          <>
+            {!hasShop && (
+              <div className="flex justify-center">
                 <button
-                  onClick={() => navigate(`/shop/${shop.owner_username}`)}
-                  className={`w-full px-4 py-2 ${trollCityTheme.gradients.button} rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 text-white`}
+                  onClick={() => navigate('/sell')}
+                  className={`${trollCityTheme.gradients.button} px-6 py-3 rounded-lg font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity text-white`}
                 >
-                  <ShoppingCart className="w-4 h-4" />
-                  Visit Shop
+                  <Plus className="w-4 h-4" />
+                  Create Your Shop
                 </button>
               </div>
-            ))}
-          </div>
+            )}
+
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1,2,3,4,5,6].map(i => (
+                  <div key={i} className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-xl p-6 animate-pulse`}>
+                    <div className={`h-4 ${trollCityTheme.backgrounds.glass} rounded w-1/2 mb-2`}></div>
+                    <div className={`h-8 ${trollCityTheme.backgrounds.glass} rounded w-3/4`}></div>
+                  </div>
+                ))}
+              </div>
+            ) : shops.length === 0 ? (
+              <div className="text-center py-12">
+                <Store className={`w-16 h-16 ${trollCityTheme.text.muted} mx-auto mb-4`} />
+                <h2 className="text-2xl font-bold mb-2">No Shops Available</h2>
+                <p className={`${trollCityTheme.text.muted} mb-6`}>Be the first to create a shop and start selling!</p>
+                {!hasShop && (
+                  <button
+                    onClick={() => navigate('/sell')}
+                    className={`${trollCityTheme.gradients.button} px-6 py-3 rounded-lg font-semibold text-white`}
+                  >
+                    Create Your Shop
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {shops.map((shop) => (
+                  <div key={shop.id} className={`${trollCityTheme.components.card}`}>
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-purple-300">{shop.name}</h3>
+                      <p className={`text-sm ${trollCityTheme.text.muted}`}>by {shop.owner_username}</p>
+                    </div>
+
+                    <div className="space-y-3 mb-4">
+                      {shop.shop_items?.length > 0 ? (
+                        shop.shop_items.slice(0, 3).map((item: any) => (
+                          <div key={item.id} className={`flex items-center justify-between ${trollCityTheme.backgrounds.glass} p-2 rounded border ${trollCityTheme.borders.glass}`}>
+                            <span className="text-sm">{item.name}</span>
+                            <span className="text-yellow-400 font-bold flex items-center gap-1">
+                              <Coins className="w-3 h-3" />
+                              {item.price}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className={`${trollCityTheme.text.muted} text-sm`}>No items listed yet</p>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => navigate(`/shop/${shop.owner_username}`)}
+                      className={`w-full px-4 py-2 ${trollCityTheme.gradients.button} rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 text-white`}
+                    >
+                      <ShoppingCart className="w-4 h-4" />
+                      Visit Shop
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
+
+        {activeTab === 'orders' && <BuyerOrders />}
+        {activeTab === 'sales' && <MarketplaceSellerOrders />}
       </div>
     </div>
   )

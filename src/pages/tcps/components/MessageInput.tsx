@@ -75,28 +75,7 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
   }, [conversationId])
 
   const handleTyping = () => {
-    if (channelRef.current && profile?.id) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: { userId: profile.id, isTyping: true }
-      })
-    }
-
-    if (onTyping) {
-      onTyping(true)
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
-      typingTimeoutRef.current = setTimeout(() => {
-        onTyping(false)
-        if (channelRef.current && profile?.id) {
-            channelRef.current.send({
-                type: 'broadcast',
-                event: 'typing',
-                payload: { userId: profile.id, isTyping: false }
-            })
-        }
-      }, 3000)
-    }
+    // No-op: typing indicators removed to prevent per-keystroke broadcasts
   }
 
   const sendMessage = async () => {

@@ -29,6 +29,7 @@ export default function PastorPayouts() {
       const { error } = await supabase.rpc('submit_cashout_request', {
         p_user_id: profile.id,
         p_amount_coins: selectedTier.coins,
+        p_usd_value: selectedTier.usd,
         p_provider: 'PayPal',
         p_delivery_method: 'PayPal Transfer',
         p_payout_details: profile.payout_paypal_email
@@ -118,7 +119,7 @@ export default function PastorPayouts() {
                   <span className="text-2xl font-bold text-white">${tier.usd}</span>
                   {tier.manualReview && (
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                      MANUAL
+                      3 DAY MANUAL
                     </span>
                   )}
                 </div>

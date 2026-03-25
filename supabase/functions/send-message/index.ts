@@ -109,6 +109,9 @@ interface MessagePayload {
   data: any;
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 // --- Utilities ---
 
 function canonicalizeJson(obj: any): string {
@@ -192,6 +195,13 @@ serve(async (req) => {
 
     const body: MessagePayload = await req.json();
     const { type, stream_id, txn_id, data } = body;
+
+    if (!UUID_REGEX.test(String(stream_id || "").trim())) {
+      return new Response(JSON.stringify({ error: "Invalid stream_id", code: "INVALID_STREAM_ID" }), {
+        status: 400,
+        headers: { ...headers, "Content-Type": "application/json" },
+      });
+    }
 
     // 2. Validate input
     const requiredFields = ['type', 'stream_id', 'txn_id', 'data'];
@@ -448,7 +458,7 @@ serve(async (req) => {
     const { error: insertError } = await supabase
       .from("stream_messages")
       .insert({
-        stream_id: stream_id,
+        stream_id: stream.id,
         user_id: user.id,
         content: data.content,
         type: type,

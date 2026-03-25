@@ -38,8 +38,6 @@ interface UseStreamChatProps {
 }
 
 const MAX_MESSAGES = 200; // Max messages to keep in state
-const FLUSH_INTERVAL = 150; // ms for buffering incoming messages
-const RATE_LIMIT_MS = 1000; // 1 message per second per user
 const AUTO_DELETE_INTERVAL = 5000; // Check every 5 seconds for messages to delete
 const MESSAGE_LIFETIME_MS = 30000; // Messages disappear after 30 seconds
 
@@ -47,9 +45,10 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
   const [messages, setMessages] = useState<Message[]>([]);
   const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
   const { user, profile } = useAuthStore();
-  const messageBufferRef = useRef<Message[]>([]);
-  const lastSentRef = useRef<number>(0);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  
+  // Track processed message IDs to prevent duplicates from broadcast + postgres_changes
+  const processedMessageIds = useRef<Set<string>>(new Set());
 
   // Fetch Stream Mods (simplified for now, BroadcastChat had this but it might not be needed for overlay)
   const [streamMods, setStreamMods] = useState<string[]>([]);
@@ -111,7 +110,7 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
 
     // Initial fetch of messages (last 50)
     const fetchMessages = async () => {
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 800)); // Jitter
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 400)); // Jitter
 
       const { data } = await supabase
         .from('stream_messages')
@@ -131,6 +130,8 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
             rgb_username_expires_at: m.user_rgb_expires_at || m.user_profiles?.rgb_username_expires_at,
             glowing_username_color: m.user_glowing_username_color || m.user_profiles?.glowing_username_color
           };
+          // Track IDs to prevent duplicates
+          if (m.id) processedMessageIds.current.add(m.id);
           return { ...m, type: 'chat', user_profiles: uProfile } as Message;
         });
         
@@ -143,32 +144,42 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
     };
     fetchMessages();
 
-    // Message buffer flush interval
-    const flushInterval = setInterval(() => {
-      if (messageBufferRef.current.length === 0) return;
+    // Broadcast channel for INSTANT message delivery (primary delivery mechanism)
+    const broadcastChannel = supabase
+      .channel(`stream-chat:${streamId}`)
+      .on(
+        'broadcast',
+        { event: 'chat' },
+        (payload: any) => {
+          const msg = payload.payload as Message;
+          
+          // Skip our own messages (already shown via optimistic update)
+          if (msg.user_id === user?.id) return;
+          
+          // Deduplicate using txn_id and message id
+          if (msg.txn_id && processedMessageIds.current.has(msg.txn_id)) return;
+          if (msg.id && processedMessageIds.current.has(msg.id)) return;
+          
+          if (msg.txn_id) processedMessageIds.current.add(msg.txn_id);
+          if (msg.id) processedMessageIds.current.add(msg.id);
+          
+          // Add directly to state for instant display
+          setMessages(prev => {
+            // Check for duplicates in current state
+            if (msg.txn_id && prev.some(m => m.txn_id === msg.txn_id)) return prev;
+            if (msg.id && prev.some(m => m.id === msg.id)) return prev;
+            
+            const updated = [...prev, msg];
+            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+            return updated;
+          });
+        }
+      )
+      .subscribe();
 
-      const newMsgs = [...messageBufferRef.current];
-      messageBufferRef.current = [];
-
-      setMessages(prev => {
-        const incomingIds = new Set(newMsgs.map(m => `${m.user_id}:${m.content}`));
-        const filtered = prev.filter(m => {
-            if (m.id.startsWith('temp-')) {
-                const key = `${m.user_id}:${m.content}`;
-                return !incomingIds.has(key);
-            }
-            return true;
-        });
-
-        const updated = [...filtered, ...newMsgs];
-        if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
-        return updated;
-      });
-    }, FLUSH_INTERVAL);
-
-    // Realtime Postgres Changes for new messages
+    // Postgres Changes as backup (in case broadcast fails)
     const chatChannel = supabase
-      .channel(`stream-chat-${streamId}`)
+      .channel(`stream-chat-db-${streamId}`)
       .on(
         'postgres_changes',
         {
@@ -180,7 +191,15 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
         async (payload: any) => {
           const newMessage = payload.new;
 
-          const { data: profile } = await supabase
+          // Skip our own messages
+          if (newMessage.user_id === user?.id) return;
+          
+          // Deduplicate - if already received via broadcast, skip
+          if (newMessage.id && processedMessageIds.current.has(newMessage.id)) return;
+          if (newMessage.txn_id && processedMessageIds.current.has(newMessage.txn_id)) return;
+
+          // Fetch user profile for the message
+          const { data: profileData } = await supabase
             .from('user_profiles')
             .select('username, avatar_url, role, troll_role, created_at, rgb_username_expires_at, glowing_username_color')
             .eq('id', newMessage.user_id)
@@ -189,20 +208,38 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
           const newMsg: Message = {
             ...newMessage,
             type: 'chat',
-            user_profiles: profile
+            user_profiles: profileData,
           };
-          messageBufferRef.current.push(newMsg);
+          
+          if (newMessage.id) processedMessageIds.current.add(newMessage.id);
+
+          // Add directly to state
+          setMessages(prev => {
+            if (newMessage.id && prev.some(m => m.id === newMessage.id)) return prev;
+            const updated = [...prev, newMsg];
+            if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+            return updated;
+          });
         }
       )
       .subscribe();
+
+    // Track which users have join messages shown (to prevent duplicates)
+    const joinedUsersRef = useRef<Set<string>>(new Set());
 
     // Presence Channel for join/leave messages
     const presenceChannel = supabase
       .channel(`stream:${streamId}`)
       .on('presence', { event: 'join' }, ({ newPresences }) => {
           newPresences.forEach((p: any) => {
+              // Skip our own user
+              if (p.user_id === user?.id) return;
+              // Skip if we already showed a join for this user
+              if (joinedUsersRef.current.has(p.user_id)) return;
+              joinedUsersRef.current.add(p.user_id);
+
               const systemMsg: Message = {
-                  id: `sys-${Date.now()}-${Math.random()}`,
+                  id: `sys-join-${p.user_id}-${Date.now()}`,
                   user_id: p.user_id,
                   content: 'joined the broadcast',
                   created_at: new Date().toISOString(),
@@ -215,13 +252,23 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
                       troll_role: p.troll_role
                   }
               };
-              messageBufferRef.current.push(systemMsg);
+              setMessages(prev => {
+                  const updated = [...prev, systemMsg];
+                  if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+                  return updated;
+              });
           });
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
           leftPresences.forEach((p: any) => {
+              // Skip our own user
+              if (p.user_id === user?.id) return;
+              // Only show leave if we showed a join for this user
+              if (!joinedUsersRef.current.has(p.user_id)) return;
+              joinedUsersRef.current.delete(p.user_id);
+
               const systemMsg: Message = {
-                  id: `sys-${Date.now()}-${Math.random()}`,
+                  id: `sys-leave-${p.user_id}-${Date.now()}`,
                   user_id: p.user_id,
                   content: 'left the broadcast',
                   created_at: new Date().toISOString(),
@@ -234,7 +281,11 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
                       troll_role: p.troll_role
                   }
               };
-              messageBufferRef.current.push(systemMsg);
+              setMessages(prev => {
+                  const updated = [...prev, systemMsg];
+                  if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
+                  return updated;
+              });
           });
       })
       .subscribe();
@@ -249,12 +300,12 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
     }, AUTO_DELETE_INTERVAL);
 
     return () => {
-      clearInterval(flushInterval);
       clearInterval(autoDeleteInterval);
+      supabase.removeChannel(broadcastChannel);
       supabase.removeChannel(chatChannel);
       supabase.removeChannel(presenceChannel);
     };
-  }, [streamId]);
+  }, [streamId, user?.id]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!user || !profile) {
@@ -269,12 +320,6 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
         return;
     }
 
-    const now = Date.now();
-    if (now - lastSentRef.current < RATE_LIMIT_MS) {
-        toast.error('You are sending messages too fast. Please slow down.');
-        return;
-    }
-    lastSentRef.current = now;
     setIsSendingMessage(true);
 
     const txnId = generateUUID();
@@ -299,6 +344,19 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
         const updated = [...prev, optimisticMessage];
         if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
         return updated;
+    });
+    
+    // Track ID to prevent duplicates when received via broadcast/postgres
+    processedMessageIds.current.add(txnId);
+
+    // Broadcast for instant delivery to all viewers
+    const broadcastCh = supabase.channel(`stream-chat:${streamId}`);
+    broadcastCh.send({
+        type: 'broadcast',
+        event: 'chat',
+        payload: optimisticMessage
+    }).catch(err => {
+        console.warn('[useStreamChat] Broadcast send failed:', err);
     });
 
     try {

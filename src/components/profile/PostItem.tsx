@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
 import GiftModal from '../trollWall/GiftModal';
 import { parseTextWithLinks } from '../../lib/utils';
+import MentionTextarea from '../MentionTextarea';
 
 interface Comment {
   id: string;
@@ -400,17 +401,15 @@ export default function PostItem({ post, onDelete }: PostItemProps) {
                         </div>
                     )}
                     <div className="relative">
-                        <input
-                            ref={inputRef}
+                        <MentionTextarea
                             id={`comment-input-${post.id}`}
-                            type="text"
                             value={commentText}
-                            onChange={e => setCommentText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handlePostComment()}
-                            placeholder={replyingTo ? "Write a reply..." : "Write a comment..."}
-                            className="w-full bg-white/5 border border-white/10 rounded-full pl-4 pr-20 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            onChange={setCommentText}
+                            placeholder={replyingTo ? "Write a reply... Use # to tag" : "Write a comment... Use # to tag"}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-4 pr-20 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                            rows={1}
                         />
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <div className="absolute right-2 bottom-2 flex items-center gap-1">
                             <button 
                                 onClick={handlePostComment}
                                 className="p-1.5 text-purple-400 hover:text-purple-300 transition-colors"

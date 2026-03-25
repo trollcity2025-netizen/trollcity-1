@@ -8,7 +8,7 @@ import UserNameWithAge from '../components/UserNameWithAge'
 interface Family {
   id: string
   name: string
-  icon_emoji: string | null
+  emoji: string | null
   banner_url: string | null
   description: string | null
   level: number
@@ -226,7 +226,7 @@ export default function FamilyProfilePage() {
       <div className="troll-card p-4 mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{family.icon_emoji || '👹'}</span>
+            <span className="text-2xl">{(family as any).emoji || '👹'}</span>
             <h1 className="text-2xl font-extrabold">{family.name}</h1>
           </div>
           <div className="text-sm text-gray-300 mt-1">

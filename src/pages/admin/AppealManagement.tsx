@@ -292,7 +292,7 @@ export default function AppealManagement() {
   }
 
   return (
-    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-4 pb-20 md:pb-4 md:ml-64`}>
+    <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 pb-20 md:pb-4 md:ml-64`}>
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header */}

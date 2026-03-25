@@ -96,43 +96,13 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
     let mounted = true
     const init = async () => {
       try {
-        const { data: existingConvs, error: existingError } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .eq('user_id', user.id)
+        // Single RPC call replaces batched conversation_members lookup
+        const { data: foundConvId, error: rpcError } = await supabase
+          .rpc('find_shared_conversation', { p_user_id: user.id, p_other_user_id: otherUserId })
 
-        if (existingError) throw existingError
+        if (rpcError) throw rpcError
 
-        const myConvIds = existingConvs?.map((c) => c.conversation_id) || []
-        let targetConvId: string | null = null
-
-        if (myConvIds.length > 0) {
-          // Batch the lookup to avoid URL length limits
-          const BATCH_SIZE = 50
-          let foundConv: string | null = null
-          
-          for (let i = 0; i < myConvIds.length && !foundConv; i += BATCH_SIZE) {
-            const batch = myConvIds.slice(i, i + BATCH_SIZE)
-            const { data: shared, error: sharedError } = await supabase
-              .from('conversation_members')
-              .select('conversation_id')
-              .in('conversation_id', batch)
-              .eq('user_id', otherUserId)
-              .limit(1)
-
-            if (sharedError) {
-              console.warn('Error in batch lookup:', sharedError)
-              continue
-            }
-            
-            const sharedFirst = Array.isArray(shared) ? shared[0] : null
-            if (sharedFirst) {
-              foundConv = sharedFirst.conversation_id
-            }
-          }
-          
-          targetConvId = foundConv
-        }
+        let targetConvId: string | null = foundConvId || null
 
         if (!targetConvId) {
           const newConv = await createConversation([otherUserId])

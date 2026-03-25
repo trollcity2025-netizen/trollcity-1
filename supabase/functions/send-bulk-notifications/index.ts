@@ -1,9 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { corsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-requested-with, accept, origin, content-length',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE, PATCH',
+};
 
 interface NotificationRequest {
   type: string;
@@ -18,7 +23,7 @@ interface UserProfile {
 }
 
 serve(async (req: Request) => {
-  const headers = corsHeaders(req.headers.get("Origin"));
+  const headers = { ...corsHeaders };
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers });
@@ -97,7 +102,7 @@ serve(async (req: Request) => {
       type,
       title,
       message,
-      metadata,
+      metadata: { ...metadata, _bulk: true },
       is_read: false,
       created_at: new Date().toISOString(),
     }));

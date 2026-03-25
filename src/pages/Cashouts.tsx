@@ -83,10 +83,8 @@ const Cashouts = () => {
       setRequesting(tier.id)
 
       const { data, error } = await supabase.rpc('request_payout', {
-        p_tier_id: tier.id,
-        p_coin_amount: totalCoinsNeeded,
-        p_cash_amount: tier.cash_amount,
-        p_currency: tier.currency
+        p_user_id: profile.id,
+        p_coins_to_redeem: totalCoinsNeeded
       })
 
       if (error) throw error

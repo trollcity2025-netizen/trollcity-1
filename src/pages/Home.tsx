@@ -39,37 +39,7 @@ const AnimatedGradient = () => {
   );
 };
 
-// Floating coins effect
-const FloatingParticles = () => {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 20 }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute w-6 h-6 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(234,179,8,0.6)] flex items-center justify-center text-[8px] font-bold text-black"
-          style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            animation: `float-particle ${10 + Math.random() * 15}s ease-in-out infinite`,
-            animationDelay: `${Math.random() * 10}s`,
-          }}
-        >
-          TC
-        </div>
-      ))}
-      <style>
-        {`
-          @keyframes float-particle {
-            0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); opacity: 0; }
-            10% { opacity: 0.9; }
-            90% { opacity: 0.9; }
-            50% { transform: translateY(-200px) translateX(40px) rotate(360deg); }
-          }
-        `}
-      </style>
-    </div>
-  );
-};
+
 
 interface LiveItem {
   id: string
@@ -209,7 +179,6 @@ export default function Home() {
 
       {/* Animated Background */}
       <AnimatedGradient />
-      <FloatingParticles />
 
       {/* PWA Install Prompt - Only on Landing Page */}
       <PWAInstallPrompt />
@@ -420,8 +389,8 @@ export default function Home() {
             )}
           </section>
 
-          {/* Main Content Area */}
-          {activeTab === 'wall' && (
+          {/* Main Content Area - Wall Feed stays mounted for instant loading */}
+          <div className={`${activeTab === 'wall' ? '' : 'hidden'}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-8 space-y-6">
                 <TrollWallFeed onRequireAuth={requireAuth} />
@@ -458,7 +427,7 @@ export default function Home() {
                 <PromoSlot placement="right_panel_featured" variant="featured" />
               </div>
             </div>
-          )}
+          </div>
         </div>
         <div className="safe-bottom" />
       </div>

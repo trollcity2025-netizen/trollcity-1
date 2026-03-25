@@ -83,7 +83,7 @@ export default function PayoutRequest() {
       }
 
       if (tier.manualReview) {
-        toast.info("This amount requires manual review and may take longer to process.");
+        toast.info("This amount requires 3 day manual review and may take longer to process.");
       }
 
       const { data, error } = await supabase.rpc('request_visa_redemption', {
@@ -160,8 +160,8 @@ export default function PayoutRequest() {
             <div className="text-xs text-gray-400 mt-1">
               Fee: <span className="text-red-400">${FIXED_FEE_USD.toFixed(2)}</span> • Net: <span className="text-green-400">${netUsd.toFixed(2)}</span>
               {TIERS.find(t => t.coins === parsed)?.manualReview && (
-                 <span className="block text-yellow-400 mt-1">⚠️ Requires Manual Review</span>
-              )}
+                  <span className="block text-yellow-400 mt-1">⚠️ Requires 3 Day Manual Review</span>
+               )}
             </div>
           )}
         </div>

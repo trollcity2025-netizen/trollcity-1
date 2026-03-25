@@ -530,7 +530,7 @@ export default function CityHall() {
   };
 
   return (
-    <div className={`min-h-screen ${trollCityTheme.backgrounds.primary} text-white p-4 pb-20 md:pb-4 md:ml-64`}>
+    <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 pb-20 md:pb-4 md:ml-64`}>
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
@@ -926,7 +926,7 @@ export default function CityHall() {
                     value={lawTitle}
                     onChange={(e) => setLawTitle(e.target.value)}
                     placeholder="e.g., 2x XP Hour"
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   />
                 </div>
                 <div>
@@ -935,7 +935,7 @@ export default function CityHall() {
                     value={lawDescription}
                     onChange={(e) => setLawDescription(e.target.value)}
                     placeholder="What does this law do?"
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg h-20`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg h-20`}
                   />
                 </div>
                 <div>
@@ -943,7 +943,7 @@ export default function CityHall() {
                   <select
                     value={lawEffect}
                     onChange={(e) => setLawEffect(e.target.value)}
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   >
                     <option value="xp_boost">XP Boost</option>
                     <option value="mute_enforcement">Mute Enforcement</option>
@@ -960,7 +960,7 @@ export default function CityHall() {
                       onChange={(e) => setEventValue(Number(e.target.value))}
                       min={1}
                       max={10}
-                      className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                      className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                     />
                   </div>
                 ) : null}
@@ -969,7 +969,7 @@ export default function CityHall() {
                   <select
                     value={lawDuration}
                     onChange={(e) => setLawDuration(Number(e.target.value))}
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   >
                     <option value={1}>1 hour</option>
                     <option value={6}>6 hours</option>
@@ -1010,7 +1010,7 @@ export default function CityHall() {
                     value={targetUsername}
                     onChange={(e) => setTargetUsername(e.target.value)}
                     placeholder="Enter username to ban"
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   />
                 </div>
                 <div>
@@ -1020,7 +1020,7 @@ export default function CityHall() {
                     value={actionReason}
                     onChange={(e) => setActionReason(e.target.value)}
                     placeholder="Reason for ban"
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   />
                 </div>
                 <div>
@@ -1028,7 +1028,7 @@ export default function CityHall() {
                   <select
                     value={actionDuration}
                     onChange={(e) => setActionDuration(Number(e.target.value))}
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   >
                     <option value={1}>1 hour</option>
                     <option value={6}>6 hours</option>
@@ -1068,7 +1068,7 @@ export default function CityHall() {
                     value={targetUsername}
                     onChange={(e) => setTargetUsername(e.target.value)}
                     placeholder="Enter username to mute"
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   />
                 </div>
                 <div>
@@ -1078,7 +1078,7 @@ export default function CityHall() {
                     value={actionReason}
                     onChange={(e) => setActionReason(e.target.value)}
                     placeholder="Reason for mute"
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   />
                 </div>
                 <div>
@@ -1086,7 +1086,7 @@ export default function CityHall() {
                   <select
                     value={actionDuration}
                     onChange={(e) => setActionDuration(Number(e.target.value))}
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   >
                     <option value={1}>1 hour</option>
                     <option value={6}>6 hours</option>
@@ -1125,7 +1125,7 @@ export default function CityHall() {
                   <select
                     value={eventType}
                     onChange={(e) => setEventType(e.target.value)}
-                    className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                    className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                   >
                     <option value="xp_hour">XP Hour</option>
                     <option value="battle_bonus">Battle Bonus</option>
@@ -1142,7 +1142,7 @@ export default function CityHall() {
                       onChange={(e) => setEventValue(Number(e.target.value))}
                       min={1}
                       max={10}
-                      className={`w-full mt-1 ${trollCityTheme.inputs.default} px-4 py-2 rounded-lg`}
+                      className={`w-full mt-1 ${trollCityTheme.components.input} px-4 py-2 rounded-lg`}
                     />
                   </div>
                 )}

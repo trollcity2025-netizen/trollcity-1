@@ -9,7 +9,6 @@ interface FamilyRow {
   id: string
   name: string
   description: string | null
-  icon_emoji: string | null
   emoji: string | null
   banner_url: string | null
   level: number | null
@@ -50,7 +49,7 @@ export default function FamilyBrowse() {
     
     let query = supabase
       .from('troll_families')
-      .select('id, name, description, icon_emoji, emoji, banner_url, level, total_coins, member_count, is_featured, created_at')
+      .select('id, name, description, emoji, banner_url, level, total_coins, member_count, is_featured, created_at')
     
     // Apply search filter (name + description)
     if (searchQuery.trim()) {
@@ -81,7 +80,7 @@ export default function FamilyBrowse() {
   const fetchFeaturedFamilies = useCallback(async () => {
     const { data, error } = await supabase
       .from('troll_families')
-      .select('id, name, description, icon_emoji, emoji, banner_url, level, total_coins, member_count, is_featured, created_at')
+      .select('id, name, description, emoji, banner_url, level, total_coins, member_count, is_featured, created_at')
       .eq('is_featured', true)
       .limit(5)
       .order('member_count', { ascending: false })
@@ -446,7 +445,7 @@ interface FamilyCardProps {
 
 function FamilyCard({ family, onJoin, onView }: FamilyCardProps) {
   const [showJoinConfirm, setShowJoinConfirm] = useState(false)
-  const badgeEmoji = family.icon_emoji || family.emoji || '👑'
+  const badgeEmoji = family.emoji || '👑'
   const members = family.member_count ?? 0
 
   return (

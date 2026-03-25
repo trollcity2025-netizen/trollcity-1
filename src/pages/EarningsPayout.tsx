@@ -22,7 +22,7 @@ const CASHOUT_TIERS: CashoutTier[] = TIERS.map((t, i) => ({
   id: `tier${i+1}`,
   coins: t.coins,
   usd: t.usd,
-  label: `${t.coins.toLocaleString()} Troll Coins → $${t.usd}${t.manualReview ? ' (Manual Review)' : ''}`
+  label: `${t.coins.toLocaleString()} Troll Coins → $${t.usd}${t.manualReview ? ' (3 Day Manual Review)' : ''}`
 }));
 
 export default function EarningsPayout() {
@@ -38,7 +38,7 @@ export default function EarningsPayout() {
   const reserved_coins = profile?.reserved_troll_coins || 0
   const troll_coins = Math.max(0, raw_troll_coins - reserved_coins)
   
-  const freeCoins = profile?.troll_coins || 0
+  const freeCoins = profile?.free_coins || 0
 
   const eligibleTiers = useMemo(
     () => CASHOUT_TIERS.filter(t => t.coins <= troll_coins),
@@ -148,9 +148,8 @@ export default function EarningsPayout() {
       try {
         const { data, error } = await supabase.rpc('request_visa_redemption', {
             p_user_id: profile.id,
-            p_tier_id: selectedTierId,
-            p_full_name: fullName,
-            p_payout_details: payoutDetails
+            p_coins: tier.coins,
+            p_usd: tier.usd
         });
 
       if (error) {

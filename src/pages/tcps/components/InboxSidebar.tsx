@@ -170,183 +170,38 @@ export default function InboxSidebar({
     }
     
     try {
-      // 1. Fetch all conversations the user is a member of
-      const { data: members, error: membersError } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', user.id)
-      
-      if (membersError) throw membersError
-      const convIds = members?.map(m => m.conversation_id) || []
-      
-      // Separate array to hold our processed conversations
-      const processedConvs: SidebarConversation[] = []
+      // Single RPC call replaces 10+ batched queries
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_user_conversations_optimized', { p_user_id: user.id })
 
-      if (convIds.length > 0) {
-        // Helper function to batch array into chunks
-        const BATCH_SIZE = 50
-        const chunkArray = (arr: string[], size: number) => {
-          const chunks: string[][] = []
-          for (let i = 0; i < arr.length; i += size) {
-            chunks.push(arr.slice(i, i + size))
-          }
-          return chunks
-        }
+      if (rpcError) throw rpcError
 
-        const batches = chunkArray(convIds, BATCH_SIZE)
+      const allConvs: SidebarConversation[] = (rpcData || []).map((c: any) => ({
+        other_user_id: c.other_user_id,
+        other_username: c.other_username,
+        other_avatar_url: c.other_avatar_url,
+        rgb_username_expires_at: c.rgb_username_expires_at,
+        glowing_username_color: c.glowing_username_color,
+        other_created_at: c.other_created_at,
+        last_message: c.last_message,
+        last_timestamp: c.last_timestamp || '',
+        unread_count: c.unread_count || 0,
+        conversation_id: c.conversation_id,
+      }))
 
-        // Fetch all data in parallel across batches for better performance
-        const [membersResults, unreadResults, messagesResults] = await Promise.all([
-          // 2. Fetch other members for all batches in parallel
-          Promise.all(batches.map(batch =>
-            supabase
-              .from('conversation_members')
-              .select('conversation_id, user_id, user_profiles!inner(username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at)')
-              .in('conversation_id', batch)
-              .neq('user_id', user.id)
-          )),
-          
-          // 3. Fetch unread counts for all batches in parallel
-          Promise.all(batches.map(batch =>
-            supabase
-              .from('conversation_messages')
-              .select('conversation_id')
-              .in('conversation_id', batch)
-              .neq('sender_id', user.id)
-              .is('read_at', null)
-              .is('is_deleted', false)
-          )),
-          
-          // 4. Fetch recent messages for all batches in parallel
-          Promise.all(batches.map(batch =>
-            supabase
-              .from('conversation_messages')
-              .select('conversation_id, body, created_at, sender_id')
-              .in('conversation_id', batch)
-              .is('is_deleted', false)
-              .order('created_at', { ascending: false })
-              .limit(100)
-          ))
-        ])
+      // Get hidden conversations mapping from localStorage
+      const hiddenConvMapping = getHiddenConvMapping()
+      const hiddenConvIds = new Set(Object.keys(hiddenConvMapping))
 
-        // Combine results from all batches
-        const allOtherMembers = membersResults.flatMap(r => r.data || [])
-        const otherMembers = allOtherMembers
+      // Separate visible and hidden
+      const visibleConvs = allConvs.filter(c => !hiddenConvIds.has(c.conversation_id || ''))
+      const hiddenConvs = allConvs.filter(c => hiddenConvIds.has(c.conversation_id || ''))
 
-        const unreadCounts: Record<string, number> = {}
-        unreadResults.forEach(({ data }) => {
-          data?.forEach(m => {
-            unreadCounts[m.conversation_id] = (unreadCounts[m.conversation_id] || 0) + 1
-          })
-        })
+      setHiddenConversations(hiddenConvs)
 
-        const lastMessageByConversationId: Record<string, { body: string; created_at: string | null; sender_id: string }> = {}
-        messagesResults.forEach(({ data: recentMessages }) => {
-          ;(recentMessages || []).forEach((m: any) => {
-            if (!m?.conversation_id) return
-            if (!lastMessageByConversationId[m.conversation_id]) {
-              lastMessageByConversationId[m.conversation_id] = {
-                body: m.body,
-                created_at: m.created_at ?? null,
-                sender_id: m.sender_id ?? ''
-              }
-            }
-          })
-        })
-
-        // 2.5 Fetch blocked users to filter them out
-        const { data: blockedData } = await supabase
-          .from('user_relationships')
-          .select('related_user_id')
-          .eq('user_id', user.id)
-          .eq('status', 'blocked')
-          
-        const blockedUserIds = new Set(blockedData?.map(b => b.related_user_id) || [])
-
-        // 2.6 Get hidden conversations mapping from localStorage
-        const hiddenConvMapping = getHiddenConvMapping()
-        const hiddenConvIds = new Set(Object.keys(hiddenConvMapping))
-
-        // Array to collect hidden conversations
-        const hiddenConvsArray: SidebarConversation[] = []
-
-        // 4. Build conversation previews (use batched last message map)
-        const convsWithDetails = convIds.map((cid) => {
-          const lastMsg = lastMessageByConversationId[cid] || { body: 'No messages yet', created_at: null, sender_id: '' }
-
-          // 4.1 Check if conversation is hidden
-          const isHidden = hiddenConvIds.has(cid)
-          const unreadCount = unreadCounts[cid] || 0
-
-          // Find other member(s)
-          const others = otherMembers?.filter(om => om.conversation_id === cid)
-          if (!others || others.length === 0) return null
-
-          // For now, handle as 1-on-1 but we could support groups
-          const other = others[0]
-          if (!other.user_profiles || blockedUserIds.has(other.user_id)) return null
-
-          const profile = other.user_profiles as any
-
-          // If hidden, don't add to processedConvs - it's stored separately
-          if (isHidden) {
-            return null
-          }
-
-          return {
-            other_user_id: other.user_id,
-            other_username: profile.username,
-            other_avatar_url: profile.avatar_url,
-            rgb_username_expires_at: profile.rgb_username_expires_at,
-            glowing_username_color: profile.glowing_username_color,
-            other_created_at: profile.created_at,
-            last_message: lastMsg.body,
-            last_timestamp: lastMsg.created_at || '',
-            unread_count: unreadCount,
-            conversation_id: cid // Include for cache
-          }
-        })
-        
-        // Filter only visible conversations
-        const visibleConvs = convsWithDetails.filter(Boolean) as SidebarConversation[]
-        processedConvs.push(...visibleConvs)
-        
-        // Store hidden conversations - rebuild from convIds using the already-fetched data
-        const finalHiddenConvs: SidebarConversation[] = []
-        for (const cid of convIds) {
-          if (hiddenConvIds.has(cid)) {
-            const lastMsg = lastMessageByConversationId[cid] || { body: 'No messages yet', created_at: null, sender_id: '' }
-            const others = otherMembers?.filter(om => om.conversation_id === cid)
-            if (others && others.length > 0) {
-              const other = others[0]
-              if (other.user_profiles && !blockedUserIds.has(other.user_id)) {
-                const profile = other.user_profiles as any
-                finalHiddenConvs.push({
-                  other_user_id: other.user_id,
-                  other_username: profile.username,
-                  other_avatar_url: profile.avatar_url,
-                  rgb_username_expires_at: profile.rgb_username_expires_at,
-                  glowing_username_color: profile.glowing_username_color,
-                  other_created_at: profile.created_at,
-                  last_message: lastMsg.body,
-                  last_timestamp: lastMsg.created_at || '',
-                  unread_count: unreadCounts[cid] || 0,
-                  conversation_id: cid // Store conversation_id for proper tracking
-                })
-              }
-            }
-          }
-        }
-        setHiddenConversations(finalHiddenConvs)
-      } else {
-        // No convIds - still need to set hidden conversations to empty
-        setHiddenConversations([])
-      }
-
-      // 5. Deduplicate by other_user_id
+      // Deduplicate by other_user_id
       const uniqueConvsMap = new Map<string, SidebarConversation>()
-      
-      processedConvs.forEach(conv => {
+      visibleConvs.forEach(conv => {
         const existing = uniqueConvsMap.get(conv.other_user_id)
         const hasTime = (t: string) => t && t !== ''
         if (!existing) {
@@ -362,7 +217,7 @@ export default function InboxSidebar({
       
       const finalConvs = Array.from(uniqueConvsMap.values())
       
-      // 6. Add Officer Operations if applicable
+      // Add Officer Operations if applicable
       if (isUserOfficer) {
         try {
           const { data: latestOpsMsg } = await supabase
@@ -396,7 +251,7 @@ export default function InboxSidebar({
         }
       }
       
-      // 7. Sort by timestamp
+      // Sort by timestamp
       finalConvs.sort((a, b) => {
         if (a.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return -1
         if (b.other_user_id === OFFICER_GROUP_CONVERSATION_ID) return 1
@@ -455,54 +310,35 @@ export default function InboxSidebar({
         return
       }
 
-      // Find and store the conversation_id FIRST before removing from UI
-      let targetConvId: string | null = null
-      const { data: memberData, error: memberError } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', user.id)
-      
-      if (memberError) {
-        console.error('Hide chat: member query error', memberError)
-        return
+      // Use conversation_id from the already-loaded conversation data (no DB query needed)
+      let targetConvId: string | null = conv.conversation_id || null
+
+      // Fallback: if conversation_id wasn't stored, use RPC
+      if (!targetConvId) {
+        const { data: rpcConvId } = await supabase
+          .rpc('find_shared_conversation', { p_user_id: user.id, p_other_user_id: otherUserId })
+        targetConvId = rpcConvId || null
       }
-      
-      if (memberData && memberData.length > 0) {
-        const myConvIds = memberData.map(m => m.conversation_id)
-        const { data: shared, error: sharedError } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .in('conversation_id', myConvIds)
-          .eq('user_id', otherUserId)
-          .maybeSingle()
-        
-        if (sharedError) {
-          console.error('Hide chat: shared query error', sharedError)
-          return
-        }
-        
-        if (shared?.conversation_id) {
-          targetConvId = shared.conversation_id
-          
-          // Store in localStorage with both conversation_id and user mapping
-          let hiddenChats: Record<string, string> = {}
-          try {
-            const stored = localStorage.getItem('hidden_conversations')
-            if (stored) {
-              hiddenChats = JSON.parse(stored)
-              if (typeof hiddenChats !== 'object' || hiddenChats === null) {
-                hiddenChats = {}
-              }
+
+      if (targetConvId) {
+        // Store in localStorage with both conversation_id and user mapping
+        let hiddenChats: Record<string, string> = {}
+        try {
+          const stored = localStorage.getItem('hidden_conversations')
+          if (stored) {
+            hiddenChats = JSON.parse(stored)
+            if (typeof hiddenChats !== 'object' || hiddenChats === null) {
+              hiddenChats = {}
             }
-          } catch (e) {
-            console.warn('Hide chat: invalid localStorage data, resetting', e)
-            hiddenChats = {}
           }
-          
-          // Store mapping: conversation_id -> other_user_id
-          hiddenChats[targetConvId] = otherUserId
-          localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
+        } catch (e) {
+          console.warn('Hide chat: invalid localStorage data, resetting', e)
+          hiddenChats = {}
         }
+
+        // Store mapping: conversation_id -> other_user_id
+        hiddenChats[targetConvId] = otherUserId
+        localStorage.setItem('hidden_conversations', JSON.stringify(hiddenChats))
       }
 
       // Now update state AFTER storing the mapping
@@ -625,21 +461,14 @@ export default function InboxSidebar({
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_messages' }, (payload) => {
          const newMsg = payload.new
          if (newMsg && user?.id && newMsg.sender_id !== user.id) {
-           // Check if this message is in one of our conversations before fetching
-           supabase
-             .from('conversation_members')
-             .select('conversation_id')
-             .eq('user_id', user.id)
-             .eq('conversation_id', newMsg.conversation_id)
-             .then(({ data }) => {
-               if (data && data.length > 0) {
-                 // Only fetch if message is from our conversations
-                 fetchConversations(true)
-                 if (activeConversation !== newMsg.conversation_id) {
-                   setNewMessagesMap(prev => ({ ...prev, [newMsg.conversation_id]: true }))
-                 }
-               }
-             })
+           // Use in-memory conversations state instead of DB query
+           const isOurConversation = conversations.some(c => c.conversation_id === newMsg.conversation_id)
+           if (isOurConversation) {
+             fetchConversations(true)
+             if (activeConversation !== newMsg.conversation_id) {
+               setNewMessagesMap(prev => ({ ...prev, [newMsg.conversation_id]: true }))
+             }
+           }
          }
       })
       // Only listen for message updates in our own conversations - filter by sender_id not being us

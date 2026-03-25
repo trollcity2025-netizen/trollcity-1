@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Trophy, Zap, CheckCircle2, Info } from 'lucide-react';
-import { sendGlobalNotification } from '../lib/ntfyNotify';
 
 interface GoalMetric {
   current: number;
@@ -60,12 +59,8 @@ export const CreatorSeasonalGoals = () => {
       });
 
       if (error) throw error;
-      
-      // Trigger global notification
-      const message = `I'm close to my ${metric.replace(/_/g, ' ')} goal! Can someone help with a few gifts? 🎁`;
-      await sendGlobalNotification(`🚀 Creator Goal Boost!`, `${user.user.email?.split('@')[0]} needs your help: ${message}`);
 
-      toast.success('Goal Boost requested! A notification has been sent to the city.');
+      toast.success('Goal Boost requested! Your followers will be notified.');
     } catch (error: any) {
       toast.error('Failed to request boost: ' + error.message);
     } finally {

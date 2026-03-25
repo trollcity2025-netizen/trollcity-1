@@ -4,7 +4,7 @@ import { Shield, AlertTriangle, Lock, MessageSquare, Ban, Users, FileText } from
 
 export default function Safety() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="text-center mb-8">
           <Shield className="w-16 h-16 text-purple-400 mx-auto mb-4" />

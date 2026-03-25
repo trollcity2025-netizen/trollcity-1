@@ -155,7 +155,7 @@ export default function Stats() {
   const familyXpProgress = stats?.familyXp ? Math.min((stats.familyXp / 1000) * 100, 100) : 0
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a14] via-[#12121f] to-[#0a0a14] text-white p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">

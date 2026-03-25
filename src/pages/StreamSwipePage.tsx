@@ -204,13 +204,14 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
   
   // Touch event handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isAnimating.current || streams.length === 0) return;
+    if (isAnimating.current || streams.length <= 1) return;
     touchStartY.current = e.touches[0].clientY;
     touchCurrentY.current = e.touches[0].clientY;
   }, [streams.length]);
   
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (isAnimating.current || streams.length === 0) return;
+    if (isAnimating.current || streams.length <= 1) return;
+    e.preventDefault();
     
     touchCurrentY.current = e.touches[0].clientY;
     const diff = touchStartY.current - touchCurrentY.current;
@@ -234,7 +235,7 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
   }, [currentIndex, streams.length, isMuted]);
   
   const handleTouchEnd = useCallback(() => {
-    if (streams.length === 0) return;
+    if (streams.length <= 1) return;
     
     const diff = touchStartY.current - touchCurrentY.current;
     const threshold = 100; // Pixels to trigger swipe
@@ -331,9 +332,10 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
     <div 
       ref={containerRef}
       className="fixed inset-0 bg-black overflow-hidden"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      style={{ touchAction: streams.length > 1 ? 'none' : 'auto' }}
+      onTouchStart={streams.length > 1 ? handleTouchStart : undefined}
+      onTouchMove={streams.length > 1 ? handleTouchMove : undefined}
+      onTouchEnd={streams.length > 1 ? handleTouchEnd : undefined}
     >
       {/* Close button */}
       <button

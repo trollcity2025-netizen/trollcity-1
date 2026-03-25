@@ -46,8 +46,8 @@ export default function LiveControlTab() {
   }, [checkLiveStatus]);
 
   const handleGoLive = () => {
-    // Navigate to broadcast setup with TCNN category
-    window.location.href = '/broadcast/setup?category=tcnn';
+    // Navigate to TCNN broadcaster studio page
+    window.location.href = '/tcnn/broadcaster';
   };
 
   if (isLoading) {
