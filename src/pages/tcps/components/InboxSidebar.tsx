@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, Eye, MessageSquare, Shield, Users } from 'lucide-react'
-import { supabase, isOfficer, OFFICER_GROUP_CONVERSATION_ID } from '../../../lib/supabase'
+import { supabase, isOfficer, OFFICER_GROUP_CONVERSATION_ID, getBlockedUserIds } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
 import UserNameWithAge from '../../../components/UserNameWithAge'
@@ -194,13 +194,18 @@ export default function InboxSidebar({
         conversation_id: c.conversation_id,
       }))
 
+      // Filter out blocked users (both directions)
+      const blockedIds = await getBlockedUserIds()
+      const blockedSet = new Set(blockedIds)
+      const filteredByBlock = allConvs.filter(c => !blockedSet.has(c.other_user_id))
+
       // Get hidden conversations mapping from localStorage
       const hiddenConvMapping = getHiddenConvMapping()
       const hiddenConvIds = new Set(Object.keys(hiddenConvMapping))
 
       // Separate visible and hidden
-      const visibleConvs = allConvs.filter(c => !hiddenConvIds.has(c.conversation_id || ''))
-      const hiddenConvs = allConvs.filter(c => hiddenConvIds.has(c.conversation_id || ''))
+      const visibleConvs = filteredByBlock.filter(c => !hiddenConvIds.has(c.conversation_id || ''))
+      const hiddenConvs = filteredByBlock.filter(c => hiddenConvIds.has(c.conversation_id || ''))
 
       setHiddenConversations(hiddenConvs)
 

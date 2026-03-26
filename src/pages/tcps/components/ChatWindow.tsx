@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { supabase, createConversation, getConversationMessages, markConversationRead, OFFICER_GROUP_CONVERSATION_ID } from '../../../lib/supabase'
+import { supabase, createConversation, getConversationMessages, markConversationRead, OFFICER_GROUP_CONVERSATION_ID, getBlockedUserIds } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import MessageInput from './MessageInput'
@@ -53,7 +53,14 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent, isGroup = 
     const rows = await getConversationMessages(conversationId, { limit: MAX_MESSAGES })
     if (!rows || rows.length === 0) return []
 
-    const senderIds = Array.from(new Set(rows.map((m) => m.sender_id)))
+    // Get blocked user IDs to filter their messages
+    const blockedIds = await getBlockedUserIds()
+    const blockedSet = new Set(blockedIds)
+
+    // Filter out messages from blocked users (but keep own messages)
+    const filteredRows = rows.filter(m => m.sender_id === user?.id || !blockedSet.has(m.sender_id))
+
+    const senderIds = Array.from(new Set(filteredRows.map((m) => m.sender_id)))
     const { data: senders, error: sendersError } = await supabase
       .from('user_profiles')
       .select('id, username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at')
@@ -68,7 +75,7 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent, isGroup = 
       senderMap[s.id] = s
     })
 
-    return rows
+    return filteredRows
       .map((m) => ({
         id: m.id,
         conversation_id: m.conversation_id,
@@ -83,7 +90,7 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent, isGroup = 
         sender_created_at: senderMap[m.sender_id]?.created_at,
       }))
       .reverse()
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) {

@@ -313,6 +313,7 @@ export default function TCPS() {
             conversationId={activeGroupInfo.conversationId}
             groupName={activeGroupInfo.name || 'Group Chat'}
             onLeftGroup={handleLeftGroup}
+            onMemberChanged={() => setSidebarRefreshKey(prev => prev + 1)}
           />
         )}
 

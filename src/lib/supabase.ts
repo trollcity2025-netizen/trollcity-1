@@ -1422,6 +1422,149 @@ export async function getGroupChatMembers(conversationId: string): Promise<Array
   }))
 }
 
+export async function removeGroupMember(conversationId: string, userIdToRemove: string): Promise<void> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const currentUserId = userData.user?.id
+  if (!currentUserId) throw new Error('Not authenticated')
+
+  // Verify current user is owner or admin of the group
+  const { data: myRole } = await supabase
+    .from('conversation_members')
+    .select('role')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', currentUserId)
+    .maybeSingle()
+
+  if (!myRole || (myRole.role !== 'owner' && myRole.role !== 'admin')) {
+    throw new Error('Only group owners and admins can remove members')
+  }
+
+  // Can't remove yourself via this function (use leaveGroupChat)
+  if (userIdToRemove === currentUserId) {
+    throw new Error('Use leave group to remove yourself')
+  }
+
+  // Remove the member
+  const { error } = await supabase
+    .from('conversation_members')
+    .delete()
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userIdToRemove)
+
+  if (error) throw error
+
+  // Delete any pending invite notification for this user
+  await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', userIdToRemove)
+    .eq('type', 'group_invite')
+    .contains('metadata', { conversation_id: conversationId })
+}
+
+export async function addGroupMember(conversationId: string, userIdToAdd: string): Promise<void> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const currentUserId = userData.user?.id
+  if (!currentUserId) throw new Error('Not authenticated')
+
+  // Verify current user is a member of the group
+  const { data: myMembership } = await supabase
+    .from('conversation_members')
+    .select('role')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', currentUserId)
+    .maybeSingle()
+
+  if (!myMembership) throw new Error('You are not a member of this group')
+
+  // Check if user is already a member
+  const { data: existing } = await supabase
+    .from('conversation_members')
+    .select('id, status')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userIdToAdd)
+    .maybeSingle()
+
+  if (existing) {
+    if (existing.status === 'active') throw new Error('User is already in this group')
+    // If invited, re-activate
+    await supabase
+      .from('conversation_members')
+      .update({ status: 'active', role: 'member' })
+      .eq('id', existing.id)
+    return
+  }
+
+  // Insert as active member directly (added by owner/admin)
+  const { error } = await supabase
+    .from('conversation_members')
+    .insert({
+      conversation_id: conversationId,
+      user_id: userIdToAdd,
+      role: 'member',
+      status: 'active',
+    })
+
+  if (error) throw error
+
+  // Send notification to the added user
+  try {
+    const { data: convData } = await supabase
+      .from('conversations')
+      .select('name')
+      .eq('id', conversationId)
+      .maybeSingle()
+
+    const { data: adderProfile } = await supabase
+      .from('user_profiles')
+      .select('username')
+      .eq('id', currentUserId)
+      .maybeSingle()
+
+    await supabase.from('notifications').insert({
+      user_id: userIdToAdd,
+      type: 'group_invite',
+      title: 'Added to Group Chat',
+      message: `${adderProfile?.username || 'Someone'} added you to "${convData?.name || 'a group'}"`,
+      metadata: {
+        conversation_id: conversationId,
+        group_name: convData?.name || '',
+        added_by: currentUserId,
+      }
+    })
+  } catch {
+    // Non-critical
+  }
+}
+
+export async function getBlockedUserIds(): Promise<string[]> {
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData.user?.id
+  if (!userId) return []
+
+  // Get users I blocked
+  const { data: blocked } = await supabase
+    .from('user_relationships')
+    .select('related_user_id')
+    .eq('user_id', userId)
+    .eq('status', 'blocked')
+
+  // Get users who blocked me
+  const { data: blockedBy } = await supabase
+    .from('user_relationships')
+    .select('user_id')
+    .eq('related_user_id', userId)
+    .eq('status', 'blocked')
+
+  const ids = new Set<string>()
+  blocked?.forEach(r => ids.add(r.related_user_id))
+  blockedBy?.forEach(r => ids.add(r.user_id))
+
+  return Array.from(ids)
+}
+
 // Global Message Notification Listener
 export function setupGlobalMessageNotifications(
   userId: string,
