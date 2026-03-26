@@ -33,7 +33,7 @@ export default function AppLayout({
   const { isCollapsed } = useSidebarStore()
   useChatStore()
   const isAuthPage = location.pathname.startsWith('/auth');
-  const isLivePage = location.pathname.startsWith('/live/') || location.pathname.startsWith('/broadcast/') || location.pathname.startsWith('/stream/') || location.pathname === '/live-swipe';
+  const isLivePage = location.pathname.startsWith('/live/') || (location.pathname.startsWith('/broadcast/') && !location.pathname.startsWith('/broadcast/setup')) || location.pathname.startsWith('/stream/') || location.pathname === '/live-swipe';
   const isKeyboardVisible = false;
 
   // Setup global message notifications - opens chat bubble when message received

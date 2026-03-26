@@ -9,7 +9,7 @@ import PromoAdCard from './PromoAdCard';
 
 interface PromoSlotProps {
   placement: AdPlacement;
-  variant?: 'sidebar' | 'featured';
+  variant?: 'sidebar' | 'featured' | 'horizontal';
 }
 
 export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotProps) {
@@ -168,8 +168,9 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
 
   // Loading state
   if (loading) {
+    const loadingHeight = variant === 'horizontal' ? 'h-[100px]' : variant === 'sidebar' ? 'h-[180px]' : 'h-[400px]';
     return (
-      <div className={`w-full ${variant === 'sidebar' ? 'h-[180px]' : 'h-[400px]'} 
+      <div className={`w-full ${loadingHeight} 
         bg-slate-900/50 rounded-xl animate-pulse border border-slate-800`}>
         <div className="flex items-center justify-center h-full">
           <div className="text-slate-500 text-sm">Loading promo...</div>

@@ -3,7 +3,7 @@
  * Internal Troll City promotional ads
  */
 
-export type AdPlacement = 'left_sidebar_screensaver' | 'right_panel_featured';
+export type AdPlacement = 'left_sidebar_screensaver' | 'right_panel_featured' | 'home_horizontal_banner';
 
 export type CampaignType = 
   | 'troll_coins' 
@@ -63,6 +63,7 @@ export interface CityAdWithCreator extends CityAd {
 export const AD_PLACEMENTS: { value: AdPlacement; label: string; description: string }[] = [
   { value: 'left_sidebar_screensaver', label: 'Left Sidebar', description: 'Tall card in empty sidebar area' },
   { value: 'right_panel_featured', label: 'Right Panel', description: 'Large featured card in right panel' },
+  { value: 'home_horizontal_banner', label: 'Upper Panel', description: 'Horizontal banner on the home feed' },
 ];
 
 export const CAMPAIGN_TYPES: { value: CampaignType; label: string }[] = [

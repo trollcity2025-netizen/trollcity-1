@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CityAd, AdPlacement, CampaignType } from '../../types/cityAds';
+import { CityAd, AdPlacement, CampaignType, AD_PLACEMENTS } from '../../../types/cityAds';
 import { supabase } from '../../../lib/supabase';
 import { uploadCityAdImage, deleteCityAdImage } from '../../../lib/uploadCityAdImage';
 import { toast } from 'sonner';
@@ -336,6 +336,13 @@ export default function CityAdsManager() {
             {/* Image Upload */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Image*</label>
+              <p className="text-xs text-slate-500 mb-2">
+                {(formData.placement || 'left_sidebar_screensaver') === 'home_horizontal_banner'
+                  ? 'Recommended: 1200x150px (horizontal banner)'
+                  : (formData.placement || 'left_sidebar_screensaver') === 'right_panel_featured'
+                  ? 'Recommended: 1200x500px (featured card)'
+                  : 'Recommended: 400x600px (sidebar card)'}
+              </p>
               <div className="space-y-2">
                 <input
                   type="file"
@@ -370,10 +377,7 @@ export default function CityAdsManager() {
                 onChange={handleFormChange}
                 className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-purple-500 focus:ring-purple-500"
               >
-                {[
-                  { value: 'left_sidebar_screensaver', label: 'Left Sidebar' },
-                  { value: 'right_panel_featured', label: 'Right Panel' }
-                ].map(option => (
+                {AD_PLACEMENTS.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -559,9 +563,10 @@ export default function CityAdsManager() {
                onChange={(e) => setPlacementFilter(e.target.value as AdPlacement | '')}
                className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-purple-500 focus:ring-purple-500"
              >
-               <option value="">All Placements</option>
-               <option value="left_sidebar_screensaver">Left Sidebar</option>
-               <option value="right_panel_featured">Right Panel</option>
+                <option value="">All Placements</option>
+                {AD_PLACEMENTS.map(p => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
              </select>
            </div>
            <div>
@@ -617,7 +622,7 @@ export default function CityAdsManager() {
                           {ad.label || 'Troll City Promo'}
                         </span>
                         <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-purple-600/80 text-white">
-                          {ad.placement === 'left_sidebar_screensaver' ? 'Sidebar' : 'Right Panel'}
+                          {AD_PLACEMENTS.find(p => p.value === ad.placement)?.label || ad.placement}
                         </span>
                       </div>
                       <h4 className="font-bold text-white">{ad.title}</h4>

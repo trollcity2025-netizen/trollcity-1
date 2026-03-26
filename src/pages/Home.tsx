@@ -387,6 +387,9 @@ export default function Home() {
             )}
           </section>
 
+          {/* Horizontal Ad Banner */}
+          <PromoSlot placement="home_horizontal_banner" variant="horizontal" />
+
           {/* Main Content Area - Wall Feed stays mounted for instant loading */}
           <div className={`${activeTab === 'wall' ? '' : 'hidden'}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
