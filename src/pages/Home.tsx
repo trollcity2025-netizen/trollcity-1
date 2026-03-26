@@ -159,10 +159,10 @@ export default function Home() {
   )
 
   const handleLiveItemClick = (item: LiveItem) => {
-    if (!requireAuth('watch live content')) return
     if (item.type === 'stream') {
       navigate(`/watch/${item.id}`)
     } else {
+      if (!requireAuth('join a pod')) return
       navigate(`/pods/${item.id}`)
     }
   }

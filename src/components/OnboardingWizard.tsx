@@ -29,7 +29,7 @@ const OnboardingWizard: React.FC = () => {
   };
 
   return (
-    <div className="onboarding-wizard bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
+    <div className="onboarding-wizard bg-slate-900 p-6 rounded-lg shadow-lg max-w-md mx-auto border border-white/10">
       <div className="mb-4">
         <div className="flex justify-between mb-2">
           {steps.map((_, index) => (
@@ -41,16 +41,16 @@ const OnboardingWizard: React.FC = () => {
             />
           ))}
         </div>
-        <h2 className="text-xl font-bold">{steps[currentStep].title}</h2>
+        <h2 className="text-xl font-bold text-white">{steps[currentStep].title}</h2>
       </div>
       <div className="mb-6">
-        <p>{steps[currentStep].content}</p>
+        <p className="text-gray-300">{steps[currentStep].content}</p>
       </div>
       <div className="flex justify-between">
         <button
           onClick={prevStep}
           disabled={currentStep === 0}
-          className="px-4 py-2 bg-gray-300 text-gray-700 rounded disabled:opacity-50"
+          className="px-4 py-2 bg-slate-700 text-gray-300 rounded disabled:opacity-50"
         >
           Previous
         </button>

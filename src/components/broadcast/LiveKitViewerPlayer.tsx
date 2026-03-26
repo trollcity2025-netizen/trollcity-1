@@ -31,21 +31,21 @@ const LiveKitViewerPlayer: React.FC<LiveKitViewerPlayerProps> = ({ streamId, bro
     
     // Play video tracks
     videoPubs.forEach((pub) => {
-      if (pub.track && pub.track.kind === 'video') {
+      if (pub.track && typeof (pub.track as any).play === 'function' && pub.track.kind === 'video') {
         const videoTrack = pub.track as RemoteVideoTrack;
         if (videoContainerRef.current) {
           console.log('[LiveKitViewerPlayer] Playing video track for:', participant.identity);
-          videoTrack.play(videoContainerRef.current);
+          try { videoTrack.play(videoContainerRef.current); } catch (e) { console.warn('[LiveKitViewerPlayer] video play failed:', e); }
         }
       }
     });
     
     // Play audio tracks
     audioPubs.forEach((pub) => {
-      if (pub.track && pub.track.kind === 'audio') {
+      if (pub.track && typeof (pub.track as any).play === 'function' && pub.track.kind === 'audio') {
         const audioTrack = pub.track as RemoteAudioTrack;
         console.log('[LiveKitViewerPlayer] Playing audio track for:', participant.identity);
-        audioTrack.play();
+        try { audioTrack.play(); } catch (e) { console.warn('[LiveKitViewerPlayer] audio play failed:', e); }
       }
     });
   }, []);

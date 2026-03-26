@@ -141,9 +141,9 @@ export default function IdVerifyClient({onComplete}:{onComplete:(r:Result)=>void
   }
 
   return (
-    <div className="p-4 bg-white rounded shadow">
-      <h3 className="text-lg font-semibold">ID Verification (Prototype)</h3>
-      <p className="text-sm text-gray-600">Capture a photo of your ID and a live selfie. OCR and face-match run locally.</p>
+    <div className="p-4 bg-slate-900 rounded shadow border border-white/10">
+      <h3 className="text-lg font-semibold text-white">ID Verification (Prototype)</h3>
+      <p className="text-sm text-gray-400">Capture a photo of your ID and a live selfie. OCR and face-match run locally.</p>
       <div className="mt-3">
         <label className="block text-sm">ID Image (photo or scan)</label>
         <input type="file" accept="image/*" onChange={handleIdFileChange} />

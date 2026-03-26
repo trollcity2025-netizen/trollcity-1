@@ -118,7 +118,7 @@ export function InstallPrompt({ className = '', variant = 'banner' }: InstallPro
                   <div className="flex items-center space-x-3 ml-4">
                     <button
                       onClick={handleInstall}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-purple-900 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Install
@@ -386,7 +386,7 @@ export function UpdateBanner() {
         </div>
         <button
           onClick={updateApp}
-          className="px-4 py-2 bg-white text-purple-900 font-medium rounded-lg hover:bg-purple-50 transition-colors"
+          className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-500 transition-colors"
         >
           Update Now
         </button>

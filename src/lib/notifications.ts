@@ -233,7 +233,7 @@ export async function notifySystemAnnouncement(
 }
 
 /**
- * Create notification for all admins
+ * Create notification for all admins and officers
  */
 export async function notifyAdmins(
   title: string,
@@ -242,11 +242,11 @@ export async function notifyAdmins(
   metadata?: NotificationMetadata
 ) {
   try {
-    // Get all admin IDs
+    // Get all admin and officer IDs
     const { data: admins, error } = await supabase
       .from('user_profiles')
       .select('id')
-      .or('role.eq.admin,is_admin.eq.true')
+      .or('role.eq.admin,is_admin.eq.true,is_troll_officer.eq.true,is_lead_officer.eq.true,role.eq.secretary,role.eq.troll_officer,role.eq.lead_troll_officer')
 
     if (error) throw error
 
@@ -254,9 +254,12 @@ export async function notifyAdmins(
       return { success: true, count: 0 }
     }
 
-    // Create notifications for all admins
-    const notifications = admins.map(admin => ({
-      user_id: admin.id,
+    // Deduplicate
+    const uniqueIds = [...new Set(admins.map(a => a.id))]
+
+    // Create notifications for all admins/officers
+    const notifications = uniqueIds.map(id => ({
+      user_id: id,
       type,
       title,
       message,
@@ -273,7 +276,7 @@ export async function notifyAdmins(
     try {
       await supabase.functions.invoke('send-push-notification', {
         body: {
-          user_ids: admins.map(a => a.id),
+          user_ids: uniqueIds,
           title,
           body: message,
           data: metadata,
@@ -284,7 +287,7 @@ export async function notifyAdmins(
       console.error('Failed to send push to admins:', pushError)
     }
 
-    return { success: true, count: admins.length }
+    return { success: true, count: uniqueIds.length }
   } catch (err: any) {
     console.error('Error notifying admins:', err)
     return { success: false, error: err?.message || 'Unknown error', count: 0 }

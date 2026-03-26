@@ -34,7 +34,7 @@ export function ReviewCard({ review }: ReviewCardProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-slate-900 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
       <div className="flex items-start gap-3">
         {/* Avatar */}
         <div className="flex-shrink-0">
@@ -206,7 +206,7 @@ export function ReviewForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-slate-900 rounded-lg p-6 shadow-sm">
       <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
         Leave a Review
       </h3>
@@ -418,7 +418,7 @@ export function SellerRatingSummary({
   const positivePercent = totalReviews > 0 ? Math.round((positiveReviews / totalReviews) * 100) : 0;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+    <div className="bg-slate-900 rounded-lg p-4 shadow-sm">
       <div className="flex items-center gap-4">
         {/* Average Rating */}
         <div className="text-center">

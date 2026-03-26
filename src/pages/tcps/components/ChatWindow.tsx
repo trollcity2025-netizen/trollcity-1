@@ -49,29 +49,18 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent, isGroup = 
 
   const otherUserId = otherUserInfo?.id ?? null
 
-  useEffect(() => {
-    if (!user?.id) {
-      setActualConversationId(null)
-      setMessages([])
-      return
-    }
+  const mapConversationMessages = useCallback(async (conversationId: string) => {
+    const rows = await getConversationMessages(conversationId, { limit: MAX_MESSAGES })
+    if (!rows || rows.length === 0) return []
 
-    // Group chat: use the provided conversation ID directly
-    if (isGroup && groupConversationId) {
-      setActualConversationId(groupConversationId)
-      return
-    }
+    const senderIds = Array.from(new Set(rows.map((m) => m.sender_id)))
+    const { data: senders, error: sendersError } = await supabase
+      .from('user_profiles')
+      .select('id, username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at')
+      .in('id', senderIds)
 
-    if (!otherUserId) {
-      setActualConversationId(null)
-      setMessages([])
-      return
-    }
-
-    if (otherUserId === OFFICER_GROUP_CONVERSATION_ID) {
-      setActualConversationId(OFFICER_GROUP_CONVERSATION_ID)
-      setMessages([])
-      return
+    if (sendersError) {
+      console.error('Error fetching message senders:', sendersError)
     }
 
     const senderMap: Record<string, any> = {}
@@ -97,7 +86,19 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent, isGroup = 
   }, [])
 
   useEffect(() => {
-    if (!user?.id || !otherUserId) {
+    if (!user?.id) {
+      setActualConversationId(null)
+      setMessages([])
+      return
+    }
+
+    // Group chat: use the provided conversation ID directly
+    if (isGroup && groupConversationId) {
+      setActualConversationId(groupConversationId)
+      return
+    }
+
+    if (!otherUserId) {
       setActualConversationId(null)
       setMessages([])
       return

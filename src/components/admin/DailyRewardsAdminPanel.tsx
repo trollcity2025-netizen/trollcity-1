@@ -185,8 +185,8 @@ export default function DailyRewardsAdminPanel() {
   const poolBalance = dashboardData?.poolBalance || 0
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-4 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4">🎁 Daily Rewards Admin</h2>
+    <div className="bg-slate-900 rounded-lg shadow-lg p-4 max-w-4xl mx-auto border border-white/10">
+      <h2 className="text-2xl font-bold mb-4 text-white">🎁 Daily Rewards Admin</h2>
       
       {/* Pool Balance Card */}
       <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg p-4 mb-6 text-white">
@@ -206,7 +206,7 @@ export default function DailyRewardsAdminPanel() {
             <button
               onClick={handleAddToPool}
               disabled={saving || !poolAddAmount}
-              className="bg-white text-green-600 px-4 py-2 rounded font-semibold hover:bg-green-50 disabled:opacity-50"
+              className="bg-green-600 text-white px-4 py-2 rounded font-semibold hover:bg-green-500 disabled:opacity-50"
             >
               Add
             </button>

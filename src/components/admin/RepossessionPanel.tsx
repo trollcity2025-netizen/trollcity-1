@@ -169,7 +169,7 @@ export function RepossessionPanel({ targetUserId, onClose }: RepossessionPanelPr
                   <div
                     key={prop.id}
                     className={`p-3 border rounded-lg ${
-                      prop.is_repossessed ? 'bg-red-50' : 'bg-white'
+                      prop.is_repossessed ? 'bg-red-900/20 border-red-500/30' : 'bg-slate-800 border-white/10'
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -207,7 +207,7 @@ export function RepossessionPanel({ targetUserId, onClose }: RepossessionPanelPr
                   <div
                     key={veh.id}
                     className={`p-3 border rounded-lg ${
-                      veh.is_repossessed ? 'bg-red-50' : 'bg-white'
+                      veh.is_repossessed ? 'bg-red-900/20 border-red-500/30' : 'bg-slate-800 border-white/10'
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -282,9 +282,9 @@ export function RepossessionPanel({ targetUserId, onClose }: RepossessionPanelPr
       {/* Confirmation Modal */}
       {showConfirmModal && confirmAction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md w-full">
-            <h3 className="text-lg font-bold mb-4 text-red-600">Confirm Repossession</h3>
-            <p className="mb-4">
+          <div className="bg-slate-900 p-6 rounded-lg max-w-md w-full border border-white/10">
+            <h3 className="text-lg font-bold mb-4 text-red-400">Confirm Repossession</h3>
+            <p className="mb-4 text-gray-300">
               Are you sure you want to repossess {confirmAction.name}?
               This action will:
             </p>

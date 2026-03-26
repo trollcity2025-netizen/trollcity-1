@@ -995,7 +995,7 @@ function AppContent() {
           <button
             type="button"
             onClick={handleUpdateClick}
-            className="ml-4 rounded bg-white text-black text-sm font-semibold px-3 py-1"
+            className="ml-4 rounded bg-purple-600 text-white text-sm font-semibold px-3 py-1 hover:bg-purple-500"
           >
             Update now
           </button>

@@ -99,7 +99,7 @@ const EventCountdown: React.FC = () => {
 
           <Link
             to="/auth?signup=true"
-            className="px-6 py-2 bg-white text-purple-900 font-bold rounded-full text-sm hover:bg-purple-100 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+            className="px-6 py-2 bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-bold rounded-full text-sm hover:from-purple-400 hover:to-cyan-400 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
           >
             JOIN NOW
           </Link>
