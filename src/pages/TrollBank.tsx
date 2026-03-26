@@ -113,7 +113,7 @@ export default function TrollBank() {
             <div className="relative z-10">
               <p className={`${trollCityTheme.text.secondary} text-sm font-medium mb-1`}>Available Balance</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-yellow-400">{balances.troll_coins.toLocaleString()}</span>
+                <span className="text-4xl font-bold text-yellow-400">{(balances?.troll_coins ?? 0).toLocaleString()}</span>
                 <span className="text-sm text-yellow-400/70">coins</span>
               </div>
               <div className="mt-4 flex items-center gap-2 text-xs text-gray-500">
@@ -184,11 +184,11 @@ export default function TrollBank() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
              <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
                  <p className="text-sm text-purple-300 mb-1">Total Credit Limit</p>
-                 <p className="text-2xl font-bold text-white">{creditInfo.limit.toLocaleString()}</p>
+                 <p className="text-2xl font-bold text-white">{(creditInfo?.limit ?? 0).toLocaleString()}</p>
              </div>
              <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                  <p className="text-sm text-blue-300 mb-1">Available to Spend</p>
-                 <p className="text-2xl font-bold text-white">{creditInfo.available.toLocaleString()}</p>
+                 <p className="text-2xl font-bold text-white">{(creditInfo?.available ?? 0).toLocaleString()}</p>
              </div>
           </div>
           
@@ -288,8 +288,8 @@ export default function TrollBank() {
                     {new Date(entry.created_at).toLocaleDateString()}
                   </p>
                 </div>
-                <div className={`font-bold ${entry.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {entry.amount > 0 ? '+' : ''}{entry.amount.toLocaleString()}
+                <div className={`font-bold ${(entry.amount || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {(entry.amount || 0) > 0 ? '+' : ''}{(entry.amount || 0).toLocaleString()}
                 </div>
               </div>
             ))}
