@@ -800,11 +800,11 @@ export default function BroadcastControls({
                     </button>
                  )}
 
-                 {/* End Stream (Host Only) */}
-                 {isHost && (
+                 {/* End Stream (Host Only) — visible when controls panel is collapsed */}
+                 {isHost && !showStreamControls && (
                      <button
                     onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
-                    className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors relative z-50"
+                    className="ml-2 px-4 py-2 bg-gradient-to-r from-red-600/80 to-red-500/80 hover:from-red-500 hover:to-red-400 border border-red-400/30 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-[0_0_12px_rgba(239,68,68,0.2)]"
                 >
                         <Power size={16} />
                         End Stream
@@ -824,22 +824,45 @@ export default function BroadcastControls({
             </div>
         </div>
 
-        {/* Stream Controls - Host & Staff */}
+        {/* ═══════════════════════════════════════════════════════════════
+            STREAM CONTROLS — Premium Glassmorphism Panel
+            ═══════════════════════════════════════════════════════════════ */}
         {canManageStream && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-5">
+                {/* Section Header with neon accent line */}
                 <div
-                className="flex items-center justify-between border-t border-white/10 pt-4 cursor-pointer hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
-                onClick={() => setShowStreamControls(!showStreamControls)}
-              >
-                    <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                        <Settings2 className="text-yellow-500" />
-                        Stream Controls
-                    </h3>
-                    <div className="flex items-center gap-4">
-                        <ChevronDown 
-                            size={20} 
-                            className={cn("text-slate-400 transition-transform duration-200", showStreamControls && "rotate-180")} 
-                        />
+                    className="flex items-center justify-between cursor-pointer group pt-2"
+                    onClick={() => setShowStreamControls(!showStreamControls)}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center shadow-[0_0_12px_rgba(168,85,247,0.15)]">
+                            <Settings2 size={16} className="text-purple-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-white font-bold text-sm tracking-wide uppercase">
+                                Stream Controls
+                            </h3>
+                            <div className="h-0.5 w-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full mt-0.5 shadow-[0_0_6px_rgba(168,85,247,0.5)]" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {/* Inline stat pills */}
+                        <div className="hidden md:flex items-center gap-2">
+                            <div className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5">
+                                <Eye size={11} className="text-blue-400" />
+                                <span className="text-[10px] font-bold text-blue-300">{liveViewerCount ?? 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1 bg-pink-500/10 border border-pink-500/20 rounded-full px-2 py-0.5">
+                                <Heart size={11} className="text-pink-400" />
+                                <span className="text-[10px] font-bold text-pink-300">{likes}</span>
+                            </div>
+                        </div>
+                        <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300",
+                            showStreamControls ? "bg-purple-500/20 text-purple-400 rotate-180" : "bg-white/5 text-slate-500"
+                        )}>
+                            <ChevronDown size={16} />
+                        </div>
                     </div>
                 </div>
 
@@ -849,129 +872,203 @@ export default function BroadcastControls({
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
                         className="overflow-hidden"
                     >
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
-                            {/* Box Layout Control - Only show if category allows adding/removing boxes and user has permission */}
-                            {canModifyBoxes && canEditElectionBoxes && (
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
-                        <span className="text-slate-400 text-sm font-medium flex items-center gap-2">
-                            <LayoutGrid size={16} />
-                            Boxes
-                        </span>
-                        <div className="flex items-center gap-3">
-                            <button 
-                                type="button"
-                                onClick={() => updateBoxCount(boxCount - 1)}
-                                disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes) || !categoryConfig.allowDeductBox}
-                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition disabled:opacity-50"
-                            >
-                                <Minus size={16} />
-                            </button>
-                            <span className="font-bold text-white min-w-[20px] text-center">{boxCount}</span>
-                            <button 
-                                type="button"
-                                onClick={() => updateBoxCount(boxCount + 1)}
-                                disabled={!canEditStream || boxCount >= 6 || !categoryConfig.allowAddBox}
-                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition disabled:opacity-50"
-                            >
-                                <Plus size={16} />
-                            </button>
-                        </div>
-                    </div>
+                        <div className="flex flex-col gap-4 pb-1">
+                            {/* ─── ROW 1: Boxes + Visuals ─── */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                                {/* ┌─────────────────────────────────┐
+                                    │  BOXES CONTROL                  │
+                                    └─────────────────────────────────┘ */}
+                                {canModifyBoxes && canEditElectionBoxes && (
+                                <div className="relative bg-gradient-to-br from-[#0e0e1a] to-[#12122a] rounded-2xl p-5 border border-purple-500/15 shadow-[0_0_20px_rgba(168,85,247,0.06),inset_0_1px_0_rgba(255,255,255,0.04)] group hover:border-purple-500/25 transition-all duration-300">
+                                    {/* Subtle glow on hover */}
+                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/0 to-blue-500/0 group-hover:from-purple-500/5 group-hover:to-blue-500/5 transition-all duration-500 pointer-events-none" />
+
+                                    <div className="relative flex flex-col items-center gap-4">
+                                        {/* Label */}
+                                        <div className="flex items-center gap-2">
+                                            <LayoutGrid size={14} className="text-purple-400" />
+                                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Boxes</span>
+                                        </div>
+
+                                        {/* Number display with glow ring */}
+                                        <div className="relative">
+                                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 flex items-center justify-center shadow-[0_0_24px_rgba(168,85,247,0.12)]">
+                                                <span className="text-3xl font-black text-white tracking-tight">{boxCount}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* +/- Buttons */}
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => updateBoxCount(boxCount - 1)}
+                                                disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes) || !categoryConfig.allowDeductBox}
+                                                className="w-10 h-10 rounded-xl bg-slate-800/80 hover:bg-red-500/20 border border-white/5 hover:border-red-500/30 text-white hover:text-red-400 transition-all duration-200 flex items-center justify-center disabled:opacity-30 disabled:hover:bg-slate-800/80 disabled:hover:border-white/5 disabled:hover:text-white disabled:cursor-not-allowed"
+                                            >
+                                                <Minus size={18} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => updateBoxCount(boxCount + 1)}
+                                                disabled={!canEditStream || boxCount >= 6 || !categoryConfig.allowAddBox}
+                                                className="w-10 h-10 rounded-xl bg-slate-800/80 hover:bg-emerald-500/20 border border-white/5 hover:border-emerald-500/30 text-white hover:text-emerald-400 transition-all duration-200 flex items-center justify-center disabled:opacity-30 disabled:hover:bg-slate-800/80 disabled:hover:border-white/5 disabled:hover:text-white disabled:cursor-not-allowed"
+                                            >
+                                                <Plus size={18} />
+                                            </button>
+                                        </div>
+
+                                        <p className="text-[10px] text-zinc-600">1–6 boxes available</p>
+                                    </div>
+                                </div>
+                                )}
+
+                                {/* ┌─────────────────────────────────┐
+                                    │  VISUALS TOGGLE                 │
+                                    └─────────────────────────────────┘ */}
+                                {isHost && (
+                                <div className="relative bg-gradient-to-br from-[#0e0e1a] to-[#12122a] rounded-2xl p-5 border border-purple-500/15 shadow-[0_0_20px_rgba(168,85,247,0.06),inset_0_1px_0_rgba(255,255,255,0.04)] group hover:border-purple-500/25 transition-all duration-300">
+                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/0 to-pink-500/0 group-hover:from-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500 pointer-events-none" />
+
+                                    <div className="relative flex flex-col items-center gap-4 h-full justify-center">
+                                        {/* Label */}
+                                        <div className="flex items-center gap-2">
+                                            <Palette size={14} className="text-pink-400" />
+                                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Visuals</span>
+                                        </div>
+
+                                        {/* Premium toggle switch */}
+                                        <button
+                                            onClick={() => toggleStreamRgb()}
+                                            className={cn(
+                                                "relative w-16 h-8 rounded-full transition-all duration-300 flex items-center",
+                                                stream.has_rgb_effect
+                                                    ? "bg-gradient-to-r from-purple-600 to-pink-500 shadow-[0_0_16px_rgba(168,85,247,0.4)]"
+                                                    : "bg-slate-800 border border-white/10"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "w-6 h-6 rounded-full bg-white shadow-lg transition-all duration-300 mx-1",
+                                                stream.has_rgb_effect ? "translate-x-8" : "translate-x-0"
+                                            )} />
+                                        </button>
+
+                                        <p className={cn(
+                                            "text-[10px] font-medium transition-colors",
+                                            stream.has_rgb_effect ? "text-purple-400" : "text-zinc-600"
+                                        )}>
+                                            {stream.has_rgb_effect ? 'RGB Effect Active' : 'RGB Effect Off'}
+                                        </p>
+                                    </div>
+                                </div>
+                                )}
+                            </div>
+
+                            {/* ┌─────────────────────────────────────────┐
+                                │  SEAT PRICE — Full Width Premium Card   │
+                                └─────────────────────────────────────────┘ */}
+                            {canManageStream && (
+                            <div className="relative bg-gradient-to-br from-[#0e0e1a] to-[#141428] rounded-2xl p-5 border border-amber-500/15 shadow-[0_0_20px_rgba(245,158,11,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
+                                {/* Header row */}
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                                            <Coins size={14} className="text-amber-400" />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-bold text-white">
+                                                {enablePerBoxPricing ? 'Per-Box Pricing' : 'Seat Price'}
+                                            </span>
+                                            <p className="text-[10px] text-zinc-500 mt-0.5">
+                                                {enablePerBoxPricing
+                                                    ? "Set individual prices per seat"
+                                                    : "Set to 0 for free seats, or charge coins to join"}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Advanced / Simple Mode pill toggle */}
+                                    <button
+                                        onClick={() => setEnablePerBoxPricing(!enablePerBoxPricing)}
+                                        className={cn(
+                                            "text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full transition-all duration-200",
+                                            enablePerBoxPricing
+                                                ? "bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]"
+                                                : "bg-slate-800/80 text-zinc-400 border border-white/5 hover:border-amber-500/20 hover:text-amber-400"
+                                        )}
+                                    >
+                                        {enablePerBoxPricing ? 'Simple Mode' : 'Advanced Mode'}
+                                    </button>
+                                </div>
+
+                                {/* Price input area */}
+                                {!enablePerBoxPricing ? (
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1 relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="5000"
+                                                value={seatPrice === 0 ? '' : seatPrice}
+                                                onChange={handlePriceChange}
+                                                disabled={!isHost}
+                                                className={cn(
+                                                    "w-full bg-[#0a0a14] border border-amber-500/20 rounded-xl px-4 py-3 text-lg font-bold text-white placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_12px_rgba(245,158,11,0.15)] transition-all",
+                                                    !isHost && "opacity-50 cursor-not-allowed"
+                                                )}
+                                                placeholder="0"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-500 font-medium">coins</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                                        {Array.from({ length: 6 }, (_, i) => (
+                                            <div key={i} className="flex flex-col items-center gap-1.5">
+                                                <label className={cn(
+                                                    "text-[10px] font-bold uppercase tracking-wider",
+                                                    i === 0 ? "text-purple-400" : "text-zinc-500"
+                                                )}>
+                                                    {i === 0 ? 'Host' : `Seat ${i}`}
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="5000"
+                                                    value={seatPrices[i] || 0}
+                                                    onChange={(e) => handleBoxPriceChange(i, e.target.value)}
+                                                    disabled={!isHost || i === 0}
+                                                    className={cn(
+                                                        "w-full bg-[#0a0a14] border rounded-xl px-2 py-2 text-sm font-bold text-white text-center focus:outline-none focus:border-amber-500/50 transition-all",
+                                                        i === 0
+                                                            ? "border-purple-500/20 text-purple-300 opacity-60 cursor-not-allowed"
+                                                            : "border-amber-500/20 focus:shadow-[0_0_8px_rgba(245,158,11,0.1)]"
+                                                    )}
+                                                    placeholder="0"
+                                                    title={i === 0 ? "Host seat is always free" : `Price for seat ${i}`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                             )}
 
-                    {/* Seat Pricing - Only visible to Host & Staff */}
-                    {canManageStream && (
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <label className="text-slate-400 text-xs font-medium flex items-center gap-1">
-                                <Coins size={12} className="text-yellow-500" />
-                                {enablePerBoxPricing ? 'Per-Box Pricing' : 'Seat Price'}
-                            </label>
-                            <button
-                                onClick={() => setEnablePerBoxPricing(!enablePerBoxPricing)}
-                                className={cn(
-                                    "text-[10px] px-2 py-1 rounded-full transition-colors",
-                                    enablePerBoxPricing 
-                                        ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" 
-                                        : "bg-zinc-700 text-slate-400 hover:bg-zinc-600"
-                                )}
-                            >
-                                {enablePerBoxPricing ? 'Simple Mode' : 'Advanced Mode'}
-                            </button>
+                            {/* ─── END STREAM — Prominent red CTA ─── */}
+                            {isHost && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
+                                    className="w-full mt-1 py-3.5 rounded-2xl bg-gradient-to-r from-red-600/90 to-red-500/90 hover:from-red-500 hover:to-red-400 text-white font-bold text-sm tracking-wide uppercase flex items-center justify-center gap-2 border border-red-400/30 shadow-[0_0_24px_rgba(239,68,68,0.25)] hover:shadow-[0_0_32px_rgba(239,68,68,0.4)] transition-all duration-300 active:scale-[0.98]"
+                                >
+                                    <Power size={18} />
+                                    End Stream
+                                </button>
+                            )}
                         </div>
-                        
-                        {!enablePerBoxPricing ? (
-                            // Simple mode - single price for all seats
-                            <div className="flex items-center gap-3">
-                                <input 
-                                    type="number" 
-                                    min="0"
-                                    max="5000"
-                                    value={seatPrice === 0 ? '' : seatPrice}
-                                    onChange={handlePriceChange}
-                                    disabled={!isHost}
-                                    className={cn(
-                                        "flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
-                                        (!isHost) && "opacity-50 cursor-not-allowed"
-                                    )}
-                                    placeholder="0 = Free"
-                                />
-                                <span className="text-xs text-zinc-500">coins</span>
-                            </div>
-                        ) : (
-                            // Advanced mode - per-box pricing
-                            <div className="grid grid-cols-3 gap-2">
-                                {Array.from({ length: 6 }, (_, i) => (
-                                    <div key={i} className="flex flex-col gap-1">
-                                        <label className="text-[10px] text-zinc-500">
-                                            {i === 0 ? 'Host' : `Seat ${i}`}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="5000"
-                                            value={seatPrices[i] || 0}
-                                            onChange={(e) => handleBoxPriceChange(i, e.target.value)}
-                                            disabled={!isHost || i === 0} // Host seat is always free
-                                            className={cn(
-                                                "w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-500",
-                                                (i === 0) && "opacity-50 cursor-not-allowed bg-slate-900"
-                                            )}
-                                            placeholder="0"
-                                            title={i === 0 ? "Host seat is always free" : `Price for seat ${i}`}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        
-                        <p className="text-[10px] text-zinc-500">
-                            {enablePerBoxPricing 
-                                ? "Set 0 for free seats. Host seat is always free." 
-                                : "Set to 0 for free seats, or charge coins to join."}
-                        </p>
-                    </div>
-                    )}
-
-                    {/* Visual Effects - HOST ONLY */}
-                    {isHost && (
-                    <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex items-center justify-between">
-                         <span className="text-slate-400 text-sm font-medium flex items-center gap-2">
-                            <Palette size={16} className="text-purple-400" />
-                            Visuals
-                         </span>
-                         <button onClick={() => toggleStreamRgb()} className={cn("p-1 px-2 rounded-full", stream.has_rgb_effect ? "bg-purple-500" : "bg-zinc-700")}>
-           <div className={cn("w-4 h-4 rounded-full", stream.has_rgb_effect ? "bg-white" : "bg-zinc-500")}></div>
-         </button>
-                    </div>
-                    )}
-
-
-                </div>
-                </motion.div>
+                    </motion.div>
                 )}
                 </AnimatePresence>
             </div>

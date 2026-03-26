@@ -275,6 +275,9 @@ export interface Conversation {
   id: string
   created_at: string
   created_by: string
+  is_group?: boolean
+  name?: string | null
+  group_avatar_url?: string | null
 }
 
 export interface ConversationMember {
@@ -1244,6 +1247,179 @@ export async function sendOfficerMessage(content: string, priority: string = 'no
   
   if (error) throw error
   return data
+}
+
+// ─── Group Chat Functions ───────────────────────────────────────────────────
+
+export async function createGroupChat(name: string, memberUserIds: string[]): Promise<Conversation> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const currentUserId = userData.user?.id
+  if (!currentUserId) throw new Error('Not authenticated')
+
+  const uniqueMemberIds = Array.from(new Set([...memberUserIds, currentUserId]))
+
+  const { data: conversationData, error: conversationError } = await supabase
+    .from('conversations')
+    .insert({
+      created_by: currentUserId,
+      is_group: true,
+      name: name.trim(),
+    })
+    .select()
+    .single()
+
+  if (conversationError) throw conversationError
+
+  const conversationId = conversationData.id as string
+
+  // Insert creator as owner, others as invited (they must accept)
+  const membersPayload = uniqueMemberIds.map((userId) => ({
+    conversation_id: conversationId,
+    user_id: userId,
+    role: userId === currentUserId ? 'owner' : (userId === currentUserId ? 'member' : 'invited'),
+    status: userId === currentUserId ? 'active' : 'invited',
+  }))
+
+  const { error: membersError } = await supabase
+    .from('conversation_members')
+    .insert(membersPayload)
+
+  if (membersError) throw membersError
+
+  // Send invite notifications to all invited members
+  for (const memberId of memberUserIds) {
+    if (memberId !== currentUserId) {
+      try {
+        await supabase.from('notifications').insert({
+          user_id: memberId,
+          type: 'group_invite',
+          title: 'Group Chat Invite',
+          message: `${profile?.username || 'Someone'} invited you to "${name.trim()}"`,
+          metadata: {
+            conversation_id: conversationId,
+            group_name: name.trim(),
+            invited_by: currentUserId,
+          }
+        })
+      } catch {
+        // Non-critical: notification may fail but group is still created
+      }
+    }
+  }
+
+  return {
+    id: conversationData.id,
+    created_at: conversationData.created_at,
+    created_by: conversationData.created_by,
+    is_group: true,
+    name: name.trim(),
+  }
+}
+
+export async function acceptGroupInvite(conversationId: string): Promise<void> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const userId = userData.user?.id
+  if (!userId) throw new Error('Not authenticated')
+
+  // Update member status from 'invited' to 'active'
+  const { error } = await supabase
+    .from('conversation_members')
+    .update({ status: 'active', role: 'member' })
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+
+  // Delete the invite notification
+  await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', userId)
+    .eq('type', 'group_invite')
+    .contains('metadata', { conversation_id: conversationId })
+}
+
+export async function declineGroupInvite(conversationId: string): Promise<void> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const userId = userData.user?.id
+  if (!userId) throw new Error('Not authenticated')
+
+  // Remove member from conversation
+  const { error } = await supabase
+    .from('conversation_members')
+    .delete()
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+
+  // Delete the invite notification
+  await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', userId)
+    .eq('type', 'group_invite')
+    .contains('metadata', { conversation_id: conversationId })
+}
+
+export async function leaveGroupChat(conversationId: string): Promise<void> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const userId = userData.user?.id
+  if (!userId) throw new Error('Not authenticated')
+
+  // Remove member from conversation
+  const { error } = await supabase
+    .from('conversation_members')
+    .delete()
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+
+  // Check if any active members remain
+  const { count } = await supabase
+    .from('conversation_members')
+    .select('*', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('status', 'active')
+
+  // If no active members left, delete the entire conversation
+  if ((count ?? 0) === 0) {
+    await supabase.from('conversation_messages').delete().eq('conversation_id', conversationId)
+    await supabase.from('conversation_members').delete().eq('conversation_id', conversationId)
+    await supabase.from('conversations').delete().eq('id', conversationId)
+  }
+}
+
+export async function getGroupChatMembers(conversationId: string): Promise<Array<{ user_id: string; username: string; avatar_url: string | null; role: string; status: string }>> {
+  const { data: members, error } = await supabase
+    .from('conversation_members')
+    .select('user_id, role, status')
+    .eq('conversation_id', conversationId)
+
+  if (error) throw error
+  if (!members || members.length === 0) return []
+
+  const userIds = members.map(m => m.user_id)
+  const { data: profiles } = await supabase
+    .from('user_profiles')
+    .select('id, username, avatar_url')
+    .in('id', userIds)
+
+  const profileMap: Record<string, any> = {}
+  profiles?.forEach(p => { profileMap[p.id] = p })
+
+  return members.map(m => ({
+    user_id: m.user_id,
+    username: profileMap[m.user_id]?.username || 'Unknown',
+    avatar_url: profileMap[m.user_id]?.avatar_url || null,
+    role: m.role,
+    status: m.status,
+  }))
 }
 
 // Global Message Notification Listener

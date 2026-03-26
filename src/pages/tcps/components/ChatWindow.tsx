@@ -3,6 +3,7 @@ import { supabase, createConversation, getConversationMessages, markConversation
 import { useAuthStore } from '../../../lib/store'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import MessageInput from './MessageInput'
+import { Users, Info, Phone, Video } from 'lucide-react'
 
 const MAX_MESSAGES = 5000 // Increased to fetch all messages
 
@@ -34,9 +35,13 @@ interface ChatWindowProps {
   isOnline?: boolean
   onBack?: () => void
   onMessageSent?: () => void // Callback when a message is sent
+  isGroup?: boolean
+  groupConversationId?: string | null
+  groupName?: string | null
+  onOpenGroupInfo?: () => void
 }
 
-const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWindowProps) => {
+const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent, isGroup = false, groupConversationId, groupName, onOpenGroupInfo }: ChatWindowProps) => {
   const { user, profile } = useAuthStore()
   const [actualConversationId, setActualConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -44,18 +49,29 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
 
   const otherUserId = otherUserInfo?.id ?? null
 
-  const mapConversationMessages = useCallback(async (conversationId: string) => {
-    const rows = await getConversationMessages(conversationId, { limit: MAX_MESSAGES })
-    if (!rows || rows.length === 0) return []
+  useEffect(() => {
+    if (!user?.id) {
+      setActualConversationId(null)
+      setMessages([])
+      return
+    }
 
-    const senderIds = Array.from(new Set(rows.map((m) => m.sender_id)))
-    const { data: senders, error: sendersError } = await supabase
-      .from('user_profiles')
-      .select('id, username, avatar_url, rgb_username_expires_at, glowing_username_color, created_at')
-      .in('id', senderIds)
+    // Group chat: use the provided conversation ID directly
+    if (isGroup && groupConversationId) {
+      setActualConversationId(groupConversationId)
+      return
+    }
 
-    if (sendersError) {
-      console.error('Error fetching message senders:', sendersError)
+    if (!otherUserId) {
+      setActualConversationId(null)
+      setMessages([])
+      return
+    }
+
+    if (otherUserId === OFFICER_GROUP_CONVERSATION_ID) {
+      setActualConversationId(OFFICER_GROUP_CONVERSATION_ID)
+      setMessages([])
+      return
     }
 
     const senderMap: Record<string, any> = {}
@@ -124,7 +140,7 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
     return () => {
       mounted = false
     }
-  }, [otherUserId, user?.id])
+  }, [otherUserId, user?.id, isGroup, groupConversationId])
 
   useEffect(() => {
     if (!actualConversationId) return
@@ -276,15 +292,15 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
 
   if (!user?.id) return null
 
-  if (!otherUserId) {
+  if (!otherUserId && !isGroup) {
     return <div className="flex-1 flex items-center justify-center text-gray-500 h-full">Select a conversation</div>
   }
 
   if (!actualConversationId) {
     return (
       <div className="flex-1 flex flex-col h-full">
-        {/* Header with user info */}
-        {otherUserInfo && (
+        {/* Header with user/group info */}
+        {(otherUserInfo || isGroup) && (
           <div className="flex items-center gap-3 p-4 bg-white/5 border-b border-white/10">
             <button
               onClick={() => window.history.back()}
@@ -292,11 +308,19 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
             >
               ←
             </button>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold">
-              {otherUserInfo.username?.[0]?.toUpperCase() || '?'}
-            </div>
+            {isGroup ? (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+                <Users className="w-5 h-5" />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold">
+                {otherUserInfo?.username?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
             <div>
-              <div className="font-semibold text-white">{otherUserInfo.username || 'Loading...'}</div>
+              <div className="font-semibold text-white">
+                {isGroup ? (groupName || 'Group Chat') : (otherUserInfo?.username || 'Loading...')}
+              </div>
             </div>
           </div>
         )}
@@ -312,8 +336,8 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
 
   return (
     <div className="flex flex-col h-full bg-[#0A0A14]">
-      {/* Header with user info */}
-      {otherUserInfo && (
+      {/* Header with user/group info */}
+      {(otherUserInfo || isGroup) && (
         <div className="flex items-center gap-3 p-4 bg-white/5 border-b border-white/10 shrink-0">
           {/* Back button for mobile */}
           {onBack && (
@@ -325,16 +349,40 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           )}
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold shrink-0">
-            {otherUserInfo.username?.[0]?.toUpperCase() || '?'}
-          </div>
-          <div className="min-w-0">
-            <div className="font-semibold text-white truncate">{otherUserInfo.username || 'Unknown User'}</div>
-            {isOnline !== undefined && (
+          {isGroup ? (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold shrink-0">
+              {otherUserInfo?.username?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-white truncate">
+              {isGroup ? (groupName || 'Group Chat') : (otherUserInfo?.username || 'Unknown User')}
+            </div>
+            {!isGroup && isOnline !== undefined && (
               <div className="text-xs flex items-center gap-1">
                 <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
                 <span className={isOnline ? 'text-green-400' : 'text-gray-500'}>{isOnline ? 'Online' : 'Offline'}</span>
               </div>
+            )}
+            {isGroup && (
+              <div className="text-xs text-purple-400">Group Chat</div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1">
+            {isGroup && onOpenGroupInfo && (
+              <button
+                onClick={onOpenGroupInfo}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+                title="Group Info"
+              >
+                <Info size={18} />
+              </button>
             )}
           </div>
         </div>
@@ -380,6 +428,7 @@ const ChatWindow = ({ otherUserInfo, isOnline, onBack, onMessageSent }: ChatWind
       <MessageInput
         conversationId={actualConversationId}
         otherUserId={otherUserId}
+        isGroup={isGroup}
         onMessageSent={() => {
           if (actualConversationId) {
             void markConversationRead(actualConversationId).catch(() => {})

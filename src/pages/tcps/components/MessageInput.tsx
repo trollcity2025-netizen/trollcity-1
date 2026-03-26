@@ -15,9 +15,10 @@ interface MessageInputProps {
   onMessageSent: () => void
   onNewMessage?: (msg: any) => void
   onTyping?: (isTyping: boolean) => void
+  isGroup?: boolean
 }
 
-export default function MessageInput({ conversationId, otherUserId, onMessageSent, onNewMessage, onTyping }: MessageInputProps) {
+export default function MessageInput({ conversationId, otherUserId, onMessageSent, onNewMessage, onTyping, isGroup = false }: MessageInputProps) {
   const { user: _user, profile } = useAuthStore()
   const { isJailed } = useJailMode(profile?.id)
   const [isOtherUserAdmin, setIsOtherUserAdmin] = useState(false)
@@ -79,10 +80,11 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
   }
 
   const sendMessage = async () => {
-    if (!message.trim() || !otherUserId || !profile?.id || sending) return
+    if (!message.trim() || !profile?.id || sending) return
+    if (!isGroup && !otherUserId) return
 
-    // Jail restriction: Inmates can only message admins
-    if (isJailed && !isOtherUserAdmin) {
+    // Jail restriction: Inmates can only message admins (skip for group chats)
+    if (!isGroup && isJailed && !isOtherUserAdmin) {
       toast.error('As an inmate, you can only message administrators.')
       return
     }
@@ -140,6 +142,15 @@ export default function MessageInput({ conversationId, otherUserId, onMessageSen
       // Handle OPS group message
       if (conversationId === OFFICER_GROUP_CONVERSATION_ID) {
         await sendOfficerMessage(currentMessage, 'normal')
+        onMessageSent()
+        setSending(false)
+        inputRef.current?.focus()
+        return
+      }
+      
+      // Group chat: send message directly without payment check
+      if (isGroup) {
+        await sendConversationMessage(conversationId, currentMessage)
         onMessageSent()
         setSending(false)
         inputRef.current?.focus()

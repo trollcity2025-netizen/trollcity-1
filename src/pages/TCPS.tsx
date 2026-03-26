@@ -5,6 +5,8 @@ import { trollCityTheme } from '../styles/trollCityTheme'
 import InboxSidebar from './tcps/components/InboxSidebar'
 import ChatWindow from './tcps/components/ChatWindow'
 import NewMessageModal from './tcps/components/NewMessageModal'
+import CreateGroupChatModal from './tcps/components/CreateGroupChatModal'
+import GroupChatInfoModal from './tcps/components/GroupChatInfoModal'
 import IncomingCallPopup from '../components/IncomingCallPopup'
 import { supabase } from '../lib/supabase'
 import { usePresenceStore } from '../lib/presenceStore'
@@ -37,10 +39,14 @@ export default function TCPS() {
   const prefetchMessages = usePrefetchMessages()
 
   const [activeConversation, setActiveConversation] = useState<string | null>(null)
+  const [activeConversationType, setActiveConversationType] = useState<'dm' | 'group'>('dm')
+  const [activeGroupInfo, setActiveGroupInfo] = useState<{ conversationId: string; name: string } | null>(null)
 
   const [activeTab, setActiveTab] = useState<string>('inbox')
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0)
   const [showNewMessageModal, setShowNewMessageModal] = useState(false)
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false)
+  const [showGroupInfoModal, setShowGroupInfoModal] = useState(false)
 
   const [otherUserInfo, setOtherUserInfo] = useState<{
     id: string
@@ -177,8 +183,14 @@ export default function TCPS() {
       })
   }, [activeConversation, otherUserInfo?.id, otherUserInfo?.username])
 
-  const handleSelectConversation = (otherId: string) => {
+  const handleSelectConversation = (otherId: string, isGroup?: boolean, conversationId?: string, groupName?: string) => {
     setActiveConversation(otherId)
+    setActiveConversationType(isGroup ? 'group' : 'dm')
+    if (isGroup && conversationId) {
+      setActiveGroupInfo({ conversationId, name: groupName || 'Group Chat' })
+    } else {
+      setActiveGroupInfo(null)
+    }
     setOtherUserInfo({
       id: otherId,
       username: '',
@@ -189,6 +201,8 @@ export default function TCPS() {
 
   const handleNewMessage = (userId: string) => {
     setActiveConversation(userId)
+    setActiveConversationType('dm')
+    setActiveGroupInfo(null)
     setOtherUserInfo({
       id: userId,
       username: '',
@@ -196,6 +210,26 @@ export default function TCPS() {
     })
     navigate(`/tcps?user=${userId}`, { replace: true })
     setShowNewMessageModal(false)
+  }
+
+  const handleGroupCreated = (conversationId: string) => {
+    // Refresh sidebar to show the new group
+    setSidebarRefreshKey(prev => prev + 1)
+    // Select the new group conversation
+    setActiveConversation(conversationId)
+    setActiveConversationType('group')
+    setActiveGroupInfo({ conversationId, name: '' }) // Name will be loaded
+    navigate(`/tcps?user=${conversationId}`, { replace: true })
+    setShowCreateGroupModal(false)
+  }
+
+  const handleLeftGroup = () => {
+    setActiveConversation(null)
+    setActiveConversationType('dm')
+    setActiveGroupInfo(null)
+    setOtherUserInfo(null)
+    navigate('/tcps', { replace: true })
+    setSidebarRefreshKey(prev => prev + 1)
   }
 
   const handleConversationsLoaded = useCallback((conversations: SidebarConversation[]) => {
@@ -231,6 +265,7 @@ export default function TCPS() {
               onlineUsers={onlineUsersRecord}
               onConversationsLoaded={handleConversationsLoaded}
               onOpenNewMessage={() => setShowNewMessageModal(true)}
+              onOpenCreateGroup={() => setShowCreateGroupModal(true)}
               refreshKey={sidebarRefreshKey}
             />
           </div>
@@ -238,17 +273,23 @@ export default function TCPS() {
           {/* Column 2: Chat Window */}
           <div className={`flex-1 flex-col min-w-0 bg-transparent h-full ${!activeConversation ? 'hidden md:flex' : 'flex'}`}>
             <ChatWindow
-              conversationId={null} // It will be derived from users or we can pass it if we have it
-              otherUserInfo={otherUserInfo}
-              isOnline={isOtherOnline}
+              conversationId={null}
+              otherUserInfo={activeConversationType === 'group' ? null : otherUserInfo}
+              isOnline={activeConversationType === 'group' ? undefined : isOtherOnline}
+              isGroup={activeConversationType === 'group'}
+              groupConversationId={activeGroupInfo?.conversationId || null}
+              groupName={activeGroupInfo?.name || null}
               onBack={() => {
                 setActiveConversation(null)
+                setActiveConversationType('dm')
+                setActiveGroupInfo(null)
                 navigate('/tcps')
               }}
               onMessageSent={() => {
                 // Refresh sidebar when message is sent
                 setSidebarRefreshKey(prev => prev + 1)
               }}
+              onOpenGroupInfo={() => setShowGroupInfoModal(true)}
             />
           </div>
         </div>
@@ -258,6 +299,22 @@ export default function TCPS() {
           onClose={() => setShowNewMessageModal(false)}
           onSelectUser={handleNewMessage}
         />
+
+        <CreateGroupChatModal
+          isOpen={showCreateGroupModal}
+          onClose={() => setShowCreateGroupModal(false)}
+          onGroupCreated={handleGroupCreated}
+        />
+
+        {showGroupInfoModal && activeGroupInfo && (
+          <GroupChatInfoModal
+            isOpen={showGroupInfoModal}
+            onClose={() => setShowGroupInfoModal(false)}
+            conversationId={activeGroupInfo.conversationId}
+            groupName={activeGroupInfo.name || 'Group Chat'}
+            onLeftGroup={handleLeftGroup}
+          />
+        )}
 
         {incomingCall && (
           <IncomingCallPopup

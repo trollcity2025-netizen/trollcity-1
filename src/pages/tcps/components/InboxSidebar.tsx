@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, Eye, MessageSquare, Shield } from 'lucide-react'
+import { Search, MessageCircle, Mail, MoreVertical, Ban, EyeOff, Eye, MessageSquare, Shield, Users } from 'lucide-react'
 import { supabase, isOfficer, OFFICER_GROUP_CONVERSATION_ID } from '../../../lib/supabase'
 import { useAuthStore } from '../../../lib/store'
 import { useChatStore } from '../../../lib/chatStore'
@@ -18,15 +18,19 @@ interface SidebarConversation {
   glowing_username_color?: string | null
   other_created_at?: string
   conversation_id?: string // Add conversation_id for proper tracking
+  is_group?: boolean
+  group_name?: string | null
+  member_count?: number
 }
 
 interface InboxSidebarProps {
   activeConversation: string | null
-  onSelectConversation: (userId: string) => void
+  onSelectConversation: (userId: string, isGroup?: boolean, conversationId?: string, groupName?: string) => void
   onlineUsers: Record<string, boolean>
   activeTab: string
   setActiveTab: (tab: string) => void
   onOpenNewMessage: () => void
+  onOpenCreateGroup: () => void
   onConversationsLoaded: (conversations: SidebarConversation[]) => void
   refreshKey?: number // When changed, triggers a fresh fetch
 }
@@ -41,6 +45,7 @@ export default function InboxSidebar({
   activeTab,
   setActiveTab,
   onOpenNewMessage,
+  onOpenCreateGroup,
   onConversationsLoaded,
   refreshKey
 }: InboxSidebarProps) {
@@ -534,12 +539,22 @@ export default function InboxSidebar({
             <Mail className="w-5 h-5 text-purple-400" />
             TCPS Inbox
           </h1>
-          <button 
-            onClick={onOpenNewMessage}
-            className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors shadow-lg shadow-purple-900/20"
-          >
-            <MessageCircle className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button 
+              onClick={onOpenCreateGroup}
+              className="p-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 rounded-lg transition-colors border border-purple-500/20"
+              title="Create Group Chat"
+            >
+              <Users className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={onOpenNewMessage}
+              className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors shadow-lg shadow-purple-900/20"
+              title="New Message"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         
         <div className="relative">
@@ -598,6 +613,7 @@ export default function InboxSidebar({
             {displayedConversations.map((conv) => {
               const isActive = activeConversation === conv.other_user_id
               const isOnline = onlineUsers[conv.other_user_id]
+              const isGroup = conv.is_group
               
               return (
                 <div
@@ -606,17 +622,23 @@ export default function InboxSidebar({
                     isActive ? 'bg-white/5 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-purple-500' : ''
                   } ${
                     conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID ? 'bg-blue-900/10 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-blue-500' : ''
+                  } ${
+                    isGroup ? 'bg-purple-900/10 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-purple-400' : ''
                   }`}
                 >
                   <div 
                     className="absolute inset-0 cursor-pointer"
-                    onClick={() => onSelectConversation(conv.other_user_id)}
+                    onClick={() => onSelectConversation(conv.other_user_id, isGroup, conv.conversation_id, conv.group_name || undefined)}
                   />
 
                   <div className="relative flex-shrink-0 pointer-events-none">
                     {conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID ? (
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
                         <Shield className="w-6 h-6 text-white" />
+                      </div>
+                    ) : isGroup ? (
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <Users className="w-6 h-6 text-white" />
                       </div>
                     ) : (
                       <div className={`relative w-12 h-12 rounded-full ${conv.unread_count > 0 ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-[#0F0F1A] animate-pulse' : ''}`}>
@@ -627,7 +649,7 @@ export default function InboxSidebar({
                         />
                       </div>
                     )}
-                    {(isOnline || conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID) && (
+                    {(!isGroup && (isOnline || conv.other_user_id === OFFICER_GROUP_CONVERSATION_ID)) && (
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0F0F1A]" />
                     )}
                     {conv.unread_count > 0 && (
@@ -640,12 +662,21 @@ export default function InboxSidebar({
                   <div className="flex-1 min-w-0 pointer-events-none">
                     <div className="flex items-center justify-between">
                       <div className="font-bold text-white truncate">
-                        <UserNameWithAge 
-                          username={conv.other_username} 
-                          createdAt={conv.other_created_at}
-                          rgbUsernameExpiresAt={conv.rgb_username_expires_at}
-                          glowingUsernameColor={conv.glowing_username_color}
-                        />
+                        {isGroup ? (
+                          <span className="flex items-center gap-1.5">
+                            {conv.group_name || 'Group Chat'}
+                            {conv.member_count && conv.member_count > 0 && (
+                              <span className="text-[10px] text-purple-400 font-normal">({conv.member_count})</span>
+                            )}
+                          </span>
+                        ) : (
+                          <UserNameWithAge 
+                            username={conv.other_username} 
+                            createdAt={conv.other_created_at}
+                            rgbUsernameExpiresAt={conv.rgb_username_expires_at}
+                            glowingUsernameColor={conv.glowing_username_color}
+                          />
+                        )}
                       </div>
                       <time className="text-xs text-gray-400 flex-shrink-0 ml-2">
                         {conv.last_timestamp ? new Date(conv.last_timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
