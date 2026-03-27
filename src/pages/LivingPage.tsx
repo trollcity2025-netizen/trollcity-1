@@ -780,7 +780,7 @@ export default function LivingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 pb-20 md:pb-4 md:ml-64">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4 pb-20 md:pb-4 md:ml-64">
       <div className="max-w-4xl mx-auto space-y-6">
         
         <header className="flex items-center justify-between mb-8">

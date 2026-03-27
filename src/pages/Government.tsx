@@ -187,7 +187,7 @@ export default function GovernmentPage() {
   // If not logged in
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex items-center justify-center text-slate-900 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center text-white p-4">
         <div className="max-w-md text-center space-y-6">
           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto border border-slate-800">
             <Lock className="w-10 h-10 text-slate-500" />
@@ -212,7 +212,7 @@ export default function GovernmentPage() {
   const ActiveComponent = tabConfig[currentTab as keyof typeof tabConfig]?.component;
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4">

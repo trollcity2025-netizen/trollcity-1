@@ -522,7 +522,7 @@ export default function TrollCourt() {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6`}>
+    <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-6`}>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center">

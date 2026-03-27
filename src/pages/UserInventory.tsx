@@ -1284,7 +1284,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
 
   return (
     <>
-      <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6`}>
+      <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-6`}>
         {content}
       </div>
       

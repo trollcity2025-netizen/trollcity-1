@@ -559,7 +559,7 @@ export default function Trollifieds() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* Header */}
       <div className="bg-[#1A1A1A] border-b border-[#2C2C2C] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">

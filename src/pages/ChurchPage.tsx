@@ -33,7 +33,7 @@ export default function ChurchPage() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
       </div>
     )
@@ -148,7 +148,7 @@ export default function ChurchPage() {
   if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-4 md:p-8 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4 md:p-8 pb-24">
       {/* Header */}
       <div className="max-w-4xl mx-auto space-y-8">
          <header className="text-center space-y-4">

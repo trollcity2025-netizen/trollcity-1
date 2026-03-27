@@ -588,7 +588,7 @@ export default function LeadOfficerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-6 space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-purple-300 mb-2">
           Troll Officer Command Center

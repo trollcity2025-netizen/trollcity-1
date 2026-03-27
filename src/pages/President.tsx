@@ -37,7 +37,7 @@ export default function PresidentPage() {
   // Show loading state while profile is loading
   if (user && !profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="max-w-md text-center space-y-6">
           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto border border-slate-800">
             <Lock className="w-10 h-10 text-slate-500" />
@@ -70,7 +70,7 @@ export default function PresidentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pb-20">
       {/* Hero Section - Current Administration */}
       <div className="relative overflow-hidden bg-gradient-to-b from-purple-900/40 to-slate-950 pt-10 pb-20 px-4">
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20" />

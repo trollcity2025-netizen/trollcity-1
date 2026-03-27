@@ -91,7 +91,7 @@ export default function Leaderboard() {
   }, [])
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900`}>
+    <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white`}>
       <div className="max-w-5xl mx-auto p-8">
         <div className="flex items-center gap-2 mb-4">
           <Trophy className="w-6 h-6 text-yellow-300" />
