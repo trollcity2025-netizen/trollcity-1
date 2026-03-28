@@ -11,7 +11,7 @@ import { useCreditScore as _useCreditScore } from '../lib/hooks/useCreditScore';
 import { useProfileViewPayment as _useProfileViewPayment } from '../hooks/useProfileViewPayment';
 import { getLevelName } from '../lib/xp';
 import { ENTRANCE_EFFECTS_MAP, EntranceEffect } from '../lib/entranceEffects';
-import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw, Home, Mars, Venus, Trash2, CheckCircle, CreditCard, FileText, Palette, Sparkles, X } from 'lucide-react';
+import { Loader2, MessageCircle, UserPlus, Settings, MapPin, Link as LinkIcon, Calendar, Package, Shield, Zap, Phone, Coins, Mail, Bell, BellOff, LogOut, ChevronDown, Car, RefreshCw, Home, Trash2, CheckCircle, CreditCard, FileText, Palette, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { PERK_CONFIG } from '@/lib/perkSystem';
 import { canMessageAdmin, getGlowingTextStyle } from '@/lib/perkEffects';
@@ -950,11 +950,11 @@ function ProfileInner() {
           <h1 className={`text-2xl font-bold flex items-center gap-2 ${hasRgbUsername ? 'rgb-username' : ''}`} style={glowingStyle}>
             {profile.display_name || profile.username}
             {(profile as any).gender === 'male' && (
-              <Mars className="text-blue-400" size={16} />
+              <span className="text-blue-400 text-lg">♂</span>
             )}
 
             {(profile as any).gender === 'female' && (
-              <Venus className="text-pink-400" size={16} />
+              <span className="text-pink-400 text-lg">♀</span>
             )}
 
             {profile.is_verified && (
