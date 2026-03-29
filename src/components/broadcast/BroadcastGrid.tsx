@@ -81,14 +81,37 @@ interface BroadcastGridProps {
 function LiveKitVideoPlayer({
   videoTrack,
   isLocal = false,
+  isScreenShare: isScreenShareProp = false,
 }: {
   videoTrack: LocalVideoTrack | RemoteVideoTrack | undefined;
   isLocal?: boolean;
+  isScreenShare?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasPlayedRef = useRef(false);
-  const isScreenShare = videoTrack && (videoTrack.name === 'screen-share' || videoTrack.mediaStreamTrack?.label?.toLowerCase().includes('screen'));
+  const mediaTrack = videoTrack?.mediaStreamTrack;
+  const trackLabel = mediaTrack?.label?.toLowerCase() || '';
+  const trackName = (videoTrack as any)?.name || '';
+  const settings = mediaTrack ? (mediaTrack.getSettings?.() || {}) : {};
+  const isScreenShare = isScreenShareProp || (!!videoTrack && (
+    trackName === 'screen-share' ||
+    trackLabel.includes('screen') ||
+    trackLabel.includes('display') ||
+    trackLabel.includes('window') ||
+    !!(settings as any).displaySurface
+  ));
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+
+  if (videoTrack) {
+    console.log('[LiveKitVideoPlayer] Track info:', {
+      trackName,
+      trackLabel,
+      displaySurface: (settings as any).displaySurface,
+      isScreenShare,
+      isScreenShareProp,
+      isLocal
+    });
+  }
 
   useEffect(() => {
     if (!videoTrack || !containerRef.current) {
@@ -566,15 +589,28 @@ export default function BroadcastGrid({
     const isMicOn = isLocal 
       ? (audioTrack ? (audioTrack as any).enabled !== false : false) 
       : !!audioTrack;
-    const isCamOn = isLocal 
-      ? (videoTrack ? ((videoTrack as any).enabled === true || (videoTrack as any).enabled === undefined) : false) 
+    const isCamOn = isLocal
+      ? (videoTrack ? ((videoTrack as any).enabled === true || (videoTrack as any).enabled === undefined) : false)
       : !!videoTrack;
 
+    // Detect screen share from track name or MediaStreamTrack label
+    const mediaTrack = videoTrack?.mediaStreamTrack;
+    const vTrackLabel = mediaTrack?.label?.toLowerCase() || '';
+    const vTrackName = (videoTrack as any)?.name || '';
+    const vSettings = mediaTrack ? (mediaTrack.getSettings?.() || {}) : {};
+    const isScreenShare = !!videoTrack && (
+      vTrackName === 'screen-share' ||
+      vTrackLabel.includes('screen') ||
+      vTrackLabel.includes('display') ||
+      vTrackLabel.includes('window') ||
+      !!(vSettings as any).displaySurface
+    );
+
     if (isLocal) {
-      console.log('[BroadcastGrid] Local track states:', { isMicOn, isCamOn, videoTrackExists: !!videoTrack, audioTrackExists: !!audioTrack });
+      console.log('[BroadcastGrid] Local track states:', { isMicOn, isCamOn, isScreenShare, vTrackName, vTrackLabel, videoTrackExists: !!videoTrack, audioTrackExists: !!videoTrack });
     }
 
-    return { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn };
+    return { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn, isScreenShare };
   };
 
   // Calculate how many boxes we must render (never hide occupied seats)
@@ -747,7 +783,7 @@ export default function BroadcastGrid({
           const isStreamHost = userId === stream.user_id;
 
           // Find participant + tracks
-          const { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn } = getParticipantAndTracks(userId);
+          const { participant, videoTrack, audioTrack, isLocal, isMicOn, isCamOn, isScreenShare } = getParticipantAndTracks(userId);
 
           // Debug logging for ALL users (local and remote)
           if (userId) {
@@ -821,7 +857,8 @@ export default function BroadcastGrid({
               className={cn(
                 boxClass,
                 isSingleBoxLayout && 'h-full min-h-[min(60vw,22rem)] md:min-h-0',
-                enforceSquareOnMobile && 'aspect-square self-start md:aspect-auto md:self-stretch'
+                enforceSquareOnMobile && !isScreenShare && 'aspect-square self-start md:aspect-auto md:self-stretch',
+                enforceSquareOnMobile && isScreenShare && 'aspect-video self-start md:aspect-auto md:self-stretch'
               )}
               onClick={() => {
                 if (isStreamHost && seatIndex === 0 && isHost) {
@@ -869,11 +906,13 @@ export default function BroadcastGrid({
                 <LiveKitVideoPlayer
                   videoTrack={videoTrack}
                   isLocal={true}
+                  isScreenShare={isScreenShare}
                 />
               ) : videoTrack && isCamOn ? (
                 <LiveKitVideoPlayer
                   videoTrack={videoTrack}
                   isLocal={false}
+                  isScreenShare={isScreenShare}
                 />
               ) : userId && participant ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90">
