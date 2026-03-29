@@ -87,6 +87,7 @@ function LiveKitVideoPlayer({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasPlayedRef = useRef(false);
+  const isScreenShare = videoTrack && (videoTrack.name === 'screen-share' || videoTrack.mediaStreamTrack?.label?.toLowerCase().includes('screen'));
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -121,7 +122,7 @@ function LiveKitVideoPlayer({
         const videoElement = videoTrack.attach();
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
-        videoElement.style.objectFit = 'cover';
+        videoElement.style.objectFit = isScreenShare ? 'contain' : 'cover';
         // Critical: Add autoPlay and playsInline for proper video display
         videoElement.autoplay = true;
         videoElement.playsInline = true;
@@ -132,8 +133,8 @@ function LiveKitVideoPlayer({
         
         containerRef.current.appendChild(videoElement);
         
-        // Mirror local video container for natural self-view
-        if (isLocal && containerRef.current) {
+        // Mirror local camera video for natural self-view (skip for screen share)
+        if (isLocal && !isScreenShare && containerRef.current) {
           containerRef.current.style.transform = 'scaleX(-1)';
         }
         videoElementRef.current = videoElement;
@@ -179,7 +180,7 @@ function LiveKitVideoPlayer({
             const newElement = videoTrack.attach();
             newElement.style.width = '100%';
             newElement.style.height = '100%';
-            newElement.style.objectFit = 'cover';
+            newElement.style.objectFit = isScreenShare ? 'contain' : 'cover';
             newElement.autoplay = true;
             newElement.playsInline = true;
             if (isLocal) {
