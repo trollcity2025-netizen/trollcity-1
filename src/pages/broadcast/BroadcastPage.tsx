@@ -1745,22 +1745,26 @@ function BroadcastPage() {
         if (shouldCreateNewTracks) {
           console.log('[BroadcastPage] Creating new tracks (shouldCreateNewTracks=true)')
           // No tracks from PreflightStore - create new ones
-          console.log('[BroadcastPage] No valid tracks available, enabling camera/mic')
-          
+          const isScreenShareInit = PreflightStore.getScreenShareMode()
+          console.log('[BroadcastPage] Screen share mode:', isScreenShareInit)
+
           let tracksCreated = false
-          
+
           try {
-            // Enable camera and microphone with explicit options
-            // Note: This creates AND publishes tracks automatically
             const devices = await navigator.mediaDevices.enumerateDevices()
             const hasCamera = devices.some(d => d.kind === 'videoinput')
             const hasMic = devices.some(d => d.kind === 'audioinput')
-            
+
             console.log('[BroadcastPage] Device check:', { hasCamera, hasMic })
-            
+
             if (!hasCamera && !hasMic) {
               console.warn('[BroadcastPage] No camera or microphone found')
               toast.error('No camera or microphone found')
+            } else if (isScreenShareInit) {
+              // Screen share mode: only enable mic, camera is replaced by screen track
+              console.log('[BroadcastPage] Screen share mode - enabling mic only')
+              await room.localParticipant.setMicrophoneEnabled(true)
+              tracksCreated = true
             } else {
               await room.localParticipant.enableCameraAndMicrophone()
               console.log('[BroadcastPage] enableCameraAndMicrophone completed successfully')
@@ -1770,13 +1774,14 @@ function BroadcastPage() {
             console.error('[BroadcastPage] Error enabling camera/mic:', err)
             toast.error('Failed to enable camera/microphone')
           }
-          
+
           if (!tracksCreated) {
-            // If enableCameraAndMicrophone failed, try manual creation
+            // If enable failed, try manual creation
             console.log('[BroadcastPage] Trying manual track creation as fallback')
             try {
               const { createLocalTracks } = await import('livekit-client')
-              const localTracks = await createLocalTracks({ audio: true, video: true })
+              const isScreenShareFallback = PreflightStore.getScreenShareMode()
+              const localTracks = await createLocalTracks({ audio: true, video: !isScreenShareFallback })
               for (const track of localTracks) {
                 await room.localParticipant.publishTrack(track)
               }
@@ -1789,28 +1794,32 @@ function BroadcastPage() {
           
           // OPTIMIZED: No delay - camera should appear immediately after track creation
           
-          // Get tracks from room's local participant - check BOTH video AND audio publications
-          // Note: Tracks are already published by enableCameraAndMicrophone()
-          // NOTE: Remove 'let' to use outer scope variables, not shadow them
+          // Get tracks from room's local participant
+          // In screen share mode, only get audio (screen track handled separately)
+          const isScreenShareTracks = PreflightStore.getScreenShareMode()
           videoTrack = undefined
           audioTrack = undefined
-          
+
           console.log('[BroadcastPage] Video publications:', Array.from(room.localParticipant.videoTrackPublications.values()).map((p: any) => p.trackId))
           console.log('[BroadcastPage] Audio publications:', Array.from(room.localParticipant.audioTrackPublications.values()).map((p: any) => p.trackId))
-          
-          // Get video track
-          for (const pub of room.localParticipant.videoTrackPublications.values()) {
-            if (pub.track && pub.track.kind === 'video') {
-              videoTrack = pub.track as LocalVideoTrack
-              if (typeof videoTrack.getTrackId === 'function') {
-                console.log('[BroadcastPage] Found video track:', videoTrack.getTrackId())
-              } else {
-                console.log('[BroadcastPage] Found video track but getTrackId not available')
+
+          // Get video track (skip in screen share mode - camera not published)
+          if (!isScreenShareTracks) {
+            for (const pub of room.localParticipant.videoTrackPublications.values()) {
+              if (pub.track && pub.track.kind === 'video') {
+                videoTrack = pub.track as LocalVideoTrack
+                if (typeof videoTrack.getTrackId === 'function') {
+                  console.log('[BroadcastPage] Found video track:', videoTrack.getTrackId())
+                } else {
+                  console.log('[BroadcastPage] Found video track but getTrackId not available')
+                }
+                break
               }
-              break
             }
+          } else {
+            console.log('[BroadcastPage] Screen share mode - skipping camera track lookup')
           }
-          
+
           // Get audio track - must check audioTrackPublications!
           for (const pub of room.localParticipant.audioTrackPublications.values()) {
             if (pub.track && pub.track.kind === 'audio') {
@@ -1823,27 +1832,29 @@ function BroadcastPage() {
               break
             }
           }
-          
+
           // If still no tracks, try to create them manually
-          if (!videoTrack || !audioTrack) {
-            console.warn('[BroadcastPage] No tracks found after enableCameraAndMicrophone(), trying manual creation')
-            
+          // In screen share mode, only create audio
+          const needVideo = !isScreenShareTracks && !videoTrack
+          const needAudio = !audioTrack
+          if (needVideo || needAudio) {
+            console.warn('[BroadcastPage] Missing tracks, trying manual creation', { needVideo, needAudio })
+
             try {
-              // Import createLocalTracks from livekit-client
               const { createLocalTracks } = await import('livekit-client')
-              
+
               const devices = await navigator.mediaDevices.enumerateDevices()
               const hasCamera = devices.some(d => d.kind === 'videoinput')
               const hasMic = devices.some(d => d.kind === 'audioinput')
-              
+
               console.log('[BroadcastPage] Available devices:', { hasCamera, hasMic })
-              
+
               if (hasCamera || hasMic) {
                 const localTracks = await createLocalTracks({
-                  audio: hasMic,
-                  video: hasCamera
+                  audio: hasMic && needAudio,
+                  video: hasCamera && needVideo
                 })
-                
+
                 for (const track of localTracks) {
                   await room.localParticipant.publishTrack(track)
                   if (track.kind === 'video') {
@@ -1871,25 +1882,24 @@ function BroadcastPage() {
         }
 
         // Update localTracks state - handle partial tracks (either audio OR video)
-        // Don't require both tracks to be present
-        if (audioTrack || videoTrack) {
-          // Verify tracks are valid LiveKit track objects before calling methods
-          const videoTrackId = (videoTrack && typeof videoTrack.getTrackId === 'function') ? videoTrack.getTrackId() : 'unknown'
+        // In screen share mode, use screen track as the video track for local preview
+        const isScreenShareLocal = PreflightStore.getScreenShareMode()
+        const screenTrackLocal = PreflightStore.getScreenTrack() || screenTrack
+        if (audioTrack || videoTrack || (isScreenShareLocal && screenTrackLocal)) {
+          const displayVideoTrack = isScreenShareLocal && screenTrackLocal ? screenTrackLocal : videoTrack
+          const videoTrackId = (displayVideoTrack && typeof displayVideoTrack.getTrackId === 'function') ? displayVideoTrack.getTrackId() : 'unknown'
           const audioTrackId = (audioTrack && typeof audioTrack.getTrackId === 'function') ? audioTrack.getTrackId() : 'unknown'
-          
+
           console.log('[BroadcastPage] Setting localTracks state:', {
             hasAudio: !!audioTrack,
-            hasVideo: !!videoTrack,
+            hasVideo: !!displayVideoTrack,
+            isScreenShare: isScreenShareLocal,
             videoTrackId,
             audioTrackId,
-            videoEnabled: videoTrack?.isEnabled,
-            audioEnabled: audioTrack?.isEnabled,
-            roomRefCurrent: !!roomRef.current,
-            roomIdentity: roomRef.current?.localParticipant?.identity
           })
-          setLocalTracks([audioTrack || null, videoTrack || null])
+          setLocalTracks([audioTrack || null, displayVideoTrack || null])
         } else {
-          console.warn('[BroadcastPage] No tracks created after enableCameraAndMicrophone()!')
+          console.warn('[BroadcastPage] No tracks created!')
         }
 
         // Only disable mic if hostMicMutedByOfficer is explicitly set (from database)
@@ -1932,23 +1942,13 @@ function BroadcastPage() {
           console.log('[BroadcastPage] Screen share mode - skipping camera enable')
         }
 
-        // Gaming screen share: unpublish camera, publish screen track, update local preview
+        // Gaming screen share: publish the screen track to viewers
         if (PreflightStore.getScreenShareMode()) {
           const screenTrackToPublish = PreflightStore.getScreenTrack() || screenTrack
           if (screenTrackToPublish) {
-            console.log('[BroadcastPage] Gaming screen share - replacing camera with screen track')
+            console.log('[BroadcastPage] Gaming screen share - publishing screen track')
             try {
-              // Unpublish camera track so viewers only see screen share
-              for (const pub of room.localParticipant.videoTrackPublications.values()) {
-                if (pub.track && pub.track.kind === 'video') {
-                  await room.localParticipant.unpublishTrack(pub.track)
-                  console.log('[BroadcastPage] Camera track unpublished')
-                  break
-                }
-              }
               await room.localParticipant.publishTrack(screenTrackToPublish)
-              // Update local preview to show screen share instead of camera
-              setLocalTracks([audioTrack || null, screenTrackToPublish])
               setIsScreenSharing(true)
               console.log('[BroadcastPage] Screen track published successfully')
             } catch (err) {
