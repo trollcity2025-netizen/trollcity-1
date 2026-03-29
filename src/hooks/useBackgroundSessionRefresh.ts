@@ -100,39 +100,12 @@ export function useBackgroundSessionRefresh() {
       doRefresh()
     }, SESSION_REFRESH_INTERVAL)
 
-    // Also refresh on window visibility change, but only if it's been at least 2 minutes
-    // This prevents excessive refreshes when user switches tabs frequently
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
-        if (timeSinceLastRefresh > 2 * 60 * 1000) { // 2 minutes minimum
-          console.log('[BackgroundSession] Window visible, refreshing session...')
-          doRefresh()
-        }
-      }
-    }
-    
-    // Also refresh on window focus, but only if it's been at least 2 minutes
-    // This prevents excessive refreshes when user is actively using the page
-    const handleFocus = () => {
-      const timeSinceLastRefresh = Date.now() - lastRefreshTimeRef.current
-      if (timeSinceLastRefresh > 2 * 60 * 1000) { // 2 minutes minimum between focus refreshes
-        console.log('[BackgroundSession] Window focused, refreshing session...')
-        doRefresh()
-      }
-    }
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-
     return () => {
       isActiveRef.current = false
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
     }
   }, [user?.id, doRefresh]) // Only re-run when user ID changes
 }

@@ -6,7 +6,7 @@ import { getTransactionHistory, logCoinAction } from "../lib/coinUtils";
 import { supabase } from "../lib/supabase";
 import { format12hr } from "../utils/timeFormat";
 import { toast } from "sonner";
-import { TIERS } from "../lib/payoutTiers";
+import { TIERS } from "../config/coinConfig";
 
 interface CoinTx {
   id: string;

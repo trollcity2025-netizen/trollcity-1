@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect, useCallback, memo, type CSSProper
 import { motion } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield } from 'lucide-react';
+import { User, Coins, Plus, Minus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield, Palette } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 import { supabase } from '../../lib/supabase';
@@ -70,6 +70,12 @@ interface BroadcastGridProps {
   canSwipe?: boolean;
   onSwipeUp?: () => void;
   onSwipeDown?: () => void;
+  // Side orb controls (host-only, shown inside broadcaster box)
+  onAddBox?: () => void;
+  onRemoveBox?: () => void;
+  onToggleRgb?: () => void;
+  hasRgbEffect?: boolean;
+  canEditBoxes?: boolean;
 }
 
 function LiveKitVideoPlayer({
@@ -302,6 +308,11 @@ export default function BroadcastGrid({
   canSwipe = true,
   onSwipeUp,
   onSwipeDown,
+  onAddBox,
+  onRemoveBox,
+  onToggleRgb,
+  hasRgbEffect = false,
+  canEditBoxes = false,
 }: BroadcastGridProps) {
   const { profile } = useAuthStore();
   
@@ -663,7 +674,7 @@ export default function BroadcastGrid({
   return (
     <div
       className={cn(
-        'grid gap-2 w-full p-2 min-w-0 overflow-hidden max-w-full md:h-full',
+        'grid gap-2 w-full p-2 pb-20 min-w-0 overflow-hidden max-w-full md:h-full',
         isSingleBoxLayout ? 'h-full grid-cols-1 grid-rows-1 auto-rows-fr items-stretch content-stretch' : 'content-start auto-rows-max',
         effectiveBoxCount === 1 && 'md:grid-rows-1',
         effectiveBoxCount === 2 && 'grid-cols-2 md:grid-rows-1',
@@ -1103,6 +1114,49 @@ export default function BroadcastGrid({
                   onGift={() => onGift(userId)}
                   onKickStage={onKick ? () => onKick(userId) : undefined}
                 />
+              )}
+
+              {/* Host-only side orbs inside broadcaster box (box 0) */}
+              {seatIndex === 0 && isHost && canEditBoxes && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-2">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onAddBox?.(); }}
+                      disabled={!onAddBox}
+                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-black/40 border-white/10 text-white/50 hover:text-white"
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <span className="text-[7px] text-slate-500 font-medium leading-none">+</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRemoveBox?.(); }}
+                      disabled={!onRemoveBox}
+                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-black/40 border-white/10 text-white/50 hover:text-white"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="text-[7px] text-slate-500 font-medium leading-none">-</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleRgb?.(); }}
+                      className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all",
+                        hasRgbEffect
+                          ? "bg-purple-500/20 border-purple-500/40 text-purple-400"
+                          : "bg-black/40 border-white/10 text-white/50 hover:text-white"
+                      )}
+                    >
+                      <Palette size={14} />
+                    </button>
+                    <span className="text-[7px] text-slate-500 font-medium leading-none">RGB</span>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-xl border border-white/10 flex items-center justify-center">
+                    <span className="text-[10px] font-black text-white">{boxCountProp}</span>
+                  </div>
+                </div>
               )}
             </motion.div>
             </div>

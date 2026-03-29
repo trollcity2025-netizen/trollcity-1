@@ -2,13 +2,9 @@
  * CENTRAL COIN CONFIGURATION
  * 
  * This is the single source of truth for all coin pack and cashout tier values.
- * NOTE: Cashout tiers should match src/lib/payoutTiers.ts - update both files!
  * 
  * Last Updated: 2026-03-21
  */
-
-// Import rate calculator from payoutTiers (shares same logic)
-import { getRateForCoins } from '../lib/payoutTiers';
 
 // Type for cashout tiers (matches payoutTiers.ts)
 export interface CashoutTierConfig {
@@ -48,10 +44,8 @@ export const COINS_PER_USD = 100;
 export const NEW_USER_BONUS_PERCENT = 5;
 
 // ============================================================================
-// CASHOUT TIERS - Import from payoutTiers.ts (Single Source of Truth)
+// CASHOUT TIERS (Single Source of Truth)
 // ============================================================================
-// Re-export from payoutTiers for convenience
-// Cashout tiers - MUST match src/lib/payoutTiers.ts
 export const CASHOUT_TIERS = [
   { coins: 5000, usd: 10, manualReview: false },
   { coins: 15000, usd: 50, manualReview: false },
@@ -60,6 +54,10 @@ export const CASHOUT_TIERS = [
   { coins: 120000, usd: 600, manualReview: false },
   { coins: 200000, usd: 1000, manualReview: true },
 ] as const;
+
+// Alias exports for backward compatibility with old payoutTiers imports
+export const TIERS = CASHOUT_TIERS;
+export const FIXED_FEE_USD = 3;
 
 // Minimum coins required for any cashout
 export const MIN_CASHOUT_COINS = 5000;
@@ -70,6 +68,19 @@ export const MANUAL_REVIEW_THRESHOLD = 200000;
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * Get cashout rate (USD per coin) for a given coin amount
+ */
+export function getRateForCoins(coins: number): number {
+  if (coins >= 200000) return 1000 / 200000;
+  if (coins >= 120000) return 600 / 120000;
+  if (coins >= 60000) return 300 / 60000;
+  if (coins >= 30000) return 150 / 30000;
+  if (coins >= 15000) return 50 / 15000;
+  if (coins >= 5000) return 10 / 5000;
+  return 0;
+}
 
 /**
  * Get coins per USD for a given cashout amount

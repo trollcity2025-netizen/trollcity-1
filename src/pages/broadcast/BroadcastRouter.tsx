@@ -215,7 +215,7 @@ function BroadcastRouter() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
+      <div className="flex items-center justify-center h-dvh bg-black text-white">
         <Loader2 className="w-8 h-8 animate-spin" />
         <p className="ml-4">Loading stream...</p>
       </div>
@@ -224,7 +224,7 @@ function BroadcastRouter() {
 
   if (error || !stream) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-black text-white">
+      <div className="flex flex-col items-center justify-center h-dvh bg-black text-white">
         <p className="text-red-500">{error || 'Stream not found'}</p>
       </div>
     )

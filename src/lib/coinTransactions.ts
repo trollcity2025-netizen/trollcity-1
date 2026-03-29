@@ -4,7 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase, ensureSupabaseSession } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
-import { trackCoinEarning } from './familyTasks'
+import { trackCoinEarning, updateFamilyGoalProgress } from './familyTasks'
 import { trackWarActivity } from './familyWars'
 import { sendNotification } from './sendNotification'
 
@@ -524,6 +524,13 @@ export async function addCoins(params: {
             await trackCoinEarning(userId, amount)
           } catch (taskErr) {
             console.warn('Failed to track coin earning for tasks:', taskErr)
+          }
+
+          // Update family_goals progress (used by TrollFamilyHome)
+          try {
+            await updateFamilyGoalProgress(userId, amount)
+          } catch (goalErr) {
+            console.warn('Failed to update family goal progress:', goalErr)
           }
 
           // Track coin earning for active wars

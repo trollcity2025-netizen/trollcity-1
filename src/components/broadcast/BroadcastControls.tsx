@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
-import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star, GripVertical, X } from 'lucide-react';
+import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star, GripVertical, X, MoreHorizontal, Sliders, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { getCategoryConfig } from '../../config/broadcastCategories';
@@ -36,22 +36,16 @@ interface BroadcastControlsProps {
   toggleMicrophone: () => void;
   onPinProduct?: () => void;
   onRgbToggle?: (enabled: boolean) => void;
-  // New props for UI state tracking
   isMicOn?: boolean;
   isCamOn?: boolean;
-  // Box count from parent for instant sync
   boxCount?: number;
   setBoxCount?: (count: number) => void;
-  // Stream refresh for battle mode
   onRefreshStream?: () => void;
-  // Challenge management props
   pendingChallenges?: any[];
   onAcceptChallenge?: (challengeId: string, challengerId: string) => void;
   onDenyChallenge?: (challengeId: string) => void;
-  // Challenge button props for viewers
   onChallengeBroadcaster?: () => void;
   hasPendingChallenge?: boolean;
-  // Battle mode props
   onStartBattle?: () => void;
   battleActive?: boolean;
   battleEnabled?: boolean;
@@ -95,17 +89,13 @@ export default function BroadcastControls({
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
 
-  // Use props if provided (from parent state), otherwise derive from localTracks
-  // IMPORTANT: Check .isEnabled on the track, not just track existence
   const isMicOn = propMicOn !== undefined ? propMicOn : (audioTrack ? (audioTrack.isEnabled ?? true) : false);
   const isCamOn = propCamOn !== undefined ? propCamOn : (videoTrack ? (videoTrack.isEnabled ?? true) : false);
-  
-  // Check if tracks are available
+
   const hasAudioTrack = !!audioTrack;
   const hasVideoTrack = !!videoTrack;
   const tracksReady = hasAudioTrack || hasVideoTrack;
-  
-  // Debug logging
+
   console.log('[BroadcastControls] Track states:', {
     propMicOn,
     propCamOn,
@@ -118,10 +108,9 @@ export default function BroadcastControls({
     audioEnabled: audioTrack?.enabled,
     videoEnabled: videoTrack?.enabled
   });
-  
+
   const { user, isAdmin, profile } = useAuthStore();
   const [seatPrice, setSeatPrice] = useState(stream.seat_price || 0);
-  // Per-box pricing: array of prices for each box (index 0 = host, 1+ = guests)
   const [seatPrices, setSeatPrices] = useState<number[]>(stream.seat_prices || [0, seatPrice, seatPrice, seatPrice, seatPrice, seatPrice]);
 
   const [debouncedPrice, setDebouncedPrice] = useState(seatPrice);
@@ -129,28 +118,17 @@ export default function BroadcastControls({
 
   const [showBannedList, setShowBannedList] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
-  const [likes, setLikes] = useState(0); // Local like count for immediate feedback
+  const [likes, setLikes] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
   const [isFeatureLoading, setIsFeatureLoading] = useState(false);
-
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [showStreamControls, setShowStreamControls] = useState(true);
-  // Default to stationary (not floating) at bottom of screen
-  const [isFloating, setIsFloating] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
-  const [position, setPosition] = useState({ x: 20, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartPos = useRef({ x: 0, y: 0 });
 
-  // Get category config to check if boxes can be added/removed
   const categoryConfig = getCategoryConfig(stream.category || 'general');
   const canModifyBoxes = categoryConfig.allowAddBox || categoryConfig.allowDeductBox;
-  
-  // For election category, only officers/admins can modify boxes
+
   const isElectionCategory = stream.category === 'election';
-  
-  // Check if user is officer or admin using multiple validation methods
-  const isOfficerOrAdmin = 
+  const isOfficerOrAdmin =
     profile?.role === 'admin' ||
     profile?.role === 'secretary' ||
     profile?.role === 'lead_troll_officer' ||
@@ -165,39 +143,30 @@ export default function BroadcastControls({
     false;
   const canEditElectionBoxes = !isElectionCategory || isOfficerOrAdmin;
 
-  // Use parent boxCount if provided, otherwise use local state
   const [localBoxCount, setLocalBoxCount] = useState(stream.box_count || 1);
-  
-  // Use parent state if available, otherwise fall back to local
   const boxCount = parentBoxCount !== undefined ? parentBoxCount : localBoxCount;
   const setBoxCount = parentSetBoxCount !== undefined ? parentSetBoxCount : setLocalBoxCount;
 
-  // Sync box count when stream updates from database (for viewers)
   useEffect(() => {
-    // Only update if we don't have parent control and stream box_count changed
     if (parentBoxCount === undefined && stream.box_count !== undefined && stream.box_count !== localBoxCount) {
       setLocalBoxCount(stream.box_count);
     }
   }, [stream.box_count, parentBoxCount, localBoxCount]);
 
-  // Sync likes from stream - only when total_likes changes
   useEffect(() => {
     if (typeof stream.total_likes === 'number') {
-        setLikes(stream.total_likes);
+      setLikes(stream.total_likes);
     }
   }, [stream.total_likes]);
 
-  // Sync seat prices from stream - keep stable, only update when broadcaster explicitly changes
   useEffect(() => {
     if (stream.seat_prices && Array.isArray(stream.seat_prices)) {
-      // Only update if we don't have pending changes (debouncing)
       const currentPrices = stream.seat_prices;
       setSeatPrices(currentPrices);
       setDebouncedSeatPrices(currentPrices);
     }
   }, [stream.seat_prices]);
-  
-  // Also sync main seat price
+
   useEffect(() => {
     if (stream.seat_price !== undefined) {
       setSeatPrice(stream.seat_price);
@@ -205,39 +174,33 @@ export default function BroadcastControls({
     }
   }, [stream.seat_price]);
 
-  // Sync box count when stream updates (only if no parent control)
   useEffect(() => {
     if (parentBoxCount === undefined) {
       setLocalBoxCount(stream.box_count || 1);
     }
   }, [stream.box_count, parentBoxCount]);
+
   const attributes = useParticipantAttributes(user ? [user.id] : [], stream.id);
   const myAttributes = user ? attributes[user.id] : null;
   const activePerks = myAttributes?.activePerks || [];
-  
-  // Only true admins can control broadcaster streams - NOT moderators
+
   const isTrueAdmin = isAdmin || profile?.troll_role === 'admin';
   const canManageStream = isHost || isTrueAdmin;
-  // Only Host and Admins can control stream settings (Visuals, Price, Boxes)
-  // Moderators can NOT control broadcaster streams
   const canEditStream = isHost || isTrueAdmin;
-  
-  // Feature toggle function for officers/admin
+
   const toggleFeature = async () => {
     if (!isOfficerOrAdmin || !user) return;
-    
     setIsFeatureLoading(true);
     try {
       const newFeatured = !stream.is_featured;
       const { error } = await supabase
         .from('streams')
-        .update({ 
+        .update({
           is_featured: newFeatured,
           featured_at: newFeatured ? new Date().toISOString() : null,
           featured_by: newFeatured ? user.id : null
         })
         .eq('id', stream.id);
-      
       if (error) throw error;
       toast.success(newFeatured ? 'Stream featured successfully!' : 'Stream unfeatured');
     } catch (e: any) {
@@ -251,95 +214,73 @@ export default function BroadcastControls({
   const togglePerk = async (perkId: string) => {
     if (!user) return;
     const isActive = activePerks.includes(perkId as any);
-
     try {
-        if (isActive) {
-             const { error } = await supabase.from('user_perks').update({ is_active: false }).eq('user_id', user.id).eq('perk_id', perkId);
-             if (error) throw error;
+      if (isActive) {
+        const { error } = await supabase.from('user_perks').update({ is_active: false }).eq('user_id', user.id).eq('perk_id', perkId);
+        if (error) throw error;
+      } else {
+        const { data, error: fetchError } = await supabase
+          .from('user_perks')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('perk_id', perkId)
+          .maybeSingle();
+        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+        if (data) {
+          const { error } = await supabase.from('user_perks').update({ is_active: true }).eq('id', data.id);
+          if (error) throw error;
         } else {
-             // Try to find existing perk first (active or inactive)
-             const { data, error: fetchError } = await supabase
-                .from('user_perks')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('perk_id', perkId)
-                .maybeSingle();
-             
-             if (fetchError && fetchError.code !== 'PGRST116') {
-                 throw fetchError;
-             }
-
-             if (data) {
-                 const { error } = await supabase.from('user_perks').update({ is_active: true }).eq('id', data.id);
-                 if (error) throw error;
-             } else {
-                 // Try to grant free perk (might fail if RLS prevents insert)
-                 const { error } = await supabase.from('user_perks').insert({ 
-                    user_id: user.id, 
-                    perk_id: perkId, 
-                    is_active: true, 
-                    expires_at: new Date(Date.now() + 86400000).toISOString() 
-                 });
-                 
-                 if (error) {
-                     // 42501 is RLS violation
-                     if (error.code === '42501') {
-                         toast.error("You don't own this effect yet.");
-                     } else {
-                         throw error;
-                     }
-                 } else {
-                     toast.success("Effect activated!");
-                 }
-             }
+          const { error } = await supabase.from('user_perks').insert({
+            user_id: user.id,
+            perk_id: perkId,
+            is_active: true,
+            expires_at: new Date(Date.now() + 86400000).toISOString()
+          });
+          if (error) {
+            if (error.code === '42501') {
+              toast.error("You don't own this effect yet.");
+            } else {
+              throw error;
+            }
+          } else {
+            toast.success("Effect activated!");
+          }
         }
+      }
     } catch (e: any) {
-        console.error(e);
-        toast.error(e.message || "Failed to toggle effect");
+      console.error(e);
+      toast.error(e.message || "Failed to toggle effect");
     }
   };
-
-
-
 
   const updateStreamConfig = React.useCallback(async (price: number, showToast: boolean = true, perBoxPrices?: number[]) => {
     if (!canEditStream) return;
     try {
-        const updates: { seat_price: number; seat_prices?: number[] } = { seat_price: price };
-        if (perBoxPrices) {
-            updates.seat_prices = perBoxPrices;
-        }
-        await supabase
-        .from('streams')
-        .update(updates)
-        .eq('id', stream.id);
-        if (showToast) {
-            toast.success("Stream settings updated");
-        }
+      const updates: { seat_price: number; seat_prices?: number[] } = { seat_price: price };
+      if (perBoxPrices) {
+        updates.seat_prices = perBoxPrices;
+      }
+      await supabase.from('streams').update(updates).eq('id', stream.id);
+      if (showToast) {
+        toast.success("Stream settings updated");
+      }
     } catch (e) {
-        console.error(e);
+      console.error(e);
     }
   }, [canEditStream, stream.id]);
 
-  // Debounce price updates to DB
   useEffect(() => {
-    // If local price matches stream price (loosely to handle potential string/number mismatch), do nothing
     if (debouncedPrice == stream.seat_price) return;
-
     const timer = setTimeout(() => {
-      // Don't show toast for auto-updates
       updateStreamConfig(debouncedPrice, false);
     }, 1000);
     return () => clearTimeout(timer);
   }, [debouncedPrice, stream.seat_price, updateStreamConfig]);
 
-  // Debounce per-box price updates to DB
   useEffect(() => {
-    // Check if per-box prices have changed
     const currentPrices = stream.seat_prices || [0, stream.seat_price || 0, stream.seat_price || 0, stream.seat_price || 0, stream.seat_price || 0, stream.seat_price || 0];
     const hasChanged = debouncedSeatPrices.some((price, idx) => price !== currentPrices[idx]);
     if (!hasChanged) return;
-
     const timer = setTimeout(() => {
       updateStreamConfig(seatPrice, false, debouncedSeatPrices);
     }, 1000);
@@ -347,79 +288,58 @@ export default function BroadcastControls({
   }, [debouncedSeatPrices, stream.seat_prices, seatPrice, updateStreamConfig]);
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only Host can change price (Prompt: Host only)
     if (!isHost) return;
-    
-        if (e.target.value === '') {
-            setSeatPrice(0);
-            setDebouncedPrice(0);
-            return;
-        }
-
-        let val = parseInt(e.target.value, 10) || 0;
-        if (val > 5000) val = 5000;
+    if (e.target.value === '') {
+      setSeatPrice(0);
+      setDebouncedPrice(0);
+      return;
+    }
+    let val = parseInt(e.target.value, 10) || 0;
+    if (val > 5000) val = 5000;
     setSeatPrice(val);
     setDebouncedPrice(val);
   };
 
-  // Handler for per-box price changes
   const handleBoxPriceChange = (boxIndex: number, value: string) => {
     if (!isHost) return;
-    
     const newPrices = [...seatPrices];
     let val = parseInt(value, 10) || 0;
     if (val > 5000) val = 5000;
     if (val < 0) val = 0;
-    
     newPrices[boxIndex] = val;
     setSeatPrices(newPrices);
     setDebouncedSeatPrices(newPrices);
   };
 
-  // Toggle per-box pricing mode
   const [enablePerBoxPricing, setEnablePerBoxPricing] = useState(false);
 
-
-  
   const updateBoxCount = async (newCount: number) => {
     if (!canEditStream) return;
-
     const minLimit = Math.max(1, requiredBoxes);
-
     if (newCount < minLimit) {
       toast.error("Cannot reduce boxes below occupied seats");
       return;
     }
-
     if (newCount > 6) {
       toast.error("Maximum 6 boxes allowed");
       return;
     }
-
-    // Update local state immediately for instant UI feedback (optimistic update)
     setBoxCount(newCount);
-
-    // notify parent for any additional handling (broadcast to viewers)
     if (onBoxCountUpdate) {
       onBoxCountUpdate(newCount);
     }
-
-    // Update database asynchronously (viewers will get realtime update)
     try {
       console.log('[BroadcastControls] Updating database with box_count:', newCount);
       const { error } = await supabase
         .from('streams')
         .update({ box_count: newCount })
         .eq('id', stream.id);
-      
       if (error) {
         console.error('[BroadcastControls] Error updating box count:', error);
         toast.error("Failed to update box count");
-        // Revert UI on error
         setBoxCount(stream.box_count || 1);
         return;
       }
-      
       console.log('[BroadcastControls] Box count updated in database to:', newCount);
     } catch (e) {
       console.error('[BroadcastControls] Exception updating box count:', e);
@@ -429,41 +349,28 @@ export default function BroadcastControls({
   };
 
   const toggleStreamRgb = async () => {
-     // Only Host can toggle RGB (Prompt: Host only)
-     if (!isHost) return;
-     
-     const enabling = !stream.has_rgb_effect;
-     
-     try {
-        // If enabling, we might be purchasing. 
-        // We let the RPC handle the logic of "charge if not purchased yet".
-        const { data, error } = await supabase.rpc('purchase_rgb_broadcast', { 
-             p_stream_id: stream.id, 
-             p_enable: enabling 
-        });
-
-        if (error) throw error;
-        
-        // Handle array or object return
-        const result = Array.isArray(data) ? data[0] : data;
-        
-        if (!result || !result.success) throw new Error(result?.error || "Failed to update RGB");
-        
-        // Update local state based on success
-        if (onRgbToggle) {
-          onRgbToggle(enabling);
-        }
-        
-        if (result.message === 'Purchased and Enabled') {
-             toast.success("RGB Unlocked! (-10 Coins)");
-        } else {
-             toast.success(enabling ? "RGB Effect Enabled" : "RGB Effect Disabled");
-        }
-     } catch (e: any) {
-        console.error(e);
-        toast.error(e.message || "Failed to update RGB setting");
-        // Revert local state if needed (though we didn't optimistically update this time)
-     }
+    if (!isHost) return;
+    const enabling = !stream.has_rgb_effect;
+    try {
+      const { data, error } = await supabase.rpc('purchase_rgb_broadcast', {
+        p_stream_id: stream.id,
+        p_enable: enabling
+      });
+      if (error) throw error;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result || !result.success) throw new Error(result?.error || "Failed to update RGB");
+      if (onRgbToggle) {
+        onRgbToggle(enabling);
+      }
+      if (result.message === 'Purchased and Enabled') {
+        toast.success("RGB Unlocked! (-10 Coins)");
+      } else {
+        toast.success(enabling ? "RGB Effect Enabled" : "RGB Effect Disabled");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || "Failed to update RGB setting");
+    }
   };
 
   const handleEndStream = () => {
@@ -472,609 +379,363 @@ export default function BroadcastControls({
     }
   };
 
-
-
-  // If closed, show a small button to reopen
   if (isClosed) {
     return (
-      <div 
-        className="fixed z-50"
-        style={{ left: position.x, top: position.y }}
-      >
+      <div className="fixed bottom-4 right-4 z-50">
         <button
           onClick={() => setIsClosed(false)}
-          className="bg-slate-900/95 border border-yellow-500/50 rounded-full p-3 shadow-lg hover:bg-slate-800 transition-colors"
+          className="bg-slate-900/95 border border-white/10 rounded-full p-3 shadow-lg hover:bg-slate-800 transition-colors"
           title="Show Controls"
         >
-          <Settings2 size={20} className="text-yellow-500" />
+          <Settings2 size={20} className="text-white/60" />
         </button>
       </div>
     );
   }
 
-  // Drag handlers for floating bubble mode
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (isFloating) {
-      setIsDragging(true);
-      dragStartPos.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && isFloating) {
-      setPosition({
-        x: e.clientX - dragStartPos.current.x,
-        y: e.clientY - dragStartPos.current.y
-      });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
   return (
-    <div 
-      className={cn(
-        "bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.4)] relative transition-all duration-300",
-        isMinimized ? "w-56 py-3 px-4" : isFloating ? "w-80 p-4" : "w-full p-4",
-        isFloating ? "fixed z-50 border-2 border-purple-500/30" : ""
+    <>
+      {showBannedList && (
+        <BannedUsersList streamId={stream.id} onClose={() => setShowBannedList(false)} />
       )}
-      style={isFloating ? { left: position.x, top: position.y } : undefined}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-        {/* Drag handle for floating bubble */}
-        <div 
-          className={cn(
-            "flex items-center justify-between mb-2",
-            isFloating && "cursor-move pb-2 border-b border-white/10"
-          )}
-          onMouseDown={handleMouseDown}
-        >
-          {isFloating ? (
-            <>
-              <div className="flex items-center gap-2">
-                <GripVertical size={16} className="text-yellow-500" />
-                <span className="text-xs text-yellow-500 font-bold">Controls</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button 
-                    onClick={() => setIsFloating(false)}
-                    className="bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white"
-                    title="Dock"
-                >
-                    <Settings2 size={14} />
-                </button>
-                <button 
-                    onClick={() => setIsMinimized(!isMinimized)}
-                    className="bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white"
-                    title={isMinimized ? "Expand" : "Minimize"}
-                >
-                    {isMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-                <button 
-                    onClick={() => setIsClosed(true)}
-                    className="bg-red-500/20 border border-red-500/30 rounded-full p-1 text-red-400 hover:text-red-300"
-                    title="Close"
-                >
-                    <X size={14} />
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-bold">Controls</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button 
-                    onClick={() => setIsFloating(true)}
-                    className="bg-yellow-500/20 border border-yellow-500/30 rounded-full p-1.5 text-yellow-500 hover:text-yellow-400"
-                    title="Make Floating"
-                >
-                    <GripVertical size={14} />
-                </button>
-                <button 
-                    onClick={() => setIsClosed(true)}
-                    className="bg-red-500/20 border border-red-500/30 rounded-full p-1 text-red-400 hover:text-red-300"
-                    title="Close"
-                >
-                    <X size={14} />
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+      {showThemeSelector && (
+        <ThemeSelector
+          streamId={stream.id}
+          currentThemeUrl={stream.active_theme_url}
+          onClose={() => setShowThemeSelector(false)}
+        />
+      )}
 
-        {isMinimized ? (
-             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Controls</span>
-        ) : (
-        <>
-
-
-        {showBannedList && (
-            <BannedUsersList streamId={stream.id} onClose={() => setShowBannedList(false)} />
+      {/* Main action orbs - bottom center */}
+      <div className="flex items-center gap-3">
+        {/* Mic (stage only) */}
+        {isOnStage && tracksReady && (
+          <OrbBtn
+            active={isMicOn}
+            onClick={toggleMicrophone}
+            icon={isMicOn ? Mic : MicOff}
+            label="Mic"
+            glow={!isMicOn ? "red" : undefined}
+            size="sm"
+            disabled={!hasAudioTrack}
+          />
         )}
 
-        {showThemeSelector && (
-            <ThemeSelector 
-                streamId={stream.id} 
-                currentThemeUrl={stream.active_theme_url} 
-                onClose={() => setShowThemeSelector(false)} 
-            />
+        {/* Cam (stage only) */}
+        {isOnStage && tracksReady && (
+          <OrbBtn
+            active={isCamOn}
+            onClick={toggleCamera}
+            icon={isCamOn ? Video : VideoOff}
+            label="Cam"
+            glow={!isCamOn ? "red" : undefined}
+            size="sm"
+            disabled={!hasVideoTrack}
+          />
         )}
 
-        {/* Mobile: Stack title and controls vertically; Desktop: side by side */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
-            <div className="flex items-center gap-4">
-                <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                    <Settings2 className="text-purple-400" />
-                    Controls
-                </h3>
+        {/* Loading indicator */}
+        {isOnStage && !tracksReady && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 rounded-full border border-yellow-500/20">
+            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+            <span className="text-[10px] text-yellow-500 font-bold">Init...</span>
+          </div>
+        )}
+
+        {/* Chat */}
+        <OrbBtn
+          active={chatOpen}
+          onClick={toggleChat}
+          icon={chatOpen ? MessageSquare : MessageSquareOff}
+          label="Chat"
+          size="sm"
+        />
+
+        {/* Share */}
+        {onShare && (
+          <OrbBtn
+            active={false}
+            onClick={onShare}
+            icon={Share2}
+            label="Share"
+            size="sm"
+          />
+        )}
+
+        {/* Like (viewers only) */}
+        {!isHost && (
+          <OrbBtn
+            active={false}
+            onClick={handleLike}
+            icon={Heart}
+            label="Like"
+            glow={isLiking ? "pink" : undefined}
+            size="sm"
+          />
+        )}
+
+        {/* Challenge (viewers) */}
+        {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (
+          <OrbBtn
+            active={hasPendingChallenge}
+            onClick={onChallengeBroadcaster}
+            icon={Swords}
+            label={hasPendingChallenge ? "..." : "Battle"}
+            glow={hasPendingChallenge ? "yellow" : undefined}
+            size="sm"
+          />
+        )}
+
+        {/* Start Battle (guests on stage) */}
+        {onStartBattle && isOnStage && battleEnabled && !battleActive && (
+          <OrbBtn
+            active={false}
+            onClick={onStartBattle}
+            icon={Swords}
+            label="Fight!"
+            glow="red"
+            size="sm"
+          />
+        )}
+
+        {/* End Stream (host) - center large orb */}
+        {isHost && (
+          <OrbBtn
+            active={false}
+            onClick={handleEndStream}
+            icon={Power}
+            label="End"
+            glow="red"
+            size="lg"
+          />
+        )}
+
+        {/* Leave Seat (guest) */}
+        {onLeave && isOnStage && !isHost && (
+          <OrbBtn
+            active={false}
+            onClick={onLeave}
+            icon={LogOut}
+            label="Leave"
+            glow="red"
+            size="sm"
+          />
+        )}
+
+        {/* More menu toggle */}
+        {(canManageStream || isHost || isOfficerOrAdmin) && (
+          <OrbBtn
+            active={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+            icon={Sliders}
+            label="More"
+            size="sm"
+          />
+        )}
+      </div>
+
+      {/* Expandable menu */}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl w-80 max-h-[60vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Stream Settings</span>
+              <button onClick={() => setMenuOpen(false)} className="text-slate-500 hover:text-white">
+                <X size={14} />
+              </button>
             </div>
 
-            {/* Mobile: full width, wrap buttons; Desktop: inline */}
-            <div className="flex items-center gap-2 flex-wrap justify-center md:justify-end w-full md:w-auto">
-                 {/* Viewer Count */}
-                 <div className="flex items-center gap-1.5 md:gap-2 bg-black/40 px-2 md:px-3 py-1 rounded-full border border-white/5">
-                     <Eye size={14} className="text-blue-400" />
-                     <span className="text-xs md:text-sm font-bold text-white">
-                         {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
-                     </span>
-                 </div>
-
-                 {/* Like Count */}
-                 <div className="flex items-center gap-1.5 md:gap-2 bg-black/40 px-2 md:px-3 py-1 rounded-full border border-white/5">
-                     <Heart size={14} className="text-pink-500 fill-pink-500/20" />
-                     <span className="text-xs md:text-sm font-bold text-white">{likes}</span>
-                 </div>
-
-                 {/* Mic & Cam Controls (Stage Only, when tracks ready) */}
-                 {isOnStage && tracksReady && (
-                    <>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); toggleMicrophone(); }}
-                            disabled={!hasAudioTrack}
-                            className={cn(
-                                "p-2 rounded-lg transition-colors group relative",
-                                isMicOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30",
-                                !hasAudioTrack && "opacity-50 cursor-not-allowed"
-                            )}
-                            title={hasAudioTrack ? (isMicOn ? "Mute Microphone" : "Unmute Microphone") : "Microphone not available"}
-                        >
-                            {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); toggleCamera(); }}
-                            disabled={!hasVideoTrack}
-                            className={cn(
-                                "p-2 rounded-lg transition-colors group relative mr-2",
-                                isCamOn ? "bg-white/10 text-white hover:bg-white/20" : "bg-red-500/20 text-red-500 hover:bg-red-500/30",
-                                !hasVideoTrack && "opacity-50 cursor-not-allowed"
-                            )}
-                            title={hasVideoTrack ? (isCamOn ? "Turn Camera Off" : "Turn Camera On") : "Camera not available"}
-                        >
-                            {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
-                        </button>
-                    </>
-                 )}
-                 
-                 {/* Loading indicator when on stage but tracks not ready */}
-                 {isOnStage && !tracksReady && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/10 rounded-full border border-yellow-500/20">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                        <span className="text-xs text-yellow-500">Initializing...</span>
-                    </div>
-                 )}
-
-                 {/* Share Button */}
-                 {onShare && (
-                     <button
-                        onClick={(e) => { e.stopPropagation(); onShare(); }}
-                        className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors group"
-                        title="Share Stream"
-                     >
-                        <Share2 size={20} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
-                     </button>
-                 )}
-
-                 {/* Like Button - Only show for non-hosts (viewers) */}
-                 {!isHost && (
-                 <button
-                    onClick={(e) => { e.stopPropagation(); handleLike(); }}
-                    disabled={isLiking}
-                    className="p-2 hover:bg-pink-500/20 rounded-lg transition-colors group"
-                    title="Like Stream"
-                 >
-                    <Heart size={20} className={cn("text-slate-400 group-hover:text-pink-500 transition-colors", isLiking && "scale-125 text-pink-500 fill-pink-500")} />
-                 </button>
-                 )}
-
-                  {/* Challenge Button - For Viewers */}
-                  {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (
-                      <button
-                          onClick={(e) => { e.stopPropagation(); onChallengeBroadcaster(); }}
-                          disabled={hasPendingChallenge}
-                          className={cn(
-                              "p-2 rounded-lg transition-colors flex items-center gap-2",
-                              hasPendingChallenge
-                                  ? "bg-yellow-500/20 text-yellow-400 cursor-wait"
-                                  : "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"
-                          )}
-                          title={hasPendingChallenge ? "Challenge pending..." : "Challenge broadcaster to a battle!"}
-                      >
-                          <Swords size={20} className={hasPendingChallenge ? "animate-pulse" : ""} />
-                      </button>
-                  )}
-
-                  {/* Start Battle Button - For Guests on Stage when battle is enabled */}
-                  {(() => {
-                    const showStartBattle = onStartBattle && isOnStage && battleEnabled && !battleActive;
-                    return showStartBattle && (
-                      <button
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            console.log('[BroadcastControls] ✅ Start Battle clicked!');
-                            if (onStartBattle) onStartBattle(); 
-                          }}
-                          className="p-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 text-white transition-colors flex items-center gap-2 animate-pulse"
-                          title="Start Battle!"
-                      >
-                          <Swords size={20} />
-                          <span className="text-xs font-bold">Start Battle</span>
-                      </button>
-                    );
-                  })()}
-
-                 {/* Chat Toggle */}
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); toggleChat(); }}
-                    className={cn(
-                        "p-2 rounded-lg transition-colors flex items-center gap-2",
-                        chatOpen ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-slate-400"
-                    )}
-                    title="Toggle Chat"
-                 >
-                    {chatOpen ? <MessageSquare size={20} /> : <MessageSquareOff size={20} />}
-                 </button>
-
-                 {/* Feature Button - Officers/Admin Only */}
-                 {isOfficerOrAdmin && (
-                     <button
-                       onClick={(e) => { e.stopPropagation(); toggleFeature(); }}
-                       disabled={isFeatureLoading}
-                       className={cn(
-                           "p-2 rounded-lg transition-colors flex items-center gap-2",
-                           stream.is_featured 
-                               ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30" 
-                               : "hover:bg-pink-500/20 text-slate-400 hover:text-pink-400"
-                       )}
-                       title={stream.is_featured ? "Unfeature Stream" : "Feature Stream"}
-                     >
-                        <Star size={20} className={cn(stream.is_featured && "fill-pink-400")} />
-                     </button>
-                 )}
-
-                 {canManageStream && (
-                    <>
-                    <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setShowBannedList(!showBannedList);
-                            setShowThemeSelector(false);
-                        }}
-                        className={cn("p-2 rounded-lg transition-colors", showBannedList ? "bg-red-500/20 text-red-400" : "hover:bg-white/5 text-slate-400")}
-                        title="Banned Users"
-                    >
-                        <UserX size={20} />
-                    </button>
-                    <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setShowThemeSelector(!showThemeSelector);
-                            setShowBannedList(false);
-                        }}
-                        className={cn("p-2 rounded-lg transition-colors", showThemeSelector ? "bg-purple-500/20 text-purple-400" : "hover:bg-white/5 text-slate-400")}
-                        title="Broadcast Theme"
-                    >
-                        <ImageIcon size={20} />
-                    </button>
-                    </>
-                 )}
-
-
-
-                 {/* Pin Product (Host Only) */}
-                 {isHost && onPinProduct && (
-                     <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onPinProduct();
-                        }}
-                        className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors flex items-center gap-2"
-                        title="Pin Product"
-                    >
-                        <Package size={20} />
-                    </button>
-                 )}
-
-                 {/* End Stream (Host Only) — visible when controls panel is collapsed */}
-                 {isHost && !showStreamControls && (
-                     <button
-                    onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
-                    className="ml-2 px-4 py-2 bg-gradient-to-r from-red-600/80 to-red-500/80 hover:from-red-500 hover:to-red-400 border border-red-400/30 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-[0_0_12px_rgba(239,68,68,0.2)]"
-                >
-                        <Power size={16} />
-                        End Stream
-                     </button>
-                 )}
-
-                 {/* Leave Seat (Guest Only) */}
-                 {onLeave && isOnStage && !isHost && (
-                     <button 
-                        onClick={(e) => { e.stopPropagation(); onLeave(); }}
-                        className="ml-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/50 text-red-500 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
-                     >
-                        <LogOut size={16} />
-                        Leave
-                     </button>
-                 )}
+            {/* Quick actions grid */}
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {onShare && (
+                <MenuOrb icon={Share2} label="Share" onClick={() => { onShare(); setMenuOpen(false); }} />
+              )}
+              {isHost && onPinProduct && (
+                <MenuOrb icon={Package} label="Product" onClick={() => { onPinProduct(); setMenuOpen(false); }} />
+              )}
+              {canManageStream && (
+                <MenuOrb icon={ImageIcon} label="Theme" onClick={() => { setShowThemeSelector(!showThemeSelector); setMenuOpen(false); }} />
+              )}
+              {canManageStream && (
+                <MenuOrb icon={UserX} label="Banned" onClick={() => { setShowBannedList(!showBannedList); setMenuOpen(false); }} />
+              )}
+              {isOfficerOrAdmin && (
+                <MenuOrb
+                  icon={Star}
+                  label={stream.is_featured ? "Unfeature" : "Feature"}
+                  onClick={() => { toggleFeature(); setMenuOpen(false); }}
+                  active={stream.is_featured}
+                />
+              )}
+              {isHost && (
+                <MenuOrb
+                  icon={Palette}
+                  label={stream.has_rgb_effect ? "RGB ON" : "RGB OFF"}
+                  onClick={() => { toggleStreamRgb(); }}
+                  active={stream.has_rgb_effect}
+                />
+              )}
             </div>
-        </div>
 
-        {/* ═══════════════════════════════════════════════════════════════
-            STREAM CONTROLS — Premium Glassmorphism Panel
-            ═══════════════════════════════════════════════════════════════ */}
-        {canManageStream && (
-            <div className="flex flex-col gap-5">
-                {/* Section Header with neon accent line */}
-                <div
-                    className="flex items-center justify-between cursor-pointer group pt-2"
-                    onClick={() => setShowStreamControls(!showStreamControls)}
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center shadow-[0_0_12px_rgba(168,85,247,0.15)]">
-                            <Settings2 size={16} className="text-purple-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-white font-bold text-sm tracking-wide uppercase">
-                                Stream Controls
-                            </h3>
-                            <div className="h-0.5 w-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full mt-0.5 shadow-[0_0_6px_rgba(168,85,247,0.5)]" />
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {/* Inline stat pills */}
-                        <div className="hidden md:flex items-center gap-2">
-                            <div className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5">
-                                <Eye size={11} className="text-blue-400" />
-                                <span className="text-[10px] font-bold text-blue-300">{liveViewerCount ?? 0}</span>
-                            </div>
-                            <div className="flex items-center gap-1 bg-pink-500/10 border border-pink-500/20 rounded-full px-2 py-0.5">
-                                <Heart size={11} className="text-pink-400" />
-                                <span className="text-[10px] font-bold text-pink-300">{likes}</span>
-                            </div>
-                        </div>
-                        <div className={cn(
-                            "w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300",
-                            showStreamControls ? "bg-purple-500/20 text-purple-400 rotate-180" : "bg-white/5 text-slate-500"
-                        )}>
-                            <ChevronDown size={16} />
-                        </div>
-                    </div>
+            {/* Seat Price */}
+            {canManageStream && (
+              <div className="bg-white/5 rounded-xl p-3 mb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Coins size={14} className="text-amber-400" />
+                    <span className="text-xs font-bold text-white">
+                      {enablePerBoxPricing ? 'Per-Box Pricing' : 'Seat Price'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setEnablePerBoxPricing(!enablePerBoxPricing)}
+                    className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-white/10 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {enablePerBoxPricing ? 'Simple' : 'Advanced'}
+                  </button>
                 </div>
 
-                <AnimatePresence>
-                {showStreamControls && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: 'easeInOut' }}
-                        className="overflow-hidden"
-                    >
-                        <div className="flex flex-col gap-4 pb-1">
-                            {/* ─── ROW 1: Boxes + Visuals ─── */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                                {/* ┌─────────────────────────────────┐
-                                    │  BOXES CONTROL                  │
-                                    └─────────────────────────────────┘ */}
-                                {canModifyBoxes && canEditElectionBoxes && (
-                                <div className="relative bg-gradient-to-br from-[#0e0e1a] to-[#12122a] rounded-2xl p-5 border border-purple-500/15 shadow-[0_0_20px_rgba(168,85,247,0.06),inset_0_1px_0_rgba(255,255,255,0.04)] group hover:border-purple-500/25 transition-all duration-300">
-                                    {/* Subtle glow on hover */}
-                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/0 to-blue-500/0 group-hover:from-purple-500/5 group-hover:to-blue-500/5 transition-all duration-500 pointer-events-none" />
-
-                                    <div className="relative flex flex-col items-center gap-4">
-                                        {/* Label */}
-                                        <div className="flex items-center gap-2">
-                                            <LayoutGrid size={14} className="text-purple-400" />
-                                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Boxes</span>
-                                        </div>
-
-                                        {/* Number display with glow ring */}
-                                        <div className="relative">
-                                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 flex items-center justify-center shadow-[0_0_24px_rgba(168,85,247,0.12)]">
-                                                <span className="text-3xl font-black text-white tracking-tight">{boxCount}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* +/- Buttons */}
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => updateBoxCount(boxCount - 1)}
-                                                disabled={!canEditStream || boxCount <= Math.max(1, requiredBoxes) || !categoryConfig.allowDeductBox}
-                                                className="w-10 h-10 rounded-xl bg-slate-800/80 hover:bg-red-500/20 border border-white/5 hover:border-red-500/30 text-white hover:text-red-400 transition-all duration-200 flex items-center justify-center disabled:opacity-30 disabled:hover:bg-slate-800/80 disabled:hover:border-white/5 disabled:hover:text-white disabled:cursor-not-allowed"
-                                            >
-                                                <Minus size={18} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => updateBoxCount(boxCount + 1)}
-                                                disabled={!canEditStream || boxCount >= 6 || !categoryConfig.allowAddBox}
-                                                className="w-10 h-10 rounded-xl bg-slate-800/80 hover:bg-emerald-500/20 border border-white/5 hover:border-emerald-500/30 text-white hover:text-emerald-400 transition-all duration-200 flex items-center justify-center disabled:opacity-30 disabled:hover:bg-slate-800/80 disabled:hover:border-white/5 disabled:hover:text-white disabled:cursor-not-allowed"
-                                            >
-                                                <Plus size={18} />
-                                            </button>
-                                        </div>
-
-                                        <p className="text-[10px] text-zinc-600">1–6 boxes available</p>
-                                    </div>
-                                </div>
-                                )}
-
-                                {/* ┌─────────────────────────────────┐
-                                    │  VISUALS TOGGLE                 │
-                                    └─────────────────────────────────┘ */}
-                                {isHost && (
-                                <div className="relative bg-gradient-to-br from-[#0e0e1a] to-[#12122a] rounded-2xl p-5 border border-purple-500/15 shadow-[0_0_20px_rgba(168,85,247,0.06),inset_0_1px_0_rgba(255,255,255,0.04)] group hover:border-purple-500/25 transition-all duration-300">
-                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/0 to-pink-500/0 group-hover:from-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500 pointer-events-none" />
-
-                                    <div className="relative flex flex-col items-center gap-4 h-full justify-center">
-                                        {/* Label */}
-                                        <div className="flex items-center gap-2">
-                                            <Palette size={14} className="text-pink-400" />
-                                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Visuals</span>
-                                        </div>
-
-                                        {/* Premium toggle switch */}
-                                        <button
-                                            onClick={() => toggleStreamRgb()}
-                                            className={cn(
-                                                "relative w-16 h-8 rounded-full transition-all duration-300 flex items-center",
-                                                stream.has_rgb_effect
-                                                    ? "bg-gradient-to-r from-purple-600 to-pink-500 shadow-[0_0_16px_rgba(168,85,247,0.4)]"
-                                                    : "bg-slate-800 border border-white/10"
-                                            )}
-                                        >
-                                            <div className={cn(
-                                                "w-6 h-6 rounded-full bg-white shadow-lg transition-all duration-300 mx-1",
-                                                stream.has_rgb_effect ? "translate-x-8" : "translate-x-0"
-                                            )} />
-                                        </button>
-
-                                        <p className={cn(
-                                            "text-[10px] font-medium transition-colors",
-                                            stream.has_rgb_effect ? "text-purple-400" : "text-zinc-600"
-                                        )}>
-                                            {stream.has_rgb_effect ? 'RGB Effect Active' : 'RGB Effect Off'}
-                                        </p>
-                                    </div>
-                                </div>
-                                )}
-                            </div>
-
-                            {/* ┌─────────────────────────────────────────┐
-                                │  SEAT PRICE — Full Width Premium Card   │
-                                └─────────────────────────────────────────┘ */}
-                            {canManageStream && (
-                            <div className="relative bg-gradient-to-br from-[#0e0e1a] to-[#141428] rounded-2xl p-5 border border-amber-500/15 shadow-[0_0_20px_rgba(245,158,11,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
-                                {/* Header row */}
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                                            <Coins size={14} className="text-amber-400" />
-                                        </div>
-                                        <div>
-                                            <span className="text-sm font-bold text-white">
-                                                {enablePerBoxPricing ? 'Per-Box Pricing' : 'Seat Price'}
-                                            </span>
-                                            <p className="text-[10px] text-zinc-500 mt-0.5">
-                                                {enablePerBoxPricing
-                                                    ? "Set individual prices per seat"
-                                                    : "Set to 0 for free seats, or charge coins to join"}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Advanced / Simple Mode pill toggle */}
-                                    <button
-                                        onClick={() => setEnablePerBoxPricing(!enablePerBoxPricing)}
-                                        className={cn(
-                                            "text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full transition-all duration-200",
-                                            enablePerBoxPricing
-                                                ? "bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]"
-                                                : "bg-slate-800/80 text-zinc-400 border border-white/5 hover:border-amber-500/20 hover:text-amber-400"
-                                        )}
-                                    >
-                                        {enablePerBoxPricing ? 'Simple Mode' : 'Advanced Mode'}
-                                    </button>
-                                </div>
-
-                                {/* Price input area */}
-                                {!enablePerBoxPricing ? (
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1 relative">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="5000"
-                                                value={seatPrice === 0 ? '' : seatPrice}
-                                                onChange={handlePriceChange}
-                                                disabled={!isHost}
-                                                className={cn(
-                                                    "w-full bg-[#0a0a14] border border-amber-500/20 rounded-xl px-4 py-3 text-lg font-bold text-white placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_12px_rgba(245,158,11,0.15)] transition-all",
-                                                    !isHost && "opacity-50 cursor-not-allowed"
-                                                )}
-                                                placeholder="0"
-                                            />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-500 font-medium">coins</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                                        {Array.from({ length: 6 }, (_, i) => (
-                                            <div key={i} className="flex flex-col items-center gap-1.5">
-                                                <label className={cn(
-                                                    "text-[10px] font-bold uppercase tracking-wider",
-                                                    i === 0 ? "text-purple-400" : "text-zinc-500"
-                                                )}>
-                                                    {i === 0 ? 'Host' : `Seat ${i}`}
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="5000"
-                                                    value={seatPrices[i] || 0}
-                                                    onChange={(e) => handleBoxPriceChange(i, e.target.value)}
-                                                    disabled={!isHost || i === 0}
-                                                    className={cn(
-                                                        "w-full bg-[#0a0a14] border rounded-xl px-2 py-2 text-sm font-bold text-white text-center focus:outline-none focus:border-amber-500/50 transition-all",
-                                                        i === 0
-                                                            ? "border-purple-500/20 text-purple-300 opacity-60 cursor-not-allowed"
-                                                            : "border-amber-500/20 focus:shadow-[0_0_8px_rgba(245,158,11,0.1)]"
-                                                    )}
-                                                    placeholder="0"
-                                                    title={i === 0 ? "Host seat is always free" : `Price for seat ${i}`}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            )}
-
-                            {/* ─── END STREAM — Prominent red CTA ─── */}
-                            {isHost && (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleEndStream(); }}
-                                    className="w-full mt-1 py-3.5 rounded-2xl bg-gradient-to-r from-red-600/90 to-red-500/90 hover:from-red-500 hover:to-red-400 text-white font-bold text-sm tracking-wide uppercase flex items-center justify-center gap-2 border border-red-400/30 shadow-[0_0_24px_rgba(239,68,68,0.25)] hover:shadow-[0_0_32px_rgba(239,68,68,0.4)] transition-all duration-300 active:scale-[0.98]"
-                                >
-                                    <Power size={18} />
-                                    End Stream
-                                </button>
-                            )}
-                        </div>
-                    </motion.div>
+                {!enablePerBoxPricing ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="5000"
+                      value={seatPrice === 0 ? '' : seatPrice}
+                      onChange={handlePriceChange}
+                      disabled={!isHost}
+                      className={cn(
+                        "flex-1 bg-black/40 border border-amber-500/20 rounded-lg px-3 py-2 text-sm font-bold text-white placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/50 transition-all",
+                        !isHost && "opacity-50 cursor-not-allowed"
+                      )}
+                      placeholder="0"
+                    />
+                    <span className="text-[10px] text-zinc-500 font-medium">coins</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: 6 }, (_, i) => (
+                      <div key={i} className="flex flex-col items-center gap-1">
+                        <label className={cn(
+                          "text-[9px] font-bold uppercase tracking-wider",
+                          i === 0 ? "text-purple-400" : "text-zinc-500"
+                        )}>
+                          {i === 0 ? 'Host' : `Seat ${i}`}
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="5000"
+                          value={seatPrices[i] || 0}
+                          onChange={(e) => handleBoxPriceChange(i, e.target.value)}
+                          disabled={!isHost || i === 0}
+                          className={cn(
+                            "w-full bg-black/40 border rounded-lg px-2 py-1.5 text-xs font-bold text-white text-center focus:outline-none transition-all",
+                            i === 0
+                              ? "border-purple-500/20 text-purple-300 opacity-60 cursor-not-allowed"
+                              : "border-amber-500/20"
+                          )}
+                          placeholder="0"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
-                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Viewer stats */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full px-2.5 py-1">
+                <Eye size={11} className="text-blue-400" />
+                <span className="text-[10px] font-bold text-blue-300">
+                  {liveViewerCount !== undefined ? liveViewerCount : ((stream as any).current_viewers || stream.viewer_count || 0)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-pink-500/10 border border-pink-500/20 rounded-full px-2.5 py-1">
+                <Heart size={11} className="text-pink-400" />
+                <span className="text-[10px] font-bold text-pink-300">{likes}</span>
+              </div>
             </div>
+          </motion.div>
         )}
-        </>
+      </AnimatePresence>
+    </>
+  );
+}
+
+// ─── ORB COMPONENTS ───
+
+function OrbBtn({ active, onClick, icon: Icon, label, glow, size, disabled }: any) {
+  const isLg = size === 'lg';
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          "rounded-full flex items-center justify-center transition-all backdrop-blur-xl border",
+          isLg ? "w-14 h-14" : "w-11 h-11",
+          glow === "red"
+            ? "bg-red-500/20 border-red-500/40 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+            : glow === "pink"
+              ? "bg-pink-500/20 border-pink-500/40 text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.3)]"
+              : glow === "yellow"
+                ? "bg-yellow-500/20 border-yellow-500/40 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)] animate-pulse"
+                : active
+                  ? "bg-white/15 border-white/25 text-white shadow-lg"
+                  : "bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/10",
+          disabled && "opacity-40 cursor-not-allowed"
         )}
+      >
+        <Icon size={isLg ? 20 : 16} />
+      </button>
+      <span className="text-[8px] text-slate-500 font-medium">{label}</span>
     </div>
+  );
+}
+
+function SideOrb({ onClick, icon: Icon, color, active, disabled, label }: any) {
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all",
+          active ? `bg-${color}-500/20 border-${color}-500/40 text-${color}-400` : "bg-black/40 border-white/10 text-white/50 hover:text-white",
+          disabled && "opacity-30 cursor-not-allowed"
+        )}
+      >
+        <Icon size={14} />
+      </button>
+      {label && <span className="text-[7px] text-slate-500 font-medium leading-none">{label}</span>}
+    </div>
+  );
+}
+
+function MenuOrb({ icon: Icon, label, onClick, active }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-1 p-2 rounded-xl transition-all",
+        active ? "bg-purple-500/15 text-purple-400" : "hover:bg-white/10 text-white/70"
+      )}
+    >
+      <div className={cn(
+        "w-10 h-10 rounded-full border flex items-center justify-center",
+        active ? "bg-purple-500/20 border-purple-500/30" : "bg-white/10 border-white/10"
+      )}>
+        <Icon size={16} />
+      </div>
+      <span className="text-[8px] text-slate-400">{label}</span>
+    </button>
   );
 }

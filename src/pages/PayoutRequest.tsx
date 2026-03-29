@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
 import { DollarSign, ArrowRight } from "lucide-react";
 import { isPayoutWindowOpen, PAYOUT_WINDOW_LABEL } from "../lib/payoutWindow";
-import { TIERS, FIXED_FEE_USD, getRateForCoins } from "../lib/payoutTiers";
+import { TIERS, FIXED_FEE_USD, getRateForCoins } from "../config/coinConfig";
 
 export default function PayoutRequest() {
   const { user, profile, refreshProfile } = useAuthStore() as any;

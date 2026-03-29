@@ -161,7 +161,7 @@ export default function CreatePostModal({
         .from('troll_wall_posts')
         .insert({
           user_id: user.id,
-          post_type: postType,
+          post_type: (postType === 'image' || postType === 'video') ? 'text' : postType,
           content: content.trim(),
           metadata
         })

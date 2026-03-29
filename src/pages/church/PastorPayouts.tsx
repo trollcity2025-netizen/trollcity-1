@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { CreditCard, DollarSign, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { TIERS } from '@/lib/payoutTiers';
+import { TIERS } from '@/config/coinConfig';
 
 export default function PastorPayouts() {
   const { profile, refreshProfile } = useAuthStore();

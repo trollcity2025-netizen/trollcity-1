@@ -44,7 +44,7 @@ function BroadcastPage() {
 
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
-  const { clearTracks } = useStreamStore()
+  const { clearTracks, screenTrack } = useStreamStore()
 
   const [stream, setStream] = useState<Stream | null>(null)
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null)
@@ -437,6 +437,8 @@ function BroadcastPage() {
   const {
     boxCount,
     setBoxCount: updateBoxCount,
+    incrementBoxCount,
+    decrementBoxCount,
   } = useBoxCount({
     streamId: streamId || '',
     initialBoxCount: stream?.box_count || 1,
@@ -1572,6 +1574,20 @@ function BroadcastPage() {
             setLocalTracks([audioTrack || null, videoTrack || null])
           }
           
+          // Screen share mode: publish screen track from useStreamStore
+          const isScreenShareExisting = PreflightStore.getScreenShareMode()
+          const screenTrackExisting = PreflightStore.getScreenTrack() || screenTrack
+          if (isScreenShareExisting && screenTrackExisting) {
+            console.log('[BroadcastPage] Screen share mode (existing room) - publishing screen track')
+            try {
+              await existingRoom.localParticipant.publishTrack(screenTrackExisting)
+              console.log('[BroadcastPage] Screen track published successfully (existing room)')
+              setIsScreenSharing(true)
+            } catch (err) {
+              console.error('[BroadcastPage] Failed to publish screen track (existing room):', err)
+            }
+          }
+          
           hasJoinedRef.current = true
           setIsJoining(false)
           
@@ -1901,6 +1917,21 @@ function BroadcastPage() {
           console.log('[BroadcastPage] Camera is already enabled - good!')
         }
 
+        // Gaming screen share: publish the screen track in addition to camera/mic
+        if (PreflightStore.getScreenShareMode()) {
+          const screenTrackToPublish = PreflightStore.getScreenTrack() || screenTrack
+          if (screenTrackToPublish) {
+            console.log('[BroadcastPage] Gaming screen share - publishing screen track')
+            try {
+              await room.localParticipant.publishTrack(screenTrackToPublish)
+              setIsScreenSharing(true)
+              console.log('[BroadcastPage] Screen track published successfully')
+            } catch (err) {
+              console.error('[BroadcastPage] Failed to publish screen track:', err)
+            }
+          }
+        }
+
         await supabase
           .from('streams')
           .update({ is_live: true, status: 'live' })
@@ -2164,6 +2195,28 @@ function BroadcastPage() {
     } catch (e) {
         console.error('Like error:', e);
         toast.error('Failed to send like');
+    }
+  };
+
+  const toggleStreamRgb = async () => {
+    if (!isHost || !stream) return;
+    const enabling = !stream.has_rgb_effect;
+    try {
+      const { data, error } = await supabase.rpc('purchase_rgb_broadcast', {
+        p_stream_id: stream.id,
+        p_enable: enabling
+      });
+      if (error) throw error;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result || !result.success) throw new Error(result?.error || "Failed to update RGB");
+      if (result.message === 'Purchased and Enabled') {
+        toast.success("RGB Unlocked! (-10 Coins)");
+      } else {
+        toast.success(enabling ? "RGB Effect Enabled" : "RGB Effect Disabled");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || "Failed to update RGB setting");
     }
   };
 
@@ -2441,7 +2494,7 @@ function BroadcastPage() {
   // This allows users to see the page immediately while data loads in background
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-black text-white">
+      <div className="flex flex-col items-center justify-center h-dvh bg-black text-white">
         <p className="text-red-500">{error}</p>
         <Link to="/">Go Home</Link>
       </div>
@@ -2452,7 +2505,7 @@ function BroadcastPage() {
   // Use skeleton/placeholder instead of blocking with spinner
   if (!stream) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black">
+      <div className="flex items-center justify-center h-dvh bg-black">
         <div className="text-white text-center">
           <div className="animate-pulse">
             <div className="h-4 bg-gray-700 rounded w-48 mb-4"></div>
@@ -2539,6 +2592,11 @@ function BroadcastPage() {
                 canSwipe={canSwipe}
                 onSwipeUp={() => navigateToAdjacentStream('up')}
                 onSwipeDown={() => navigateToAdjacentStream('down')}
+                onAddBox={isHost && categoryConfig.allowAddBox && boxCount < 6 ? incrementBoxCount : undefined}
+                onRemoveBox={isHost && categoryConfig.allowDeductBox && boxCount > 1 ? decrementBoxCount : undefined}
+                onToggleRgb={isHost ? toggleStreamRgb : undefined}
+                hasRgbEffect={stream.has_rgb_effect}
+                canEditBoxes={isHost}
               />
             </>
           </div>

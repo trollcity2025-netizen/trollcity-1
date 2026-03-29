@@ -4,7 +4,7 @@ import { useAuthStore } from "../lib/store";
 import { toast } from "sonner";
 import { isPayoutWindowOpen, PAYOUT_WINDOW_LABEL } from "../lib/payoutWindow";
 // import { Coins, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { TIERS } from '../lib/payoutTiers';
+import { TIERS } from '../config/coinConfig';
 
 export default function Withdraw() {
   const { user } = useAuthStore();

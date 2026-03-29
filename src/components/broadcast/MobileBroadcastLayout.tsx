@@ -97,7 +97,7 @@ export default function MobileBroadcastLayout({
   if (!isMobile) {
     // Desktop layout - return original structure
     return (
-      <div className="relative h-screen w-full bg-black overflow-hidden">
+      <div className="relative h-dvh w-full bg-black overflow-hidden">
         {children}
         <TopLiveBar
           stream={stream}

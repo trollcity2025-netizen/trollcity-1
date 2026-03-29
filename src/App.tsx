@@ -74,6 +74,9 @@ const BadgeDesignShowcase = lazyWithRetry(() => import("./pages/dev/BadgeDesignS
 const HomepageBackgroundShowcase = lazyWithRetry(() => import("./pages/dev/HomepageBackgroundShowcase"));
 const GiftAnimationShowcase = lazyWithRetry(() => import("./pages/dev/GiftAnimationShowcase"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
+const StreamControlPreview = lazyWithRetry(() => import("./pages/dev/StreamControlPreview"));
+const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/BroadcastLayoutPreview"));
+const SetupPreview = lazyWithRetry(() => import("./pages/dev/SetupPreview"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
 
@@ -1098,6 +1101,11 @@ function AppContent() {
                 {/* Safety Page (standalone) */}
                 <Route path="/safety" element={<Safety />} />
 
+                {/* Dev preview pages (no auth required) */}
+                <Route path="/dev/stream-controls" element={<StreamControlPreview />} />
+                <Route path="/dev/broadcast-layout" element={<BroadcastLayoutPreview />} />
+                <Route path="/dev/setup-preview" element={<SetupPreview />} />
+
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<LandingHome />} />
@@ -1189,9 +1197,10 @@ function AppContent() {
                   <Route path="/dev/xp" element={<XPSimulatorPage />} />
                   <Route path="/dev/badge-showcase" element={<BadgeDesignShowcase />} />
                   <Route path="/dev/homepage-bg-showcase" element={<HomepageBackgroundShowcase />} />
-                  <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
-                  
-                  {/* 🎥 Streaming */}
+                   <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
+
+
+                   {/* 🎥 Streaming */}
 
                   <Route path="/join" element={<JoinPage />} />
                   <Route path="/kick-fee" element={<KickFee />} />

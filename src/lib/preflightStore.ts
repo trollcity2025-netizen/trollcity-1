@@ -16,6 +16,10 @@ interface PreflightState {
   // LiveKit room and tracks from SetupPage
   livekitRoom: Room | null;
   livekitTracks: [LocalAudioTrack | null, LocalVideoTrack | null] | null;
+  // Screen share mode flag for gaming category
+  isScreenShareMode: boolean;
+  // Screen track for gaming screen share
+  screenTrack: LocalVideoTrack | null;
 }
 
 const state: PreflightState = {
@@ -29,6 +33,8 @@ const state: PreflightState = {
   battlesDisabled: true, // Default to disabled until further notice
   livekitRoom: null,
   livekitTracks: null,
+  isScreenShareMode: false,
+  screenTrack: null,
 };
 
 export const PreflightStore = {
@@ -105,6 +111,28 @@ export const PreflightStore = {
     return state.livekitTracks;
   },
 
+  // Set screen share mode flag
+  setScreenShareMode(isScreenShare: boolean) {
+    state.isScreenShareMode = isScreenShare;
+    console.log('[PreflightStore] setScreenShareMode:', isScreenShare);
+  },
+
+  // Get screen share mode flag
+  getScreenShareMode(): boolean {
+    return state.isScreenShareMode;
+  },
+
+  // Store screen track for gaming screen share
+  setScreenTrack(track: LocalVideoTrack | null) {
+    state.screenTrack = track;
+    console.log('[PreflightStore] setScreenTrack:', track ? 'available' : 'null');
+  },
+
+  // Get screen track for gaming screen share
+  getScreenTrack(): LocalVideoTrack | null {
+    return state.screenTrack;
+  },
+
   clear() {
     state.token = null;
     state.roomName = null;
@@ -116,5 +144,7 @@ export const PreflightStore = {
     state.battlesDisabled = true; // Keep battles disabled on clear
     state.livekitRoom = null;
     state.livekitTracks = null;
+    state.isScreenShareMode = false;
+    state.screenTrack = null;
   }
 };

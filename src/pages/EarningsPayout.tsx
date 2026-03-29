@@ -9,7 +9,7 @@ import { DollarSign, Banknote, Send, History } from 'lucide-react'
 
 type PayoutMethod = 'PayPal'
 
-import { TIERS } from "../lib/payoutTiers";
+import { TIERS } from "../config/coinConfig";
 
 interface CashoutTier {
   id: string

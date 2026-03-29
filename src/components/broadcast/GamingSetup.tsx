@@ -1,45 +1,24 @@
 import React from 'react';
 import { Monitor, Camera, Gamepad2, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScreenShare, StreamMode } from '@/hooks/useScreenShare';
-import { useStreamStore } from '@/lib/streamStore';
-import { LocalVideoTrack } from 'livekit-client';
 
 interface GamingSetupProps {
   streamId: string;
-  // videoRef removed - video playback is now handled by Agora's play() method in the parent
-  acquireMediaStream?: (facingMode: 'user' | 'environment', enableVideo: boolean) => Promise<MediaStream | null>;
-  facingMode?: 'user' | 'environment';
-  isVideoEnabled?: boolean;
-  setStream?: (stream: MediaStream | null) => void;
-  // Callback to handle screen share attachment in parent
-  onScreenShareStarted?: (track: LocalVideoTrack) => void;
-  onScreenShareStopped?: () => void;
+  isScreenSharing: boolean;
+  cameraOverlayEnabled: boolean;
+  onToggleScreenShare: () => void;
+  onToggleCameraOverlay: (enabled: boolean) => void;
 }
 
 export function GamingSetup({
   streamId,
-  acquireMediaStream,
-  facingMode = 'user',
-  isVideoEnabled = true,
-  setStream,
-  onScreenShareStarted,
-  onScreenShareStopped,
+  isScreenSharing,
+  cameraOverlayEnabled,
+  onToggleScreenShare,
+  onToggleCameraOverlay,
 }: GamingSetupProps) {
   const [copiedKey, setCopiedKey] = React.useState(false);
   const [copiedUrl, setCopiedUrl] = React.useState(false);
-
-  // Use global stream store for persistence
-  const {
-    screenTrack,
-    setScreenTrack,
-    streamMode,
-    setStreamMode,
-    setScreenPreviewStream,
-  } = useStreamStore();
-
-  // Use screen share hook
-  const screenShare = useScreenShare();
 
   // LiveKit RTMP settings
   const livekitRTMPUrl = 'rtmp://rtmp.livekit.io/live';
@@ -59,192 +38,65 @@ export function GamingSetup({
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
-  const toggleScreenShare = async () => {
-    if (streamMode === 'screen') {
-      // Switch back to camera mode
-      screenShare.stopScreenShare();
-      setScreenTrack(null);
-      setScreenPreviewStream(null);
-      setStreamMode('camera');
-
-      // Notify parent to stop screen share preview
-      if (onScreenShareStopped) {
-        onScreenShareStopped();
-      }
-
-      // Re-acquire camera stream if function provided
-      // Note: Video playback is handled by Agora's play() method in the parent component
-      if (acquireMediaStream && setStream) {
-        const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
-        if (mediaStream) {
-          setStream(mediaStream);
-        }
-      }
-
-      toast.info('Switched to camera mode');
-    } else {
-      // Switch to screen share mode
-      const track = await screenShare.startScreenShare();
-      if (track) {
-        setScreenTrack(track);
-        setStreamMode('screen');
-
-        // Create preview stream for state management
-        const mediaStreamTrack = track.getMediaStreamTrack();
-        if (mediaStreamTrack) {
-          const previewStream = new MediaStream([mediaStreamTrack]);
-          setScreenPreviewStream(previewStream);
-        }
-
-        // Notify parent to attach screen share preview
-        if (onScreenShareStarted) {
-          onScreenShareStarted(track);
-        }
-
-        toast.success('Screen sharing started!');
-
-        // Handle when user stops sharing via browser UI
-        screenShare.onScreenShareEnded(() => {
-          setScreenTrack(null);
-          setScreenPreviewStream(null);
-          setStreamMode('camera');
-
-          // Notify parent to stop screen share preview
-          if (onScreenShareStopped) {
-            onScreenShareStopped();
-          }
-
-          // Re-acquire camera stream when screen share ends
-          // Note: Video playback is handled by Agora's play() method in the parent component
-          if (acquireMediaStream && setStream) {
-            acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
-              if (mediaStream) {
-                setStream(mediaStream);
-              }
-            });
-          }
-
-          toast.info('Screen sharing ended');
-        });
-      } else {
-        toast.error(screenShare.error || 'Failed to start screen sharing');
-      }
-    }
-  };
-
-  // Mobile fallback - phones often cannot screen share
-  if (!screenShare.isSupported) {
-    return (
-      <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 text-amber-400">
-          <Monitor size={18} />
-          <span className="font-semibold">🎮 Gaming Mode</span>
-        </div>
-
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-          <p className="text-xs text-amber-300">
-            📱 Screen sharing is not supported on this device/browser.
-            You can still stream using your camera.
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setStreamMode('camera')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              streamMode === 'camera'
-                ? 'bg-amber-500 text-black'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <Camera size={16} className="inline mr-2" />
-            Camera
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-slate-950/80 border border-purple-500/30 rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2 text-purple-400">
         <Monitor size={18} />
-        <span className="font-semibold">🎮 Stream Your Game</span>
+        <span className="font-semibold">🎮 Gaming Setup</span>
       </div>
 
-      {/* Mode Toggle */}
+      {/* Screen Share Toggle */}
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => {
-            if (streamMode === 'screen') {
-              screenShare.stopScreenShare();
-              setScreenTrack(null);
-              setScreenPreviewStream(null);
-              setStreamMode('camera');
-
-              // Notify parent to stop screen share preview
-              if (onScreenShareStopped) {
-                onScreenShareStopped();
-              }
-
-              // Re-acquire camera stream if function provided
-              // Note: Video playback is handled by Agora's play() method in the parent component
-              if (acquireMediaStream && setStream) {
-                acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
-                  if (mediaStream) {
-                    setStream(mediaStream);
-                  }
-                });
-              }
-            }
-            setStreamMode('camera');
-          }}
-          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-            streamMode === 'camera'
+          onClick={onToggleScreenShare}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+            isScreenSharing
               ? 'bg-purple-500 text-white'
               : 'bg-white/10 text-white hover:bg-white/20'
           }`}
         >
-          <Camera size={16} className="inline mr-2" />
-          Camera
+          <Gamepad2 size={16} />
+          {isScreenSharing ? 'Screen Sharing Active' : 'Start Screen Share'}
         </button>
+      </div>
+
+      {/* Camera Overlay Toggle */}
+      <div className="flex items-center justify-between bg-white/5 rounded-lg p-3">
+        <div className="flex items-center gap-2">
+          <Camera size={14} className="text-gray-400" />
+          <div>
+            <span className="text-xs font-medium text-gray-300">Camera Overlay</span>
+            <p className="text-[10px] text-gray-500">Show your camera as a draggable facecam on top of the screen share</p>
+          </div>
+        </div>
         <button
           type="button"
-          onClick={toggleScreenShare}
-          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-            streamMode === 'screen'
-              ? 'bg-purple-500 text-white'
-              : 'bg-white/10 text-white hover:bg-white/20'
+          onClick={() => onToggleCameraOverlay(!cameraOverlayEnabled)}
+          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+            cameraOverlayEnabled
+              ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
+              : 'bg-white/5 border-white/10 text-slate-500 hover:text-white hover:bg-white/10'
           }`}
         >
-          <Gamepad2 size={16} className="inline mr-2" />
-          Screen
+          {cameraOverlayEnabled ? 'ON' : 'OFF'}
         </button>
       </div>
 
       {/* Screen Share Active Indicator */}
-      {streamMode === 'screen' && screenTrack && (
+      {isScreenSharing && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
           <div className="flex items-center gap-2 text-green-400">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span className="text-sm font-medium">Screen sharing active</span>
           </div>
+          {cameraOverlayEnabled && (
+            <p className="text-[10px] text-green-300/70 mt-1">Camera overlay is shown on your screen preview — drag it to reposition</p>
+          )}
         </div>
       )}
 
       <div className="space-y-3 text-sm">
-        {/* Quick Start - In Browser */}
-        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-green-400 mb-1">
-            <span className="font-semibold">✅ Easiest: In-Browser</span>
-          </div>
-          <p className="text-xs text-gray-400">
-            Click the <Gamepad2 size={12} className="inline" /> button above to share your screen directly from the browser!
-          </p>
-        </div>
-
         {/* OBS Option */}
         <div className="border-t border-white/10 pt-3">
           <p className="text-xs text-gray-400 mb-2">
@@ -296,8 +148,8 @@ export function GamingSetup({
         <div className="border-t border-white/10 pt-3">
           <p className="text-xs font-medium text-purple-300 mb-1">💡 Pro Tips:</p>
           <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-            <li>Use "Screen" mode to share your gameplay</li>
-            <li>Use "Camera" mode to show your facecam</li>
+            <li>Click &quot;Start Screen Share&quot; to share your gameplay</li>
+            <li>Enable &quot;Camera Overlay&quot; to add a facecam you can drag around</li>
             <li>OBS gives you more control over overlays and scenes</li>
             <li>Test your audio levels before going live</li>
           </ul>

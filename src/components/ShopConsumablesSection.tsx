@@ -15,14 +15,6 @@ const CONSUMABLES = [
     description: 'Send a notification to all users to watch your stream. Lasts 1 hour.',
     durationMinutes: 60,
   },
-  {
-    id: 'broadcast_feature',
-    name: 'Top Broadcaster Feature',
-    category: 'broadcast_feature',
-    price_coins: 1000,
-    description: 'Feature your stream in the top broadcasters on the homepage for 1 hour.',
-    durationMinutes: 60,
-  },
 ];
 
 export default function ShopConsumablesSection() {
@@ -59,12 +51,6 @@ export default function ShopConsumablesSection() {
           .update({ broadcast_notification_until: expiresAt })
           .eq('id', user.id);
         toast.success('Stream Notification activated! It will send when you go live.');
-      } else if (item.category === 'broadcast_feature') {
-        await supabase
-          .from('user_profiles')
-          .update({ top_broadcaster_until: expiresAt })
-          .eq('id', user.id);
-        toast.success('Top Broadcaster feature activated for 1 hour!');
       }
 
       // Create purchase record for history

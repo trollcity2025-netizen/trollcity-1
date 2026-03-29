@@ -89,6 +89,50 @@ export async function trackCoinEarning(userId: string, coinsEarned: number) {
 }
 
 /**
+ * Update family_goals current_value when coins are earned.
+ * This keeps the family_goals table (used by TrollFamilyHome) in sync.
+ */
+export async function updateFamilyGoalProgress(userId: string, coinsEarned: number) {
+  try {
+    const { data: familyMember } = await supabase
+      .from('family_members')
+      .select('family_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (!familyMember?.family_id) return
+
+    // Fetch active activity-type goals for this family
+    const { data: activeGoals } = await supabase
+      .from('family_goals')
+      .select('id, current_value, target_value, status')
+      .eq('family_id', familyMember.family_id)
+      .eq('status', 'active')
+      .eq('goal_type', 'activity')
+      .gt('expires_at', new Date().toISOString())
+
+    if (!activeGoals || activeGoals.length === 0) return
+
+    for (const goal of activeGoals) {
+      const newValue = Math.min(goal.current_value + coinsEarned, goal.target_value)
+      const newStatus = newValue >= goal.target_value ? 'completed' : 'active'
+
+      await supabase
+        .from('family_goals')
+        .update({
+          current_value: newValue,
+          status: newStatus,
+          ...(newStatus === 'completed' ? { completed_at: new Date().toISOString() } : {}),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', goal.id)
+    }
+  } catch (error) {
+    console.warn('updateFamilyGoalProgress error:', error)
+  }
+}
+
+/**
  * Hook to track XP earnings for family tasks
  */
 export async function trackXpEarning(userId: string, xpEarned: number) {

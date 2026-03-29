@@ -5,9 +5,11 @@ import { useAuthStore } from '@/lib/store';
 import { PreflightStore } from '@/lib/preflightStore';
 import { useStreamStore } from '@/lib/streamStore';
 import { LocalAudioTrack, LocalVideoTrack, AudioPresets, VideoPresets, Room } from 'livekit-client';
-import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Monitor, Lock, Eye, EyeOff } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, RefreshCw, Swords, Gamepad2, Monitor, Lock, Eye, EyeOff, Radio } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
 import { GamingSetup } from '../../components/broadcast/GamingSetup';
+import { DraggableCameraOverlay } from '../../components/broadcast/DraggableCameraOverlay';
 import { toast } from 'sonner';
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown';
 import { generateUUID } from '../../lib/uuid';
@@ -144,6 +146,9 @@ export default function SetupPage() {
 
   // Stream mode for gaming category (camera vs screen share)
   const screenShare = useScreenShare();
+  const [cameraOverlayEnabled, setCameraOverlayEnabled] = useState(false);
+  const cameraOverlayContainerRef = useRef<HTMLDivElement>(null);
+  const [cameraOverlayStream, setCameraOverlayStream] = useState<MediaStream | null>(null);
   
   // Use global stream store for persistence across navigation
   const {
@@ -166,7 +171,13 @@ export default function SetupPage() {
       sessionStorage.removeItem('tc_screen_share_active');
       sessionStorage.setItem('tc_stream_mode', streamMode);
     }
-  }, [screenTrack, streamMode]);
+    // Persist camera overlay enabled state
+    if (cameraOverlayEnabled) {
+      sessionStorage.setItem('tc_camera_overlay_enabled', 'true');
+    } else {
+      sessionStorage.removeItem('tc_camera_overlay_enabled');
+    }
+  }, [screenTrack, streamMode, cameraOverlayEnabled]);
 
   // Restore screen share state when returning to tab
   useEffect(() => {
@@ -174,6 +185,12 @@ export default function SetupPage() {
     if (wasScreenSharing && streamMode === 'camera' && !screenTrack) {
       console.log('[SetupPage] Restoring screen share mode from session storage');
       setStreamMode('screen');
+    }
+    // Restore camera overlay state
+    const wasCameraOverlay = sessionStorage.getItem('tc_camera_overlay_enabled') === 'true';
+    if (wasCameraOverlay && !cameraOverlayEnabled) {
+      console.log('[SetupPage] Restoring camera overlay enabled from session storage');
+      setCameraOverlayEnabled(true);
     }
   }, []);
 
@@ -188,9 +205,75 @@ export default function SetupPage() {
     if (category !== 'gaming') {
       // Reset to camera mode for non-gaming categories
       setStreamMode('camera');
+      setCameraOverlayEnabled(false);
     }
     // Note: For gaming, we don't auto-switch - let user choose between camera/screen
   }, [category, setStreamMode]);
+
+  // Manage camera overlay stream for gaming mode
+  useEffect(() => {
+    let overlayStream: MediaStream | null = null;
+
+    const setupCameraOverlay = async () => {
+      if (category === 'gaming' && streamMode === 'screen' && cameraOverlayEnabled) {
+        try {
+          overlayStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: facingMode,
+            },
+            audio: false,
+          });
+
+          setCameraOverlayStream(overlayStream);
+
+          // Attach to overlay container
+          if (cameraOverlayContainerRef.current) {
+            cameraOverlayContainerRef.current.innerHTML = '';
+            const videoEl = document.createElement('video');
+            videoEl.srcObject = overlayStream;
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
+            videoEl.muted = true;
+            videoEl.style.width = '100%';
+            videoEl.style.height = '100%';
+            videoEl.style.objectFit = 'cover';
+            videoEl.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'none';
+            cameraOverlayContainerRef.current.appendChild(videoEl);
+          }
+
+          console.log('[SetupPage] Camera overlay stream acquired');
+        } catch (err: any) {
+          console.error('[SetupPage] Failed to acquire camera overlay:', err);
+          toast.error('Failed to access camera for overlay');
+          setCameraOverlayEnabled(false);
+        }
+      }
+    };
+
+    const cleanupCameraOverlay = () => {
+      if (cameraOverlayStream) {
+        cameraOverlayStream.getTracks().forEach(t => t.stop());
+        setCameraOverlayStream(null);
+      }
+      if (cameraOverlayContainerRef.current) {
+        cameraOverlayContainerRef.current.innerHTML = '';
+      }
+    };
+
+    if (category === 'gaming' && streamMode === 'screen' && cameraOverlayEnabled) {
+      setupCameraOverlay();
+    } else {
+      cleanupCameraOverlay();
+    }
+
+    return () => {
+      if (overlayStream) {
+        overlayStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [category, streamMode, cameraOverlayEnabled, facingMode]);
 
   // Handle camera facing mode based on category
   useEffect(() => {
@@ -372,10 +455,14 @@ export default function SetupPage() {
   const detachVideoTrack = (videoTrack: LocalVideoTrack) => {
     if (!videoContainerRef.current) return;
     
-    // Use LiveKit's detach to properly clean up the element
-    const mediaElement = videoTrack.detach();
-    if (mediaElement && videoContainerRef.current.contains(mediaElement)) {
-      videoContainerRef.current.removeChild(mediaElement);
+    // LiveKit's detach() returns an array of HTMLVideoElements
+    const mediaElements = videoTrack.detach();
+    if (mediaElements && mediaElements.length > 0) {
+      mediaElements.forEach(el => {
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      });
     }
   };
 
@@ -511,6 +598,7 @@ export default function SetupPage() {
         sessionStorage.removeItem('tc_tab_switching');
         sessionStorage.removeItem('tc_screen_share_active');
         sessionStorage.removeItem('tc_stream_mode');
+        sessionStorage.removeItem('tc_camera_overlay_enabled');
       } else {
         console.log('[SetupPage] Cleanup: Preserving session storage (tab switch or stream start)');
       }
@@ -594,17 +682,30 @@ export default function SetupPage() {
     async function getInitialMedia() {
       console.log('[SetupPage] getInitialMedia called. Existing stream state:', stream ? 'available' : 'not available');
       
-      // For camera mode: Stop previous tracks if any (but only if we're actually changing camera settings)
-      // For screen mode: Don't stop - the screen share should persist
+      // Only use store streamMode (authoritative) - sessionStorage can be stale from previous sessions
+      if (streamMode === 'screen' && screenTrack) {
+        console.log('[SetupPage] Screen share mode active with track - attaching to preview');
+        if (videoContainerRef.current) {
+          clearVideoContainer();
+          const mediaElement = screenTrack.attach();
+          mediaElement.style.width = '100%';
+          mediaElement.style.height = '100%';
+          mediaElement.style.objectFit = 'contain';
+          mediaElement.style.transform = 'none';
+          mediaElement.autoplay = true;
+          mediaElement.playsInline = true;
+          mediaElement.muted = true;
+          videoContainerRef.current.appendChild(mediaElement);
+          mediaElement.play().catch(() => {});
+          console.log('[SetupPage] Screen track attached for preview');
+        }
+        return;
+      }
+      
+      // For camera mode: Stop previous tracks if any
       if (stream && streamMode === 'camera') {
           console.log('[SetupPage] Stopping previous camera media tracks.');
           stream.getTracks().forEach(track => track.stop());
-      }
-
-      // If we're in screen share mode and already have a screen track, don't re-acquire camera
-      if (streamMode === 'screen' && screenTrack) {
-        console.log('[SetupPage] Screen share mode active with track - skipping camera acquisition');
-        return;
       }
 
       const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
@@ -772,8 +873,11 @@ export default function SetupPage() {
   // Toggle screen sharing for gaming mode
   const toggleScreenShare = async () => {
     if (streamMode === 'screen') {
-      // Switch back to camera mode
-      screenShare.stopScreenShare();
+      // Switch back to camera mode - stop the screen track directly
+      if (screenTrack) {
+        screenTrack.stop();
+        screenTrack.detach().forEach(el => el.remove());
+      }
       setScreenTrack(null);
       setScreenPreviewStream(null);
       setStreamMode('camera');
@@ -781,79 +885,85 @@ export default function SetupPage() {
       const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
       if (mediaStream) {
         setStream(mediaStream);
-        // Video is now played via LiveKit's attach() method in acquireMediaStream
       }
       toast.info('Switched to camera mode');
     } else {
-      // Switch to screen share mode
-      // First, stop camera stream to free up resources
+      // Call getDisplayMedia FIRST while user gesture is still active
+      // Browsers require getDisplayMedia to be called synchronously from a click handler
+      let displayStream: MediaStream;
+      try {
+        displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            frameRate: { ideal: 30, max: 60 },
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 }
+          },
+          audio: false
+        });
+      } catch (err: any) {
+        // User cancelled the picker - not an error
+        if (err.name !== 'NotAllowedError') {
+          console.error('[toggleScreenShare] getDisplayMedia failed:', err);
+          toast.error('Failed to start screen sharing');
+        }
+        return;
+      }
+
+      // User selected a screen - now stop camera and set up screen share
       if (stream) {
         console.log('[toggleScreenShare] Stopping camera stream before screen share');
         stream.getTracks().forEach(track => track.stop());
         setStream(null);
       }
 
-      // Detach camera preview
       if (livekitTracks[1]) {
         detachVideoTrack(livekitTracks[1]);
       }
 
-      const track = await screenShare.startScreenShare();
-      if (track) {
-        setScreenTrack(track);
-        setStreamMode('screen');
+      // Create LiveKit track from the display stream
+      const videoTrack = new LocalVideoTrack(displayStream.getVideoTracks()[0], {
+        name: 'screen-share'
+      });
 
-        // Attach screen share track to preview using LiveKit's attach()
-        if (videoContainerRef.current) {
-          clearVideoContainer();
-          const mediaElement = track.attach();
-          mediaElement.style.width = '100%';
-          mediaElement.style.height = '100%';
-          mediaElement.style.objectFit = 'contain'; // Use contain for screen share
-          mediaElement.style.transform = 'none'; // Don't mirror screen share
-          // Critical: Add autoplay and playsInline for proper video display
-          mediaElement.autoplay = true;
-          mediaElement.playsInline = true;
-          videoContainerRef.current.appendChild(mediaElement);
-          console.log('[SetupPage] Screen track attached for preview');
-        }
+      setScreenTrack(videoTrack);
+      setStreamMode('screen');
 
-        // Create preview stream for state management
-        const mediaStreamTrack = track.getMediaStreamTrack();
-        if (mediaStreamTrack) {
-          const previewStream = new MediaStream([mediaStreamTrack]);
-          setScreenPreviewStream(previewStream);
-        }
-
-        toast.success('Screen sharing started!');
-
-        // Handle when user stops sharing via browser UI
-        screenShare.onScreenShareEnded(() => {
-          setScreenTrack(null);
-          setScreenPreviewStream(null);
-          setStreamMode('camera');
-          // Stop screen track
-          track.stop();
-          // Clear container
-          clearVideoContainer();
-          // Re-acquire camera stream when screen share ends
-          acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
-            if (mediaStream) {
-              setStream(mediaStream);
-              // Video will be attached via LiveKit's attach() in acquireMediaStream
-            }
-          });
-          toast.info('Screen sharing ended');
+      // Attach screen share track to preview
+      if (videoContainerRef.current) {
+        clearVideoContainer();
+        const mediaElement = videoTrack.attach();
+        mediaElement.style.width = '100%';
+        mediaElement.style.height = '100%';
+        mediaElement.style.objectFit = 'contain';
+        mediaElement.style.transform = 'none';
+        mediaElement.autoplay = true;
+        mediaElement.playsInline = true;
+        mediaElement.muted = true;
+        videoContainerRef.current.appendChild(mediaElement);
+        // Ensure playback starts - some browsers require explicit play()
+        mediaElement.play().catch(() => {
+          // autoplay may still be blocked in some contexts, but muted should handle it
         });
-      } else {
-        toast.error(screenShare.error || 'Failed to start screen sharing');
-        // Re-acquire camera stream on failure
-        const mediaStream = await acquireMediaStream(facingMode, isVideoEnabled);
-        if (mediaStream) {
-          setStream(mediaStream);
-          // Video will be attached via LiveKit's attach() in acquireMediaStream
-        }
+        console.log('[SetupPage] Screen track attached for preview');
       }
+
+      toast.success('Screen sharing started!');
+
+      // Listen for user stopping share via browser UI
+      displayStream.getVideoTracks()[0].onended = () => {
+        console.log('[SetupPage] Screen share ended by user via browser UI');
+        setScreenTrack(null);
+        setScreenPreviewStream(null);
+        setStreamMode('camera');
+        videoTrack.stop();
+        clearVideoContainer();
+        acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
+          if (mediaStream) {
+            setStream(mediaStream);
+          }
+        });
+        toast.info('Screen sharing ended');
+      };
     }
   };
 
@@ -1052,10 +1162,17 @@ export default function SetupPage() {
       // Note: The actual screenTrack is stored in the global streamStore and will persist across navigation
       if (streamMode === 'screen' && screenTrack) {
         sessionStorage.setItem('tc_broadcast_screen_mode', 'true');
+        // Store camera overlay state for gaming mode
+        if (cameraOverlayEnabled) {
+          sessionStorage.setItem('tc_camera_overlay_enabled', 'true');
+        } else {
+          sessionStorage.removeItem('tc_camera_overlay_enabled');
+        }
         console.log('[handleStartStream] Screen share mode active - storing for BroadcastPage', {
           category,
           streamMode,
           hasScreenTrack: !!screenTrack,
+          cameraOverlayEnabled,
           trackId: screenTrack.getTrackId?.()
         });
       } else {
@@ -1083,20 +1200,6 @@ export default function SetupPage() {
             console.error('[SetupPage] Background: FAILED to update stream to live:', liveUpdateError);
           } else {
             console.log('[SetupPage] Background: Stream updated to live');
-            
-            // Create RTC session tracking
-            try {
-              await supabase.from('rtc_sessions').insert({
-                user_id: user?.id,
-                room_name: `stream-${streamId}`,
-                started_at: new Date().toISOString(),
-                is_active: true,
-                duration_seconds: 0
-              });
-              console.log('[SetupPage] RTC session created for stream:', streamId);
-            } catch (rtcErr) {
-              console.error('[SetupPage] Failed to create RTC session:', rtcErr);
-            }
           }
         });
 
@@ -1120,7 +1223,22 @@ export default function SetupPage() {
 
       // CRITICAL: Ensure tracks exist before navigating to BroadcastPage
       // If tracks are null, we need to wait for them or create them
-      if (!livekitTracks[0] || !livekitTracks[1]) {
+      // For gaming screen share mode, we only need audio (screen track is separate)
+      const isScreenShareMode = category === 'gaming' && streamMode === 'screen' && screenTrack;
+      PreflightStore.setScreenShareMode(!!isScreenShareMode);
+      if (isScreenShareMode && screenTrack) {
+        PreflightStore.setScreenTrack(screenTrack);
+      }
+      if (isScreenShareMode) {
+        // Screen share mode - only audio track required, screen track handled separately
+        if (!livekitTracks[0]) {
+          console.warn('[SetupPage] Audio track not ready for screen share mode');
+          toast.error('Microphone not ready. Please wait a moment and try again.');
+          setLoading(false);
+          isStartingStream.current = false;
+          return;
+        }
+      } else if (!livekitTracks[0] || !livekitTracks[1]) {
         console.warn('[SetupPage] Tracks not ready yet, waiting...', { 
           audioTrack: !!livekitTracks[0], 
           videoTrack: !!livekitTracks[1] 
@@ -1181,7 +1299,7 @@ export default function SetupPage() {
           ))}
         </select>
         <p className="text-xs text-gray-500">
-          You'll only be matched with broadcasters of the same faith
+          You&apos;ll only be matched with broadcasters of the same faith
         </p>
       </div>
     );
@@ -1230,34 +1348,60 @@ export default function SetupPage() {
   // Render category-specific info
   const renderCategoryInfo = () => {
     switch (category) {
+      case 'gaming':
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Gaming</span>
+            <p className="text-xs text-white">Screen share with optional draggable camera overlay</p>
+          </div>
+        );
       case 'debate':
         return (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-sm">
-            <p className="text-blue-300">⚖️ Split-screen debate layout with exactly 2 participants</p>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Debate</span>
+            <p className="text-xs text-white">Split-screen layout with exactly 2 participants</p>
           </div>
         );
       case 'education':
         return (
-           <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-sm">
-             <p className="text-green-300">📚 Classroom layout - You're the Teacher, guests are Students</p>
-           </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-green-400">Education</span>
+            <p className="text-xs text-white">Classroom layout — You&apos;re the Teacher, guests are Students</p>
+          </div>
         );
       case 'fitness':
         return (
-           <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 text-sm">
-             <p className="text-orange-300">💪 One-way broadcast - You're the Trainer</p>
-           </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">Fitness</span>
+            <p className="text-xs text-white">One-way broadcast — You&apos;re the Trainer</p>
+          </div>
         );
       case 'irl':
         return (
-          <div className="bg-pink-500/10 border border-pink-500/30 rounded-xl p-3 text-sm">
-            <p className="text-pink-300">📍 Rear camera only for first-person streaming</p>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-pink-400">IRL</span>
+            <p className="text-xs text-white">Rear camera only for first-person streaming</p>
+          </div>
+        );
+      case 'business':
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">Business</span>
+            <p className="text-xs text-white">Professional broadcast for business discussions</p>
+          </div>
+        );
+      case 'spiritual':
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">Spiritual</span>
+            <p className="text-xs text-white">Faith-based broadcast — select your religion</p>
           </div>
         );
       case 'tcnn':
         return (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm">
-            <p className="text-red-300">📺 Official TCNN broadcast - News Caster role required</p>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-red-400">TCNN</span>
+            <p className="text-xs text-white">Official news broadcast — News Caster role required</p>
           </div>
         );
       default:
@@ -1266,31 +1410,52 @@ export default function SetupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 flex items-start md:items-center justify-center overflow-y-auto">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
-        
-        {/* Preview Section */}
-        <div className="space-y-4">
-          <div className="aspect-video bg-black rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl">
+    <div className="min-h-screen bg-[#08080f] text-white p-3 md:p-6 overflow-y-auto">
+      <div className="max-w-5xl w-full mx-auto flex flex-col gap-3 py-4">
+
+        {/* Top Header Bar */}
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+              <Radio size={16} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">Go Live</h1>
+            </div>
+          </div>
+          {broadcasterLimitInfo && (
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold border",
+              broadcasterLimitInfo.canStart ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-red-500/10 border-red-500/20 text-red-400"
+            )}>
+              {broadcasterLimitInfo.current}/{broadcasterLimitInfo.max} broadcasters
+            </div>
+          )}
+        </div>
+
+        {/* Main Grid: Camera + Quick Cards */}
+        <div className="flex gap-3 flex-1 min-h-0" style={{ minHeight: '320px' }}>
+
+          {/* Camera Preview Card - Large */}
+          <div className="flex-[2.5] relative rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl">
             {showPermissionPrompt ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 p-6 text-center">
-                <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4">
-                  <Video size={32} className="text-yellow-400" />
+                <div className="w-14 h-14 bg-yellow-500/20 rounded-full flex items-center justify-center mb-3">
+                  <Video size={28} className="text-yellow-400" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">Camera & Microphone Access Required</h3>
-                <p className="text-sm text-gray-400 mb-4 max-w-xs">
+                <h3 className="text-sm font-bold text-white mb-1">Camera & Microphone Access Required</h3>
+                <p className="text-[10px] text-gray-400 mb-3 max-w-xs">
                   We need permission to access your camera and microphone for streaming.
-                  This is required to go live.
                 </p>
                 {permissionStatus === 'denied' ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-red-400">
-                      Permission was denied. Please enable camera/microphone access in your browser settings.
+                    <p className="text-[10px] text-red-400">
+                      Permission denied. Enable access in browser settings.
                     </p>
                     <button
                       type="button"
                       onClick={() => window.location.reload()}
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white transition-colors"
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs text-white transition-colors"
                     >
                       Retry
                     </button>
@@ -1299,114 +1464,302 @@ export default function SetupPage() {
                   <button
                     type="button"
                     onClick={requestPermissions}
-                    className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold rounded-xl hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95"
+                    className="px-5 py-2.5 bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-xs rounded-xl hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95"
                   >
                     Allow Camera & Microphone
                   </button>
                 )}
               </div>
             ) : (
-              // Container div for LiveKit video preview
-              // LiveKit SDK manages the video element inside this container via attach()
               <div
                 ref={videoContainerRef}
                 className="absolute inset-0 w-full h-full bg-black overflow-hidden"
-                style={{
-                  zIndex: 1,
-                  // Mirror effect for front camera is handled in attachVideoTrack()
+                style={{ zIndex: 1 }}
+              />
+            )}
+
+            {/* Preview badge */}
+            <div className="absolute top-3 left-3 z-10 bg-black/60 backdrop-blur px-2.5 py-1 rounded-full text-[9px] text-white font-bold border border-white/10 flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400" /> PREVIEW
+            </div>
+
+            {/* Draggable Camera Overlay for Gaming + Screen Share */}
+            {category === 'gaming' && streamMode === 'screen' && cameraOverlayEnabled && (
+              <DraggableCameraOverlay
+                videoRef={cameraOverlayContainerRef}
+                isVideoEnabled={cameraOverlayStream !== null}
+                isAudioEnabled={isAudioEnabled}
+                onToggleVideo={() => {
+                  if (cameraOverlayStream) {
+                    cameraOverlayStream.getTracks().forEach(t => t.stop());
+                    setCameraOverlayStream(null);
+                    if (cameraOverlayContainerRef.current) {
+                      cameraOverlayContainerRef.current.innerHTML = '';
+                    }
+                  } else {
+                    setCameraOverlayEnabled(false);
+                    setTimeout(() => setCameraOverlayEnabled(true), 50);
+                  }
+                }}
+                onToggleAudio={toggleAudio}
+                onFlipCamera={hasMultipleCameras ? () => {
+                  const newMode = facingMode === 'user' ? 'environment' : 'user';
+                  setFacingMode(newMode);
+                } : undefined}
+                hasMultipleCameras={hasMultipleCameras}
+                onClose={() => {
+                  if (cameraOverlayStream) {
+                    cameraOverlayStream.getTracks().forEach(t => t.stop());
+                    setCameraOverlayStream(null);
+                  }
+                  if (cameraOverlayContainerRef.current) {
+                    cameraOverlayContainerRef.current.innerHTML = '';
+                  }
+                  setCameraOverlayEnabled(false);
                 }}
               />
             )}
-            
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
+
+            {/* Media controls overlay */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 bg-black/50 backdrop-blur-md px-5 py-2 rounded-full border border-white/10">
               <button
                 type="button"
                 onClick={toggleVideo}
-                className={`p-3 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
-
-                disabled={false}
-
-                title={categoryConfig.requiresCamera && !isVideoEnabled ? 'Camera required for this category' : 'Toggle camera'}
+                className={`p-2.5 rounded-full transition-colors ${isVideoEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
+                title={categoryConfig.requiresCamera && !isVideoEnabled ? 'Camera required' : 'Toggle camera'}
               >
-                {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
+                {isVideoEnabled ? <Video size={18} /> : <VideoOff size={18} />}
               </button>
               <button
                 type="button"
                 onClick={toggleAudio}
-                className={`p-3 rounded-full transition-colors ${isAudioEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
+                className={`p-2.5 rounded-full transition-colors ${isAudioEnabled ? 'bg-white/10 hover:bg-white/20' : 'bg-red-500/80 hover:bg-red-600/80'}`}
               >
-                {isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+                {isAudioEnabled ? <Mic size={18} /> : <MicOff size={18} />}
               </button>
-              
               {hasMultipleCameras && canUseFrontCamera && (
-                  <button
-                    type="button"
-                    onClick={flipCamera}
-                    className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                    title="Flip Camera"
-                  >
-                    <RefreshCw size={20} />
-                  </button>
+                <button
+                  type="button"
+                  onClick={flipCamera}
+                  className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                  title="Flip Camera"
+                >
+                  <RefreshCw size={18} />
+                </button>
               )}
-              
-              {/* Screen Share Button for Gaming Category */}
               {category === 'gaming' && screenShare.isSupported && (
                 <button
                   type="button"
                   onClick={toggleScreenShare}
-                  className={`p-3 rounded-full transition-colors ${streamMode === 'screen' ? 'bg-purple-500/80 hover:bg-purple-600/80' : 'bg-white/10 hover:bg-white/20'}`}
+                  className={`p-2.5 rounded-full transition-colors ${streamMode === 'screen' ? 'bg-purple-500/80 hover:bg-purple-600/80' : 'bg-white/10 hover:bg-white/20'}`}
                   title={streamMode === 'screen' ? 'Stop Screen Share' : 'Share Screen'}
                 >
-                  {streamMode === 'screen' ? <Monitor size={20} /> : <Gamepad2 size={20} />}
+                  {streamMode === 'screen' ? <Monitor size={18} /> : <Gamepad2 size={18} />}
                 </button>
               )}
-              
-              {/* Show warning if front camera not allowed */}
               {shouldForceRearCamera && (
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-pink-500/80 px-3 py-1 rounded-full text-xs whitespace-nowrap">
-                  📍 Rear Camera Only
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-pink-500/80 px-2.5 py-0.5 rounded-full text-[9px] whitespace-nowrap">
+                  Rear Camera Only
                 </div>
               )}
             </div>
           </div>
-          <p className="text-center text-sm text-gray-400">
-            Check your camera and microphone before going live
-            {category === 'gaming' && (
-              <span className="block text-xs text-amber-400 mt-1">
-                💡 Chromebook/Chrome users: When screen sharing, select "Window" instead of "Chrome Tab" for best results
-              </span>
+
+          {/* Right Column: Quick Setting Cards */}
+          <div className="flex-1 flex flex-col gap-2.5 min-w-0" style={{ minWidth: '160px' }}>
+
+            {/* Battle Toggle Card */}
+            {categorySupportsBattles && (
+              <div className="flex-1 bg-zinc-900/80 rounded-xl border border-white/10 p-3 flex flex-col justify-between">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Swords size={13} className="text-orange-400" />
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Battle</span>
+                </div>
+                <p className="text-[9px] text-slate-500 mb-2">Allow {categoryMatchingTerm.toLowerCase()} during broadcast</p>
+                <button
+                  type="button"
+                  onClick={() => setBattleEnabled(!battleEnabled)}
+                  className={cn(
+                    "w-full py-1.5 rounded-lg text-[10px] font-bold transition-all border",
+                    battleEnabled
+                      ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
+                      : "bg-white/5 border-white/10 text-slate-500 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  {battleEnabled ? 'ENABLED' : 'DISABLED'}
+                </button>
+              </div>
             )}
-          </p>
+
+            {/* Password Protection Card */}
+            {canCreateProtected && (
+              <div className="flex-1 bg-zinc-900/80 rounded-xl border border-white/10 p-3 flex flex-col justify-between">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Lock size={13} className="text-purple-400" />
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Lock</span>
+                </div>
+                <p className="text-[9px] text-slate-500 mb-2">Password-protect your stream</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProtected(!isProtected);
+                    if (!isProtected) setBroadcastPassword('');
+                  }}
+                  className={cn(
+                    "w-full py-1.5 rounded-lg text-[10px] font-bold transition-all border",
+                    isProtected
+                      ? "bg-purple-500/15 border-purple-500/30 text-purple-400"
+                      : "bg-white/5 border-white/10 text-slate-500 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  {isProtected ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            )}
+
+            {/* Follower Count Card */}
+            <div className="flex-1 bg-zinc-900/80 rounded-xl border border-white/10 p-3 flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Followers</span>
+              </div>
+              <div className="flex items-end gap-1">
+                <span className={cn(
+                  "text-xl font-black",
+                  followerCount >= 1 ? "text-emerald-400" : "text-red-400"
+                )}>{followerCount}</span>
+                <span className="text-[10px] text-slate-600 mb-1">/ 1 min</span>
+              </div>
+              <div className="w-full bg-gray-700/50 rounded-full h-1.5 mt-1">
+                <div
+                  className={cn("h-1.5 rounded-full transition-all", followerCount >= 1 ? "bg-emerald-500" : "bg-red-500")}
+                  style={{ width: `${Math.min(followerCount * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Category Info Card */}
+            {category !== 'general' && (
+              <div className={cn(
+                "flex-1 rounded-xl border p-3",
+                category === 'gaming' ? "bg-amber-500/10 border-amber-500/25" :
+                category === 'debate' ? "bg-blue-500/10 border-blue-500/25" :
+                category === 'education' ? "bg-green-500/10 border-green-500/25" :
+                category === 'fitness' ? "bg-orange-500/10 border-orange-500/25" :
+                category === 'irl' ? "bg-pink-500/10 border-pink-500/25" :
+                category === 'spiritual' ? "bg-purple-500/10 border-purple-500/25" :
+                category === 'tcnn' ? "bg-red-500/10 border-red-500/25" :
+                "bg-white/5 border-white/15"
+              )}>
+                {renderCategoryInfo()}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Form Section */}
-        
-        <div className="space-y-6 bg-slate-900/50 p-4 md:p-8 rounded-3xl border border-white/5 shadow-xl">
-          <div>
-            <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">Go Live</h1>
-            <p className="text-gray-400">Set up your broadcast details</p>
+        {/* Password Input (when protected) */}
+        {isProtected && canCreateProtected && (
+          <div className="bg-zinc-900/80 rounded-xl border border-purple-500/20 p-3">
+            <label className="block text-[10px] font-medium text-purple-300 mb-1.5">Enter Password (min 4 characters)</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={broadcastPassword}
+                onChange={(e) => setBroadcastPassword(e.target.value)}
+                placeholder="Enter password..."
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 pr-10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {broadcastPassword.length > 0 && broadcastPassword.length < 4 && (
+              <p className="text-[10px] text-red-400 mt-1">Password must be at least 4 characters</p>
+            )}
           </div>
+        )}
 
-          <div className="space-y-4">
+        {/* Gaming Follower Requirement */}
+        {category === 'gaming' && (
+          <div className={cn(
+            "rounded-xl p-3 border",
+            followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary')
+              ? 'bg-green-500/10 border-green-500/30'
+              : 'bg-amber-500/10 border-amber-500/30'
+          )}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-gray-300">Gaming Follower Requirement</span>
+              <span className={cn(
+                "text-xs font-bold",
+                followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary')
+                  ? 'text-green-400' : 'text-amber-400'
+              )}>
+                {followerCount} / 100
+              </span>
+            </div>
+            <div className="w-full bg-gray-700/50 rounded-full h-1.5">
+              <div
+                className={cn(
+                  "h-1.5 rounded-full transition-all",
+                  followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary')
+                    ? 'bg-green-500' : 'bg-amber-500'
+                )}
+                style={{ width: `${Math.min((followerCount / 100) * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Gaming Setup Panel */}
+        {category === 'gaming' && (
+          <GamingSetup
+            streamId={streamId}
+            isScreenSharing={streamMode === 'screen' && !!screenTrack}
+            cameraOverlayEnabled={cameraOverlayEnabled}
+            onToggleScreenShare={toggleScreenShare}
+            onToggleCameraOverlay={(enabled) => setCameraOverlayEnabled(enabled)}
+          />
+        )}
+
+        {/* Religion Selector */}
+        {renderReligionSelector()}
+
+        {/* Battle/Match Info */}
+        {renderBattleInfo()}
+
+        {/* Permission Warning */}
+        {showPermissionPrompt && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center">
+            <p className="text-amber-300 text-xs">
+              Camera and microphone permissions are required to start streaming.
+            </p>
+          </div>
+        )}
+
+        {/* Bottom Row: Title + Category + Go Live */}
+        <div className="bg-zinc-900/80 rounded-2xl border border-white/10 p-4 flex flex-col md:flex-row items-stretch md:items-end gap-3">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Stream Title</label>
+              <label className="block text-[10px] font-medium text-gray-400 mb-1">Stream Title</label>
               <input
                 type="text"
                 name="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter stream title"
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all placeholder:text-gray-600"
+                className="w-full bg-zinc-900/80 border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+              <label className="block text-[10px] font-medium text-gray-400 mb-1">Category</label>
               <select
                 name="category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as BroadcastCategoryId)}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-gray-300"
+                className="w-full bg-zinc-900/80 border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
               >
                 <option value="general">💬 General Chat</option>
                 <option value="gaming">🎮 Gaming</option>
@@ -1424,222 +1777,36 @@ export default function SetupPage() {
                 )}
               </select>
             </div>
-
-            {/* Category-specific info */}
-            {renderCategoryInfo()}
-
-            {/* Gaming Follower Requirement */}
-            {category === 'gaming' && (
-              <div className={`rounded-xl p-4 border ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'bg-green-500/10 border-green-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-300">🎮 Gaming Follower Requirement</span>
-                  <span className={`text-sm font-bold ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'text-green-400' : 'text-amber-400'}`}>
-                    {followerCount} / 100
-                  </span>
-                </div>
-                <div className="w-full bg-gray-700/50 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'bg-green-500' : 'bg-amber-500'}`}
-                    style={{ width: `${Math.min((followerCount / 100) * 100, 100)}%` }}
-                  />
-                </div>
-                <p className={`text-xs mt-2 ${followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary') ? 'text-green-300' : 'text-amber-300'}`}>
-                  {followerCount >= 100 || (profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || profile?.role === 'lead_troll_officer' || profile?.role === 'secretary')
-                    ? '✅ You can broadcast in Gaming category!'
-                    : '⚠️ Gaming category requires 100 followers (admins & officers bypass)'
-                  }
-                </p>
-              </div>
-            )}
-
-            {/* Gaming Setup Panel */}
-            {category === 'gaming' && (
-              <GamingSetup
-                streamId={streamId}
-                acquireMediaStream={acquireMediaStream}
-                facingMode={facingMode}
-                isVideoEnabled={isVideoEnabled}
-                setStream={setStream}
-                onScreenShareStarted={(track) => {
-                  // Attach screen share track to preview
-                  if (videoContainerRef.current) {
-                    clearVideoContainer();
-                    const mediaElement = track.attach();
-                    mediaElement.style.width = '100%';
-                    mediaElement.style.height = '100%';
-                    mediaElement.style.objectFit = 'contain'; // Use contain for screen share
-                    mediaElement.style.transform = 'none'; // Don't mirror screen share
-                    mediaElement.autoplay = true;
-                    mediaElement.playsInline = true;
-                    videoContainerRef.current.appendChild(mediaElement);
-                    console.log('[SetupPage] Screen share preview attached from GamingSetup');
-                  }
-                }}
-                onScreenShareStopped={() => {
-                  // Clear screen share preview
-                  clearVideoContainer();
-                  // Re-acquire camera stream
-                  acquireMediaStream(facingMode, isVideoEnabled).then(mediaStream => {
-                    if (mediaStream) {
-                      setStream(mediaStream);
-                    }
-                  });
-                }}
-              />
-            )}
-
-            {/* Religion Selector for Spiritual */}
-            {renderReligionSelector()}
-
-            {/* Password Protection - Only for eligible users */}
-            {canCreateProtected && (
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-5 h-5 text-purple-400" />
-                    <span className="font-medium text-purple-300">Password Protection</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsProtected(!isProtected);
-                      if (!isProtected) {
-                        setBroadcastPassword('');
-                      }
-                    }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      isProtected ? 'bg-purple-500' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        isProtected ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-                
-                {isProtected && (
-                  <div className="space-y-2">
-                    <label className="block text-sm text-gray-300">
-                      Enter Password (minimum 4 characters)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={broadcastPassword}
-                        onChange={(e) => setBroadcastPassword(e.target.value)}
-                        placeholder="Enter password..."
-                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all placeholder:text-gray-600"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                      >
-                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                      </button>
-                    </div>
-                    {broadcastPassword.length > 0 && broadcastPassword.length < 4 && (
-                      <p className="text-xs text-red-400">Password must be at least 4 characters</p>
-                    )}
-                  </div>
-                )}
-                
-                {!isProtected && (
-                  <p className="text-xs text-gray-400">
-                    Enable password protection to restrict who can join your broadcast
-                  </p>
-                )}
-
-                {/* Battle Enabled Toggle - Only for General Chat category */}
-                {category === 'general' && (
-                  <div className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-white/10">
-                    <div className="flex items-center gap-3">
-                      <Swords size={20} className="text-orange-500" />
-                      <div>
-                        <span className="font-medium text-orange-300">Battle Mode</span>
-                        <p className="text-xs text-gray-400">
-                          Allow guests to start battles during your broadcast
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setBattleEnabled(!battleEnabled)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        battleEnabled ? 'bg-orange-500' : 'bg-gray-600'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          battleEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Battle/Match Info */}
-            {renderBattleInfo()}
-
-            {showPermissionPrompt && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center">
-                <p className="text-amber-300 text-sm">
-                  ⚠️ Camera and microphone permissions are required to start streaming.
-                </p>
-              </div>
-            )}
-
-            {/* Monthly Broadcaster Limit Indicator */}
-            {broadcasterLimitInfo && (
-              <div className={`rounded-xl p-4 border ${broadcasterLimitInfo.canStart ? 'bg-blue-500/10 border-blue-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-300">Monthly Broadcaster Limit</span>
-                  <span className={`text-sm font-bold ${broadcasterLimitInfo.canStart ? 'text-blue-400' : 'text-red-400'}`}>
-                    {broadcasterLimitInfo.current} / {broadcasterLimitInfo.max}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-700/50 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all ${broadcasterLimitInfo.canStart ? 'bg-blue-500' : 'bg-red-500'}`}
-                    style={{ width: `${Math.min((broadcasterLimitInfo.current / broadcasterLimitInfo.max) * 100, 100)}%` }}
-                  />
-                </div>
-                <p className={`text-xs mt-2 ${broadcasterLimitInfo.canStart ? 'text-blue-300' : 'text-red-300'}`}>
-                  {broadcasterLimitInfo.canStart
-                    ? `${broadcasterLimitInfo.max - broadcasterLimitInfo.current} spots remaining this month`
-                    : 'Monthly limit reached. Please try again next month.'}
-                </p>
-              </div>
-            )}
-
+          </div>
+          <div className="shrink-0">
             <button
               type="button"
               onClick={handleStartStream}
               disabled={loading || !title.trim() || (categoryRequiresReligion && !selectedReligion) || (shouldForceRearCamera && !hasRearCamera) || showPermissionPrompt || (broadcasterLimitInfo && !broadcasterLimitInfo.canStart)}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-600 text-black font-bold text-lg hover:from-yellow-300 hover:to-amber-500 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-500/20"
+              className="w-full md:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:from-amber-300 hover:to-orange-400 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 whitespace-nowrap"
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></span>
-                  Creating your stream...
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></span>
+                  Starting...
                 </span>
               ) : showPermissionPrompt ? (
-                'Grant Permissions to Start'
+                'Grant Permissions'
               ) : (broadcasterLimitInfo && !broadcasterLimitInfo.canStart) ? (
-                'Monthly Limit Reached'
+                'Limit Reached'
               ) : (
-                'Start Broadcast'
+                <>
+                  <Radio size={16} />
+                  Start Broadcast
+                </>
               )}
             </button>
-            {shouldForceRearCamera && !hasRearCamera && (
-              <p className="text-red-400 text-sm text-center mt-2">A rear camera is required for this category but none was detected.</p>
-            )}
           </div>
         </div>
+
+        {shouldForceRearCamera && !hasRearCamera && (
+          <p className="text-red-400 text-xs text-center">A rear camera is required for this category but none was detected.</p>
+        )}
       </div>
     </div>
   );

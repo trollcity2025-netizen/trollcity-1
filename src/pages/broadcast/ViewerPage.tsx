@@ -764,7 +764,7 @@ function ViewerPage() {
   /** LOADING */
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
+      <div className="flex items-center justify-center h-dvh bg-black text-white">
         <Loader2 className="w-8 h-8 animate-spin" />
         <p className="ml-4">Loading stream...</p>
       </div>
@@ -773,7 +773,7 @@ function ViewerPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-black text-white">
+      <div className="flex flex-col items-center justify-center h-dvh bg-black text-white">
         <p className="text-red-500">{error}</p>
         <Link to="/">Go Home</Link>
       </div>

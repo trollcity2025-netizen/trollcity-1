@@ -82,7 +82,7 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
         .from('troll_wall_posts')
         .insert({
           user_id: user?.id,
-          post_type: imageFile ? 'image' : 'text',
+          post_type: 'text',
           content: content.trim(),
           metadata
         })
