@@ -1574,13 +1574,23 @@ function BroadcastPage() {
             setLocalTracks([audioTrack || null, videoTrack || null])
           }
           
-          // Screen share mode: publish screen track from useStreamStore
+          // Screen share mode: unpublish camera, publish screen track, update local preview
           const isScreenShareExisting = PreflightStore.getScreenShareMode()
           const screenTrackExisting = PreflightStore.getScreenTrack() || screenTrack
           if (isScreenShareExisting && screenTrackExisting) {
-            console.log('[BroadcastPage] Screen share mode (existing room) - publishing screen track')
+            console.log('[BroadcastPage] Screen share mode (existing room) - replacing camera with screen track')
             try {
+              // Unpublish camera track so viewers only see screen share
+              for (const pub of existingRoom.localParticipant.videoTrackPublications.values()) {
+                if (pub.track && pub.track.kind === 'video') {
+                  await existingRoom.localParticipant.unpublishTrack(pub.track)
+                  console.log('[BroadcastPage] Camera track unpublished (existing room)')
+                  break
+                }
+              }
               await existingRoom.localParticipant.publishTrack(screenTrackExisting)
+              // Update local preview to show screen share instead of camera
+              setLocalTracks([audioTrack || null, screenTrackExisting])
               console.log('[BroadcastPage] Screen track published successfully (existing room)')
               setIsScreenSharing(true)
             } catch (err) {
@@ -1896,16 +1906,19 @@ function BroadcastPage() {
         }
 
         // CRITICAL: Ensure camera is enabled on initial join (similar to mic logic)
-        // This is needed because track may exist but be disabled
+        // Skip camera enable when in screen share mode - screen track replaces camera
+        const isScreenShareMode = PreflightStore.getScreenShareMode()
         console.log('[BroadcastPage] Camera state on join:', {
           isCameraEnabled: room.localParticipant.isCameraEnabled,
           hasVideoTrack: !!videoTrack,
-          preflightVideoEnabled: preflightEnabledStates?.isVideoEnabled
+          preflightVideoEnabled: preflightEnabledStates?.isVideoEnabled,
+          isScreenShareMode
         })
-        
+
         // If camera is not enabled but we have a video track, enable it
         // This ensures camera is on when joining broadcast
-        if (!room.localParticipant.isCameraEnabled && (videoTrack || shouldCreateNewTracks)) {
+        // Skip if screen share mode - camera will be unpublished
+        if (!isScreenShareMode && !room.localParticipant.isCameraEnabled && (videoTrack || shouldCreateNewTracks)) {
           console.log('[BroadcastPage] Camera was off - enabling camera on join')
           try {
             await room.localParticipant.setCameraEnabled(true)
@@ -1913,17 +1926,29 @@ function BroadcastPage() {
           } catch (err) {
             console.error('[BroadcastPage] Failed to enable camera:', err)
           }
-        } else if (room.localParticipant.isCameraEnabled) {
+        } else if (!isScreenShareMode && room.localParticipant.isCameraEnabled) {
           console.log('[BroadcastPage] Camera is already enabled - good!')
+        } else if (isScreenShareMode) {
+          console.log('[BroadcastPage] Screen share mode - skipping camera enable')
         }
 
-        // Gaming screen share: publish the screen track in addition to camera/mic
+        // Gaming screen share: unpublish camera, publish screen track, update local preview
         if (PreflightStore.getScreenShareMode()) {
           const screenTrackToPublish = PreflightStore.getScreenTrack() || screenTrack
           if (screenTrackToPublish) {
-            console.log('[BroadcastPage] Gaming screen share - publishing screen track')
+            console.log('[BroadcastPage] Gaming screen share - replacing camera with screen track')
             try {
+              // Unpublish camera track so viewers only see screen share
+              for (const pub of room.localParticipant.videoTrackPublications.values()) {
+                if (pub.track && pub.track.kind === 'video') {
+                  await room.localParticipant.unpublishTrack(pub.track)
+                  console.log('[BroadcastPage] Camera track unpublished')
+                  break
+                }
+              }
               await room.localParticipant.publishTrack(screenTrackToPublish)
+              // Update local preview to show screen share instead of camera
+              setLocalTracks([audioTrack || null, screenTrackToPublish])
               setIsScreenSharing(true)
               console.log('[BroadcastPage] Screen track published successfully')
             } catch (err) {

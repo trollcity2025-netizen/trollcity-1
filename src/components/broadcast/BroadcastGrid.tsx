@@ -513,19 +513,29 @@ export default function BroadcastGrid({
         const allAudioPubs = participant.trackPublications ? 
           Array.from((participant.trackPublications as any).values()) : [];
         
-        // First try the standard way
-        let videoPub = Array.from(videoPubs?.values() || []).find(p => p.track && p.isSubscribed);
+        // First try the standard way, prioritizing screen-share tracks
+        let videoPub = Array.from(videoPubs?.values() || []).find(p => p.track && p.trackName === 'screen-share' && p.isSubscribed);
+        if (!videoPub) {
+          videoPub = Array.from(videoPubs?.values() || []).find(p => p.track && p.isSubscribed);
+        }
         let audioPub = Array.from(audioPubs?.values() || []).find(p => p.track && p.isSubscribed);
-        
+
         // If not found, try getting any track regardless of subscription status
+        // Still prioritize screen-share
+        if (!videoPub) {
+          videoPub = Array.from(videoPubs?.values() || []).find(p => p.track && p.trackName === 'screen-share');
+        }
         if (!videoPub) {
           videoPub = Array.from(videoPubs?.values() || []).find(p => p.track);
         }
         if (!audioPub) {
           audioPub = Array.from(audioPubs?.values() || []).find(p => p.track);
         }
-        
+
         // Try from all trackPublications as fallback
+        if (!videoPub) {
+          videoPub = allVideoPubs.find((p: any) => p.track && p.trackName === 'screen-share' && p.kind === 'video');
+        }
         if (!videoPub) {
           videoPub = allVideoPubs.find((p: any) => p.track && p.kind === 'video');
         }
