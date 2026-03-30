@@ -190,8 +190,8 @@ export default function StreamSummary() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
-      <div className="max-w-lg w-full bg-zinc-900 border border-white/10 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center p-4 overflow-y-auto">
+      <div className="max-w-lg w-full bg-zinc-900 border border-white/10 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center shadow-2xl my-auto">
         <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-yellow-500/50">
           <Trophy size={40} className="text-yellow-500" />
         </div>

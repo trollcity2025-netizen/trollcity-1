@@ -505,17 +505,17 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   )
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-white">Wall</h2>
           <p className={`${trollCityTheme.text.muted} text-sm`}>The city timeline. Share updates and join the conversation.</p>
         </div>
       </div>
 
-      <CreatePostComposer onPostCreated={handlePostCreated} onRequireAuth={onRequireAuth} />
-
-      <div className="space-y-4">
+      {/* Posts - scrollable area above the input */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         {loading && posts.length === 0 ? (
           <div className="py-10 text-center text-white/50">Loading Wall...</div>
         ) : posts.length === 0 ? (
@@ -524,22 +524,25 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
             <p>No posts yet. Start the conversation.</p>
           </div>
         ) : (
-          <div className="h-[800px]">
-            <Virtuoso
-              style={{ height: '100%' }}
-              data={posts}
-              itemContent={renderPost}
-              endReached={() => {
-                if (hasMore && !loadingMore && user?.id) {
-                  const nextPage = page + 1
-                  setPage(nextPage)
-                  loadPosts(nextPage, true)
-                }
-              }}
-              increaseViewportBy={200}
-            />
-          </div>
+          <Virtuoso
+            style={{ height: '100%' }}
+            data={posts}
+            itemContent={renderPost}
+            endReached={() => {
+              if (hasMore && !loadingMore && user?.id) {
+                const nextPage = page + 1
+                setPage(nextPage)
+                loadPosts(nextPage, true)
+              }
+            }}
+            increaseViewportBy={200}
+          />
         )}
+      </div>
+
+      {/* Input box - fixed at bottom like live chat */}
+      <div className="flex-shrink-0 pt-3 mt-3 border-t border-white/10">
+        <CreatePostComposer onPostCreated={handlePostCreated} onRequireAuth={onRequireAuth} />
       </div>
 
       {/* User Profile Popup */}

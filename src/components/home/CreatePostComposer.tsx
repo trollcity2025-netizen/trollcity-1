@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Image, Smile } from 'lucide-react'
+import { Image, Send, Smile } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
@@ -117,15 +117,30 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
   }
 
   return (
-    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-4`}
+    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-3`}
       onClick={() => handleRequireAuth('create a post')}
     >
-      <div className="flex items-start gap-3">
-        <div className="h-10 w-10 rounded-full bg-white/5 overflow-hidden flex-shrink-0">
+      {imageFile && (
+        <div className="mb-2 flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-xs text-white/70">
+          <span className="truncate">{imageFile.name}</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              setImageFile(null)
+            }}
+            className="text-red-300 hover:text-red-200 ml-2"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+        <div className="h-8 w-8 rounded-full bg-white/5 overflow-hidden flex-shrink-0">
           {profile?.avatar_url ? (
             <img src={profile.avatar_url} alt={profile.username || 'Profile'} className="h-full w-full object-cover" />
           ) : (
-            <div className="h-full w-full flex items-center justify-center text-sm text-white/60">
+            <div className="h-full w-full flex items-center justify-center text-xs text-white/60">
               {profile?.username?.[0]?.toUpperCase() || 'T'}
             </div>
           )}
@@ -135,82 +150,65 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
             value={content}
             onChange={setContent}
             placeholder="What's happening in the City? Use # to tag users"
-            className="w-full min-h-[90px] bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-purple-400/60"
+            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white text-sm placeholder-white/40 focus:outline-none focus:border-purple-400/60 resize-none"
             maxLength={5000}
             onFocus={() => handleRequireAuth('create a post')}
           />
-          {imageFile && (
-            <div className="mt-2 flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-xs text-white/70">
-              <span className="truncate">{imageFile.name}</span>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setImageFile(null)
-                }}
-                className="text-red-300 hover:text-red-200"
-              >
-                Remove
-              </button>
-            </div>
-          )}
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleImagePick()
-                }}
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
-              >
-                <Image className="h-4 w-4" />
-              </button>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (!handleRequireAuth('add an emoji')) return
-                    setShowEmoji((prev) => !prev)
-                  }}
-                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
-                >
-                  <Smile className="h-4 w-4" />
-                </button>
-                {showEmoji && (
-                  <div className="absolute z-10 mt-2 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
-                    <div className="flex gap-2">
-                      {EMOJI_OPTIONS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            handleEmojiInsert(emoji)
-                          }}
-                          className="px-2 py-1 rounded-lg bg-white/5 text-white/80 hover:bg-white/10 text-xs"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              handleImagePick()
+            }}
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
+          >
+            <Image className="h-4 w-4" />
+          </button>
+          <div className="relative">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
-                handleSubmit()
+                if (!handleRequireAuth('add an emoji')) return
+                setShowEmoji((prev) => !prev)
               }}
-              disabled={submitting}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-60"
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
             >
-              {submitting ? 'Posting...' : 'Post'}
+              <Smile className="h-4 w-4" />
             </button>
+            {showEmoji && (
+              <div className="absolute z-10 bottom-full mb-2 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
+                <div className="flex gap-2">
+                  {EMOJI_OPTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleEmojiInsert(emoji)
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white/5 text-white/80 hover:bg-white/10 text-xs"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              handleSubmit()
+            }}
+            disabled={submitting || !content.trim()}
+            className="p-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-40 text-white"
+          >
+            <Send className="h-4 w-4" />
+          </button>
         </div>
       </div>
       <input

@@ -393,7 +393,7 @@ export default function Home() {
           {/* Main Content Area - Wall Feed stays mounted for instant loading */}
           <div className={`${activeTab === 'wall' ? '' : 'hidden'}`}>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-8 space-y-6">
+              <div className="lg:col-span-8" style={{ height: 'calc(100dvh - 320px)', minHeight: '500px' }}>
                 <TrollWallFeed onRequireAuth={requireAuth} />
               </div>
               <div className="lg:col-span-4 space-y-6">
