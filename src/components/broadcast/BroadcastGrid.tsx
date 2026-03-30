@@ -721,14 +721,14 @@ export default function BroadcastGrid({
   return (
     <div
       className={cn(
-        'grid gap-2 w-full p-2 pb-20 min-w-0 overflow-hidden max-w-full md:h-full',
-        isSingleBoxLayout ? 'h-full grid-cols-1 grid-rows-1 auto-rows-fr items-stretch content-stretch' : 'content-start auto-rows-max',
-        effectiveBoxCount === 1 && 'md:grid-rows-1',
-        effectiveBoxCount === 2 && 'grid-cols-2 md:grid-rows-1',
-        effectiveBoxCount === 3 && 'grid-cols-2 md:grid-rows-2',
-        effectiveBoxCount === 4 && 'grid-cols-2 md:grid-rows-2',
-        effectiveBoxCount === 5 && 'grid-cols-3 md:grid-rows-2',
-        effectiveBoxCount === 6 && 'grid-cols-3 md:grid-rows-2'
+        'grid gap-2 w-full p-2 pb-20 min-w-0 overflow-hidden max-w-full h-full',
+        isSingleBoxLayout ? 'grid-cols-1 grid-rows-1 auto-rows-fr items-stretch content-stretch' : 'auto-rows-fr',
+        effectiveBoxCount === 1 && 'grid-cols-1 grid-rows-1',
+        effectiveBoxCount === 2 && 'grid-cols-2 grid-rows-1',
+        effectiveBoxCount === 3 && 'grid-cols-2 grid-rows-2',
+        effectiveBoxCount === 4 && 'grid-cols-2 grid-rows-2',
+        effectiveBoxCount === 5 && 'grid-cols-3 grid-rows-2',
+        effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
       )}
       style={enableStreamSwipe && canSwipe ? { touchAction: 'none' } : undefined}
       onTouchStart={handleTouchStart}
@@ -808,7 +808,7 @@ export default function BroadcastGrid({
           // Use real-time attributes if available
           const userAttrs = userId ? attributes[userId] : null;
 
-          const baseBoxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300 min-w-0';
+          const baseBoxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300 min-w-0 h-full';
 
           const hasGold =
             !!displayProfile?.is_gold || userAttrs?.activePerks?.includes('perk_gold_username' as any);
@@ -854,11 +854,9 @@ export default function BroadcastGrid({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
-              className={cn(
+               className={cn(
                 boxClass,
                 isSingleBoxLayout && 'h-full min-h-[min(60vw,22rem)] md:min-h-0',
-                enforceSquareOnMobile && !isScreenShare && 'aspect-square self-start md:aspect-auto md:self-stretch',
-                enforceSquareOnMobile && isScreenShare && 'aspect-video self-start md:aspect-auto md:self-stretch'
               )}
               onClick={() => {
                 if (isStreamHost && seatIndex === 0 && isHost) {
