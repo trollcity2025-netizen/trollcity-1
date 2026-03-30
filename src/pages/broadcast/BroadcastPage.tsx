@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { Room, LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, LocalParticipant } from 'livekit-client'
+import { Room, LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, LocalParticipant, VideoPresets, AudioPresets } from 'livekit-client'
 
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
@@ -33,6 +33,9 @@ import {
   getMatchingTerminology,
 } from '../../config/broadcastCategories'
 import ChallengeManager from '../../components/broadcast/ChallengeManager'
+import { useFiveVFiveBattle } from '../../hooks/useFiveVFiveBattle'
+import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
+import BattleStartModal from '../../components/broadcast/BattleStartModal'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -45,6 +48,14 @@ function BroadcastPage() {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   const { clearTracks, screenTrack } = useStreamStore()
+
+  // Determine if user is admin for video quality (1080p admin, 720p regular)
+  const isStreamAdmin = !!(profile && (
+    profile.role === 'admin' || profile.is_admin ||
+    profile.role === 'superadmin' || profile.is_superadmin ||
+    profile.role === 'owner'
+  ))
+  const videoPreset = isStreamAdmin ? VideoPresets.h1080 : VideoPresets.h720
 
   const [stream, setStream] = useState<Stream | null>(null)
   const [broadcasterProfile, setBroadcasterProfile] = useState<any>(null)
@@ -622,6 +633,24 @@ function BroadcastPage() {
     localUserId: user?.id || userSeat?.guest_id || '',
     isHost,
     hostId: stream?.user_id,
+  });
+
+  // 5v5 Battle system
+  const {
+    state: fiveVFiveState,
+    findMatch: fiveVFiveFindMatch,
+    useAbility: fiveVFiveUseAbility,
+    processGift: fiveVFiveProcessGift,
+    requestRematch: fiveVFiveRequestRematch,
+    resetBattle: fiveVFiveReset,
+    isGeneralChat: fiveVFiveIsGeneralChat,
+    TEAM_FREEZE_COOLDOWN,
+    REVERSE_COOLDOWN,
+    DOUBLE_XP_COOLDOWN,
+  } = useFiveVFiveBattle({
+    streamId: stream?.id || '',
+    isHost,
+    category: stream?.category || 'general',
   });
 
   const canPublish = isHost || !!userSeat
@@ -1404,7 +1433,20 @@ function BroadcastPage() {
 
         if (error) throw error
 
-        const room = new Room()
+        const room = new Room({
+          adaptiveStream: true,
+          dynacast: true,
+          videoCaptureDefaults: {
+            ...videoPreset,
+            facingMode: 'user'
+          },
+          audioCaptureDefaults: {
+            ...AudioPresets.audio,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        })
         roomRef.current = room
 
         // Listen for local track events to update state
@@ -1781,7 +1823,10 @@ function BroadcastPage() {
             try {
               const { createLocalTracks } = await import('livekit-client')
               const isScreenShareFallback = PreflightStore.getScreenShareMode()
-              const localTracks = await createLocalTracks({ audio: true, video: !isScreenShareFallback })
+              const localTracks = await createLocalTracks({
+                audio: true,
+                video: !isScreenShareFallback ? videoPreset : false
+              })
               for (const track of localTracks) {
                 await room.localParticipant.publishTrack(track)
               }
@@ -1852,7 +1897,7 @@ function BroadcastPage() {
               if (hasCamera || hasMic) {
                 const localTracks = await createLocalTracks({
                   audio: hasMic && needAudio,
-                  video: hasCamera && needVideo
+                  video: hasCamera && needVideo ? videoPreset : false
                 })
 
                 for (const track of localTracks) {
@@ -2648,11 +2693,11 @@ function BroadcastPage() {
             boxCount={boxCount}
             setBoxCount={updateBoxCount}
             onRefreshStream={refreshStream}
-            onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
-            hasPendingChallenge={hasPendingChallenge}
-            onStartBattle={userSeat && (stream.battle_enabled === true) && !battleState.active && stream.category === 'general' ? startBattle : undefined}
-            battleActive={battleState.active}
-            battleEnabled={stream.battle_enabled === true && stream.category === 'general'}
+            onChallengeBroadcaster={undefined}
+            hasPendingChallenge={false}
+            onFiveVFiveBattle={isHost && stream.status === 'live' && fiveVFiveIsGeneralChat ? fiveVFiveFindMatch : undefined}
+            fiveVFiveBattleActive={fiveVFiveState.active}
+            isLive={stream.status === 'live'}
           />
         }
         
@@ -2693,6 +2738,18 @@ function BroadcastPage() {
                 setRecentGifts(prev => prev.filter(g => g.id !== giftId));
               }}
             />
+            {/* 5v5 Battle Overlay */}
+            {fiveVFiveState.phase !== 'idle' && (
+              <FiveVFiveBattleOverlay
+                state={fiveVFiveState}
+                currentUserId={user?.id || ''}
+                onUseAbility={fiveVFiveUseAbility}
+                onRequestRematch={fiveVFiveRequestRematch}
+                TEAM_FREEZE_COOLDOWN={TEAM_FREEZE_COOLDOWN}
+                REVERSE_COOLDOWN={REVERSE_COOLDOWN}
+                DOUBLE_XP_COOLDOWN={DOUBLE_XP_COOLDOWN}
+              />
+            )}
           </>
         }
         
@@ -2714,6 +2771,20 @@ function BroadcastPage() {
                 const quantity = target.quantity || 1;
                 const totalAmount = giftData.coinCost * quantity;
                 
+                // 5v5 Battle gift processing
+                if (fiveVFiveState.active && fiveVFiveState.phase === 'active') {
+                  const giftAmount = giftData.coinCost * quantity;
+                  if (target.type === 'all') {
+                    const allRecipients = [stream.user_id, ...activeUserIds];
+                    allRecipients.forEach(rid => {
+                      fiveVFiveProcessGift(user?.id || '', rid, giftAmount, giftData.name);
+                    });
+                  } else {
+                    const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
+                    fiveVFiveProcessGift(user?.id || '', recipientId, giftAmount, giftData.name);
+                  }
+                }
+
                 // Record battle gift if battle is active
                 if (battleState.active && battleState.battleId) {
                   const giftAmount = giftData.coinCost * quantity;
@@ -2818,6 +2889,15 @@ function BroadcastPage() {
                 />
               </div>
             )}
+
+            {/* 5v5 Battle Start Modal */}
+            <BattleStartModal
+              isOpen={fiveVFiveState.phase === 'pre_battle'}
+              participants={fiveVFiveState.participants}
+              countdown={fiveVFiveState.timerSeconds}
+              currentUserId={user?.id || ''}
+              onClose={fiveVFiveReset}
+            />
           </>
         }
       />

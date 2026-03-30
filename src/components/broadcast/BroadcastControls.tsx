@@ -41,14 +41,9 @@ interface BroadcastControlsProps {
   boxCount?: number;
   setBoxCount?: (count: number) => void;
   onRefreshStream?: () => void;
-  pendingChallenges?: any[];
-  onAcceptChallenge?: (challengeId: string, challengerId: string) => void;
-  onDenyChallenge?: (challengeId: string) => void;
-  onChallengeBroadcaster?: () => void;
-  hasPendingChallenge?: boolean;
-  onStartBattle?: () => void;
-  battleActive?: boolean;
-  battleEnabled?: boolean;
+  onFiveVFiveBattle?: () => void;
+  fiveVFiveBattleActive?: boolean;
+  isLive?: boolean;
 }
 
 export default function BroadcastControls({
@@ -77,14 +72,9 @@ export default function BroadcastControls({
   boxCount: parentBoxCount,
   setBoxCount: parentSetBoxCount,
   onRefreshStream,
-  pendingChallenges = [],
-  onAcceptChallenge,
-  onDenyChallenge,
-  onChallengeBroadcaster,
-  hasPendingChallenge = false,
-  onStartBattle,
-  battleActive = false,
-  battleEnabled = false
+  onFiveVFiveBattle,
+  fiveVFiveBattleActive = false,
+  isLive = false,
 }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
@@ -474,25 +464,25 @@ export default function BroadcastControls({
           />
         )}
 
-        {/* Challenge (viewers) */}
-        {onChallengeBroadcaster && !isHost && !PreflightStore.getBattlesDisabled() && (
+        {/* 5v5 Battle (General Chat only, when live) */}
+        {onFiveVFiveBattle && isHost && isLive && !fiveVFiveBattleActive && categoryConfig.id === 'general' && (
           <OrbBtn
-            active={hasPendingChallenge}
-            onClick={onChallengeBroadcaster}
+            active={false}
+            onClick={onFiveVFiveBattle}
             icon={Swords}
-            label={hasPendingChallenge ? "..." : "Battle"}
-            glow={hasPendingChallenge ? "yellow" : undefined}
+            label="Battle"
+            glow="red"
             size="sm"
           />
         )}
 
-        {/* Start Battle (guests on stage) */}
-        {onStartBattle && isOnStage && battleEnabled && !battleActive && (
+        {/* Battle Active Indicator */}
+        {fiveVFiveBattleActive && (
           <OrbBtn
-            active={false}
-            onClick={onStartBattle}
+            active={true}
+            onClick={() => {}}
             icon={Swords}
-            label="Fight!"
+            label="In Battle"
             glow="red"
             size="sm"
           />
