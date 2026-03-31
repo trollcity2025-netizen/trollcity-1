@@ -13,6 +13,7 @@ interface Props {
 
   overlays?: React.ReactNode
   modals?: React.ReactNode
+  hideHeader?: boolean
 }
 
 export default function StreamLayout({
@@ -23,7 +24,8 @@ export default function StreamLayout({
   isChatOpen,
   onToggleChat,
   overlays,
-  modals
+  modals,
+  hideHeader = false
 }: Props) {
 
   const [chatWidth, setChatWidth] = useState(320)
@@ -50,10 +52,12 @@ export default function StreamLayout({
         onMouseMove={onDrag}
         onMouseUp={stopDrag}
       >
-        {/* HEADER */}
-        <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
-          {header}
-        </div>
+        {/* HEADER (hidden during battle) */}
+        {!hideHeader && (
+          <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
+            {header}
+          </div>
+        )}
 
         {/* MAIN */}
         <div className="flex flex-1 min-h-0">
@@ -127,8 +131,8 @@ export default function StreamLayout({
         onMouseMove={onDrag}
         onMouseUp={stopDrag}
       >
-      {/* TOP BAR - Collapsible */}
-      {headerCollapsed ? (
+      {/* TOP BAR - Collapsible (hidden during battle) */}
+      {hideHeader ? null : headerCollapsed ? (
         <div className="h-6 bg-[#13131a] border-b border-white/5 flex items-center justify-center shrink-0 z-50 cursor-pointer hover:bg-[#1a1a24] transition-colors"
           onClick={() => setHeaderCollapsed(false)}>
           <Minimize2 size={10} className="text-white/30 rotate-180" />

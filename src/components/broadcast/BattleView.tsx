@@ -10,7 +10,6 @@ import { PreflightStore } from '../../lib/preflightStore';
 import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus, Crown, Flame, ArrowLeft, Skull, Gem } from 'lucide-react';
 import { useCoins } from '../../lib/hooks/useCoins';
 import BattleChat from './BattleChat';
-import BroadcastChat from './BroadcastChat';
 import MuteHandler from './MuteHandler';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
 import GiftTray from './GiftTray';
@@ -91,10 +90,7 @@ const LiveKitVideoPlayer = ({
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
         videoElement.style.objectFit = 'cover';
-        // Mirror local video
-        if (isLocal) {
-          videoElement.style.transform = 'scaleX(-1)';
-        }
+        // Mirror is applied on the container div, not the video element, to avoid double-mirroring on mobile
         // Critical: Add autoplay and playsInline for proper video display
         videoElement.autoplay = true;
         videoElement.playsInline = true;
@@ -182,6 +178,7 @@ const LiveKitVideoPlayer = ({
       style={{
         minWidth: '100%',
         minHeight: '100%',
+        transform: isLocal ? 'scaleX(-1)' : undefined,
       }}
     />
   );
@@ -2447,16 +2444,15 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
         <MuteHandler streamId={challengerStream.id} />
         
-        {/* Live Chat - Use the challenger stream ID for chat messages (not battle-{id}) */}
+        {/* Live Chat - Use BattleChat to show messages from both teams */}
         <div className="absolute top-14 md:top-16 right-0 bottom-0 w-full md:w-72 lg:w-80 pointer-events-none z-40">
           <div className="h-full pointer-events-auto">
-            <BroadcastChat
-              streamId={challengerStream?.id}
-              hostId={challengerStream.user_id}
-              isHost={participantInfo?.role === 'host'}
-              isViewer={participantInfo?.role === 'viewer'}
-              isGuest={participantInfo?.role === 'stage'}
-              isModerator={participantInfo?.role === 'host'}
+            <BattleChat
+              battleId={battleId}
+              challengerStream={{ id: challengerStream.id, title: challengerStream.title, user_id: challengerStream.user_id }}
+              opponentStream={{ id: opponentStream.id, title: opponentStream.title, user_id: opponentStream.user_id }}
+              currentUserId={effectiveUserId}
+              participantRole={participantInfo?.role}
             />
           </div>
         </div>

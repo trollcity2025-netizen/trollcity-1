@@ -809,6 +809,7 @@ function ViewerPage() {
       <StreamLayout
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        hideHeader={battleSubscriberState.phase !== 'idle'}
         
         header={
           <BroadcastHeader
@@ -856,6 +857,22 @@ function ViewerPage() {
                   <p>Connecting to stream...</p>
                 </div>
               </div>
+            )}
+            {/* 5v5 Battle Overlay - inside video slot so chat stays visible */}
+            {battleSubscriberState.phase !== 'idle' && (
+              <FiveVFiveBattleOverlay
+                state={battleSubscriberState}
+                currentUserId={user?.id || ''}
+                onUseAbility={() => {}}
+                onRequestRematch={() => {}}
+                TEAM_FREEZE_COOLDOWN={30}
+                REVERSE_COOLDOWN={20}
+                DOUBLE_XP_COOLDOWN={25}
+                userAbilities={[]}
+                currentUsername={profile?.username || 'Viewer'}
+                remoteParticipants={remoteParticipants}
+                isHost={false}
+              />
             )}
           </div>
         }
@@ -920,22 +937,6 @@ function ViewerPage() {
                 setRecentGifts(prev => prev.filter(g => g.id !== giftId));
               }}
             />
-            {/* 5v5 Battle Overlay - visible to all viewers */}
-            {battleSubscriberState.phase !== 'idle' && (
-              <FiveVFiveBattleOverlay
-                state={battleSubscriberState}
-                currentUserId={user?.id || ''}
-                onUseAbility={() => {}}
-                onRequestRematch={() => {}}
-                TEAM_FREEZE_COOLDOWN={30}
-                REVERSE_COOLDOWN={20}
-                DOUBLE_XP_COOLDOWN={25}
-                userAbilities={[]}
-                currentUsername={profile?.username || 'Viewer'}
-                remoteParticipants={remoteParticipants}
-                isHost={false}
-              />
-            )}
           </>
         }
         

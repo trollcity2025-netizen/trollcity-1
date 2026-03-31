@@ -2735,6 +2735,7 @@ function BroadcastPage() {
       <StreamLayout
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        hideHeader={effectiveBattleState.phase !== 'idle' || !!(stream.is_battle && battleData)}
         
           header={
           <BroadcastHeader
@@ -2799,6 +2800,23 @@ function BroadcastPage() {
                 canEditBoxes={isHost}
               />
             </>
+            {/* 5v5 Battle Overlay - inside video slot so chat stays visible */}
+            {effectiveBattleState.phase !== 'idle' && (
+              <FiveVFiveBattleOverlay
+                state={effectiveBattleState}
+                currentUserId={user?.id || ''}
+                onUseAbility={isHost ? fiveVFiveUseAbility : () => {}}
+                onRequestRematch={isHost ? fiveVFiveRequestRematch : () => {}}
+                TEAM_FREEZE_COOLDOWN={TEAM_FREEZE_COOLDOWN}
+                REVERSE_COOLDOWN={REVERSE_COOLDOWN}
+                DOUBLE_XP_COOLDOWN={DOUBLE_XP_COOLDOWN}
+                userAbilities={userAbilities}
+                currentUsername={profile?.username || 'Someone'}
+                localTracks={localTracks}
+                remoteParticipants={Array.from(remoteParticipants.values())}
+                isHost={isHost}
+              />
+            )}
           </div>
         }
 
@@ -2868,23 +2886,6 @@ function BroadcastPage() {
                 setRecentGifts(prev => prev.filter(g => g.id !== giftId));
               }}
             />
-            {/* 5v5 Battle Overlay */}
-            {effectiveBattleState.phase !== 'idle' && (
-              <FiveVFiveBattleOverlay
-                state={effectiveBattleState}
-                currentUserId={user?.id || ''}
-                onUseAbility={isHost ? fiveVFiveUseAbility : () => {}}
-                onRequestRematch={isHost ? fiveVFiveRequestRematch : () => {}}
-                TEAM_FREEZE_COOLDOWN={TEAM_FREEZE_COOLDOWN}
-                REVERSE_COOLDOWN={REVERSE_COOLDOWN}
-                DOUBLE_XP_COOLDOWN={DOUBLE_XP_COOLDOWN}
-                userAbilities={userAbilities}
-                currentUsername={profile?.username || 'Someone'}
-                localTracks={localTracks}
-                remoteParticipants={Array.from(remoteParticipants.values())}
-                isHost={isHost}
-              />
-            )}
             {/* Broadcast Ability Effects Overlay */}
             <BroadcastAbilityEffects activeEffects={abilityActiveEffects} />
             

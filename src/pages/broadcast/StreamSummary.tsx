@@ -190,57 +190,58 @@ export default function StreamSummary() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center p-4 overflow-y-auto">
-      <div className="max-w-lg w-full bg-zinc-900 border border-white/10 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center shadow-2xl my-auto">
-        <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-yellow-500/50">
-          <Trophy size={40} className="text-yellow-500" />
+    <div className="h-screen bg-black text-white flex flex-col items-center p-4 overflow-y-auto">
+      <div className="max-w-lg w-full bg-zinc-900 border border-white/10 rounded-2xl p-5 sm:p-8 flex flex-col items-center text-center shadow-2xl my-auto shrink-0">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4 sm:mb-6 ring-1 ring-yellow-500/50">
+          <Trophy size={32} className="text-yellow-500 sm:hidden" />
+          <Trophy size={40} className="text-yellow-500 hidden sm:block" />
         </div>
         
-        <h1 className="text-3xl font-bold mb-2">Broadcast Ended</h1>
-        <p className="text-zinc-400 mb-8">{displayStreamStats.title || "Great stream! Here's how it went:"}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Broadcast Ended</h1>
+        <p className="text-zinc-400 mb-4 sm:mb-8 text-sm sm:text-base">{displayStreamStats.title || "Great stream! Here's how it went:"}</p>
 
-        <div className="grid grid-cols-2 gap-4 w-full mb-8">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full mb-4 sm:mb-8">
           {/* Trollmonds Spent - What the user spent on this stream */}
-          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-            <Coins className="text-yellow-400 mb-2" size={28} />
-            <span className="text-3xl font-bold text-yellow-400">
+          <div className="bg-black/40 rounded-xl p-3 sm:p-4 flex flex-col items-center border border-white/5">
+            <Coins className="text-yellow-400 mb-1 sm:mb-2" size={24} />
+            <span className="text-2xl sm:text-3xl font-bold text-yellow-400">
               {formatValue(userStats.trollmondsSpent)}
             </span>
-            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Trollmonds Spent</span>
+            <span className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Trollmonds Spent</span>
           </div>
 
           {/* Gifts Received - What the user received */}
-          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-            <Gift className="text-pink-400 mb-2" size={28} />
-            <span className="text-3xl font-bold text-pink-400">
+          <div className="bg-black/40 rounded-xl p-3 sm:p-4 flex flex-col items-center border border-white/5">
+            <Gift className="text-pink-400 mb-1 sm:mb-2" size={24} />
+            <span className="text-2xl sm:text-3xl font-bold text-pink-400">
               {formatValue(userStats.giftsReceived)}
             </span>
-            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Gifts Received</span>
+            <span className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Gifts Received</span>
           </div>
 
           {/* Total Likes - Stream likes */}
-          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-            <Heart className="text-red-400 mb-2" size={28} />
-            <span className="text-3xl font-bold text-red-400">
+          <div className="bg-black/40 rounded-xl p-3 sm:p-4 flex flex-col items-center border border-white/5">
+            <Heart className="text-red-400 mb-1 sm:mb-2" size={24} />
+            <span className="text-2xl sm:text-3xl font-bold text-red-400">
               {formatValue(displayStreamStats.totalLikes)}
             </span>
-            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Total Likes</span>
+            <span className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Total Likes</span>
           </div>
 
           {/* New Followers - Followers gained during stream */}
-          <div className="bg-black/40 rounded-xl p-4 flex flex-col items-center border border-white/5">
-            <UserPlus className="text-green-400 mb-2" size={28} />
-            <span className="text-3xl font-bold text-green-400">
+          <div className="bg-black/40 rounded-xl p-3 sm:p-4 flex flex-col items-center border border-white/5">
+            <UserPlus className="text-green-400 mb-1 sm:mb-2" size={24} />
+            <span className="text-2xl sm:text-3xl font-bold text-green-400">
               {formatValue(userStats.newFollowers)}
             </span>
-            <span className="text-xs text-zinc-500 uppercase tracking-wider mt-1">New Followers</span>
+            <span className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">New Followers</span>
           </div>
         </div>
 
         {/* User info */}
         {user && (
-          <div className="mb-6 p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 w-full">
-            <p className="text-sm text-purple-300">
+          <div className="mb-4 sm:mb-6 p-2 sm:p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 w-full">
+            <p className="text-xs sm:text-sm text-purple-300">
               {isBroadcaster 
                 ? "You're the broadcaster!"
                 : `Watching as: ${profile?.username || 'User'}`

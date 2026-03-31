@@ -371,6 +371,7 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     participants: BattleParticipant[],
     abilities: Record<string, AbilityState>
   ) => {
+    const startedAt = Date.now();
     let remaining = BATTLE_DURATION;
 
     setState(prev => ({
@@ -380,10 +381,12 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
       totalDuration: BATTLE_DURATION,
     }));
 
-    broadcastState('battle_start', { battleId, duration: BATTLE_DURATION });
+    broadcastState('battle_start', { battleId, duration: BATTLE_DURATION, startedAt });
 
     timerRef.current = setInterval(() => {
-      remaining--;
+      // Calculate remaining time based on shared timestamp for sync accuracy
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      remaining = Math.max(0, BATTLE_DURATION - elapsed);
 
       // Update ability cooldowns
       const now = Date.now();
@@ -727,6 +730,21 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         break;
       }
       case 'battle_start': {
+        const battleStartedAt = data.startedAt || Date.now();
+        // Start independent timer on non-host side using shared timestamp for sync
+        if (!isHost && timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+        if (!isHost) {
+          timerRef.current = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - battleStartedAt) / 1000);
+            const remaining = Math.max(0, BATTLE_DURATION - elapsed);
+            setState(prev => ({ ...prev, timerSeconds: remaining }));
+            if (remaining <= 0) {
+              if (timerRef.current) clearInterval(timerRef.current);
+            }
+          }, 1000);
+        }
         setState(prev => ({
           ...prev,
           phase: 'active',

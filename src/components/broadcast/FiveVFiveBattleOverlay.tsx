@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
-import { Swords, Shield, Clock, Coins, Gift, Zap, Snowflake, RotateCcw, Star, Timer, Users, Trophy, Flame, User, Crown } from 'lucide-react';
+import { Swords, Shield, Clock, Coins, Gift, Zap, Snowflake, RotateCcw, Star, Timer, Users, Trophy, Flame, User, Crown, Home } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { FiveVFiveBattleState, BattleParticipant } from '../../hooks/useFiveVFiveBattle';
 import type { UserAbility } from '../../types/broadcastAbilities';
@@ -82,7 +83,7 @@ function LiveKitVideoPlayer({
     };
   }, [videoTrack, isLocal]);
 
-  return <div ref={containerRef} className="absolute inset-0" />;
+  return <div ref={containerRef} className="absolute inset-0" style={isLocal ? { transform: 'scaleX(-1)' } : undefined} />;
 }
 
 function BattleParticipantCard({
@@ -158,6 +159,7 @@ export default function FiveVFiveBattleOverlay({
   remoteParticipants = [],
   isHost = false,
 }: FiveVFiveBattleOverlayProps) {
+  const navigate = useNavigate();
   const { phase } = state;
   const [abilityEffects, setAbilityEffects] = useState<BattleAbilityEffect[]>([]);
 
@@ -205,7 +207,19 @@ export default function FiveVFiveBattleOverlay({
 
   // ─── LIVEKIT TRACK HELPERS ───
   const findRemoteParticipant = useCallback((userId: string): RemoteParticipant | undefined => {
-    return remoteParticipants.find(p => p.identity === userId || p.identity.startsWith(userId));
+    // Try exact identity match first
+    let found = remoteParticipants.find(p => p.identity === userId);
+    if (found) return found;
+    // Try userId as prefix of identity (e.g., "abc123" matches "abc123-suffix")
+    found = remoteParticipants.find(p => p.identity.startsWith(userId));
+    if (found) return found;
+    // Try identity contained in userId or vice versa (handles guest IDs)
+    found = remoteParticipants.find(p => userId.startsWith(p.identity) || p.identity.includes(userId));
+    if (found) return found;
+    // Try without viewer- prefix
+    const withoutPrefix = userId.replace(/^viewer-/, '');
+    found = remoteParticipants.find(p => p.identity === withoutPrefix || p.identity.startsWith(withoutPrefix));
+    return found;
   }, [remoteParticipants]);
 
   const getVideoTrack = useCallback((participant: RemoteParticipant | undefined): RemoteVideoTrack | undefined => {
@@ -443,10 +457,9 @@ export default function FiveVFiveBattleOverlay({
             </div>
             <div className="flex-1 grid grid-cols-2 gap-1 auto-rows-fr">
               {teamAParticipants.map((p) => {
-                const lkParticipant = p.userId === currentUserId && isHost && localTracks
-                  ? undefined
-                  : findRemoteParticipant(p.userId);
-                const isLocal = p.userId === currentUserId && isHost;
+                const isCurrentUser = p.userId === currentUserId;
+                const isLocal = isCurrentUser && !!localTracks;
+                const lkParticipant = isLocal ? undefined : findRemoteParticipant(p.userId);
                 const videoTrack = isLocal ? localTracks?.[1] : getVideoTrack(lkParticipant);
                 const audioTrack = isLocal ? localTracks?.[0] : getAudioTrack(lkParticipant);
                 const hasVideo = isLocal ? !!localTracks?.[1] : hasVideoEnabled(lkParticipant);
@@ -488,10 +501,9 @@ export default function FiveVFiveBattleOverlay({
             </div>
             <div className="flex-1 grid grid-cols-2 gap-1 auto-rows-fr">
               {teamBParticipants.map((p) => {
-                const lkParticipant = p.userId === currentUserId && isHost && localTracks
-                  ? undefined
-                  : findRemoteParticipant(p.userId);
-                const isLocal = p.userId === currentUserId && isHost;
+                const isCurrentUser = p.userId === currentUserId;
+                const isLocal = isCurrentUser && !!localTracks;
+                const lkParticipant = isLocal ? undefined : findRemoteParticipant(p.userId);
                 const videoTrack = isLocal ? localTracks?.[1] : getVideoTrack(lkParticipant);
                 const audioTrack = isLocal ? localTracks?.[0] : getAudioTrack(lkParticipant);
                 const hasVideo = isLocal ? !!localTracks?.[1] : hasVideoEnabled(lkParticipant);
@@ -734,6 +746,13 @@ export default function FiveVFiveBattleOverlay({
                 REMATCH
               </button>
             )}
+            <button
+              onClick={() => navigate('/')}
+              className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/10"
+            >
+              <Home size={16} />
+              Back to Home
+            </button>
             <div className="text-[10px] text-zinc-500 text-center">
               Auto-returns in {state.rematchCountdown}s
             </div>
